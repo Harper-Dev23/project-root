@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":573,"h":546},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":573,"h":546},
+	"sourceSize": {"w":573,"h":546}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":573,"y":0,"w":573,"h":546},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":573,"h":546},
+	"sourceSize": {"w":573,"h":546}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":546,"w":573,"h":546},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":573,"h":546},
+	"sourceSize": {"w":573,"h":546}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":573,"y":546,"w":573,"h":546},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":573,"h":546},
+	"sourceSize": {"w":573,"h":546}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_leader_hut_elseth.png",
+	"format": "RGBA8888",
+	"size": {"w":1146,"h":1092},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:963812bc41650c7eba6a8f48b63c8d6c:c1c980ff07a4a699196fb4f2d1dbdd5a:f08987cb5a3233ae211873cf76d5b9e6$"
+}
+}

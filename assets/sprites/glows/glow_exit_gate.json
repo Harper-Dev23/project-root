@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":228,"h":302},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":228,"h":302},
+	"sourceSize": {"w":228,"h":302}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":0,"y":302,"w":228,"h":302},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":228,"h":302},
+	"sourceSize": {"w":228,"h":302}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":604,"w":228,"h":302},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":228,"h":302},
+	"sourceSize": {"w":228,"h":302}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":0,"y":906,"w":228,"h":302},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":228,"h":302},
+	"sourceSize": {"w":228,"h":302}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_exit_gate.png",
+	"format": "RGBA8888",
+	"size": {"w":228,"h":1208},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:5f7292c89c651087b30e031696da2b29:1d19e5ce70ab7458de97e0032e0bf157:ef200415b326701068e8c6e4fea3ea09$"
+}
+}
