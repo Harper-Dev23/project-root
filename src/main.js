@@ -40,7 +40,7 @@ const config = {
     autoCenter: Phaser.Scale.CENTER_BOTH
   }
 };
-
+//BRIEF TEST UPLOAD TO GIT
 // Boot the game and store the instance
 const game = new Phaser.Game(config);
 
