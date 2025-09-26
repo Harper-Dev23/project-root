@@ -7,11 +7,48 @@ import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/Sta
 
 
 const cloneBuffStruct = (buff) => (buff ? { ...buff } : undefined);
-const cloneRewardStruct = (reward) => (reward ? { ...reward, buff: cloneBuffStruct(reward.buff), debuff: cloneBuffStruct(reward.debuff) } : undefined);
+const cloneRewardStruct = (reward) => (reward ? {
+  ...reward,
+  buff: cloneBuffStruct(reward.buff),
+  debuff: cloneBuffStruct(reward.debuff)
+} : undefined);
 const cloneRewardList = (list) => (Array.isArray(list) ? list.map(rule => ({
-  ...rule, buff: cloneBuffStruct(rule.buff),
+  ...rule,
+  buff: cloneBuffStruct(rule.buff),
   debuff: cloneBuffStruct(rule.debuff)
 })) : undefined);
+const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
+
+function normalizeSkillEntry(id, skill = {}) {
+  const normalized = {
+    ...skill,
+    id: skill.id ?? id,
+    tags: cloneArray(skill.tags),
+    requiredWeapon: cloneArray(skill.requiredWeapon),
+    positionRequirement: cloneArray(skill.positionRequirement),
+    consumeWeakness: cloneArray(skill.consumeWeakness),
+    applyWeakness: cloneArray(skill.applyWeakness),
+    buildupHint: skill.buildupHint ? { ...skill.buildupHint } : undefined,
+    aoe: skill.aoe ? { ...skill.aoe } : undefined,
+    move: skill.move ? { ...skill.move } : undefined,
+    rewardIfWeak: cloneRewardStruct(skill.rewardIfWeak),
+    rewardIfTargetHas: cloneRewardStruct(skill.rewardIfTargetHas),
+    rewardIfSelfHas: cloneRewardStruct(skill.rewardIfSelfHas),
+    rewards: cloneRewardList(skill.rewards),
+    transformWeakness: skill.transformWeakness ? { ...skill.transformWeakness } : undefined,
+    triggers: cloneArray(skill.triggers)
+  };
+
+  return normalized;
+}
+
+function buildSkillRegistry(skillDefs = {}) {
+  const registry = {};
+  for (const [id, skill] of Object.entries(skillDefs)) {
+    registry[id] = normalizeSkillEntry(id, skill);
+  }
+  return registry;
+}
 
 export const SkillTypes = ['weapon', 'class', 'reaction', 'special'];
 export const ActionTypes = ['major', 'bonus', 'class', 'reaction'];
@@ -122,7 +159,7 @@ export function getReactionSkillsFor(char) {
   return out;
 }
 
-export const SKILLS = {
+const RAW_SKILLS = {
   // --- Core Skills ---
   'basic_attack': {
     id: 'basic_attack',
@@ -1675,7 +1712,8 @@ export const SKILLS = {
       scene._log?.(`${user.name} rushes to a new position.`);
       return {};
     }
-  },
+  }
+}; 
 
 
 
@@ -1711,7 +1749,6 @@ export const SKILLS = {
         return { amount: 0 };
       },
       description: 'Idles theatrically, consuming time.'
-    }
   },
 
   'step_forward': {
@@ -2487,13 +2524,13 @@ export const SKILLS = {
     apply: () => ({ amount: 18, buildup: { expose: 60, disorient: 60 } })
   }
 };
-Object.assign(SKILLS, NPC_ONLY_SKILLS);
+Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
 
 // ===============================
 // v3.2 — Dagger skills (13) — injected directly; no wrapper const
 // Notes: no `range`; tooltip helpers via `buildupHint`/`aoe`; event scaffolding inert.
 // ===============================
-Object.assign(SKILLS, {
+Object.assign(RAW_SKILLS, {
 
   // -------- Generation (7) --------
   'needle_feint': {                               //v.3.21
@@ -6217,7 +6254,7 @@ Object.assign(SKILLS, {
 
 });
 
-
+export const SKILLS = buildSkillRegistry(RAW_SKILLS);
 // ======== Global Skill Test Mode (opt-in) — works on SKILLS object ========
 const DEV_SKILL_TEST = {
   ENABLE: false,              // flip true for dev sessions
