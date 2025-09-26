@@ -815,7 +815,7 @@ export default class TownScene extends Phaser.Scene {
 
       if (this.vendorRowGroup) this.vendorRowGroup.add(this.gambleButton);
       else this.add.existing(this.gambleButton);
-      
+
       return;
     }
 
@@ -1291,12 +1291,12 @@ export default class TownScene extends Phaser.Scene {
   // =====================================================
   _enterCombatPit() {
     const scenarioIds = [
-      'training_easy_1',
-      'training_easy_2',
-      'training_medium_1',
-      'training_medium_2',
-      'training_hard',
-      'training_savage'
+      'training_encounter_1',
+      'training_encounter_2',
+      'training_encounter_3',
+      'training_encounter_4',
+      'training_encounter_5',
+      'training_encounter_6'
     ];
 
     const menuOptions = scenarioIds.map(id => {

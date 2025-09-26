@@ -1,75 +1,76 @@
 export const COMBAT_SCENARIOS = {
-  training_easy_1: {
-    name: "Basic Training I",
-    description: "Three stationary dummies to test your skills.",
-    longDescription: "This first stage of training pits you against three completely stationary practice dummies. A safe way to get comfortable with movement, targeting, and basic attacks without the risk of taking damage.",
-    portraitKey: "dummy_portrait",
+  training_encounter_1: {
+    name: 'Basic Training I',
+    description: 'Five stationary dummies for safe sparring.',
+    longDescription: 'Start with fundamentals against practice dummies that simply sway in place. Perfect for verifying positioning, targeting and basic skill flow with no incoming pressure.',
+    portraitKey: 'dummy_portrait',
     enemies: [
-      { type: "training_dummy", slotId: 3, hp: 20 },
-      { type: "training_dummy", slotId: 4, hp: 20 },
-      { type: "training_dummy", slotId: 5, hp: 20 },
-      { type: "training_dummy", slotId: 6, hp: 20 },
-      { type: "training_dummy", slotId: 7, hp: 20 }
+      { type: 'stationary_training_dummy', slotId: 3 },
+      { type: 'stationary_training_dummy', slotId: 4 },
+      { type: 'stationary_training_dummy', slotId: 5 },
+      { type: 'stationary_training_dummy', slotId: 6 },
+      { type: 'stationary_training_dummy', slotId: 7 }
     ]
   },
 
-  training_easy_2: {
-    name: "Basic Training II",
-    description: "Slightly sturdier dummies for extended practice.",
-    longDescription: "A continuation of your basic training. The dummies here are reinforced...",
-    portraitKey: "dummy_portrait",
+  training_encounter_2: {
+    name: 'Basic Training II',
+    description: 'Reinforced stationary dummies built for longer drills.',
+    longDescription: 'These sturdier targets remain fixed in place so you can focus on rotations, weakness application tests and UI exercises without reactive behaviour from the enemy side.',
+    portraitKey: 'dummy_portrait',
     enemies: [
-      { type: "moving_dummy", slotId: 5, hp: 30 },
-      { type: "moving_dummy", slotId: 6, hp: 30 },
-      { type: "moving_dummy", slotId: 7, hp: 30 }
+      { type: 'stationary_training_dummy_elite', slotId: 4 },
+      { type: 'stationary_training_dummy_elite', slotId: 5 },
+      { type: 'stationary_training_dummy_elite', slotId: 6 },
+      { type: 'stationary_training_dummy_elite', slotId: 7 },
+      { type: 'stationary_training_dummy_elite', slotId: 8 }
     ]
   },
 
-  training_medium_1: {
-    name: "Moving Targets I",
-    description: "Dummies that can move around to avoid attacks.",
-    longDescription: "These dummies have been mounted on mobile stands, allowing them to sway or roll out of your strikes. Accuracy and timing become more important here.",
-    portraitKey: "dummy_portrait",
+  training_encounter_3: {
+    name: 'Animated Party Test',
+    description: 'Five animated dummies demonstrating classic RPG roles.',
+    longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger and rogue—showcases weakness synergies, payoffs and interlocking behaviour.',
+    portraitKey: 'dummy_party',
     enemies: [
-      { type: "moving_dummy", slotId: 5, hp: 30 },
-      { type: "moving_dummy", slotId: 6, hp: 30 },
-      { type: "moving_dummy", slotId: 7, hp: 30 }
+      { type: 'animated_fighter_dummy', slotId: 1 },
+      { type: 'animated_healer_dummy', slotId: 5 },
+      { type: 'animated_warlock_dummy', slotId: 7 },
+      { type: 'animated_ranger_dummy', slotId: 6 },
+      { type: 'animated_rogue_dummy', slotId: 2 }
     ]
   },
 
-  training_medium_2: {
-    name: "Moving Targets II",
-    description: "Faster and tougher moving targets.",
-    longDescription: "The moving targets here are quicker and more resilient. You’ll need to combine your positioning skills with sustained damage output to bring them down.",
-    portraitKey: "dummy_portrait",
+  training_encounter_4: {
+    name: 'Huntsman & Beasts',
+    description: 'Coordinate against a huntsman commander and his beasts.',
+    longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
+    portraitKey: 'hunter_portrait',
     enemies: [
-      { type: "moving_dummy", slotId: 5, hp: 35 },
-      { type: "moving_dummy", slotId: 6, hp: 35 },
-      { type: "moving_dummy", slotId: 7, hp: 35 }
+      { type: 'huntsman_commander', slotId: 8 },
+      { type: 'beast_oskar', slotId: 2 },
+      { type: 'beast_kiro', slotId: 3 }
     ]
   },
 
-  training_hard: {
-    name: "Armed Opponents",
-    description: "Training soldiers that fight back.",
-    longDescription: "This is no longer passive target practice. These soldiers will engage with basic combat skills, blocking and striking when the opportunity arises. Treat them with caution.",
-    portraitKey: "soldier_portrait",
+  training_encounter_5: {
+    name: 'Elemental Duelists',
+    description: 'Battle elite fire and ice duelists leveraging elemental reactions.',
+    longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
+    portraitKey: 'elemental_duelists',
     enemies: [
-      { type: "armed_soldier", slotId: 1},
-      { type: "armed_soldier", slotId: 2},
-      { type: "armed_soldier", slotId: 6}
+      { type: 'fire_duelist', slotId: 2 },
+      { type: 'ice_duelist', slotId: 3 }
     ]
   },
 
-  training_savage: {
-    name: "Savage Arena",
-    description: "Dangerous foes to truly test your limits.",
-    longDescription: "This is the ultimate training challenge. Savage beasts with powerful attacks and high endurance will push your skills to the breaking point. Victory here marks you as a true combatant.",
-    portraitKey: "beast_portrait",
+  training_encounter_6: {
+    name: 'Berserker Boss',
+    description: 'A relentless foe with wide coverage and reactionary strikes.',
+    longDescription: 'The berserker stresses every system: high initiative generation, layered weaknesses and punishing reactions. Survive the rush, manage his initiative and plan around Death Spiral.',
+    portraitKey: 'berserker_portrait',
     enemies: [
-      { type: "savage_beast", slotId: 5, hp: 50 },
-      { type: "savage_beast", slotId: 6, hp: 50 },
-      { type: "savage_beast", slotId: 7, hp: 50 }
+      { type: 'berserker_boss', slotId: 2 }
     ]
   }
 };

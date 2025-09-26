@@ -1,39 +1,70 @@
-export function chooseNPCAction(npc, enemies) {
-  // pick the first valid enemy target that isn't down
-  const target = enemies?.find(e => e && e.status !== 'incapacitated');
-  if (!target) return null;
+import { SKILLS } from '../../data/skills.js';
 
-  const skills = npc.skills || npc.weaponSkills || [];
-  const has = id => skills.includes(id) || skills.some(s => s?.id === id);
+const isAlive = unit => unit && unit.status !== 'incapacitated';
 
-  // Helper: current column (based on conventional slot groupings)
-  const slotId = npc?._slot?.slotId;
-  const col = ([1,2,3].includes(slotId) && 'front') ||
-              ([4,5].includes(slotId)   && 'mid')   ||
-              ([6,7,8].includes(slotId) && 'back')  || null;
+function meetsWeaknessRequirement(target, requirement) {
+  if (!requirement) return true;
+  const reqs = Array.isArray(requirement) ? requirement : [requirement];
+  for (const req of reqs) {
+    if (!req?.family) continue;
+    const tiers = target?.weakness?.tiers || {};
+    const minTier = req.tierAtLeast ?? req.tier ?? 1;
+    if ((tiers[req.family] || 0) < minTier) return false;
+  }
+  return true;
+}
+function firstTarget(list, predicate = () => true) {
+  if (!Array.isArray(list)) return null;
+  for (const unit of list) {
+    if (!isAlive(unit)) continue;
+    if (!predicate(unit)) continue;
+    return unit;
+  }
+ return null;
+}
 
-  // 1) If we can shuffle and we're in a "worse" position (e.g., front for a dummy),
-  //    sometimes do it for movement variety (40% chance).
-  if (has('dummy_shuffle')) {
-    const shouldShuffle =
-      (col === 'front') ||              // get out of danger
-      (Math.random() < 0.4);            // or just be annoying
+export function chooseNPCAction(npc, enemies, scene = null) {
+  if (!npc) return null;
 
-    if (shouldShuffle) {
-      return { type: 'class', target: null, skill: 'dummy_shuffle' };
+  const pool = npc.actionsLeft || {};
+  const skillIds = (npc.skills || npc.weaponSkills || [])
+    .map(s => typeof s === 'string' ? s : s?.id)
+    .filter(Boolean);
+
+  const abilities = skillIds
+    .map(id => ({ id, ability: SKILLS[id] }))
+    .filter(entry => entry.ability && (!entry.ability.actionCost || (pool[entry.ability.actionCost] || 0) > 0));
+
+  if (!abilities.length) return null;
+
+  const allies = scene?.enemies?.filter(isAlive) || [];
+  const livingEnemies = (enemies || []).filter(isAlive);
+
+  // Payoffs first (skills that explicitly require weakness or consume it)
+  abilities.sort((a, b) => {
+    const payoff = entry => (entry.ability.requiresWeakness || (Array.isArray(entry.ability.consumeWeakness) && entry.ability.consumeWeakness.length)) ? 1 : 0;
+    const payoffDiff = payoff(b) - payoff(a);
+    if (payoffDiff !== 0) return payoffDiff;
+    const generator = entry => entry.ability.buildup ? 1 : 0;
+    return generator(b) - generator(a);
+  });
+
+  const pickTarget = (ability) => {
+    if (!ability.requiresTarget) return null;
+    const req = ability.requiresWeakness;
+    if (ability.targetRequirement === 'ally') {
+      return firstTarget(allies, ally => meetsWeaknessRequirement(ally, req));
     }
+    return firstTarget(livingEnemies, foe => meetsWeaknessRequirement(foe, req));
+  };
+  for (const { id, ability } of abilities) {
+    const type = ability.actionCost || 'major';
+    if (type === 'reaction') continue;
+    if (pool[type] <= 0) continue;
+    const target = pickTarget(ability);
+    if (ability.requiresTarget && !target) continue;
+    return { type, skill: id, target };
   }
 
-  // 2) Prefer fireball if available; it will be column-gated by your scene.
-  if (has('fireball')) {
-    return { type: 'class', target, skill: 'fireball' };
-  }
-
-  // 3) Otherwise basic attack if available.
-  if (has('basic_attack')) {
-    return { type: 'major', target, skill: 'basic_attack' };
-  }
-
-  // 4) Nothing to do.
   return null;
 }

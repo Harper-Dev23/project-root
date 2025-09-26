@@ -84,7 +84,7 @@ export default class CombatScene extends Phaser.Scene {
     this.partyData = data.party || [];
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
-    this.scenarioId = data.scenarioId || 'training_easy_1';
+    this.scenarioId = data.scenarioId || 'training_encounter_1';
     // === Reactions UI state ===
     this._rxSelection = [];
     // Store scenario data if available
@@ -511,8 +511,7 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
-
-  _placeEnemies(scenarioId = 'training_easy_1') {
+  _placeEnemies(scenarioId = 'training_encounter_1') {
     this.enemies = [];
 
     const scenario = COMBAT_SCENARIOS[scenarioId];
@@ -1684,6 +1683,42 @@ export default class CombatScene extends Phaser.Scene {
   _executeSkill(user, skillId, target = null) {
     const skill = SKILLS[skillId];
     if (!skill) { this._log?.(`[WARN] Skill not found: ${skillId}`); return { ok: false }; }
+
+    // Optional gating hook so skills can verify status tiers or custom rules
+    if (typeof skill.canExecute === 'function') {
+      const verdict = skill.canExecute({ user, target, scene: this }) ?? true;
+      const failed = (typeof verdict === 'object') ? (verdict.ok === false) : (verdict === false);
+      if (failed) {
+        const reason = typeof verdict === 'object' ? verdict.reason : null;
+        if (reason) this._log?.(reason);
+        return { ok: false };
+      }
+    }
+
+    if (skill.requiresWeakness) {
+      const requirements = Array.isArray(skill.requiresWeakness)
+        ? skill.requiresWeakness
+        : [skill.requiresWeakness];
+
+      for (const req of requirements) {
+        const fam = req?.family;
+        if (!fam) continue;
+
+        const location = req.on === 'self' ? user : target;
+        if (!location) {
+          this._log?.(`${skill.name} fizzles — no ${(req.on === 'self') ? 'user' : 'target'} to check.`);
+          return { ok: false };
+        }
+
+        const tiers = location.weakness?.tiers || {};
+        const minTier = req.tierAtLeast ?? req.tier ?? 1;
+        if ((tiers[fam] || 0) < minTier) {
+          const who = req.on === 'self' ? user?.name || 'user' : target?.name || 'target';
+          this._log?.(`${skill.name} fails — ${who} needs ${fam.toUpperCase()} T${minTier}.`);
+          return { ok: false };
+        }
+      }
+    }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
     if (user.currentMP < (skill.mpCost || 0)) {
@@ -3345,11 +3380,19 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   /** Execute an NPC action chosen by NPCLogic */
-  _performNPCAction(npc, action) {
+  _performNPCAction(npc, action, onComplete = null) {
+    const finish = (didAct = false) => {
+      this._updateActionLights?.();
+      if (typeof onComplete === 'function') {
+        onComplete(didAct);
+      } else if (!this.combatEnded) {
+        this._advanceTurn();
+      }
+    };
+
     if (!action) {
       this._log(`${npc.name} hesitates.`);
-      this._updateActionLights?.();
-      this._advanceTurn();
+      finish(false);
       return;
     }
 
@@ -3357,16 +3400,14 @@ export default class CombatScene extends Phaser.Scene {
       const ability = SKILLS[skillId];
       if (!ability) {
         this._log(`[WARN] NPC tried unknown skill: ${skillId}`);
-        this._updateActionLights?.();
-        this._advanceTurn();
+        finish(false);
         return true;
       }
 
       const res = this._executeSkill(npc, skillId, target);
       if (res?.ok) {
         // DO NOT zero any buckets here – _executeSkill already spent the right one.
-        this._updateActionLights?.();
-        this.time.delayedCall(250, () => { if (!this.combatEnded) this._advanceTurn(); });
+        this.time.delayedCall(250, () => { if (!this.combatEnded) finish(true); });
         return true;
       }
       return false;
@@ -3392,8 +3433,7 @@ export default class CombatScene extends Phaser.Scene {
         let target = ability.isMovement ? null : ensureTargetIfNeeded(skillId, action.target);
         if (ability.requiresTarget && !target) {
           this._log(`${npc.name} finds no target.`);
-          this._updateActionLights?.();
-          this._advanceTurn();
+          finish(false);
           return;
         }
         if (runAndEnd(skillId, target)) return;
@@ -3409,8 +3449,7 @@ export default class CombatScene extends Phaser.Scene {
         let target = ability.isMovement ? null : ensureTargetIfNeeded(skillId, action.target);
         if (ability.requiresTarget && !target) {
           this._log(`${npc.name} finds no target.`);
-          this._updateActionLights?.();
-          this._advanceTurn();
+          finish(false);
           return;
         }
         if (runAndEnd(skillId, target)) return;
@@ -3426,8 +3465,7 @@ export default class CombatScene extends Phaser.Scene {
             if (npc?.actionsLeft && npc.actionsLeft[ability.actionCost || 'class'] != null) {
               npc.actionsLeft[ability.actionCost || 'class'] = 0;
             }
-            this._updateActionLights?.();
-            this.time.delayedCall(250, () => { if (!this.combatEnded) this._advanceTurn(); });
+            this.time.delayedCall(250, () => { if (!this.combatEnded) finish(true); });
             return;
           }
         }
@@ -3440,8 +3478,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Nothing executed — don't stall the loop
     this._log(`${npc.name} waits.`);
-    this._updateActionLights?.();
-    this._advanceTurn();
+    finish(false);
   }
 
 
@@ -3449,18 +3486,57 @@ export default class CombatScene extends Phaser.Scene {
   _takeEnemyTurn_viaLogic(npc) {
     const enemies = GameState.party.filter(p => !p.isEnemy && p.status !== 'incapacitated');
 
-    // Prefer explicit profile if defined on the npc
-    let action = null;
-    if (npc.aiProfile && AI_PROFILES?.[npc.aiProfile]?.decide) {
-      action = AI_PROFILES[npc.aiProfile].decide(npc, this, enemies);
-    }
+    const hasActionsRemaining = () => {
+      const pool = npc.actionsLeft || {};
+      return ['major', 'bonus', 'class'].some(type => (pool[type] || 0) > 0);
+    };
 
-    // Fallback to generic logic if profile returned nothing
-    if (!action) {
-      action = chooseNPCAction(npc, enemies);
-    }
+    const decideNext = () => {
+      if (this.combatEnded) return null;
 
-    this._performNPCAction(npc, action);
+      let action = null;
+      if (npc.aiProfile && AI_PROFILES?.[npc.aiProfile]?.decide) {
+        action = AI_PROFILES[npc.aiProfile].decide(npc, this, enemies);
+      }
+      if (!action) {
+        action = chooseNPCAction(npc, enemies, this);
+      }
+      return action;
+    };
+
+    const tryAct = (depth = 0) => {
+      if (this.combatEnded) return;
+      if (!hasActionsRemaining()) {
+        this._advanceTurn();
+        return;
+      }
+      if (depth > 12) { // safety valve
+        console.warn(`[NPC] Abort loop for ${npc.name} after ${depth} attempts.`);
+        this._advanceTurn();
+        return;
+      }
+
+      const action = decideNext();
+      if (!action) {
+        this._advanceTurn();
+        return;
+      }
+
+      this._performNPCAction(npc, action, (didAct) => {
+        if (this.combatEnded) return;
+        if (!didAct) {
+          this.time.delayedCall(150, () => tryAct(depth + 1));
+          return;
+        }
+        if (hasActionsRemaining()) {
+          this.time.delayedCall(200, () => tryAct(depth + 1));
+        } else {
+          this._advanceTurn();
+        }
+      });
+    };
+
+    tryAct();
   }
 
   _advanceTurn() {

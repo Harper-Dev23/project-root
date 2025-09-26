@@ -23,6 +23,7 @@ export function getWeaponSkillsFor(char) {
 
   for (const [id, skill] of Object.entries(SKILLS)) {
     if (skill.type !== 'weapon') continue;
+    if (skill.enemyOnly) continue;
 
     // ✅ Unify stat key case
     const statKey = skill.requiredStat?.toUpperCase();
@@ -71,6 +72,7 @@ export function getClassSkillsFor(char) {
   for (const id of allowed) {
     const skill = SKILLS[id];
     if (!skill) continue;
+    if (skill.enemyOnly) continue;
     out.push({ id, ...skill });
   }
   return out;
@@ -86,6 +88,7 @@ export function getReactionSkillsFor(char) {
 
   for (const [id, s] of Object.entries(SKILLS)) {
     if (!s || s.mechanic !== 'reaction') continue;
+    if (s.enemyOnly) continue;
 
     // stat gate
     if (s.requiredStat) {
@@ -1676,65 +1679,815 @@ export const SKILLS = {
 
 
 
-  //////Training Enemies
+  const NPC_ONLY_SKILLS = {
+    // Shared training utilities
 
-  'dummy_shuffle': {
-    id: 'dummy_shuffle',
-    name: 'Shuffle',
-    type: 'special',
-    actionCost: 'bonus',
-    mpCost: 0,
-    hpCost: 0,
-    range: 0,
-    positionRequirement: ['front', 'mid', 'back'],
-    requiresTarget: false,          // ← movement shouldn’t force a target
-    targetRequirement: 'position',
-    isMovement: true,
-    cooldown: 0,                    // ← no cooldown
-    apply: (attacker, _target, scene) => {
-      const moved = scene._enemyTryShuffleOneColumn(attacker);
-      if (moved) scene._log?.(`${attacker.name} shuffles position.`);
-      return { amount: 0, moved };
+    'dummy_shuffle': {
+      id: 'dummy_shuffle',
+      name: 'Shuffle',
+      type: 'special',
+      actionCost: 'bonus',
+      enemyOnly: true,
+      requiresTarget: false,
+      targetRequirement: 'position',
+      isMovement: true,
+      cooldown: 0,
+      apply: (attacker, _target, scene) => {
+        const moved = scene?._enemyTryShuffleOneColumn?.(attacker);
+        if (moved) scene?._log?.(`${attacker.name} shuffles position.`);
+        return { amount: 0, moved };
+      }
     },
-  },
 
-  'dummy_sway': {
-    id: 'dummy_sway',
-    name: 'Sway',
-    type: 'class',
-    actionCost: 'major',            // consumes the turn
-    mpCost: 0, hpCost: 0, range: 0,
-    positionRequirement: ['front', 'mid', 'back'],
-    requiresTarget: false,
-    targetRequirement: 'none',
-    cooldown: 0,
-    apply: (attacker, _target, scene) => {
-      scene._log?.(`${attacker.name} sways. A slight breeze blows...`);
-      return { amount: 0 };
-    },
-    description: 'Idles theatrically, consuming time.'
+    'dummy_sway': {
+      id: 'dummy_sway',
+      name: 'Sway',
+      type: 'special',
+      actionCost: 'major',
+      enemyOnly: true,
+      requiresTarget: false,
+      apply: (attacker, _target, scene) => {
+        scene._log?.(`${attacker.name} sways. A slight breeze blows...`);
+        return { amount: 0 };
+      },
+      description: 'Idles theatrically, consuming time.'
+    }
   },
-
 
   'step_forward': {
     id: 'step_forward',
     name: 'Step Forward',
     type: 'special',
     actionCost: 'bonus',
-    mpCost: 0, hpCost: 0, range: 0,
-    positionRequirement: ['mid', 'back', 'front'],
+    enemyOnly: true,
     requiresTarget: false,
     targetRequirement: 'position',
     isMovement: true,
     cooldown: 2,
     apply: (attacker, _target, scene) => {
-      const moved = scene._enemyTryStepTowardFront?.(attacker);
-      if (moved) scene._log?.(`${attacker.name} steps forward.`);
+      const moved = scene?._enemyTryStepTowardFront?.(attacker);
+      if (moved) scene?._log?.(`${attacker.name} steps forward.`);
       return { moved, amount: 0 };
-    },
-    description: 'Advance one column toward the front if space exists.'
+    }
   },
+
+  // Encounter 1 – Warm-up Duel
+  'warmup_swing': {
+    id: 'warmup_swing',
+    name: 'Practice Swing',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 12 })
+  },
+  'warmup_patch': {
+    id: 'warmup_patch',
+    name: 'Patch Scratches',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user) => {
+      if (!user) return { amount: 0 };
+      const heal = Math.max(3, Math.floor((user.maxHP || 40) * 0.15));
+      user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
+      return { amount: 0 };
+    }
+  },
+
+  // Encounter 2 – Defensive Trial
+  'defender_guard_raise': {
+    id: 'defender_guard_raise',
+    name: 'Raise Shield',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user) => ({
+      amount: 0,
+      statusEffects: [{ id: 'defender_guard', turns: 2, mods: { PhysicalResist: 20 } }]
+    })
+  },
+  'defender_taunt': {
+    id: 'defender_taunt',
+    name: 'Challenge Cry',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (user, target, scene) => {
+      scene?._log?.(`${user.name} challenges ${target?.name}.`);
+      return {
+        amount: 6,
+        statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null } }],
+        buildup: { expose: 60 }
+      };
+    }
+  },
+  'offender_expose_strike': {
+    id: 'offender_expose_strike',
+    name: 'Stinging Strike',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 14, buildup: { expose: 70 } })
+  },
+  'defender_small_heal': {
+    id: 'defender_small_heal',
+    name: 'Training Mend',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    apply: (_user, target) => {
+      if (!target) return { amount: 0 };
+      const heal = Math.max(6, Math.floor((target.maxHP || 40) * 0.2));
+      target.currentHP = Math.min(target.maxHP || heal, (target.currentHP || 0) + heal);
+      return { amount: 0 };
+    }
+  },
+
+  // Encounter 3 – Animated Party Test
+  'fighter_heavy_slash': {
+    id: 'fighter_heavy_slash',
+    name: 'Heavy Slash',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 18, buildup: { expose: 90 } })
+  },
+  'fighter_guarded_blow': {
+    id: 'fighter_guarded_blow',
+    name: 'Guarded Blow',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (user, target) => ({
+      amount: 10,
+      buildup: { cold: 60 },
+      statusEffects: [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 } }]
+    })
+  },
+  'fighter_taunt': {
+    id: 'fighter_taunt',
+    name: 'Taunting Cry',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'expose', tier: 1 },
+    apply: (user, target, scene) => {
+      scene?._log?.(`${user.name} taunts ${target?.name}!`);
+      return { amount: 0, statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null } }] };
+    }
+  },
+  'fighter_executioner': {
+    id: 'fighter_executioner',
+    name: 'Executioner’s Strike',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'expose', tier: 2 },
+    apply: () => ({ amount: 34, consumeWeakness: ['expose'] })
+  },
+
+  'healer_heal': {
+    id: 'healer_heal',
+    name: 'Restore',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    apply: (_user, target) => {
+      if (!target) return { amount: 0 };
+      const heal = Math.max(14, Math.floor((target.maxHP || 50) * 0.35));
+      target.currentHP = Math.min(target.maxHP || heal, (target.currentHP || 0) + heal);
+      return { amount: 0 };
+    }
+  },
+  'healer_cleanse': {
+    id: 'healer_cleanse',
+    name: 'Cleanse Weakness',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    apply: (_user, target, scene) => {
+      if (!target?.weakness) return { amount: 0 };
+      const w = target.weakness;
+      let removed = false;
+      for (const fam of ['curse', 'disease', 'toxic']) {
+        if ((w.meters?.[fam] || 0) > 0) {
+          w.meters[fam] = 0;
+          w.tiers[fam] = 0;
+          removed = true;
+        }
+      }
+      if (removed) {
+        scene?._log?.(`${target.name} is cleansed of maladies.`);
+        target.currentMP = Math.min(target.maxMP || 0, (target.currentMP || 0) + 4);
+      }
+      return { amount: 0 };
+    }
+  },
+  'healer_blessing': {
+    id: 'healer_blessing',
+    name: 'Blessing',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    apply: (_user, target) => ({
+      amount: 0,
+      statusEffects: [{ id: 'healer_blessing', turns: 3, mods: { Accuracy: 10 }, data: { mpRegen: 2 } }]
+    })
+  },
+  'healer_flame_flick': {
+    id: 'healer_flame_flick',
+    name: 'Flame Flick',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 8, buildup: { fire: 70 } })
+  },
+
+  'warlock_hex': {
+    id: 'warlock_hex',
+    name: 'Hex',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 10, buildup: { curse: 80 } })
+  },
+  'warlock_drain_life': {
+    id: 'warlock_drain_life',
+    name: 'Drain Life',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'curse', tier: 1 },
+    apply: (user, target) => {
+      const tier = target?.weakness?.tiers?.curse || 0;
+      const dmg = 16;
+      const heal = tier >= 2 ? 18 : 10;
+      if (user) {
+        user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
+      }
+      return { amount: dmg };
+    }
+  },
+  'warlock_dark_bolts': {
+    id: 'warlock_dark_bolts',
+    name: 'Dark Bolts',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 12, buildup: { disease: 70 } })
+  },
+  'warlock_curse_amplify': {
+    id: 'warlock_curse_amplify',
+    name: 'Curse Amplify',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'curse', tier: 1 },
+    apply: (_user, target, scene) => {
+      if (!target?.weakness) return { amount: 0 };
+      const w = target.weakness;
+      const meter = w.meters?.curse || 0;
+      w.meters.curse = meter * 2;
+      scene?._log?.(`${target.name}'s curse deepens!`);
+      return { amount: 0 };
+    }
+  },
+
+  'ranger_quick_shot': {
+    id: 'ranger_quick_shot',
+    name: 'Quick Shot',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 14, buildup: { expose: 60 } })
+  },
+  'ranger_frost_arrow': {
+    id: 'ranger_frost_arrow',
+    name: 'Frost Arrow',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 16, buildup: { cold: 90 } })
+  },
+  'ranger_volley': {
+    id: 'ranger_volley',
+    name: 'Volley',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 12,
+        splash: foes.slice(1).map(t => ({ target: t, amount: 10 }))
+      };
+    }
+  },
+  'ranger_aimed_shot': {
+    id: 'ranger_aimed_shot',
+    name: 'Aimed Shot',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'expose', tier: 1 },
+    apply: () => ({ amount: 28, consumeWeakness: ['expose'] })
+  },
+
+  'rogue_poisoned_knife': {
+    id: 'rogue_poisoned_knife',
+    name: 'Poisoned Knife',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (_user, target) => {
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const base = { amount: 10, buildup: { toxic: 70 } };
+      if (exposeTier >= 1) {
+        base.buildup.toxic += 40;
+      }
+      return base;
+    }
+  },
+  'rogue_hamstring': {
+    id: 'rogue_hamstring',
+    name: 'Hamstring',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 14, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] })
+  },
+  'rogue_evasion': {
+    id: 'rogue_evasion',
+    name: 'Evasion',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user, _target, scene) => {
+      if (!user) return { amount: 0 };
+      const anyAfflicted = scene?.turnOrder?.some(u => !u.isEnemy && u.status !== 'incapacitated' && (((u.weakness?.tiers?.curse || 0) >= 1) || ((u.weakness?.tiers?.toxic || 0) >= 1)));
+      if (anyAfflicted) {
+        user.currentMP = Math.min(user.maxMP || 0, (user.currentMP || 0) + 3);
+      }
+      return { amount: 0, statusEffects: [{ id: 'rogue_evasion', turns: 1, mods: { Evasion: 20 } }] };
+    }
+  },
+  'rogue_sneak_attack': {
+    id: 'rogue_sneak_attack',
+    name: 'Sneak Attack',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'expose', tier: 1 },
+    apply: () => ({ amount: 26 })
+  },
+  'rogue_finishing_strike': {
+    id: 'rogue_finishing_strike',
+    name: 'Finishing Strike',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    canExecute: ({ target }) => {
+      if (!target?.weakness?.tiers) return { ok: false };
+      const tiers = target.weakness.tiers;
+      const families = ['expose', 'toxic', 'curse', 'disease', 'cold', 'fire', 'lacerate'];
+      const count = families.reduce((n, fam) => n + ((tiers[fam] || 0) >= 1 ? 1 : 0), 0);
+      return count >= 2 ? true : { ok: false, reason: `${target.name} lacks layered weaknesses.` };
+    },
+    apply: () => ({ amount: 40, consumeWeakness: ['expose', 'toxic'] })
+  },
+
+  // Encounter 4 – Huntsman & Beasts
+  'huntsman_mark': {
+    id: 'huntsman_mark',
+    name: 'Huntmaster’s Mark',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (user, target) => ({
+      amount: 10,
+      buildup: { expose: 80 },
+      statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
+    })
+  },
+  'huntsman_command': {
+    id: 'huntsman_command',
+    name: 'Whistled Command',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    apply: (_user, beast) => ({
+      amount: 0,
+      statusEffects: [{ id: 'commanded', turns: 1, mods: { Initiative: 15, Accuracy: 10 } }]
+    })
+  },
+  'huntsman_trap_shot': {
+    id: 'huntsman_trap_shot',
+    name: 'Trap Shot',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 20, buildup: { lacerate: 90 }, statusEffects: [{ id: 'snared', turns: 2 }] })
+  },
+  'huntsman_empower_pack': {
+    id: 'huntsman_empower_pack',
+    name: 'Empower Pack',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    canExecute: ({ target }) => {
+      if (!target?.weakness?.tiers) return { ok: false };
+      const tiers = target.weakness.tiers;
+      const present = ['expose', 'lacerate', 'disease', 'toxic'].reduce((n, fam) => n + ((tiers[fam] || 0) >= 1 ? 1 : 0), 0);
+      return present >= 2 ? true : { ok: false, reason: 'The mark lacks layered weaknesses.' };
+    },
+    apply: (_user, _target, scene) => {
+      const beasts = scene?.enemies?.filter(u => u?.tags?.includes('beast')) || [];
+      for (const beast of beasts) {
+        beast.statusEffects = beast.statusEffects || [];
+        beast.statusEffects.push({ id: 'empowered_pack', turns: 2, mods: { Initiative: 20, Accuracy: 10 } });
+      }
+      return { amount: 0 };
+    }
+  },
+
+  'oskar_rending_bite': {
+    id: 'oskar_rending_bite',
+    name: 'Rending Bite',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 22, buildup: { lacerate: 90 } })
+  },
+  'oskar_infectious_claw': {
+    id: 'oskar_infectious_claw',
+    name: 'Infectious Claw',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (_user, target) => {
+      const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
+      return { amount: 14, buildup: { disease: hasLac ? 140 : 80 } };
+    }
+  },
+  'oskar_maw_rip': {
+    id: 'oskar_maw_rip',
+    name: 'Maw Rip',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'lacerate', tier: 1 },
+    apply: () => ({ amount: 32, consumeWeakness: ['lacerate'] })
+  },
+  'oskar_rotting_maw': {
+    id: 'oskar_rotting_maw',
+    name: 'Rotting Maw',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'disease', tier: 2 },
+    apply: (_user, target) => {
+      if (target?.weakness) {
+        const val = target.weakness.meters?.disease || 0;
+        target.weakness.meters.disease = 0;
+        target.weakness.tiers.disease = 0;
+        target.weakness.meters.toxic = (target.weakness.meters.toxic || 0) + val;
+      }
+      return { amount: 26 };
+    }
+  },
+
+  'kiro_toxic_spit': {
+    id: 'kiro_toxic_spit',
+    name: 'Toxic Spit',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 12, buildup: { toxic: 90 } })
+  },
+  'kiro_venomous_swipe': {
+    id: 'kiro_venomous_swipe',
+    name: 'Venomous Swipe',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 18, buildup: { disease: 90 } })
+  },
+  'kiro_poison_cloud': {
+    id: 'kiro_poison_cloud',
+    name: 'Poison Cloud',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'toxic', tier: 1 },
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 10,
+        consumeWeakness: ['toxic'],
+        splash: foes.map(t => ({ target: t, amount: 6, buildup: { toxic: 60 } }))
+      };
+    }
+  },
+  'kiro_corrosive_bite': {
+    id: 'kiro_corrosive_bite',
+    name: 'Corrosive Bite',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'toxic', tier: 2 },
+    apply: (_user, target) => {
+      const payload = { amount: 30, consumeWeakness: ['toxic'] };
+      if ((target?.weakness?.tiers?.disease || 0) >= 1) {
+        payload.buildup = { curse: 80 };
+      }
+      return payload;
+    }
+  },
+
+  // Encounter 5 – Elemental Duelists
+  'fire_flame_slash': {
+    id: 'fire_flame_slash',
+    name: 'Flame Slash',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 20, buildup: { fire: 100 } })
+  },
+  'fire_heated_guard': {
+    id: 'fire_heated_guard',
+    name: 'Heated Guard',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user) => ({
+      amount: 0,
+      statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 }, data: { retaliateFire: true } }]
+    })
+  },
+  'fire_burst': {
+    id: 'fire_burst',
+    name: 'Fire Burst',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'fire', tier: 2 },
+    apply: () => ({ amount: 32, consumeWeakness: ['fire'] })
+  },
+  'fire_flare_wave': {
+    id: 'fire_flare_wave',
+    name: 'Flare Wave',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 18,
+        splash: foes.map(t => ({ target: t, amount: 14, buildup: { fire: 60 } }))
+      };
+    }
+  },
+
+  'ice_frost_strike': {
+    id: 'ice_frost_strike',
+    name: 'Frost Strike',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 20, buildup: { cold: 100 } })
+  },
+  'ice_icy_guard': {
+    id: 'ice_icy_guard',
+    name: 'Icy Guard',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 }, data: { retaliateCold: true } }] })
+  },
+  'ice_freeze_point': {
+    id: 'ice_freeze_point',
+    name: 'Freeze Point',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'cold', tier: 2 },
+    apply: () => ({ amount: 32, consumeWeakness: ['cold'], statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }] })
+  },
+  'ice_shard_storm': {
+    id: 'ice_shard_storm',
+    name: 'Shard Storm',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 16,
+        splash: foes.map(t => ({ target: t, amount: 12, buildup: { cold: 50 } }))
+      };
+    }
+  },
+
+  // Encounter 6 – Berserker Boss
+  'berserker_crushing_blow': {
+    id: 'berserker_crushing_blow',
+    name: 'Crushing Blow',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 26, buildup: { expose: 90, lacerate: 80 } })
+  },
+  'berserker_disrupting_roar': {
+    id: 'berserker_disrupting_roar',
+    name: 'Disrupting Roar',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 0,
+        splash: foes.map(t => ({ target: t, amount: 8, buildup: { disorient: 80 } }))
+      };
+    }
+  },
+  'berserker_bleeding_sweep': {
+    id: 'berserker_bleeding_sweep',
+    name: 'Bleeding Sweep',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (_user, _target, scene) => {
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+      return {
+        amount: 0,
+        splash: foes.map(t => ({ target: t, amount: 18, buildup: { lacerate: 90 } }))
+      };
+    }
+  },
+  'berserker_guarded_fury': {
+    id: 'berserker_guarded_fury',
+    name: 'Guarded Fury',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (user, target) => ({
+      amount: 14,
+      buildup: { cold: 70 },
+      statusEffects: [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]
+    })
+  },
+  'berserker_battle_frenzy': {
+    id: 'berserker_battle_frenzy',
+    name: 'Battle Frenzy',
+    type: 'enemy',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user) => ({
+      amount: 0,
+      statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 10 } }]
+    })
+  },
+  'berserker_death_spiral': {
+    id: 'berserker_death_spiral',
+    name: 'Death Spiral',
+    type: 'enemy',
+    actionCost: 'class',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: [
+      { family: 'expose', tier: 1 },
+      { family: 'lacerate', tier: 1 }
+    ],
+    apply: () => ({ amount: 44, consumeWeakness: ['expose', 'lacerate'] })
+  },
+  'berserker_unstoppable_rush': {
+    id: 'berserker_unstoppable_rush',
+    name: 'Unstoppable Rush',
+    type: 'enemy',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: (user, target) => {
+      if (user) {
+        user.initiativeGauge = Math.max(0, (user.initiativeGauge || 0) - 50);
+      }
+      const disorientStacks = target?.weakness?.tiers?.disorient || 0;
+      const bonus = disorientStacks >= 1 ? 8 * disorientStacks : 0;
+      return { amount: 28 + bonus };
+    }
+  },
+  'berserker_blood_fury': {
+    id: 'berserker_blood_fury',
+    name: 'Blood Fury',
+    type: 'enemy',
+    actionCost: 'reaction',
+    mechanic: 'reaction',
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 18, buildup: { expose: 60, disorient: 60 } })
+  }
 };
+Object.assign(SKILLS, NPC_ONLY_SKILLS);
 
 // ===============================
 // v3.2 — Dagger skills (13) — injected directly; no wrapper const

@@ -12,7 +12,7 @@ export default class SceneManager {
 
   // 🏠 Main Menu
   startMainMenu() {
-    this.scene.start('MainMenu');
+    this.scene.start('MainMenuScene');
   }
 
   // 🌆 Enter Town via loading screen
