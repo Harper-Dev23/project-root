@@ -1735,7 +1735,7 @@ export const SKILLS = {
 Object.assign(SKILLS, {
 
   // -------- Generation (7) --------
-  'needle_feint': {
+  'needle_feint': {                               //v.3.21
     id: "needle_feint",
     name: "Needle Feint",
     type: "weapon",
@@ -1746,14 +1746,41 @@ Object.assign(SKILLS, {
     requiredValue: 14,
     actionCost: "major",
     mpCost: 2,
+    hpCost: 0,
+    positionRequirement: ["front", "mid"],
     requiresTarget: true,
     targetRequirement: "enemy",
+    targetColumns: ["front", "mid"],
+    cooldown: 1,
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["feint"],
     // tooltip
     buildupHint: { expose: 60 },
     // reward on tier cross
-    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 10, turns: 1 } }],
+    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 10, turns: 1, statusId: 'reward_needle_feint_crit' } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.needle_feint;
+      const roll = calculateDamage(attacker, target);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+      }));
+
+      const reward = Array.isArray(ability?.rewardIfTierCross)
+        ? ability.rewardIfTierCross.map(rule => ({
+          ...rule,
+          buff: rule.buff ? { ...rule.buff } : undefined,
+          debuff: rule.debuff ? { ...rule.debuff } : undefined,
+        }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: 60 },
+        rewardIfTierCross: reward,
+      };
+    },
     description: "Quick stab that exposes a weakness; crossing T1 grants brief crit."
   },
 

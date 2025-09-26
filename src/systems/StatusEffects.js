@@ -10,6 +10,11 @@ export const StatusEffects = {
     isDebuff: true,
     icon: '☠🔥'   // placeholder icon; you’ll swap to a sprite later
   },
+  reward_needle_feint_crit: {
+    id: 'reward_needle_feint_crit',
+    name: 'Feint Advantage',
+    icon: '✦'
+  },
 
   regen: { name: 'Regen', duration: 2, tickHeal: 3 },
   // Add any other *non-weakness* statuses here (e.g., shields, buffs, etc.)

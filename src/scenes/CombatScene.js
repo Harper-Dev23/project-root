@@ -2144,6 +2144,12 @@ export default class CombatScene extends Phaser.Scene {
               attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + rule.healMP);
               this._log(`${attacker.name} recovers ${rule.healMP} MP (tier ${rule.tier} ${fam}).`);
             }
+            if (rule.buff) {
+              this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
+            }
+            if (rule.debuff) {
+              this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier });
+            }
           }
         }
       }
@@ -3563,6 +3569,84 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
+  _applyRewardBuff(target, buff, ability, context = {}) {
+    if (!target || !buff) return;
+
+    const turns = Math.max(1, buff.turns | 0);
+    const mods = {};
+    const summary = [];
+
+    const toStat = (key, value, label) => {
+      if (!Number.isFinite(value)) return;
+      mods[key] = (mods[key] || 0) + value;
+      const sign = value >= 0 ? '+' : '';
+      summary.push(`${sign}${value}% ${label}`);
+    };
+
+    if (Number.isFinite(buff.critChanceBonusPct)) {
+      toStat('CritChance', buff.critChanceBonusPct, 'crit chance');
+    }
+    if (Number.isFinite(buff.accPct)) {
+      toStat('Accuracy', buff.accPct, 'accuracy');
+    }
+    if (Number.isFinite(buff.guardPct)) {
+      toStat('PhysicalResist', buff.guardPct, 'guard');
+    }
+    if (Number.isFinite(buff.evasionPct)) {
+      toStat('Evasion', buff.evasionPct, 'evasion');
+    }
+
+    if (Object.keys(mods).length === 0) return;
+
+    const effectId = buff.statusId || `reward_${ability?.id || 'skill'}_buff`;
+    this._addStatusEffects(target, [{ id: effectId, turns, mods }]);
+
+    if (summary.length) {
+      const durationText = turns > 1 ? `${turns} turns` : '1 turn';
+      const abilityName = ability?.name || 'the skill';
+      const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
+      this._log?.(`${target.name} gains ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
+    }
+  }
+
+  _applyRewardDebuff(target, debuff, ability, context = {}) {
+    if (!target || !debuff) return;
+
+    const turns = Math.max(1, debuff.turns | 0);
+    const mods = {};
+    const summary = [];
+
+    const toStat = (key, value, label) => {
+      if (!Number.isFinite(value)) return;
+      mods[key] = (mods[key] || 0) + value;
+      const sign = value >= 0 ? '+' : '';
+      summary.push(`${sign}${value}% ${label}`);
+    };
+
+    if (Number.isFinite(debuff.physicalVulnPct)) {
+      toStat('PhysicalResist', -Math.abs(debuff.physicalVulnPct), 'physical guard');
+    }
+    if (Number.isFinite(debuff.accDownPct)) {
+      toStat('Accuracy', -Math.abs(debuff.accDownPct), 'accuracy');
+    }
+    if (Number.isFinite(debuff.speedDownPct)) {
+      toStat('Initiative', -Math.abs(debuff.speedDownPct), 'initiative');
+    }
+
+    if (Object.keys(mods).length === 0) return;
+
+    const effectId = debuff.statusId || `reward_${ability?.id || 'skill'}_debuff`;
+    this._addStatusEffects(target, [{ id: effectId, turns, mods }]);
+
+    if (summary.length) {
+      const durationText = turns > 1 ? `${turns} turns` : '1 turn';
+      const abilityName = ability?.name || 'the skill';
+      const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
+      this._log?.(`${target.name} suffers ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
+    }
+  }
+
+
   _addStatusEffects(target, effects = []) {
     if (!target || !Array.isArray(effects) || effects.length === 0) return;
     target.statusEffects = target.statusEffects || [];
@@ -3575,6 +3659,7 @@ export default class CombatScene extends Phaser.Scene {
         tickDamage: se.tickDamage ?? def.tickDamage ?? 0,
         tickHeal: se.tickHeal ?? def.tickHeal ?? 0,
         blocksAction: se.blocksAction ?? def.blocksAction ?? false,
+        mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
 
@@ -3587,10 +3672,15 @@ export default class CombatScene extends Phaser.Scene {
         cur.turns = Math.max(cur.turns | 0, incoming.turns | 0);
         // keep blocksAction if either says true
         cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
+        if (incoming.mods && Object.keys(incoming.mods).length) {
+          cur.mods = { ...(incoming.mods) };
+        }
       } else {
         target.statusEffects.push(incoming);
       }
     }
+
+    this._refreshStatusEffectIcons?.(target);
   }
 
 
