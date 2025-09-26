@@ -187,13 +187,13 @@ export default class UIScene extends Phaser.Scene {
           }
         }
       },
-      { label: '🗺️ Map', action: () => console.log('Open Map') },
-      { label: '📜 Quest', action: () => console.log('Open Quest Log') },
-      { label: '📖 Journal', action: () => console.log('Open Journal') },
-      { label: '⚙️ Options', action: () => console.log('Open Options') },
+      { label: '🗺️ Map', action: () => this.openOverlay('MapOverlay') },
+      { label: '📜 Quest', action: () => this.openOverlay('QuestOverlay') },
+      { label: '📖 Journal', action: () => this.openOverlay('JournalOverlay') },
+      { label: '⚙️ Options', action: () => this.openOverlay('OptionsOverlay') },
       { label: '💾 Save', action: () => this.createSaveSlotPopup() },
       { label: '🔁 Load', action: () => this.createLoadSlotPopup() },
-      { label: '🚪 Exit', action: () => console.log('Exit Game') }
+      { label: '🚪 Exit', action: () => this.exitToMainMenu() }
     ];
 
     const totalItems = menuItems.length;
@@ -386,6 +386,39 @@ export default class UIScene extends Phaser.Scene {
       .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
     return btn;
   }
+
+  openOverlay(key) {
+    if (!this.scene.isActive(key)) {
+      this.scene.launch(key);
+    }
+    this.scene.bringToTop(key);
+  }
+
+  exitToMainMenu() {
+    this.cleanupPopup?.();
+    const overlays = [
+      'CharacterListOverlay',
+      'InventoryOverlay',
+      'SkillsOverlay',
+      'MapOverlay',
+      'OptionsOverlay',
+      'JournalOverlay',
+      'QuestOverlay',
+      'PartyManagementScene'
+    ];
+    overlays.forEach(key => {
+      if (this.scene.isActive(key)) {
+        this.scene.stop(key);
+      }
+    });
+
+    if (this.scene.isActive('TownScene')) {
+      this.scene.stop('TownScene');
+    }
+
+    this.scene.start('MainMenuScene');
+  }
+
 
   createSaveSlotPopup() {
     this.cleanupPopup?.();

@@ -2,6 +2,7 @@
 import Tooltip from '../../ui/Tooltip.js';
 import { DEPTH } from '../../ui/styles.js';
 import { SKILLS } from '../../../data/skills.js';
+import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -27,50 +28,21 @@ export default class SkillsOverlay extends Phaser.Scene {
   }
 
   create() {
-    const { width: W, height: H } = this.scale;
-
-    // Root
-    this.root = this.add.container(0, 0)
-      .setDepth((DEPTH && DEPTH.MENU) ? DEPTH.MENU : 2000)
-      .setScrollFactor(0);
-
-    // Dimmer (close only if outside panel)
-    const dimmer = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.6).setInteractive();
-    this.root.add(dimmer);
-
-    // Panel metrics
-    const PAD_L = 180, PAD_R = 180, PAD_T = 15, PAD_B = 15;
-    const panelW = W - PAD_L - PAD_R;
-    const panelH = H - PAD_T - PAD_B;
-    const panelX = PAD_L, panelY = PAD_T;
-    this._panelRect = new Phaser.Geom.Rectangle(panelX, panelY, panelW, panelH);
-
-    // Panel
-    const panel = this.add.rectangle(panelX + panelW / 2, panelY + panelH / 2, panelW, panelH, 0x202020, 0.95)
-      .setStrokeStyle(2, 0xffffff);
-    this.root.add(panel);
-
-    // Shield to swallow inside clicks
-    const shield = this.add.rectangle(panelX + panelW / 2, panelY + panelH / 2, panelW, panelH, 0x000000, 0)
-      .setInteractive();
-    shield.setDepth(1);
-    this.root.add(shield);
-
-    // Backdrop close only outside panel
-    dimmer.on('pointerdown', (pointer) => {
-      const { x, y } = pointer;
-      if (!Phaser.Geom.Rectangle.Contains(this._panelRect, x, y)) this.scene.stop();
+    const frame = createOverlayFrame(this, {
+      title: 'Skills',
+      onClose: () => this._close()
     });
 
-    // Title / Close
-    const title = this.add.text(panelX + 16, panelY + 12, 'Skills', { fontSize: '20px', color: '#ffffff' });
-    this.root.add(title);
-    const closeBtn = this.add.text(panelX + panelW - 24, panelY + 12, '✕', { fontSize: '20px', color: '#ffffff' })
-      .setOrigin(1, 0).setInteractive({ useHandCursor: true });
-    closeBtn.on('pointerdown', () => this.scene.stop());
-    this.root.add(closeBtn);
+    this.root = frame.content;
 
-    // Viewport & mask
+    const panelX = frame.bounds.x;
+    const panelY = frame.bounds.y;
+    const panelW = frame.bounds.width;
+    const panelH = frame.bounds.height;
+
+    this._panelRect = new Phaser.Geom.Rectangle(panelX, panelY, panelW, panelH);
+
+
     const viewport = new Phaser.Geom.Rectangle(panelX + 16, panelY + 84, panelW - 32, panelH - 120);
     this.graphViewport = viewport;
 
@@ -87,16 +59,15 @@ export default class SkillsOverlay extends Phaser.Scene {
     this.content.setMask(geomMask);
     this.root.add(this.content);
 
-    const frame = this.add.graphics();
-    frame.lineStyle(1, 0xffffff, 1);
-    frame.strokeRect(viewport.x, viewport.y, viewport.width, viewport.height);
-    this.root.add(frame);
+    const viewportFrame = this.add.graphics();
+    viewportFrame.lineStyle(1, 0xffffff, 1);
+    viewportFrame.strokeRect(viewport.x, viewport.y, viewport.width, viewport.height);
+    this.root.add(viewportFrame);
 
     // Tooltip
     this.tooltip = new Tooltip(this);
     if (this.tooltip?.container) {
-      this.tooltip.container.setDepth(((DEPTH && DEPTH.MENU) ? DEPTH.MENU : 2000) + 20);
-      this.root.add(this.tooltip.container);
+      this.tooltip.container.setDepth(DEPTH.TOOLTIP);
     }
 
     // Build options
@@ -376,7 +347,7 @@ export default class SkillsOverlay extends Phaser.Scene {
 
     // Cooldown / uses
     if (Number.isFinite(sk.cooldown)) lines.push(`Cooldown: ${sk.cooldown} turn${sk.cooldown === 1 ? '' : 's'}`);
-    if (Number.isFinite(sk.maxUses))  lines.push(`Uses: ${sk.maxUses}`);
+    if (Number.isFinite(sk.maxUses)) lines.push(`Uses: ${sk.maxUses}`);
 
     // Scaling / damage type
     const scale = sk.scaling || sk.scale || sk.damageScale || null;
@@ -401,6 +372,12 @@ export default class SkillsOverlay extends Phaser.Scene {
 
     if (lines.length === 0) lines.push('No additional details.');
     return lines;
+  }
+
+  _close() {
+    this._hideTooltip();
+    this.scene.resume('UIScene');
+    this.scene.stop();
   }
 
   _showTooltipAt(x, y, data) { if (this.tooltip?.show) this.tooltip.show(x, y, data); }

@@ -10,6 +10,10 @@ import CharacterListOverlay from './scenes/overlays/CharacterListOverlay.js';
 import CombatScene from './scenes/CombatScene.js';
 import InventoryOverlay from './scenes/overlays/InventoryOverlay.js';
 import SkillsOverlay from './scenes/overlays/SkillsOverlay.js';
+import MapOverlay from './scenes/overlays/MapOverlay.js';
+import OptionsOverlay from './scenes/overlays/OptionsOverlay.js';
+import JournalOverlay from './scenes/overlays/JournalOverlay.js';
+import QuestOverlay from './scenes/overlays/QuestOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -27,6 +31,10 @@ const config = {
     CombatScene,
     InventoryOverlay,
     SkillsOverlay,
+    MapOverlay,
+    OptionsOverlay,
+    JournalOverlay,
+    QuestOverlay,
   ],
   physics: {
     default: 'arcade',
@@ -46,6 +54,6 @@ const game = new Phaser.Game(config);
 
 // Create and attach the SceneManager to GameState so it can be accessed globally
 GameState.sceneManager = new SceneManager(game);
-window.sceneManager    = GameState.sceneManager;
+window.sceneManager = GameState.sceneManager;
 // Optionally, launch the main menu using the manager
 GameState.sceneManager.startMainMenu();

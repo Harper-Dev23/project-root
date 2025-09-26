@@ -3,7 +3,15 @@ import { calculateDamage, calculateDualWieldDamage } from '../src/systems/Combat
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
 import { applyDamageModifiers } from '../src/systems/CombatLogic.js';
+import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
 
+
+const cloneBuffStruct = (buff) => (buff ? { ...buff } : undefined);
+const cloneRewardStruct = (reward) => (reward ? { ...reward, buff: cloneBuffStruct(reward.buff), debuff: cloneBuffStruct(reward.debuff) } : undefined);
+const cloneRewardList = (list) => (Array.isArray(list) ? list.map(rule => ({
+  ...rule, buff: cloneBuffStruct(rule.buff),
+  debuff: cloneBuffStruct(rule.debuff)
+})) : undefined);
 
 export const SkillTypes = ['weapon', 'class', 'reaction', 'special'];
 export const ActionTypes = ['major', 'bonus', 'class', 'reaction'];
@@ -1740,7 +1748,7 @@ Object.assign(SKILLS, {
     name: "Needle Feint",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -1755,7 +1763,7 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["feint"],
     // tooltip
-    buildupHint: { expose: 60 },
+    buildupHint: { expose: 110 },
     // reward on tier cross
     rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 10, turns: 1, statusId: 'reward_needle_feint_crit' } }],
     apply: (attacker, target) => {
@@ -1777,7 +1785,7 @@ Object.assign(SKILLS, {
       return {
         ...roll,
         amount,
-        buildup: { expose: 60 },
+        buildup: { expose: 110 },
         rewardIfTierCross: reward,
       };
     },
@@ -1800,6 +1808,25 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "toxic"],
     buildupHint: { toxic: 70 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.needle_venom;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let toxicBuildup = 70;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * 1.15);
+        toxicBuildup += 30;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: toxicBuildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Reliable poison builder; stronger if the target is Exposed."
   },
 
@@ -1819,6 +1846,26 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "expose"],
     buildupHint: { expose: 80 },
     rewardIfTierCross: [{ family: "expose", tier: 2, buff: { nextSkillDamagePct: 20, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.pressure_point;
+      const roll = calculateDamage(attacker, target, ability);
+      const dex = attacker?.totalStats?.DEX || 0;
+      const precisionBonus = Math.floor(dex / 6);
+      let base = roll.amount + precisionBonus;
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * 1.1);
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: 80 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "Precise strike that ramps Expose; hitting T2 buffs your next skill this turn."
   },
 
@@ -1838,6 +1885,45 @@ Object.assign(SKILLS, {
     tags: ["stealth", "support"],
     statusEffects: [{ id: "stealth", turns: 1 }],
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { evasionPct: 10, turns: 1, scope: "selfNearExposed" } },
+    apply: (attacker, _target, scene) => {
+      const ability = SKILLS?.ghoststep;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      let nearExposed = false;
+      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(attacker);
+        if (column) {
+          const opposingSlots = attacker?.isEnemy ? scene.allySlots : scene.enemySlots;
+          nearExposed = opposingSlots?.some(slot => {
+            if (!slot || scene._getColumnBySlotId(slot.slotId) !== column) return false;
+            const unit = slot.char;
+            if (!unit || unit.status === 'incapacitated') return false;
+            return (unit?.weakness?.tiers?.expose || 0) >= 1;
+          }) || false;
+        }
+      }
+
+      if (nearExposed) {
+        const buff = ability?.rewardIfWeak?.buff || {};
+        statusEffects.push({
+          id: 'ghoststep_evasion',
+          turns: buff.turns ?? 1,
+          evasionPct: buff.evasionPct ?? 10,
+        });
+      }
+
+      const log = nearExposed
+        ? `${attacker.name} melts into shadow, drawing cover from exposed foes.`
+        : `${attacker.name} slips into the shadows.`;
+
+      return {
+        amount: 0,
+        statusEffects,
+        log,
+      };
+    },
     description: "Slip into stealth; standing near Exposed foes grants extra evasion."
   },
 
@@ -1858,6 +1944,52 @@ Object.assign(SKILLS, {
     buildupHint: { curse: 60 },
     aoe: { shape: "circle", scale: 1 }, // “adjacent” in your tooltip
     proliferateWeakness: { families: ["curse"], to: "adjacent", ratio: 0.5, maxTargets: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.hex_stitch;
+      const roll = calculateDamage(attacker, target, ability);
+      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
+      const preAmount = roll.amount + intBonus;
+      let amount = Math.max(1, applyDamageModifiers(preAmount, attacker, target, { ability, tags: ability?.tags, element: 'curse', isMagic: true }));
+
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      if (curseTier > 0) {
+        const meter = target?.weakness?.meters?.curse || 0;
+        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+        const tierBonus = 0.12 * curseTier;
+        const overflowBonus = Math.max(0, intensity - 1) * 0.08;
+        amount = Math.floor(amount * (1 + tierBonus + overflowBonus));
+      }
+
+      let splash;
+      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .slice(0, 2) || [];
+          if (neighbors.length) {
+            const splashAmount = Math.max(1, Math.floor(amount * 0.55));
+            const splashBuildup = Math.max(1, Math.floor(ability?.buildupHint?.curse ? ability.buildupHint.curse * 0.5 : 30));
+            splash = neighbors.map(slot => ({
+              target: slot.char,
+              amount: splashAmount,
+              isMagic: true,
+              buildup: { curse: splashBuildup },
+              tags: ability?.tags,
+            }));
+          }
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { curse: 60 },
+        splash,
+      };
+    },
     description: "Applies lingering Curse; spreads half the current Curse to nearby enemies."
   },
 
@@ -1877,6 +2009,32 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "lightning"],
     buildupHint: { lightning: 60 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 1, buff: { chanceExtraHitPct: 25 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.static_prick;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags, element: 'lightning' }));
+
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      let buildup = 60;
+      let extraHitAmount = 0;
+      if (lightningTier >= 1) {
+        amount = Math.floor(amount * 1.1);
+        buildup += 20;
+        const chance = ability?.rewardIfWeak?.buff?.chanceExtraHitPct || 0;
+        if (chance > 0 && (Math.random() * 100) < chance) {
+          extraHitAmount = Math.max(1, Math.floor(amount * 0.35));
+          amount += extraHitAmount;
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lightning: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: extraHitAmount ? [{ amount: extraHitAmount, element: 'lightning' }] : undefined,
+      };
+    },
     description: "Seeds Shock; against Shocked foes, chance to add a bonus light hit."
   },
 
@@ -1894,6 +2052,58 @@ Object.assign(SKILLS, {
     requiresTarget: true,
     targetRequirement: "ally",
     tags: ["support", "mp", "cleanse"],
+    apply: (attacker, target, scene) => {
+      if (!target) {
+        return { amount: 0, log: `${attacker.name} fumbles for a vial but finds no recipient.` };
+      }
+
+      const cha = attacker?.totalStats?.CHA || 0;
+      const baseRestore = 3 + Math.floor(cha / 5);
+      let bonus = 0;
+
+      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const enemySlots = target?.isEnemy ? scene.allySlots : scene.enemySlots;
+          const diseasedNearby = enemySlots?.some(slot => {
+            if (!slot || scene._getColumnBySlotId(slot.slotId) !== column) return false;
+            const foe = slot.char;
+            if (!foe || foe.status === 'incapacitated') return false;
+            return (foe?.weakness?.tiers?.disease || 0) >= 1;
+          });
+          if (diseasedNearby) bonus += 2;
+        }
+      }
+
+      const restore = Math.max(0, baseRestore + bonus);
+      if (restore > 0) {
+        const maxMP = target.maxMP || target.derived?.maxMP || 0;
+        if (maxMP > 0) {
+          target.currentMP = Math.min(maxMP, (target.currentMP || 0) + restore);
+        } else {
+          target.currentMP = (target.currentMP || 0) + restore;
+        }
+      }
+
+      let cleansed = false;
+      if (target?.weakness?.meters?.disease > 0) {
+        const newMeter = Math.max(0, target.weakness.meters.disease - 60);
+        target.weakness.meters.disease = newMeter;
+        if (target.weakness.tiers) {
+          target.weakness.tiers.disease = weaknessTierFromMeter(newMeter);
+        }
+        cleansed = true;
+      }
+
+      const logParts = [`${attacker.name} administers a quick tonic to ${target.name}, restoring ${restore} MP.`];
+      if (bonus > 0) logParts.push('Nearby illness sharpens the mixture.');
+      if (cleansed) logParts.push('Some lingering disease fades.');
+
+      return {
+        amount: 0,
+        log: logParts.join(' '),
+      };
+    },
     description: "Restore small MP to self/ally; a bit more if any nearby enemy is Diseased."
   },
 
@@ -1914,6 +2124,21 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "execute"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.5 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.heartpiercer;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const finisherBase = 1.35 + Math.max(0, exposeTier - 1) * 0.1;
+      amount = Math.floor(amount * finisherBase);
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Heavy finisher usable only on Exposed targets; bigger crits at T2. Does not consume."
   },
 
@@ -1935,6 +2160,28 @@ Object.assign(SKILLS, {
     consumeWeakness: ["toxic"],
     buildupHint: { toxic: 100 }, // for tooltip: intended consumption cap
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_bloom;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+
+      const toxicMeter = target?.weakness?.meters?.toxic || 0;
+      const toxicTier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(toxicMeter) || 1);
+      const rapidTicks = 3 + (toxicTier >= 2 ? 1 : 0);
+      const tickBase = Math.max(1, Math.floor((attacker?.totalStats?.DEX || 0) / 6) + Math.floor(toxicMeter / 45));
+      const rapidDamage = Math.max(0, tickBase * rapidTicks);
+
+      amount += rapidDamage;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        rapidWeakness: rapidDamage ? { family: 'toxic', ticks: rapidTicks, snapshotIntensity: intensity } : undefined,
+      };
+    },
     description: "Consume Toxic to trigger rapid DOT ticks (snapshot). Adds a 4th tick at T2."
   },
 
@@ -1953,6 +2200,22 @@ Object.assign(SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "stealth"],
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { damagePct: 15 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.silent_order;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * 1.15);
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Stealth-friendly strike that hits harder when the target is Exposed. Does not consume Expose."
   },
 
@@ -1971,6 +2234,26 @@ Object.assign(SKILLS, {
     targetRequirement: "enemy",
     tags: ["curse", "amplify", "magic"],
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.curse_snap;
+      const roll = calculateDamage(attacker, target, ability);
+      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
+      const base = roll.amount + intBonus;
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags, element: 'curse', isMagic: true }));
+
+      const meter = target?.weakness?.meters?.curse || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.08));
+
+      const status = { id: 'curse_snap', turns: 1, doubleCurseTicks: true };
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        statusEffects: [status],
+      };
+    },
     description: "For one turn, all Curse effects on the target tick twice (amplify only; no consume)."
   },
 
@@ -1990,6 +2273,29 @@ Object.assign(SKILLS, {
     tags: ["melee", "attack", "lightning", "amplify"],
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 60 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.flash_overload;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags, element: 'lightning' }));
+
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      let repeatDamage = 0;
+      if (lightningTier >= 1) {
+        amount = Math.floor(amount * 1.2);
+      }
+      if (lightningTier >= 2) {
+        const pct = ability?.rewardIfWeak?.buff?.repeatPowerPct ?? 60;
+        repeatDamage = Math.max(1, Math.floor(amount * (pct / 100)));
+        amount += repeatDamage;
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: repeatDamage ? [{ amount: repeatDamage, element: 'lightning', repeat: true }] : undefined,
+      };
+    },
     description: "Requires Shocked target; at T2 repeats the strike once at reduced power."
   },
 
@@ -2011,6 +2317,48 @@ Object.assign(SKILLS, {
     transformWeakness: { from: "lacerate", to: "toxic", ratio: 0.75 },
     buildupHint: { lacerate: 100 }, // tooltip: transform cap
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.vein_tap;
+      const roll = calculateDamage(attacker, target, ability);
+      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 4);
+      const base = roll.amount + intBonus;
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags }));
+
+      const transform = ability?.transformWeakness;
+      let transformed;
+      if (transform && target?.weakness) {
+        const fromKey = transform.from;
+        const toKey = transform.to;
+        const ratio = transform.ratio ?? 1;
+        const current = target.weakness.meters?.[fromKey] || 0;
+        if (current > 0) {
+          const transfer = Math.max(0, Math.floor(current * ratio));
+          const remaining = Math.max(0, current - transfer);
+          target.weakness.meters[fromKey] = remaining;
+          target.weakness.meters[toKey] = (target.weakness.meters[toKey] || 0) + transfer;
+          if (target.weakness.tiers) {
+            target.weakness.tiers[fromKey] = weaknessTierFromMeter(target.weakness.meters[fromKey]);
+            target.weakness.tiers[toKey] = weaknessTierFromMeter(target.weakness.meters[toKey]);
+          }
+          transformed = { from: fromKey, to: toKey, amount: transfer };
+        }
+      }
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const buildup = exposeTier >= 1 ? { toxic: 30 } : undefined;
+      const log = transformed
+        ? `${attacker.name} taps the wound, turning bleed into venom.`
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        buildup,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        transformedWeakness: transformed,
+        log,
+      };
+    },
     description: "Transforms Bleed into Poison and strikes; adds bonus Poison if the target is also Exposed."
   },
 

@@ -44,8 +44,9 @@ export default class LoadingScene extends Phaser.Scene {
     // Load sidebar art (global UI)
     this.load.image('sidebar_left', 'assets/UIinterface/sidebar_left.png');
 
-    // Map (WebP) — same key, new file
-this.load.image('campMap', 'assets/maps/Camp_Nehemiah_NIGHTSCENE.webp');
+    // Map (WebP) assets
+    this.load.image('campMap', 'assets/maps/Camp_Nehemiah_NIGHTSCENE.webp');
+    this.load.image('map_behelith_island', 'assets/maps/Behelith_Island_Map.webp');
 
 
     // 🔄 Batch load glow frame sequences

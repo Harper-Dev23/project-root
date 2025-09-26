@@ -1,8 +1,9 @@
 import GameState from '../../systems/GameState.js';
 import { Items } from '../../../data/items.js';
-import { isItemInstance, createItemInstance } from '../../systems/ItemFactory.js';
+import { isItemInstance } from '../../systems/ItemFactory.js';
 import InventorySystem from '../../systems/InventorySystem.js';
 import Tooltip from '../../ui/Tooltip.js';
+import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -98,30 +99,22 @@ export default class InventoryOverlay extends Phaser.Scene {
     // remove any leftover wheel handler from a previous run
     if (this._onWheel) this.input.off('wheel', this._onWheel, this);
 
+    const frame = createOverlayFrame(this, {
+      title: 'Inventory',
+      onClose: () => this._handleClose()
+    });
 
-    // BACKDROP
-    this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
-      .setInteractive()
-      .setDepth(1999);
-
-    const safeWidth = (1280 - (180 * 2)) - 20 + 10;
-    const safeHeight = 720 - (15 + 15);
-
-    const bg = this.add.rectangle(640, 720 / 2, safeWidth, safeHeight, 0x111111, 0.95)
-      .setStrokeStyle(3, 0xffffff)
-      .setDepth(2000);
+    const safeWidth = frame.bounds.width;
+    const safeHeight = frame.bounds.height;
+    const contentDepth = frame.depth;
 
     if (this.firstOpen) {
-      bg.setAlpha(0);
-      this.tweens.add({ targets: bg, alpha: 1, duration: 200 });
+      frame.panel.setAlpha(0);
+      this.tweens.add({ targets: frame.panel, alpha: 0.95, duration: 200 });
       this.firstOpen = false;
     }
 
-    this.add.text(640, 50, 'Inventory', {
-      fontSize: '28px',
-      color: '#ffddaa',
-      fontFamily: 'Georgia'
-    }).setOrigin(0.5).setDepth(2001);
+    frame.dimmer.setAlpha(0.65);
 
     // CHARACTER SELECTOR
     GameState.party.forEach((char, i) => {
@@ -130,7 +123,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         color: (i === this.selectedCharIndex) ? '#ffff88' : '#cccccc'
       }).setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { this.selectedCharIndex = i; this.scene.restart(); })
-        .setDepth(2001);
+        .setDepth(contentDepth);
     });
 
     const char = GameState.party[this.selectedCharIndex];
@@ -139,7 +132,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     // EQUIPPED GEAR
     let equipY = 140;
-    this.add.text(200, equipY, 'Equipped:', { fontSize: '18px', color: '#ffffff' }).setDepth(2001);
+    this.add.text(200, equipY, 'Equipped:', { fontSize: '18px', color: '#ffffff' }).setDepth(contentDepth);
     equipY += 20;
 
     Object.keys(char.equipment).forEach(slot => {
@@ -159,7 +152,7 @@ export default class InventoryOverlay extends Phaser.Scene {
       const nameTxt = this.add.text(200, lineY, `${slot}: ${disp.name}`, {
         fontSize: '14px',
         color: disp.color
-      }).setDepth(2001)
+      }).setDepth(contentDepth)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', (p) => this.tooltip.show(p.worldX, p.worldY, {
           title: disp.title || disp.name,
@@ -184,7 +177,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
           })
 
-          .setDepth(2001);
+          .setDepth(contentDepth);
       }
 
       equipY += 16;
@@ -192,7 +185,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     // --- PERSONAL INVENTORY HEADER ---
     equipY += 10;
-    this.add.text(200, equipY, 'Personal Inventory:', { fontSize: '16px', color: '#ffffff' }).setDepth(2001);
+    this.add.text(200, equipY, 'Personal Inventory:', { fontSize: '16px', color: '#ffffff' }).setDepth(contentDepth);
     equipY += 20;
 
     // Personal category toggle
@@ -209,7 +202,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         color: (this.currentPersonalCategory === cat.key) ? '#ffff88' : '#cccccc'
       }).setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { this.currentPersonalCategory = cat.key; this.scene.restart(); })
-        .setDepth(2001);
+        .setDepth(contentDepth);
     });
     equipY += 20;
 
@@ -231,10 +224,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     const pMaskShape = new Phaser.Display.Masks.GeometryMask(this, pMaskGfx);
 
     // list container, positioned exactly at mask origin
-    const pList = this.add.container(pMaskX, pMaskY).setDepth(2001).setMask(pMaskShape);
-
-    // (optional) debug window; comment out when done
-    // this.add.rectangle(pMaskX, pMaskY, pMaskWidth, pMaskHeight, 0x00ff00, 0.08).setDepth(2000);
+    const pList = this.add.container(pMaskX, pMaskY).setDepth(contentDepth).setMask(pMaskShape);
 
     // --- PERSONAL ROWS ---
     personalItems.forEach((item, idx) => {
@@ -339,7 +329,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         color: (this.currentGlobalCategory === cat.key) ? '#ffff88' : '#cccccc'
       }).setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { this.currentGlobalCategory = cat.key; this.scene.restart(); })
-        .setDepth(2001)
+        .setDepth(contentDepth)
         .setOrigin(0.5);
     });
 
@@ -353,10 +343,10 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const mask = this.add.graphics().fillRect(0, 0, newWidth, safeHeightAdj);
     const maskShape = mask.createGeometryMask();
-    mask.setPosition(newX, gToggleY + 20).setDepth(2001);
+    mask.setPosition(newX, gToggleY + 20).setDepth(contentDepth);
     mask.setVisible(false);
 
-    const listContainer = this.add.container(newX, gToggleY + 20).setMask(maskShape).setDepth(2001);
+    const listContainer = this.add.container(newX, gToggleY + 20).setMask(maskShape).setDepth(contentDepth);
 
     const spacing = 38;
     inventoryItems.forEach((item, i) => {
@@ -509,7 +499,13 @@ export default class InventoryOverlay extends Phaser.Scene {
       fontSize: '20px',
       color: '#ff8888'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.scene.stop()).setDepth(2001);
+      .on('pointerdown', () => this._handleClose()).setDepth(contentDepth);
+  }
+
+  _handleClose() {
+    this.tooltip?.hide();
+    this.scene.resume('UIScene');
+    this.scene.stop();
   }
 
   _filterByCategory(items, category) {
