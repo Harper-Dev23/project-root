@@ -1,5 +1,5 @@
 // Advanced encounter AI profiles
-
+//test
 const isAlive = unit => unit && unit.status !== 'incapacitated';
 
 const hasAction = (npc, type) => (npc?.actionsLeft?.[type] || 0) > 0;
