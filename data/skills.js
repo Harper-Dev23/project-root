@@ -2553,7 +2553,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["feint"],
     // tooltip
-    buildupHint: { expose: 110 },
+    buildupHint: { expose: 1110 },
     // reward on tier cross
     rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 10, turns: 1, statusId: 'reward_needle_feint_crit' } }],
     apply: (attacker, target) => {
@@ -2575,7 +2575,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         amount,
-        buildup: { expose: 110 },
+        buildup: { expose: 1110 },
         rewardIfTierCross: reward,
       };
     },
