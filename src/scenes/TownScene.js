@@ -160,12 +160,12 @@ export default class TownScene extends Phaser.Scene {
     this._registerGlowZone('Bonfire', {
       key: 'glow_bonfire',
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
-      x: 648, y: 330,
-      scale: 0.17,
+      x: 649, y: 330,
+      scale: 0.14,
       fps: 4,
       alpha: 0.9
     }, {
-      x: 654, y: 327,
+      x: 655, y: 327,
       width: 60,
       height: 50,
       onClick: () => {
@@ -392,12 +392,12 @@ export default class TownScene extends Phaser.Scene {
     this._registerGlowZone('CombatPit', {
       key: 'glow_combat_pit',
       frames: COMMON_FRAMES,
-      x: 823, y: 70,
+      x: 824, y: 71,
       scale: 0.15,
       fps: 4,
       alpha: 0.9
     }, {
-      x: 823, y: 87,
+      x: 824, y: 88,
       width: 60, height: 60,
       onClick: () => this._enterCombatPit()
     });
