@@ -584,6 +584,8 @@ export default class UIScene extends Phaser.Scene {
     if (this.nameInputDOM) { this.nameInputDOM.destroy(); this.nameInputDOM = null; }
     if (this.modalPanelGroup) { this.modalPanelGroup.destroy(true); this.modalPanelGroup = null; }
     if (this.modalBlockerGroup) { this.modalBlockerGroup.destroy(true); this.modalBlockerGroup = null; }
+    if (this.popupGroup) { this.popupGroup.destroy(true); this.popupGroup = null; }
+    if (this.popupButtons) { this.popupButtons.length = 0; }
   }
 
   showSelectionMenu(title, options) {
@@ -597,6 +599,7 @@ export default class UIScene extends Phaser.Scene {
     // Dark background overlay
     const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7)
       .setOrigin(0.5)
+      .setInteractive();
 
 
     // Title

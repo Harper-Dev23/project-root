@@ -2,7 +2,7 @@ import GameState from '../systems/GameState.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import { Items } from '../../data/items.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
-import { createItemInstance } from '../systems/ItemFactory.js';
+import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import Tooltip from '../ui/Tooltip.js';
 
 // === Shared quality colors ===
@@ -31,6 +31,51 @@ function getWeaponIdPool() {
     .map(([id]) => id);
 }
 
+function getArmorIdPool() {
+  return Object.entries(Items)
+    .filter(([, it]) => it?.type === 'armor')
+    .map(([id]) => id);
+}
+
+const DERIVED_LABELS = {
+  maxHP: 'Max HP',
+  maxMP: 'Max MP',
+  PhysicalResist: 'Physical Resist',
+  ElementalResist: 'Elemental Resist',
+  Accuracy: 'Accuracy',
+  CritAvoid: 'Crit Avoid'
+};
+
+const DEFAULT_VENDOR_FLAVOR = "A selection of traders await behind makeshift stalls.";
+
+function formatStatKey(stat) {
+  if (!stat) return stat;
+  switch (stat) {
+    case 'STR': return 'STR';
+    case 'DEX': return 'DEX';
+    case 'INT': return 'INT';
+    case 'CON': return 'CON';
+    case 'WIS': return 'WIS';
+    case 'CHA': return 'CHA';
+    default:
+      return stat.replace(/([A-Z])/g, ' $1').replace(/^\s+/, '').replace(/\b\w/g, s => s.toUpperCase());
+  }
+}
+
+function formatSigned(value, suffix = '') {
+  if (value == null || value === 0) return null;
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value}${suffix}`;
+}
+
+function formatLabel(str = '') {
+  if (!str) return '';
+  return str
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, s => s.toUpperCase())
+    .replace(/(\d)([a-z])/gi, (_, num, letter) => `${num}${letter.toUpperCase()}`);
+}
 
 export default class TownScene extends Phaser.Scene {
   constructor() {
@@ -118,6 +163,157 @@ export default class TownScene extends Phaser.Scene {
 
   _setMapScale(ms) { this._mapScale = ms; }
   _getMapScale() { return this._mapScale || 1; }
+
+  _clearGambleButtons() {
+    if (this.gambleButtons) {
+      this.gambleButtons.forEach(btn => btn?.destroy?.());
+    }
+    this.gambleButtons = [];
+  }
+
+  _resetVendorRowState() {
+    this._clearGambleButtons();
+
+    if (this.vendorInventoryContainer) {
+      this.vendorInventoryContainer.removeAll(true);
+      this.vendorInventoryContainer.y = 0;
+      this.vendorInventoryContainer.listHeight = 0;
+      this.vendorInventoryContainer.topPadding = 0;
+      this.vendorInventoryContainer.lineHeight = 36;
+      this._resetInventoryMask();
+    }
+
+    if (this.vendorInventoryTitle) {
+      this.vendorInventoryTitle.setText('Select a Vendor');
+    }
+
+    if (this.vendorInventoryText) {
+      this.vendorInventoryText.setText('');
+    }
+
+    if (this.vendorLeftFlavor) {
+      this.vendorLeftFlavor.setText(DEFAULT_VENDOR_FLAVOR);
+      this.vendorLeftFlavor.setVisible(true);
+    }
+
+    if (this.vendorListContainer) {
+      this.vendorListContainer.removeAll(true);
+      this.showVendorList();
+    }
+
+    this.tooltip?.hide();
+  }
+
+  _buildItemTooltipData(itemRef) {
+    const view = getItemComputedData(itemRef);
+    if (!view) return null;
+
+    const lines = [];
+    if (view.description) lines.push(view.description);
+
+    if (view.type === 'weapon') {
+      if (view.weaponType) lines.push(`Type: ${formatLabel(view.weaponType)}`);
+      if (typeof view.hands === 'number') lines.push(`Hands: ${view.hands}`);
+      if (view.damage && (view.damage.min != null || view.damage.max != null)) {
+        const min = view.damage.min ?? '?';
+        const max = view.damage.max ?? '?';
+        lines.push(`Damage: ${min}–${max}`);
+      }
+
+      const weaponMods = view._weaponMods || {};
+      const flat = weaponMods.damageFlat || {};
+      const flatLine = [];
+      if (flat.min) flatLine.push(formatSigned(flat.min, ' Min Damage'));
+      if (flat.max) flatLine.push(formatSigned(flat.max, ' Max Damage'));
+      if (flatLine.length) lines.push(flatLine.join(', '));
+
+      if (weaponMods.localDamagePercent) {
+        lines.push(`${formatSigned(weaponMods.localDamagePercent, '%')} Local Damage`);
+      }
+
+      const elementalFlat = weaponMods.elementalFlat || {};
+      Object.entries(elementalFlat).forEach(([element, range]) => {
+        if (!range) return;
+        const min = range.min ?? 0;
+        const max = range.max ?? min;
+        lines.push(`+${min}–${max} ${formatLabel(element)} Damage`);
+      });
+
+      const buildup = weaponMods.buildupPercent || {};
+      Object.entries(buildup).forEach(([family, amount]) => {
+        if (!amount) return;
+        lines.push(`${formatSigned(amount, '%')} ${formatLabel(family)} Buildup`);
+      });
+    } else if (view.type === 'armor') {
+      if (view.slot) lines.push(`Slot: ${formatLabel(view.slot)}`);
+    }
+
+    const bonuses = view.bonuses || {};
+    Object.entries(bonuses).forEach(([stat, amount]) => {
+      if (!amount) return;
+      lines.push(`${formatSigned(amount)} ${formatStatKey(stat)}`);
+    });
+
+    const derived = view._derivedMods || {};
+    Object.entries(derived).forEach(([key, amount]) => {
+      if (!amount) return;
+      const label = DERIVED_LABELS[key] || formatLabel(key);
+      lines.push(`${formatSigned(amount)} ${label}`);
+    });
+
+    const misc = view._miscMods || {};
+    if (misc.resilience) lines.push(`${formatSigned(misc.resilience)} Resilience`);
+    if (misc.globalDamagePercent) lines.push(`${formatSigned(misc.globalDamagePercent, '%')} Global Damage`);
+    if (misc.elementalDamagePercent) lines.push(`${formatSigned(misc.elementalDamagePercent, '%')} Elemental Damage`);
+    if (misc.necroticDamagePercent) lines.push(`${formatSigned(misc.necroticDamagePercent, '%')} Necrotic Damage`);
+    if (misc.mpPerTurn) lines.push(`${formatSigned(misc.mpPerTurn)} MP per Turn`);
+    if (misc.skillCostReductionPct) lines.push(`${formatSigned(misc.skillCostReductionPct, '%')} Skill Cost Reduction`);
+
+    const miscBuildup = misc.buildupPercent || {};
+    Object.entries(miscBuildup).forEach(([family, amount]) => {
+      if (!amount) return;
+      lines.push(`${formatSigned(amount, '%')} ${formatLabel(family)} Buildup`);
+    });
+
+    if (!lines.length) lines.push('No additional properties.');
+
+    return {
+      title: view.name,
+      titleColor: QUALITY_COLORS[view.quality] || '#dddddd',
+      lines
+    };
+  }
+
+  _attachTooltip(displayObj, {
+    itemRef = null,
+    tooltipData = null,
+    baseColor = null,
+    hoverColor = '#ffffff'
+  } = {}) {
+    if (!displayObj?.on) return;
+
+    displayObj.on('pointerover', (pointer) => {
+      if (displayObj.setColor && hoverColor) {
+        displayObj.setColor(hoverColor);
+      }
+
+      const data = tooltipData || this._buildItemTooltipData(itemRef);
+      if (data && this.tooltip) {
+        this.tooltip.show(pointer.worldX, pointer.worldY, data);
+      }
+    });
+
+    displayObj.on('pointermove', (pointer) => {
+      this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+    });
+
+    displayObj.on('pointerout', () => {
+      if (displayObj.setColor && baseColor) {
+        displayObj.setColor(baseColor);
+      }
+      this.tooltip?.hide();
+    });
+  }
 
 
   create() {
@@ -422,6 +618,10 @@ export default class TownScene extends Phaser.Scene {
   }
 
   _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, exitText = '[ Exit ]', onExit }) {
+    const blocker = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
+      .setOrigin(0.5)
+      .setInteractive();
+
     const bg = this.add.rectangle(640, 360, 915, 685, bgColor, 1)
       .setStrokeStyle(4, 0x886644)
       .setDepth(0);
@@ -448,7 +648,7 @@ export default class TownScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', onExit);
 
-    return this.add.container(0, 0, [bg, title, flavor, exitBtn]).setDepth(11);
+    return this.add.container(0, 0, [blocker, bg, title, flavor, exitBtn]).setDepth(11);
   }
 
 
@@ -516,6 +716,7 @@ export default class TownScene extends Phaser.Scene {
 
     if (this.vendorRowGroup) {
       this.vendorRowGroup.setVisible(true);
+      this._resetVendorRowState();
       return;
     }
 
@@ -529,13 +730,12 @@ export default class TownScene extends Phaser.Scene {
 
     // Vendor list container
     this.vendorListContainer = this.add.container(0, 0);
-    this.showVendorList();
 
     // Hide any default flavor produced by _buildInteriorLayout to prevent overlap
     if (this.vendorRowFlavorText) this.vendorRowFlavorText.setVisible(false);
 
     this.vendorLeftFlavor = this.add.text(230, 440,
-      "A selection of traders await behind makeshift stalls.",
+      DEFAULT_VENDOR_FLAVOR,
       { fontSize: '16px', color: '#aaaaaa', wordWrap: { width: 280 } }
     );
 
@@ -552,11 +752,11 @@ export default class TownScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#ffddaa'
     }).setOrigin(0.5);
-    this.vendorInventoryText = this.add.text(610, 250, '', {
+    this.vendorInventoryText = this.add.text(610, 210, '', {
       fontSize: '16px',
       color: '#dddddd',
       wordWrap: { width: 470 }
-    });
+    }).setOrigin(0, 1);
 
     // Inventory scroll container
     this.vendorInventoryContainer = this.add.container(0, 0);
@@ -572,6 +772,9 @@ export default class TownScene extends Phaser.Scene {
 
     layout.setDepth(12);
     this.vendorRowGroup = layout;
+    this.gambleButtons = [];
+
+    this._resetVendorRowState();
 
     // Wheel scroll handler for inventory panel
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
@@ -621,45 +824,37 @@ export default class TownScene extends Phaser.Scene {
 
 
   leaveVendorRow() {
-    if (this.gambleButton) { this.gambleButton.destroy(); this.gambleButton = null; }
+    this._clearGambleButtons();
+
     if (this.vendorRowGroup) this.vendorRowGroup.setVisible(false);
     if (this.campMap) this.campMap.setVisible(true);
 
     if (this.vendorLeftFlavor) this.vendorLeftFlavor.setVisible(false);
-    if (this.vendorInventoryText) this.vendorInventoryText.setText(''); // right panel cleared
+    if (this.vendorInventoryText) this.vendorInventoryText.setText('');
     this.tooltip?.hide();
 
 
-    // ✅ Cleanup vendor buttons
     if (this.vendorButtons) {
       this.vendorButtons.forEach(btn => btn.destroy());
       this.vendorButtons = [];
     }
 
-    // ✅ Cleanup category tabs
+
     if (this.vendorCategoryButtons) {
       this.vendorCategoryButtons.forEach(btn => btn.destroy());
       this.vendorCategoryButtons = [];
     }
 
-    // ✅ Reset inventory scroll container
-    if (this.vendorInventoryContainer) {
-      this.vendorInventoryContainer.removeAll(true);
-      this.vendorInventoryContainer.y = 0;
-    }
-
-    // ✅ Optionally reset text fields
-    if (this.vendorInventoryTitle) this.vendorInventoryTitle.setText('Select a Vendor');
-    if (this.vendorInventoryText) this.vendorInventoryText.setText('');
+    this._resetVendorRowState();
   }
 
 
   showVendorList() {
-    if (this.gambleButton) { this.gambleButton.destroy(); this.gambleButton = null; }
+    this._clearGambleButtons();
     if (this.vendorListContainer) this.vendorListContainer.removeAll(true);
 
     if (this.vendorLeftFlavor) {
-      this.vendorLeftFlavor.setText("A selection of traders await behind makeshift stalls.");
+      this.vendorLeftFlavor.setText(DEFAULT_VENDOR_FLAVOR);
       this.vendorLeftFlavor.setVisible(true);
     }
 
@@ -719,7 +914,7 @@ export default class TownScene extends Phaser.Scene {
           this.vendorInventoryTitle.setText('Select a Vendor');
           // keep the layout flavor hidden; drive flavor via vendorLeftFlavor only
           if (this.vendorLeftFlavor) {
-            this.vendorLeftFlavor.setText("A selection of traders await behind makeshift stalls.");
+            this.vendorLeftFlavor.setText(DEFAULT_VENDOR_FLAVOR);
             this.vendorLeftFlavor.setVisible(true);
           }
           this.vendorInventoryText.setText(''); // right panel messages are for purchases only
@@ -732,7 +927,7 @@ export default class TownScene extends Phaser.Scene {
   }
 
   openVendorInventory(vendorKey, filterType = 'all') {
-    if (this.gambleButton) { this.gambleButton.destroy(); this.gambleButton = null; }
+    this._clearGambleButtons();
     const vendors = this.getVendorDefinitions();
     const vendor = vendors[vendorKey];
     if (!vendor) {
@@ -767,54 +962,77 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.lineHeight = LOG_LINE_H;
       this.vendorInventoryContainer.y = 0;
 
-      // Fixed button OUTSIDE the scroll container
-      this.gambleButton = this.add.text(620, 220, '[ Gamble (Free) ]', {
-        fontSize: '20px',
-        color: '#ffddaa'
-      })
-        .setDepth(13)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerover', function () { this.setColor('#ffffff'); })
-        .on('pointerout', function () { this.setColor('#ffddaa'); })
-        .on('pointerdown', () => {
-          const pool = getWeaponIdPool();
-          if (!pool.length) {
-            this.vendorInventoryText.setText('No weapon IDs found in Items.js.');
-            return;
-          }
-          const baseId = pool[(Math.random() * pool.length) | 0];
-          const q = randomQualityForGamble();
-          const inst = createItemInstance(baseId, { quality: q });
-          if (!inst) {
-            this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
-            return;
-          }
+      const createGambleButton = ({ label, y, poolGetter, emptyMessage }) => {
+        const btn = this.add.text(620, y, `[ Gamble ${label} ]`, {
+          fontSize: '20px',
+          color: '#ffddaa'
+        })
+          .setDepth(13)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerover', function () { this.setColor('#ffffff'); })
+          .on('pointerout', function () { this.setColor('#ffddaa'); })
+          .on('pointerdown', () => {
+            const pool = poolGetter();
+            if (!pool.length) {
+              this.vendorInventoryText.setText(emptyMessage);
+              return;
+            }
 
-          InventorySystem.addGlobalItem(inst);
+            const baseId = pool[(Math.random() * pool.length) | 0];
+            const q = randomQualityForGamble();
+            const inst = createItemInstance(baseId, { quality: q });
+            if (!inst) {
+              this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
+              return;
+            }
 
-          // log line
-          const BONEPILE_LOG_START_Y = 300;
-          const LOG_X = 590;
-          const LOG_LINE_H = 24;
-          const lineY = BONEPILE_LOG_START_Y + this.vendorInventoryContainer.listHeight;
-          const line = this.add.text(LOG_X, lineY, `→ ${inst.displayName}`, {
-            fontSize: '16px',
-            color: QUALITY_COLORS[q] || '#ffffff'
-          }).setDepth(13);
-          this.vendorInventoryContainer.add(line);
-          this.vendorInventoryContainer.listHeight += LOG_LINE_H;
+            InventorySystem.addGlobalItem(inst);
 
-          // auto-scroll
-          const visibleH = (this._inventoryMaskBottom - this._inventoryMaskTop);
-          let maxScroll = Math.max(0, this.vendorInventoryContainer.listHeight - visibleH);
-          if (LOG_LINE_H > 0) maxScroll = Math.ceil(maxScroll / LOG_LINE_H) * LOG_LINE_H;
-          this.vendorInventoryContainer.y = -maxScroll;
+            const lineY = BONEPILE_LOG_START_Y + this.vendorInventoryContainer.listHeight;
+            const displayColor = QUALITY_COLORS[q] || '#ffffff';
+            const line = this.add.text(LOG_X, lineY, `→ ${inst.displayName}`, {
+              fontSize: '16px',
+              color: displayColor
+            })
+              .setDepth(13)
+              .setInteractive({ useHandCursor: true });
 
-          this.vendorInventoryText.setText(`You received: ${inst.displayName}`);
-        });
+            const tooltipData = this._buildItemTooltipData(inst);
+            this._attachTooltip(line, {
+              tooltipData,
+              baseColor: displayColor,
+              hoverColor: '#ffffff'
+            });
 
-      if (this.vendorRowGroup) this.vendorRowGroup.add(this.gambleButton);
-      else this.add.existing(this.gambleButton);
+            this.vendorInventoryContainer.add(line);
+            this.vendorInventoryContainer.listHeight += LOG_LINE_H;
+
+            const visibleH = (this._inventoryMaskBottom - this._inventoryMaskTop);
+            let maxScroll = Math.max(0, this.vendorInventoryContainer.listHeight - visibleH);
+            if (LOG_LINE_H > 0) maxScroll = Math.ceil(maxScroll / LOG_LINE_H) * LOG_LINE_H;
+            this.vendorInventoryContainer.y = -maxScroll;
+
+            this.vendorInventoryText.setText(`You received: ${inst.displayName}`);
+          });
+
+        this.gambleButtons.push(btn);
+        if (this.vendorRowGroup) this.vendorRowGroup.add(btn);
+        else this.add.existing(btn);
+      };
+
+      createGambleButton({
+        label: 'Armor',
+        y: 180,
+        poolGetter: () => getArmorIdPool(),
+        emptyMessage: 'No armor IDs found in Items.js.'
+      });
+
+      createGambleButton({
+        label: 'Weapons',
+        y: 220,
+        poolGetter: () => getWeaponIdPool(),
+        emptyMessage: 'No weapon IDs found in Items.js.'
+      });
 
       return;
     }
@@ -850,6 +1068,7 @@ export default class TownScene extends Phaser.Scene {
     this._resetInventoryMask(); // ensure top=220 for regular vendors
     this.vendorInventoryContainer.topPadding = 0;
     this.vendorInventoryContainer.lineHeight = 36; // your normal row height
+    this.vendorInventoryContainer.listHeight = 0;
 
     // List Items
     let yOffset = 0;
@@ -872,36 +1091,6 @@ export default class TownScene extends Phaser.Scene {
         })
           .setDepth(13)
           .setInteractive({ useHandCursor: true })
-          .on('pointerover', (pointer) => {
-            text.setColor('#ffffff');
-            const base = entry.base;
-            const lines = [];
-
-            if (base.description || entry.desc) lines.push(base.description || entry.desc);
-            // Show some quick specs if present
-            if (base.type) lines.push(`Type: ${base.type}`);
-            if (base.slot) lines.push(`Slot: ${base.slot}`);
-            if (typeof base.hands === 'number') lines.push(`Hands: ${base.hands}`);
-            if (base.damage && (base.damage.min != null || base.damage.max != null)) {
-              const min = base.damage.min ?? '?', max = base.damage.max ?? '?';
-              lines.push(`Damage: ${min}–${max}`);
-            }
-
-            this.tooltip.show(pointer.worldX, pointer.worldY, {
-              title: base.name,
-              titleColor: QUALITY_COLORS[base.quality] || '#dddddd',
-              lines
-            });
-          })
-          .on('pointermove', (pointer) => {
-            this.tooltip.reposition(pointer.worldX, pointer.worldY);
-          })
-
-          .on('pointerout', () => {
-            text.setColor(color);
-            this.tooltip.hide();
-          })
-
           .on('pointerdown', () => {
             const itemId = entry.base?.id;
             if (!itemId) {
@@ -923,6 +1112,18 @@ export default class TownScene extends Phaser.Scene {
 
         this.vendorInventoryContainer.add(text);
         yOffset += 36;
+        
+        const tooltipData = this._buildItemTooltipData(entry.id);
+        if (tooltipData && entry.desc) {
+          const uniqueLines = tooltipData.lines.filter(line => line !== entry.desc);
+          tooltipData.lines = [entry.desc, ...uniqueLines];
+        }
+
+        this._attachTooltip(text, {
+          tooltipData,
+          baseColor: color,
+          hoverColor: '#ffffff'
+        });
       });
 
     // Store total height for scrolling clamp
