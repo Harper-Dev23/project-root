@@ -179,11 +179,15 @@ const RAW_SKILLS = {
       const offWeapon = attacker.equipment?.weaponOff ? Items[attacker.equipment.weaponOff] : null;
       const mainIsTwoHand = mainWeapon?.hands === 2;
 
-      // Only dual wield if offhand is a weapon (not shield) and main is not 2H
+
       if (offWeapon && offWeapon.weaponType !== 'shield' && !mainIsTwoHand) {
-        return calculateDualWieldDamage(attacker, target);
+        const result = calculateDualWieldDamage(attacker, target);
+        const amount = applyDamageModifiers(result.amount, attacker, target);
+        return { ...result, amount };
       } else {
-        return calculateDamage(attacker, target);
+        const r = calculateDamage(attacker, target);
+        const amount = applyDamageModifiers(r.amount, attacker, target);
+        return { ...r, amount };
       }
     },
     description: 'A quick physical strike.',
@@ -1713,42 +1717,42 @@ const RAW_SKILLS = {
       return {};
     }
   }
-}; 
+};
 
 
 
-  const NPC_ONLY_SKILLS = {
-    // Shared training utilities
+const NPC_ONLY_SKILLS = {
+  // Shared training utilities
 
-    'dummy_shuffle': {
-      id: 'dummy_shuffle',
-      name: 'Shuffle',
-      type: 'special',
-      actionCost: 'bonus',
-      enemyOnly: true,
-      requiresTarget: false,
-      targetRequirement: 'position',
-      isMovement: true,
-      cooldown: 0,
-      apply: (attacker, _target, scene) => {
-        const moved = scene?._enemyTryShuffleOneColumn?.(attacker);
-        if (moved) scene?._log?.(`${attacker.name} shuffles position.`);
-        return { amount: 0, moved };
-      }
+  'dummy_shuffle': {
+    id: 'dummy_shuffle',
+    name: 'Shuffle',
+    type: 'special',
+    actionCost: 'bonus',
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'position',
+    isMovement: true,
+    cooldown: 0,
+    apply: (attacker, _target, scene) => {
+      const moved = scene?._enemyTryShuffleOneColumn?.(attacker);
+      if (moved) scene?._log?.(`${attacker.name} shuffles position.`);
+      return { amount: 0, moved };
+    }
+  },
+
+  'dummy_sway': {
+    id: 'dummy_sway',
+    name: 'Sway',
+    type: 'special',
+    actionCost: 'major',
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (attacker, _target, scene) => {
+      scene._log?.(`${attacker.name} sways. A slight breeze blows...`);
+      return { amount: 0 };
     },
-
-    'dummy_sway': {
-      id: 'dummy_sway',
-      name: 'Sway',
-      type: 'special',
-      actionCost: 'major',
-      enemyOnly: true,
-      requiresTarget: false,
-      apply: (attacker, _target, scene) => {
-        scene._log?.(`${attacker.name} sways. A slight breeze blows...`);
-        return { amount: 0 };
-      },
-      description: 'Idles theatrically, consuming time.'
+    description: 'Idles theatrically, consuming time.'
   },
 
   'step_forward': {
@@ -2562,6 +2566,7 @@ Object.assign(RAW_SKILLS, {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
         tags: ability?.tags,
+        skipGearMultiplier: true,
       }));
 
       const reward = Array.isArray(ability?.rewardIfTierCross)
@@ -2601,7 +2606,11 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_venom;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       let toxicBuildup = 70;
@@ -2642,7 +2651,11 @@ Object.assign(RAW_SKILLS, {
       const dex = attacker?.totalStats?.DEX || 0;
       const precisionBonus = Math.floor(dex / 6);
       let base = roll.amount + precisionBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       if (exposeTier >= 1) {
@@ -2739,7 +2752,13 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
       const preAmount = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(preAmount, attacker, target, { ability, tags: ability?.tags, element: 'curse', isMagic: true }));
+      let amount = Math.max(1, applyDamageModifiers(preAmount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'curse',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
 
       const curseTier = target?.weakness?.tiers?.curse || 0;
       if (curseTier > 0) {
@@ -2802,7 +2821,12 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.static_prick;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags, element: 'lightning' }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        skipGearMultiplier: true,
+      }));
 
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
       let buildup = 60;
@@ -2917,7 +2941,11 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.heartpiercer;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       const finisherBase = 1.35 + Math.max(0, exposeTier - 1) * 0.1;
@@ -2953,7 +2981,11 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.venom_bloom;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const toxicMeter = target?.weakness?.meters?.toxic || 0;
       const toxicTier = target?.weakness?.tiers?.toxic || 0;
@@ -2993,7 +3025,11 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.silent_order;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       if (exposeTier >= 1) {
@@ -3029,7 +3065,13 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
       const base = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags, element: 'curse', isMagic: true }));
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'curse',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
 
       const meter = target?.weakness?.meters?.curse || 0;
       const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
@@ -3066,7 +3108,12 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.flash_overload;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, { ability, tags: ability?.tags, element: 'lightning' }));
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        skipGearMultiplier: true,
+      }));
 
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
       let repeatDamage = 0;
@@ -3112,7 +3159,11 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 4);
       const base = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, { ability, tags: ability?.tags }));
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
 
       const transform = ability?.transformWeakness;
       let transformed;

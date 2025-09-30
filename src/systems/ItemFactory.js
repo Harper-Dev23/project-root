@@ -8,48 +8,348 @@ import { Items } from '../../data/items.js';
  * common: 0
  */
 export const QUALITY_RULES = {
-  common:   { min: 0, max: 0, force: null },          // 0 total
+  common: { min: 0, max: 0, force: null },          // 0 total
   uncommon: { min: 1, max: 2, force: null },          // 1–2 total
-  rare:     { min: 3, max: 3, force: null },          // exactly 3 total
-  epic:     { min: 4, max: 4, force: { prefixes: 2, suffixes: 2 } }, // 2+2
+  rare: { min: 3, max: 3, force: null },          // exactly 3 total
+  epic: { min: 4, max: 4, force: { prefixes: 2, suffixes: 2 } }, // 2+2
 };
 
-/** ---------- Affix Pools ----------
- * Keep it small and obvious to verify in UI/combat.
- * You can expand at will; effects are additive unless noted.
- */
-const PREFIX_POOL = [
-  // flat stats
-  { key: 'Mighty',   type: 'stat',   path: 'STR', amount: 2 },
-  { key: 'Agile',    type: 'stat',   path: 'DEX', amount: 2 },
-  { key: 'Hearty',   type: 'stat',   path: 'CON', amount: 2 },
-  { key: 'Sage',     type: 'stat',   path: 'INT', amount: 2 },
-  { key: 'Aware',    type: 'stat',   path: 'WIS', amount: 2 },
+function asRng(fn) {
+  return typeof fn === 'function' ? fn : Math.random;
+}
 
-  // derived
-  { key: 'Keen',     type: 'derived','path': 'CritChance', amount: 5 }, // +5% crit
-  { key: 'Swift',    type: 'derived','path': 'Evasion', amount: 5 },    // +5 evasion (if you track it)
+function rollInt(range, rng) {
+  if (!range) return 0;
+  const [min, max] = range;
+  if (min === max) return min;
+  const next = asRng(rng);
+  return min + Math.floor((next() ?? Math.random()) * (max - min + 1));
+}
+
+function cloneRange(range) {
+  if (!range) return { min: 0, max: 0 };
+  const { min = 0, max = 0 } = range;
+  return { min, max };
+}
+
+// --- Armor prefix helpers ---------------------------------------------------
+function makeDerivedArmorPrefix({ key, tier, derivedKey, range }) {
+  return {
+    key,
+    tier,
+    family: derivedKey,
+    roll(rng) {
+      const amount = rollInt(range, rng);
+      return {
+        key,
+        tier,
+        family: derivedKey,
+        mods: { derived: { [derivedKey]: amount } }
+      };
+    }
+  };
+}
+
+function makeMiscArmorPrefix({ key, tier, prop, range, clamp = null }) {
+  return {
+    key,
+    tier,
+    family: prop,
+    roll(rng) {
+      let amount = rollInt(range, rng);
+      if (clamp) amount = Math.max(clamp.min ?? -Infinity, Math.min(clamp.max ?? Infinity, amount));
+      return {
+        key,
+        tier,
+        family: prop,
+        mods: { misc: { [prop]: amount } }
+      };
+    }
+  };
+}
+
+// --- Weapon prefix helpers --------------------------------------------------
+function makeWeaponFlatPrefix({ key, tier, field, range }) {
+  return {
+    key,
+    tier,
+    family: field,
+    roll(rng) {
+      const amount = rollInt(range, rng);
+      return {
+        key,
+        tier,
+        family: field,
+        mods: { damageFlat: { [field]: amount } }
+      };
+    }
+  };
+}
+
+function makeWeaponPercentPrefix({ key, tier, range }) {
+  return {
+    key,
+    tier,
+    family: 'weaponPercent',
+    roll(rng) {
+      const amount = rollInt(range, rng);
+      return {
+        key,
+        tier,
+        family: 'weaponPercent',
+        mods: { damagePercent: { weapon: amount } }
+      };
+    }
+  };
+}
+
+function makeWeaponElementFlatPrefix({ key, tier, element, range }) {
+  return {
+    key,
+    tier,
+    family: `${element}Flat`,
+    roll() {
+      return {
+        key,
+        tier,
+        family: `${element}Flat`,
+        mods: { elementalFlat: { [element]: { min: range[0], max: range[1] } } }
+      };
+    }
+  };
+}
+
+function makeWeaponElementPercentPrefix({ key, tier, prop, range }) {
+  return {
+    key,
+    tier,
+    family: prop,
+    roll(rng) {
+      const amount = rollInt(range, rng);
+      return {
+        key,
+        tier,
+        family: prop,
+        mods: { misc: { [prop]: amount } }
+      };
+    }
+  };
+}
+
+// --- Suffix helpers ---------------------------------------------------------
+function makeStatSuffix({ key, stat }) {
+  return {
+    key,
+    roll() {
+      return {
+        key,
+        mods: { stats: { [stat]: 1 } }
+      };
+    }
+  };
+}
+
+function makeBuildupSuffix({ key, tier, family, range }) {
+  return {
+    key,
+    tier,
+    family,
+    roll(rng) {
+      const amount = rollInt(range, rng);
+      return {
+        key,
+        tier,
+        family,
+        mods: { misc: { buildupPercent: { [family]: amount } } }
+      };
+    }
+  };
+}
+
+// --- Armor pools ------------------------------------------------------------
+const ARMOR_PREFIX_POOL = [
+  // Max HP
+  makeDerivedArmorPrefix({ key: 'Sanctified', tier: 3, derivedKey: 'maxHP', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Covenant', tier: 2, derivedKey: 'maxHP', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Elijah\u2019s', tier: 1, derivedKey: 'maxHP', range: [6, 9] }),
+
+  // Max MP
+  makeDerivedArmorPrefix({ key: 'Anointed', tier: 3, derivedKey: 'maxMP', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Sanctuary', tier: 2, derivedKey: 'maxMP', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Isaiah\u2019s', tier: 1, derivedKey: 'maxMP', range: [6, 9] }),
+
+  // Physical Resist
+  makeDerivedArmorPrefix({ key: 'Blessed', tier: 3, derivedKey: 'PhysicalResist', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Exalted', tier: 2, derivedKey: 'PhysicalResist', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'David\u2019s', tier: 1, derivedKey: 'PhysicalResist', range: [6, 9] }),
+
+  // Elemental Resist
+  makeDerivedArmorPrefix({ key: 'Hallowed', tier: 3, derivedKey: 'ElementalResist', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Redeemed', tier: 2, derivedKey: 'ElementalResist', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Samuel\u2019s', tier: 1, derivedKey: 'ElementalResist', range: [6, 9] }),
+
+  // Accuracy
+  makeDerivedArmorPrefix({ key: 'Ordained', tier: 3, derivedKey: 'Accuracy', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Zealous', tier: 2, derivedKey: 'Accuracy', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Zechariah\u2019s', tier: 1, derivedKey: 'Accuracy', range: [6, 9] }),
+
+  // Crit Avoid
+  makeDerivedArmorPrefix({ key: 'Consecrated', tier: 3, derivedKey: 'CritAvoid', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Holy', tier: 2, derivedKey: 'CritAvoid', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Jeremiah\u2019s', tier: 1, derivedKey: 'CritAvoid', range: [6, 9] }),
+
+  // Evasion
+  makeDerivedArmorPrefix({ key: 'Fleet', tier: 3, derivedKey: 'Evasion', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Swift', tier: 2, derivedKey: 'Evasion', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Nahum\u2019s', tier: 1, derivedKey: 'Evasion', range: [6, 9] }),
+
+  // MP Regen (per turn)
+  makeMiscArmorPrefix({ key: 'Meditative', tier: 3, prop: 'mpPerTurn', range: [1, 1] }),
+  makeMiscArmorPrefix({ key: 'Devout', tier: 2, prop: 'mpPerTurn', range: [2, 2] }),
+  makeMiscArmorPrefix({ key: 'Elisha\u2019s', tier: 1, prop: 'mpPerTurn', range: [3, 3] }),
+
+  // Skill Cost Reduction (% of MP/HP costs)
+  makeMiscArmorPrefix({ key: 'Frugal', tier: 3, prop: 'skillCostReductionPct', range: [1, 1] }),
+  makeMiscArmorPrefix({ key: 'Temperate', tier: 2, prop: 'skillCostReductionPct', range: [2, 3] }),
+  makeMiscArmorPrefix({ key: 'Solomon\u2019s', tier: 1, prop: 'skillCostReductionPct', range: [4, 5] }),
+
+  // Crit Chance (%)
+  makeDerivedArmorPrefix({ key: 'Keen', tier: 3, derivedKey: 'CritChance', range: [1, 1] }),
+  makeDerivedArmorPrefix({ key: 'Sharp', tier: 2, derivedKey: 'CritChance', range: [2, 3] }),
+  makeDerivedArmorPrefix({ key: 'Micah\u2019s', tier: 1, derivedKey: 'CritChance', range: [4, 5] }),
+
+  // Damage % (all sources)
+  makeMiscArmorPrefix({ key: 'Strong', tier: 3, prop: 'globalDamagePercent', range: [1, 1] }),
+  makeMiscArmorPrefix({ key: 'Mighty', tier: 2, prop: 'globalDamagePercent', range: [2, 3] }),
+  makeMiscArmorPrefix({ key: 'Amos\u2019', tier: 1, prop: 'globalDamagePercent', range: [4, 5] }),
+
+  // Resilience (Buildup resistance)
+  makeMiscArmorPrefix({ key: 'Stalwart', tier: 3, prop: 'resilience', range: [1, 2] }),
+  makeMiscArmorPrefix({ key: 'Unyielding', tier: 2, prop: 'resilience', range: [3, 5] }),
+  makeMiscArmorPrefix({ key: 'Job\u2019s', tier: 1, prop: 'resilience', range: [6, 9] })
 ];
 
-const SUFFIX_POOL = [
-  // weapon damage adjustments (flat min/max)
-  { key: 'of Cutting',    type: 'damageFlat', min: 1, max: 1 },
-  { key: 'of Wounding',   type: 'damageFlat', min: 2, max: 0 },
-  { key: 'of Brutality',  type: 'damageFlat', min: 0, max: 2 },
-
-  // defensive/utility
-  { key: 'of Guarding',   type: 'stat', path: 'PhysicalRes', amount: 5 },   // if tracked
-  { key: 'of Warding',    type: 'stat', path: 'ElementalRes', amount: 5 },  // if tracked
-  { key: 'of Precision',  type: 'derived','path': 'Accuracy', amount: 5 },
+const ARMOR_SUFFIX_POOL = [
+  makeStatSuffix({ key: 'of the Bear', stat: 'STR' }),
+  makeStatSuffix({ key: 'of the Wolf', stat: 'DEX' }),
+  makeStatSuffix({ key: 'of the Boar', stat: 'CON' }),
+  makeStatSuffix({ key: 'of the Serpent', stat: 'INT' }),
+  makeStatSuffix({ key: 'of the Stag', stat: 'WIS' }),
+  makeStatSuffix({ key: 'of the Lion', stat: 'CHA' })
 ];
+
+// --- Weapon pools -----------------------------------------------------------
+const WEAPON_PREFIX_POOL = [
+  // Flat min damage
+  makeWeaponFlatPrefix({ key: 'Honed', tier: 3, field: 'min', range: [1, 2] }),
+  makeWeaponFlatPrefix({ key: 'Sharpened', tier: 2, field: 'min', range: [2, 3] }),
+  makeWeaponFlatPrefix({ key: 'Razor-edged', tier: 1, field: 'min', range: [4, 5] }),
+
+  // Flat max damage
+  makeWeaponFlatPrefix({ key: 'Weighted', tier: 3, field: 'max', range: [1, 2] }),
+  makeWeaponFlatPrefix({ key: 'Tempered', tier: 2, field: 'max', range: [2, 3] }),
+  makeWeaponFlatPrefix({ key: 'Crushing', tier: 1, field: 'max', range: [4, 5] }),
+
+  // % weapon damage (local)
+  makeWeaponPercentPrefix({ key: 'Rugged', tier: 3, range: [2, 3] }),
+  makeWeaponPercentPrefix({ key: 'Savage', tier: 2, range: [4, 6] }),
+  makeWeaponPercentPrefix({ key: 'Brutal', tier: 1, range: [7, 10] }),
+
+  // Flat elemental damage
+  makeWeaponElementFlatPrefix({ key: 'Smoldering', tier: 3, element: 'fire', range: [1, 2] }),
+  makeWeaponElementFlatPrefix({ key: 'Burning', tier: 2, element: 'fire', range: [2, 3] }),
+  makeWeaponElementFlatPrefix({ key: 'Infernal', tier: 1, element: 'fire', range: [3, 4] }),
+
+  makeWeaponElementFlatPrefix({ key: 'Chilling', tier: 3, element: 'cold', range: [1, 2] }),
+  makeWeaponElementFlatPrefix({ key: 'Freezing', tier: 2, element: 'cold', range: [2, 3] }),
+  makeWeaponElementFlatPrefix({ key: 'Glacial', tier: 1, element: 'cold', range: [3, 4] }),
+
+  makeWeaponElementFlatPrefix({ key: 'Sparking', tier: 3, element: 'lightning', range: [1, 2] }),
+  makeWeaponElementFlatPrefix({ key: 'Crackling', tier: 2, element: 'lightning', range: [2, 3] }),
+  makeWeaponElementFlatPrefix({ key: 'Thunderous', tier: 1, element: 'lightning', range: [3, 4] }),
+
+  makeWeaponElementFlatPrefix({ key: 'Withering', tier: 3, element: 'necrotic', range: [1, 2] }),
+  makeWeaponElementFlatPrefix({ key: 'Blighted', tier: 2, element: 'necrotic', range: [2, 3] }),
+  makeWeaponElementFlatPrefix({ key: 'Corrupting', tier: 1, element: 'necrotic', range: [3, 4] }),
+
+  // % Elemental / Necrotic (global)
+  makeWeaponElementPercentPrefix({ key: 'Flaring', tier: 3, prop: 'elementalDamagePercent', range: [2, 3] }),
+  makeWeaponElementPercentPrefix({ key: 'Shocking', tier: 2, prop: 'elementalDamagePercent', range: [4, 6] }),
+  makeWeaponElementPercentPrefix({ key: 'Cataclysmic', tier: 1, prop: 'elementalDamagePercent', range: [7, 10] }),
+
+  makeWeaponElementPercentPrefix({ key: 'Foul', tier: 3, prop: 'necroticDamagePercent', range: [2, 3] }),
+  makeWeaponElementPercentPrefix({ key: 'Profane', tier: 2, prop: 'necroticDamagePercent', range: [4, 6] }),
+  makeWeaponElementPercentPrefix({ key: 'Unholy', tier: 1, prop: 'necroticDamagePercent', range: [7, 10] }),
+];
+
+const WEAPON_SUFFIX_POOL = [
+  // Fire buildup
+  makeBuildupSuffix({ key: 'of Sparks', tier: 3, family: 'fire', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Flames', tier: 2, family: 'fire', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Inferno', tier: 1, family: 'fire', range: [11, 15] }),
+
+  // Cold buildup
+  makeBuildupSuffix({ key: 'of Chill', tier: 3, family: 'cold', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Frost', tier: 2, family: 'cold', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Blizzard', tier: 1, family: 'cold', range: [11, 15] }),
+
+  // Lightning buildup
+  makeBuildupSuffix({ key: 'of Static', tier: 3, family: 'lightning', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Storms', tier: 2, family: 'lightning', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Tempest', tier: 1, family: 'lightning', range: [11, 15] }),
+
+  // Lacerate buildup
+  makeBuildupSuffix({ key: 'of Scratches', tier: 3, family: 'lacerate', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Wounds', tier: 2, family: 'lacerate', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Hemorrhage', tier: 1, family: 'lacerate', range: [11, 15] }),
+
+  // Expose buildup
+  makeBuildupSuffix({ key: 'of Bruises', tier: 3, family: 'expose', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Flaying', tier: 2, family: 'expose', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Ruin', tier: 1, family: 'expose', range: [11, 15] }),
+
+  // Disorient buildup
+  makeBuildupSuffix({ key: 'of Echoes', tier: 3, family: 'disorient', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Daze', tier: 2, family: 'disorient', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Concussion', tier: 1, family: 'disorient', range: [11, 15] }),
+
+  // Disease buildup
+  makeBuildupSuffix({ key: 'of Rot', tier: 3, family: 'disease', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Plague', tier: 2, family: 'disease', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Pestilence', tier: 1, family: 'disease', range: [11, 15] }),
+
+  // Curse buildup
+  makeBuildupSuffix({ key: 'of Whispers', tier: 3, family: 'curse', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Hexes', tier: 2, family: 'curse', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Affliction', tier: 1, family: 'curse', range: [11, 15] }),
+
+  // Toxic buildup
+  makeBuildupSuffix({ key: 'of Venom', tier: 3, family: 'toxic', range: [5, 7] }),
+  makeBuildupSuffix({ key: 'of Toxins', tier: 2, family: 'toxic', range: [8, 10] }),
+  makeBuildupSuffix({ key: 'of Envenoming', tier: 1, family: 'toxic', range: [11, 15] })
+];
+
+function getAffixPoolsFor(base) {
+  if (!base) return null;
+  if (base.type === 'armor') {
+    return { prefixes: ARMOR_PREFIX_POOL, suffixes: ARMOR_SUFFIX_POOL };
+  }
+  if (base.type === 'weapon') {
+    return { prefixes: WEAPON_PREFIX_POOL, suffixes: WEAPON_SUFFIX_POOL };
+  }
+  return null;
+}
+
 
 /** Utility: pick N unique elements from an array */
 function pickUnique(arr, n, rng) {
   const pool = [...arr];
   const out = [];
   for (let i = 0; i < n && pool.length; i++) {
-    const idx = Math.floor((rng() ?? Math.random()) * pool.length);
-    out.push(pool.splice(idx, 1)[0]);
+    const idx = Math.floor((asRng(rng)() ?? Math.random()) * pool.length);
+    const def = pool.splice(idx, 1)[0];
+    if (!def) continue;
+    out.push(def.roll(rng));
   }
   return out;
 }
@@ -61,9 +361,9 @@ function rollAffixCounts(quality, rng) {
 
   const total = rule.min === rule.max
     ? rule.min
-    : rule.min + Math.floor((rng() ?? Math.random()) * (rule.max - rule.min + 1));
+    : rule.min + Math.floor((asRng(rng)() ?? Math.random()) * (rule.max - rule.min + 1));
 
-  // heuristic split: prefer 1 prefix first, then alternate
+
   let prefixes = 0, suffixes = 0;
   for (let i = 0; i < total; i++) {
     if (prefixes <= suffixes) prefixes++; else suffixes++;
@@ -71,36 +371,82 @@ function rollAffixCounts(quality, rng) {
   return { prefixes, suffixes };
 }
 
+function ensureObj(obj) {
+  return obj && typeof obj === 'object' ? obj : {};
+}
+
+
 /**
  * Apply affixes to produce a merged "instanceMods" object we can read later.
  * We avoid mutating the base item; all affix effects live on the instance.
  */
 function buildInstanceModifiers(prefixes, suffixes) {
   const mods = {
-    // stats: STR/DEX/… or resistances
-    stats: {},             // e.g., { STR:+2, DEX:+1, PhysicalRes:+5 }
-    // derived bonuses: crit, accuracy, evasion, etc.
-    derived: {},           // e.g., { CritChance:+5 }
-    // weapon damage adjustments
-    damageFlat: { min: 0, max: 0 }, // additive
+    stats: {},
+    derived: {},
+    damageFlat: { min: 0, max: 0 },
+    damagePercent: { weapon: 0 },
+    elementalFlat: {},
+    misc: {
+      mpPerTurn: 0,
+      skillCostReductionPct: 0,
+      globalDamagePercent: 0,
+      elementalDamagePercent: 0,
+      necroticDamagePercent: 0,
+      resilience: 0,
+      buildupPercent: {}
+    }
   };
 
   const apply = (affix) => {
-    switch (affix.type) {
-      case 'stat': {
-        const k = affix.path;
-        mods.stats[k] = (mods.stats[k] || 0) + affix.amount;
-        break;
+    if (!affix?.mods) return;
+    const data = affix.mods;
+
+    if (data.stats) {
+      for (const [k, v] of Object.entries(data.stats)) {
+        mods.stats[k] = (mods.stats[k] || 0) + v;
       }
-      case 'derived': {
-        const k = affix.path;
-        mods.derived[k] = (mods.derived[k] || 0) + affix.amount;
-        break;
+    }
+
+    if (data.derived) {
+      for (const [k, v] of Object.entries(data.derived)) {
+        mods.derived[k] = (mods.derived[k] || 0) + v;
       }
-      case 'damageFlat': {
-        mods.damageFlat.min += affix.min || 0;
-        mods.damageFlat.max += affix.max || 0;
-        break;
+    }
+
+    if (data.damageFlat) {
+      const flat = ensureObj(data.damageFlat);
+      mods.damageFlat.min += flat.min || 0;
+      mods.damageFlat.max += flat.max || 0;
+    }
+
+    if (data.damagePercent) {
+      const percent = ensureObj(data.damagePercent);
+      mods.damagePercent.weapon += percent.weapon || 0;
+    }
+
+    if (data.elementalFlat) {
+      for (const [element, range] of Object.entries(data.elementalFlat)) {
+        if (!range) continue;
+        const existing = mods.elementalFlat[element] || { min: 0, max: 0 };
+        existing.min += range.min || 0;
+        existing.max += range.max || 0;
+        mods.elementalFlat[element] = existing;
+      }
+    }
+
+    if (data.misc) {
+      const misc = data.misc;
+      if (misc.mpPerTurn) mods.misc.mpPerTurn += misc.mpPerTurn;
+      if (misc.skillCostReductionPct) mods.misc.skillCostReductionPct += misc.skillCostReductionPct;
+      if (misc.globalDamagePercent) mods.misc.globalDamagePercent += misc.globalDamagePercent;
+      if (misc.elementalDamagePercent) mods.misc.elementalDamagePercent += misc.elementalDamagePercent;
+      if (misc.necroticDamagePercent) mods.misc.necroticDamagePercent += misc.necroticDamagePercent;
+      if (misc.resilience) mods.misc.resilience += misc.resilience;
+      if (misc.buildupPercent) {
+        for (const [fam, v] of Object.entries(misc.buildupPercent)) {
+          mods.misc.buildupPercent[fam] = (mods.misc.buildupPercent[fam] || 0) + v;
+        }
       }
     }
   };
@@ -127,12 +473,16 @@ export function createItemInstance(id, opts = {}) {
 
   const rng = typeof opts.rng === 'function' ? opts.rng : Math.random;
   const quality = opts.quality || base.quality || 'common';
+  const pools = getAffixPoolsFor(base);
 
-  // decide affixes
-  const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(quality, rng);
-  const doRoll = opts.rollAffixes ?? (quality !== 'common');
-  const prefixes = doRoll ? pickUnique(PREFIX_POOL, nPre, rng) : [];
-  const suffixes = doRoll ? pickUnique(SUFFIX_POOL, nSuf, rng) : [];
+  let prefixes = [];
+  let suffixes = [];
+
+  if (pools && (opts.rollAffixes ?? (quality !== 'common'))) {
+    const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(quality, rng);
+    prefixes = pickUnique(pools.prefixes, nPre, rng);
+    suffixes = pickUnique(pools.suffixes, nSuf, rng);
+  }
 
   const instance = {
     id,
@@ -140,9 +490,9 @@ export function createItemInstance(id, opts = {}) {
     quality,
     prefixes: prefixes.map(a => a.key),
     suffixes: suffixes.map(a => a.key),
-    // mods are used by combat/stat merge routines
+
     instanceMods: buildInstanceModifiers(prefixes, suffixes),
-    // optional display override for convenience
+
     displayName: buildAffixedName(base.name, prefixes, suffixes),
   };
 
@@ -152,9 +502,9 @@ export function createItemInstance(id, opts = {}) {
 function buildAffixedName(baseName, prefixes, suffixes) {
   const pre = prefixes.map(a => a.key).join(' ');
   const suf = suffixes.map(a => a.key).join(' ');
-  if (pre && suf)  return `${pre} ${baseName} ${suf}`;
-  if (pre)         return `${pre} ${baseName}`;
-  if (suf)         return `${baseName} ${suf}`;
+  if (pre && suf) return `${pre} ${baseName} ${suf}`;
+  if (pre) return `${pre} ${baseName}`;
+  if (suf) return `${baseName} ${suf}`;
   return baseName;
 }
 
@@ -169,7 +519,7 @@ export function isItemInstance(obj) {
  * Returns a *computed view* object; does not mutate the base or instance.
  */
 export function getItemComputedData(itemRef) {
-  // Normalize to { base, instanceMods }
+
   let base, instanceMods = null, displayName = null, quality = null;
   if (isItemInstance(itemRef)) {
     base = Items[itemRef.id];
@@ -181,7 +531,7 @@ export function getItemComputedData(itemRef) {
   }
   if (!base) return null;
 
-  // Start with base and layer on computed changes
+
   const view = {
     ...base,
     name: displayName || base.name,
@@ -189,26 +539,57 @@ export function getItemComputedData(itemRef) {
   };
 
   if (instanceMods) {
-    // merge stats/bonuses
+
     if (Object.keys(instanceMods.stats).length > 0) {
-      // put them into a familiar place for your pipeline:
+
       view.bonuses = { ...(base.bonuses || {}) };
       for (const [k, v] of Object.entries(instanceMods.stats)) {
         view.bonuses[k] = (view.bonuses[k] || 0) + v;
       }
     }
 
-    // derived (non-persistent stat map—read in combat calc)
-    view._derivedMods = { ...(instanceMods.derived || {}) };
+    if (Object.keys(instanceMods.derived).length > 0) {
+      view._derivedMods = { ...(instanceMods.derived || {}) };
+    } else {
+      view._derivedMods = {};
+    }
 
-    // weapon damage adjustments
     if (base.damage) {
       const flat = instanceMods.damageFlat || { min: 0, max: 0 };
+      const percent = instanceMods.damagePercent?.weapon || 0;
+      const baseMin = base.damage?.min || 0;
+      const baseMax = base.damage?.max || 0;
+      const totalMin = baseMin + (flat.min || 0);
+      const totalMax = baseMax + (flat.max || 0);
+      const mult = 1 + (percent / 100);
       view.damage = {
-        min: (base.damage.min || 0) + (flat.min || 0),
-        max: (base.damage.max || 0) + (flat.max || 0),
+        min: Math.max(0, Math.floor(totalMin * mult)),
+        max: Math.max(0, Math.floor(totalMax * mult)),
       };
     }
+
+    const misc = instanceMods.misc || {};
+    const elementalFlat = {};
+    for (const [element, range] of Object.entries(instanceMods.elementalFlat || {})) {
+      elementalFlat[element] = cloneRange(range);
+    }
+
+    view._weaponMods = {
+      damageFlat: { ...(instanceMods.damageFlat || { min: 0, max: 0 }) },
+      localDamagePercent: instanceMods.damagePercent?.weapon || 0,
+      elementalFlat,
+      buildupPercent: { ...(misc.buildupPercent || {}) }
+    };
+
+    view._miscMods = {
+      mpPerTurn: misc.mpPerTurn || 0,
+      skillCostReductionPct: misc.skillCostReductionPct || 0,
+      globalDamagePercent: misc.globalDamagePercent || 0,
+      elementalDamagePercent: misc.elementalDamagePercent || 0,
+      necroticDamagePercent: misc.necroticDamagePercent || 0,
+      resilience: misc.resilience || 0,
+      buildupPercent: { ...(misc.buildupPercent || {}) }
+    };
   }
 
   return view;

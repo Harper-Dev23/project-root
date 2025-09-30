@@ -325,18 +325,50 @@ export function rebuildCharacterStats(character) {
   let total = mergeStats(baseStatPoints, raceBonus);
   total = mergeStats(total, classBonus);
 
+  const gearDerived = {};
+  const gearEffects = {
+    mpPerTurn: 0,
+    skillCostReductionPct: 0,
+    globalDamagePercent: 0,
+    elementalDamagePercent: 0,
+    necroticDamagePercent: 0,
+    resilience: 0,
+    weaponBuildupPercent: {}
+  };
+
   // Equipment bonuses (base + instance affixes; rarity-aware)
   const equipped = character.equipment || {};
   for (const slot in equipped) {
     const inst = equipped[slot];
     if (!inst) continue;
 
-    // Works whether 'inst' is a string id or a full instance object
+
     const view = getItemComputedData(inst);
 
-    // view.bonuses is the merged result of base item + instance mods
+
     if (view?.bonuses) {
       total = mergeStats(total, view.bonuses);
+    }
+
+    if (view?._derivedMods) {
+      for (const [k, v] of Object.entries(view._derivedMods)) {
+        gearDerived[k] = (gearDerived[k] || 0) + v;
+      }
+    }
+
+    if (view?._miscMods) {
+      const misc = view._miscMods;
+      if (misc.mpPerTurn) gearEffects.mpPerTurn += misc.mpPerTurn;
+      if (misc.skillCostReductionPct) gearEffects.skillCostReductionPct += misc.skillCostReductionPct;
+      if (misc.globalDamagePercent) gearEffects.globalDamagePercent += misc.globalDamagePercent;
+      if (misc.elementalDamagePercent) gearEffects.elementalDamagePercent += misc.elementalDamagePercent;
+      if (misc.necroticDamagePercent) gearEffects.necroticDamagePercent += misc.necroticDamagePercent;
+      if (misc.resilience) gearEffects.resilience += misc.resilience;
+      if (misc.buildupPercent) {
+        for (const [fam, amt] of Object.entries(misc.buildupPercent)) {
+          gearEffects.weaponBuildupPercent[fam] = (gearEffects.weaponBuildupPercent[fam] || 0) + amt;
+        }
+      }
     }
   }
 
@@ -349,13 +381,45 @@ export function rebuildCharacterStats(character) {
   const hpRatio = Math.max(0, Math.min(1, prevHP / Math.max(1, prevMaxHP)));
   const mpRatio = (prevMaxMP > 0) ? Math.max(0, Math.min(1, prevMP / prevMaxMP)) : 0;
 
-  const d = calculateDerivedStats(total);
+  const baseDerived = calculateDerivedStats(total);
+  const d = { ...baseDerived };
+  for (const [k, v] of Object.entries(gearDerived)) {
+    d[k] = (d[k] || 0) + v;
+  }
+
   character.derived = d;               // single source of baseline truth
   character.maxHP = d.maxHP;
   character.maxMP = d.maxMP;
   character.currentHP = Math.max(0, Math.min(d.maxHP, Math.round(d.maxHP * hpRatio)));
   character.currentMP = Math.max(0, Math.min(d.maxMP, Math.round(d.maxMP * mpRatio)));
   character.initiative = d.Initiative;
+
+  character.modifiers = character.modifiers || {};
+  character.modifiers.gear = {
+    stats: {},
+    derived: { ...gearDerived },
+    misc: {
+      mpPerTurn: gearEffects.mpPerTurn,
+      skillCostReductionPct: gearEffects.skillCostReductionPct,
+      globalDamagePercent: gearEffects.globalDamagePercent,
+      elementalDamagePercent: gearEffects.elementalDamagePercent,
+      necroticDamagePercent: gearEffects.necroticDamagePercent,
+      resilience: gearEffects.resilience,
+      weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent }
+    }
+  };
+
+  character.gearEffects = {
+    mpPerTurn: gearEffects.mpPerTurn,
+    skillCostReductionPct: gearEffects.skillCostReductionPct,
+    globalDamagePercent: gearEffects.globalDamagePercent,
+    elementalDamagePercent: gearEffects.elementalDamagePercent,
+    necroticDamagePercent: gearEffects.necroticDamagePercent,
+    resilience: gearEffects.resilience,
+    weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent }
+  };
+  character.resilience = gearEffects.resilience || 0;
+
 
   // Runtime-only modifiers (do NOT persist; reset each combat)
   if (!character.combatMods) character.combatMods = {

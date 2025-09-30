@@ -46,6 +46,49 @@ function getEquippedItemData(equipped) {
   const id = isItemInstance(equipped) ? equipped.id : equipped;
   return Items[id] || null;
 }
+
+function calculateEffectiveResourceCost(user, baseCost, resource, opts = {}) {
+  let cost = Math.max(0, baseCost | 0);
+  const result = { cost, gear: null, penalty: null };
+  if (cost <= 0) return result;
+
+  const reductionPct = user?.gearEffects?.skillCostReductionPct || 0;
+  if (reductionPct > 0) {
+    const clampPct = Math.min(95, Math.max(0, reductionPct));
+    const after = Math.max(0, Math.floor(cost * (1 - clampPct / 100)));
+    if (after !== cost) {
+      result.gear = { before: cost, after };
+      cost = after;
+    }
+  }
+
+  if (resource === 'mp' && opts.includePenalties !== false) {
+    const tiers = user?.weakness?.tiers || {};
+    const meters = user?.weakness?.meters || {};
+    const tier = tiers.disorient | 0;
+    if (tier >= 1) {
+      const base = WeaknessV3?.families?.disorient?.t1?.costMultiplier ?? 0;
+      const cap = WeaknessV3?.families?.disorient?.t1?.costMultiplierCap ?? 0;
+      const intensity = typeof familyIntensityMult === 'function'
+        ? familyIntensityMult('disorient', meters.disorient | 0)
+        : 1;
+      let add = base * (intensity > 0 ? intensity : 0);
+      if (tier >= 2) add *= 1.5;
+      if (cap > 0) add = Math.min(add, cap);
+      if (add > 0) {
+        const before = cost;
+        const after = Math.ceil(cost * (1 + add));
+        if (after !== cost) {
+          result.penalty = { before, after, mult: 1 + add };
+          cost = after;
+        }
+      }
+    }
+  }
+
+  result.cost = cost;
+  return result;
+}
 // === Grid helper =========================================
 const SLOT_COORDS = {
   8: { col: 0, row: 0 },
@@ -1093,18 +1136,10 @@ export default class CombatScene extends Phaser.Scene {
     const costBits = [];
     if (ability.actionCost) costBits.push(`Action: ${String(ability.actionCost)}`);
     if (Number.isFinite(ability.mpCost) && ability.mpCost > 0) {
+      const info = calculateEffectiveResourceCost(actor, ability.mpCost, 'mp');
       let mpText = `MP: ${ability.mpCost}`;
-      const w = actor?.weakness;
-      if (w && ((w.tiers?.disorient | 0) >= 1)) {
-        const m = w.meters?.disorient | 0;
-        const I = familyIntensityMult('disorient', m);
-        const base = WeaknessV3?.families?.disorient?.t1?.costMultiplier ?? 0;
-        const cap = WeaknessV3?.families?.disorient?.t1?.costMultiplierCap ?? 0.75;
-        const bump = Math.min(base * I, cap);
-        const mult = 1 + bump;
-        const eff = Math.max(0, Math.floor(ability.mpCost * mult));
-        if (eff !== ability.mpCost) mpText = `MP: ${ability.mpCost} → ${eff}`;
-      }
+      if (info.gear) mpText += ` → ${info.gear.after}`;
+      if (info.penalty) mpText += ` → ${info.penalty.after}`;
       costBits.push(mpText);
     }
     if (Number.isFinite(ability.hpCost) && ability.hpCost > 0) costBits.push(`HP: ${ability.hpCost}`);
@@ -1721,7 +1756,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
-    if (user.currentMP < (skill.mpCost || 0)) {
+    if (user.currentMP < calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost) {
       this._log(`${user.name} lacks the MP to use ${skill.name}.`);
       return { ok: false };
     }
@@ -1809,15 +1844,9 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null) {
     // ===== Resource gate =====
-    const baseMpCost = ability.mpCost || 0;
-    let mpCost = baseMpCost;
-
-    // 🤯 Disorient T1: increased skill costs
-    if (user?.weakness && (user.weakness.tiers.disorient | 0) >= 1) {
-      const t = user.weakness.tiers.disorient | 0;
-      const baseMult = WeaknessV3.families.disorient.t1.costMult * (t === 2 ? 1.5 : 1);
-      mpCost = Math.ceil(baseMpCost * (1 + baseMult));
-    }
+    const baseMpCost = Number.isFinite(ability?.mpCost) ? ability.mpCost : 0;
+    const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
+    const mpCost = mpInfo?.cost ?? baseMpCost;
 
     if (user.currentMP < mpCost) {
       this._log(`${user.name} lacks the MP to use ${ability.name}.`);
@@ -2243,26 +2272,21 @@ export default class CombatScene extends Phaser.Scene {
 
     // ---- Costs & cooldowns ----
     const payNow = !(result?.armReaction && result?.consumeOn === 'trigger');
-    if (payNow && Number.isFinite(ability.mpCost) && ability.mpCost > 0) {
-      let mpCost = ability.mpCost;
-
-      // Disorient T1 (Dazed): increase skill MP costs (overflow-scaled, capped)
-      const w = user?.weakness;
-      if (w && ((w.tiers?.disorient | 0) >= 1)) {
-        const m = w.meters?.disorient | 0;
-        const I = familyIntensityMult('disorient', m);
-        const base = WeaknessV3?.families?.disorient?.t1?.costMultiplier ?? 0;
-        const cap = WeaknessV3?.families?.disorient?.t1?.costMultiplierCap ?? 0.75;
-        const bump = Math.min(base * I, cap);    // 0..cap
-        const mult = 1 + bump;
-
-        const before = mpCost;
-        mpCost = Math.max(0, Math.floor(mpCost * mult));
-        this._log(`${user.name} is Dazed: MP cost ${before} → ${mpCost} (×${mult.toFixed(2)})`);
+    if (payNow && mpCost > 0) {
+      const gearInfo = mpInfo?.gear;
+      if (gearInfo && gearInfo.after !== ability.mpCost) {
+        this._log(`${user.name}'s gear reduces MP cost: ${ability.mpCost} → ${gearInfo.after}.`);
+      }
+      const penaltyInfo = mpInfo?.penalty;
+      if (penaltyInfo && penaltyInfo.after !== (gearInfo?.after ?? ability.mpCost)) {
+        const multText = penaltyInfo.mult ? ` (×${penaltyInfo.mult.toFixed(2)})` : '';
+        this._log(`${user.name} is Dazed: MP cost ${penaltyInfo.before} → ${penaltyInfo.after}${multText}`);
       }
 
       user.currentMP = Math.max(0, user.currentMP - mpCost);
     }
+
+
 
     const delayCD = result?.armReaction && result?.consumeOn === 'trigger';
     if (!delayCD && Number.isFinite(ability.cooldown) && ability.cooldown > 0) {
@@ -2389,6 +2413,21 @@ export default class CombatScene extends Phaser.Scene {
     return { died, skip };
   }
 
+  _applyGearStartOfTurn(char) {
+    const regen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
+    if (!regen) return;
+    const before = char.currentMP | 0;
+    const max = char.maxMP | 0;
+    if (max <= 0 || before >= max) return;
+
+    const after = Math.min(max, before + regen);
+    if (after > before) {
+      char.currentMP = after;
+      this._log?.(`${char.name} regenerates ${after - before} MP from gear.`);
+      this._updateHPMPBars?.();
+    }
+  }
+
   _applyMagicDot(char, amount, element, label) {
     let dmg = Math.max(0, amount | 0);
     // If you want magic-side mods (Curse/elemental res) to affect DOT, route through modifiers:
@@ -2435,6 +2474,18 @@ export default class CombatScene extends Phaser.Scene {
 
       const w = target.weakness;
 
+      if (ctx?.user?.gearEffects?.weaponBuildupPercent) {
+        const bonus = ctx.user.gearEffects.weaponBuildupPercent[key] || 0;
+        if (bonus) {
+          const before = amt;
+          amt = Math.max(0, Math.floor(amt * (1 + bonus / 100)));
+          if (amt !== before) {
+            const userName = ctx?.user?.name || 'Weapon';
+            this._log?.(`${userName}'s weapon empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
+          }
+        }
+      }
+
       // FIRE T1+: incoming fire buildup increased while Singed
       if (key === 'fire' && (w.tiers?.fire | 0) >= 1) {
         const inc = WeaknessV3?.families?.fire?.t1?.incomingFireBonus ?? 0;
@@ -2473,6 +2524,15 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       // Apply
+      const resilience = target?.gearEffects?.resilience ?? target?.resilience ?? 0;
+      if (resilience > 0) {
+        const before = amt;
+        amt = Math.max(0, amt - resilience);
+        if (amt !== before) {
+          this._log?.(`${target.name}'s resilience reduces ${key} buildup: ${before} → ${amt}.`);
+        }
+      }
+
       const beforeMeter = w.meters[key] | 0;
       w.meters[key] = beforeMeter + amt;
 
@@ -3570,6 +3630,8 @@ export default class CombatScene extends Phaser.Scene {
 
     const start = this._startTurnWeakness(char);      // existing
     if (this.combatEnded) return;
+
+    this._applyGearStartOfTurn(char);
 
     // If any source says skip, skip
     if (se.skip || start.skip) {

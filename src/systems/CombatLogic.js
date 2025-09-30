@@ -52,6 +52,30 @@ export function getEffectiveDerived(char) {
   };
 }
 
+function getAttackerDamageMultiplier(attacker, opts = {}) {
+  const ge = attacker?.gearEffects;
+  if (!ge) return 1;
+
+  let mult = 1;
+  if (ge.globalDamagePercent) {
+    mult *= 1 + (ge.globalDamagePercent / 100);
+  }
+
+  const element = opts.element;
+  if (element && ['fire', 'cold', 'lightning'].includes(element)) {
+    if (ge.elementalDamagePercent) {
+      mult *= 1 + (ge.elementalDamagePercent / 100);
+    }
+  }
+
+  if (element === 'necrotic' && ge.necroticDamagePercent) {
+    mult *= 1 + (ge.necroticDamagePercent / 100);
+  }
+
+  return mult;
+}
+
+
 // CHA-based initiative with Cold T1 penalty applied at point of use
 export function computeEffectiveInitiative(char) {
   const eff = getEffectiveDerived(char);
@@ -361,7 +385,8 @@ export function calculateDamage(attacker, target, ability = null) {
   let min = 1, max = 2;
   const weaponData = getEquippedWeaponData(attacker, 'weaponMain');
   if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
-
+  const weaponMods = weaponData?._weaponMods || {};
+  const localDamageMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
   // STR scaling (your rule)
   const strengthMod = Math.floor((attacker.totalStats?.STR || 0) / 5);
   let baseDamage = Phaser.Math.Between(min, max) + strengthMod;
@@ -369,20 +394,61 @@ export function calculateDamage(attacker, target, ability = null) {
 
   // Crit chance from attacker + weapon; CritMult from derived (NOT hardcoded)
   const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
-  const critChance = (attacker.derived?.CritChance || 0) + weaponCrit;
-  try { _pushBreakdown({ label: 'critChance', value: Math.round(critChance) }); } catch { }
+  const baseCritChance = (attacker.derived?.CritChance || 0) + weaponCrit;
+  const baseCritMult = attacker?.derived?.CritMult ?? 1.5;
+  const critBundle = applyExposeCritBonuses(attacker, target, baseCritChance, baseCritMult);
+  try { _pushBreakdown({ label: 'critChance', value: Math.round(critBundle.critChance) }); } catch { }
 
-  const cm = attacker?.derived?.CritMult ?? 1.5;
-
-  const isCrit = Phaser.Math.Between(1, 100) <= critChance;
+  const critRoll = Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : (Math.floor(Math.random() * 100) + 1);
+  const isCrit = critRoll <= critBundle.critChance;
   if (isCrit) {
     const prev = baseDamage;
-    baseDamage = Math.floor(baseDamage * cm);
-    try { _pushBreakdown({ label: 'crit', from: prev, mult: cm, to: baseDamage }); } catch { }
+    baseDamage = Math.floor(baseDamage * critBundle.critMult);
+    try { _pushBreakdown({ label: 'crit', from: prev, mult: critBundle.critMult, to: baseDamage }); } catch { }
+  }
+
+  const gearMult = getAttackerDamageMultiplier(attacker);
+  if (gearMult !== 1) {
+    const prev = baseDamage;
+    baseDamage = Math.max(0, Math.floor(baseDamage * gearMult));
+    try { _pushBreakdown({ label: 'gear damage', from: prev, mult: gearMult, to: baseDamage }); } catch { }
+  }
+
+  let extraMagic = 0;
+  for (const [element, range] of Object.entries(weaponMods.elementalFlat || {})) {
+    if (!range) continue;
+    const minFlat = range.min || 0;
+    const maxFlat = range.max || 0;
+    if (minFlat === 0 && maxFlat === 0) continue;
+
+    const rollFn = Phaser?.Math?.Between
+      ? Phaser.Math.Between
+      : ((lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)));
+    const rolled = rollFn(minFlat, maxFlat);
+    let scaled = Math.max(0, Math.floor(rolled * localDamageMult));
+    if (scaled <= 0) continue;
+
+    const elementMult = getAttackerDamageMultiplier(attacker, { element });
+    if (elementMult !== 1) {
+      scaled = Math.max(0, Math.floor(scaled * elementMult));
+    }
+
+    let applied = applyDamageModifiers(scaled, attacker, target, {
+      element,
+      isMagic: true,
+      ability,
+      skipGearMultiplier: true
+    });
+
+    if (applied > 0) {
+      extraMagic += applied;
+      try { _pushBreakdown({ label: `${element} flat`, flat: applied }); } catch { }
+    }
   }
 
   const final = applyWeaknessDamagePipeline(baseDamage, attacker, target, ability);
-  return { amount: final, isCrit };
+  if (attacker) attacker.__gearAppliedForLastDamage = true;
+  return { amount: final + extraMagic, isCrit };
 }
 
 
@@ -469,6 +535,19 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
 
   let out = amount | 0;
 
+    const autoSkip = attacker && attacker.__gearAppliedForLastDamage;
+  if (autoSkip) attacker.__gearAppliedForLastDamage = false;
+
+  if (!opts?.skipGearMultiplier && !autoSkip && attacker) {
+    const mult = getAttackerDamageMultiplier(attacker, { element });
+    if (mult !== 1) {
+      const prev = out;
+      out = Math.max(0, Math.floor(out * mult));
+      try { _pushBreakdown({ label: 'gear damage', from: prev, mult, to: out }); } catch { }
+    }
+  }
+
+
   // ---- (Legacy) Flay universal amp (keep until you fully migrate) ----
   const flayTier = target?.weakness?.tiers?.flay || 0;
   if (flayTier === 1) {
@@ -516,23 +595,6 @@ export function resolveAttack(attacker, target, ability = null) {
     return { hit: false, chance, amount: 0, isCrit: false };
   }
 
-  // 2) Base weapon damage (no crit inside)
-  let min = 1, max = 2;
-  const weaponData = getEquippedWeaponData(attacker, 'weaponMain');
-  if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
-  const strengthMod = Math.floor((attacker.totalStats?.STR || 0) / 5);
-  let amount = Phaser.Math.Between(min, max) + strengthMod;
-
-  // 3) Expose T2 crit bonuses then crit roll
-  const baseCritChance = (attacker.derived?.CritChance || 0) + (weaponData?._derivedMods?.CritChance || 0);
-  const baseCritMult = attacker?.derived?.CritMult ?? 1.5;
-  const cb = applyExposeCritBonuses(attacker, target, baseCritChance, baseCritMult);
-  const isCrit = (Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : (Math.floor(Math.random() * 100) + 1)) <= cb.critChance;
-  try { _pushBreakdown({ label: 'critChance', value: Math.round(cb.critChance) }); } catch { }
-  if (isCrit) amount = Math.floor(amount * cb.critMult);
-
-  // 4) Apply weakness riders (Lightning, Expose T1 phys vuln, Cold T2 dmg-out)
-  amount = applyWeaknessDamagePipeline(amount, attacker, target, ability);
-
-  return { hit: true, chance, amount, isCrit };
+  const result = calculateDamage(attacker, target, ability);
+  return { hit: true, chance, amount: result.amount, isCrit: result.isCrit };
 }

@@ -1,6 +1,6 @@
 import GameState from '../../systems/GameState.js';
 import { Items } from '../../../data/items.js';
-import { isItemInstance } from '../../systems/ItemFactory.js';
+import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.js';
 import InventorySystem from '../../systems/InventorySystem.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
@@ -40,50 +40,73 @@ export default class InventoryOverlay extends Phaser.Scene {
   // Build a display object: name, color, and tooltip lines
   // Build a display object: title, titleColor, and body lines
   _formatItemDisplay(item) {
-    const base = Items[item.id] || {};
-    const name = item.displayName || base.name || item.id;
-    const quality = item.quality || base.quality || 'common';
+    const instance = isItemInstance(item) ? item : null;
+    const computed = instance ? getItemComputedData(instance) : null;
+    const base = computed || Items[item.id] || Items[item] || {};
+    const name = instance?.displayName || computed?.name || base.name || instance?.id || item?.id || 'Unknown';
+    const quality = instance?.quality || computed?.quality || base.quality || 'common';
     const color = this.QUALITY_COLORS?.[quality] || '#cccccc';
 
     const lines = [];
     if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);
 
-    if (base.damage) {
-      const flatMin = item.instanceMods?.damageFlat?.min || 0;
-      const flatMax = item.instanceMods?.damageFlat?.max || 0;
-      const dMin = (base.damage.min || 0) + flatMin;
-      const dMax = (base.damage.max || 0) + flatMax;
-      lines.push(`Damage: ${dMin}–${dMax}${base.hands === 2 ? ' (2h)' : ''}`);
+    if (computed?.damage) {
+      const range = `${computed.damage.min}–${computed.damage.max}`;
+      lines.push(`Damage: ${range}${base.hands === 2 ? ' (2h)' : ''}`);
     }
 
-    const merged = { ...(base.bonuses || {}) };
-    if (item.instanceMods?.stats) {
-      for (const [k, v] of Object.entries(item.instanceMods.stats)) {
-        merged[k] = (merged[k] || 0) + v;
-      }
-    }
-    const statKeys = Object.keys(merged);
+    const statBonuses = computed?.bonuses || {};
+    const statKeys = Object.keys(statBonuses);
     if (statKeys.length) {
       lines.push('Bonuses:');
-      statKeys.forEach(k => lines.push(`  • ${k} +${merged[k]}`));
+      statKeys.forEach(k => lines.push(`  • ${k} +${statBonuses[k]}`));
     }
 
-    if (item.instanceMods?.derived) {
-      const dKeys = Object.keys(item.instanceMods.derived);
-      if (dKeys.length) {
-        lines.push('Derived:');
-        dKeys.forEach(k => lines.push(`  • ${k} +${item.instanceMods.derived[k]}`));
-      }
+    const derivedMods = instance?.instanceMods?.derived || {};
+    const derivedKeys = Object.keys(derivedMods);
+    if (derivedKeys.length) {
+      lines.push('Derived:');
+      derivedKeys.forEach(k => lines.push(`  • ${k} +${derivedMods[k]}`));
     }
 
-    if (item.prefixes?.length || item.suffixes?.length) {
-      if (item.prefixes?.length) lines.push(`Prefixes: ${item.prefixes.join(', ')}`);
-      if (item.suffixes?.length) lines.push(`Suffixes: ${item.suffixes.join(', ')}`);
+    const dmgFlat = instance?.instanceMods?.damageFlat || {};
+    const dmgPercent = instance?.instanceMods?.damagePercent?.weapon || 0;
+    if ((dmgFlat.min || 0) || (dmgFlat.max || 0) || dmgPercent) {
+      lines.push('Weapon Modifiers:');
+      if (dmgFlat.min) lines.push(`  • Min Damage +${dmgFlat.min}`);
+      if (dmgFlat.max) lines.push(`  • Max Damage +${dmgFlat.max}`);
+      if (dmgPercent) lines.push(`  • Local Weapon Damage +${dmgPercent}%`);
+    }
+
+    const elemFlat = instance?.instanceMods?.elementalFlat || {};
+    const elemEntries = Object.entries(elemFlat).filter(([, v]) => (v.min || 0) || (v.max || 0));
+    if (elemEntries.length) {
+      lines.push('Added Damage:');
+      elemEntries.forEach(([el, v]) => lines.push(`  • ${el.toUpperCase()} +${v.min}–${v.max}`));
+    }
+
+    const misc = instance?.instanceMods?.misc || {};
+    if (misc.mpPerTurn) lines.push(`MP per Turn: +${misc.mpPerTurn}`);
+    if (misc.skillCostReductionPct) lines.push(`Skill Cost Reduction: -${misc.skillCostReductionPct}%`);
+    if (misc.globalDamagePercent) lines.push(`Damage (all sources): +${misc.globalDamagePercent}%`);
+    if (misc.elementalDamagePercent) lines.push(`Elemental Damage: +${misc.elementalDamagePercent}%`);
+    if (misc.necroticDamagePercent) lines.push(`Necrotic Damage: +${misc.necroticDamagePercent}%`);
+    if (misc.resilience) lines.push(`Resilience: +${misc.resilience}`);
+
+    const buildup = misc.buildupPercent || {};
+    const buildupKeys = Object.keys(buildup);
+    if (buildupKeys.length) {
+      lines.push('Buildup Bonus:');
+      buildupKeys.forEach(k => lines.push(`  • ${k.toUpperCase()} +${buildup[k]}%`));
+    }
+
+    if (instance?.prefixes?.length || instance?.suffixes?.length) {
+      if (instance.prefixes?.length) lines.push(`Prefixes: ${instance.prefixes.join(', ')}`);
+      if (instance.suffixes?.length) lines.push(`Suffixes: ${instance.suffixes.join(', ')}`);
     }
 
     if (base.description) lines.push('', base.description);
 
-    // NEW: return title + titleColor separately
     return { title: name, titleColor: color, lines, name, color };
   }
 
