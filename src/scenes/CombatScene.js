@@ -34,6 +34,7 @@ import {
   rollToHit, computeHitChance, getLastDamageBreakdown,
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getHealingReceivedMult, applyExposePreDamage,
+  getDamageReductionFraction,
 } from '../systems/CombatLogic.js';
 
 
@@ -150,6 +151,7 @@ export default class CombatScene extends Phaser.Scene {
     this.turnOrder = [...GameState.party, ...(this.enemies || [])];
     this.turnOrder.sort((a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a));
 
+    this._resetAllCooldowns();
 
     // Seed Initiative Gauge (resource)
     for (const u of this.turnOrder) {
@@ -265,13 +267,20 @@ export default class CombatScene extends Phaser.Scene {
     this.logEntries = [];
 
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
-      if (!this.isHoveringCombatLog) return;
-      this.combatLogText.y -= deltaY * 0.25;
-      this.combatLogText.y = Phaser.Math.Clamp(
-        this.combatLogText.y,
-        y + height - this.combatLogText.height - 10,
-        y + 10
-      );
+      let handled = false;
+      if (this.isHoveringCombatLog) {
+        this.combatLogText.y -= deltaY * 0.25;
+        this.combatLogText.y = Phaser.Math.Clamp(
+          this.combatLogText.y,
+          y + height - this.combatLogText.height - 10,
+          y + 10
+        );
+        handled = true;
+      }
+
+      if (!handled && this._isPointerOverActionMenu?.(pointer)) {
+        this._scrollActionMenu?.(deltaY);
+      }
     });
   }
   _displayNameForSkill(user, skill) {
@@ -1061,10 +1070,37 @@ export default class CombatScene extends Phaser.Scene {
     this.actionMenu = this.add.container(x, y).setDepth(UI_DEPTH.overlay);
 
     // Ensure a single Tooltip instance for this scene
-    if (!this.tooltip) {
+    if (!this.tooltip || !this.tooltip.container || this.tooltip.container.scene !== this) {
       this.tooltip = new Tooltip(this);
       this.input.on('pointermove', (p) => this.tooltip.reposition(p.worldX, p.worldY));
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.tooltip = null; });
     }
+
+    // Scrollable viewport setup for the action menu
+    this.actionMenuViewport = { width: 220, height: 240 };
+
+    const bg = this.add.rectangle(-12, -12,
+      this.actionMenuViewport.width + 24,
+      this.actionMenuViewport.height + 24,
+      0x000000, 0.55)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0xffffff)
+      .setDepth(UI_DEPTH.overlay - 1);
+    this.actionMenuBg = bg;
+    this.actionMenu.add(bg);
+
+    this.actionMenuList = this.add.container(0, 0);
+    this.actionMenu.add(this.actionMenuList);
+
+    const maskGfx = this.make.graphics({ add: false });
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRect(x, y, this.actionMenuViewport.width, this.actionMenuViewport.height);
+    this.actionMenuMask = maskGfx.createGeometryMask();
+    this.actionMenuList.setMask(this.actionMenuMask);
+
+    this.actionMenuScrollY = 0;
+    this.actionMenuScrollMax = 0;
+
 
     // Safe to build now because _buildActionMenuRoot() will hide if not the player’s turn
     this._buildActionMenuRoot();
@@ -1077,7 +1113,8 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _buildActionMenuRoot() {
-    this.actionMenu.removeAll(true);
+    this._exitTargetingMode?.();
+    this._clearActionMenuContent();
     const curr = this._currentChar?.();
     const isPlayerTurn = !!curr && !curr.isEnemy;
 
@@ -1085,14 +1122,14 @@ export default class CombatScene extends Phaser.Scene {
       // Hide the player action UI entirely on enemy turn OR before first _advanceTurn()
       this.actionMenu.setVisible(false);
       this.endTurnButton?.setVisible(false);
-      this.actionMenu.iterate?.(c => c.disableInteractive?.());
+      this._setActionMenuInteractive(false);
       return;
     }
 
     // Player turn: ensure UI is visible and interactive
     this.actionMenu.setVisible(true);
     this.endTurnButton?.setVisible(true);
-    this.actionMenu.iterate?.(c => c.setInteractive?.()); // in case anything persisted disabled
+    this._setActionMenuInteractive(true);
     this.menuLevel = 'root';
 
     const buttons = [
@@ -1105,8 +1142,10 @@ export default class CombatScene extends Phaser.Scene {
 
     buttons.forEach((b, i) => {
       const btn = new UIButton(this, 0, i * 50, b.label, b.handler);
-      this.actionMenu.add(btn);
+      this._actionMenuAdd(btn);
     });
+
+    this._finalizeActionMenuLayout();
   }
 
   _updateHealthBars() {
@@ -1186,8 +1225,7 @@ export default class CombatScene extends Phaser.Scene {
     // Cooldown preview
     const cdRaw = actor?.cooldowns?.[ability.id] || 0;
     if (cdRaw > 0) {
-      const cdShown = Math.max(0, cdRaw - 1);
-      lines.push(`On cooldown: ${cdShown} turn${cdShown === 1 ? '' : 's'} remaining`);
+      lines.push(`On cooldown: ${cdRaw} turn${cdRaw === 1 ? '' : 's'} remaining`);
     }
 
     const titleColor = (tags.includes('fire') && '#ffb37a')
@@ -1271,7 +1309,7 @@ export default class CombatScene extends Phaser.Scene {
       `Select up to ${cap}. Will trigger ≤ ${left} before your next turn.`,
       { fontSize: '14px', color: '#ffddaa' }
     ).setOrigin(0, 0);
-    this.actionMenu.add(header);
+    this._actionMenuAdd(header);
 
     // Layout constants (match your normal button vertical rhythm)
     let y = header.height + 8; // start buttons below header
@@ -1305,7 +1343,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     );
     if (!hasPoint) prepBtn.setAlpha?.(0.5);
-    this.actionMenu.add(prepBtn);
+    this._actionMenuAdd(prepBtn);
     y += ROW_H;
 
     // Reaction skills — each as a UIButton row in the SAME container
@@ -1341,7 +1379,7 @@ export default class CombatScene extends Phaser.Scene {
       // Tooltip on the whole button (not the label only)
       this._wireAbilityTooltip?.(btn, full, user);
 
-      this.actionMenu.add(btn);
+      this._actionMenuAdd(btn);
       y += ROW_H;
     });
 
@@ -1350,7 +1388,9 @@ export default class CombatScene extends Phaser.Scene {
       this._rxSelection = [];
       this._buildActionMenuRoot?.();
     });
-    this.actionMenu.add(backBtn);
+    this._actionMenuAdd(backBtn);
+
+    this._finalizeActionMenuLayout();
   }
 
 
@@ -1381,10 +1421,10 @@ export default class CombatScene extends Phaser.Scene {
         fontSize: '16px',
         color: '#888888'
       }).setOrigin(0);
-      this.actionMenu.add(noText);
+      this._actionMenuAdd(noText);
 
       // Back button
-      this.actionMenu.add(
+      this._actionMenuAdd(
         new UIButton(this, 0, 50, '🔙 Back', () => this._buildActionMenuRoot())
       );
       return;
@@ -1394,15 +1434,14 @@ export default class CombatScene extends Phaser.Scene {
       // HYDRATE from SKILLS so tooltip/labels have full data
       const full = (SKILLS[a?.id] || a);
 
-      const cdRaw = actor.cooldowns?.[full.id] || 0;     // stored value includes grace
+      const cdRaw = actor.cooldowns?.[full.id] || 0;
       const onCD = cdRaw > 0;
-      const cdShown = Math.max(0, cdRaw - 1);              // show "real" remaining turns
       const noAction = full.actionCost && !this._canUseActionType(full.actionCost);
 
       const baseLabel = (this._displayNameForSkill
         ? this._displayNameForSkill(actor, full)
         : (full.name || a.name || 'Unnamed'));
-      const label = onCD ? `${baseLabel} (CD${cdShown})` : baseLabel;
+      const label = onCD ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
       const btn = new UIButton(this, 0, i * 50, label, () => {
         if (onCD || noAction) return;                      // hard gate: do nothing
@@ -1413,14 +1452,16 @@ export default class CombatScene extends Phaser.Scene {
       this._wireAbilityTooltip?.(btn, full, actor);
 
       btn.setAlpha((onCD || noAction) ? 0.35 : 1.0);
-      this.actionMenu.add(btn);
+      this._actionMenuAdd(btn);
     });
 
     // Back button
     const offsetY = abilities.length * 50 + 10;
-    this.actionMenu.add(
+    this._actionMenuAdd(
       new UIButton(this, 0, offsetY, '🔙 Back', () => this._buildActionMenuRoot())
     );
+
+    this._finalizeActionMenuLayout();
   }
 
 
@@ -1485,8 +1526,7 @@ export default class CombatScene extends Phaser.Scene {
     // Cooldown gate BEFORE entering targeting mode
     const cdRemaining = actor.cooldowns?.[ability.id] || 0;
     if (cdRemaining > 0) {
-      const visible = Math.max(0, cdRemaining - 1); // your “grace” tick model
-      this._log(`${ability.name} is on cooldown${visible ? ` (${visible} turn${visible > 1 ? 's' : ''} left)` : ''}.`);
+      this._log(`${ability.name} is on cooldown (${cdRemaining} turn${cdRemaining > 1 ? 's' : ''} left).`);
       return;
     }
 
@@ -1600,6 +1640,20 @@ export default class CombatScene extends Phaser.Scene {
     });
   }
 
+  _resetAllCooldowns() {
+    const party = GameState.party || [];
+    const foes = this.enemies || [];
+    for (const unit of [...party, ...foes]) {
+      if (!unit) continue;
+      if (!unit.cooldowns) {
+        unit.cooldowns = {};
+        continue;
+      }
+      for (const key of Object.keys(unit.cooldowns)) {
+        unit.cooldowns[key] = 0;
+      }
+    }
+  }
 
 
   _updateHPMPBars() {
@@ -1623,6 +1677,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _onCombatVictory() {
     this.combatEnded = true;
+    this._resetAllCooldowns();
     let xpReward = 0;
     const xpSummary = [];
 
@@ -1671,6 +1726,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _onCombatDefeat() {
     this.combatEnded = true;  // stop all further turn/timer work
+    this._resetAllCooldowns();
 
     if (this.isTraining) {
       this._log('⚠ Training lost — restoring party to full HP/MP.');
@@ -1696,21 +1752,24 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   // === Cooldowns (centralized) =============================================
-  // Policy: on use, set remaining = baseCooldown + 1 (grace). We tick at end
-  // of *this* unit's turn. A skill is available only if remaining <= 0.
+  // Policy: on use, store the base cooldown turns. We tick at end of the
+  // acting unit's turn and a skill is available only when remaining <= 0.
 
   _isSkillOnCooldown(char, skillId) {
     return (char.cooldowns?.[skillId] ?? 0) > 0;
   }
   _startSkillCooldown(char, skillId, base) {
     if (!char.cooldowns) char.cooldowns = {};
-    const grace = Math.max(0, base || 0) + 1;
-    char.cooldowns[skillId] = grace;
+    const turns = Math.max(0, base || 0);
+    char.cooldowns[skillId] = turns;
   }
   _tickCooldownsEndOfTurn(char) {
     if (!char?.cooldowns) return;
     for (const k of Object.keys(char.cooldowns)) {
-      if (char.cooldowns[k] > 0) char.cooldowns[k] -= 1;
+      if (char.cooldowns[k] > 0) {
+        char.cooldowns[k] -= 1;
+        if (char.cooldowns[k] < 0) char.cooldowns[k] = 0;
+      }
     }
   }
 
@@ -1765,7 +1824,8 @@ export default class CombatScene extends Phaser.Scene {
       return { ok: false };
     }
     if (this._isSkillOnCooldown(user, skill.id)) {
-      this._log(`${skill.name} is on cooldown.`);
+      const remain = user.cooldowns?.[skill.id] || 0;
+      this._log(`${skill.name} is on cooldown (${remain} turn${remain === 1 ? '' : 's'} remaining).`);
       return { ok: false };
     }
     if (skill.requiresTarget && !target) {
@@ -1969,7 +2029,24 @@ export default class CombatScene extends Phaser.Scene {
 
     // === NEW: Roll to hit (Accuracy vs Evasion) BEFORE reactions land ==========
     // We only roll for weapon/attack-style abilities unless explicitly auto-hit.
-    const usesHitRoll = isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true;
+    const sameTeam = (!!user?.isEnemy) === (!!target?.isEnemy);
+    const metaFriendly = sameTeam
+      || ability.targetRequirement === 'ally'
+      || ability.targetRequirement === 'self'
+      || ability.targetRequirement === 'allyOrSelf'
+      || ability.targetRequirement === 'ally_or_self';
+
+    const tagList = Array.isArray(intent.tags) ? intent.tags : [];
+    const abilityTags = Array.isArray(ability?.tags) ? ability.tags : [];
+    const friendlyTag = tagList.concat(abilityTags).some(tag => (
+      tag === 'heal' || tag === 'buff' || tag === 'support'
+    ));
+
+    const friendlyOutcome = metaFriendly
+      || resultMutable?.isHeal === true
+      || friendlyTag;
+
+    const usesHitRoll = !friendlyOutcome && isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true;
     let missed = false;
     let hitChanceShown = null;
 
@@ -1986,6 +2063,22 @@ export default class CombatScene extends Phaser.Scene {
         resultMutable.splash = null;
       }
     }
+
+    const isHealResult = resultMutable?.isHeal === true;
+
+    const rawDamage = Math.max(0, Number(resultMutable.amount || 0));
+    const willDealDamage = !isMovement && !isHealResult && (rawDamage > 0 || ability.dealsDamage === true);
+
+    if (!missed && willDealDamage && !resultMutable.ignoreDR) {
+      const isMagicHit = !!(resultMutable.isMagic || ability?.isMagic || ability?.tags?.includes?.('magic'));
+      const baseDR = getDamageReductionFraction(target, { isMagic: isMagicHit, applyExpose: false });
+      if (baseDR) {
+        const cur = Number(resultMutable.damageReduction || 0);
+        const next = Phaser.Math.Clamp(cur + baseDR, -0.95, 0.95);
+        resultMutable.damageReduction = next;
+      }
+    }
+
 
     // ===== Reaction window: BEFORE damage lands on the defender =====
     // Only emit if not missed AND it is hostile & damaging/attack-y.
@@ -2093,7 +2186,7 @@ export default class CombatScene extends Phaser.Scene {
         const dealsDamage = !!ability.dealsDamage;
         const raw = Math.max(0, (amount | 0));
         const ignoreDR = !!result?.ignoreDR;
-        const dr = ignoreDR ? 0 : Math.max(0, Math.min(0.9, result?.damageReduction || 0));
+        const dr = ignoreDR ? 0 : Phaser.Math.Clamp(result?.damageReduction || 0, -0.95, 0.95);
 
         const dmg = Math.max(0, Math.floor(raw * (1 - dr)));
         const blocked = raw - dmg;
@@ -2111,7 +2204,7 @@ export default class CombatScene extends Phaser.Scene {
 
           const critText = isCrit ? ' (CRIT!)' : '';
           const typeText = isMagic ? ' magic' : '';
-          const drText = (!ignoreDR && dr > 0)
+          const drText = (!ignoreDR && dr !== 0)
             ? ` (DR ${Math.round(dr * 100)}%${blocked > 0 ? `, blocked ${blocked}` : ''})`
             : '';
 
@@ -2291,7 +2384,7 @@ export default class CombatScene extends Phaser.Scene {
     const delayCD = result?.armReaction && result?.consumeOn === 'trigger';
     if (!delayCD && Number.isFinite(ability.cooldown) && ability.cooldown > 0) {
       if (!user.cooldowns) user.cooldowns = {};
-      user.cooldowns[ability.id] = (ability.cooldown || 0) + 1; // your grace model
+      user.cooldowns[ability.id] = Math.max(0, ability.cooldown || 0);
     }
 
     // Spend action pool for any non-reaction skill
@@ -2436,6 +2529,12 @@ export default class CombatScene extends Phaser.Scene {
         dmg = applyDamageModifiers(dmg, /*attacker*/ null, char, { isMagic: true, element });
       }
     } catch { }
+    if (dmg > 0) {
+      const dr = getDamageReductionFraction(char, { isMagic: true });
+      if (dr) {
+        dmg = Math.max(0, Math.floor(dmg * (1 - dr)));
+      }
+    }
     const before = char.currentHP | 0;
     const after = Math.max(0, before - dmg);
     char.currentHP = after;
@@ -2659,8 +2758,13 @@ export default class CombatScene extends Phaser.Scene {
       // Damage-over-time from the ground, optional elemental buildup
       const maxHP = Math.max(1, char.maxHP || 1);
       const dot = Math.max(1, Math.floor(maxHP * (eff.tickPctMaxHP || 0.02)));
-      char.currentHP = Math.max(0, char.currentHP - dot);
-      this._log(`${char.name} suffers ${dot} damage from ${eff.id}.`);
+      let tileDmg = dot;
+      const dr = getDamageReductionFraction(char, { isMagic: !!eff.element });
+      if (dr) {
+        tileDmg = Math.max(0, Math.floor(tileDmg * (1 - dr)));
+      }
+      char.currentHP = Math.max(0, char.currentHP - tileDmg);
+      this._log(`${char.name} suffers ${tileDmg} damage from ${eff.id}.`);
 
       // Optional elemental weakness buildup
       if (eff.element && char.weakness) {
@@ -2765,6 +2869,13 @@ export default class CombatScene extends Phaser.Scene {
           }
         } catch { }
 
+        if (burn > 0) {
+          const dr = getDamageReductionFraction(char, { isMagic: true });
+          if (dr) {
+            burn = Math.max(0, Math.floor(burn * (1 - dr)));
+          }
+        }
+
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - burn);
         this._showFloatingNumber?.(burn, char, /*isHeal=*/false, /*isCrit=*/false);
@@ -2817,9 +2928,15 @@ export default class CombatScene extends Phaser.Scene {
         const pct = Math.min(basePct * (I > 0 ? I : 1), capPct);
         const dot = Math.max(1, Math.floor(maxHP * pct));
 
-        char.currentHP = Math.max(0, (char.currentHP | 0) - dot);
-        this._showFloatingNumber?.(dot, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log?.(`${char.name} hemorrhages ${dot} (${Math.round(pct * 100)}% of Max HP).`);
+        let bleed = dot;
+        const dr = getDamageReductionFraction(char, { isMagic: false });
+        if (dr) {
+          bleed = Math.max(0, Math.floor(bleed * (1 - dr)));
+        }
+
+        char.currentHP = Math.max(0, (char.currentHP | 0) - bleed);
+        this._showFloatingNumber?.(bleed, char, /*isHeal=*/false, /*isCrit=*/false);
+        this._log?.(`${char.name} hemorrhages ${bleed} (${Math.round(pct * 100)}% of Max HP).`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
 
         if (char.currentHP === 0 && char.status !== 'incapacitated') {
@@ -2855,6 +2972,13 @@ export default class CombatScene extends Phaser.Scene {
             dmg = applyDamageModifiers(raw, /*attacker*/ null, char, { isMagic: true, element: 'necrotic' });
           }
         } catch { }
+
+        if (dmg > 0) {
+          const dr = getDamageReductionFraction(char, { isMagic: true });
+          if (dr) {
+            dmg = Math.max(0, Math.floor(dmg * (1 - dr)));
+          }
+        }
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - dmg);
         this._showFloatingNumber?.(dmg, char, /*isHeal=*/false, /*isCrit=*/false);
@@ -3058,7 +3182,8 @@ export default class CombatScene extends Phaser.Scene {
     // Hide any active tooltip and destroy any reaction list container
     this.tooltip?.hide();
     if (this._rxList) { this._rxList.destroy(); this._rxList = null; }
-    this.actionMenu?.removeAll(true);
+    this._exitTargetingMode?.();
+    this._clearActionMenuContent();
   }
   _createButtonList(items) {
     // items = [{ label:'Text', action: ()=>{} } ... ]
@@ -3075,8 +3200,103 @@ export default class CombatScene extends Phaser.Scene {
         if (it.action) it.action();
       });
       if (!it.action) btn.setAlpha(0.35);     // grey‑out disabled
-      this.actionMenu.add(btn);
+      this._actionMenuAdd(btn);
     });
+    this._finalizeActionMenuLayout();
+  }
+
+  _clearActionMenuContent() {
+    if (this.actionMenuList) {
+      this.actionMenuList.removeAll(true);
+      this.actionMenuList.y = 0;
+    } else {
+      this.actionMenu?.removeAll(true);
+    }
+    this.actionMenuScrollY = 0;
+    this.actionMenuScrollMax = 0;
+  }
+
+  _actionMenuAdd(obj) {
+    if (!obj) return;
+    if (this.actionMenuList) {
+      this.actionMenuList.add(obj);
+    } else {
+      this.actionMenu?.add(obj);
+    }
+  }
+
+  _setActionMenuInteractive(enabled) {
+    const visit = (child) => {
+      if (!child) return;
+      if (child.list && Array.isArray(child.list)) {
+        child.list.forEach(visit);
+      }
+      if (enabled) {
+        child.setInteractive?.({ useHandCursor: true });
+      } else {
+        child.disableInteractive?.();
+      }
+    };
+
+    const roots = this.actionMenuList?.list || this.actionMenu?.list || [];
+    roots.forEach(visit);
+  }
+
+  _updateActionMenuScrollBounds() {
+    if (!this.actionMenuList) {
+      this.actionMenuScrollMax = 0;
+      return;
+    }
+
+    const children = this.actionMenuList.list || [];
+    let maxBottom = 0;
+    const baseY = this.actionMenu?.y ?? 0;
+
+    children.forEach(child => {
+      if (!child || !child.visible) return;
+      const bounds = child.getBounds?.();
+      if (!bounds) return;
+      const localBottom = bounds.bottom - baseY;
+      if (localBottom > maxBottom) maxBottom = localBottom;
+    });
+    const viewH = this.actionMenuViewport?.height ?? 0;
+    const contentHeight = Math.max(viewH, maxBottom);
+    this.actionMenuScrollMax = Math.max(0, contentHeight - viewH);
+    this._applyActionMenuScroll();
+  }
+
+  _applyActionMenuScroll() {
+    if (this.actionMenuList) {
+      this.actionMenuList.y = -this.actionMenuScrollY;
+    }
+  }
+
+  _setActionMenuScroll(value) {
+    const max = this.actionMenuScrollMax ?? 0;
+    const clamped = Phaser.Math.Clamp(value, 0, max);
+    if (clamped === this.actionMenuScrollY) return;
+    this.actionMenuScrollY = clamped;
+    this._applyActionMenuScroll();
+  }
+
+  _scrollActionMenu(deltaY) {
+    if (!this.actionMenu?.visible) return;
+    const step = deltaY * 0.35;
+    this._setActionMenuScroll((this.actionMenuScrollY || 0) + step);
+  }
+
+  _finalizeActionMenuLayout() {
+    this._updateActionMenuScrollBounds();
+    this._applyActionMenuScroll();
+  }
+
+  _isPointerOverActionMenu(pointer) {
+    if (!pointer || !this.actionMenu || !this.actionMenu.visible) return false;
+    const viewport = this.actionMenuViewport;
+    if (!viewport) return false;
+    const localX = pointer.worldX - (this.actionMenu.x ?? 0);
+    const localY = pointer.worldY - (this.actionMenu.y ?? 0);
+    return localX >= 0 && localX <= viewport.width && localY >= 0 && localY <= viewport.height;
   }
 
   _updateActionLights() {
@@ -4009,6 +4229,7 @@ export default class CombatScene extends Phaser.Scene {
       this.koSprites.forEach(obj => obj.destroy?.());
       this.koSprites = [];
     }
+    this.tooltip = null;
   }
 
 

@@ -130,8 +130,9 @@ export function computeHitChance(attacker, target, ability) {
   // Apply Cold T2 evasion penalty at point-of-use
   const evasionEff = applyColdEvasionPenalty(target, T.Evasion | 0);
 
-  const raw = 75 + (A.Accuracy | 0) - (evasionEff | 0);
-  return Math.max(5, Math.min(95, raw));
+  const acc = (A.Accuracy | 0);
+  const raw = 100 - (evasionEff | 0) + acc;
+  return Math.max(5, Math.min(100, raw));
 }
 
 
@@ -156,46 +157,53 @@ export function applyExposeCritBonuses(attacker, target, baseCritChance, baseCri
 
 // === DR / Healing helpers for UI ===
 export function estimateDRPercent(target, opts = {}) {
-  try {
-    const base = 1000;
-    let out = base;
-    if (typeof applyDamageModifiers === 'function') {
-      out = applyDamageModifiers(base, /*attacker*/ null, target, opts);
-    }
-    const red = 1 - (out / Math.max(1, base));
-    return Math.max(0, Math.min(100, Math.round(red * 100)));
-  } catch {
-    return 0;
+  const frac = getDamageReductionFraction(target, opts);
+  return Math.round(frac * 100);
+}
+
+export function getDamageReductionFraction(target, opts = {}) {
+  if (!target) return 0;
+
+
+  const eff = getEffectiveDerived(target) || {};
+  const isMagic = !!opts.isMagic;
+
+  let dr = 0;
+  if (isMagic) {
+    dr += (eff.ElementalResist || 0) / 100;
+    if (Number.isFinite(target.magDR)) dr += target.magDR;
+  } else {
+    dr += (eff.PhysicalResist || 0) / 100;
+    if (Number.isFinite(target.physDR)) dr += target.physDR;
   }
+
+  if (Number.isFinite(opts.extraAdd)) dr += opts.extraAdd;
+
+  const includeExpose = opts.applyExpose !== false && !isMagic;
+  if (includeExpose) {
+    const w = target?.weakness;
+    if (w && (w.tiers?.expose | 0) >= 1) {
+      const I = familyIntensityMult('expose', w.meters?.expose | 0);
+      const sub = (WeaknessV3?.families?.expose?.t1?.physDRPen ?? 0) * I;
+      dr -= sub;
+    }
+  }
+
+  const cap = 0.95;
+  if (dr > cap) dr = cap;
+  if (dr < -cap) dr = -cap;
+  return dr;
 }
 
 // === Effective Physical Damage Reduction (additive model) ===
 // Returns percent integer for UI (e.g., 15 => "15%"; -10 => "-10%")
 export function getEffectivePDR(char) {
-  // Base DR as decimal (e.g., 0.15 = 15%); use your real base source here
-  let dr = Number(char.physDR ?? 0);
-
-  // Add any other *additive* sources your engine uses here, e.g. armor pieces:
-  // dr += (char.armorDR ?? 0) + (char.buffDR ?? 0) - (char.debuffDR ?? 0);
-
-  // Expose T1+ subtracts additively
-  const w = char?.weakness;
-  if (w && (w.tiers?.expose | 0) >= 1) {
-    const I = familyIntensityMult('expose', w.meters?.expose | 0);
-    const sub = (WeaknessV3?.families?.expose?.t1?.physDRPen ?? 0) * I; // absolute points
-    dr = dr - sub;
-  }
-
-  // Upper cap keeps invulnerability sane; **no lower cap** per your spec.
-  if (dr > 0.95) dr = 0.95;
-
-  return Math.round(dr * 100);
+  return Math.round(getDamageReductionFraction(char, { isMagic: false }) * 100);
 }
 
 
 export function getEffectiveMDR(target) {
-  // Magic pipeline; element doesn't matter if your MDR is global
-  return estimateDRPercent(target, { isMagic: true, element: 'arcane' });
+  return Math.round(getDamageReductionFraction(target, { isMagic: true }) * 100);
 }
 
 // === Expose pre-damage shaping (additive PDR model) ===
@@ -535,7 +543,7 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
 
   let out = amount | 0;
 
-    const autoSkip = attacker && attacker.__gearAppliedForLastDamage;
+  const autoSkip = attacker && attacker.__gearAppliedForLastDamage;
   if (autoSkip) attacker.__gearAppliedForLastDamage = false;
 
   if (!opts?.skipGearMultiplier && !autoSkip && attacker) {
