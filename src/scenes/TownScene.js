@@ -1022,7 +1022,7 @@ export default class TownScene extends Phaser.Scene {
 
       createGambleButton({
         label: 'Armor',
-        y: 180,
+        y: 240,
         poolGetter: () => getArmorIdPool(),
         emptyMessage: 'No armor IDs found in Items.js.'
       });
