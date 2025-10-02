@@ -1119,7 +1119,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Scrollable viewport setup for the action menu
-    this.actionMenuViewport = { x: -112, y: -24, width: 348, height: 232 };
+    this.actionMenuViewport = { x: -92, y: -34, width: 380, height: 232 };
     const {
       x: viewportX = 0,
       y: viewportY = 0,
