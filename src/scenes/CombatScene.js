@@ -161,7 +161,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Core UI
     this._createTurnOrderUI();
-    this._createActionMenu(width - 320, height - 240);
+    this._createActionMenu(width - 320, height - 254);
     this._createActionLights(width - 320, height - 280);
     this._createEndTurnButton(width - 160, height - 60);
     this._highlightCurrentTurn();
@@ -879,8 +879,8 @@ export default class CombatScene extends Phaser.Scene {
 
     const slots = ['weaponMain', 'weaponOff', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
     const labelMap = {
-      weaponMain: 'Main Hand',
-      weaponOff: 'Off Hand',
+      weaponMain: 'M.H',
+      weaponOff: 'O.H',
       head: 'Head',
       chest: 'Chest',
       legs: 'Legs',
@@ -1099,7 +1099,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Scrollable viewport setup for the action menu
-    this.actionMenuViewport = { x: -80, width: 300, height: 240 };
+    this.actionMenuViewport = { x: -52, width: 348, height: 232 };
     const { x: viewportX = 0, width: viewportWidth, height: viewportHeight } = this.actionMenuViewport;
 
     const bg = this.add.rectangle(viewportX - 12, -12,
@@ -1111,6 +1111,9 @@ export default class CombatScene extends Phaser.Scene {
       .setDepth(UI_DEPTH.overlay - 1);
     this.actionMenuBg = bg;
     this.actionMenu.add(bg);
+
+    this.actionMenuContentX = viewportX + 20;
+
 
     this.actionMenuList = this.add.container(0, 0);
     this.actionMenu.add(this.actionMenuList);
@@ -1155,6 +1158,9 @@ export default class CombatScene extends Phaser.Scene {
     this._setActionMenuInteractive(true);
     this.menuLevel = 'root';
 
+    const baseX = this.actionMenuContentX ?? 0;
+
+
     const buttons = [
       { label: 'Weapon Skills', handler: () => this._openSubmenu('weapon') },
       { label: 'Class Skills', handler: () => this._openSubmenu('class') },
@@ -1164,7 +1170,7 @@ export default class CombatScene extends Phaser.Scene {
     ];
 
     buttons.forEach((b, i) => {
-      const btn = new UIButton(this, 0, i * 50, b.label, b.handler);
+      const btn = new UIButton(this, baseX, i * 50, b.label, b.handler);
       this._actionMenuAdd(btn);
     });
 
@@ -1327,8 +1333,10 @@ export default class CombatScene extends Phaser.Scene {
     );
 
     // Header (aligned at x=0 like the buttons)
+    const baseX = this.actionMenuContentX ?? 0;
+
     const header = this.add.text(
-      0, 0,
+      baseX, 0,
       `Select up to ${cap}. Will trigger ≤ ${left} before your next turn.`,
       { fontSize: '14px', color: '#ffddaa' }
     ).setOrigin(0, 0);
@@ -1340,7 +1348,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Prepare Selected (standard UIButton)
     const prepBtn = new UIButton(
-      this, 0, y,
+      this, baseX, y,
       hasPoint ? 'Prepare Selected' : 'Prepare Selected (no reaction action)',
       () => {
         if (!hasPoint) {
@@ -1381,7 +1389,7 @@ export default class CombatScene extends Phaser.Scene {
         ? this._displayNameForSkill(user, full)
         : (full.name || full.id);
 
-      const btn = new UIButton(this, 0, y, `${mark} ${name}`, () => {
+      const btn = new UIButton(this, baseX, y, `${mark} ${name}`, () => {
         if (isPrepared) return; // prepared entries are display-only
         const idx = this._rxSelection.indexOf(full.id);
         if (idx >= 0) {
@@ -1407,7 +1415,7 @@ export default class CombatScene extends Phaser.Scene {
     });
 
     // Back (standard UIButton)
-    const backBtn = new UIButton(this, 0, y + 8, '🔙 Back', () => {
+    const backBtn = new UIButton(this, baseX, y + 8, '🔙 Back', () => {
       this._rxSelection = [];
       this._buildActionMenuRoot?.();
     });
@@ -1439,8 +1447,11 @@ export default class CombatScene extends Phaser.Scene {
       abilities = abilities.filter(s => (s?.mechanic || '') !== 'reaction');
     }
 
+    const baseX = this.actionMenuContentX ?? 0;
+
+
     if (!abilities.length) {
-      const noText = this.add.text(0, 0, 'No abilities available', {
+      const noText = this.add.text(baseX, 0, 'No abilities available', {
         fontSize: '16px',
         color: '#888888'
       }).setOrigin(0);
@@ -1448,7 +1459,7 @@ export default class CombatScene extends Phaser.Scene {
 
       // Back button
       this._actionMenuAdd(
-        new UIButton(this, 0, 50, '🔙 Back', () => this._buildActionMenuRoot())
+        new UIButton(this, baseX, 50, '🔙 Back', () => this._buildActionMenuRoot())
       );
       return;
     }
@@ -1466,7 +1477,7 @@ export default class CombatScene extends Phaser.Scene {
         : (full.name || a.name || 'Unnamed'));
       const label = onCD ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
-      const btn = new UIButton(this, 0, i * 50, label, () => {
+      const btn = new UIButton(this, baseX, i * 50, label, () => {
         if (onCD || noAction) return;                      // hard gate: do nothing
         this._useAbility(full);                            // use the hydrated skill
       });
@@ -1481,7 +1492,7 @@ export default class CombatScene extends Phaser.Scene {
     // Back button
     const offsetY = abilities.length * 50 + 10;
     this._actionMenuAdd(
-      new UIButton(this, 0, offsetY, '🔙 Back', () => this._buildActionMenuRoot())
+      new UIButton(this, baseX, offsetY, '🔙 Back', () => this._buildActionMenuRoot())
     );
 
     this._finalizeActionMenuLayout();
@@ -3210,8 +3221,9 @@ export default class CombatScene extends Phaser.Scene {
   }
   _createButtonList(items) {
     // items = [{ label:'Text', action: ()=>{} } ... ]
+    const baseX = this.actionMenuContentX ?? 0;
     items.forEach((it, i) => {
-      const btn = new UIButton(this, 0, i * 50, it.label, () => {
+      const btn = new UIButton(this, baseX, i * 50, it.label, () => {
         const actor = this._currentChar?.();
         if (actor?.isEnemy) {
           this._log?.(`⛔ It’s ${actor.name}’s (enemy) turn. Player actions are disabled.`);

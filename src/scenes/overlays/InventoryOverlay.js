@@ -173,7 +173,10 @@ export default class InventoryOverlay extends Phaser.Scene {
         ? this._formatItemDisplay(equippedItem)
         : { name: itemName, color: '#cccccc', lines: [itemName] };
 
-      const nameTxt = this.add.text(200, lineY, `${slot}: ${disp.name}`, {
+      const slotLabel = this._formatLabel(slot);
+      const simpleName = this._getEquippedSimpleName(slot, equippedItem, disp.name);
+
+      const nameTxt = this.add.text(200, lineY, `${slotLabel}: ${simpleName}`, {
         fontSize: '14px',
         color: disp.color,
         wordWrap: { width: EQUIPPED_TEXT_WIDTH, useAdvancedWrap: true }
@@ -285,6 +288,13 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispP.lines
           });
         });
+
+      const rowBgHeight = rowP.height + 6;
+      const rowBg = this.add.rectangle(0, y - 3, pMaskWidth, rowBgHeight, 0x000000, 0.35)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0xffffff, 0.18);
+
+      pList.add(rowBg);
       pList.add(rowP);
 
       const tBtn = this.add.text(150, y, '[T]', { fontSize: '12px', color: '#88ccff' })
@@ -340,7 +350,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         const useBtn = this.add.text(180, y, '[Use]', { fontSize: '12px', color: '#888888' });
         pList.add([tBtn, useBtn]);
       }
-      
+
       personalCursorY += rowP.height + 6;
     });
 
@@ -401,7 +411,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     let globalCursorY = 0;
     inventoryItems.forEach((item) => {
       const baseItem = Items[item.id] || {};
-     const y = globalCursorY;
+      const y = globalCursorY;
 
       const dispG = this._formatItemDisplay(item);
       const rowG = this.add.text(20, y, `• ${dispG.name}`, {
@@ -430,7 +440,12 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispG.lines
           });
         })
+      const rowBgHeight = rowG.height + 10;
+      const rowBg = this.add.rectangle(0, y - 5, newWidth, rowBgHeight, 0x000000, 0.35)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0xffffff, 0.18);
 
+      listContainer.add(rowBg);
       listContainer.add(rowG);
 
 
@@ -504,10 +519,10 @@ export default class InventoryOverlay extends Phaser.Scene {
         const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
         listContainer.add([transferBtn, useBtn]);
       }
-      
+
       globalCursorY += rowG.height + spacing;
     });
-        if (inventoryItems.length === 0) {
+    if (inventoryItems.length === 0) {
       const empty = this.add.text(20, 0, '(Empty)', { fontSize: '16px', color: '#777777' });
       listContainer.add(empty);
       globalCursorY = empty.height;
@@ -573,13 +588,82 @@ export default class InventoryOverlay extends Phaser.Scene {
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this._handleClose()).setDepth(contentDepth);
   }
-  
+
   _isPointerWithinArea(pointer, area) {
     if (!area) return true;
     const { worldX, worldY } = pointer;
     return worldX >= area.x && worldX <= area.x + area.w && worldY >= area.y && worldY <= area.y + area.h;
   }
-  
+
+  _getEquippedSimpleName(slot, item, fallbackName) {
+    if (!item) return 'None';
+
+    const base = this._getBaseItemData(item);
+    if (base) {
+      if (base.type === 'weapon') {
+        if (base.weaponType) {
+          return this._formatLabel(base.weaponType);
+        }
+        if (base.name) return base.name;
+      }
+
+      if (base.slot) {
+        return this._formatLabel(base.slot);
+      }
+
+      if (base.type) {
+        return this._formatLabel(base.type);
+      }
+
+      if (base.name) {
+        return base.name;
+      }
+    }
+
+    if (isItemInstance(item)) {
+      if (item.baseId && Items[item.baseId]?.name) {
+        return Items[item.baseId].name;
+      }
+      if (item.id && Items[item.id]?.name) {
+        return Items[item.id].name;
+      }
+      if (item.name) {
+        return item.name;
+      }
+    }
+
+    if (typeof item === 'string') {
+      return this._formatLabel(item);
+    }
+
+    if (fallbackName) return fallbackName;
+
+    return this._formatLabel(slot) || 'Unknown';
+  }
+
+  _getBaseItemData(item) {
+    if (!item) return null;
+    if (isItemInstance(item)) {
+      return Items[item.id] || null;
+    }
+    if (typeof item === 'string') {
+      return Items[item] || null;
+    }
+    if (item?.id) {
+      return Items[item.id] || null;
+    }
+    return null;
+  }
+
+  _formatLabel(str = '') {
+    if (!str) return '';
+    return str
+      .replace(/_/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, s => s.toUpperCase())
+      .replace(/(\d)([a-z])/gi, (_, num, letter) => `${num}${letter.toUpperCase()}`);
+  }
+
   _handleClose() {
     this.tooltip?.hide();
     this.scene.resume('UIScene');

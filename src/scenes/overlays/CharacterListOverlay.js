@@ -232,12 +232,26 @@ export default class CharacterListOverlay extends Phaser.Scene {
       this.detailBackground.destroy();
       this.detailBackground = null;
     }
+    if (this.detailStaticContainer) {
+      this.detailStaticContainer.destroy(true);
+      this.detailStaticContainer = null;
+    }
 
     const bounds = this.frame.bounds;
     const detailLeft = bounds.x + bounds.width / 2 + 20;
     const detailWidth = bounds.width / 2 - 60;
     const detailTop = bounds.y + 120;
     const detailHeight = bounds.height - 160;
+    const detailPadding = 18;
+    const columnGap = 20;
+    const portraitColumnWidth = 150;
+    const scrollWidth = Math.max(120, detailWidth - portraitColumnWidth - columnGap - detailPadding * 2);
+    const scrollHeight = Math.max(60, detailHeight - detailPadding * 2);
+    const scrollLeft = detailLeft + detailPadding;
+    const scrollTop = detailTop + detailPadding;
+    const portraitLeft = scrollLeft + scrollWidth + columnGap;
+    const portraitWidth = Math.max(96, detailWidth - (portraitLeft - detailLeft) - detailPadding);
+    const portraitBoxSize = Math.min(portraitWidth, scrollHeight);
 
     this.detailBackground = this.add.rectangle(
       detailLeft + detailWidth / 2,
@@ -250,20 +264,22 @@ export default class CharacterListOverlay extends Phaser.Scene {
       .setStrokeStyle(1, 0xffffff, 0.2)
       .setDepth(this.backgroundDepth);
 
-    const maskGraphics = this.make.graphics({ x: detailLeft, y: detailTop, add: false });
+    const maskGraphics = this.make.graphics({ x: scrollLeft, y: scrollTop, add: false });
     maskGraphics.fillStyle(0xffffff, 1);
-    maskGraphics.fillRect(0, 0, detailWidth, detailHeight);
+    maskGraphics.fillRect(0, 0, scrollWidth, scrollHeight);
     const mask = new Phaser.Display.Masks.GeometryMask(this, maskGraphics);
 
     this.detailMaskGraphics = maskGraphics;
     this.detailMask = mask;
 
-    this.detailContainer = this.add.container(detailLeft, detailTop).setDepth(this.contentDepth);
+    this.detailContainer = this.add.container(scrollLeft, scrollTop).setDepth(this.contentDepth);
     this.detailContainer.setMask(mask);
 
-    this.detailScrollArea = { x: detailLeft, y: detailTop, w: detailWidth, h: detailHeight };
-    this.detailBaseY = detailTop;
-    this.detailViewportHeight = detailHeight;
+    this.detailScrollArea = { x: scrollLeft, y: scrollTop, w: scrollWidth, h: scrollHeight };
+    this.detailBaseY = scrollTop;
+    this.detailViewportHeight = scrollHeight;
+
+    this.detailStaticContainer = this.add.container(portraitLeft, detailTop + detailPadding).setDepth(this.contentDepth);
 
     let cursorY = 0;
 
@@ -275,7 +291,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
       const placeholder = this.add.text(0, 0, placeholderText, {
         fontSize: '16px',
         color: '#cccccc',
-        wordWrap: { width: detailWidth - 20 }
+        wordWrap: { width: scrollWidth - 20 }
       }).setDepth(this.contentDepth);
       this.detailContainer.add(placeholder);
       cursorY = placeholder.height;
@@ -287,14 +303,51 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     this.hintText?.setVisible(false);
 
-    const header = this.add.text(0, 0, character.name, {
-      fontSize: '22px',
-      color: '#ffddaa',
-      fontFamily: 'Georgia'
-    }).setDepth(this.contentDepth);
-    this.detailContainer.add(header);
+    const portraitKey = character.skin || `${(character.race || 'Human').toLowerCase()}_portrait_1`;
+    const availablePortraitKey = this.textures.exists(portraitKey)
+      ? portraitKey
+      : (this.textures.exists('dummy_portrait') ? 'dummy_portrait' : null);
+    const portraitBg = this.add.rectangle(portraitWidth / 2, portraitBoxSize / 2, portraitWidth, portraitBoxSize, 0x000000, 0.35)
+      .setStrokeStyle(1, 0xffffff, 0.25)
+      .setDepth(this.contentDepth);
+    this.detailStaticContainer.add(portraitBg);
 
-    cursorY = header.height + 12;
+    if (availablePortraitKey) {
+      const portrait = this.add.image(portraitWidth / 2, portraitBoxSize / 2, availablePortraitKey)
+        .setDepth(this.contentDepth)
+        .setOrigin(0.5, 0.5);
+      const scale = Math.min((portraitWidth - 8) / portrait.width, (portraitBoxSize - 8) / portrait.height);
+      portrait.setScale(scale);
+      this.detailStaticContainer.add(portrait);
+    } else {
+      const placeholderText = this.add.text(portraitWidth / 2, portraitBoxSize / 2, 'No Portrait', {
+        fontSize: '14px',
+        color: '#cccccc'
+      })
+        .setOrigin(0.5, 0.5)
+        .setDepth(this.contentDepth);
+      this.detailStaticContainer.add(placeholderText);
+    }
+
+    const nameText = this.add.text(portraitWidth / 2, portraitBoxSize + 12, character.name, {
+      fontSize: '20px',
+      color: '#ffddaa',
+      fontFamily: 'Georgia',
+      align: 'center',
+      wordWrap: { width: portraitWidth - 12 }
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(this.contentDepth);
+    this.detailStaticContainer.add(nameText);
+
+    const levelText = this.add.text(portraitWidth / 2, portraitBoxSize + nameText.height + 18, `Level ${character.level}`, {
+      fontSize: '16px',
+      color: '#eeeeee',
+      align: 'center'
+    })
+      .setOrigin(0.5, 0)
+      .setDepth(this.contentDepth);
+    this.detailStaticContainer.add(levelText);
 
     const overview = [
       `Race: ${character.race}`,
@@ -303,14 +356,22 @@ export default class CharacterListOverlay extends Phaser.Scene {
       `XP: ${character.experience}/${getXPNeededForLevel(character.level)}`,
       `Favor: ${character.favor}/10`
     ];
-    cursorY = this._writeSection(0, cursorY, 'Overview', overview, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Overview', overview, scrollWidth);
+
+    const statSource = character.totalStats || character.baseStats || {};
+    const statValue = (key) => {
+      const value = statSource?.[key];
+      return value ?? character.baseStats?.[key] ?? '—';
+    };
+    const coreStats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(key => `${key}: ${statValue(key)}`);
+    cursorY = this._writeSection(0, cursorY, 'Core Stats', coreStats, scrollWidth);
 
     const vitals = [
       `HP: ${character.currentHP}/${character.maxHP}`,
       `MP: ${character.currentMP}/${character.maxMP}`,
       `Initiative: ${character.initiative}`
     ];
-    cursorY = this._writeSection(0, cursorY, 'Vitals', vitals, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Vitals', vitals, scrollWidth);
 
     const resilience = character.resilience ?? character.derived?.Resilience ?? '—';
     const combat = [
@@ -318,19 +379,19 @@ export default class CharacterListOverlay extends Phaser.Scene {
       `Evasion: ${character.derived?.Evasion ?? '—'}`,
       `Resilience: ${resilience}`
     ];
-    cursorY = this._writeSection(0, cursorY, 'Combat', combat, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Combat', combat, scrollWidth);
 
     const resistances = [
       `Physical Res: ${character.derived?.PhysicalResist ?? '—'}`,
       `Elemental Res: ${character.derived?.ElementalResist ?? '—'}`
     ];
-    cursorY = this._writeSection(0, cursorY, 'Resistances', resistances, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Resistances', resistances, scrollWidth);
 
     const healing = [
       `Healing Given: ${Math.round((character.healing?.given ?? 0) * 100)}%`,
       `Healing Received: ${Math.round((character.healing?.received ?? 0) * 100)}%`
     ];
-    cursorY = this._writeSection(0, cursorY, 'Support', healing, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Support', healing, scrollWidth);
 
     this.detailContentHeight = cursorY;
     this._resetDetailScroll();
