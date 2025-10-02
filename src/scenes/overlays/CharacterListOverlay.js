@@ -12,6 +12,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
     this.detailContentHeight = 0;
     this.detailViewportHeight = 0;
     this.detailBaseY = 0;
+    this.detailStaticContainer = null;
     this._detailWheelHandler = null;
   }
 
@@ -142,9 +143,11 @@ export default class CharacterListOverlay extends Phaser.Scene {
     this.listEntries = [];
 
     const bounds = this.frame.bounds;
-    const listLeft = bounds.x + 40;
+    const listPaddingLeft = 12;
+    const listPaddingTop = 12;
+    const listLeft = bounds.x + 40 + listPaddingLeft;
     const listWidth = bounds.width / 2 - 60;
-    const startY = bounds.y + 130;
+    const startY = bounds.y + 130 + listPaddingTop;
     const spacing = 44;
 
     const roster = this.activeTab === 'alive'
