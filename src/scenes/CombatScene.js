@@ -695,7 +695,6 @@ export default class CombatScene extends Phaser.Scene {
     const lineH = 14;   // tight spacing
     const gap = 6;
 
-    const stats = char.totalStats || {};
     const derived = char.derived || {};
     const eff = (typeof getEffectiveDerived === 'function') ? getEffectiveDerived(char) : (derived || {});
 
@@ -716,31 +715,9 @@ export default class CombatScene extends Phaser.Scene {
     const dispHP = Math.min(char.currentHP | 0, effMaxHP);
 
     // ===== Right column (original list) =====
-    const rowsRight = [
-      { label: 'HP:', value: `${dispHP}/${effMaxHP}` },
-      { label: 'MP:', value: `${char.currentMP}/${char.maxMP}` },
-      { label: 'STR:', value: `${stats.STR ?? 0}` },
-      { label: 'DEX:', value: `${stats.DEX ?? 0}` },
-      { label: 'CON:', value: `${stats.CON ?? 0}` },
-      { label: 'INT:', value: `${stats.INT ?? 0}` },
-      { label: 'WIS:', value: `${stats.WIS ?? 0}` },
-      { label: 'CHA:', value: `${stats.CHA ?? 0}` },
-      { label: 'Accuracy:', value: `${derived.Accuracy ?? 0}` },
-      { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true },
-      { label: 'Crit Chance:', value: `${derived.CritChance ?? 0}` },
-      { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}` },
-    ];
+    const resilience = char?.resilience ?? char?.gearEffects?.resilience ?? 0;
 
-    // ===== Middle column (aligned to HP row Y) =====
-    const rowsMid = [
-      { label: 'PDR:', value: `${pdr}%` },
-      { label: 'MDR:', value: `${mdr}%` },
-      { label: 'Healing Recv:', value: `${healPct}%` },
-      { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
-    ];
-
-    // === Crit Vuln (beneath Cost Mult) — ultra compact ===
-    (() => {
+    const critInfo = (() => {
       const w = char?.weakness;
       let line = '-';
       let color = '#cccccc';
@@ -759,11 +736,26 @@ export default class CombatScene extends Phaser.Scene {
         bold = true;
       }
 
-      // Label is "Crit:" so the final line reads "Crit: 35%, 25% cm"
-      rowsMid.push({ label: 'Crit Vuln.:', value: line, valueColor: color, valueBold: bold });
+      return { line, color, bold };
     })();
 
+    const rowsRight = [
+      { label: 'HP:', value: `${dispHP}/${effMaxHP}` },
+      { label: 'MP:', value: `${char.currentMP}/${char.maxMP}` },
+      { label: 'PDR:', value: `${pdr}%` },
+      { label: 'MDR:', value: `${mdr}%` },
+      { label: 'Healing Recv:', value: `${healPct}%` },
+      { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
+      { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
+      { label: 'Resilience:', value: `${resilience}` },
+      { label: 'Accuracy:', value: `${derived.Accuracy ?? 0}` },
+      { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true },
+      { label: 'Crit Chance:', value: `${derived.CritChance ?? 0}` },
+      { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}` },
+    ];
 
+    // ===== Middle column (aligned to HP row Y) =====
+    const rowsMid = [];
 
 
     const labelStyle = { fontSize: `${fontPx}px`, color: '#cccccc', align: 'right' };
@@ -857,6 +849,33 @@ export default class CombatScene extends Phaser.Scene {
     const width = this.characterInfoPanelWidth || 400;
     const rightX = width - panelPad;
     const startY = 60 - 20; // moved up 20px
+    const statsColumnRight = Math.min(rightX - 40, Math.max(panelPad + 120, rightX - 200));
+    const statsLineH = 18;
+
+    const stats = char.totalStats || {};
+    const statRows = [
+      { label: 'STR:', value: `${stats.STR ?? 0}` },
+      { label: 'DEX:', value: `${stats.DEX ?? 0}` },
+      { label: 'CON:', value: `${stats.CON ?? 0}` },
+      { label: 'INT:', value: `${stats.INT ?? 0}` },
+      { label: 'WIS:', value: `${stats.WIS ?? 0}` },
+      { label: 'CHA:', value: `${stats.CHA ?? 0}` },
+    ];
+
+    const statLabelStyle = { fontSize: '14px', color: '#cccccc', align: 'right' };
+    const statValueStyle = { fontSize: '14px', color: '#eeeeee', align: 'right' };
+
+    statRows.forEach((row, idx) => {
+      const y = startY + idx * statsLineH;
+      const valueText = this.add.text(statsColumnRight, y, row.value, statValueStyle).setOrigin(1, 0);
+      this.characterInfoPanel.add(valueText);
+      this._charInfoBodyGroup.push(valueText);
+
+      const labelX = statsColumnRight - valueText.width - 6;
+      const labelText = this.add.text(labelX, y, row.label, statLabelStyle).setOrigin(1, 0);
+      this.characterInfoPanel.add(labelText);
+      this._charInfoBodyGroup.push(labelText);
+    });
 
     const slots = ['weaponMain', 'weaponOff', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
     const labelMap = {
@@ -1027,6 +1046,8 @@ export default class CombatScene extends Phaser.Scene {
     const bg = this.add.rectangle(0, 0, 180, 300, 0x222222, 0.9).setOrigin(0, 0);
     this.turnOrderContent.add(bg);
 
+    this.turnOrderEntries = [];
+
     const allUnits = this.turnOrder;
     allUnits.forEach((unit, i) => {
       const icon = this.add.text(10, 10 + i * 24, `${i + 1}. ${unit.name}`, {
@@ -1034,6 +1055,7 @@ export default class CombatScene extends Phaser.Scene {
         color: '#ffffff'
       });
       this.turnOrderContent.add(icon);
+      this.turnOrderEntries.push(icon);
     });
 
     // Add content to UI container
@@ -1077,11 +1099,12 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Scrollable viewport setup for the action menu
-    this.actionMenuViewport = { width: 220, height: 240 };
+    this.actionMenuViewport = { x: -80, width: 300, height: 240 };
+    const { x: viewportX = 0, width: viewportWidth, height: viewportHeight } = this.actionMenuViewport;
 
-    const bg = this.add.rectangle(-12, -12,
-      this.actionMenuViewport.width + 24,
-      this.actionMenuViewport.height + 24,
+    const bg = this.add.rectangle(viewportX - 12, -12,
+      viewportWidth + 24,
+      viewportHeight + 24,
       0x000000, 0.55)
       .setOrigin(0)
       .setStrokeStyle(2, 0xffffff)
@@ -1094,7 +1117,7 @@ export default class CombatScene extends Phaser.Scene {
 
     const maskGfx = this.make.graphics({ add: false });
     maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(x, y, this.actionMenuViewport.width, this.actionMenuViewport.height);
+    maskGfx.fillRect(x + viewportX, y, viewportWidth, viewportHeight);
     this.actionMenuMask = maskGfx.createGeometryMask();
     this.actionMenuList.setMask(this.actionMenuMask);
 
@@ -3296,7 +3319,9 @@ export default class CombatScene extends Phaser.Scene {
     if (!viewport) return false;
     const localX = pointer.worldX - (this.actionMenu.x ?? 0);
     const localY = pointer.worldY - (this.actionMenu.y ?? 0);
-    return localX >= 0 && localX <= viewport.width && localY >= 0 && localY <= viewport.height;
+    const viewLeft = viewport.x ?? 0;
+    const viewRight = viewLeft + (viewport.width ?? 0);
+    return localX >= viewLeft && localX <= viewRight && localY >= 0 && localY <= (viewport.height ?? 0);
   }
 
   _updateActionLights() {
@@ -3623,12 +3648,11 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // ✅ Highlight the current turn in the turnOrder UI list (by tinting text)
-    if (this.turnOrderContent) {
-      const children = this.turnOrderContent.list;
-      children.forEach((child, i) => {
-        if (child.setColor) {
-          const isActive = i === this.currentTurnIndex;
-          child.setColor(isActive ? '#00ff00' : '#ffffff');
+    if (this.turnOrderEntries) {
+      this.turnOrderEntries.forEach((entry, idx) => {
+        if (entry?.setColor) {
+          const isActive = idx === this.currentTurnIndex;
+          entry.setColor(isActive ? '#00ff00' : '#ffffff');
         }
       });
     }
