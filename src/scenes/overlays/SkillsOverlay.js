@@ -75,7 +75,7 @@ export default class SkillsOverlay extends Phaser.Scene {
     this._computeStatOptions();
 
     // Header (persistent; never destroyed on click)
-    this._initHeader(panelX, panelY + 36, panelW);
+    this._initHeader(panelX, panelY + 48, panelW);
 
     // First render
     this._buildCards();

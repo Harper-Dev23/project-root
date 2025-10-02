@@ -5,6 +5,14 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 export default class CharacterListOverlay extends Phaser.Scene {
   constructor() {
     super({ key: 'CharacterListOverlay' });
+    this.detailContainer = null;
+    this.detailMask = null;
+    this.detailMaskGraphics = null;
+    this.detailScrollArea = null;
+    this.detailContentHeight = 0;
+    this.detailViewportHeight = 0;
+    this.detailBaseY = 0;
+    this._detailWheelHandler = null;
   }
 
   create() {
@@ -20,13 +28,19 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     this.tabButtons = [];
     this.listEntries = [];
-    this.detailTexts = [];
     this.detailBackground = null;
+    this.detailContainer = null;
+    this.detailMask = null;
+    this.detailMaskGraphics = null;
+    this.detailScrollArea = null;
+    this.detailContentHeight = 0;
+    this.detailViewportHeight = 0;
+    this.detailBaseY = 0;
 
     this.activeTab = 'alive';
     this.selectedCharacterId = GameState.party?.[0]?.id ?? null;
 
-    this.hintText = this.add.text(frame.bounds.x + 40, frame.bounds.y + 78,
+    this.hintText = this.add.text(frame.bounds.x + 40, frame.bounds.y + 60,
       'Select a character to view their vitals.', {
       fontSize: '16px',
       color: '#cccccc',
@@ -41,6 +55,33 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     const initialCharacter = GameState.party?.find(c => c.id === this.selectedCharacterId) || null;
     this.renderCharacterDetails(initialCharacter);
+
+    if (this._detailWheelHandler) {
+      this.input.off('wheel', this._detailWheelHandler, this);
+    }
+    this._detailWheelHandler = (pointer, _objects, _dx, dy) => {
+      if (!this.detailContainer || !this.detailScrollArea) return;
+      const { x, y, w, h } = this.detailScrollArea;
+      const { worldX, worldY } = pointer;
+      if (worldX < x || worldX > x + w || worldY < y || worldY > y + h) return;
+
+      const maxScroll = Math.max(0, this.detailContentHeight - this.detailViewportHeight);
+      if (maxScroll <= 0) {
+        this.detailContainer.y = this.detailBaseY;
+        return;
+      }
+
+      const next = this.detailContainer.y - dy * 0.3;
+      this.detailContainer.y = Phaser.Math.Clamp(next, this.detailBaseY - maxScroll, this.detailBaseY);
+    };
+    this.input.on('wheel', this._detailWheelHandler, this);
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this._detailWheelHandler) {
+        this.input.off('wheel', this._detailWheelHandler, this);
+        this._detailWheelHandler = null;
+      }
+    });
   }
 
   _buildTabs() {
@@ -171,10 +212,18 @@ export default class CharacterListOverlay extends Phaser.Scene {
   }
 
   renderCharacterDetails(character) {
-    if (this.detailTexts) {
-      this.detailTexts.forEach(entry => entry.destroy());
+    if (this.detailContainer) {
+      this.detailContainer.destroy(true);
+      this.detailContainer = null;
     }
-    this.detailTexts = [];
+    if (this.detailMask) {
+      this.detailMask.destroy();
+      this.detailMask = null;
+    }
+    if (this.detailMaskGraphics) {
+      this.detailMaskGraphics.destroy();
+      this.detailMaskGraphics = null;
+    }
 
     if (this.detailBackground) {
       this.detailBackground.destroy();
@@ -198,30 +247,51 @@ export default class CharacterListOverlay extends Phaser.Scene {
       .setStrokeStyle(1, 0xffffff, 0.2)
       .setDepth(this.backgroundDepth);
 
+    const maskGraphics = this.make.graphics({ x: detailLeft, y: detailTop, add: false });
+    maskGraphics.fillStyle(0xffffff, 1);
+    maskGraphics.fillRect(0, 0, detailWidth, detailHeight);
+    const mask = new Phaser.Display.Masks.GeometryMask(this, maskGraphics);
+
+    this.detailMaskGraphics = maskGraphics;
+    this.detailMask = mask;
+
+    this.detailContainer = this.add.container(detailLeft, detailTop).setDepth(this.contentDepth);
+    this.detailContainer.setMask(mask);
+
+    this.detailScrollArea = { x: detailLeft, y: detailTop, w: detailWidth, h: detailHeight };
+    this.detailBaseY = detailTop;
+    this.detailViewportHeight = detailHeight;
+
+    let cursorY = 0;
+
+
     if (!character) {
-      const placeholder = this.add.text(detailLeft, detailTop,
-        this.activeTab === 'slain'
-          ? 'Fallen heroes will appear here once recorded.'
-          : 'Select a character to review their vitals.', {
+      const placeholderText = this.activeTab === 'slain'
+        ? 'Fallen heroes will appear here once recorded.'
+        : 'Select a character to review their vitals.';
+      const placeholder = this.add.text(0, 0, placeholderText, {
         fontSize: '16px',
         color: '#cccccc',
         wordWrap: { width: detailWidth - 20 }
       }).setDepth(this.contentDepth);
-      this.detailTexts.push(placeholder);
+      this.detailContainer.add(placeholder);
+      cursorY = placeholder.height;
+      this.detailContentHeight = cursorY;
+      this._resetDetailScroll();
       this.hintText?.setVisible(true);
       return;
     }
 
     this.hintText?.setVisible(false);
 
-    const header = this.add.text(detailLeft, detailTop, character.name, {
+    const header = this.add.text(0, 0, character.name, {
       fontSize: '22px',
       color: '#ffddaa',
       fontFamily: 'Georgia'
     }).setDepth(this.contentDepth);
-    this.detailTexts.push(header);
+    this.detailContainer.add(header);
 
-    let cursorY = detailTop + 32;
+    cursorY = header.height + 12;
 
     const overview = [
       `Race: ${character.race}`,
@@ -230,36 +300,37 @@ export default class CharacterListOverlay extends Phaser.Scene {
       `XP: ${character.experience}/${getXPNeededForLevel(character.level)}`,
       `Favor: ${character.favor}/10`
     ];
-    cursorY = this._writeSection(detailLeft, cursorY, 'Overview', overview, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Overview', overview, detailWidth);
 
     const vitals = [
       `HP: ${character.currentHP}/${character.maxHP}`,
       `MP: ${character.currentMP}/${character.maxMP}`,
       `Initiative: ${character.initiative}`
     ];
-    cursorY = this._writeSection(detailLeft, cursorY, 'Vitals', vitals, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Vitals', vitals, detailWidth);
 
+    const resilience = character.resilience ?? character.derived?.Resilience ?? '—';
     const combat = [
       `Accuracy: ${character.derived?.Accuracy ?? '—'}`,
       `Evasion: ${character.derived?.Evasion ?? '—'}`,
-      `Stun Chance: ${character.derived?.StunChance ?? '—'}`,
+      `Resilience: ${resilience}`
+    ];
+    cursorY = this._writeSection(0, cursorY, 'Combat', combat, detailWidth);
+
+    const resistances = [
       `Physical Res: ${character.derived?.PhysicalResist ?? '—'}`,
       `Elemental Res: ${character.derived?.ElementalResist ?? '—'}`
     ];
-    cursorY = this._writeSection(detailLeft, cursorY, 'Combat', combat, detailWidth);
-
-    const resistances = [
-      `Fear Res: ${character.statusResist?.fear ?? '—'}`,
-      `Charm Res: ${character.statusResist?.charm ?? '—'}`,
-      `Poison Res: ${character.statusResist?.poison ?? '—'}`
-    ];
-    cursorY = this._writeSection(detailLeft, cursorY, 'Resistances', resistances, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Resistances', resistances, detailWidth);
 
     const healing = [
       `Healing Given: ${Math.round((character.healing?.given ?? 0) * 100)}%`,
       `Healing Received: ${Math.round((character.healing?.received ?? 0) * 100)}%`
     ];
-    this._writeSection(detailLeft, cursorY, 'Support', healing, detailWidth);
+    cursorY = this._writeSection(0, cursorY, 'Support', healing, detailWidth);
+
+    this.detailContentHeight = cursorY;
+    this._resetDetailScroll();
   }
 
   _writeSection(x, startY, title, lines, width) {
@@ -268,20 +339,25 @@ export default class CharacterListOverlay extends Phaser.Scene {
       color: '#ffffaa',
       fontStyle: 'bold'
     }).setDepth(this.contentDepth);
-    this.detailTexts.push(titleText);
+    this.detailContainer?.add(titleText);
 
-    let cursorY = startY + 24;
+    let cursorY = startY + titleText.height + 6;
     lines.forEach(line => {
       const body = this.add.text(x + 12, cursorY, line, {
         fontSize: '16px',
         color: '#eeeeee',
         wordWrap: { width: width - 24 }
       }).setDepth(this.contentDepth);
-      this.detailTexts.push(body);
-      cursorY += 22;
+      this.detailContainer?.add(body);
+      cursorY += body.height + 6;
     });
 
     return cursorY + 10;
+  }
+
+  _resetDetailScroll() {
+    if (!this.detailContainer) return;
+    this.detailContainer.y = this.detailBaseY;
   }
 
   _close() {

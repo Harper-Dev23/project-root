@@ -158,6 +158,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.add.text(200, equipY, 'Equipped:', { fontSize: '18px', color: '#ffffff' }).setDepth(contentDepth);
     equipY += 20;
 
+    const EQUIPPED_TEXT_WIDTH = 160;
     Object.keys(char.equipment).forEach(slot => {
       const equippedItem = char.equipment[slot];
       let itemName = 'None';
@@ -174,7 +175,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
       const nameTxt = this.add.text(200, lineY, `${slot}: ${disp.name}`, {
         fontSize: '14px',
-        color: disp.color
+        color: disp.color,
+        wordWrap: { width: EQUIPPED_TEXT_WIDTH, useAdvancedWrap: true }
       }).setDepth(contentDepth)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', (p) => this.tooltip.show(p.worldX, p.worldY, {
@@ -203,7 +205,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           .setDepth(contentDepth);
       }
 
-      equipY += 16;
+      equipY += Math.max(nameTxt.height, 16) + 4;
     });
 
     // --- PERSONAL INVENTORY HEADER ---
@@ -234,7 +236,6 @@ export default class InventoryOverlay extends Phaser.Scene {
     personalItems = this._filterByCategory(personalItems, this.currentPersonalCategory);
 
     // --- PERSONAL MASK + LIST (OFF-DISPLAY GEO, NO DISPLAY-LIST GRAPHICS) ---
-    const P_LINE = 18;
     const pMaskWidth = 300;
     const pMaskHeight = 100;
     const pMaskX = 200;
@@ -250,30 +251,46 @@ export default class InventoryOverlay extends Phaser.Scene {
     const pList = this.add.container(pMaskX, pMaskY).setDepth(contentDepth).setMask(pMaskShape);
 
     // --- PERSONAL ROWS ---
-    personalItems.forEach((item, idx) => {
+    const PERSONAL_TEXT_WIDTH = 140;
+    let personalCursorY = 0;
+    personalItems.forEach((item) => {
       const baseItem = Items[item.id] || {};
-      const y = idx * P_LINE;
+      const y = personalCursorY;
 
       const dispP = this._formatItemDisplay(item);
 
-      const rowP = this.add.text(0, y, `• ${dispP.name}`, { fontSize: '12px', color: dispP.color })
+      const rowP = this.add.text(0, y, `• ${dispP.name}`, {
+        fontSize: '12px',
+        color: dispP.color,
+        wordWrap: { width: PERSONAL_TEXT_WIDTH, useAdvancedWrap: true }
+      })
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: dispP.title || dispP.name,
-          titleColor: dispP.titleColor || dispP.color,
-          lines: dispP.lines
-        }))
+        .on('pointerover', (p) => {
+          if (!this._isPointerWithinArea(p, pArea)) return;
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: dispP.title || dispP.name,
+            titleColor: dispP.titleColor || dispP.color,
+            lines: dispP.lines
+          });
+        })
         .on('pointerout', () => this.tooltip.hide())
-        .on('pointermove', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: dispP.title || dispP.name,
-          titleColor: dispP.titleColor || dispP.color,
-          lines: dispP.lines
-        }));
+        .on('pointermove', (p) => {
+          if (!this._isPointerWithinArea(p, pArea)) {
+            this.tooltip.hide();
+            return;
+          }
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: dispP.title || dispP.name,
+            titleColor: dispP.titleColor || dispP.color,
+            lines: dispP.lines
+          });
+        });
       pList.add(rowP);
 
       const tBtn = this.add.text(150, y, '[T]', { fontSize: '12px', color: '#88ccff' })
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
+        .on('pointerdown', (p) => {
+          if (!this._isPointerWithinArea(p, pArea)) return;
           // remove from character immutably
           const updatedChar = InventorySystem.removeItemFromCharacter(char, item);
 
@@ -290,7 +307,8 @@ export default class InventoryOverlay extends Phaser.Scene {
       if (baseItem.type === 'weapon') {
         const mBtn = this.add.text(180, y, '[M]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => {
+          .on('pointerdown', (p) => {
+            if (!this._isPointerWithinArea(p, pArea)) return;
             const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponMain');
             this._commitChar(updatedChar);
             this.scene.restart();
@@ -300,7 +318,8 @@ export default class InventoryOverlay extends Phaser.Scene {
         const oBtn = this.add.text(210, y, '[O]', { fontSize: '12px', color: offColor });
         if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
           oBtn.setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => {
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, pArea)) return;
               const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponOff');
               this._commitChar(updatedChar);
               this.scene.restart();
@@ -310,10 +329,10 @@ export default class InventoryOverlay extends Phaser.Scene {
       } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
         const eqBtn = this.add.text(180, y, '[Eq]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => {
+          .on('pointerdown', (p) => {
+            if (!this._isPointerWithinArea(p, pArea)) return;
             const updatedChar = InventorySystem.equipItemFromInventory(char, item, baseItem.slot);
             this._commitChar(updatedChar);
-            this.scene.restart();
             this.scene.restart();
           });
         pList.add([tBtn, eqBtn]);
@@ -321,14 +340,18 @@ export default class InventoryOverlay extends Phaser.Scene {
         const useBtn = this.add.text(180, y, '[Use]', { fontSize: '12px', color: '#888888' });
         pList.add([tBtn, useBtn]);
       }
+      
+      personalCursorY += rowP.height + 6;
     });
 
     // fallback when empty so you can see *something*
     if (personalItems.length === 0) {
-      pList.add(this.add.text(0, 0, '(Empty)', { fontSize: '12px', color: '#777777' }));
+      const empty = this.add.text(0, 0, '(Empty)', { fontSize: '12px', color: '#777777' });
+      pList.add(empty);
+      personalCursorY = empty.height;
     }
 
-    const pContentHeight = Math.max(P_LINE * personalItems.length, 0);
+    const pContentHeight = Math.max(personalCursorY, 0);
     const pVisibleHeight = pMaskHeight;
     // anchor the list to the mask origin (don’t move it to 0)
     pList.setPosition(pMaskX, pMaskY);
@@ -371,32 +394,50 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const listContainer = this.add.container(newX, gToggleY + 20).setMask(maskShape).setDepth(contentDepth);
 
-    const spacing = 38;
-    inventoryItems.forEach((item, i) => {
+    const gArea = { x: newX, y: gToggleY + 20, w: newWidth, h: safeHeightAdj };
+
+    const spacing = 10;
+    const GLOBAL_TEXT_WIDTH = 230;
+    let globalCursorY = 0;
+    inventoryItems.forEach((item) => {
       const baseItem = Items[item.id] || {};
-      const y = i * spacing;
+     const y = globalCursorY;
 
       const dispG = this._formatItemDisplay(item);
-      const rowG = this.add.text(20, y, `• ${dispG.name}`, { fontSize: '16px', color: dispG.color })
+      const rowG = this.add.text(20, y, `• ${dispG.name}`, {
+        fontSize: '16px',
+        color: dispG.color,
+        wordWrap: { width: GLOBAL_TEXT_WIDTH, useAdvancedWrap: true }
+      })
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: dispG.title || dispG.name,
-          titleColor: dispG.titleColor || dispG.color,
-          lines: dispG.lines
-        }))
+        .on('pointerover', (p) => {
+          if (!this._isPointerWithinArea(p, gArea)) return;
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: dispG.title || dispG.name,
+            titleColor: dispG.titleColor || dispG.color,
+            lines: dispG.lines
+          });
+        })
         .on('pointerout', () => this.tooltip.hide())
-        .on('pointermove', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: dispG.title || dispG.name,
-          titleColor: dispG.titleColor || dispG.color,
-          lines: dispG.lines
-        }))
+        .on('pointermove', (p) => {
+          if (!this._isPointerWithinArea(p, gArea)) {
+            this.tooltip.hide();
+            return;
+          }
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: dispG.title || dispG.name,
+            titleColor: dispG.titleColor || dispG.color,
+            lines: dispG.lines
+          });
+        })
 
       listContainer.add(rowG);
 
 
       const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
+        .on('pointerdown', (p) => {
+          if (!this._isPointerWithinArea(p, gArea)) return;
           // remove instance from global via system helper
           InventorySystem.removeGlobalItem(item);
 
@@ -410,7 +451,8 @@ export default class InventoryOverlay extends Phaser.Scene {
       if (baseItem.type === 'weapon') {
         const mBtn = this.add.text(420, y, '[Main]', { fontSize: '14px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => {
+          .on('pointerdown', (p) => {
+            if (!this._isPointerWithinArea(p, gArea)) return;
             // 1) remove from global
             InventorySystem.removeGlobalItem(item);
 
@@ -430,7 +472,8 @@ export default class InventoryOverlay extends Phaser.Scene {
         const oBtn = this.add.text(500, y, '[Off]', { fontSize: '14px', color: offColor });
         if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
           oBtn.setInteractive({ useHandCursor: true })
-            .on('pointerdown', () => {
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
               InventorySystem.removeGlobalItem(item);
               let updatedChar = InventorySystem.addItemToCharacter(char, item);
               updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponOff');
@@ -445,7 +488,8 @@ export default class InventoryOverlay extends Phaser.Scene {
       } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
         const eqBtn = this.add.text(420, y, '[Eq]', { fontSize: '14px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => {
+          .on('pointerdown', (p) => {
+            if (!this._isPointerWithinArea(p, gArea)) return;
             InventorySystem.removeGlobalItem(item);
             let updatedChar = InventorySystem.addItemToCharacter(char, item);
             updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, baseItem.slot);
@@ -460,16 +504,21 @@ export default class InventoryOverlay extends Phaser.Scene {
         const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
         listContainer.add([transferBtn, useBtn]);
       }
+      
+      globalCursorY += rowG.height + spacing;
     });
+        if (inventoryItems.length === 0) {
+      const empty = this.add.text(20, 0, '(Empty)', { fontSize: '16px', color: '#777777' });
+      listContainer.add(empty);
+      globalCursorY = empty.height;
+    }
     // === GLOBAL: measure content & reset scroll ===
-    const G_LINE = spacing;               // you set spacing = 38 earlier
-    const gContentHeight = Math.max(G_LINE * inventoryItems.length, 0);
-    const gVisibleHeight = safeHeightAdj;
+    const gContentHeight = Math.max(globalCursorY, 0);
+    const gVisibleHeight = gArea.h;
     // viewport = mask height for global
     listContainer.setPosition(newX, gToggleY + 20);
 
-    // static global scroll hitbox
-    const gArea = { x: newX, y: gToggleY + 20, w: newWidth, h: gVisibleHeight };
+    // static global scroll hitbox (reuse gArea defined above)
 
 
     // === Wheel handler (one instance) ===
@@ -524,7 +573,13 @@ export default class InventoryOverlay extends Phaser.Scene {
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this._handleClose()).setDepth(contentDepth);
   }
-
+  
+  _isPointerWithinArea(pointer, area) {
+    if (!area) return true;
+    const { worldX, worldY } = pointer;
+    return worldX >= area.x && worldX <= area.x + area.w && worldY >= area.y && worldY <= area.y + area.h;
+  }
+  
   _handleClose() {
     this.tooltip?.hide();
     this.scene.resume('UIScene');
