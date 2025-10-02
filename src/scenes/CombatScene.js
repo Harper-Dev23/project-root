@@ -160,10 +160,24 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Core UI
+    const layout = {
+      actionMenu: { x: width - 280, y: height - 242 },
+      endTurn: { x: width - 90, y: height - 70 }
+    };
+    layout.actionLights = {
+      x: layout.endTurn.x - 30,
+      y: layout.endTurn.y - 60
+    };
+    layout.turnName = {
+      x: layout.endTurn.x,
+      y: layout.actionLights.y - 28
+    };
+    this.layout = layout;
+
     this._createTurnOrderUI();
-    this._createActionMenu(width - 320, height - 254);
-    this._createActionLights(width - 320, height - 280);
-    this._createEndTurnButton(width - 160, height - 60);
+    this._createActionMenu(layout.actionMenu.x, layout.actionMenu.y);
+    this._createActionLights(layout.actionLights.x, layout.actionLights.y);
+    this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
     this._highlightCurrentTurn();
     this._createCombatLog();
 
@@ -195,7 +209,7 @@ export default class CombatScene extends Phaser.Scene {
     const panelX = 475;
     const panelY = 470;
     const panelWidth = 400;
-    const panelHeight = 210;
+    const panelHeight = 230;
 
     this.characterInfoPanelX = panelX;
     this.characterInfoPanelY = panelY;
@@ -223,10 +237,15 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _createCombatLog() {
-    const x = 20;
-    const y = 500;
-    const width = 440;
-    const height = 140;
+    const config = {
+      x: 20,
+      y: 460,
+      width: 440,
+      height: 250,
+      padding: 10
+    };
+    this.combatLogConfig = config;
+    const { x, y, width, height, padding } = config;
 
     // Background box
     const bg = this.add.rectangle(x, y, width, height, 0x000000, 0.6)
@@ -235,10 +254,10 @@ export default class CombatScene extends Phaser.Scene {
       .setDepth(UI_DEPTH.overlay);
 
     // Scrollable text
-    this.combatLogText = this.add.text(x + 10, y + 10, '', {
+    this.combatLogText = this.add.text(x + padding, y + padding, '', {
       fontSize: '14px',
       color: '#eeeeee',
-      wordWrap: { width: width - 20 }
+      wordWrap: { width: width - padding * 2 }
     }).setOrigin(0, 0).setDepth(UI_DEPTH.overlay);
 
     // Mask for scroll area
@@ -272,8 +291,8 @@ export default class CombatScene extends Phaser.Scene {
         this.combatLogText.y -= deltaY * 0.25;
         this.combatLogText.y = Phaser.Math.Clamp(
           this.combatLogText.y,
-          y + height - this.combatLogText.height - 10,
-          y + 10
+          y + height - this.combatLogText.height - padding,
+          y + padding
         );
         handled = true;
       }
@@ -302,10 +321,11 @@ export default class CombatScene extends Phaser.Scene {
     // If not hovering, auto-scroll to newest entry
     if (!this.isHoveringCombatLog) {
       const textHeight = this.combatLogText.height;
-      const viewHeight = 140; // your combat log height
-      const baseY = 500 + 10; // original Y + 10 padding
+      const { height, padding, y } = this.combatLogConfig || {};
+      const viewHeight = height ?? 140;
+      const baseY = (y ?? 500) + (padding ?? 10);
 
-      const offset = Math.max(textHeight - viewHeight + 10, 0);
+      const offset = Math.max(textHeight - viewHeight + (padding ?? 10), 0);
       this.combatLogText.y = baseY - offset;
     }
   }
@@ -1099,10 +1119,15 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Scrollable viewport setup for the action menu
-    this.actionMenuViewport = { x: -52, width: 348, height: 232 };
-    const { x: viewportX = 0, width: viewportWidth, height: viewportHeight } = this.actionMenuViewport;
+    this.actionMenuViewport = { x: -112, y: -24, width: 348, height: 232 };
+    const {
+      x: viewportX = 0,
+      y: viewportY = 0,
+      width: viewportWidth,
+      height: viewportHeight
+    } = this.actionMenuViewport;
 
-    const bg = this.add.rectangle(viewportX - 12, -12,
+    const bg = this.add.rectangle(viewportX - 12, viewportY - 12,
       viewportWidth + 24,
       viewportHeight + 24,
       0x000000, 0.55)
@@ -1112,7 +1137,7 @@ export default class CombatScene extends Phaser.Scene {
     this.actionMenuBg = bg;
     this.actionMenu.add(bg);
 
-    this.actionMenuContentX = viewportX + 20;
+    this.actionMenuContentX = 20;
 
 
     this.actionMenuList = this.add.container(0, 0);
@@ -1120,7 +1145,7 @@ export default class CombatScene extends Phaser.Scene {
 
     const maskGfx = this.make.graphics({ add: false });
     maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(x + viewportX, y, viewportWidth, viewportHeight);
+    maskGfx.fillRect(x + viewportX, y + viewportY, viewportWidth, viewportHeight);
     this.actionMenuMask = maskGfx.createGeometryMask();
     this.actionMenuList.setMask(this.actionMenuMask);
 
@@ -1131,7 +1156,8 @@ export default class CombatScene extends Phaser.Scene {
     // Safe to build now because _buildActionMenuRoot() will hide if not the player’s turn
     this._buildActionMenuRoot();
 
-    this.turnNameText = this.add.text(width - 250, height - 310, '', {
+    const turnNamePos = this.layout?.turnName || { x: width - 250, y: height - 310 };
+    this.turnNameText = this.add.text(turnNamePos.x, turnNamePos.y, '', {
       fontSize: '18px',
       fontStyle: 'bold',
       color: '#ffffff'
@@ -3283,9 +3309,10 @@ export default class CombatScene extends Phaser.Scene {
       return;
     }
 
+    const viewport = this.actionMenuViewport || {};
     const children = this.actionMenuList.list || [];
     let maxBottom = 0;
-    const baseY = this.actionMenu?.y ?? 0;
+    const baseY = (this.actionMenu?.y ?? 0) + (viewport.y ?? 0);
 
     children.forEach(child => {
       if (!child || !child.visible) return;
@@ -3294,7 +3321,7 @@ export default class CombatScene extends Phaser.Scene {
       const localBottom = bounds.bottom - baseY;
       if (localBottom > maxBottom) maxBottom = localBottom;
     });
-    const viewH = this.actionMenuViewport?.height ?? 0;
+    const viewH = viewport.height ?? 0;
     const contentHeight = Math.max(viewH, maxBottom);
     this.actionMenuScrollMax = Math.max(0, contentHeight - viewH);
     this._applyActionMenuScroll();
@@ -3332,8 +3359,10 @@ export default class CombatScene extends Phaser.Scene {
     const localX = pointer.worldX - (this.actionMenu.x ?? 0);
     const localY = pointer.worldY - (this.actionMenu.y ?? 0);
     const viewLeft = viewport.x ?? 0;
+    const viewTop = viewport.y ?? 0;
     const viewRight = viewLeft + (viewport.width ?? 0);
-    return localX >= viewLeft && localX <= viewRight && localY >= 0 && localY <= (viewport.height ?? 0);
+    const viewBottom = viewTop + (viewport.height ?? 0);
+    return localX >= viewLeft && localX <= viewRight && localY >= viewTop && localY <= viewBottom;
   }
 
   _updateActionLights() {
