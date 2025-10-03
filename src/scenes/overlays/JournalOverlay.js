@@ -1,10 +1,11 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { JOURNAL_CATEGORIES } from '../../../data/journal/manifest.js';
-import { JOURNAL_ENTRIES } from '../../../data/journal/entries.seed.js';
+import { JOURNAL_ENTRIES as SEEDS } from '../../../data/journal/entries.seed.js';
 import JournalTree from '../../ui/JournalTree.js';
 import JournalContent from '../../ui/JournalContent.js';
-import JournalIndex from '../../systems/JournalIndex.js';
+import { JournalIndex } from '../../systems/JournalIndex.js';
 import { JournalState } from '../../systems/JournalState.js';
+import { readAllMarkdown } from '../../systems/MarkdownLoader.js';
 import { FONTS } from '../../ui/styles.js';
 
 const LEFT_WIDTH = 280;
@@ -40,9 +41,11 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.categories = JOURNAL_CATEGORIES.filter(cat => cat.id !== 'index');
         this.virtualIndexCategory = JOURNAL_CATEGORIES.find(cat => cat.id === 'index');
 
-        this.index = new JournalIndex(JOURNAL_ENTRIES);
-        this.entries = [...JOURNAL_ENTRIES];
+        this.index = new JournalIndex([]);
+        this._entries = [];
         this.indexEntries = [];
+        this._dataReady = false;
+        this._pendingOpenId = undefined;
 
         this.currentCategory = this.categories[0]?.id || 'lore';
         this.currentEntryId = null;
@@ -51,18 +54,47 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
         this.darkMode = readDarkMode();
 
-        this.unseenSet = new Set(
-            this.entries
-                .filter(entry => JournalState.isUnlockedEntry(entry))
-                .map(entry => entry.id)
-                .filter(id => !JournalState.seenEntries.has(id))
-        );
+        this.unseenSet = new Set();
 
         this._buildUI(bounds);
         this._bindStateEvents();
         this._bindInput();
 
         scene.add.existing(this);
+        this._bootPromise = this._bootJournalData();
+    }
+
+    async _bootJournalData() {
+        try {
+            const mdEntries = await readAllMarkdown('/data/journal/md');
+            const entries = [...SEEDS, ...mdEntries];
+            JournalState.init(entries);
+            this.index.setEntries(entries);
+            this._entries = entries;
+        } catch (err) {
+            console.error('Failed to load journal markdown entries', err);
+            const fallbackEntries = [...SEEDS];
+            JournalState.init(fallbackEntries);
+            this.index.setEntries(fallbackEntries);
+            this._entries = fallbackEntries;
+        }
+
+        this._dataReady = true;
+        this._computeUnseenSet();
+
+        if (this.searchQuery) {
+            this._applySearch(this.searchQuery);
+        } else {
+            this._refreshTree();
+        }
+
+        const pending = this._pendingOpenId;
+        this._pendingOpenId = undefined;
+        if (pending !== undefined) {
+            this.open(pending);
+        } else {
+            this.open(null);
+        }
     }
 
     _buildUI(bounds) {
@@ -215,18 +247,25 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         }
     }
 
+    _computeUnseenSet() {
+        const unseen = new Set();
+        for (const entry of this._entries) {
+            if (!JournalState.isUnlockedEntry(entry)) continue;
+            if (!JournalState.seenEntries.has(entry.id)) {
+                unseen.add(entry.id);
+            }
+        }
+        this.unseenSet = unseen;
+    }
+
     _bindStateEvents() {
-        this.unsubSeen = JournalState.on('journal:seen', ({ entryId }) => {
-            this.unseenSet.delete(entryId);
+        this.unsubSeen = JournalState.on('journal:seen', () => {
+            this._computeUnseenSet();
             this._refreshTree();
             this._updateBottom();
         });
-        this.unsubUnlocks = JournalState.on('journal:new-unlocks', ({ entryIds }) => {
-            for (const id of entryIds) {
-                if (!JournalState.seenEntries.has(id)) {
-                    this.unseenSet.add(id);
-                }
-            }
+        this.unsubUnlocks = JournalState.on('journal:new-unlocks', () => {
+            this._computeUnseenSet();
             this._refreshTree();
             this._updateBottom();
         });
@@ -292,12 +331,23 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     open(entryId = null) {
-        this._refreshTree();
+        if (!this._dataReady) {
+            this._pendingOpenId = entryId;
+            return;
+        }
+
+        this._computeUnseenSet();
+
         if (entryId) {
             this.openEntry(entryId);
+            return;
+        }
+
+        const visibleEntries = this._getVisibleEntries();
+        if (visibleEntries.length) {
+            this.openEntry(visibleEntries[0].id);
         } else {
-            const firstEntry = this._getVisibleEntries()[0];
-            if (firstEntry) this.openEntry(firstEntry.id);
+            this._refreshTree();
         }
     }
 
@@ -306,6 +356,11 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     showCategory(categoryId) {
+        if (!this._dataReady) {
+            this.currentCategory = categoryId;
+            this._highlightTabs();
+            return;
+        }
         if (categoryId === 'index') {
             this.currentCategory = 'index';
             this._highlightTabs();
@@ -338,7 +393,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const categoryList = [...this.categories];
         if (this.virtualIndexCategory) categoryList.push(this.virtualIndexCategory);
         const activeEntry = this.currentEntryId
-            ? this.entries.find(entry => entry.id === this.currentEntryId)
+            ? this._entries.find(entry => entry.id === this.currentEntryId)
             : null;
         const activeCategoryId = activeEntry?.category || this.currentCategory;
         const activeCategory = categoryList.find(cat => cat?.id === activeCategoryId) || null;
@@ -364,7 +419,12 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
     openEntry(entryId) {
         if (!entryId) return;
-        const entry = this.entries.find(e => e.id === entryId);
+        if (!this._dataReady) {
+            this._pendingOpenId = entryId;
+            return;
+        }
+
+        const entry = this._entries.find(e => e.id === entryId);
         if (!entry) return;
         if (!JournalState.isUnlockedEntry(entry)) return;
 
@@ -391,6 +451,10 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     _applySearch(query) {
+        if (!this._dataReady) {
+            this.indexEntries = [];
+            return [];
+        }
         if (!query) {
             if (this.currentCategory === 'index') {
                 this._renderIndexCategory([]);
@@ -410,7 +474,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
     _renderIndexCategory(results) {
         const entries = results.map(result => {
-            const entry = this.entries.find(e => e.id === result.entryId);
+            const entry = this._entries.find(e => e.id === result.entryId);
             return entry ? { ...entry, excerpt: result.snippet } : null;
         }).filter(Boolean);
         this.indexEntries = entries;
@@ -432,10 +496,13 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     _getVisibleEntries() {
+        if (!this._dataReady) {
+            return [];
+        }
         if (this.currentCategory === 'index') {
             return [...this.indexEntries];
         }
-        const entries = this.entries.filter(entry => {
+        const entries = this._entries.filter(entry => {
             if (this.currentCategory && entry.category !== this.currentCategory) return false;
             if (!JournalState.isUnlockedEntry(entry)) return false;
             if (this.tagFilter.length && !this.tagFilter.every(tag => entry.tags?.includes(tag))) return false;
@@ -445,9 +512,10 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     _refreshTree() {
+        if (!this._dataReady) return;
         if (this.currentCategory === 'index') return;
         const categories = [...this.categories];
-        const visibleEntries = this.entries.filter(entry => JournalState.isUnlockedEntry(entry));
+        const visibleEntries = this._entries.filter(entry => JournalState.isUnlockedEntry(entry));
         const filtered = visibleEntries.filter(entry => {
             if (this.currentCategory && entry.category !== this.currentCategory) return false;
             if (this.tagFilter.length && !this.tagFilter.every(tag => entry.tags?.includes(tag))) return false;

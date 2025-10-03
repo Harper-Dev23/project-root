@@ -1,16 +1,18 @@
-import { JOURNAL_ENTRIES } from '../../data/journal/entries.seed.js';
 
 const STORAGE_KEY = 'game.journalState';
 
 function loadState() {
     try {
-        if (typeof localStorage === 'undefined') return { unlocks: [], seenEntries: [] };
+        if (typeof localStorage === 'undefined') {
+            return { unlocks: [], seenEntries: [] };
+        }
+
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) return { unlocks: [], seenEntries: [] };
         const parsed = JSON.parse(raw);
         return {
-            unlocks: Array.isArray(parsed.unlocks) ? parsed.unlocks : [],
-            seenEntries: Array.isArray(parsed.seenEntries) ? parsed.seenEntries : []
+            unlocks: Array.isArray(parsed?.unlocks) ? parsed.unlocks : [],
+            seenEntries: Array.isArray(parsed?.seenEntries) ? parsed.seenEntries : []
         };
     } catch (err) {
         console.warn('Failed to load journal state:', err);
@@ -28,16 +30,10 @@ function persist(unlocks, seenEntries) {
     }
 }
 
-function computeUnlockedEntries(unlockSet) {
-    const unlocked = new Set();
-    for (const entry of JOURNAL_ENTRIES) {
-        if (entry.requires && entry.requires.length) {
-            const meets = entry.requires.every(flag => unlockSet.has(flag));
-            if (!meets) continue;
-        }
-        unlocked.add(entry.id);
-    }
-    return unlocked;
+function meetsRequirements(entry, unlockSet) {
+    const requirements = Array.isArray(entry?.requires) ? entry.requires : [];
+    if (requirements.length === 0) return true;
+    return requirements.every(flag => unlockSet.has(flag));
 }
 
 const listeners = new Map();
@@ -45,9 +41,9 @@ const listeners = new Map();
 function emit(event, payload) {
     const subs = listeners.get(event);
     if (!subs) return;
-    for (const cb of [...subs]) {
+    for (const handler of [...subs]) {
         try {
-            cb(payload);
+            handler(payload);
         } catch (err) {
             console.error('JournalState listener error', err);
         }
@@ -60,46 +56,64 @@ function on(event, handler) {
     return () => listeners.get(event)?.delete(handler);
 }
 
-const initial = loadState();
+const initialState = loadState();
 
 export const JournalState = {
-    unlocks: new Set(initial.unlocks),
-    seenEntries: new Set(initial.seenEntries),
+    unlocks: new Set(initialState.unlocks),
+    seenEntries: new Set(initialState.seenEntries),
+    _entries: [],
     on,
-    addUnlock(flag) {
-        if (!flag) return [];
-        const before = computeUnlockedEntries(this.unlocks);
-        const sizeBefore = this.unlocks.size;
-        this.unlocks.add(flag);
-        if (this.unlocks.size !== sizeBefore) {
-            persist(this.unlocks, this.seenEntries);
-        }
-        const after = computeUnlockedEntries(this.unlocks);
-        const newlyUnlocked = [...after].filter(id => !before.has(id));
-        if (newlyUnlocked.length) {
-            emit('journal:new-unlocks', { entryIds: newlyUnlocked });
-            emit('journal:toast', { message: 'New Journal entry', entryIds: newlyUnlocked });
-        }
-        return newlyUnlocked;
+    init(entries) {
+        this._entries = Array.isArray(entries) ? entries : [];
     },
     isUnlockedEntry(entry) {
         if (!entry) return false;
-        if (!entry.requires || entry.requires.length === 0) return true;
-        return entry.requires.every(flag => this.unlocks.has(flag));
+        return meetsRequirements(entry, this.unlocks);
     },
-    markSeen(entryId) {
-        if (!entryId) return;
-        const sizeBefore = this.seenEntries.size;
-        this.seenEntries.add(entryId);
-        if (this.seenEntries.size !== sizeBefore) {
+    addUnlock(flag) {
+        if (!flag) return false;
+        const beforeUnlocks = new Set(this.unlocks);
+        if (beforeUnlocks.has(flag)) {
+            return false;
+        }
+
+        const beforeVisible = new Set(
+            this._entries
+                .filter(entry => meetsRequirements(entry, beforeUnlocks))
+                .map(entry => entry.id)
+        );
+
+        this.unlocks.add(flag);
+        persist(this.unlocks, this.seenEntries);
+
+        const newlyUnlocked = this._entries
+            .filter(entry => this.isUnlockedEntry(entry) && !beforeVisible.has(entry.id))
+            .map(entry => entry.id);
+
+        if (newlyUnlocked.length) {
+            emit('journal:new-unlocks', { entryIds: newlyUnlocked });
+            emit('journal:toast', { message: 'New Journal entry', entryIds: newlyUnlocked });
+            return true;
+        }
+
+        return false;
+    },
+    visibleCount() {
+        return this._entries.filter(entry => this.isUnlockedEntry(entry)).length;
+    },
+    markSeen(id) {
+        if (!id) return;
+        const beforeSize = this.seenEntries.size;
+        this.seenEntries.add(id);
+        if (this.seenEntries.size !== beforeSize) {
             persist(this.unlocks, this.seenEntries);
-            emit('journal:seen', { entryId });
+            emit('journal:seen', { entryId: id });
         }
     },
     clearSeen(entryIds = []) {
         let changed = false;
-        for (const id of entryIds) {
-            if (this.seenEntries.delete(id)) {
+        for (const entryId of entryIds) {
+            if (this.seenEntries.delete(entryId)) {
                 changed = true;
             }
         }
@@ -114,6 +128,7 @@ export const JournalState = {
         persist(this.unlocks, this.seenEntries);
         emit('journal:reset');
     }
+
 };
 
 export default JournalState;
