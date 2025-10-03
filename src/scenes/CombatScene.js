@@ -285,27 +285,21 @@ export default class CombatScene extends Phaser.Scene {
     this.combatLogScroll = 0;
     this.combatLogContentHeight = 0;
 
-    // Scroll zone to detect hover
-    this.logScrollZone = this.add.zone(x, y, width, height)
-      .setOrigin(0)
-      .setInteractive()
-      .setDepth(UI_DEPTH.overlay);
-
+    this.combatLogBounds = new Phaser.Geom.Rectangle(x, y, width, height);
     this.isHoveringCombatLog = false;
 
-    this.logScrollZone.on('pointerover', () => {
-      this.isHoveringCombatLog = true;
-    });
+    this.logEntries = [];
+    this.combatLogMaxEntries = 100;
 
-    this.logScrollZone.on('pointerout', () => {
+    this.input.on('gameout', () => {
       this.isHoveringCombatLog = false;
     });
 
-    this.logEntries = [];
 
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       let handled = false;
-      if (this.isHoveringCombatLog) {
+      if (this._isPointerOverCombatLog(pointer)) {
+        this.isHoveringCombatLog = true;
         this._setCombatLogScroll((this.combatLogScroll || 0) + deltaY * 0.35);
         handled = true;
       }
@@ -330,8 +324,11 @@ export default class CombatScene extends Phaser.Scene {
   _log(entry, opts = {}) {
     const normalized = this._normalizeLogEntry(entry, opts);
     this.logEntries.push(normalized);
+    if (this.combatLogMaxEntries && this.logEntries.length > this.combatLogMaxEntries) {
+      const excess = this.logEntries.length - this.combatLogMaxEntries;
+      if (excess > 0) this.logEntries.splice(0, excess);
+    }
     this._renderCombatLog();
-
 
     if (!this.isHoveringCombatLog) {
       this._scrollCombatLogToBottom();
@@ -497,7 +494,7 @@ export default class CombatScene extends Phaser.Scene {
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
-      textObj.setInteractive({ useHandCursor: true });
+      textObj.setInteractive({ cursor: 'pointer' });
       textObj.on('pointerover', show);
       textObj.on('pointermove', move);
       textObj.on('pointerout', hide);
@@ -512,7 +509,7 @@ export default class CombatScene extends Phaser.Scene {
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
-      textObj.setInteractive({ useHandCursor: true });
+      textObj.setInteractive({ cursor: 'pointer' });
       textObj.on('pointerover', show);
       textObj.on('pointermove', move);
       textObj.on('pointerout', hide);
@@ -526,13 +523,19 @@ export default class CombatScene extends Phaser.Scene {
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
-      textObj.setInteractive();
+      textObj.setInteractive({ cursor: 'pointer' });
       textObj.on('pointerover', show);
       textObj.on('pointermove', move);
       textObj.on('pointerout', hide);
     }
 
   }
+
+  _isPointerOverCombatLog(pointer) {
+    if (!pointer || !this.combatLogBounds) return false;
+    return this.combatLogBounds.contains(pointer.worldX, pointer.worldY);
+  }
+
 
   _getLogColorForUnit(unit) {
     if (!unit) return LOG_COLORS.neutral;
@@ -1460,7 +1463,12 @@ export default class CombatScene extends Phaser.Scene {
     // Ensure a single Tooltip instance for this scene
     if (!this.tooltip || !this.tooltip.container || this.tooltip.container.scene !== this) {
       this.tooltip = new Tooltip(this);
-      this.input.on('pointermove', (p) => this.tooltip.reposition(p.worldX, p.worldY));
+      this.input.on('pointermove', (p) => {
+        this.tooltip.reposition(p.worldX, p.worldY);
+        if (this.combatLogBounds) {
+          this.isHoveringCombatLog = this._isPointerOverCombatLog(p);
+        }
+      });
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.tooltip = null; });
     }
 
