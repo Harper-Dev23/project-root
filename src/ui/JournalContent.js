@@ -53,7 +53,7 @@ function simpleMarkdownToHtml(markdown = '') {
 }
 
 export default class JournalContent extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, width, height, { onNavigate } = {}) {
+    constructor(scene, x, y, width, height, { onNavigate, domDepth = 0 } = {}) {
         super(scene, x, y);
         this.setSize(width, height);
         this.onNavigate = onNavigate;
@@ -82,14 +82,24 @@ export default class JournalContent extends Phaser.GameObjects.Container {
 
         this.tagContainer = scene.add.container(CONTAINER_PADDING, CONTAINER_PADDING + 70);
 
-        this.contentDom = scene.add.dom(CONTAINER_PADDING, CONTAINER_PADDING + 110).createFromHTML(`
+        this.contentDom = scene.add.dom(x + CONTAINER_PADDING, y + CONTAINER_PADDING + 110).createFromHTML(`
       <div class="journal-content" style="width:${width - CONTAINER_PADDING * 2}px; min-height:${height - 150}px; color:#e6e6e6; font-family:'Cormorant Garamond', serif; font-size:18px; line-height:1.5;">
         <p>Choose an entry from the list.</p>
       </div>
     `);
         this.contentDom.setOrigin(0, 0);
+        this.contentDom.setDepth(domDepth);
+        const domNode = this.contentDom.node;
+        if (domNode) {
+            domNode.style.width = `${width - CONTAINER_PADDING * 2}px`;
+            domNode.style.maxWidth = domNode.style.width;
+            domNode.style.minHeight = `${height - 150}px`;
+            domNode.style.position = 'absolute';
+            domNode.style.background = 'transparent';
+            domNode.style.pointerEvents = 'auto';
+        }
 
-        this.scrollContainer.add([this.titleText, this.metaText, this.tagContainer, this.contentDom]);
+        this.scrollContainer.add([this.titleText, this.metaText, this.tagContainer]);
         this.add([this.background, this.scrollContainer]);
 
         this.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
@@ -98,17 +108,25 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         });
 
         scene.add.existing(this);
+
+        this._boundSync = () => this._syncDomPosition();
+        scene.events.on('postupdate', this._boundSync);
+        scene.events.once('postupdate', this._boundSync);
     }
 
     destroy(fromScene) {
         this.maskGfx?.destroy();
+        this.contentDom?.destroy();
+        this.scene?.events?.off('postupdate', this._boundSync);
         super.destroy(fromScene);
     }
 
     scrollBy(delta) {
         const bounds = this.scrollContainer.getBounds();
-        const maxScroll = Math.max(0, bounds.height - this.height + 24);
+        const contentHeight = Math.max(bounds.height, this._getDomContentHeight());
+        const maxScroll = Math.max(0, contentHeight - this.height + 24);
         this.scrollContainer.y = Phaser.Math.Clamp(this.scrollContainer.y - delta, -maxScroll, 0);
+        this._syncDomPosition();
     }
 
     _renderTags(tags = []) {
@@ -134,6 +152,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             this.metaText.setText('');
             this._renderTags([]);
             this.contentDom?.setHTML?.(`<div class="journal-content"><p>Choose an entry from the list.</p></div>`);
+            this._resetScroll();
             return;
         }
 
@@ -185,5 +204,31 @@ export default class JournalContent extends Phaser.GameObjects.Container {
                 });
             });
         }
+        this._resetScroll();
+    }
+
+    forceDomSync() {
+        this._syncDomPosition();
+    }
+
+    _resetScroll() {
+        this.scrollContainer.y = 0;
+        this._syncDomPosition();
+    }
+    _getDomContentHeight() {
+        const node = this.contentDom?.node;
+        if (!node) return 0;
+        const wrapper = node.querySelector('.journal-content');
+        const baseHeight = wrapper ? wrapper.scrollHeight : node.scrollHeight || 0;
+        return baseHeight + CONTAINER_PADDING + 110;
+    }
+
+    _syncDomPosition() {
+        if (!this.contentDom) return;
+        const matrix = this.getWorldTransformMatrix?.();
+        if (!matrix) return;
+        const baseX = matrix.tx + CONTAINER_PADDING;
+        const baseY = matrix.ty + CONTAINER_PADDING + 110;
+        this.contentDom.setPosition(baseX, baseY + this.scrollContainer.y);
     }
 }

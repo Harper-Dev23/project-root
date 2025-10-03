@@ -33,10 +33,11 @@ function readDarkMode() {
 }
 
 class JournalOverlayView extends Phaser.GameObjects.Container {
-    constructor(scene, bounds, { onClose } = {}) {
+    constructor(scene, bounds, { onClose, depth } = {}) {
         super(scene, bounds.x, bounds.y);
         this.setSize(bounds.width, bounds.height);
         this.onClose = onClose;
+        this.baseDepth = typeof depth === 'number' ? depth : 0;
 
         this.categories = JOURNAL_CATEGORIES.filter(cat => cat.id !== 'index');
         this.virtualIndexCategory = JOURNAL_CATEGORIES.find(cat => cat.id === 'index');
@@ -56,11 +57,15 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
         this.unseenSet = new Set();
 
+        this._domElements = [];
+        this._syncDomAnchors = this._syncDomAnchors.bind(this);
+
         this._buildUI(bounds);
         this._bindStateEvents();
         this._bindInput();
 
         scene.add.existing(this);
+        scene.events.on('postupdate', this._syncDomAnchors, this);
         this._bootPromise = this._bootJournalData();
     }
 
@@ -119,6 +124,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
       <input type="text" placeholder="Search journal" style="width:200px;padding:6px 10px;border-radius:6px;border:1px solid #666;background:${this.darkMode ? '#1f1f1f' : '#ffffff'};color:${this.darkMode ? '#f8f8f8' : '#1a1a1a'};">
     `);
         this.searchDom.setOrigin(0, 0.5);
+        this.searchDom.setDepth(this.baseDepth + 1);
         this.searchDom.addListener('input');
         this.searchDom.on('input', (event) => {
             const value = event.target.value;
@@ -127,6 +133,19 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         });
         const searchNode = this.searchDom.node;
         if (searchNode) {
+            searchNode.style.width = '200px';
+            searchNode.style.height = '32px';
+            searchNode.style.position = 'absolute';
+            searchNode.style.display = 'flex';
+            searchNode.style.alignItems = 'center';
+            searchNode.style.justifyContent = 'flex-end';
+            searchNode.style.background = 'transparent';
+            searchNode.style.pointerEvents = 'auto';
+            const input = searchNode.querySelector('input');
+            if (input) {
+                input.style.width = '100%';
+                input.style.boxSizing = 'border-box';
+            }
             this._searchKeyHandler = (event) => {
                 event.stopPropagation();
                 if (event.key === 'Enter') {
@@ -150,6 +169,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             };
             searchNode.addEventListener('keydown', this._searchKeyHandler);
         }
+        this._domElements.push(this.searchDom);
+
         // Left tree
         this.tree = new JournalTree(scene, 20, TOP_BAR_HEIGHT + 12, LEFT_WIDTH - 40, bounds.height - TOP_BAR_HEIGHT - BOTTOM_BAR_HEIGHT - 24, {
             onSelect: (entryId) => this.openEntry(entryId)
@@ -160,7 +181,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const contentWidth = bounds.width - contentX - 20;
         const contentHeight = bounds.height - TOP_BAR_HEIGHT - BOTTOM_BAR_HEIGHT - 24;
         this.content = new JournalContent(scene, contentX, TOP_BAR_HEIGHT + 12, contentWidth, contentHeight, {
-            onNavigate: (entryId) => this.openEntry(entryId)
+            onNavigate: (entryId) => this.openEntry(entryId),
+            domDepth: this.baseDepth + 1
         });
 
         // Bottom bar
@@ -181,7 +203,6 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.topBar,
             this.breadcrumbText,
             this.tabContainer,
-            this.searchDom,
             this.tree,
             this.content,
             this.bottomBar,
@@ -190,6 +211,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.nextButton,
             this.pinButton
         ]);
+
+        this._syncDomAnchors();
     }
 
     _createBottomButton(x, y, label, handler) {
@@ -327,8 +350,24 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this._searchKeyHandler = null;
         }
         this.searchDom?.removeListener?.('input');
+        this._domElements.forEach(el => el?.destroy?.());
+        this.scene?.events?.off('postupdate', this._syncDomAnchors, this);
         super.destroy(fromScene);
     }
+
+    _syncDomAnchors() {
+        if (!this.scene || !this.searchDom) return;
+        let worldLeft = this.x;
+        let worldTop = this.y;
+        const matrix = this.getWorldTransformMatrix?.();
+        if (matrix) {
+            worldLeft = matrix.tx;
+            worldTop = matrix.ty;
+        }
+        this.searchDom.setPosition(worldLeft + this.width - 240, worldTop + TOP_BAR_HEIGHT / 2);
+        this.content?.forceDomSync?.();
+    }
+
 
     open(entryId = null) {
         if (!this._dataReady) {
@@ -587,7 +626,8 @@ export default class JournalOverlay extends Phaser.Scene {
         });
 
         this.overlay = new JournalOverlayView(this, frame.bounds, {
-            onClose: () => this._close()
+            onClose: () => this._close(),
+            depth: frame.depth
         });
         frame.content.add(this.overlay);
 
