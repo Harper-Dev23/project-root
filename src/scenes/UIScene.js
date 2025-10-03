@@ -2,6 +2,7 @@ import GameState from '../systems/GameState.js';
 import StatusBar from '../ui/StatusBar.js';
 import { COLORS } from '../ui/styles.js';
 import { DEPTH } from '../ui/styles.js';
+import { JournalState } from '../systems/JournalState.js';
 
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
@@ -20,6 +21,24 @@ export default class UIScene extends Phaser.Scene {
     this.currentEnterAction = null; // holds a function when a confirmation dialogue is open
     this.refreshUI();
     this.events.on('wake', this.refreshUI, this);
+
+        this._journalBindingsCleaned = false;
+    this._journalKeyHandler = () => this.openOverlay('JournalOverlay');
+    this.input.keyboard?.on('keydown-J', this._journalKeyHandler, this);
+    this.journalToastOff = JournalState.on('journal:toast', ({ message } = {}) => {
+      this.showToast(message || 'New Journal entry');
+    });
+
+    this._cleanupJournalBindings = () => {
+      if (this._journalBindingsCleaned) return;
+      this._journalBindingsCleaned = true;
+      this.input.keyboard?.off('keydown-J', this._journalKeyHandler, this);
+      this.journalToastOff?.();
+      this.journalToastOff = null;
+    };
+    this.events.once('shutdown', this._cleanupJournalBindings, this);
+    this.events.once('destroy', this._cleanupJournalBindings, this);
+
 
     // Listen once for entering Samuel's tent
     this.events.on('enterSamuel', () => {
@@ -373,6 +392,7 @@ export default class UIScene extends Phaser.Scene {
       this.leftPartyPanel.add([nameText, hpBar, mpBar, xpBar, classText, favorText]);
     });
 
+    this._buildToastLayer(width);
 
   }
 
@@ -392,6 +412,42 @@ export default class UIScene extends Phaser.Scene {
       this.scene.launch(key);
     }
     this.scene.bringToTop(key);
+  }
+
+  _buildToastLayer(width) {
+    this.toastTimer?.remove();
+    this.toastTimer = null;
+    this.toastText?.destroy();
+    this.toastText = this.add.text(width / 2, 64, '', {
+      fontSize: '20px',
+      color: '#ffddaa',
+      fontStyle: 'bold',
+      fontFamily: 'Georgia'
+    })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.UI_OVERLAY)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setVisible(false);
+  }
+
+  showToast(message) {
+    if (!this.toastText) return;
+    this.toastTimer?.remove();
+    this.toastText.setText(message)
+      .setVisible(true)
+      .setAlpha(1);
+    this.toastTimer = this.time.addEvent({
+      delay: 2200,
+      callback: () => {
+        this.tweens.add({
+          targets: this.toastText,
+          alpha: 0,
+          duration: 400,
+          onComplete: () => this.toastText.setVisible(false)
+        });
+      }
+    });
   }
 
   exitToMainMenu() {
