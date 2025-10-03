@@ -111,6 +111,21 @@ function moveCost(fromId, toId) {
 }
 // =========================================================
 
+const LOG_COLORS = {
+  default: '#eeeeee',
+  ally: '#aee1ff',
+  enemy: '#ffb3b3',
+  neutral: '#dddddd',
+  ability: '#ffd166',
+  damage: '#ff9966',
+  heal: '#8fe0b0',
+  crit: '#fff176',
+  keyword: '#d4c4ff',
+  info: '#bbbbbb'
+};
+
+const LOG_LINE_HEIGHT = 18;
+
 
 export default class CombatScene extends Phaser.Scene {
   constructor() {
@@ -253,19 +268,21 @@ export default class CombatScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xffffff)
       .setDepth(UI_DEPTH.overlay);
 
-    // Scrollable text
-    this.combatLogText = this.add.text(x + padding, y + padding, '', {
-      fontSize: '14px',
-      color: '#eeeeee',
-      wordWrap: { width: width - padding * 2 }
-    }).setOrigin(0, 0).setDepth(UI_DEPTH.overlay);
+
 
     // Mask for scroll area
-    const shape = this.make.graphics();
+    const shape = this.make.graphics({ add: false });
     shape.fillStyle(0xffffff);
     shape.fillRect(x, y, width, height);
     const mask = shape.createGeometryMask();
-    this.combatLogText.setMask(mask);
+    this.combatLogContainer = this.add.container(x + padding, y + padding)
+      .setDepth(UI_DEPTH.overlay);
+    this.combatLogContainer.setMask(mask);
+
+    this.combatLogMask = mask;
+    this.combatLogBaseY = y + padding;
+    this.combatLogScroll = 0;
+    this.combatLogContentHeight = 0;
 
     // Scroll zone to detect hover
     this.logScrollZone = this.add.zone(x, y, width, height)
@@ -288,12 +305,7 @@ export default class CombatScene extends Phaser.Scene {
     this.input.on('wheel', (pointer, gameObjects, deltaX, deltaY) => {
       let handled = false;
       if (this.isHoveringCombatLog) {
-        this.combatLogText.y -= deltaY * 0.25;
-        this.combatLogText.y = Phaser.Math.Clamp(
-          this.combatLogText.y,
-          y + height - this.combatLogText.height - padding,
-          y + padding
-        );
+        this._setCombatLogScroll((this.combatLogScroll || 0) + deltaY * 0.35);
         handled = true;
       }
 
@@ -314,20 +326,353 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
-  _log(text) {
-    this.logEntries.push(text);
-    this.combatLogText.setText(this.logEntries.join('\n'));
+  _log(entry, opts = {}) {
+    const normalized = this._normalizeLogEntry(entry, opts);
+    this.logEntries.push(normalized);
+    this._renderCombatLog();
 
-    // If not hovering, auto-scroll to newest entry
+
     if (!this.isHoveringCombatLog) {
-      const textHeight = this.combatLogText.height;
-      const { height, padding, y } = this.combatLogConfig || {};
-      const viewHeight = height ?? 140;
-      const baseY = (y ?? 500) + (padding ?? 10);
-
-      const offset = Math.max(textHeight - viewHeight + (padding ?? 10), 0);
-      this.combatLogText.y = baseY - offset;
+      this._scrollCombatLogToBottom();
     }
+  }
+
+  _normalizeLogEntry(entry, opts = {}) {
+    if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.segments) {
+      return { ...entry, segments: entry.segments.map(seg => ({ ...seg })) };
+    }
+
+    if (typeof entry === 'string') {
+      const color = this._colorForPlainLog(entry);
+      return { segments: [{ text: entry, color }] };
+    }
+
+    if (entry && typeof entry === 'object' && entry.text) {
+      return {
+        segments: [{ text: entry.text, color: entry.color || LOG_COLORS.default }]
+      };
+    }
+
+    const fallback = entry != null ? String(entry) : '';
+    return { segments: [{ text: fallback, color: LOG_COLORS.default }] };
+  }
+
+  _colorForPlainLog(text) {
+    if (!text) return LOG_COLORS.default;
+    if (/initiative gauge/i.test(text)) return '#7fc8ff';
+    if (/buildup|weakens|weakness/i.test(text)) return '#ffcc80';
+    if (/regenerates|heals/i.test(text)) return LOG_COLORS.heal;
+    if (/damage/i.test(text)) return LOG_COLORS.damage;
+    return LOG_COLORS.default;
+  }
+
+  _renderCombatLog() {
+    if (!this.combatLogContainer) return;
+
+    this.tooltip?.hide();
+    this.combatLogContainer.removeAll(true);
+
+    const wrapWidth = this._getCombatLogWrapWidth();
+    const spacing = 4;
+    let y = 0;
+
+    for (const entry of this.logEntries) {
+      const { container, height } = this._createLogEntryDisplay(entry, wrapWidth);
+      container.setPosition(0, y);
+      this.combatLogContainer.add(container);
+      y += height + spacing;
+    }
+
+    this.combatLogContentHeight = y;
+    this._applyCombatLogScroll();
+  }
+
+  _getCombatLogWrapWidth() {
+    const cfg = this.combatLogConfig || {};
+    const pad = cfg.padding ?? 0;
+    const width = cfg.width ?? 0;
+    return Math.max(120, width - pad * 2);
+  }
+
+  _createLogEntryDisplay(entry, wrapWidth) {
+    const container = this.add.container(0, 0);
+    const segments = Array.isArray(entry?.segments) ? entry.segments : [];
+
+    let cursorX = 0;
+    let cursorY = 0;
+    let maxBottom = 0;
+
+    const baseStyle = { fontSize: '14px', color: LOG_COLORS.default };
+
+    const applyFontStyle = (seg) => {
+      const styles = [];
+      if (seg?.bold) styles.push('bold');
+      if (seg?.italic) styles.push('italic');
+      return styles.join(' ') || undefined;
+    };
+
+    segments.forEach(segment => {
+      const tokens = this._tokenizeLogText(segment?.text ?? '');
+      tokens.forEach(token => {
+        if (token === '\n') {
+          cursorX = 0;
+          cursorY += LOG_LINE_HEIGHT;
+          maxBottom = Math.max(maxBottom, cursorY + LOG_LINE_HEIGHT);
+          return;
+        }
+
+        const style = {
+          ...baseStyle,
+          color: segment?.color || entry?.color || LOG_COLORS.default,
+          fontStyle: applyFontStyle(segment)
+        };
+
+        const textObj = this.make.text({
+          x: 0,
+          y: 0,
+          text: token,
+          style,
+          add: false
+        });
+        textObj.setOrigin(0, 0);
+
+        const tokenWidth = textObj.width;
+        if (cursorX > 0 && tokenWidth > 0 && cursorX + tokenWidth > wrapWidth) {
+          cursorX = 0;
+          cursorY += LOG_LINE_HEIGHT;
+        }
+
+        textObj.x = cursorX;
+        textObj.y = cursorY;
+        cursorX += tokenWidth;
+        maxBottom = Math.max(maxBottom, cursorY + textObj.height);
+
+        container.add(textObj);
+        this._applyLogSegmentInteractivity(textObj, segment);
+      });
+    });
+
+    if (maxBottom === 0) maxBottom = LOG_LINE_HEIGHT;
+    container.setSize(wrapWidth, maxBottom);
+
+    return { container, height: maxBottom };
+  }
+
+  _tokenizeLogText(text) {
+    if (text == null) return [];
+    const result = [];
+    const pieces = String(text).split(/(\s+)/);
+    pieces.forEach(piece => {
+      if (!piece) return;
+      if (piece.includes('\n')) {
+        const parts = piece.split('\n');
+        parts.forEach((part, idx) => {
+          if (part) result.push(part);
+          if (idx < parts.length - 1) result.push('\n');
+        });
+      } else {
+        result.push(piece);
+      }
+    });
+    return result;
+  }
+
+  _applyLogSegmentInteractivity(textObj, segment) {
+    if (!textObj || !segment) return;
+
+    const hide = () => this.tooltip?.hide();
+
+    if (segment.type === 'ability' && segment.ability) {
+      const actor = segment.actor || segment.abilityUser || null;
+      const show = (pointer) => {
+        try {
+          const data = this._formatAbilityTooltip(segment.ability, actor);
+          this.tooltip?.show(pointer.worldX, pointer.worldY, data);
+        } catch (err) {
+          console.error('[tooltip error]', err, segment.ability);
+        }
+      };
+      const move = (pointer) => {
+        this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      };
+
+      textObj.setInteractive({ useHandCursor: true });
+      textObj.on('pointerover', show);
+      textObj.on('pointermove', move);
+      textObj.on('pointerout', hide);
+      return;
+    }
+
+    if (segment.type === 'damage' && segment.tooltipData) {
+      const show = (pointer) => {
+        this.tooltip?.show(pointer.worldX, pointer.worldY, segment.tooltipData);
+      };
+      const move = (pointer) => {
+        this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      };
+
+      textObj.setInteractive({ useHandCursor: true });
+      textObj.on('pointerover', show);
+      textObj.on('pointermove', move);
+      textObj.on('pointerout', hide);
+      return;
+    }
+    if (segment.tooltipData) {
+      const show = (pointer) => {
+        this.tooltip?.show(pointer.worldX, pointer.worldY, segment.tooltipData);
+      };
+      const move = (pointer) => {
+        this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      };
+
+      textObj.setInteractive();
+      textObj.on('pointerover', show);
+      textObj.on('pointermove', move);
+      textObj.on('pointerout', hide);
+    }
+  }
+
+  _getLogColorForUnit(unit) {
+    if (!unit) return LOG_COLORS.neutral;
+    if (unit.isEnemy) return LOG_COLORS.enemy;
+    if (unit.isEnemy === false) return LOG_COLORS.ally;
+    return LOG_COLORS.neutral;
+  }
+
+  _logAbilityUseEntry(user, ability, target) {
+    if (!ability) return;
+    const actorColor = this._getLogColorForUnit(user);
+    const targetColor = this._getLogColorForUnit(target);
+
+    const name = user?.name || 'Unknown';
+    const abilityName = ability?.name || ability?.id || 'Ability';
+    const segments = [
+      { text: name, color: actorColor, bold: true },
+      { text: ' uses ', color: LOG_COLORS.default },
+      {
+        text: abilityName,
+        color: LOG_COLORS.ability,
+        bold: true,
+        type: 'ability',
+        ability,
+        actor: user
+      }
+    ];
+
+    if (target && target !== user) {
+      segments.push({ text: ' on ', color: LOG_COLORS.default });
+      segments.push({ text: target.name || 'target', color: targetColor, bold: true });
+    }
+
+    segments.push({ text: '.', color: LOG_COLORS.default });
+
+    this._log({ segments });
+  }
+
+  _buildDamageTooltipData({
+    user,
+    target,
+    ability,
+    amount,
+    raw,
+    blocked,
+    dr,
+    critPct,
+    isCrit,
+    hitChance,
+    formulaParts,
+    mpCost,
+    mpInfo,
+    isMagic,
+    isSplash
+  }) {
+    const lines = [];
+    const title = `${ability?.name || ability?.id || 'Damage'} Breakdown`;
+
+    const actorName = user?.name || 'Source';
+    const targetName = target?.name || 'Target';
+    lines.push(`Source: ${actorName}`);
+    lines.push(`Target: ${targetName}`);
+
+    if (isMagic != null) {
+      lines.push(`Type: ${isMagic ? 'Magic' : 'Physical'}`);
+    }
+
+    lines.push(`Final Damage: ${amount}`);
+    if (raw != null && raw !== amount) {
+      const blockedText = blocked > 0 ? ` (blocked ${blocked})` : '';
+      lines.push(`Raw Damage: ${raw}${blockedText}`);
+    }
+
+    if (dr && Math.abs(dr) > 0.0001) {
+      const pct = Math.round(dr * 100);
+      const blockedText = blocked > 0 ? ` (blocked ${blocked})` : '';
+      lines.push(`Damage Reduction: ${pct}%${blockedText}`);
+    }
+
+    if (Array.isArray(formulaParts) && formulaParts.length) {
+      lines.push(`Formula: ${formulaParts.join(' ')}`);
+    }
+
+    if (hitChance != null) {
+      lines.push(`Hit Chance: ${Math.round(hitChance)}%`);
+    }
+
+    if (critPct != null) {
+      lines.push(`Crit Chance: ${Math.round(critPct)}%`);
+    }
+    if (isCrit) {
+      lines.push('Critical Hit!');
+    }
+
+    if (typeof mpCost === 'number' && mpCost > 0) {
+      let mpLine = `MP Cost: ${mpCost}`;
+      const gear = mpInfo?.gear;
+      if (gear && gear.before != null && gear.after != null && gear.after !== gear.before) {
+        mpLine += ` (gear ${gear.before} → ${gear.after})`;
+      }
+      const penalty = mpInfo?.penalty;
+      if (penalty && penalty.before != null && penalty.after != null && penalty.after !== penalty.before) {
+        const mult = penalty.mult ? ` ×${penalty.mult.toFixed(2)}` : '';
+        mpLine += ` (penalty ${penalty.before} → ${penalty.after}${mult})`;
+      }
+      lines.push(mpLine);
+    }
+
+    if (isSplash) {
+      lines.push('Splash damage instance');
+    }
+
+    return {
+      title,
+      lines,
+      tags: ['damage']
+    };
+  }
+
+  _setCombatLogScroll(value) {
+    const cfg = this.combatLogConfig || {};
+    const pad = cfg.padding ?? 0;
+    const viewHeight = Math.max(0, (cfg.height ?? 0) - pad * 2);
+    const maxScroll = Math.max(0, (this.combatLogContentHeight || 0) - viewHeight);
+    const clamped = Phaser.Math.Clamp(value, 0, maxScroll);
+    if (clamped === this.combatLogScroll) return;
+    this.combatLogScroll = clamped;
+    this._applyCombatLogScroll();
+  }
+
+  _applyCombatLogScroll() {
+    if (!this.combatLogContainer) return;
+    const baseY = this.combatLogBaseY ?? 0;
+    this.combatLogContainer.y = baseY - (this.combatLogScroll || 0);
+  }
+
+  _scrollCombatLogToBottom() {
+    const cfg = this.combatLogConfig || {};
+    const pad = cfg.padding ?? 0;
+    const viewHeight = Math.max(0, (cfg.height ?? 0) - pad * 2);
+    const maxScroll = Math.max(0, (this.combatLogContentHeight || 0) - viewHeight);
+    this._setCombatLogScroll(maxScroll);
   }
 
 
@@ -1303,7 +1648,14 @@ export default class CombatScene extends Phaser.Scene {
   _wireAbilityTooltip(btn, ability, actor) {
     if (!btn || !ability) return;
 
+
+
+    const hide = () => this.tooltip?.hide();
     const safeShow = (pointer) => {
+      if (!this._isPointerOverActionMenu?.(pointer)) {
+        hide();
+        return;
+      }
       try {
         const data = this._formatAbilityTooltip(ability, actor);
         this.tooltip?.show(pointer.worldX, pointer.worldY, data);
@@ -1316,8 +1668,13 @@ export default class CombatScene extends Phaser.Scene {
         });
       }
     };
-    const move = (p) => this.tooltip?.reposition(p.worldX, p.worldY);
-    const hide = () => this.tooltip?.hide();
+    const move = (p) => {
+      if (!this._isPointerOverActionMenu?.(p)) {
+        hide();
+        return;
+      }
+      this.tooltip?.reposition(p.worldX, p.worldY);
+    };
 
     // Ensure container is interactive
     if (!btn.input?.enabled) btn.setInteractive?.({ useHandCursor: true });
@@ -1962,7 +2319,7 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
-  _applyAbilityToTarget(user, target, ability, intentOverride = null) {
+  _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
     const baseMpCost = Number.isFinite(ability?.mpCost) ? ability.mpCost : 0;
     const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
@@ -2071,6 +2428,10 @@ export default class CombatScene extends Phaser.Scene {
     }
     if (result && Array.isArray(result.statusEffects)) {
       this._addStatusEffects(target, result.statusEffects);
+    }
+
+        if (options.logUsage !== false) {
+      this._logAbilityUseEntry(user, ability, target);
     }
 
     // ===== Establish intent & tags BEFORE reactions / hit checks =====
@@ -2230,8 +2591,17 @@ export default class CombatScene extends Phaser.Scene {
       // === NEW: Miss handling ===
       if (missed) {
         this._showFloatingText?.('DODGE', target);
-        const hint = (hitChanceShown != null) ? ` (${hitChanceShown}% to hit)` : '';
-        this._log(`${user.name} misses ${target.name}${hint}.`);
+        const chanceText = (hitChanceShown != null)
+          ? ` (${Math.round(hitChanceShown)}% to hit)`
+          : '';
+        const missSegments = [
+          { text: user.name, color: this._getLogColorForUnit(user), bold: true },
+          { text: ' misses ', color: LOG_COLORS.default },
+          { text: target.name, color: this._getLogColorForUnit(target), bold: true }
+        ];
+        if (chanceText) missSegments.push({ text: chanceText, color: LOG_COLORS.info });
+        missSegments.push({ text: '.', color: LOG_COLORS.default });
+        this._log({ segments: missSegments });
 
         // Costs/cooldown/action payment happens later as normal.
       } else if (isHeal) {
@@ -2239,7 +2609,15 @@ export default class CombatScene extends Phaser.Scene {
         target.currentHP = Math.min(target.maxHP, target.currentHP + healed);
         if (healed > 0) {
           this._showFloatingNumber?.(healed, target, true);
-          this._log(`${user.name} heals ${target.name} for ${healed}`);
+          const healSegments = [
+            { text: user.name, color: this._getLogColorForUnit(user), bold: true },
+            { text: ' heals ', color: LOG_COLORS.default },
+            { text: target.name, color: this._getLogColorForUnit(target), bold: true },
+            { text: ' for ', color: LOG_COLORS.default },
+            { text: `${healed} HP`, color: LOG_COLORS.heal, bold: true },
+            { text: '.', color: LOG_COLORS.default }
+          ];
+          this._log({ segments: healSegments });
         }
       } else {
         // === DAMAGE with Damage Reduction support ===
@@ -2262,62 +2640,75 @@ export default class CombatScene extends Phaser.Scene {
 
           this._showFloatingNumber?.(dmg, target, false, isCrit);
 
-          const critText = isCrit ? ' (CRIT!)' : '';
-          const typeText = isMagic ? ' magic' : '';
-          const drText = (!ignoreDR && dr !== 0)
-            ? ` (DR ${Math.round(dr * 100)}%${blocked > 0 ? `, blocked ${blocked}` : ''})`
-            : '';
+          const bd = getLastDamageBreakdown?.() || null;
+          let critPct = null;
+          const formulaParts = [];
+          if (bd && bd.length) {
+            const critEntry = bd.find(e => e && e.label === 'critChance' && typeof e.value === 'number');
+            if (critEntry) critPct = critEntry.value;
 
-          (() => {
-            const bd = getLastDamageBreakdown?.() || null;
-
-            // Try to read crit chance from breakdown, if present
-            let critPct = null;
-            if (bd && bd.length) {
-              const entry = bd.find(e => e && e.label === 'critChance' && typeof e.value === 'number');
-              if (entry) critPct = entry.value;
-            }
-
-            if (bd && bd.length) {
-              const parts = [];
-              let baseShown = false;
-
-              for (const e of bd) {
-                if (e.label === 'base' && !baseShown) {
-                  parts.push(String(e.value));
-                  baseShown = true;
-                } else if (e.label === 'crit') {
-                  // show crit mult as ×N.NN if present
-                  const m = (e.mult != null) ? e.mult : (e.to && e.from ? (e.to / e.from) : 1.5);
-                  parts.push(`×${(+m).toFixed(2)}`);
-                } else if (e.label && e.flat) {
-                  parts.push(`+${e.flat} ${e.label}`);
-                } else if (e.label && e.mult && e.from != null && e.to != null) {
-                  parts.push(`×${(e.mult).toFixed(2)} ${e.label}`);
-                }
+            let baseShown = false;
+            for (const e of bd) {
+              if (e.label === 'base' && !baseShown) {
+                formulaParts.push(String(e.value));
+                baseShown = true;
+              } else if (e.label === 'crit') {
+                const m = (e.mult != null) ? e.mult : (e.to && e.from ? (e.to / e.from) : 1.5);
+                formulaParts.push(`×${(+m).toFixed(2)}`);
+              } else if (e.label && e.flat) {
+                formulaParts.push(`+${e.flat} ${e.label}`);
+              } else if (e.label && e.mult && e.from != null && e.to != null) {
+                formulaParts.push(`×${(e.mult).toFixed(2)} ${e.label}`);
               }
 
-              const formula = parts.join(' ');
-              // If this hit crit, append the crit %; rely on existing critText to know if it crit
-              const critSuffix = (critText && /CRIT/i.test(critText) && critPct != null)
-                ? ` (crit ${Math.round(critPct)}%)`
-                : '';
-
-              this._log(
-                `${user.name} hits ${target.name} for ${dmg}${typeText} damage${critText}${critSuffix}${drText}` +
-                ` ⟵ ${formula}${hitChanceShown != null ? ` (${Math.round(hitChanceShown)}% to hit)` : ''}`
-              );
-            } else {
-              const critSuffix = (critText && /CRIT/i.test(critText) && critPct != null)
-                ? ` (crit ${Math.round(critPct)}%)`
-                : '';
-              this._log(
-                `${user.name} hits ${target.name} for ${dmg}${typeText} damage${critText}${critSuffix}${drText}` +
-                `${hitChanceShown != null ? ` (${Math.round(hitChanceShown)}% to hit)` : ''}`
-              );
             }
-          })();
+          }
 
+
+        }
+      
+
+          const typeText = isMagic ? ' magic' : '';
+          const damageTooltip = this._buildDamageTooltipData({
+            user,
+            target,
+            ability,
+            amount: dmg,
+            raw,
+            blocked,
+            dr: ignoreDR ? 0 : dr,
+            critPct,
+            isCrit,
+            hitChance: hitChanceShown,
+            formulaParts,
+            mpCost,
+            mpInfo,
+            isMagic,
+            isSplash: options?.isSplash
+          });
+
+          const damageSegments = [
+            { text: user.name, color: this._getLogColorForUnit(user), bold: true },
+            { text: ' hits ', color: LOG_COLORS.default },
+            { text: target.name, color: this._getLogColorForUnit(target), bold: true },
+            { text: ' for ', color: LOG_COLORS.default },
+            {
+              text: `${dmg}${typeText} damage`,
+              color: LOG_COLORS.damage,
+              bold: true,
+              type: 'damage',
+              tooltipData: damageTooltip
+            }
+          ];
+          if (isCrit) {
+            damageSegments.push({ text: ' (CRIT!)', color: LOG_COLORS.crit, bold: true });
+          }
+          if (options?.isSplash) {
+            damageSegments.push({ text: ' (splash)', color: LOG_COLORS.keyword });
+          }
+
+          damageSegments.push({ text: '.', color: LOG_COLORS.default });
+          this._log({ segments: damageSegments });
 
         }
       }
@@ -2334,7 +2725,7 @@ export default class CombatScene extends Phaser.Scene {
       if (!missed && Array.isArray(result?.splash) && result.splash.length) {
         for (const sp of result.splash) {
           if (!sp?.target) continue;
-          this._applyDirectResult(user, sp.target, sp, { isSplash: true });
+          this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability });
         }
       }
     }
@@ -2481,16 +2872,61 @@ export default class CombatScene extends Phaser.Scene {
         target.currentHP = after;
         if (healed > 0) {
           this._showFloatingNumber?.(healed, target, /*isHeal=*/true, /*isCrit=*/false);
-          this._log?.(`${user.name} heals ${target.name} for ${healed}.`);
+          const healSegments = [
+            { text: user.name, color: this._getLogColorForUnit(user), bold: true },
+            { text: ' heals ', color: LOG_COLORS.default },
+            { text: target.name, color: this._getLogColorForUnit(target), bold: true },
+            { text: ' for ', color: LOG_COLORS.default },
+            { text: `${healed} HP`, color: LOG_COLORS.heal, bold: true },
+            { text: '.', color: LOG_COLORS.default }
+          ];
+          this._log({ segments: healSegments });
         }
       } else {
-        // Direct apply: you can route DR here later if you want ally cover to affect splash
         const before = target.currentHP | 0;
         const after = Math.max(0, before - Math.max(0, amt));
         const dealt = before - after;
         target.currentHP = after;
         this._showFloatingNumber?.(dealt, target, /*isHeal=*/false, /*isCrit=*/false);
-        this._log?.(`${user.name} hits ${target.name} for ${dealt}${opts.isSplash ? ' (splash)' : ''}.`);
+        const isMagic = !!payload.isMagic;
+        const typeText = isMagic ? ' magic' : '';
+        const tooltip = this._buildDamageTooltipData({
+          user,
+          target,
+          ability: opts?.ability || null,
+          amount: dealt,
+          raw: amt,
+          blocked: 0,
+          dr: 0,
+          critPct: null,
+          isCrit: false,
+          hitChance: null,
+          formulaParts: [],
+          mpCost: null,
+          mpInfo: null,
+          isMagic,
+          isSplash: opts?.isSplash
+        });
+
+        const damageSegments = [
+          { text: user.name, color: this._getLogColorForUnit(user), bold: true },
+          { text: ' hits ', color: LOG_COLORS.default },
+          { text: target.name, color: this._getLogColorForUnit(target), bold: true },
+          { text: ' for ', color: LOG_COLORS.default },
+          {
+            text: `${dealt}${typeText} damage`,
+            color: LOG_COLORS.damage,
+            bold: true,
+            type: 'damage',
+            tooltipData: tooltip
+          }
+        ];
+        if (opts.isSplash) {
+          damageSegments.push({ text: ' (splash)', color: LOG_COLORS.keyword });
+        }
+        damageSegments.push({ text: '.', color: LOG_COLORS.default });
+        this._log({ segments: damageSegments });
+
         if (after === 0 && target.status !== 'incapacitated') {
           target.status = 'incapacitated';
           this._onUnitKnockedOut?.(target);
