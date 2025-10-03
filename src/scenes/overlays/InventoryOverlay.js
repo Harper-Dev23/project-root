@@ -131,6 +131,10 @@ export default class InventoryOverlay extends Phaser.Scene {
     const safeHeight = frame.bounds.height;
     const contentDepth = frame.depth;
 
+
+    const globalListWidth = (safeWidth - 100) - 150;
+    const globalListLeft = (180 + 100) + (safeWidth - 100) - globalListWidth;
+
     if (this.firstOpen) {
       frame.panel.setAlpha(0);
       this.tweens.add({ targets: frame.panel, alpha: 0.95, duration: 200 });
@@ -176,9 +180,12 @@ export default class InventoryOverlay extends Phaser.Scene {
       const slotLabel = this._formatLabel(slot);
       const simpleName = this._getEquippedSimpleName(slot, equippedItem, disp.name);
 
+      const slotColor = equippedItem ? disp.color : '#777777';
+
+
       const nameTxt = this.add.text(200, lineY, `${slotLabel}: ${simpleName}`, {
         fontSize: '14px',
-        color: disp.color,
+        color: slotColor,
         wordWrap: { width: EQUIPPED_TEXT_WIDTH, useAdvancedWrap: true }
       }).setDepth(contentDepth)
         .setInteractive({ useHandCursor: true })
@@ -239,10 +246,11 @@ export default class InventoryOverlay extends Phaser.Scene {
     personalItems = this._filterByCategory(personalItems, this.currentPersonalCategory);
 
     // --- PERSONAL MASK + LIST (OFF-DISPLAY GEO, NO DISPLAY-LIST GRAPHICS) ---
-    const pMaskWidth = 300;
-    const pMaskHeight = 100;
+
     const pMaskX = 200;
     const pMaskY = equipY;
+    const pMaskWidth = globalListLeft - pMaskX;
+    const pMaskHeight = Math.max(150, (safeHeight - 60) - pMaskY);
 
     // geometry for mask (not added to display list)
     const pMaskGfx = this.make.graphics({ x: pMaskX, y: pMaskY, add: false });
@@ -255,6 +263,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     // --- PERSONAL ROWS ---
     const PERSONAL_TEXT_WIDTH = 140;
+    const BUTTON_START_X = Math.max(0, pMaskWidth - 80);
+    const BUTTON_SPACING = 28;
     let personalCursorY = 0;
     personalItems.forEach((item) => {
       const baseItem = Items[item.id] || {};
@@ -297,7 +307,7 @@ export default class InventoryOverlay extends Phaser.Scene {
       pList.add(rowBg);
       pList.add(rowP);
 
-      const tBtn = this.add.text(150, y, '[T]', { fontSize: '12px', color: '#88ccff' })
+      const tBtn = this.add.text(BUTTON_START_X, y, '[T]', { fontSize: '12px', color: '#88ccff' })
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', (p) => {
           if (!this._isPointerWithinArea(p, pArea)) return;
@@ -315,7 +325,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
 
       if (baseItem.type === 'weapon') {
-        const mBtn = this.add.text(180, y, '[M]', { fontSize: '12px', color: '#88ff88' })
+        const mBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[M]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, pArea)) return;
@@ -325,7 +335,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           });
 
         const offColor = (baseItem.hands === 2 || mainHandIsTwoHand) ? '#555555' : '#88ff88';
-        const oBtn = this.add.text(210, y, '[O]', { fontSize: '12px', color: offColor });
+        const oBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING * 2, y, '[O]', { fontSize: '12px', color: offColor });
         if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
           oBtn.setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
@@ -337,7 +347,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         }
         pList.add([tBtn, mBtn, oBtn]);
       } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
-        const eqBtn = this.add.text(180, y, '[Eq]', { fontSize: '12px', color: '#88ff88' })
+        const eqBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[Eq]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, pArea)) return;
@@ -347,7 +357,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           });
         pList.add([tBtn, eqBtn]);
       } else {
-        const useBtn = this.add.text(180, y, '[Use]', { fontSize: '12px', color: '#888888' });
+        const useBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[Use]', { fontSize: '12px', color: '#888888' });
         pList.add([tBtn, useBtn]);
       }
 
@@ -393,10 +403,9 @@ export default class InventoryOverlay extends Phaser.Scene {
     inventoryItems = this._filterByCategory(inventoryItems, this.currentGlobalCategory);
 
     const safeHeightAdj = safeHeight - 240;
-    const originalRightEdge = (180 + 100) + (safeWidth - 100);
-    const newWidth = (safeWidth - 100) - 150;
-    const newX = originalRightEdge - newWidth;
-
+    const newWidth = globalListWidth;
+    const newX = globalListLeft;
+    
     const mask = this.add.graphics().fillRect(0, 0, newWidth, safeHeightAdj);
     const maskShape = mask.createGeometryMask();
     mask.setPosition(newX, gToggleY + 20).setDepth(contentDepth);

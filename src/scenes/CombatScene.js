@@ -479,10 +479,17 @@ export default class CombatScene extends Phaser.Scene {
     if (!textObj || !segment) return;
 
     const hide = () => this.tooltip?.hide();
+    const allowTooltip = (pointer) => {
+      if (!pointer) return false;
+      if (!this._isPointerOverCombatLog?.(pointer)) return false;
+      return true;
+    };
+
 
     if (segment.type === 'ability' && segment.ability) {
       const actor = segment.actor || segment.abilityUser || null;
       const show = (pointer) => {
+        if (!allowTooltip(pointer)) return;
         try {
           const data = this._formatAbilityTooltip(segment.ability, actor);
           this.tooltip?.show(pointer.worldX, pointer.worldY, data);
@@ -491,6 +498,10 @@ export default class CombatScene extends Phaser.Scene {
         }
       };
       const move = (pointer) => {
+        if (!allowTooltip(pointer)) {
+          hide();
+          return;
+        }
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
@@ -503,9 +514,14 @@ export default class CombatScene extends Phaser.Scene {
 
     if (segment.type === 'damage' && segment.tooltipData) {
       const show = (pointer) => {
+        if (!allowTooltip(pointer)) return;
         this.tooltip?.show(pointer.worldX, pointer.worldY, segment.tooltipData);
       };
       const move = (pointer) => {
+        if (!allowTooltip(pointer)) {
+          hide();
+          return;
+        }
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
@@ -517,9 +533,14 @@ export default class CombatScene extends Phaser.Scene {
     }
     if (segment.tooltipData) {
       const show = (pointer) => {
+        if (!allowTooltip(pointer)) return;
         this.tooltip?.show(pointer.worldX, pointer.worldY, segment.tooltipData);
       };
       const move = (pointer) => {
+        if (!allowTooltip(pointer)) {
+          hide();
+          return;
+        }
         this.tooltip?.reposition(pointer.worldX, pointer.worldY);
       };
 
