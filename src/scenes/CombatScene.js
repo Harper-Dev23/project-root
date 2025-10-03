@@ -275,6 +275,7 @@ export default class CombatScene extends Phaser.Scene {
     shape.fillStyle(0xffffff);
     shape.fillRect(x, y, width, height);
     const mask = shape.createGeometryMask();
+
     this.combatLogContainer = this.add.container(x + padding, y + padding)
       .setDepth(UI_DEPTH.overlay);
     this.combatLogContainer.setMask(mask);
@@ -530,6 +531,7 @@ export default class CombatScene extends Phaser.Scene {
       textObj.on('pointermove', move);
       textObj.on('pointerout', hide);
     }
+
   }
 
   _getLogColorForUnit(unit) {
@@ -674,7 +676,6 @@ export default class CombatScene extends Phaser.Scene {
     const maxScroll = Math.max(0, (this.combatLogContentHeight || 0) - viewHeight);
     this._setCombatLogScroll(maxScroll);
   }
-
 
   _createBattleSlots() {
     const allyPositions = [
@@ -1735,12 +1736,12 @@ export default class CombatScene extends Phaser.Scene {
       hasPoint ? 'Prepare Selected' : 'Prepare Selected (no reaction action)',
       () => {
         if (!hasPoint) {
-          this._log?.(`${user.name} has no reaction actions left.`);
+          this._log(`${user.name} has no reaction actions left.`);
           return;
         }
         const chosen = (this._rxSelection || []).slice(0, cap);
         if (!chosen.length) {
-          this._log?.('Nothing selected to prepare.');
+          this._log('Nothing selected to prepare.');
           return;
         }
         for (const id of chosen) {
@@ -1751,7 +1752,7 @@ export default class CombatScene extends Phaser.Scene {
           0, (user.actionsLeft.reaction || 0) - 1
         );
         this._rxSelection = [];
-        this._log?.(`${user.name} prepares ${chosen.length} reaction${chosen.length > 1 ? 's' : ''}.`);
+        this._log(`${user.name} prepares ${chosen.length} reaction${chosen.length > 1 ? 's' : ''}.`);
         this._openReactionSubmenu();   // rebuild view
         this._updateActionLights?.();  // refresh lights
       }
@@ -1779,7 +1780,7 @@ export default class CombatScene extends Phaser.Scene {
           this._rxSelection.splice(idx, 1);
         } else {
           if (this._rxSelection.length >= cap) {
-            this._log?.(`Reaction pool full (${cap}). Unselect one first.`);
+            this._log(`Reaction pool full (${cap}). Unselect one first.`);
             return;
           }
           this._rxSelection.push(full.id);
@@ -2193,7 +2194,7 @@ export default class CombatScene extends Phaser.Scene {
   // === Single skill executor ==============================================
   _executeSkill(user, skillId, target = null) {
     const skill = SKILLS[skillId];
-    if (!skill) { this._log?.(`[WARN] Skill not found: ${skillId}`); return { ok: false }; }
+    if (!skill) { this._log(`[WARN] Skill not found: ${skillId}`); return { ok: false }; }
 
     // Optional gating hook so skills can verify status tiers or custom rules
     if (typeof skill.canExecute === 'function') {
@@ -2201,7 +2202,7 @@ export default class CombatScene extends Phaser.Scene {
       const failed = (typeof verdict === 'object') ? (verdict.ok === false) : (verdict === false);
       if (failed) {
         const reason = typeof verdict === 'object' ? verdict.reason : null;
-        if (reason) this._log?.(reason);
+        if (reason) this._log(reason);
         return { ok: false };
       }
     }
@@ -2217,7 +2218,7 @@ export default class CombatScene extends Phaser.Scene {
 
         const location = req.on === 'self' ? user : target;
         if (!location) {
-          this._log?.(`${skill.name} fizzles — no ${(req.on === 'self') ? 'user' : 'target'} to check.`);
+          this._log(`${skill.name} fizzles — no ${(req.on === 'self') ? 'user' : 'target'} to check.`);
           return { ok: false };
         }
 
@@ -2225,7 +2226,7 @@ export default class CombatScene extends Phaser.Scene {
         const minTier = req.tierAtLeast ?? req.tier ?? 1;
         if ((tiers[fam] || 0) < minTier) {
           const who = req.on === 'self' ? user?.name || 'user' : target?.name || 'target';
-          this._log?.(`${skill.name} fails — ${who} needs ${fam.toUpperCase()} T${minTier}.`);
+          this._log(`${skill.name} fails — ${who} needs ${fam.toUpperCase()} T${minTier}.`);
           return { ok: false };
         }
       }
@@ -2359,7 +2360,7 @@ export default class CombatScene extends Phaser.Scene {
           const loss = Math.max(1, Math.floor(baseLoss * I));
           const before = mFire;
           w.meters.fire = Math.max(0, before - loss);
-          this._log?.(`${actor.name} acts while Singed: Fire ${before} → ${w.meters.fire} (−${loss}, I=${I.toFixed(2)})`);
+          this._log(`${actor.name} acts while Singed: Fire ${before} → ${w.meters.fire} (−${loss}, I=${I.toFixed(2)})`);
           // (Tier recompute handled below)
         }
       }
@@ -2389,7 +2390,7 @@ export default class CombatScene extends Phaser.Scene {
           const before = mLac;
           const after = before + add;
           w.meters[lacId] = after;
-          this._log?.(`${actor.name} bleeds more: Lacerate ${before} → ${after} (+${after - before})`);
+          this._log(`${actor.name} bleeds more: Lacerate ${before} → ${after} (+${after - before})`);
           // (Tier recompute handled below)
         }
       }
@@ -2430,7 +2431,7 @@ export default class CombatScene extends Phaser.Scene {
       this._addStatusEffects(target, result.statusEffects);
     }
 
-        if (options.logUsage !== false) {
+    if (options.logUsage !== false) {
       this._logAbilityUseEntry(user, ability, target);
     }
 
@@ -2562,12 +2563,12 @@ export default class CombatScene extends Phaser.Scene {
       const pct = (x) => `${Math.round((x ?? 0) * 100)}%`;
 
       if (ex.pdrBefore !== undefined && ex.pdrAfter !== undefined) {
-        this._log?.(`Expose: PDR ${pct(ex.pdrBefore)}→${pct(ex.pdrAfter)} (−${pct(ex.pdrSub || 0)})`);
+        this._log(`Expose: PDR ${pct(ex.pdrBefore)}→${pct(ex.pdrAfter)} (−${pct(ex.pdrSub || 0)})`);
       }
       if (ex.critForced) {
-        this._log?.(`Expose: forced crit (+${pct(ex.critChanceBonus || 0)} chance, +${pct(ex.critDmgBonus || 0)} crit dmg)`);
+        this._log(`Expose: forced crit (+${pct(ex.critChanceBonus || 0)} chance, +${pct(ex.critDmgBonus || 0)} crit dmg)`);
       } else if (ex.critAmpOnly) {
-        this._log?.(`Expose: crit dmg +${pct(ex.critDmgBonus || 0)}`);
+        this._log(`Expose: crit dmg +${pct(ex.critDmgBonus || 0)}`);
       }
     })();
 
@@ -2662,11 +2663,10 @@ export default class CombatScene extends Phaser.Scene {
               }
 
             }
+
+
           }
 
-
-        }
-      
 
           const typeText = isMagic ? ' magic' : '';
           const damageTooltip = this._buildDamageTooltipData({
@@ -2888,6 +2888,7 @@ export default class CombatScene extends Phaser.Scene {
         const dealt = before - after;
         target.currentHP = after;
         this._showFloatingNumber?.(dealt, target, /*isHeal=*/false, /*isCrit=*/false);
+
         const isMagic = !!payload.isMagic;
         const typeText = isMagic ? ' magic' : '';
         const tooltip = this._buildDamageTooltipData({
@@ -2926,6 +2927,7 @@ export default class CombatScene extends Phaser.Scene {
         }
         damageSegments.push({ text: '.', color: LOG_COLORS.default });
         this._log({ segments: damageSegments });
+
 
         if (after === 0 && target.status !== 'incapacitated') {
           target.status = 'incapacitated';
@@ -2967,7 +2969,7 @@ export default class CombatScene extends Phaser.Scene {
         const after = Math.max(0, before - tickDmg);
         char.currentHP = after;
         this._showFloatingNumber?.(tickDmg, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log?.(`${char.name} suffers ${tickDmg} damage from ${name}.`);
+        this._log(`${char.name} suffers ${tickDmg} damage from ${name}.`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
         if (after === 0 && char.status !== 'incapacitated') {
           char.status = 'incapacitated';
@@ -2985,7 +2987,7 @@ export default class CombatScene extends Phaser.Scene {
         char.currentHP = after;
         if (healed > 0) {
           this._showFloatingNumber?.(healed, char, /*isHeal=*/true, /*isCrit=*/false);
-          this._log?.(`${char.name} regenerates ${healed} HP.`);
+          this._log(`${char.name} regenerates ${healed} HP.`);
           this._updateHealthBars?.(); this._updateHPMPBars?.();
         }
       }
@@ -3012,7 +3014,7 @@ export default class CombatScene extends Phaser.Scene {
     const after = Math.min(max, before + regen);
     if (after > before) {
       char.currentMP = after;
-      this._log?.(`${char.name} regenerates ${after - before} MP from gear.`);
+      this._log(`${char.name} regenerates ${after - before} MP from gear.`);
       this._updateHPMPBars?.();
     }
   }
@@ -3076,7 +3078,7 @@ export default class CombatScene extends Phaser.Scene {
           amt = Math.max(0, Math.floor(amt * (1 + bonus / 100)));
           if (amt !== before) {
             const userName = ctx?.user?.name || 'Weapon';
-            this._log?.(`${userName}'s weapon empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
+            this._log(`${userName}'s weapon empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
           }
         }
       }
@@ -3087,7 +3089,7 @@ export default class CombatScene extends Phaser.Scene {
         const beforeAmt = amt;
         amt = Math.floor(amt * (1 + inc));
         if (beforeAmt !== amt) {
-          this._log?.(`${target.name} takes extra fire buildup (Singed): ${beforeAmt} → ${amt}`);
+          this._log(`${target.name} takes extra fire buildup (Singed): ${beforeAmt} → ${amt}`);
         }
       }
 
@@ -3099,7 +3101,7 @@ export default class CombatScene extends Phaser.Scene {
         const beforeAmt = amt;
         amt = Math.max(1, Math.floor(amt * (1 + bonus * (Iexp > 0 ? Iexp : 1))));
         if (amt !== beforeAmt) {
-          this._log?.(`${target.name} is Raw: physical buildup ${beforeAmt} → ${amt} (I_expose=${Iexp.toFixed(2)})`);
+          this._log(`${target.name} is Raw: physical buildup ${beforeAmt} → ${amt} (I_expose=${Iexp.toFixed(2)})`);
         }
       }
 
@@ -3113,7 +3115,7 @@ export default class CombatScene extends Phaser.Scene {
           // scale the extra (amp-1) by intensity Icur so Afflicted scales with meter
           amt = Math.max(1, Math.floor(amt * (1 + (amp - 1) * (Icur > 0 ? Icur : 1))));
           if (amt !== beforeAmt) {
-            this._log?.(`${target.name} is Afflicted: CURSE-tagged buildup ${beforeAmt} → ${amt} (I_curse=${Icur.toFixed(2)})`);
+            this._log(`${target.name} is Afflicted: CURSE-tagged buildup ${beforeAmt} → ${amt} (I_curse=${Icur.toFixed(2)})`);
           }
         }
       }
@@ -3124,7 +3126,7 @@ export default class CombatScene extends Phaser.Scene {
         const before = amt;
         amt = Math.max(0, amt - resilience);
         if (amt !== before) {
-          this._log?.(`${target.name}'s resilience reduces ${key} buildup: ${before} → ${amt}.`);
+          this._log(`${target.name}'s resilience reduces ${key} buildup: ${before} → ${amt}.`);
         }
       }
 
@@ -3154,7 +3156,7 @@ export default class CombatScene extends Phaser.Scene {
       const afterT = target.weakness.tiers?.[fam] || 0;
       if (afterM !== before.m || afterT !== before.t) {
         const I = (familyIntensityMult?.(fam, afterM) ?? 1).toFixed(2);
-        this._log?.(`${target.name} ${fam} ${before.m}→${afterM}  T${before.t}→T${afterT} (I=${I})`);
+        this._log(`${target.name} ${fam} ${before.m}→${afterM}  T${before.t}→T${afterT} (I=${I})`);
       }
     }
   }
@@ -3217,7 +3219,7 @@ export default class CombatScene extends Phaser.Scene {
       if (fam === 'toxic' && ((u.weakness.tiers.toxic | 0) >= 1)) {
         const chance = WeaknessV3?.families?.toxic?.t1?.decayBypassChance ?? 0;
         if (Math.random() < chance) {
-          this._log?.(`${u.name} Toxic: decay bypassed (${Math.round(chance * 100)}% chance).`);
+          this._log(`${u.name} Toxic: decay bypassed (${Math.round(chance * 100)}% chance).`);
           continue; // NO DECAY THIS TICK
         }
       }
@@ -3344,18 +3346,18 @@ export default class CombatScene extends Phaser.Scene {
 
             if (Math.random() < finalCritChance) {
               burn = Math.floor(burn * critMult);
-              this._log?.(`${char.name} suffers AFLAME (Cinders CRIT) for ${burn} (chance ${Math.round(finalCritChance * 100)}%).`);
+              this._log(`${char.name} suffers AFLAME (Cinders CRIT) for ${burn} (chance ${Math.round(finalCritChance * 100)}%).`);
               try { addDamageBreakdown?.({ label: 'Cinders crit', mult: critMult }); } catch { }
             } else {
-              this._log?.(`${char.name} suffers AFLAME (Cinders) for ${burn}.`);
+              this._log(`${char.name} suffers AFLAME (Cinders) for ${burn}.`);
             }
           } else {
             // Not active or not hexed/afflicted → normal log keeps your previous context
-            this._log?.(`${char.name} suffers AFLAME for ${burn}.`);
+            this._log(`${char.name} suffers AFLAME for ${burn}.`);
           }
         } catch {
           // Hard-fail safe: normal log if something odd happens
-          this._log?.(`${char.name} suffers AFLAME for ${burn}.`);
+          this._log(`${char.name} suffers AFLAME for ${burn}.`);
         }
 
 
@@ -3432,7 +3434,7 @@ export default class CombatScene extends Phaser.Scene {
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - bleed);
         this._showFloatingNumber?.(bleed, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log?.(`${char.name} hemorrhages ${bleed} (${Math.round(pct * 100)}% of Max HP).`);
+        this._log(`${char.name} hemorrhages ${bleed} (${Math.round(pct * 100)}% of Max HP).`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
 
         if (char.currentHP === 0 && char.status !== 'incapacitated') {
@@ -3478,7 +3480,7 @@ export default class CombatScene extends Phaser.Scene {
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - dmg);
         this._showFloatingNumber?.(dmg, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log?.(`${char.name} Envenomed: base ${base} × I_toxic=${I.toFixed(2)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
+        this._log(`${char.name} Envenomed: base ${base} × I_toxic=${I.toFixed(2)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
 
         if (char.currentHP === 0 && char.status !== 'incapacitated') {
@@ -3633,7 +3635,7 @@ export default class CombatScene extends Phaser.Scene {
         char.currentHP = Math.min(newEffMax, Math.floor(newEffMax * ratio));
         this._updateHealthBars?.();
         this._updateHPMPBars?.();
-        if (reason) this._log?.(`${char.name} Blight updates (${reason}): MaxHP ${prevEffMax}→${newEffMax} (kept ${Math.round(ratio * 100)}%)`);
+        if (reason) this._log(`${char.name} Blight updates (${reason}): MaxHP ${prevEffMax}→${newEffMax} (kept ${Math.round(ratio * 100)}%)`);
       }
     } else {
       // Clear T2 derived
@@ -3648,7 +3650,7 @@ export default class CombatScene extends Phaser.Scene {
           char.currentHP = newHP;
           this._updateHealthBars?.();
           this._updateHPMPBars?.();
-          if (reason) this._log?.(`${char.name} Blight clears (${reason}): MaxHP cap removed (kept ${Math.round(ratio * 100)}%)`);
+          if (reason) this._log(`${char.name} Blight clears (${reason}): MaxHP cap removed (kept ${Math.round(ratio * 100)}%)`);
         }
       }
     }
@@ -3688,7 +3690,7 @@ export default class CombatScene extends Phaser.Scene {
       const btn = new UIButton(this, baseX, i * 50, it.label, () => {
         const actor = this._currentChar?.();
         if (actor?.isEnemy) {
-          this._log?.(`⛔ It’s ${actor.name}’s (enemy) turn. Player actions are disabled.`);
+          this._log(`⛔ It’s ${actor.name}’s (enemy) turn. Player actions are disabled.`);
           return;
         }
         if (it.debugTag === 'BA') {
@@ -3924,7 +3926,7 @@ export default class CombatScene extends Phaser.Scene {
       // find an open slot for this unit on its side in that column
       const dest = this._findOpenSlotOnSide(user, destCol);
       if (!dest) {
-        this._log?.(`${user.name} tries to move but finds no space in the ${destCol}.`);
+        this._log(`${user.name} tries to move but finds no space in the ${destCol}.`);
         break;
       }
       if (this._moveUnitToSlot(user, dest)) {
@@ -4000,7 +4002,7 @@ export default class CombatScene extends Phaser.Scene {
       : (ability.id === 'move_dash' ? 2 : 1);
 
     const fromId = user._slot?.slotId;
-    if (!fromId) { this._log?.('No current position.'); return; }
+    if (!fromId) { this._log('No current position.'); return; }
 
     // Only this side (allies for players, enemies for NPCs)
     const open = this._getOpenSlotsForUnitSide(user);
@@ -4402,7 +4404,7 @@ export default class CombatScene extends Phaser.Scene {
           st.turns -= 1;
           if (st.turns <= 0) {
             delete char.statuses[key];
-            this._log?.(`${char.name}'s ${key.replaceAll('_', ' ')} fades.`);
+            this._log(`${char.name}'s ${key.replaceAll('_', ' ')} fades.`);
           }
         }
       }
@@ -4416,7 +4418,7 @@ export default class CombatScene extends Phaser.Scene {
           st.turns -= 1;
           if (st.turns <= 0) {
             const pretty = (st.name || st.id || 'status');
-            this._log?.(`${char.name}'s ${pretty} fades.`);
+            this._log(`${char.name}'s ${pretty} fades.`);
             char.statusEffects.splice(i, 1);
           }
         }
@@ -4464,7 +4466,7 @@ export default class CombatScene extends Phaser.Scene {
       const durationText = turns > 1 ? `${turns} turns` : '1 turn';
       const abilityName = ability?.name || 'the skill';
       const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
-      this._log?.(`${target.name} gains ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
+      this._log(`${target.name} gains ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
     }
   }
 
@@ -4501,7 +4503,7 @@ export default class CombatScene extends Phaser.Scene {
       const durationText = turns > 1 ? `${turns} turns` : '1 turn';
       const abilityName = ability?.name || 'the skill';
       const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
-      this._log?.(`${target.name} suffers ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
+      this._log(`${target.name} suffers ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
     }
   }
 
