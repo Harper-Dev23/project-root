@@ -10,6 +10,7 @@ import { FONTS } from '../../ui/styles.js';
 const LEFT_WIDTH = 280;
 const TOP_BAR_HEIGHT = 70;
 const BOTTOM_BAR_HEIGHT = 56;
+const TAB_HEIGHT = 28;
 
 function wrap(value, min, max) {
     const range = max - min;
@@ -67,9 +68,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     _buildUI(bounds) {
         const { scene } = this;
 
-        this.background = scene.add.rectangle(0, 0, bounds.width, bounds.height, this.darkMode ? 0x121212 : 0xf4f4f4, 0.9)
-            .setOrigin(0)
-            .setStrokeStyle(1, this.darkMode ? 0x333333 : 0xcccccc);
+        this.background = scene.add.rectangle(0, 0, bounds.width, bounds.height, this.darkMode ? 0x171717 : 0xf3ede0, 0.92)
+            .setOrigin(0);
 
         // Top bar
         this.topBar = scene.add.rectangle(0, 0, bounds.width, TOP_BAR_HEIGHT, this.darkMode ? 0x1a1a1a : 0xeeeeee, 0.9)
@@ -80,7 +80,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             color: this.darkMode ? '#f8f8f8' : '#222222'
         }).setOrigin(0, 0);
 
-        this.tabContainer = scene.add.container(20, TOP_BAR_HEIGHT - 28);
+        this.tabContainer = scene.add.container(20, TOP_BAR_HEIGHT - TAB_HEIGHT);
         this._buildTabs();
 
         this.searchDom = scene.add.dom(bounds.width - 240, TOP_BAR_HEIGHT / 2).createFromHTML(`
@@ -93,7 +93,31 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.searchQuery = value;
             this._applySearch(value);
         });
-
+        const searchNode = this.searchDom.node;
+        if (searchNode) {
+            this._searchKeyHandler = (event) => {
+                event.stopPropagation();
+                if (event.key === 'Enter') {
+                    const entries = this._getVisibleEntries();
+                    const first = entries[0];
+                    if (first) {
+                        this.openEntry(first.id);
+                        event.preventDefault();
+                    }
+                } else if (event.key === 'Escape') {
+                    if (this.searchQuery) {
+                        this.searchQuery = '';
+                        if (this.searchDom?.node) {
+                            this.searchDom.node.value = '';
+                        }
+                        this._applySearch('');
+                        event.preventDefault();
+                    }
+                    searchNode.blur();
+                }
+            };
+            searchNode.addEventListener('keydown', this._searchKeyHandler);
+        }
         // Left tree
         this.tree = new JournalTree(scene, 20, TOP_BAR_HEIGHT + 12, LEFT_WIDTH - 40, bounds.height - TOP_BAR_HEIGHT - BOTTOM_BAR_HEIGHT - 24, {
             onSelect: (entryId) => this.openEntry(entryId)
@@ -115,6 +139,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             fontSize: '16px',
             color: this.darkMode ? '#dddddd' : '#222222'
         }).setOrigin(0, 0);
+        this.bottomText.setText('Select an entry to browse.');
         this.prevButton = this._createBottomButton(bounds.width - 220, bounds.height - BOTTOM_BAR_HEIGHT / 2, '◀ Prev', () => this._stepEntry(-1));
         this.nextButton = this._createBottomButton(bounds.width - 120, bounds.height - BOTTOM_BAR_HEIGHT / 2, 'Next ▶', () => this._stepEntry(1));
         this.pinButton = this._createBottomButton(bounds.width - 320, bounds.height - BOTTOM_BAR_HEIGHT / 2, '⭐ Pin', () => this._togglePin());
@@ -155,19 +180,38 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const tabs = this.virtualIndexCategory
             ? [...this.categories, this.virtualIndexCategory]
             : [...this.categories];
-        let x = 0;
+        let cursorX = 0;
         this.tabButtons = new Map();
         for (const tab of tabs) {
-            const text = this.scene.add.text(x, 0, tab.label, {
+            const label = this.scene.add.text(12, TAB_HEIGHT / 2, tab.label, {
                 ...FONTS.button,
                 fontSize: '16px',
                 color: this.currentCategory === tab.id ? '#ffddaa' : '#bbbbbb'
-            }).setOrigin(0, 0);
-            text.setInteractive({ useHandCursor: true });
-            text.on('pointerdown', () => this.showCategory(tab.id));
-            this.tabContainer.add(text);
-            this.tabButtons.set(tab.id, text);
-            x += text.width + 18;
+            }).setOrigin(0, 0.5);
+
+            const width = label.width + 24;
+            const container = this.scene.add.container(cursorX, 0);
+            const bg = this.scene.add.rectangle(0, TAB_HEIGHT / 2, width, TAB_HEIGHT, 0x000000, 0.25)
+                .setOrigin(0, 0.5)
+                .setStrokeStyle(1, 0x444444, 0.4);
+            const hit = this.scene.add.zone(width / 2, TAB_HEIGHT / 2, width, TAB_HEIGHT)
+                .setOrigin(0.5)
+                .setInteractive({ useHandCursor: true });
+
+            hit.on('pointerdown', () => this.showCategory(tab.id));
+            hit.on('pointerover', () => {
+                if (this.currentCategory === tab.id) return;
+                bg.setFillStyle(0x222222, 0.4);
+            });
+            hit.on('pointerout', () => {
+                if (this.currentCategory === tab.id) return;
+                bg.setFillStyle(0x000000, 0.25);
+            });
+
+            container.add([bg, label, hit]);
+            this.tabContainer.add(container);
+            this.tabButtons.set(tab.id, { label, bg });
+            cursorX += width + 12;
         }
     }
 
@@ -192,11 +236,21 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const keyboard = this.scene.input?.keyboard;
         if (!keyboard) return;
 
-        const onPrevTab = () => this._cycleCategory(-1);
-        const onNextTab = () => this._cycleCategory(1);
-        const onClose = () => this.close();
-        const onPrevEntry = () => this._stepEntry(-1);
-        const onNextEntry = () => this._stepEntry(1);
+        const skipIfTyping = (fn) => () => {
+            if (this._isSearchFocused()) return;
+            fn();
+        };
+
+        const onPrevTab = skipIfTyping(() => this._cycleCategory(-1));
+        const onNextTab = skipIfTyping(() => this._cycleCategory(1));
+        const onPrevEntry = skipIfTyping(() => this._stepEntry(-1));
+        const onNextEntry = skipIfTyping(() => this._stepEntry(1));
+        const onClose = () => {
+            if (this._isSearchFocused()) {
+                this.searchDom?.node?.blur?.();
+            }
+            this.close();
+        };
 
         keyboard.on('keydown-Q', onPrevTab, this);
         keyboard.on('keydown-E', onNextTab, this);
@@ -219,10 +273,20 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         };
     }
 
+    _isSearchFocused() {
+        const node = this.searchDom?.node;
+        if (!node || typeof document === 'undefined') return false;
+        return document.activeElement === node;
+    }
+
     destroy(fromScene) {
         this.unsubSeen?.();
         this.unsubUnlocks?.();
         this.inputCleanup?.();
+        if (this._searchKeyHandler) {
+            this.searchDom?.node?.removeEventListener('keydown', this._searchKeyHandler);
+            this._searchKeyHandler = null;
+        }
         this.searchDom?.removeListener?.('input');
         super.destroy(fromScene);
     }
@@ -265,12 +329,28 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
     _highlightTabs() {
-        this.tabButtons?.forEach((text, id) => {
-            text.setStyle({ color: this.currentCategory === id ? '#ffddaa' : '#bbbbbb' });
+        this.tabButtons?.forEach(({ label, bg }, id) => {
+            const active = this.currentCategory === id;
+            label.setStyle({ color: active ? '#ffddaa' : '#bbbbbb' });
+            bg.setFillStyle(active ? 0x38301f : 0x000000, active ? 0.6 : 0.25);
+            bg.setStrokeStyle(1, active ? 0xffddaa : 0x444444, active ? 0.8 : 0.4);
         });
-        const trail = this.currentEntryId ? this.currentEntryId.split('/') : [];
-        const label = trail.length > 1 ? `${trail[0]} › ${trail[1]}` : (this.currentCategory || 'journal');
-        this.breadcrumbText.setText(`Journal › ${label}`);
+        const categoryList = [...this.categories];
+        if (this.virtualIndexCategory) categoryList.push(this.virtualIndexCategory);
+        const activeEntry = this.currentEntryId
+            ? this.entries.find(entry => entry.id === this.currentEntryId)
+            : null;
+        const activeCategoryId = activeEntry?.category || this.currentCategory;
+        const activeCategory = categoryList.find(cat => cat?.id === activeCategoryId) || null;
+        let breadcrumb = activeCategory?.label || (this.currentCategory || 'Journal');
+        if (this.currentCategory === 'index' && !activeEntry) {
+            breadcrumb = activeCategory?.label || 'Index';
+        }
+        if (activeEntry) {
+            const categoryLabel = activeCategory?.label || activeEntry.category;
+            breadcrumb = `${categoryLabel} › ${activeEntry.title}`;
+        }
+        this.breadcrumbText.setText(`Journal › ${breadcrumb}`);
     }
 
     _cycleCategory(direction) {
@@ -341,7 +421,10 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             unseen: this.unseenSet
         });
         this._updateBottom();
-        this.bottomText.setText(`${results.length} search results`);
+        const resultLabel = this.searchQuery
+            ? (results.length === 1 ? '1 search result' : `${results.length} search results`)
+            : 'Type to search the archive';
+        this.bottomText.setText(resultLabel);
     }
 
     search(query) {
@@ -432,9 +515,7 @@ export default class JournalOverlay extends Phaser.Scene {
     create(data) {
         const frame = createOverlayFrame(this, {
             title: 'Journal',
-            onClose: () => this._close(),
-            height: 640,
-            width: 980
+            onClose: () => this._close()
         });
 
         this.overlay = new JournalOverlayView(this, frame.bounds, {

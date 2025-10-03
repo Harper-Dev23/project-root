@@ -13,6 +13,19 @@ const ENTRY_STYLE = {
 };
 
 const ENTRY_HEIGHT = 32;
+const ICON_GLYPHS = {
+    'icon-journal': '📖',
+    'icon-scroll': '📜',
+    'icon-hunt': '🎯',
+    'icon-system': '⚙️'
+};
+
+function getIconGlyph(icon) {
+    if (!icon) return null;
+    if (ICON_GLYPHS[icon]) return ICON_GLYPHS[icon];
+    if (icon.length === 1) return icon;
+    return '•';
+}
 
 export default class JournalTree extends Phaser.GameObjects.Container {
     constructor(scene, x, y, width, height, { onSelect } = {}) {
@@ -60,8 +73,13 @@ export default class JournalTree extends Phaser.GameObjects.Container {
     }
 
     setData({ categories = [], entries = [], activeEntryId = null, unseen = new Set() }) {
-        this.entries = entries;
-        this.categoryOrder = categories;
+        this.entries = Array.isArray(entries) ? [...entries] : [];
+        this.categoryOrder = [...categories].sort((a, b) => {
+            const orderA = a?.order ?? 0;
+            const orderB = b?.order ?? 0;
+            if (orderA !== orderB) return orderA - orderB;
+            return (a?.label || '').localeCompare(b?.label || '');
+        });
         this.activeEntryId = activeEntryId;
         this.unseen = unseen instanceof Set ? unseen : new Set(unseen);
         this._render();
@@ -69,6 +87,7 @@ export default class JournalTree extends Phaser.GameObjects.Container {
 
     _render() {
         this.scrollArea.removeAll(true);
+        this.scrollArea.y = 0;
         let cursorY = 12;
 
         if (!this.entries.length) {
@@ -105,19 +124,20 @@ export default class JournalTree extends Phaser.GameObjects.Container {
     _createEntryRow(entry, y) {
         const container = this.scene.add.container(0, y);
 
-        const bg = this.scene.add.rectangle(this.panelWidth / 2, ENTRY_HEIGHT / 2, this.panelWidth - 20, ENTRY_HEIGHT - 4, 0x000000, 0.15)
+        const bg = this.scene.add.rectangle(this.panelWidth / 2, ENTRY_HEIGHT / 2, this.panelWidth - 20, ENTRY_HEIGHT - 4, 0x000000, 0.18)
             .setOrigin(0.5);
 
-        const text = this.scene.add.text(20, 6, entry.title, ENTRY_STYLE)
-            .setOrigin(0, 0);
+        const text = this.scene.add.text(28, ENTRY_HEIGHT / 2, entry.title, ENTRY_STYLE)
+            .setOrigin(0, 0.5);
 
-        const icon = entry.icon
-            ? this.scene.add.text(4, 6, entry.icon, { ...ENTRY_STYLE, fontSize: '14px', color: '#ffaa55' }).setOrigin(0, 0)
+        const glyph = getIconGlyph(entry.icon);
+        const icon = glyph
+            ? this.scene.add.text(12, ENTRY_HEIGHT / 2, glyph, { ...ENTRY_STYLE, fontSize: '14px', color: '#ffbe78' }).setOrigin(0.5)
             : null;
 
         const isNew = this.unseen.has(entry.id);
         const badge = isNew
-            ? this.scene.add.text(this.panelWidth - 60, 6, 'NEW', { ...FONTS.muted, color: '#6FE3B6' }).setOrigin(0, 0)
+            ? this.scene.add.text(this.panelWidth - 24, ENTRY_HEIGHT / 2, 'NEW', { ...FONTS.muted, color: '#6FE3B6' }).setOrigin(1, 0.5)
             : null;
 
         if (this.activeEntryId === entry.id) {
@@ -128,12 +148,15 @@ export default class JournalTree extends Phaser.GameObjects.Container {
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true });
 
-        hitArea.on('pointerover', () => bg.setFillStyle(0x333333, 0.9));
+        hitArea.on('pointerover', () => {
+            if (this.activeEntryId === entry.id) return;
+            bg.setFillStyle(0x333333, 0.9);
+        });
         hitArea.on('pointerout', () => {
             if (this.activeEntryId === entry.id) {
                 bg.setFillStyle(0x2a2a2a, 0.9);
             } else {
-                bg.setFillStyle(0x000000, 0.15);
+                bg.setFillStyle(0x000000, 0.18);
             }
         });
         hitArea.on('pointerdown', () => {
