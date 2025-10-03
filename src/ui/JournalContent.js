@@ -83,8 +83,10 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this.tagContainer = scene.add.container(CONTAINER_PADDING, CONTAINER_PADDING + 70);
 
         this.contentDom = scene.add.dom(x + CONTAINER_PADDING, y + CONTAINER_PADDING + 110).createFromHTML(`
-      <div class="journal-content" style="width:${width - CONTAINER_PADDING * 2}px; min-height:${height - 150}px; color:#e6e6e6; font-family:'Cormorant Garamond', serif; font-size:18px; line-height:1.5;">
-        <p>Choose an entry from the list.</p>
+      <div class="journal-content-wrapper" style="width:${width - CONTAINER_PADDING * 2}px; min-height:${height - 150}px; color:#e6e6e6; font-family:'Cormorant Garamond', serif; font-size:18px; line-height:1.5; pointer-events:none;">
+        <div class="journal-content">
+          <p>Choose an entry from the list.</p>
+        </div>
       </div>
     `);
         this.contentDom.setOrigin(0, 0);
@@ -96,7 +98,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             domNode.style.minHeight = `${height - 150}px`;
             domNode.style.position = 'absolute';
             domNode.style.background = 'transparent';
-            domNode.style.pointerEvents = 'auto';
+            domNode.style.pointerEvents = 'none';
         }
 
         this.scrollContainer.add([this.titleText, this.metaText, this.tagContainer]);
@@ -184,6 +186,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
           margin: 6px 6px 0 0;
           border-radius: 4px;
           cursor: pointer;
+          pointer-events: auto;
         }
       </style>
       <div class="journal-content" data-entry-id="${entry.id}">
@@ -196,6 +199,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         const domElement = this.contentDom?.node;
         if (domElement) {
             domElement.querySelectorAll('button.journal-related').forEach(btn => {
+                btn.style.pointerEvents = 'auto';
                 btn.addEventListener('click', () => {
                     const target = btn.getAttribute('data-entry');
                     if (target) {
