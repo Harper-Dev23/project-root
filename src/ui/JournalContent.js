@@ -1,6 +1,7 @@
 import { COLORS, FONTS } from './styles.js';
 
 const CONTAINER_PADDING = 24;
+const CONTENT_TOP_OFFSET = CONTAINER_PADDING + 110;
 
 function simpleMarkdownToHtml(markdown = '') {
     const lines = markdown.split(/\r?\n/);
@@ -82,8 +83,11 @@ export default class JournalContent extends Phaser.GameObjects.Container {
 
         this.tagContainer = scene.add.container(CONTAINER_PADDING, CONTAINER_PADDING + 70);
 
-        this.contentDom = scene.add.dom(x + CONTAINER_PADDING, y + CONTAINER_PADDING + 110).createFromHTML(`
-      <div class="journal-content-wrapper" style="width:${width - CONTAINER_PADDING * 2}px; min-height:${height - 150}px; color:#e6e6e6; font-family:'Cormorant Garamond', serif; font-size:18px; line-height:1.5; pointer-events:none;">
+        const contentWidth = width - CONTAINER_PADDING * 2;
+        const viewportHeight = height - CONTENT_TOP_OFFSET;
+
+        this.contentDom = scene.add.dom(x + CONTAINER_PADDING, y + CONTENT_TOP_OFFSET).createFromHTML(`
+      <div class="journal-scroll-wrapper">
         <div class="journal-content">
           <p>Choose an entry from the list.</p>
         </div>
@@ -91,14 +95,29 @@ export default class JournalContent extends Phaser.GameObjects.Container {
     `);
         this.contentDom.setOrigin(0, 0);
         this.contentDom.setDepth(domDepth);
-        const domNode = this.contentDom.node;
-        if (domNode) {
-            domNode.style.width = `${width - CONTAINER_PADDING * 2}px`;
-            domNode.style.maxWidth = domNode.style.width;
-            domNode.style.minHeight = `${height - 150}px`;
-            domNode.style.position = 'absolute';
-            domNode.style.background = 'transparent';
-            domNode.style.pointerEvents = 'none';
+
+        const wrapperNode = this.contentDom.node;
+        this._contentInner = wrapperNode?.querySelector('.journal-content') ?? null;
+
+        if (wrapperNode) {
+            wrapperNode.style.position = 'absolute';
+            wrapperNode.style.left = '0';
+            wrapperNode.style.top = '0';
+            wrapperNode.style.width = `${contentWidth}px`;
+            wrapperNode.style.height = `${viewportHeight}px`;
+            wrapperNode.style.overflow = 'hidden';
+            wrapperNode.style.background = 'transparent';
+            wrapperNode.style.pointerEvents = 'auto';
+        }
+
+        if (this._contentInner) {
+            this._contentInner.style.minHeight = `${viewportHeight}px`;
+            this._contentInner.style.width = '100%';
+            this._contentInner.style.boxSizing = 'border-box';
+            this._contentInner.style.color = '#e6e6e6';
+            this._contentInner.style.fontFamily = `'Cormorant Garamond', serif`;
+            this._contentInner.style.fontSize = '18px';
+            this._contentInner.style.lineHeight = '1.5';
         }
 
         this.scrollContainer.add([this.titleText, this.metaText, this.tagContainer]);
@@ -153,7 +172,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             this.titleText.setText('Select an entry');
             this.metaText.setText('');
             this._renderTags([]);
-            this.contentDom?.setHTML?.(`<div class="journal-content"><p>Choose an entry from the list.</p></div>`);
+            this._setContentHtml('<p>Choose an entry from the list.</p>');
             this._resetScroll();
             return;
         }
@@ -172,42 +191,27 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             .join('');
 
         const baseHtml = `
-      <style>
-        .journal-content h1 { font-size: 28px; margin: 12px 0; }
-        .journal-content h2 { font-size: 24px; margin: 12px 0; }
-        .journal-content h3 { font-size: 20px; margin: 12px 0; }
-        .journal-content p { margin: 12px 0; }
-        .journal-content ul { margin: 12px 18px; padding: 0 18px; }
-        .journal-content button.journal-related {
-          background: #1f1f1f;
-          color: #ffddaa;
-          border: 1px solid #444;
-          padding: 6px 12px;
-          margin: 6px 6px 0 0;
-          border-radius: 4px;
-          cursor: pointer;
-          pointer-events: auto;
-        }
-      </style>
-      <div class="journal-content" data-entry-id="${entry.id}">
+        <style>
+          .journal-content h1 { font-size: 28px; margin: 12px 0; }
+          .journal-content h2 { font-size: 24px; margin: 12px 0; }
+          .journal-content h3 { font-size: 20px; margin: 12px 0; }
+          .journal-content p { margin: 12px 0; }
+          .journal-content ul { margin: 12px 18px; padding: 0 18px; }
+          .journal-content button.journal-related {
+            background: #1f1f1f;
+            color: #ffddaa;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            margin: 6px 6px 0 0;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+        </style>
         ${html || '<p>No content yet.</p>'}
-        ${relatedLinks ? `<div class="journal-related-group"><strong>Related:</strong> ${relatedLinks}</div>` : ''}
-      </div>
-    `;
-        this.contentDom?.setHTML?.(baseHtml);
+        ${relatedLinks ? `<div class="journal-related-group"><strong>Related:</strong> ${relatedLinks}</div>` : ''}`;
 
-        const domElement = this.contentDom?.node;
-        if (domElement) {
-            domElement.querySelectorAll('button.journal-related').forEach(btn => {
-                btn.style.pointerEvents = 'auto';
-                btn.addEventListener('click', () => {
-                    const target = btn.getAttribute('data-entry');
-                    if (target) {
-                        this.onNavigate?.(target);
-                    }
-                });
-            });
-        }
+        this._setContentHtml(baseHtml, entry.id ?? '');
+        this._bindRelatedEntryButtons();
         this._resetScroll();
     }
 
@@ -220,11 +224,8 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this._syncDomPosition();
     }
     _getDomContentHeight() {
-        const node = this.contentDom?.node;
-        if (!node) return 0;
-        const wrapper = node.querySelector('.journal-content');
-        const baseHeight = wrapper ? wrapper.scrollHeight : node.scrollHeight || 0;
-        return baseHeight + CONTAINER_PADDING + 110;
+        const baseHeight = this._contentInner?.scrollHeight || 0;
+        return baseHeight + CONTENT_TOP_OFFSET;
     }
 
     _syncDomPosition() {
@@ -232,7 +233,32 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         const matrix = this.getWorldTransformMatrix?.();
         if (!matrix) return;
         const baseX = matrix.tx + CONTAINER_PADDING;
-        const baseY = matrix.ty + CONTAINER_PADDING + 110;
-        this.contentDom.setPosition(baseX, baseY + this.scrollContainer.y);
+        const baseY = matrix.ty + CONTENT_TOP_OFFSET;
+        this.contentDom.setPosition(baseX, baseY);
+        if (this._contentInner) {
+            this._contentInner.style.transform = `translateY(${this.scrollContainer.y}px)`;
+        }
+    }
+
+    _bindRelatedEntryButtons() {
+        if (!this._contentInner) return;
+        this._contentInner.querySelectorAll('button.journal-related').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = btn.getAttribute('data-entry');
+                if (target) {
+                    this.onNavigate?.(target);
+                }
+            });
+        });
+    }
+
+    _setContentHtml(html, entryId = '') {
+        if (!this._contentInner) return;
+        this._contentInner.innerHTML = html;
+        if (entryId) {
+            this._contentInner.setAttribute('data-entry-id', entryId);
+        } else {
+            this._contentInner.removeAttribute('data-entry-id');
+        }
     }
 }
