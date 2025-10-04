@@ -106,7 +106,11 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const { scene } = this;
 
         this.background = scene.add.rectangle(0, 0, bounds.width, bounds.height, this.darkMode ? 0x171717 : 0xf3ede0, 0.92)
-            .setOrigin(0);
+            .setOrigin(0)
+            .setInteractive({ useHandCursor: false });
+        if (this.background.input) {
+            this.background.input.priorityID = -1;
+        }
 
         // Top bar
         this.topBar = scene.add.rectangle(0, 0, bounds.width, TOP_BAR_HEIGHT, this.darkMode ? 0x1a1a1a : 0xeeeeee, 0.9)

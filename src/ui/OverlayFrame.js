@@ -39,13 +39,34 @@ export function createOverlayFrame(scene, {
     };
 
     const dimmer = scene.add.rectangle(gameWidth / 2, gameHeight / 2, gameWidth, gameHeight, 0x000000, 0.6)
-        .setInteractive()
         .setDepth(depth);
-    dimmer.on('pointerdown', (pointer) => {
-        if (!Phaser.Geom.Rectangle.Contains(bounds, pointer.x, pointer.y)) {
-            close();
-        }
-    });
+    const closeRegions = [];
+
+    const registerCloseZone = (x, y, width, height) => {
+        if (width <= 0 || height <= 0) return;
+        const zone = scene.add.zone(x, y, width, height)
+            .setDepth(depth)
+            .setInteractive({ useHandCursor: false });
+        zone.on('pointerdown', close);
+        closeRegions.push(zone);
+    };
+
+    // Create four blocker zones around the panel so clicks outside the panel
+    // still dismiss the overlay without stealing events from the panel itself.
+    registerCloseZone(gameWidth / 2, bounds.y / 2, gameWidth, bounds.y);
+    registerCloseZone(
+        gameWidth / 2,
+        bounds.bottom + (gameHeight - bounds.bottom) / 2,
+        gameWidth,
+        gameHeight - bounds.bottom
+    );
+    registerCloseZone(bounds.x / 2, bounds.y + bounds.height / 2, bounds.x, bounds.height);
+    registerCloseZone(
+        bounds.right + (gameWidth - bounds.right) / 2,
+        bounds.y + bounds.height / 2,
+        gameWidth - bounds.right,
+        bounds.height
+    );
 
     const panel = scene.add.rectangle(centerX, centerY, width, height, 0x111111, 0.95)
         .setStrokeStyle(3, 0xffffff)
@@ -75,5 +96,5 @@ export function createOverlayFrame(scene, {
 
     const content = scene.add.container(0, 0).setDepth(depth + 2);
 
-    return { bounds, dimmer, panel, titleText, closeButton, content, close, depth: depth + 2 };
+    return { bounds, dimmer, panel, titleText, closeButton, content, close, blockers: closeRegions, depth: depth + 2 };
 }
