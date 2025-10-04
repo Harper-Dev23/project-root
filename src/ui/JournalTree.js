@@ -46,6 +46,9 @@ export default class JournalTree extends Phaser.GameObjects.Container {
         const mask = this.scrollMaskGfx.createGeometryMask();
         this.scrollArea.setMask(mask);
 
+        this.scrollMaskGfx.setVisible(false);
+        this.add(this.scrollMaskGfx);
+
         this.add([this.background, this.scrollArea]);
 
         this.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);

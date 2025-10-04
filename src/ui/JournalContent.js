@@ -69,6 +69,9 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this.maskGfx.fillRect(0, 0, width, height);
         this.scrollContainer.setMask(this.maskGfx.createGeometryMask());
 
+        this.maskGfx.setVisible(false);
+        this.add(this.maskGfx);
+
         this.titleText = scene.add.text(CONTAINER_PADDING, CONTAINER_PADDING, 'Select an entry', {
             ...FONTS.heading,
             fontSize: '26px',
