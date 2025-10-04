@@ -64,13 +64,18 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             .setStrokeStyle(1, COLORS.border);
 
         this.scrollContainer = scene.add.container(0, 0);
-        this.maskGfx = scene.add.graphics({ x: 0, y: 0 });
+        this.maskGfx = scene.make.graphics({ x: 0, y: 0, add: false });
         this.maskGfx.fillStyle(0xffffff);
         this.maskGfx.fillRect(0, 0, width, height);
-        this.scrollContainer.setMask(this.maskGfx.createGeometryMask());
-
-        this.maskGfx.setVisible(false);
-        this.add(this.maskGfx);
+        this.maskRect = this.maskGfx.createGeometryMask();
+        this.scrollContainer.setMask(this.maskRect);
+        this._syncMaskPosition = () => {
+            const matrix = this.getWorldTransformMatrix?.();
+            if (!matrix) return;
+            this.maskGfx.setPosition(matrix.tx, matrix.ty);
+        };
+        scene.events.on('postupdate', this._syncMaskPosition);
+        this._syncMaskPosition();
 
         this.titleText = scene.add.text(CONTAINER_PADDING, CONTAINER_PADDING, 'Select an entry', {
             ...FONTS.heading,
@@ -139,6 +144,9 @@ export default class JournalContent extends Phaser.GameObjects.Container {
     }
 
     destroy(fromScene) {
+        this.scene?.events?.off('postupdate', this._syncMaskPosition);
+        this.scrollContainer?.clearMask?.();
+        this.maskRect?.destroy();
         this.maskGfx?.destroy();
         this.contentDom?.destroy();
         this.scene?.events?.off('postupdate', this._boundSync);

@@ -40,14 +40,19 @@ export default class JournalTree extends Phaser.GameObjects.Container {
             .setStrokeStyle(1, COLORS.border);
 
         this.scrollArea = scene.add.container(0, 0);
-        this.scrollMaskGfx = scene.add.graphics({ x: 0, y: 0 });
+
+        this.scrollMaskGfx = scene.make.graphics({ x: 0, y: 0, add: false });
         this.scrollMaskGfx.fillStyle(0xffffff);
         this.scrollMaskGfx.fillRect(0, 0, width, height);
-        const mask = this.scrollMaskGfx.createGeometryMask();
-        this.scrollArea.setMask(mask);
-
-        this.scrollMaskGfx.setVisible(false);
-        this.add(this.scrollMaskGfx);
+        this.scrollMask = this.scrollMaskGfx.createGeometryMask();
+        this.scrollArea.setMask(this.scrollMask);
+        this._syncMaskPosition = () => {
+            const matrix = this.getWorldTransformMatrix?.();
+            if (!matrix) return;
+            this.scrollMaskGfx.setPosition(matrix.tx, matrix.ty);
+        };
+        scene.events.on('postupdate', this._syncMaskPosition);
+        this._syncMaskPosition();
 
         this.add([this.background, this.scrollArea]);
 
@@ -65,6 +70,9 @@ export default class JournalTree extends Phaser.GameObjects.Container {
     }
 
     destroy(fromScene) {
+        this.scene?.events?.off('postupdate', this._syncMaskPosition);
+        this.scrollArea?.clearMask?.();
+        this.scrollMask?.destroy();
         this.scrollMaskGfx?.destroy();
         super.destroy(fromScene);
     }
