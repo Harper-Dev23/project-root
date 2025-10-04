@@ -1,11 +1,31 @@
 ---
-title: Welcome to Behel'ith
-excerpt: Welcome to the island sanctuary of Behel'ith, a primer for newly arrived hunters.
-tags: handbook, primer
-sort: 10
+id: lore/welcome_to_behelith
+category: lore
+title: Welcome to Behel’ith
+excerpt: A primer from the Player Handbook: the island, the Hunt, and Camp Nehemiah.
+tags: [handbook, intro, island]
+requires: []
+sort: 1
+icon: icon-island
+version: 1
+updatedAt: 2025-10-04
 ---
-# Welcome to Behel'ith
+# Welcome to Behel’ith
 
-Your arrival at Behel'ith marks the first step toward understanding the island's living myths. This handbook entry introduces the city's wards, its shared rituals, and the expectations placed upon every sworn hunter.
+**Player Handbook summary**
 
-Take time to explore the campfires, speak with the quartermaster, and study the sigils etched into the great gate. Each symbol is a promise of protection—and a reminder that every oath must be earned in the hunts to come.
+### 🌍 The Island of Behelith
+A sacred island sealed from the world, alive with spiritual weight. Some places bless you; others curse you. The land remembers those who walk it.
+
+### 🏹 The Sacred Hunt
+A divine tradition at the island’s heart. You will prepare, pursue marked beasts, face shrines and trials, and return—changed.
+
+### 🛖 Camp Nehemiah
+Neutral ground built by the four tribes. You will find:
+- **Vendors** — exchange Hunt Tickets for gear and tools.
+- **Tribe Tents** — meet the four tribes and take their quests.
+- **The Waystone** — tracks shrines, quests, and divine attention.
+- **The Seers** — silent elders who watch the paths.
+- **Elder Berethos** — keeper of the Hunt’s law.
+
+> Once you leave Camp Nehemiah, you may not return until the Hunt ends.
