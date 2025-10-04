@@ -7,6 +7,31 @@ const CATEGORY_KEYWORDS = {
     hunt: ['hunt', 'synopsis', 'state-of-the-world', 'personal-log', 'teaser']
 };
 
+function isPlainObject(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normaliseBasePath(basePath = '') {
+    if (!basePath) return '';
+    return basePath.replace(/\/+$/, '');
+}
+
+function normaliseIndexEntry(entry) {
+    if (!entry) return null;
+    if (typeof entry === 'string') {
+        return { path: entry };
+    }
+    if (!isPlainObject(entry)) return null;
+    const path = typeof entry.path === 'string'
+        ? entry.path
+        : (typeof entry.file === 'string' ? entry.file : null);
+    if (!path) return null;
+    const meta = isPlainObject(entry.meta) ? entry.meta : undefined;
+    const updatedAt = entry.updatedAt;
+    return { path, meta, updatedAt };
+}
+
+
 function hasNodeFs() {
     return typeof process !== 'undefined' && !!process.versions?.node;
 }
@@ -257,12 +282,77 @@ async function readMarkdownFilesNode(basePath) {
     return entries;
 }
 
+async function readMarkdownFilesBrowser(basePath) {
+    const entries = [];
+    const base = normaliseBasePath(basePath);
+    if (!base) return entries;
+    if (typeof fetch !== 'function') {
+        console.warn('[MarkdownLoader] fetch API unavailable; cannot load markdown in browser.');
+        return entries;
+    }
+
+    const indexUrl = `${base}/index.json`;
+    let listing;
+    try {
+        const response = await fetch(indexUrl, { cache: 'no-cache' });
+        if (!response.ok) {
+            console.warn(`[MarkdownLoader] Failed to fetch index at ${indexUrl}:`, response.status, response.statusText);
+            return entries;
+        }
+        listing = await response.json();
+    } catch (err) {
+        console.warn('[MarkdownLoader] Error loading markdown index:', err);
+        return entries;
+    }
+
+    if (!Array.isArray(listing)) {
+        console.warn('[MarkdownLoader] Markdown index is not an array; skipping.');
+        return entries;
+    }
+
+    const tasks = listing
+        .map(normaliseIndexEntry)
+        .filter(Boolean)
+        .map(async (descriptor) => {
+            const relative = descriptor.path.replace(/^[./]+/, '').replace(/\\/g, '/');
+            if (shouldExclude(relative)) return null;
+            const url = `${base}/${relative}`;
+            try {
+                const res = await fetch(url, { cache: 'no-cache' });
+                if (!res.ok) {
+                    console.warn(`[MarkdownLoader] Failed to fetch ${url}:`, res.status, res.statusText);
+                    return null;
+                }
+                const text = await res.text();
+                const { meta, body } = parseFrontMatter(text);
+                const mergedMeta = descriptor.meta ? { ...descriptor.meta, ...meta } : meta;
+                let stats;
+                if (descriptor.updatedAt) {
+                    const time = new Date(descriptor.updatedAt).getTime();
+                    if (Number.isFinite(time)) {
+                        stats = { mtime: time };
+                    }
+                }
+                return buildEntry({ meta: mergedMeta, body, relativePath: relative, stats });
+            } catch (err) {
+                console.warn(`[MarkdownLoader] Error processing ${url}:`, err);
+                return null;
+            }
+        });
+
+    const resolved = await Promise.all(tasks);
+    for (const entry of resolved) {
+        if (entry) entries.push(entry);
+    }
+
+    return entries;
+}
+
 export async function readAllMarkdown(basePath = '/data/journal/md') {
     if (hasNodeFs()) {
         return readMarkdownFilesNode(basePath);
     }
-    console.warn('[MarkdownLoader] Browser environment detected; provide preloaded markdown assets.');
-    return [];
+    return readMarkdownFilesBrowser(basePath);
 }
 
 export default { readAllMarkdown };

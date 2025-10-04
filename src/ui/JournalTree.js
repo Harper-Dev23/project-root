@@ -17,7 +17,14 @@ const ICON_GLYPHS = {
     'icon-journal': '📖',
     'icon-scroll': '📜',
     'icon-hunt': '🎯',
-    'icon-system': '⚙️'
+    'icon-system': '⚙️',
+    'icon-tribes': '🛖',
+    'icon-island': '🏝️',
+    'icon-favor': '🙏',
+    'icon-relic': '🗝️',
+    'icon-stats': '📊',
+    'icon-weakness': '❄️',
+    'icon-swords': '⚔️'
 };
 
 function getIconGlyph(icon) {
