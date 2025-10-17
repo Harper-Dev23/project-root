@@ -105,6 +105,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this.contentDom.setDepth(domDepth);
 
         const wrapperNode = this.contentDom.node;
+        this._domWrapper = wrapperNode || null;
         this._contentInner = wrapperNode?.querySelector('.journal-content') ?? null;
 
         if (wrapperNode) {
@@ -116,6 +117,11 @@ export default class JournalContent extends Phaser.GameObjects.Container {
             wrapperNode.style.overflow = 'hidden';
             wrapperNode.style.background = 'transparent';
             wrapperNode.style.pointerEvents = 'auto';
+            this._domWheelHandler = (event) => {
+                event.preventDefault();
+                this.scrollBy(event.deltaY);
+            };
+            wrapperNode.addEventListener('wheel', this._domWheelHandler, { passive: false });
         }
 
         if (this._contentInner) {
@@ -148,6 +154,9 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this.scrollContainer?.clearMask?.();
         this.maskRect?.destroy();
         this.maskGfx?.destroy();
+        if (this._domWrapper && this._domWheelHandler) {
+            this._domWrapper.removeEventListener('wheel', this._domWheelHandler);
+        }
         this.contentDom?.destroy();
         this.scene?.events?.off('postupdate', this._boundSync);
         super.destroy(fromScene);

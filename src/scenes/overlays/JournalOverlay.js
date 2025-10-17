@@ -252,22 +252,22 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             const container = this.scene.add.container(cursorX, 0);
             const bg = this.scene.add.rectangle(0, TAB_HEIGHT / 2, width, TAB_HEIGHT, 0x000000, 0.25)
                 .setOrigin(0, 0.5)
-                .setStrokeStyle(1, 0x444444, 0.4);
-            const hit = this.scene.add.zone(width / 2, TAB_HEIGHT / 2, width, TAB_HEIGHT)
-                .setOrigin(0.5)
+                .setStrokeStyle(1, 0x444444, 0.4)
                 .setInteractive({ useHandCursor: true });
 
-            hit.on('pointerdown', () => this.showCategory(tab.id));
-            hit.on('pointerover', () => {
+            const activate = () => this.showCategory(tab.id);
+            bg.on('pointerdown', activate);
+            bg.on('pointerup', activate);
+            bg.on('pointerover', () => {
                 if (this.currentCategory === tab.id) return;
                 bg.setFillStyle(0x222222, 0.4);
             });
-            hit.on('pointerout', () => {
+            bg.on('pointerout', () => {
                 if (this.currentCategory === tab.id) return;
                 bg.setFillStyle(0x000000, 0.25);
             });
 
-            container.add([bg, label, hit]);
+            container.add([bg, label]);
             this.tabContainer.add(container);
             this.tabButtons.set(tab.id, { label, bg });
             cursorX += width + 12;
