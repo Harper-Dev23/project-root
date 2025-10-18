@@ -1,23 +1,27 @@
 ---
 id: systems/renown_items
-category: systems
-title: Historic (Renown) Items
-excerpt: Epics can become Historic: soulbound, questlines, legacy growth, history log.
-tags: [items, progression, renown]
+title: "Historic (Renown) Items"
+slug: "renown-items"
+category: "systems"
+subtab: "Favor"
+order: 20
+tags: ["items", "renown"]
+status: "approved"
+teaser: false
 requires: []
-sort: 50
+sort: 55
 icon: icon-relic
 version: 1
 updatedAt: 2025-10-04
 ---
 # Historic (Renown) Items
 
-Certain weapons and armor can gain **Renown** (“Historic” status). Once Historic, an item grows with the character/tribe.
+Certain weapons and armor can gain **Renown** and become "Historic." Once Historic, an item grows with the character or tribe.
 
-**Core Traits**
-- **Soulbound** — cannot be permanently lost; returns to inventory if destroyed during a hunt.
-- **Questlines** — upgrade paths tied to item type, element, origin, tribe, or corruption.
-- **Legacy Growth** — gains permanent strength or properties (not replaced).
-- **History Log** — records origin, owners, and deeds.
+**Core traits**
+- **Soulbound** - cannot be permanently lost; returns to inventory if destroyed during a hunt.
+- **Questlines** - upgrade paths tied to element, origin, tribe, or corruption themes.
+- **Legacy growth** - gains permanent strength or properties rather than being replaced.
+- **History log** - records owners, deeds, and milestones.
 
-**Baseline Triggers (Epics)** include usage milestones, notable victories, survival across hunts, and special origins (boss/shrine/vendor/quest). Paths may include **Elemental**, **Tribal**, or **Corruption** developments with unique rewards.
+**Baseline triggers** include usage milestones, notable victories, survival across hunts, and special origins such as bosses, shrines, vendors, or quests. Progression paths may follow elemental, tribal, or corruption alignments with unique rewards.

@@ -1,10 +1,16 @@
 const EXCLUDE_PATTERNS = ['non-canonical', 'game notes'];
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown']);
+const VALID_CATEGORIES = new Set(['lore', 'systems', 'hunt', 'people', 'places', 'factions', 'buildings', 'personal']);
 
 const CATEGORY_KEYWORDS = {
     systems: ['weakness', 'mechanic', 'systems', 'stat', 'weapon'],
     lore: ['tribe', 'island', 'lore', 'world', 'building', 'camp', 'character', 'prophet', 'false-god', 'history', 'handbook'],
-    hunt: ['hunt', 'synopsis', 'state-of-the-world', 'personal-log', 'teaser']
+    hunt: ['hunt', 'synopsis', 'state-of-the-world', 'personal-log', 'teaser'],
+    people: ['elder', 'vendor', 'people', 'seers', 'mourne'],
+    places: ['place', 'camp', 'forest', 'shoals', 'shroud'],
+    factions: ['faction', 'tribe', 'renown', 'favor'],
+    buildings: ['building', 'waystone', 'shrine', 'vendor'],
+    personal: ['personal', 'log']
 };
 
 function isPlainObject(value) {
@@ -81,6 +87,44 @@ function parseNumber(raw, fallback) {
     return Number.isFinite(num) ? num : fallback;
 }
 
+function normaliseString(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+function slugify(value) {
+    if (!value) return '';
+    return String(value)
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+}
+
+function slugFromRelativePath(relativePath) {
+    if (!relativePath) return '';
+    const withoutExt = relativePath.replace(/\.[^.]+$/, '');
+    const parts = withoutExt.split(/[\\/]/);
+    return slugify(parts.pop());
+}
+
+function parseBoolean(raw, fallback = false) {
+    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'string') {
+        const lowered = raw.trim().toLowerCase();
+        if (['true', 'yes', '1', 'on'].includes(lowered)) return true;
+        if (['false', 'no', '0', 'off'].includes(lowered)) return false;
+    }
+    return fallback;
+}
+
+function normaliseStatus(raw) {
+    const value = normaliseString(raw).toLowerCase();
+    if (value === 'draft') return 'draft';
+    if (value === 'approved') return 'approved';
+    return 'approved';
+}
+
 function parseFrontMatter(content) {
     const lines = content.split(/\r?\n/);
     if (lines[0]?.trim() !== '---') {
@@ -131,12 +175,15 @@ function parseFrontMatter(content) {
 }
 
 function inferCategory(relativePath, provided) {
-    if (provided) return provided;
+    const providedLower = normaliseString(provided).toLowerCase();
+    if (VALID_CATEGORIES.has(providedLower)) return providedLower;
+    const folder = (relativePath.split(/[\\/]/)[0] || '').toLowerCase();
+    if (VALID_CATEGORIES.has(folder)) return folder;
     const lower = relativePath.toLowerCase();
     const entries = Object.entries(CATEGORY_KEYWORDS);
     for (const [category, keywords] of entries) {
         if (category === 'lore') continue;
-        if (keywords.some(keyword => lower.includes(keyword))) {
+        if (VALID_CATEGORIES.has(category) && keywords.some(keyword => lower.includes(keyword))) {
             return category;
         }
     }
@@ -186,7 +233,8 @@ function deriveTitleAndExcerpt(body, fallbackTitle, fallbackName, excerptOverrid
 function truncateExcerpt(text, limit = 160) {
     if (!text) return '';
     if (text.length <= limit) return text;
-    return `${text.slice(0, limit - 1).trimEnd()}…`;
+    const safeCut = Math.max(0, limit - 3);
+    return `${text.slice(0, safeCut).trimEnd()}...`;
 }
 
 function slugToTitle(slug) {
@@ -210,22 +258,45 @@ function normaliseRequires(value) {
 
 function buildEntry({ meta, body, relativePath, stats }) {
     const inferredId = relativePath.replace(/\.[^.]+$/, '');
-    const id = meta.id || inferredId;
     const filenameTitle = slugToTitle(relativePath);
     const category = inferCategory(relativePath, meta.category);
+    const slugSource = normaliseString(meta.slug)
+        || (typeof meta.id === 'string' ? meta.id.split(/[\\\/]/).pop() : '')
+        || filenameTitle;
+    const slug = slugify(slugSource || filenameTitle);
+    if (!slug) {
+        console.warn(`[MarkdownLoader] Skipping ${relativePath}: missing slug`);
+        return null;
+    }
+
     const tags = parseListValue(meta.tags || []);
     const requires = normaliseRequires(meta.requires || []);
-    const sort = parseNumber(meta.sort, 999);
+    const explicitOrder = parseNumber(meta.order, null);
+    const sort = parseNumber(meta.sort, explicitOrder ?? 999);
     const version = parseNumber(meta.version, 1);
     const updatedAt = meta.updatedAt || (stats?.mtime ? new Date(stats.mtime).toISOString() : new Date().toISOString());
     const content = body.trim();
     const icon = typeof meta.icon === 'string' && meta.icon.trim() ? meta.icon.trim() : undefined;
+    const subtabValue = normaliseString(meta.subtab);
+    const subtab = subtabValue || null;
+    const status = normaliseStatus(meta.status);
+    const teaser = parseBoolean(meta.teaser, false);
+    const titleOverride = normaliseString(meta.title) || undefined;
 
-    const { title, excerpt } = deriveTitleAndExcerpt(content, meta.title, filenameTitle, meta.excerpt);
+    const { title, excerpt } = deriveTitleAndExcerpt(content, titleOverride, filenameTitle, meta.excerpt);
+    if (!title) {
+        console.warn(`[MarkdownLoader] Skipping ${relativePath}: missing title`);
+        return null;
+    }
+
+    const id = meta.id || (category ? `${category}/${slug}` : inferredId) || inferredId;
 
     const entry = {
         id,
         category,
+        slug,
+        subtab,
+        order: explicitOrder ?? sort,
         tags,
         title,
         excerpt,
@@ -234,7 +305,9 @@ function buildEntry({ meta, body, relativePath, stats }) {
         requires,
         sort,
         version,
-        updatedAt
+        updatedAt,
+        status,
+        teaser
     };
 
     if (icon) {
@@ -269,7 +342,8 @@ async function readMarkdownFilesNode(basePath) {
             const fileStat = await stat(fullPath);
             const raw = await readFile(fullPath, 'utf8');
             const { meta, body } = parseFrontMatter(raw);
-            entries.push(buildEntry({ meta, body, relativePath: posixRelative, stats: fileStat }));
+            const entry = buildEntry({ meta, body, relativePath: posixRelative, stats: fileStat });
+            if (entry) entries.push(entry);
         }
     }
 
@@ -356,3 +430,4 @@ export async function readAllMarkdown(basePath = '/data/journal/md') {
 }
 
 export default { readAllMarkdown };
+

@@ -2,10 +2,12 @@ import { JournalState } from './JournalState.js';
 
 const TITLE_WEIGHT = 5;
 const EXCERPT_WEIGHT = 3;
+const SUBTAB_WEIGHT = 2;
+const TAG_WEIGHT = 2;
 const CONTENT_WEIGHT = 1;
 
 function normalise(text = '') {
-    return (text || '').toLowerCase();
+  return (text || '').toLowerCase();
 }
 
 function tokenise(text = '') {
@@ -19,12 +21,12 @@ function buildSnippet(content, term) {
   const lower = normalise(content);
   const idx = lower.indexOf(term);
   if (idx === -1) {
-    return content.slice(0, 140) + (content.length > 140 ? '…' : '');
+    return content.slice(0, 140) + (content.length > 140 ? '...' : '');
   }
   const start = Math.max(0, idx - 40);
   const end = Math.min(content.length, idx + term.length + 60);
-  const prefix = start > 0 ? '…' : '';
-  const suffix = end < content.length ? '…' : '';
+  const prefix = start > 0 ? '...' : '';
+  const suffix = end < content.length ? '...' : '';
   return prefix + content.slice(start, end) + suffix;
 }
 
@@ -48,12 +50,14 @@ export class JournalIndex {
         tokens: {
           title: tokenise(entry.title),
           excerpt: tokenise(entry.excerpt),
-          content: tokenise(entry.content)
+          content: tokenise(entry.content),
+          subtab: tokenise(entry.subtab || ''),
+          tags: tokenise(Array.isArray(entry.tags) ? entry.tags.join(' ') : '')
         },
         raw: entry
       });
     }
-      }
+  }
 
   search(query) {
     const trimmed = (query || '').trim();
@@ -74,6 +78,8 @@ export class JournalIndex {
         const titleHits = data.tokens.title.filter(t => t.includes(term)).length;
         const excerptHits = data.tokens.excerpt.filter(t => t.includes(term)).length;
         const contentHits = data.tokens.content.filter(t => t.includes(term)).length;
+        const subtabHits = data.tokens.subtab.filter(t => t.includes(term)).length;
+        const tagHits = data.tokens.tags.filter(t => t.includes(term)).length;
 
         if (titleHits) {
           score += titleHits * TITLE_WEIGHT;
@@ -87,12 +93,22 @@ export class JournalIndex {
           score += contentHits * CONTENT_WEIGHT;
           snippet = snippet || buildSnippet(entry.content, term);
         }
-    }
+        if (subtabHits) {
+          score += subtabHits * SUBTAB_WEIGHT;
+          snippet = snippet || entry.subtab || entry.title;
+        }
+        if (tagHits) {
+          score += tagHits * TAG_WEIGHT;
+          const tagLine = Array.isArray(entry.tags) ? entry.tags.join(', ') : '';
+          snippet = snippet || (tagLine ? `Tags: ${tagLine}` : entry.title);
+        }
+      }
+
       if (score > 0) {
         results.push({ entryId: id, score, snippet });
       }
     }
-    
+
     return results.sort((a, b) => b.score - a.score);
   }
 }

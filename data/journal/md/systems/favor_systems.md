@@ -1,11 +1,15 @@
 ---
 id: systems/favor_systems
-category: systems
-title: Favor Systems
-excerpt: Three favor tracks: Tribe, Prophet, Infernal — distinct sources and rewards.
-tags: [favor, prophets, false-gods]
+title: "Favor Systems"
+slug: "favor-systems"
+category: "systems"
+subtab: "Favor"
+order: 10
+tags: ["favor", "prophets", "false-gods"]
+status: "approved"
+teaser: false
 requires: []
-sort: 40
+sort: 50
 icon: icon-favor
 version: 1
 updatedAt: 2025-10-04
@@ -13,13 +17,13 @@ updatedAt: 2025-10-04
 # Favor Systems
 
 Players earn favor from three sources:
-- **Tribe Favor** — supplies, maps, scouting, buffs.
-- **Prophet Favor** — long‑term divine boons and visions.
-- **Infernal Favor** — powerful, corrupt blessings from False Gods.
+- **Tribe Favor** - supplies, scouting, buffs, and travel support.
+- **Prophet Favor** - long-term divine boons and visions.
+- **Infernal Favor** - powerful but corrupt blessings from false gods.
 
-### How Favor Is Gained (examples)
-- **Tribe**: Starting quests, turning in relics to outpost vendors.
-- **Prophet**: Acting with honor/mercy/truth; praying at shrines; refusing temptations.
-- **Infernal**: Accepting temptations and completing morally dark tasks.
+### How favor is gained (examples)
+- **Tribe**: Complete starting quests, turn in relics to outpost vendors.
+- **Prophet**: Act with honor, pray at shrines, refuse temptations.
+- **Infernal**: Accept temptations and complete morally gray tasks.
 
-Favor tiers gate themed boons and narrative beats.
+Favor tiers unlock themed boons and narrative beats across the Hunt.

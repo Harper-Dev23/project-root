@@ -32,6 +32,20 @@ function readDarkMode() {
     }
 }
 
+function normaliseSubtab(value) {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    return trimmed || 'General';
+}
+
+function getEntrySlug(entry) {
+    if (!entry) return '';
+    if (typeof entry.slug === 'string' && entry.slug.trim()) return entry.slug.trim();
+    if (typeof entry.id === 'string' && entry.id.includes('/')) {
+        return entry.id.split('/').pop();
+    }
+    return entry.id || '';
+}
+
 class JournalOverlayView extends Phaser.GameObjects.Container {
     constructor(scene, bounds, { onClose, depth } = {}) {
         super(scene, bounds.x, bounds.y);
@@ -46,9 +60,11 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this._entries = [];
         this.indexEntries = [];
         this._dataReady = false;
-        this._pendingOpenId = undefined;
+        this._pendingOpenRequest = undefined;
 
-        this.currentCategory = this.categories[0]?.id || 'lore';
+        const storedCategory = JournalState.getLastCategory?.();
+        this.currentCategory = this._resolveCategory(storedCategory);
+        this.currentSubtab = JournalState.getLastSubtab?.(this.currentCategory) || null;
         this.currentEntryId = null;
         this.tagFilter = [];
         this.searchQuery = '';
@@ -87,19 +103,19 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this._dataReady = true;
         this._computeUnseenSet();
 
-        if (this.searchQuery) {
-            this._applySearch(this.searchQuery);
-        } else {
-            this._refreshTree();
+        const pending = this._pendingOpenRequest;
+        this._pendingOpenRequest = undefined;
+        if (pending) {
+            this.open(pending);
+            return;
         }
 
-        const pending = this._pendingOpenId;
-        this._pendingOpenId = undefined;
-        if (pending !== undefined) {
-            this.open(pending);
-        } else {
-            this.open(null);
+        if (this.searchQuery) {
+            this._applySearch(this.searchQuery);
+            return;
         }
+
+        this._restoreLastViewed();
     }
 
     _buildUI(bounds) {
@@ -177,7 +193,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
         // Left tree
         this.tree = new JournalTree(scene, 20, TOP_BAR_HEIGHT + 12, LEFT_WIDTH - 40, bounds.height - TOP_BAR_HEIGHT - BOTTOM_BAR_HEIGHT - 24, {
-            onSelect: (entryId) => this.openEntry(entryId)
+            onSelect: (entryId) => this.openEntry(entryId),
+            onSubtabSelect: (subtab) => this._onSubtabSelected(subtab)
         });
 
         // Right content area
@@ -217,6 +234,35 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         ]);
 
         this._syncDomAnchors();
+    }
+
+    _restoreLastViewed() {
+        const category = this._resolveCategory(JournalState.getLastCategory?.());
+        this.currentCategory = category;
+        const baseEntries = this._getCategoryEntries(category);
+        const storedSubtab = JournalState.getLastSubtab?.(category) || null;
+        const hasStoredSubtab = storedSubtab && baseEntries.some(entry => normaliseSubtab(entry.subtab) === storedSubtab);
+        this.currentSubtab = hasStoredSubtab ? storedSubtab : null;
+        if (storedSubtab && !hasStoredSubtab) {
+            JournalState.setLastSubtab(category, null);
+        }
+        this._highlightTabs();
+        this._refreshTree();
+        const storedSlug = JournalState.getLastSlug?.(category);
+        if (storedSlug) {
+            const match = this._findEntryBySlug(category, storedSlug);
+            if (match) {
+                this.openEntry(match.id);
+                return;
+            }
+        }
+        const visible = this._getVisibleEntries();
+        if (visible.length) {
+            this.openEntry(visible[0].id);
+        } else {
+            this.content.setEntry(null);
+            this.bottomText.setText('No entries unlocked yet.');
+        }
     }
 
     _createBottomButton(x, y, label, handler) {
@@ -339,6 +385,27 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         };
     }
 
+    _onSubtabSelected(subtab) {
+        if (!this._dataReady) return;
+        if (this.currentCategory === 'index') return;
+        const resolved = subtab ? normaliseSubtab(subtab) : null;
+        if (this.currentSubtab === resolved) return;
+        this.currentSubtab = resolved;
+        JournalState.setLastSubtab(this.currentCategory, resolved);
+        this._refreshTree();
+        const visible = this._getVisibleEntries();
+        if (!visible.length) {
+            this.content.setEntry(null);
+            this.bottomText.setText('No entries in this sub-section yet.');
+            return;
+        }
+        if (!visible.some(entry => entry.id === this.currentEntryId)) {
+            this.openEntry(visible[0].id);
+        } else {
+            this._updateBottom();
+        }
+    }
+
     _isSearchFocused() {
         const node = this.searchDom?.node;
         if (!node || typeof document === 'undefined') return false;
@@ -373,24 +440,58 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     }
 
 
-    open(entryId = null) {
+    open(target = null) {
+        const request = typeof target === 'string' || typeof target === 'number'
+            ? { entryId: String(target) }
+            : (target || {});
+
         if (!this._dataReady) {
-            this._pendingOpenId = entryId;
+            this._pendingOpenRequest = request;
             return;
         }
 
         this._computeUnseenSet();
 
-        if (entryId) {
-            this.openEntry(entryId);
+        let entry = null;
+        if (request.entryId) {
+            entry = this._entries.find(e => e.id === request.entryId);
+        } else if (request.slug) {
+            entry = this._findEntryBySlug(request.category, request.slug) || this._findEntryBySlug(null, request.slug);
+        }
+
+        if (entry) {
+            if (request.subtab !== undefined) {
+                const forcedSubtab = request.subtab === null ? null : normaliseSubtab(request.subtab);
+                this.currentSubtab = forcedSubtab;
+                JournalState.setLastSubtab(entry.category, forcedSubtab);
+            }
+            this.openEntry(entry.id);
             return;
         }
+
+        let targetCategory = request.category ? this._resolveCategory(request.category) : this.currentCategory;
+        if (!targetCategory || targetCategory === 'index') {
+            targetCategory = this._resolveCategory(null);
+        }
+        this.currentCategory = targetCategory;
+        JournalState.setLastCategory(targetCategory);
+
+        if (request.subtab !== undefined) {
+            this.currentSubtab = request.subtab === null ? null : normaliseSubtab(request.subtab);
+            JournalState.setLastSubtab(this.currentCategory, this.currentSubtab);
+        } else {
+            this.currentSubtab = JournalState.getLastSubtab?.(this.currentCategory) || null;
+        }
+
+        this._highlightTabs();
+        this._refreshTree();
 
         const visibleEntries = this._getVisibleEntries();
         if (visibleEntries.length) {
             this.openEntry(visibleEntries[0].id);
         } else {
-            this._refreshTree();
+            this.content.setEntry(null);
+            this.bottomText.setText('No entries unlocked yet.');
         }
     }
 
@@ -398,14 +499,16 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.onClose?.();
     }
 
-    showCategory(categoryId) {
+    showCategory(categoryId, { preserveEntry = false } = {}) {
         if (!this._dataReady) {
-            this.currentCategory = categoryId;
+            this.currentCategory = categoryId === 'index' ? 'index' : this._resolveCategory(categoryId);
+            this.currentSubtab = this.currentCategory === 'index' ? null : this.currentSubtab;
             this._highlightTabs();
             return;
         }
         if (categoryId === 'index') {
             this.currentCategory = 'index';
+            this.currentSubtab = null;
             this._highlightTabs();
             if (this.searchQuery) {
                 this._applySearch(this.searchQuery);
@@ -414,15 +517,28 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             }
             return;
         }
-        if (this.currentCategory === categoryId) return;
-        this.currentCategory = categoryId;
+        const resolved = this._resolveCategory(categoryId);
+        const changed = this.currentCategory !== resolved;
+        if (!changed && !preserveEntry) {
+            return;
+        }
+        this.currentCategory = resolved;
+        if (changed) {
+            const storedSubtab = JournalState.getLastSubtab?.(resolved) || null;
+            this.currentSubtab = storedSubtab;
+            JournalState.setLastCategory(resolved);
+        }
         this._highlightTabs();
         this._refreshTree();
-        const entries = this._getVisibleEntries();
-        if (entries.length) {
-            this.openEntry(entries[0].id);
+        if (!preserveEntry) {
+            const entries = this._getVisibleEntries();
+            if (entries.length) {
+                this.openEntry(entries[0].id);
+            } else {
+                this.content.setEntry(null);
+            }
         } else {
-            this.content.setEntry(null);
+            this._updateBottom();
         }
     }
 
@@ -463,7 +579,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     openEntry(entryId) {
         if (!entryId) return;
         if (!this._dataReady) {
-            this._pendingOpenId = entryId;
+            this._pendingOpenRequest = { entryId };
             return;
         }
 
@@ -471,13 +587,35 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         if (!entry) return;
         if (!JournalState.isUnlockedEntry(entry)) return;
 
-        const wasIndex = this.currentCategory === 'index';
-        this.currentCategory = entry.category;
-        this.currentEntryId = entry.id;
-        if (wasIndex) {
-            this.showCategory(entry.category);
+        const entryCategory = entry.category;
+        const entrySubtab = normaliseSubtab(entry.subtab);
+        const categoryChanged = this.currentCategory !== entryCategory || this.currentCategory === 'index';
+
+        if (categoryChanged) {
+            this.currentCategory = entryCategory;
+            const storedSubtab = JournalState.getLastSubtab?.(entryCategory);
+            this.currentSubtab = storedSubtab !== undefined && storedSubtab !== null ? storedSubtab : null;
+            const matchesCurrent = !this.currentSubtab || this.currentSubtab === entrySubtab;
+            if (!matchesCurrent) {
+                this.currentSubtab = entrySubtab;
+            }
+            JournalState.setLastCategory(entryCategory);
+        } else {
+            const matchesCurrent = !this.currentSubtab || this.currentSubtab === entrySubtab;
+            if (!matchesCurrent) {
+                this.currentSubtab = entrySubtab;
+            }
         }
+
+        this.currentEntryId = entry.id;
+
         JournalState.markSeen(entryId);
+        const slugToPersist = entry.slug || getEntrySlug(entry);
+        if (slugToPersist) {
+            JournalState.setLastSlug(entryCategory, slugToPersist);
+        }
+        JournalState.setLastSubtab(entryCategory, this.currentSubtab);
+
         this.content.setEntry(entry);
         this._highlightTabs();
         this._refreshTree();
@@ -525,7 +663,9 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             categories: [this.virtualIndexCategory],
             entries: entries.map(e => ({ ...e, category: 'index' })),
             activeEntryId: this.currentEntryId,
-            unseen: this.unseenSet
+            unseen: this.unseenSet,
+            activeCategory: 'index',
+            activeSubtab: null
         });
         this._updateBottom();
         const resultLabel = this.searchQuery
@@ -538,6 +678,16 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         return this._applySearch(query);
     }
 
+    _getCategoryEntries(categoryId) {
+        if (!this._dataReady) return [];
+        return this._entries.filter(entry => {
+            if (categoryId && entry.category !== categoryId) return false;
+            if (!JournalState.isUnlockedEntry(entry)) return false;
+            if (this.tagFilter.length && !this.tagFilter.every(tag => entry.tags?.includes(tag))) return false;
+            return true;
+        });
+    }
+
     _getVisibleEntries() {
         if (!this._dataReady) {
             return [];
@@ -545,36 +695,79 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         if (this.currentCategory === 'index') {
             return [...this.indexEntries];
         }
-        const entries = this._entries.filter(entry => {
-            if (this.currentCategory && entry.category !== this.currentCategory) return false;
-            if (!JournalState.isUnlockedEntry(entry)) return false;
-            if (this.tagFilter.length && !this.tagFilter.every(tag => entry.tags?.includes(tag))) return false;
-            return true;
-        });
-        return entries.sort((a, b) => (a.sort - b.sort) || a.title.localeCompare(b.title));
+        const base = this._getCategoryEntries(this.currentCategory);
+        const filtered = this.currentSubtab
+            ? base.filter(entry => normaliseSubtab(entry.subtab) === this.currentSubtab)
+            : base;
+        return filtered.sort((a, b) => this._sortEntries(a, b));
+    }
+
+    _sortEntries(a, b) {
+        const orderA = Number.isFinite(a.order) ? a.order : Number.isFinite(a.sort) ? a.sort : 999;
+        const orderB = Number.isFinite(b.order) ? b.order : Number.isFinite(b.sort) ? b.sort : 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.title || '').localeCompare(b.title || '');
+    }
+
+    _resolveCategory(categoryId) {
+        const pool = [...this.categories];
+        if (this.virtualIndexCategory) {
+            pool.push(this.virtualIndexCategory);
+        }
+        const match = pool.find(cat => cat?.id === categoryId && cat.id !== 'index');
+        if (match) return match.id;
+        return this.categories[0]?.id || 'lore';
+    }
+
+    _findEntryBySlug(category, slug) {
+        if (!slug) return null;
+        const target = String(slug).toLowerCase();
+        return this._entries.find(entry => {
+            if (category && entry.category !== category) return false;
+            const slugValue = (entry.slug || getEntrySlug(entry) || '').toLowerCase();
+            if (slugValue && slugValue === target) return true;
+            return entry.id === slug;
+        }) || null;
     }
 
     _refreshTree() {
         if (!this._dataReady) return;
         if (this.currentCategory === 'index') return;
         const categories = [...this.categories];
-        const visibleEntries = this._entries.filter(entry => JournalState.isUnlockedEntry(entry));
-        const filtered = visibleEntries.filter(entry => {
-            if (this.currentCategory && entry.category !== this.currentCategory) return false;
-            if (this.tagFilter.length && !this.tagFilter.every(tag => entry.tags?.includes(tag))) return false;
-            return true;
-        });
+        const baseEntries = this._getCategoryEntries(this.currentCategory).sort((a, b) => this._sortEntries(a, b));
+
+        let activeSubtab = this.currentSubtab;
+        if (activeSubtab) {
+            const hasSubtab = baseEntries.some(entry => normaliseSubtab(entry.subtab) === activeSubtab);
+            if (!hasSubtab) {
+                activeSubtab = null;
+                this.currentSubtab = null;
+                JournalState.setLastSubtab(this.currentCategory, null);
+            }
+        }
 
         this.tree.setData({
             categories,
-            entries: filtered,
+            entries: baseEntries,
             activeEntryId: this.currentEntryId,
-            unseen: this.unseenSet
+            unseen: this.unseenSet,
+            activeCategory: this.currentCategory,
+            activeSubtab
         });
 
-        if (!filtered.length) {
+        if (!baseEntries.length) {
             this.content.setEntry(null);
             this.bottomText.setText('No entries unlocked yet.');
+            return;
+        }
+
+        const visible = activeSubtab
+            ? baseEntries.filter(entry => normaliseSubtab(entry.subtab) === activeSubtab)
+            : baseEntries;
+
+        if (!visible.length) {
+            this.content.setEntry(null);
+            this.bottomText.setText('No entries in this sub-section yet.');
             return;
         }
 
@@ -635,7 +828,7 @@ export default class JournalOverlay extends Phaser.Scene {
         });
         frame.content.add(this.overlay);
 
-        this.overlay.open(data?.entryId ?? null);
+        this.overlay.open(data || null);
     }
 
     _close() {
@@ -643,3 +836,6 @@ export default class JournalOverlay extends Phaser.Scene {
         this.scene.stop();
     }
 }
+
+
+
