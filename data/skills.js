@@ -1,4 +1,4 @@
-﻿// data/skills.js
+// data/skills.js
 import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
@@ -105,20 +105,20 @@ export function getWeaponSkillsFor(char) {
     if (skill.type !== 'weapon') continue;
     if (skill.enemyOnly) continue;
 
-    // ✅ Unify stat key case
+    // ? Unify stat key case
     const statKey = skill.requiredStat?.toUpperCase();
     const statVal = statKey ? (char.totalStats?.[statKey] || 0) : null;
 
     if (skill.requiredStat && statVal < skill.requiredValue) continue;
 
-    // ✅ Normalize weapon type check
+    // ? Normalize weapon type check
     const mainType = char.equipment?.weaponMain ? Items[char.equipment.weaponMain]?.weaponType : null;
     const offType = char.equipment?.weaponOff ? Items[char.equipment.weaponOff]?.weaponType : null;
 
     // Preserve existing char.weaponType behavior
     const equippedType = char.weaponType || mainType;
 
-    // ✅ Pass if required weapon matches mainType, offType, or equippedType
+    // ? Pass if required weapon matches mainType, offType, or equippedType
     if (skill.requiredWeapon?.length > 0) {
       if (!(
         (equippedType && skill.requiredWeapon.includes(equippedType)) ||
@@ -355,384 +355,7 @@ const RAW_SKILLS = {
 
 
   // --- Weapon Skills ---
-
-  'fireball': {           //TESTINGTESTING BUILDUP and cost
-    id: 'fireball',
-    name: 'Fireball',
-    type: 'weapon',
-    mechanic: 'active',
-    requiredWeapon: ['staff'],
-    requiredValue: 18,
-    requiredStat: 'INT',
-    actionCost: 'major',
-    mpCost: 5, // AoE tax
-    hpCost: 0,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front', 'mid', 'back'],
-    cooldown: 3, // AoE tax
-    tags: ['fire', 'magic', 'projectile', 'aoe', 'attack'],
-
-    // optional static hints for tooltip (no runtime effect)
-    aoe: { shape: 'column', scale: 0.5 },
-    buildupHint: { fire: 700 },
-
-    apply: (attacker, target, scene) => {
-      // Primary hit
-      const r = calculateFireballDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-
-      // Column of the clicked target
-      const col = scene._getUnitColumn?.(target);
-
-      // Use slots from the target’s side, then pull out characters in the same column
-      const sideSlots = target.isEnemy ? scene.enemySlots : scene.allySlots;
-      const sameColChars = sideSlots
-        .filter(s => scene._getColumnBySlotId?.(s.slotId) === col && s.char && s.char !== target && s.char.status !== 'incapacitated')
-        .map(s => s.char);
-
-      const splashScale = 0.5;
-      const splash = sameColChars.map(u => ({
-        target: u,
-        amount: Math.max(1, Math.floor(amount * splashScale)),
-        isMagic: true,
-        buildup: { fire: 40 },
-        tags: ['fire', 'magic', 'aoe', 'splash'],
-      }));
-
-      return {
-        ...r,
-        amount,
-        isMagic: true,
-        buildup: { fire: 700 },
-        splash,
-      };
-    },
-
-    description:
-      'Hurl a burning fireball that explodes in a column, dealing high damage and scorching nearby foes.'
-  },
-
-
-
-
-
-  'feinting_jab': {                 // almost v3
-    id: 'feinting_jab',
-    name: 'Feinting Jab',
-    type: 'weapon',
-    mechanic: 'active',  // Same mechanic type as Fireball
-    requiredWeapon: ['dagger'],  // Adjust weapon type as needed
-    requiredValue: 10,  // Adjust required value based on your system
-    requiredStat: 'DEX',  // Using Dexterity for Feinting Jab
-    actionCost: 'bonus',  // Action cost for Feinting Jab (adjust as needed)
-    mpCost: 3,  // Feinting Jab might not cost MP, adjust if necessary
-    hpCost: 0,  // Feinting Jab might not cost HP, adjust if necessary
-    cooldown: 1,  // Example cooldown for Feinting Jab
-    positionRequirement: ['front', 'mid'],  // Added position requirement (same as Fireball)
-    tags: ['attack', 'melee'],  // Tags based on the nature of the attack (adjust as needed)
-
-    apply: (attacker, target, scene) => {
-      // Damage calculation for Feinting Jab (based on the original Fireball structure)
-      const r = calculateDamage(attacker, target);  // Replace with your damage calculation logic
-      const amount = applyDamageModifiers(r.amount, attacker, target);  // Apply any damage modifiers
-
-      return {
-        ...r,
-        amount,  // Return the modified damage
-      };
-    },
-
-    description:
-      'A deceptive jab that catches the opponent off guard, dealing damage and confusing them.'
-  },
-
-
-
-  'bonecrusher': {            //TESTINGTESTING
-    id: 'bonecrusher',
-    name: 'Bonecrusher',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 10,
-    requiredWeapon: ['mace_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front'], // adjacent melee smash
-    cooldown: 2,
-    tags: ['physical', 'melee', 'blunt', 'stun', 'attack'],
-    // optional static hints for tooltip
-    buildupHint: { disorient: 310 },
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      return {
-        ...r,
-        amount,
-        buildup: { disorient: 310 }, // feeds the Physical: Stun meter
-      };
-    },
-    description: 'A crushing mace strike that dazes; repeated hits can Stun.'
-  },
-
-
-  'scorching_ray': {
-    id: 'scorching_ray',
-    name: 'Scorching Ray',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 10,
-    requiredWeapon: ['wand'],
-    mpCost: 5,
-    hpCost: 0,
-    range: 2,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const result = calculateDamage(attacker, target);
-      result.isMagic = true;
-      return result;
-    },
-    description: 'A focused beam of flame fired from a wand.',
-  },
-
-  // === New Weapon/Class Skills ===
-
-  'restoration_light': {            //v3 updated
-    id: 'restoration_light',
-    name: 'Restoration Light',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'WIS',
-    requiredValue: 15,
-    requiredWeapon: ['staff'],
-    mpCost: 5,
-    hpCost: 0,
-    positionRequirement: ['back'],
-    requiresTarget: true,
-    targetRequirement: 'ally',
-    targetColumns: ['front', 'mid', 'back'], // can heal any ally row
-    cooldown: 3,
-    tags: ['holy', 'heal', 'regen', 'magic'],
-    apply: (attacker, target) => {
-      const healAmount = 10 + Math.floor((attacker.totalStats?.WIS || 0) / 2);
-      return {
-        amount: healAmount,
-        isHeal: true,
-        statusEffects: [{ id: 'regen', turns: 2, tickHeal: 3 }],
-      };
-    },
-    description: 'Restore moderate HP and grant regen for 2 turns.'
-  },
-
-  'overhead_hew': {
-    id: 'overhead_hew',
-    name: 'Overhead Hew',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 15,
-    requiredWeapon: ['axe_2h'],
-    mpCost: 5,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 4,
-    apply: (attacker, target) => {
-      const result = calculateDamage(attacker, target);
-      result.armorDebuff = 0.10;
-      return result;
-    },
-    description: 'A cleaving blow that reduces armor for the next round.'
-  },
-
-  'shield_ram': {
-    id: 'shield_ram',
-    name: 'Shield Ram',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 18,
-    requiredWeapon: ['shield'],
-    mpCost: 4,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const result = calculateDamage(attacker, target);
-      result.knockback = 1;
-      result.disorientOnCollision = true;
-      return result;
-    },
-    description: 'Bash the enemy back; if they collide, they are disoriented.'
-  },
-
-  'frostlash': {
-    id: 'frostlash',
-    name: 'Frostlash',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 15,
-    requiredWeapon: ['staff'],
-    mpCost: 6,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 4,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target); // your physical calc
-      const amount = applyDamageModifiers(r.amount, attacker, target, {
-        element: 'cold',   // tagging the element for future use (no bonus unless enabled)
-      });
-      return { ...r, amount, isMagic: true, buildup: { cold: 60 } };
-    },
-    description: 'A chilling strike that builds Cold on the enemy.'
-  },
-
-  ///////////REACTIONS///////////////
-  'cover_strike': {                  //v3 pending
-    id: 'cover_strike',
-    name: 'Cover Strike',
-    type: 'weapon',
-    mechanic: 'reaction',
-    actionCost: 'reaction',
-    requiredStat: 'DEX',
-    requiredValue: 16,
-    requiredWeapon: ['sword_1h'],
-    mpCost: 0,
-    cooldown: 0,
-    requiresTarget: false,
-    positionRequirement: ['front', 'mid'],
-    apply: (attacker) => {
-      return { armReaction: true, consumeOn: 'trigger', log: `${attacker.name} watches over their column.` };
-    },
-    reaction: {
-      trigger: 'ally_hit',
-      priority: 1,
-      canTrigger: ({ owner, target, scene }) => {
-        // Owner must be in same column as target (ally)
-        const colA = scene._getUnitColumn?.(owner);
-        const colB = scene._getUnitColumn?.(target);
-        return colA && colB && colA === colB;
-      },
-      exec: ({ owner, attacker, scene }) => {
-        scene._log?.(`${owner.name} strikes back to protect their ally!`);
-        const basic = SKILLS['basic_attack'];
-        if (basic) {
-          scene.time.delayedCall(50, () => {
-            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
-          });
-        }
-      }
-    },
-    description: 'Arm yourself to strike back when an ally in your column is attacked.'
-  },
-
-  'riposte': {                   //v3  pending
-    id: 'riposte',
-    name: 'Riposte',
-    type: 'weapon',
-    mechanic: 'reaction',        // shows up in Reactions menu
-    actionCost: 'reaction',      // you spend this on YOUR turn to arm it
-    requiredStat: 'DEX',
-    requiredValue: 15,
-    requiredWeapon: ['sword_1h'],
-    mpCost: 0,
-    cooldown: 1,                 // starts when it TRIGGERS (not on prep)
-    requiresTarget: false,
-    positionRequirement: ['front', 'mid'],
-    // Prep phase: arm the reaction; engine defers cooldown to trigger-time
-    apply: (attacker) => {
-      return { armReaction: true, consumeOn: 'trigger', log: `${attacker.name} prepares a riposte.` };
-    },
-    // Reaction descriptor: when/how it triggers and what it does
-    reaction: {
-      trigger: 'self_hit',       // fires in the defender window
-      canTrigger: ({ owner }) => {
-        const w = owner.weaponType;
-        return w === 'sword_1h'; // honor weapon gating at trigger-time
-      },
-      exec: ({ owner, attacker, scene, incoming }) => {
-        // DR before damage lands
-        incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.5);
-        scene._log?.(`${owner.name} parries!`);
-
-        // Counterattack (reuse basic_attack if available)
-        const basic = SKILLS['basic_attack'];
-        if (basic) {
-          scene.time.delayedCall(50, () => {
-            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
-          });
-        }
-      }
-    },
-    description: 'Arm a parry stance; the first hit until your next turn is reduced and countered.'
-  },
-
-
-
-
-  'rebounding_shot': {
-    id: 'rebounding_shot',
-    name: 'Rebounding Shot',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 20,
-    requiredWeapon: ['sling'],
-    mpCost: 5,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 4,
-    apply: (attacker, target) => {
-      const result = calculateDamage(attacker, target);
-      result.bounce = true;
-      return result;
-    },
-    description: 'Hits one enemy, then bounces to another.'
-  },
-
-  'brace_up': {
-    id: 'brace_up',
-    name: 'Brace Up',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'CON',
-    requiredValue: 10,
-    requiredWeapon: ['shield'],
-    mpCost: 3,
-    hpCost: 0,
-    range: 0,
-    positionRequirement: ['front', 'mid', 'back'],
-    requiresTarget: false,
-    targetRequirement: 'self',
-    cooldown: 3,
-    apply: (attacker) => {
-      return { selfBuff: { damageReduction: 0.15, duration: 1 } };
-    },
-    description: 'Brace for impact, reducing damage taken until your next turn.'
-  },
+  // Legacy weapon entries migrated to the v3.21 sections below.
 
   'guard': {
     id: 'guard',
@@ -752,945 +375,6 @@ const RAW_SKILLS = {
     },
     description: 'Raise guard to reduce incoming damage until next turn.'
   },
-
-
-
-  //////////////NEW ELEMENTAL TEST SKILLS////////////////
-  // === 1H SWORD ===
-  'chilling_slice': {             //TESTINGTESTING
-    id: 'chilling_slice',
-    name: 'Chilling Slice',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 12,
-    requiredWeapon: ['sword_1h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      const tFire = target?.weakness?.tiers?.fire || 0;
-      if (tFire >= 1) {                     // 🔸 Steam-ish synergy (easy version)
-        amount = Math.floor(amount * 1.15); // +15% if already Singed/Ablaze
-      }
-      return { ...r, amount, isMagic: true, buildup: { cold: 600 }, synergy: { hint: 'steam_scald' } };
-    },
-    description: 'Quick cut that chills the target; extra bite vs burning targets.'
-  },
-
-
-  'runic_spark': {
-    id: 'runic_spark',
-    name: 'Runic Spark',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'INT',
-    requiredValue: 10,
-    requiredWeapon: ['sword_1h'],
-    mpCost: 4,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'lightning' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      if (tCold === 2) {                    // 🔹 Thermal Shock (easy version)
-        amount = Math.floor(amount * 1.30); // +30% if Frozen
-        return { ...r, amount, isMagic: true, buildup: { lightning: 60 }, synergy: { thermal_shock: true, consumeWeakness: ['cold'] } };
-      }
-      return { ...r, amount, isMagic: true, buildup: { lightning: 60 } };
-    },
-    description: 'Arc-charged slash that builds Lightning; heavily punishes Frozen foes.'
-  },
-
-  'goading_pommel': {
-    id: 'goading_pommel',
-    name: 'Goading Pommel',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'CHA',
-    requiredValue: 12,
-    requiredWeapon: ['sword_1h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      return { ...r, daze: 1 }; // simple control; no element (easy test filler)
-    },
-    description: 'Blunt strike to rattle the foe.'
-  },
-
-  // === SLING ===
-  'searing_pitch': {
-    id: 'searing_pitch',
-    name: 'Searing Pitch',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 12,
-    requiredWeapon: ['sling'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      let buildup = 60;
-      if (tCold >= 1) {                      // 🔸 Steam Scald (easy): more burn if chilled/frozen
-        amount = Math.floor(amount * 1.20);
-        buildup += 20;
-      }
-      return { ...r, amount, isMagic: true, buildup: { fire: buildup }, synergy: { steam_scald: tCold >= 1 } };
-    },
-    description: 'Sticky, burning shot. Extra scorch on chilled foes.'
-  },
-
-  'frost_pebble': {
-    id: 'frost_pebble',
-    name: 'Frost Pebble',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'WIS',
-    requiredValue: 12,
-    requiredWeapon: ['sling'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      return { ...r, amount, isMagic: true, buildup: { cold: 50 } };
-    },
-    description: 'A chilling lob that builds Cold.'
-  },
-
-  'thunder_skip': {
-    id: 'thunder_skip',
-    name: 'Thunder Skip',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 14,
-    requiredWeapon: ['sling'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'lightning' });
-      const tFire = target?.weakness?.tiers?.fire || 0;
-      if (tFire === 2) {                      // 🔹 Third-Degree Burn (easy): surge damage on Ablaze
-        amount = Math.floor(amount * 1.20);
-      }
-      return { ...r, amount, isMagic: true, buildup: { lightning: 60 }, bounce: true, synergy: { third_degree_burn: tFire === 2 } };
-    },
-    description: 'Charged shot that arcs to a second target; bites harder on Ablaze foes.'
-  },
-
-  // === 2H AXE ===
-  'ember_cleave': {
-    id: 'ember_cleave',
-    name: 'Ember Cleave',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 12,
-    requiredWeapon: ['axe_2h'],
-    mpCost: 3,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      let buildup = 60;
-      if (tCold >= 1) {                       // 🔸 Steam Scald (easy)
-        amount = Math.floor(amount * 1.15);
-        buildup += 20;
-      }
-      return { ...r, amount, isMagic: true, buildup: { fire: buildup }, cleave: { adjacentFactor: 0.5 }, synergy: { steam_scald: tCold >= 1 } };
-    },
-    description: 'Fiery chop that singes a neighbor; stronger vs Chilled/Frozen.'
-  },
-
-  'rime_chop': {
-    id: 'rime_chop',
-    name: 'Rime Chop',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'CON',
-    requiredValue: 12,
-    requiredWeapon: ['axe_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      if (tCold === 2) amount = Math.floor(amount * 1.50); // brittle shatter (easy version)
-      return { ...r, amount, isMagic: true, buildup: { cold: 60 }, synergy: { brittle: tCold === 2 } };
-    },
-    description: 'Cold-laden chop; devastates Frozen foes.'
-  },
-
-  'storm_splitter': {
-    id: 'storm_splitter',
-    name: 'Storm Splitter',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'CHA',
-    requiredValue: 12,
-    requiredWeapon: ['axe_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'lightning' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      if (tCold >= 1) amount = Math.floor(amount * 1.25); // thermal shock flavor (easy)
-      return { ...r, amount, isMagic: true, buildup: { lightning: 70 } };
-    },
-    description: 'Thunderous cleave that builds Lightning; bonus vs Chilled/Frozen.'
-  },
-
-
-  'searing_brand': {
-    id: 'searing_brand',
-    name: 'Searing Brand',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 12,
-    requiredWeapon: ['sword_2h'],
-    mpCost: 3,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      if (tCold >= 1) amount = Math.floor(amount * 1.20);
-      return {
-        ...r, amount,
-        buildup: { fire: 60 },
-        // turns freeze → steam path later if you want to consume
-        consumeWeakness: (tCold === 2) ? ['cold'] : undefined,
-        rewardIfTierCross: [{ family: 'fire', tier: 2, healMP: 3 }]
-      };
-    },
-    description: 'Engraves a burning sigil; stronger on chilled targets.'
-  },
-
-  'column_rally': {
-    id: 'column_rally',
-    name: 'Column Rally',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'CHA',
-    requiredValue: 12,
-    requiredWeapon: ['sword_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 0,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: false,
-    targetRequirement: null,
-    cooldown: 3,
-    apply: (attacker) => {
-      return {
-        teamBuff: {
-          scope: 'column',
-          effect: { id: 'rally', turns: 2, atkMul: 1.10, accBonus: 5 }
-        }
-      };
-    },
-    description: 'Bolster allies in your column, raising attack and accuracy.'
-  },
-
-  'flaying_strike': {
-    id: 'flaying_strike',
-    name: 'Flaying Strike',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 12,
-    requiredWeapon: ['sword_1h'],   // safe existing type in your data
-    mpCost: 0,
-    hpCost: 0,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front'],
-    cooldown: 1,
-    tags: ['attack', 'melee', 'physical'],
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      return { ...r, amount, isMagic: false, buildup: { expose: 600 } };
-    },
-    description: 'Hard strip-and-slash that exposes defenses. (Overtuned test: big EXPOSE buildup)'
-  },
-
-  'venom_shot': {
-    id: 'venom_shot',
-    name: 'Venom Shot',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 12,
-    requiredWeapon: ['bow'],
-    mpCost: 0,
-    hpCost: 0,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front', 'mid', 'back'],
-    cooldown: 1,
-    tags: ['attack', 'ranged', 'physical'],
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      // IMPORTANT: canonical key is 'toxic' (alias 'poison' maps to 'toxic' too, but use 'toxic' here)
-      return { ...r, amount, isMagic: false, buildup: { toxic: 600 } };
-    },
-    description: 'Poisoned arrow for testing TOXIC buildup (overtuned).'
-  },
-
-  'plague_slam': {
-    id: 'plague_slam',
-    name: 'Plague Slam',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 10,
-    requiredWeapon: ['mace_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front'],
-    cooldown: 2,
-    tags: ['attack', 'melee', 'physical'],
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      return { ...r, amount, isMagic: false, buildup: { disease: 600 } };
-    },
-    description: 'Filthy overhead slam to test DISEASE buildup (overtuned).'
-  },
-
-  'hex_bolt': {
-    id: 'hex_bolt',
-    name: 'Hex Bolt',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'bonus',
-    requiredStat: 'INT',
-    requiredValue: 14,
-    requiredWeapon: ['wand'],
-    mpCost: 6,
-    hpCost: 0,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['mid', 'back'],
-    cooldown: 1,
-    tags: ['magic', 'single'],
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target);
-      return { ...r, amount, isMagic: true, buildup: { curse: 600 } };
-    },
-    description: 'Quick malediction for CURSE buildup testing (overtuned).'
-  },
-
-  curse_surge: {          //TESTINGTESTING COST BUILDUP
-    id: 'curse_surge',
-    name: 'Curse Surge',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 12,
-    requiredWeapon: ['staff'],
-    mpCost: 1,
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front', 'mid', 'back'],
-    cooldown: 1,
-    tags: ['magic', 'single', 'curse', 'necrotic'],
-    apply: (attacker, target, scene) => {
-      const base = 8 + ((attacker.INT | 0) >> 1);
-      const amount = applyDamageModifiers(base, attacker, target, { isMagic: true, element: 'necrotic' });
-      return { amount, isMagic: true, element: 'necrotic', dealsDamage: true, buildup: { curse: 700 } };
-    },
-    description: 'A heavy malediction that surges the CURSE meter.'
-  },
-
-
-  curse_cinders: {            //TESTINGTESTING COST BUILDUP
-    id: 'curse_cinders',
-    name: 'Curse of Cinders',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 14,
-    requiredWeapon: ['staff'],
-    mpCost: 1,
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front', 'mid', 'back'],
-    cooldown: 2,
-    tags: ['magic', 'single', 'curse', 'necrotic'],
-    minCurseTier: 1, // ← gate: Hexed (T1)+
-    apply: (attacker, target, scene) => {
-      // Gate: must be Hexed/Afflicted NOW
-      const mCur = target?.weakness?.meters?.curse | 0;
-      if (mCur < 100) {
-        scene?._log?.(`${target.name} is not Hexed; Curse of Cinders fails.`);
-        return { amount: 0, dealsDamage: false };
-      }
-
-      // Tiny poke so it feels like a spell, but not a nuke
-      const base = 6 + ((attacker.INT | 0) >> 3);
-      let amount = applyDamageModifiers(base, attacker, target, { isMagic: true, element: 'necrotic', tags: ['curse'] });
-
-      // Apply status for fixed duration (3). Store source in case you later want caster-based crit params.
-      target.statuses = target.statuses || {};
-      target.statuses.curse_cinders = { id: 'curse_cinders', turns: 3, sourceId: attacker.id ?? null };
-      scene?._log?.(`${target.name} is wreathed in Cinders (3 turns).`);
-
-      // Light self-synergy: small CURSE bump so overflow slowly grows; avoid force-setting Ablaze here
-      const addCurse = 60; // modest +60 (tune as you like)
-
-      return {
-        amount,
-        isMagic: true,
-        element: 'necrotic',
-        dealsDamage: true,
-        buildup: { curse: addCurse }
-      };
-    },
-
-    description: 'Afflicts the target with Cinders; adds CURSE and FIRE buildup that scales with CURSE intensity.'
-  },
-
-
-
-  'earthshatter': {
-    id: 'earthshatter',
-    name: 'Earthshatter',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 16,
-    requiredWeapon: ['mace_2h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      // pure physical, but rewards when you push any element to T2
-      return {
-        ...r,
-        rewardIfTierCross: [{ family: 'any', tier: 2, healHPpct: 0.05 }]
-      };
-    },
-    description: 'Crushing blow; if this push hits an elemental threshold, you siphon life.'
-  },
-
-  'sanctified_slam': {
-    id: 'sanctified_slam',
-    name: 'Sanctified Slam',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'WIS',
-    requiredValue: 12,
-    requiredWeapon: ['mace_2h'],
-    mpCost: 2,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = r.amount;
-      const tLightning = target?.weakness?.tiers?.lightning || 0;
-      if (tLightning >= 1) amount = Math.floor(amount * 1.15);
-      return {
-        ...r, amount,
-        buildup: { lightning: 40 },
-        rewardIfWeak: { family: 'lightning', tierAtLeast: 1, healMP: 3 }
-      };
-    },
-    description: 'Blessed impact that restores MP when striking a charged foe.'
-  },
-  'hailspike_stab': {
-    id: 'hailspike_stab',
-    name: 'Hailspike Stab',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 12,
-    requiredWeapon: ['dagger'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      return { ...r, amount, buildup: { cold: 50 } };
-    },
-    description: 'Quick cold-infused puncture.'
-  },
-
-  'arterial_feint': {
-    id: 'arterial_feint',
-    name: 'Arterial Feint',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'CHA',
-    requiredValue: 12,
-    requiredWeapon: ['dagger'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      // light hit but good payoff if target is Ablaze (pressure burst theme)
-      return {
-        ...r,
-        rewardIfWeak: { family: 'fire', tierAtLeast: 1, healHPpct: 0.03 }
-      };
-    },
-    description: 'Deceptive cut; siphons HP from burning foes.'
-  },
-
-  'gust_lash': {
-    id: 'gust_lash',
-    name: 'Gust Lash',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 12,
-    requiredWeapon: ['whip'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 2,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      // Apply a “wind-exposed” debuff; amplifies fire/lightning buildup from any source
-      target.statusEffects = target.statusEffects || [];
-      target.statusEffects.push({ id: 'wind_exposed', turns: 2, fireBuildupMul: 1.25, lightningBuildupMul: 1.25 });
-      return { ...r };
-    },
-    description: 'A cutting snap that leaves the foe vulnerable to fire and lightning.'
-  },
-
-  'scorch_crack': {
-    id: 'scorch_crack',
-    name: 'Scorch Crack',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 12,
-    requiredWeapon: ['whip'],
-    mpCost: 2,
-    hpCost: 0,
-    range: 2,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-      const tCold = target?.weakness?.tiers?.cold || 0;
-      if (tCold >= 1) amount = Math.floor(amount * 1.20);
-      return { ...r, amount, buildup: { fire: 60 } };
-    },
-    description: 'A fiery lash that sears worse on chilled foes.'
-  },
-
-  'soothing_arrow': {
-    id: 'soothing_arrow',
-    name: 'Soothing Arrow',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 16,
-    requiredWeapon: ['bow'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      return {
-        ...r,
-        rewardIfWeak: { family: 'cold', tierAtLeast: 1, healHPpct: 0.04 }, // off-meta dex heal
-        buildup: { cold: 40 }
-      };
-    },
-    description: 'A calming shot; heals you when striking a chilled foe.'
-  },
-
-  'hail_volley': {
-    id: 'hail_volley',
-    name: 'Hail Volley',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'WIS',
-    requiredValue: 12,
-    requiredWeapon: ['bow'],
-    mpCost: 2,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      return { ...r, amount, buildup: { cold: 60 }, splashTargets: 1 };
-    },
-    description: 'Cold-tipped volley that can catch a nearby foe.'
-  },
-
-  'capacitor_round': {
-    id: 'capacitor_round',
-    name: 'Capacitor Round',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 12,
-    requiredWeapon: ['gun'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = applyDamageModifiers(r.amount, attacker, target, { element: 'lightning' });
-      const t = target?.weakness?.tiers?.lightning || 0;
-      if (t === 2) {
-        // cash out the battery
-        return {
-          ...r, amount,
-          consumeWeakness: ['lightning'],
-          statusEffects: [{ id: 'stunned', turns: 1 }],
-          rewardIfTierCross: [{ family: 'lightning', tier: 2, healMP: 4 }]
-        };
-      }
-      return { ...r, amount, buildup: { lightning: 60 } };
-    },
-    description: 'Charges the target; if fully charged, discharges to stun and restore MP.'
-  },
-
-  'incendiary_shot': {
-    id: 'incendiary_shot',
-    name: 'Incendiary Shot',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 12,
-    requiredWeapon: ['gun'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'fire' });
-      return {
-        ...r, amount, buildup: { fire: 50 },
-        slotEffect: { id: 'burning_ground', element: 'fire', buildup: 20, tickPctMaxHP: 0.02, turns: 2 }
-      };
-    },
-    description: 'Ignites the target’s tile with burning ground.'
-  },
-
-
-  'conduction_bolt': {                //TESTINGTESING
-    id: 'conduction_bolt',
-    name: 'Conduction Bolt',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'INT',
-    requiredValue: 10,
-    requiredWeapon: ['wand'],
-    mpCost: 3,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'lightning' });
-      return { ...r, amount, buildup: { lightning: 500 } };
-    },
-    description: 'A precise arc that builds Lightning.'
-  },
-
-  'warmth': {
-    id: 'warmth',
-    name: 'Warmth',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'WIS',
-    requiredValue: 14,
-    requiredWeapon: ['wand'],
-    mpCost: 4,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'ally',
-    cooldown: 2,
-    apply: (attacker, ally) => {
-      const maxHP = Math.max(1, ally.maxHP || 1);
-      const heal = Math.floor(maxHP * 0.18);
-      ally.currentHP = Math.min(ally.maxHP || heal, (ally.currentHP || 0) + heal);
-      return { heal: heal };
-    },
-    description: 'Restore a moderate amount of HP to an ally.'
-  },
-  'ember_ward': {
-    id: 'ember_ward',
-    name: 'Ember Ward',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'WIS',
-    requiredValue: 12,
-    requiredWeapon: ['staff'],
-    mpCost: 2,
-    hpCost: 0,
-    range: 0,
-    positionRequirement: ['mid', 'back', 'front'],
-    requiresTarget: false,
-    targetRequirement: null,
-    cooldown: 3,
-    apply: (attacker) => {
-      return {
-        teamBuff: {
-          scope: 'column',
-          effect: { id: 'ember_ward', turns: 2, fireResBonus: 0.2 }
-        }
-      };
-    },
-    description: 'Protect your column with resistance to fire.'
-  },
-
-  'glacier_wall': {
-    id: 'glacier_wall',
-    name: 'Glacier Wall',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'INT',
-    requiredValue: 14,
-    requiredWeapon: ['staff'],
-    mpCost: 3,
-    hpCost: 0,
-    range: 3,
-    positionRequirement: ['mid', 'back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 3,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      return {
-        ...r, amount, buildup: { cold: 60 },
-        slotEffect: { id: 'ice_slick', element: 'cold', buildup: 15, tickPctMaxHP: 0.0, turns: 2 }
-      };
-    },
-    description: 'Erects frigid terrain on the target’s tile; stacks Cold.'
-  },
-
-  'shield_bash': {
-    id: 'shield_bash',
-    name: 'Shield Bash',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'STR',
-    requiredValue: 10,
-    requiredWeapon: ['shield'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const t = target?.weakness?.tiers?.lightning || 0;
-      const statusEffects = (t >= 1) ? [{ id: 'stunned', turns: 1 }] : undefined;
-      return { ...r, statusEffects };
-    },
-    description: 'A concussive slam; charged foes may be stunned.'
-  },
-
-  'bulwark_column': {
-    id: 'bulwark_column',
-    name: 'Bulwark Column',
-    type: 'weapon',
-    actionCost: 'bonus',
-    requiredStat: 'CON',
-    requiredValue: 12,
-    requiredWeapon: ['shield'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 0,
-    positionRequirement: ['front'],
-    requiresTarget: false,
-    targetRequirement: null,
-    cooldown: 3,
-    apply: (attacker) => {
-      return {
-        teamBuff: {
-          scope: 'column',
-          effect: { id: 'bulwark', turns: 2, physResBonus: 0.2 }
-        }
-      };
-    },
-    description: 'Brace your column, raising physical resistance.'
-  },
-
-
-  'grounding_pierce': {
-    id: 'grounding_pierce',
-    name: 'Grounding Pierce',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'WIS',
-    requiredValue: 12,
-    requiredWeapon: ['spear_1h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 2,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      let amount = r.amount;
-      const t = target?.weakness?.tiers?.lightning || 0;
-      if (t === 2) return { ...r, amount, consumeWeakness: ['lightning'], statusEffects: [{ id: 'stunned', turns: 1 }] };
-      return { ...r, amount, buildup: { lightning: 40 } };
-    },
-    description: 'Pins current through the foe; fully charged targets are stunned and discharged.'
-  },
-
-  'glacial_thrust': {
-    id: 'glacial_thrust',
-    name: 'Glacial Thrust',
-    type: 'weapon',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 12,
-    requiredWeapon: ['spear_1h'],
-    mpCost: 0,
-    hpCost: 0,
-    range: 1,
-    positionRequirement: ['front', 'mid'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    cooldown: 1,
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target, { element: 'cold' });
-      return {
-        ...r, amount, buildup: { cold: 50 },
-        rewardIfTierCross: [{ family: 'cold', tier: 2, healHPpct: 0.03 }]
-      };
-    },
-    description: 'Cold-driven thrust that rewards you for freezing the enemy.'
-  },
-
-  //////////////////////////////////////
 
   // --- Movement (unified) ---
   'move_step': {
@@ -1875,7 +559,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 18, buildup: { expose: 90 } })
+    apply: () => ({ amount: 6, buildup: { expose: 90 } })
   },
   'fighter_guarded_blow': {
     id: 'fighter_guarded_blow',
@@ -1886,7 +570,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     apply: (user, target) => ({
-      amount: 10,
+      amount: 3,
       buildup: { cold: 60 },
       statusEffects: [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 } }]
     })
@@ -1914,7 +598,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 2 },
-    apply: () => ({ amount: 34, consumeWeakness: ['expose'] })
+    apply: () => ({ amount: 11, consumeWeakness: ['expose'] })
   },
 
   'healer_heal': {
@@ -1979,7 +663,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 8, buildup: { fire: 70 } })
+    apply: () => ({ amount: 3, buildup: { fire: 70 } })
   },
 
   'warlock_hex': {
@@ -1990,7 +674,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 10, buildup: { curse: 80 } })
+    apply: () => ({ amount: 3, buildup: { curse: 80 } })
   },
   'warlock_drain_life': {
     id: 'warlock_drain_life',
@@ -2003,7 +687,7 @@ const NPC_ONLY_SKILLS = {
     requiresWeakness: { family: 'curse', tier: 1 },
     apply: (user, target) => {
       const tier = target?.weakness?.tiers?.curse || 0;
-      const dmg = 16;
+      const dmg = 5;
       const heal = tier >= 2 ? 18 : 10;
       if (user) {
         user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
@@ -2019,7 +703,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 12, buildup: { disease: 70 } })
+    apply: () => ({ amount: 4, buildup: { disease: 70 } })
   },
   'warlock_curse_amplify': {
     id: 'warlock_curse_amplify',
@@ -2048,7 +732,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 14, buildup: { expose: 60 } })
+    apply: () => ({ amount: 5, buildup: { expose: 60 } })
   },
   'ranger_frost_arrow': {
     id: 'ranger_frost_arrow',
@@ -2058,7 +742,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 16, buildup: { cold: 90 } })
+    apply: () => ({ amount: 5, buildup: { cold: 90 } })
   },
   'ranger_volley': {
     id: 'ranger_volley',
@@ -2071,8 +755,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
-        amount: 12,
-        splash: foes.slice(1).map(t => ({ target: t, amount: 10 }))
+        amount: 4,
+        splash: foes.slice(1).map(t => ({ target: t, amount: 3 }))
       };
     }
   },
@@ -2085,7 +769,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 28, consumeWeakness: ['expose'] })
+    apply: () => ({ amount: 9, consumeWeakness: ['expose'] })
   },
 
   'rogue_poisoned_knife': {
@@ -2098,7 +782,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     apply: (_user, target) => {
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const base = { amount: 10, buildup: { toxic: 70 } };
+      const base = { amount: 3, buildup: { toxic: 70 } };
       if (exposeTier >= 1) {
         base.buildup.toxic += 40;
       }
@@ -2113,7 +797,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 14, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] })
+    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] })
   },
   'rogue_evasion': {
     id: 'rogue_evasion',
@@ -2140,7 +824,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 26 })
+    apply: () => ({ amount: 9 })
   },
   'rogue_finishing_strike': {
     id: 'rogue_finishing_strike',
@@ -2157,7 +841,7 @@ const NPC_ONLY_SKILLS = {
       const count = families.reduce((n, fam) => n + ((tiers[fam] || 0) >= 1 ? 1 : 0), 0);
       return count >= 2 ? true : { ok: false, reason: `${target.name} lacks layered weaknesses.` };
     },
-    apply: () => ({ amount: 40, consumeWeakness: ['expose', 'toxic'] })
+    apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] })
   },
 
   // Encounter 4 – Huntsman & Beasts
@@ -2170,7 +854,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     apply: (user, target) => ({
-      amount: 10,
+      amount: 3,
       buildup: { expose: 80 },
       statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
     })
@@ -2196,7 +880,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 20, buildup: { lacerate: 90 }, statusEffects: [{ id: 'snared', turns: 2 }] })
+    apply: () => ({ amount: 7, buildup: { lacerate: 90 }, statusEffects: [{ id: 'snared', turns: 2 }] })
   },
   'huntsman_empower_pack': {
     id: 'huntsman_empower_pack',
@@ -2230,7 +914,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 22, buildup: { lacerate: 90 } })
+    apply: () => ({ amount: 7, buildup: { lacerate: 90 } })
   },
   'oskar_infectious_claw': {
     id: 'oskar_infectious_claw',
@@ -2242,7 +926,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     apply: (_user, target) => {
       const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
-      return { amount: 14, buildup: { disease: hasLac ? 140 : 80 } };
+      return { amount: 5, buildup: { disease: hasLac ? 140 : 80 } };
     }
   },
   'oskar_maw_rip': {
@@ -2254,7 +938,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lacerate', tier: 1 },
-    apply: () => ({ amount: 32, consumeWeakness: ['lacerate'] })
+    apply: () => ({ amount: 11, consumeWeakness: ['lacerate'] })
   },
   'oskar_rotting_maw': {
     id: 'oskar_rotting_maw',
@@ -2272,7 +956,7 @@ const NPC_ONLY_SKILLS = {
         target.weakness.tiers.disease = 0;
         target.weakness.meters.toxic = (target.weakness.meters.toxic || 0) + val;
       }
-      return { amount: 26 };
+      return { amount: 9 };
     }
   },
 
@@ -2284,7 +968,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 12, buildup: { toxic: 90 } })
+    apply: () => ({ amount: 4, buildup: { toxic: 90 } })
   },
   'kiro_venomous_swipe': {
     id: 'kiro_venomous_swipe',
@@ -2294,7 +978,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 18, buildup: { disease: 90 } })
+    apply: () => ({ amount: 6, buildup: { disease: 90 } })
   },
   'kiro_poison_cloud': {
     id: 'kiro_poison_cloud',
@@ -2308,9 +992,9 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
-        amount: 10,
+        amount: 3,
         consumeWeakness: ['toxic'],
-        splash: foes.map(t => ({ target: t, amount: 6, buildup: { toxic: 60 } }))
+        splash: foes.map(t => ({ target: t, amount: 2, buildup: { toxic: 60 } }))
       };
     }
   },
@@ -2324,7 +1008,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'toxic', tier: 2 },
     apply: (_user, target) => {
-      const payload = { amount: 30, consumeWeakness: ['toxic'] };
+      const payload = { amount: 10, consumeWeakness: ['toxic'] };
       if ((target?.weakness?.tiers?.disease || 0) >= 1) {
         payload.buildup = { curse: 80 };
       }
@@ -2341,7 +1025,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 20, buildup: { fire: 100 } })
+    apply: () => ({ amount: 7, buildup: { fire: 100 } })
   },
   'fire_heated_guard': {
     id: 'fire_heated_guard',
@@ -2364,7 +1048,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'fire', tier: 2 },
-    apply: () => ({ amount: 32, consumeWeakness: ['fire'] })
+    apply: () => ({ amount: 11, consumeWeakness: ['fire'] })
   },
   'fire_flare_wave': {
     id: 'fire_flare_wave',
@@ -2377,8 +1061,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
-        amount: 18,
-        splash: foes.map(t => ({ target: t, amount: 14, buildup: { fire: 60 } }))
+        amount: 6,
+        splash: foes.map(t => ({ target: t, amount: 5, buildup: { fire: 60 } }))
       };
     }
   },
@@ -2391,7 +1075,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 20, buildup: { cold: 100 } })
+    apply: () => ({ amount: 7, buildup: { cold: 100 } })
   },
   'ice_icy_guard': {
     id: 'ice_icy_guard',
@@ -2411,7 +1095,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'cold', tier: 2 },
-    apply: () => ({ amount: 32, consumeWeakness: ['cold'], statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }] })
+    apply: () => ({ amount: 11, consumeWeakness: ['cold'], statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }] })
   },
   'ice_shard_storm': {
     id: 'ice_shard_storm',
@@ -2424,8 +1108,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
-        amount: 16,
-        splash: foes.map(t => ({ target: t, amount: 12, buildup: { cold: 50 } }))
+        amount: 5,
+        splash: foes.map(t => ({ target: t, amount: 4, buildup: { cold: 50 } }))
       };
     }
   },
@@ -2439,7 +1123,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 26, buildup: { expose: 90, lacerate: 80 } })
+    apply: () => ({ amount: 9, buildup: { expose: 90, lacerate: 80 } })
   },
   'berserker_disrupting_roar': {
     id: 'berserker_disrupting_roar',
@@ -2452,7 +1136,7 @@ const NPC_ONLY_SKILLS = {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
         amount: 0,
-        splash: foes.map(t => ({ target: t, amount: 8, buildup: { disorient: 80 } }))
+        splash: foes.map(t => ({ target: t, amount: 3, buildup: { disorient: 80 } }))
       };
     }
   },
@@ -2467,7 +1151,7 @@ const NPC_ONLY_SKILLS = {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
         amount: 0,
-        splash: foes.map(t => ({ target: t, amount: 18, buildup: { lacerate: 90 } }))
+        splash: foes.map(t => ({ target: t, amount: 6, buildup: { lacerate: 90 } }))
       };
     }
   },
@@ -2480,7 +1164,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     apply: (user, target) => ({
-      amount: 14,
+      amount: 5,
       buildup: { cold: 70 },
       statusEffects: [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]
     })
@@ -2509,7 +1193,7 @@ const NPC_ONLY_SKILLS = {
       { family: 'expose', tier: 1 },
       { family: 'lacerate', tier: 1 }
     ],
-    apply: () => ({ amount: 44, consumeWeakness: ['expose', 'lacerate'] })
+    apply: () => ({ amount: 15, consumeWeakness: ['expose', 'lacerate'] })
   },
   'berserker_unstoppable_rush': {
     id: 'berserker_unstoppable_rush',
@@ -2524,8 +1208,8 @@ const NPC_ONLY_SKILLS = {
         user.initiativeGauge = Math.max(0, (user.initiativeGauge || 0) - 50);
       }
       const disorientStacks = target?.weakness?.tiers?.disorient || 0;
-      const bonus = disorientStacks >= 1 ? 8 * disorientStacks : 0;
-      return { amount: 28 + bonus };
+      const bonus = disorientStacks >= 1 ? 3 * disorientStacks : 0;
+      return { amount: 9 + bonus };
     }
   },
   'berserker_blood_fury': {
@@ -2537,7 +1221,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 18, buildup: { expose: 60, disorient: 60 } })
+    apply: () => ({ amount: 6, buildup: { expose: 60, disorient: 60 } })
   }
 };
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
@@ -8263,6 +6947,1757 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Twist the blade and infuse the wound-convert Bleed into Poison."
+  },
+
+});
+
+// ===============================
+// v3.21 - Legacy Weapon Conversions
+// ===============================
+
+Object.assign(RAW_SKILLS, {
+
+  // --- Dagger (1h) ---
+  'feinting_jab': {
+    id: "feinting_jab",
+    name: "Feinting Jab",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 10,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack"],
+    cooldown: 1,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.feinting_jab;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return { ...roll, amount };
+    },
+    description: "A deceptive jab that keeps pressure on the foe."
+  },
+
+  'hailspike_stab': {
+    id: "hailspike_stab",
+    name: "Hailspike Stab",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold"],
+    cooldown: 1,
+    buildupHint: { cold: 50 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hailspike_stab;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 50 },
+      };
+    },
+    description: "Quick cold-infused puncture."
+  },
+
+  'arterial_feint': {
+    id: "arterial_feint",
+    name: "Arterial Feint",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack"],
+    cooldown: 2,
+    rewardIfWeak: { family: "fire", tierAtLeast: 1, healHPpct: 0.03 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arterial_feint;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "Deceptive cut; siphons HP from burning foes."
+  },
+
+  // --- Sword (1h) ---
+  'flaying_strike': {
+    id: "flaying_strike",
+    name: "Flaying Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "STR",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose"],
+    cooldown: 1,
+    buildupHint: { expose: 600 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.flaying_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 600 },
+      };
+    },
+    description: "Hard strip-and-slash that exposes defenses."
+  },
+
+  'chilling_slice': {
+    id: "chilling_slice",
+    name: "Chilling Slice",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold"],
+    cooldown: 2,
+    buildupHint: { cold: 600 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.chilling_slice;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const fireTier = target?.weakness?.tiers?.fire || 0;
+      if (fireTier >= 1) {
+        amount = Math.floor(amount * 1.15);
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 600 },
+      };
+    },
+    description: "Quick cut that chills the target; extra bite vs burning foes."
+  },
+
+  'runic_spark': {
+    id: "runic_spark",
+    name: "Runic Spark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "INT",
+    requiredValue: 10,
+    actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning"],
+    cooldown: 1,
+    buildupHint: { lightning: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.runic_spark;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      let consumeWeakness;
+      if (coldTier === 2) {
+        amount = Math.floor(amount * 1.3);
+        consumeWeakness = ["cold"];
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "lightning",
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+        consumeWeakness,
+      };
+    },
+    description: "Arc-charged slash that builds Lightning; heavily punishes Frozen foes."
+  },
+
+  'goading_pommel': {
+    id: "goading_pommel",
+    name: "Goading Pommel",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "control"],
+    cooldown: 2,
+    statusEffects: [{ id: "dazed", turns: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.goading_pommel;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return { ...roll, amount, statusEffects };
+    },
+    description: "Blunt strike to rattle the foe."
+  },
+
+  // --- Sword (1h) Reactions ---
+  'cover_strike': {
+    id: "cover_strike",
+    name: "Cover Strike",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.21",
+    actionCost: "reaction",
+    requiredStat: "DEX",
+    requiredValue: 16,
+    requiredWeapon: ["sword_1h"],
+    mpCost: 0,
+    cooldown: 0,
+    requiresTarget: false,
+    positionRequirement: ["front", "mid"],
+    apply: (attacker) => {
+      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} watches over their column.` };
+    },
+    reaction: {
+      trigger: "ally_hit",
+      priority: 1,
+      canTrigger: ({ owner, target, scene }) => {
+        const colA = scene?._getUnitColumn?.(owner);
+        const colB = scene?._getUnitColumn?.(target);
+        return colA && colB && colA === colB;
+      },
+      exec: ({ owner, attacker, scene }) => {
+        scene?._log?.(`${owner.name} strikes back to protect their ally!`);
+        const basic = SKILLS?.basic_attack;
+        if (basic) {
+          scene.time?.delayedCall(50, () => {
+            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
+          });
+        }
+      }
+    },
+    description: "Arm yourself to strike back when an ally in your column is attacked."
+  },
+
+  'riposte': {
+    id: "riposte",
+    name: "Riposte",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.21",
+    actionCost: "reaction",
+    requiredStat: "DEX",
+    requiredValue: 15,
+    requiredWeapon: ["sword_1h"],
+    mpCost: 0,
+    cooldown: 1,
+    requiresTarget: false,
+    positionRequirement: ["front", "mid"],
+    apply: (attacker) => {
+      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} prepares a riposte.` };
+    },
+    reaction: {
+      trigger: "self_hit",
+      canTrigger: ({ owner }) => {
+        const w = owner?.weaponType;
+        return w === "sword_1h";
+      },
+      exec: ({ owner, attacker, scene, incoming }) => {
+        incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.5);
+        scene?._log?.(`${owner.name} parries!`);
+        const basic = SKILLS?.basic_attack;
+        if (basic) {
+          scene.time?.delayedCall(50, () => {
+            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
+          });
+        }
+      }
+    },
+    description: "Arm a parry stance; the first hit until your next turn is reduced and countered."
+  },
+
+  // --- Sword (2h) ---
+  'searing_brand': {
+    id: "searing_brand",
+    name: "Searing Brand",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire"],
+    cooldown: 2,
+    buildupHint: { fire: 60 },
+    rewardIfTierCross: [{ family: "fire", tier: 2, healMP: 3 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.searing_brand;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier >= 1) amount = Math.floor(amount * 1.2);
+      const consumeWeakness = coldTier === 2 ? ["cold"] : undefined;
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: ability?.buildupHint?.fire ?? 60 },
+        consumeWeakness,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Engraves a burning sigil; stronger on chilled targets."
+  },
+
+  'column_rally': {
+    id: "column_rally",
+    name: "Column Rally",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff"],
+    cooldown: 3,
+    teamBuff: { scope: "column", effect: { id: "rally", turns: 2, atkMul: 1.10, accBonus: 5 } },
+    apply: () => {
+      return {
+        teamBuff: {
+          scope: "column",
+          effect: { id: "rally", turns: 2, atkMul: 1.10, accBonus: 5 }
+        }
+      };
+    },
+    description: "Bolster allies in your column, raising attack and accuracy."
+  },
+
+  // --- Axe (2h) ---
+  'overhead_hew': {
+    id: "overhead_hew",
+    name: "Overhead Hew",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack"],
+    cooldown: 4,
+    armorDebuff: 0.10,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.overhead_hew;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, armorDebuff: ability?.armorDebuff };
+    },
+    description: "A cleaving blow that reduces armor for the next round."
+  },
+
+  'ember_cleave': {
+    id: "ember_cleave",
+    name: "Ember Cleave",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire", "aoe"],
+    cooldown: 2,
+    buildupHint: { fire: 60 },
+    cleave: { adjacentFactor: 0.5 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ember_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      let fireBuildup = ability?.buildupHint?.fire ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * 1.15);
+        fireBuildup += 20;
+      }
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: fireBuildup },
+        cleave: ability?.cleave ? { ...ability.cleave } : undefined,
+      };
+    },
+    description: "Fiery chop that singes a neighbor; stronger vs Chilled/Frozen."
+  },
+
+  'rime_chop': {
+    id: "rime_chop",
+    name: "Rime Chop",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "CON",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold"],
+    cooldown: 3,
+    buildupHint: { cold: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.rime_chop;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier === 2) amount = Math.floor(amount * 1.5);
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+      };
+    },
+    description: "Cold-laden chop; devastates Frozen foes."
+  },
+
+  'storm_splitter': {
+    id: "storm_splitter",
+    name: "Storm Splitter",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning"],
+    cooldown: 3,
+    buildupHint: { lightning: 70 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.storm_splitter;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier >= 1) amount = Math.floor(amount * 1.25);
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "lightning",
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 70 },
+      };
+    },
+    description: "Thunderous cleave that builds Lightning; bonus vs Chilled/Frozen."
+  },
+
+  // --- Mace (2h) ---
+  'bonecrusher': {
+    id: "bonecrusher",
+    name: "Bonecrusher",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 10,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "blunt", "disorient"],
+    cooldown: 2,
+    buildupHint: { disorient: 310 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.bonecrusher;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 310 },
+      };
+    },
+    description: "A crushing mace strike that dazes; repeated hits can Stun."
+  },
+
+  'plague_slam': {
+    id: "plague_slam",
+    name: "Plague Slam",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 10,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disease"],
+    cooldown: 2,
+    buildupHint: { disease: 600 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.plague_slam;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        buildup: { disease: ability?.buildupHint?.disease ?? 600 },
+      };
+    },
+    description: "Filthy overhead slam to test DISEASE buildup."
+  },
+
+  'earthshatter': {
+    id: "earthshatter",
+    name: "Earthshatter",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "finisher"],
+    cooldown: 3,
+    rewardIfTierCross: [{ family: "any", tier: 2, healHPpct: 0.05 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.earthshatter;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Crushing blow; if this push hits an elemental threshold, you siphon life."
+  },
+
+  'sanctified_slam': {
+    id: "sanctified_slam",
+    name: "Sanctified Slam",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning", "holy"],
+    cooldown: 2,
+    buildupHint: { lightning: 40 },
+    rewardIfWeak: { family: "lightning", tierAtLeast: 1, healMP: 3 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.sanctified_slam;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      if (lightningTier >= 1) amount = Math.floor(amount * 1.15);
+      return {
+        ...roll,
+        amount,
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 40 },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "Blessed impact that restores MP when striking a charged foe."
+  },
+
+  // --- Spear (1h) ---
+  'grounding_pierce': {
+    id: "grounding_pierce",
+    name: "Grounding Pierce",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["spear_1h"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning"],
+    cooldown: 2,
+    buildupHint: { lightning: 40 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.grounding_pierce;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      if (lightningTier === 2) {
+        const statusEffects = [{ id: "stunned", turns: 1 }];
+        return {
+          ...roll,
+          amount,
+          element: "lightning",
+          isMagic: true,
+          consumeWeakness: ["lightning"],
+          statusEffects,
+        };
+      }
+      return {
+        ...roll,
+        amount,
+        element: "lightning",
+        isMagic: true,
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 40 },
+      };
+    },
+    description: "Pins current through the foe; fully charged targets are stunned and discharged."
+  },
+
+  'glacial_thrust': {
+    id: "glacial_thrust",
+    name: "Glacial Thrust",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["spear_1h"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold"],
+    cooldown: 1,
+    buildupHint: { cold: 50 },
+    rewardIfTierCross: [{ family: "cold", tier: 2, healHPpct: 0.03 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacial_thrust;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 50 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Cold-driven thrust that rewards you for freezing the enemy."
+  },
+
+  // --- Sling (1h) ---
+  'rebounding_shot': {
+    id: "rebounding_shot",
+    name: "Rebounding Shot",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sling"],
+    requiredStat: "DEX",
+    requiredValue: 20,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "bounce"],
+    cooldown: 4,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.rebounding_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, bounce: true };
+    },
+    description: "Hits one enemy, then bounces to another."
+  },
+
+  'searing_pitch': {
+    id: "searing_pitch",
+    name: "Searing Pitch",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sling"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "fire"],
+    cooldown: 2,
+    buildupHint: { fire: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.searing_pitch;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      let fireBuildup = ability?.buildupHint?.fire ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * 1.2);
+        fireBuildup += 20;
+      }
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: fireBuildup },
+      };
+    },
+    description: "Sticky, burning shot. Extra scorch on chilled foes."
+  },
+
+  'frost_pebble': {
+    id: "frost_pebble",
+    name: "Frost Pebble",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sling"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "cold"],
+    cooldown: 1,
+    buildupHint: { cold: 50 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frost_pebble;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 50 },
+      };
+    },
+    description: "A chilling lob that builds Cold."
+  },
+
+  'thunder_skip': {
+    id: "thunder_skip",
+    name: "Thunder Skip",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sling"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "lightning", "bounce"],
+    cooldown: 2,
+    buildupHint: { lightning: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.thunder_skip;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const fireTier = target?.weakness?.tiers?.fire || 0;
+      if (fireTier === 2) {
+        amount = Math.floor(amount * 1.2);
+      }
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "lightning",
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+        bounce: true,
+      };
+    },
+    description: "Charged shot that arcs to a second target; bites harder on Ablaze foes."
+  },
+
+  // --- Bow (2h) ---
+  'venom_shot': {
+    id: "venom_shot",
+    name: "Venom Shot",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "toxic"],
+    cooldown: 1,
+    buildupHint: { toxic: 600 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: ability?.buildupHint?.toxic ?? 600 },
+      };
+    },
+    description: "Poisoned arrow for testing TOXIC buildup."
+  },
+
+  'soothing_arrow': {
+    id: "soothing_arrow",
+    name: "Soothing Arrow",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "cold"],
+    cooldown: 2,
+    buildupHint: { cold: 40 },
+    rewardIfWeak: { family: "cold", tierAtLeast: 1, healHPpct: 0.04 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.soothing_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 40 },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "A calming shot; heals you when striking a chilled foe."
+  },
+
+  'hail_volley': {
+    id: "hail_volley",
+    name: "Hail Volley",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["bow"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "cold", "aoe"],
+    cooldown: 3,
+    buildupHint: { cold: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hail_volley;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+        splashTargets: 1,
+      };
+    },
+    description: "Cold-tipped volley that can catch a nearby foe."
+  },
+
+  // --- Gun (2h) ---
+  'capacitor_round': {
+    id: "capacitor_round",
+    name: "Capacitor Round",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["gun"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "lightning"],
+    cooldown: 2,
+    buildupHint: { lightning: 60 },
+    statusEffects: [{ id: "stunned", turns: 1 }],
+    rewardIfTierCross: [{ family: "lightning", tier: 2, healMP: 4 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.capacitor_round;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      if (lightningTier === 2) {
+        const statusEffects = Array.isArray(ability?.statusEffects) ? ability.statusEffects.map(s => ({ ...s })) : undefined;
+        return {
+          ...roll,
+          amount,
+          isMagic: true,
+          element: "lightning",
+          consumeWeakness: ["lightning"],
+          statusEffects,
+          rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+        };
+      }
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "lightning",
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+      };
+    },
+    description: "Charges the target; if fully charged, discharges to stun and restore MP."
+  },
+
+  'incendiary_shot': {
+    id: "incendiary_shot",
+    name: "Incendiary Shot",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["gun"],
+    requiredStat: "STR",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "fire", "terrain"],
+    cooldown: 3,
+    buildupHint: { fire: 50 },
+    slotEffect: { id: "burning_ground", element: "fire", buildup: 20, tickPctMaxHP: 0.02, turns: 2 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.incendiary_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: ability?.buildupHint?.fire ?? 50 },
+        slotEffect,
+      };
+    },
+    description: "Ignites the target's tile with burning ground."
+  },
+
+  // --- Wand (1h) ---
+  'scorching_ray': {
+    id: "scorching_ray",
+    name: "Scorching Ray",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["wand"],
+    requiredStat: "INT",
+    requiredValue: 10,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "fire"],
+    cooldown: 1,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.scorching_ray;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, isMagic: true, element: "fire" };
+    },
+    description: "A focused beam of flame fired from a wand."
+  },
+
+  'hex_bolt': {
+    id: "hex_bolt",
+    name: "Hex Bolt",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["wand"],
+    requiredStat: "INT",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "curse"],
+    cooldown: 1,
+    buildupHint: { curse: 600 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hex_bolt;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { curse: ability?.buildupHint?.curse ?? 600 },
+      };
+    },
+    description: "Quick malediction for CURSE buildup testing."
+  },
+
+  'conduction_bolt': {
+    id: "conduction_bolt",
+    name: "Conduction Bolt",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["wand"],
+    requiredStat: "INT",
+    requiredValue: 10,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "lightning"],
+    cooldown: 1,
+    buildupHint: { lightning: 500 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.conduction_bolt;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "lightning",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "lightning",
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 500 },
+      };
+    },
+    description: "A precise arc that builds Lightning."
+  },
+
+  'warmth': {
+    id: "warmth",
+    name: "Warmth",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["wand"],
+    requiredStat: "WIS",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "ally",
+    tags: ["magic", "support", "heal"],
+    cooldown: 2,
+    apply: (_attacker, ally) => {
+      const maxHP = Math.max(1, ally?.maxHP || ally?.derivedStats?.maxHP || 1);
+      const heal = Math.floor(maxHP * 0.18);
+      return { amount: heal, isHeal: true };
+    },
+    description: "Restore a moderate amount of HP to an ally."
+  },
+
+  // --- Staff (2h) ---
+  'fireball': {
+    id: "fireball",
+    name: "Fireball",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 18,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "fire", "aoe"],
+    cooldown: 3,
+    aoe: { shape: "column", scale: 0.5 },
+    buildupHint: { fire: 700, splash: 40 },
+    splashScale: 0.5,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.fireball;
+      const roll = calculateFireballDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const col = scene._getUnitColumn(target);
+        const sideSlots = target.isEnemy ? scene.enemySlots : scene.allySlots;
+        const sameColChars = sideSlots
+          ?.filter(s => scene._getColumnBySlotId?.(s.slotId) === col && s.char && s.char !== target && s.char.status !== "incapacitated")
+          .map(s => s.char) || [];
+        const scale = ability?.splashScale ?? 0.5;
+        const splashBuildup = ability?.buildupHint?.splash ?? 40;
+        sameColChars.forEach(u => {
+          splash.push({
+            target: u,
+            amount: Math.max(1, Math.floor(amount * scale)),
+            isMagic: true,
+            element: "fire",
+            buildup: { fire: splashBuildup },
+            tags: ability?.tags,
+          });
+        });
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: ability?.buildupHint?.fire ?? 700 },
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Hurl a burning fireball that explodes in a column, dealing high damage and scorching nearby foes."
+  },
+
+  'restoration_light': {
+    id: "restoration_light",
+    name: "Restoration Light",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "ally",
+    tags: ["magic", "holy", "heal", "regen"],
+    cooldown: 3,
+    statusEffects: [{ id: "regen", turns: 2, tickHeal: 3 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.restoration_light;
+      const wis = attacker?.totalStats?.WIS ?? attacker?.WIS ?? 0;
+      const healAmount = 10 + Math.floor(wis / 2);
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      return {
+        amount: healAmount,
+        isHeal: true,
+        statusEffects,
+      };
+    },
+    description: "Restore moderate HP and grant regen for 2 turns."
+  },
+
+  'frostlash': {
+    id: "frostlash",
+    name: "Frostlash",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "cold"],
+    cooldown: 4,
+    buildupHint: { cold: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frostlash;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+      };
+    },
+    description: "A chilling strike that builds Cold on the enemy."
+  },
+
+  'curse_surge': {
+    id: "curse_surge",
+    name: "Curse Surge",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 1,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "curse", "necrotic"],
+    cooldown: 1,
+    buildupHint: { curse: 700 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.curse_surge;
+      const intStat = attacker?.totalStats?.INT ?? attacker?.INT ?? 0;
+      const base = 8 + (intStat >> 1);
+      const amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "necrotic",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      return {
+        amount,
+        isMagic: true,
+        element: "necrotic",
+        dealsDamage: true,
+        buildup: { curse: ability?.buildupHint?.curse ?? 700 },
+      };
+    },
+    description: "A heavy malediction that surges the CURSE meter."
+  },
+
+  'curse_cinders': {
+    id: "curse_cinders",
+    name: "Curse of Cinders",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 1,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "curse", "necrotic"],
+    cooldown: 2,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    statusEffects: [{ id: "curse_cinders", turns: 3 }],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_cinders;
+      const meter = target?.weakness?.meters?.curse || 0;
+      if (meter < 100) {
+        scene?._log?.(`${target?.name || "The target"} is not Hexed; Curse of Cinders fails.`);
+        return { amount: 0, dealsDamage: false };
+      }
+      const intStat = attacker?.totalStats?.INT ?? attacker?.INT ?? 0;
+      const base = 6 + (intStat >> 3);
+      const amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "necrotic",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect, sourceId: attacker?.id ?? effect.sourceId }))
+        : undefined;
+      return {
+        amount,
+        isMagic: true,
+        element: "necrotic",
+        dealsDamage: true,
+        buildup: { curse: ability?.buildupHint?.curse ?? 60 },
+        statusEffects,
+      };
+    },
+    description: "Afflicts the target with Cinders; adds CURSE buildup and lingering burn."
+  },
+
+  'ember_ward': {
+    id: "ember_ward",
+    name: "Ember Ward",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 2,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff"],
+    cooldown: 3,
+    teamBuff: { scope: "column", effect: { id: "ember_ward", turns: 2, fireResBonus: 0.2 } },
+    apply: () => {
+      return {
+        teamBuff: {
+          scope: "column",
+          effect: { id: "ember_ward", turns: 2, fireResBonus: 0.2 }
+        }
+      };
+    },
+    description: "Protect your column with resistance to fire."
+  },
+
+  'glacier_wall': {
+    id: "glacier_wall",
+    name: "Glacier Wall",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "cold", "terrain"],
+    cooldown: 3,
+    buildupHint: { cold: 60 },
+    slotEffect: { id: "ice_slick", element: "cold", buildup: 15, tickPctMaxHP: 0.0, turns: 2 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacier_wall;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+        slotEffect,
+      };
+    },
+    description: "Erects frigid terrain on the target's tile; stacks Cold."
+  },
+
+  // --- Shield ---
+  'shield_ram': {
+    id: "shield_ram",
+    name: "Shield Ram",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["shield"],
+    requiredStat: "STR",
+    requiredValue: 18,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "control"],
+    cooldown: 3,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shield_ram;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        knockback: 1,
+        disorientOnCollision: true,
+      };
+    },
+    description: "Bash the enemy back; if they collide, they are disoriented."
+  },
+
+  'brace_up': {
+    id: "brace_up",
+    name: "Brace Up",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["shield"],
+    requiredStat: "CON",
+    requiredValue: 10,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["stance", "support"],
+    cooldown: 3,
+    statusEffects: [{ id: "brace_up", turns: 1, guardPct: 15, damageReduction: 0.15 }],
+    apply: () => {
+      const ability = SKILLS?.brace_up;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      return { amount: 0, statusEffects };
+    },
+    description: "Brace for impact, reducing damage taken until your next turn."
+  },
+
+  'shield_bash': {
+    id: "shield_bash",
+    name: "Shield Bash",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["shield"],
+    requiredStat: "STR",
+    requiredValue: 10,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "control"],
+    cooldown: 2,
+    statusEffects: [{ id: "stunned", turns: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shield_bash;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const statusEffects = lightningTier >= 1
+        ? (Array.isArray(ability?.statusEffects) ? ability.statusEffects.map(effect => ({ ...effect })) : undefined)
+        : undefined;
+      return { ...roll, amount, statusEffects };
+    },
+    description: "A concussive slam; charged foes may be stunned."
+  },
+
+  'bulwark_column': {
+    id: "bulwark_column",
+    name: "Bulwark Column",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["shield"],
+    requiredStat: "CON",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "stance"],
+    cooldown: 3,
+    teamBuff: { scope: "column", effect: { id: "bulwark", turns: 2, physResBonus: 0.2 } },
+    apply: () => {
+      return {
+        teamBuff: {
+          scope: "column",
+          effect: { id: "bulwark", turns: 2, physResBonus: 0.2 }
+        }
+      };
+    },
+    description: "Brace your column, raising physical resistance."
+  },
+
+  // --- Whip ---
+  'gust_lash': {
+    id: "gust_lash",
+    name: "Gust Lash",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["whip"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "wind"],
+    cooldown: 2,
+    statusEffects: [{ id: "wind_exposed", turns: 2, fireBuildupMul: 1.25, lightningBuildupMul: 1.25 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.gust_lash;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      return { ...roll, amount, statusEffects };
+    },
+    description: "A cutting snap that leaves the foe vulnerable to fire and lightning."
+  },
+
+  'scorch_crack': {
+    id: "scorch_crack",
+    name: "Scorch Crack",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["whip"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire"],
+    cooldown: 2,
+    buildupHint: { fire: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.scorch_crack;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier >= 1) amount = Math.floor(amount * 1.2);
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: ability?.buildupHint?.fire ?? 60 },
+      };
+    },
+    description: "A fiery lash that sears worse on chilled foes."
   },
 
 });
