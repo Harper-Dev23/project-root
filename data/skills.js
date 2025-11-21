@@ -19,6 +19,49 @@ const cloneRewardList = (list) => (Array.isArray(list) ? list.map(rule => ({
 })) : undefined);
 const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
 
+const SWORD_CHAIN_STATUS_KEY = 'sword_rhythm_window';
+const SWORD_RECENT_HIT_KEY = 'sword_recent_hit';
+const ensureStatusBucket = (unit) => {
+  if (!unit) return null;
+  if (!unit.statuses || typeof unit.statuses !== 'object') unit.statuses = {};
+  return unit.statuses;
+};
+const markSword1hUse = (unit, abilityId) => {
+  const bucket = ensureStatusBucket(unit);
+  if (!bucket) return;
+  bucket[SWORD_CHAIN_STATUS_KEY] = {
+    ...(bucket[SWORD_CHAIN_STATUS_KEY] || {}),
+    weapon: 'sword_1h',
+    lastAbility: abilityId || null,
+    turns: 2,
+  };
+};
+const hasSword1hChainReady = (unit) => {
+  const marker = unit?.statuses?.[SWORD_CHAIN_STATUS_KEY];
+  return !!(marker && (marker.turns | 0) > 0);
+};
+const markSword1hHit = (target, attacker, abilityId) => {
+  if (!target) return;
+  const bucket = ensureStatusBucket(target);
+  if (!bucket) return;
+  bucket[SWORD_RECENT_HIT_KEY] = {
+    ...(bucket[SWORD_RECENT_HIT_KEY] || {}),
+    weapon: 'sword_1h',
+    lastAbility: abilityId || null,
+    lastAttackerId: attacker?.id || attacker?.name || null,
+    turns: 2,
+  };
+};
+const targetRecentlyHitBySword1h = (target, attacker) => {
+  const marker = target?.statuses?.[SWORD_RECENT_HIT_KEY];
+  if (!marker) return false;
+  if ((marker.turns | 0) <= 0) return false;
+  if (attacker && marker.lastAttackerId && marker.lastAttackerId !== (attacker.id || attacker.name)) {
+    return false;
+  }
+  return true;
+};
+
 function normalizeSkillEntry(id, skill = {}) {
   const normalized = {
     ...skill,
@@ -2531,13 +2574,13 @@ const NPC_ONLY_SKILLS = {
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
 
 // ===============================
-// v3.2 — Dagger skills (13) — injected directly; no wrapper const
+// v3.2 - Dagger skills (13) - injected directly; no wrapper const
 // Notes: no `range`; tooltip helpers via `buildupHint`/`aoe`; event scaffolding inert.
 // ===============================
 Object.assign(RAW_SKILLS, {
 
   // -------- Generation (7) --------
-  'needle_feint': {                               //v.3.21
+  'needle_feint': {                               
     id: "needle_feint",
     name: "Needle Feint",
     type: "weapon",
@@ -2592,7 +2635,7 @@ Object.assign(RAW_SKILLS, {
     name: "Needle Venom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -2634,7 +2677,7 @@ Object.assign(RAW_SKILLS, {
     name: "Pressure Point",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -2677,7 +2720,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ghoststep",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -2735,7 +2778,7 @@ Object.assign(RAW_SKILLS, {
     name: "Hex Stitch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -2807,7 +2850,7 @@ Object.assign(RAW_SKILLS, {
     name: "Static Prick",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -2857,7 +2900,7 @@ Object.assign(RAW_SKILLS, {
     name: "Street Panacea",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
     requiredValue: 15,
@@ -2927,7 +2970,7 @@ Object.assign(RAW_SKILLS, {
     name: "Heartpiercer",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 18,
@@ -2965,7 +3008,7 @@ Object.assign(RAW_SKILLS, {
     name: "Venom Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -3012,7 +3055,7 @@ Object.assign(RAW_SKILLS, {
     name: "Silent Order",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
     requiredValue: 16,
@@ -3050,7 +3093,7 @@ Object.assign(RAW_SKILLS, {
     name: "Curse Snap",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "INT",
     requiredValue: 18,
@@ -3094,7 +3137,7 @@ Object.assign(RAW_SKILLS, {
     name: "Flash Overload",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 17,
@@ -3141,7 +3184,7 @@ Object.assign(RAW_SKILLS, {
     name: "Vein Tap",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["dagger"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -3203,7 +3246,7 @@ Object.assign(RAW_SKILLS, {
     description: "Transforms Bleed into Poison and strikes; adds bonus Poison if the target is also Exposed."
   },
 
-  //v3.2 1h sword skills - reactions pending 
+  // v3.21 1h sword skills - reactions pending 
 
 
   'marked_cut': {
@@ -3211,7 +3254,7 @@ Object.assign(RAW_SKILLS, {
     name: "Marked Cut",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -3222,6 +3265,22 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["slash"],
     buildupHint: { expose: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.marked_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 60 },
+      };
+    },
     description: "A quick slice that exposes a weakness for later exploitation."
   },
 
@@ -3230,7 +3289,7 @@ Object.assign(RAW_SKILLS, {
     name: "Guarded Slash",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -3240,7 +3299,31 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold"],
     buildupHint: { cold: 60 },
-    rewardIfTier: { family: "cold", tierAtLeast: 1, buff: { guardPct: 10, turns: 1 } },
+    rewardIfWeak: { family: "cold", tierAtLeast: 1, buff: { guardPct: 10, turns: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.guarded_slash;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * coldTier));
+      }
+      const buildupVal = ability?.buildupHint?.cold ?? 60;
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        element: 'cold',
+        buildup: { cold: buildupVal },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A guarded swing that chills the foe while raising your guard."
   },
 
@@ -3249,7 +3332,7 @@ Object.assign(RAW_SKILLS, {
     name: "Rhythm Blow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -3258,9 +3341,38 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack"],
-    // inert chain metadata for later: restores MP when chained with a 1h sword skill last turn
     comboHint: { lastTurnWeapon: "sword_1h" },
     mpRestoreOnChain: 2,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.rhythm_blow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.max(1, Math.floor(amount * 0.9));
+      const chainReady = hasSword1hChainReady(attacker);
+      let mpRestored = 0;
+      if (chainReady && ability?.mpRestoreOnChain) {
+        const gain = ability.mpRestoreOnChain;
+        const maxMP = attacker?.maxMP ?? attacker?.derived?.maxMP ?? 0;
+        const before = attacker?.currentMP ?? 0;
+        const after = maxMP > 0 ? Math.min(maxMP, before + gain) : before + gain;
+        mpRestored = Math.max(0, after - before);
+        attacker.currentMP = after;
+      }
+      const log = mpRestored > 0
+        ? `${attacker?.name || 'The swordsman'} keeps tempo and regains ${mpRestored} MP.`
+        : undefined;
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        log,
+      };
+    },
     description: "A tempo-setter; keep the beat with a follow-up strike that restores MP when chained."
   },
 
@@ -3269,7 +3381,7 @@ Object.assign(RAW_SKILLS, {
     name: "Soft Spot Exposed",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -3279,8 +3391,28 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
     buildupHint: { expose: 60 },
-    // If this hit increases Expose tier, make target more vulnerable to physical for a bit
     rewardIfTierCross: [{ family: "expose", tier: 2, debuff: { physicalVulnPct: 10, turns: 2 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.soft_spot_exposed;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 60 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A strike that makes the target more vulnerable to physical damage."
   },
 
@@ -3289,7 +3421,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sword Flourish",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -3298,10 +3430,62 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
-    // tooltip shape for “two adjacent foes”
     aoe: { shape: "cone", scale: 1 },
-    // Spread any Expose from primary to one adjacent target (full value)
     proliferateWeakness: { families: ["expose"], to: "adjacent", ratio: 1.0, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.sword_flourish;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseBuildup = ability?.buildupHint?.expose ?? 50;
+      const ratio = ability?.proliferateWeakness?.ratio ?? 1;
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const splash = [];
+      const spreadMeta = [];
+      const predictedExpose = (target?.weakness?.meters?.expose || 0) + baseBuildup;
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
+          neighbors.slice(0, maxTargets).forEach(char => {
+            const splashAmount = Math.max(1, Math.floor(amount * 0.7));
+            const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.75));
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+            if (char?.weakness && predictedExpose > 0) {
+              const transfer = Math.max(0, Math.floor(predictedExpose * ratio));
+              if (transfer > 0) {
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
+                char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
+                spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
+              }
+            }
+            markSword1hHit(char, attacker, ability?.id);
+          });
+        }
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "A sweeping flourish that hits two adjacent foes."
   },
 
@@ -3310,7 +3494,7 @@ Object.assign(RAW_SKILLS, {
     name: "Read and React",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -3319,8 +3503,18 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["stance", "support"],
-    // your engine can honor this later: next hit vs Exposed targets deals extra
     statusEffects: [{ id: "read_and_react", turns: 1, nextVsExposeDamagePct: 20 }],
+    apply: (attacker) => {
+      const ability = SKILLS?.read_and_react;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+      markSword1hUse(attacker, ability?.id);
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
     description: "Study an opponent’s movements and prepare; later attacks against exposed enemies are empowered."
   },
 
@@ -3328,8 +3522,8 @@ Object.assign(RAW_SKILLS, {
     id: "power_riposte",
     name: "Power Riposte",
     type: "weapon",
-    mechanic: "active", // not a true reaction in this pass
-    versionTag: "v3.2",
+    mechanic: "active",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -3339,8 +3533,32 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    // inert scaler for later damage calc
     scaleWithTier: { family: "expose", perTierDamagePct: 15 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.power_riposte;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const perTier = ability?.scaleWithTier?.perTierDamagePct ?? 15;
+      if (exposeTier > 0) {
+        amount = Math.floor(amount * (1 + (perTier * exposeTier) / 100));
+      }
+      const meter = target?.weakness?.meters?.expose || 0;
+      if (meter > 0) {
+        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.12));
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+      };
+    },
     description: "A heavy counter that punishes exposed foes; scales with Expose tier."
   },
 
@@ -3349,7 +3567,7 @@ Object.assign(RAW_SKILLS, {
     name: "Glacial Parry",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "WIS",
     requiredValue: 14,
@@ -3361,6 +3579,33 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "cold", tierAtLeast: 2 },
     consumeWeakness: ["cold"],
     statusEffects: [{ id: "immobilized", turns: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacial_parry;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+      const coldMeter = target?.weakness?.meters?.cold || 0;
+      if (coldMeter > 0) {
+        const intensity = Math.max(1, weaknessIntensityMult(coldMeter) || 1);
+        amount = Math.floor(amount * (1 + Math.max(0.15, intensity * 0.15)));
+      }
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        element: 'cold',
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+      };
+    },
     description: "Convert Cold stacks into a freezing slash, immobilizing the target."
   },
 
@@ -3369,7 +3614,7 @@ Object.assign(RAW_SKILLS, {
     name: "Taunting Slash",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "CHA",
     requiredValue: 14,
@@ -3380,6 +3625,29 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "taunt"],
     requiresWeakness: { family: "expose", tierAtLeast: 2 },
     statusEffects: [{ id: "taunted", turns: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.taunting_slash;
+      const roll = calculateDamage(attacker, target, ability);
+      const chaBonus = Math.floor((attacker?.totalStats?.CHA || 0) / 4);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount + chaBonus, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const turns = ability?.statusEffects?.[0]?.turns ?? 1;
+      const statusEffects = [{
+        id: 'taunted',
+        turns,
+        data: { forcedTarget: attacker?.id || attacker?.name || null },
+      }];
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        statusEffects,
+      };
+    },
     description: "A provoking blow that draws aggro from exposed enemies."
   },
 
@@ -3388,7 +3656,7 @@ Object.assign(RAW_SKILLS, {
     name: "Crescent Cleave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 16,
@@ -3399,6 +3667,46 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose", "aoe"],
     aoe: { shape: "column", scale: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { damagePct: 15 } },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.crescent_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.forEach(char => {
+            const splashAmount = Math.max(1, Math.floor(amount * 0.75));
+            const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+            markSword1hHit(char, attacker, ability?.id);
+          });
+        }
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        splash: splash.length ? splash : undefined,
+      };
+    },
     description: "A broad arc that cleaves through multiple foes; deals bonus to enemies with Expose."
   },
 
@@ -3407,7 +3715,7 @@ Object.assign(RAW_SKILLS, {
     name: "Momentum Strike",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -3416,9 +3724,30 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "multi"],
-    // inert condition: extra hit if target was hit by a 1h sword skill last turn
     conditionHint: { targetWasHitBy: "sword_1h", withinTurns: 1 },
     onTrigger: { grantExtraHitPct: 100 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.momentum_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const chained = targetRecentlyHitBySword1h(target, attacker);
+      let extraHitAmount = 0;
+      if (chained) {
+        extraHitAmount = Math.max(1, Math.floor(amount * 0.65));
+        amount += extraHitAmount;
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        extraHits: chained ? [{ amount: extraHitAmount, tags: ability?.tags }] : undefined,
+      };
+    },
     description: "A quick follow-up that flows from a recent set-up."
   },
 
@@ -3427,7 +3756,7 @@ Object.assign(RAW_SKILLS, {
     name: "Balancing Blow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "CON",
     requiredValue: 14,
@@ -3437,8 +3766,37 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "leech"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    // heal based on missing HP per Expose tier (engine can read this hint later)
     healSelfPctMissingHpPerTier: 6,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.balancing_blow;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      let heal = 0;
+      if (attacker) {
+        const maxHP = attacker?.maxHP ?? attacker?.derived?.maxHP ?? 0;
+        const currentHP = attacker?.currentHP ?? 0;
+        const missing = Math.max(0, maxHP - currentHP);
+        const exposeTier = target?.weakness?.tiers?.expose || 0;
+        const pctPerTier = ability?.healSelfPctMissingHpPerTier || 0;
+        const healPct = pctPerTier * exposeTier;
+        if (missing > 0 && healPct > 0) {
+          heal = Math.max(0, Math.floor(missing * (healPct / 100)));
+          const newHP = maxHP > 0 ? Math.min(maxHP, currentHP + heal) : currentHP + heal;
+          attacker.currentHP = newHP;
+        }
+      }
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        log: heal > 0 ? `${attacker?.name || 'The swordsman'} siphons ${heal} HP.` : undefined,
+      };
+    },
     description: "A measured strike that siphons life from the exposed."
   },
 
@@ -3447,7 +3805,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shattering Cut",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 18,
@@ -3456,1048 +3814,43 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "execute", "consume"],
-    // assumes Expose max tier is 3; adjust if different in your Weakness config
-    requiresWeakness: { family: "expose", tierAtLeast: 3 },
+    requiresWeakness: { family: "expose", tierAtLeast: 2 },
     consumeWeakness: ["expose"],
     debuffOnHit: { armorDownPct: 20, turns: 2 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shattering_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const tierBonus = exposeTier > 0 ? 0.3 * exposeTier : 0;
+      const intensity = meter > 0 ? Math.max(1, weaknessIntensityMult(meter) || 1) : 1;
+      const overflowBonus = Math.max(0, intensity - 1) * 0.4;
+      amount = Math.floor(amount * (1 + tierBonus + overflowBonus));
+      const debuff = ability?.debuffOnHit;
+      const statusEffects = debuff ? [{
+        id: 'shattering_cut_sundered',
+        turns: debuff.turns ?? 2,
+        mods: { PhysicalResist: -Math.abs(debuff.armorDownPct || 20) },
+      }] : undefined;
+      if (target) markSword1hHit(target, attacker, ability?.id);
+      markSword1hUse(attacker, ability?.id);
+      return {
+        ...roll,
+        amount,
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+      };
+    },
     description: "A finishing blow that wrecks defenses; clears all Expose and reduces armor briefly."
   },
 
   // ===============================
-  // v3.2 — 2h Sword (13)
-  // ===============================
-  'hewing_mark': {
-    id: "hewing_mark",
-    name: "Hewing Mark",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["slash", "heavy"],
-    buildupHint: { expose: 75 },
-    description: "A deep opening cut that rapidly raises Expose."
-  },
-
-  'broad_arc': {
-    id: "broad_arc",
-    name: "Broad Arc",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "aoe"],
-    emitTagsOnUse: ["cleave"],
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 40 },
-    description: "Sweeping arc that lightly exposes multiple foes in the column."
-  },
-
-  'tendon_hewer': {
-    id: "tendon_hewer",
-    name: "Tendon Hewer",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate"],
-    emitTagsOnUse: ["bleed"],
-    buildupHint: { lacerate: 80 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 30 } } },
-    description: "Heavy chop that piles on Bleed; more if the target is Exposed."
-  },
-
-  'helm_splitter': {
-    id: "helm_splitter",
-    name: "Helm Splitter",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "bonus",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
-    buildupHint: { disorient: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { addBuildup: { disorient: 30 } } },
-    description: "A jolting blow that rattles defenses, stronger versus higher Expose."
-  },
-
-  'winter_edge': {
-    id: "winter_edge",
-    name: "Winter Edge",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "INT",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
-    buildupHint: { cold: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { cold: 25 } } },
-    description: "A frosted cut that builds Cold; Exposed targets chill faster."
-  },
-
-  'discipline': {
-    id: "discipline",
-    name: "Discipline",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support"],
-    statusEffects: [{ id: "discipline", turns: 1, guardPct: 10 }],
-    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { accPct: 10, turns: 1 } }],
-    description: "Center yourself; on raising Expose this turn, gain brief accuracy."
-  },
-
-  'carry_through': {
-    id: "carry_through",
-    name: "Carry Through",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "proliferate"],
-    aoe: { shape: "column", scale: 1 },
-    proliferateWeakness: { families: ["expose"], to: "column", ratio: 0.5, maxTargets: 1 },
-    description: "Drive the blade through ranks, carrying Expose down the line."
-  },
-
-  'great_cleave': {
-    id: "great_cleave",
-    name: "Great Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe", "finisher"],
-    aoe: { shape: "column", scale: 1 },
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { damagePct: 20 } },
-    description: "A decisive sweep that excels against Exposed lines."
-  },
-
-  'sever_finish': {
-    id: "sever_finish",
-    name: "Sever Finish",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "consume"],
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    consumeWeakness: ["lacerate"],
-    description: "Convert Bleed into brutal burst damage with a finishing chop."
-  },
-
-  'ice_shatter': {
-    id: "ice_shatter",
-    name: "Ice Shatter",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold", "amplify"],
-    requiresWeakness: { family: "cold", tierAtLeast: 1 },
-    rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 15, turns: 2 } },
-    description: "Strike a frozen weakpoint; at Cold T2, crack their armor."
-  },
-
-  'executioner_swing': {
-    id: "executioner_swing",
-    name: "Executioner Swing",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 19,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 3, buff: { critMultBonus: 0.5 } },
-    description: "A beheading stroke that thrives on deep Expose."
-  },
-
-  'disorient_crush': {
-    id: "disorient_crush",
-    name: "Disorient Crush",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "amplify"],
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 20 } },
-    description: "Punish a rattled foe; heavier impact at higher Disorient."
-  },
-
-  'storm_cleave': {
-    id: "storm_cleave",
-    name: "Storm Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["sword_2h"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning", "aoe"],
-    aoe: { shape: "column", scale: 1 },
-    requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 50 } },
-    description: "An electrified cleave; on Shock T2, echoes once at reduced power."
-  },
-
-  // ===============================
-  // v3.2 — 2h Axe (13)
-  // ===============================
-
-  // -------- Generation (7) --------
-  'reckoning_heave': {
-    id: "reckoning_heave",
-    name: "Reckoning Heave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["arc", "heavy"],
-    buildupHint: { expose: 75 },
-    description: "A brutal overhead that tears an opening and spikes Expose."
-  },
-
-  'sunder_line': {
-    id: "sunder_line",
-    name: "Sunder Line",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "aoe"],
-    emitTagsOnUse: ["cleave", "arc"],
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 40 },
-    description: "A sweeping sunder that lightly Exposes every foe in the column."
-  },
-
-  'artery_opener': {
-    id: "artery_opener",
-    name: "Artery Opener",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate"],
-    emitTagsOnUse: ["bleed"],
-    buildupHint: { lacerate: 85 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 30 } } },
-    description: "Hooking chop that seeds heavy Bleed; even more if the target is Exposed."
-  },
-
-  'skull_rattle': {
-    id: "skull_rattle",
-    name: "Skull Rattle",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "bonus",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
-    buildupHint: { disorient: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { addBuildup: { disorient: 30 } } },
-    description: "A stunning haft blow that rattles the brain; nastier at higher Expose."
-  },
-
-  'splinter_shards': {
-    id: "splinter_shards",
-    name: "Splinter Shards",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "proliferate", "aoe"],
-    emitTagsOnUse: ["arc"],
-    aoe: { shape: "cone", scale: 1 },
-    // Splash a portion of Bleed to one adjacent target
-    proliferateWeakness: { families: ["lacerate"], to: "adjacent", ratio: 0.5, maxTargets: 1 },
-    description: "Chop that throws splinters—Bleed spills to a nearby foe."
-  },
-
-  'glacial_heft': {
-    id: "glacial_heft",
-    name: "Glacial Heft",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "INT",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
-    buildupHint: { cold: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { cold: 25 } } },
-    description: "A frost-laden swing that chills the target; faster on Exposed foes."
-  },
-
-  'battle_roar': {
-    id: "battle_roar",
-    name: "Battle Roar",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "CHA",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support", "expose"],
-    // Light Expose ping (for tooltip) + team buff hook
-    buildupHint: { expose: 30 },
-    statusEffects: [{ id: "roaring_focus", turns: 1, teamDamagePct: 5 }],
-    description: "A rallying bellow that pressures the foe and bolsters allies."
-  },
-
-  // -------- Payoff (6) --------
-  'cleave': {
-    id: "cleave",
-    name: "Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe", "finisher"],
-    emitTagsOnUse: ["cleave", "arc"],
-    aoe: { shape: "column", scale: 1 },
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { damagePct: 20 } },
-    description: "A devastating arc through the ranks; excels against Exposed lines."
-  },
-
-  'sever_artery': {
-    id: "sever_artery",
-    name: "Sever Artery",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "consume"],
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    consumeWeakness: ["lacerate"],
-    description: "Rip open wounds to convert Bleed into immediate, brutal damage."
-  },
-
-  'skull_sunder': {
-    id: "skull_sunder",
-    name: "Skull Sunder",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "amplify"],
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 20 } },
-    description: "Crushing head-splitter that hits harder against a rattled target."
-  },
-
-  'ice_fracture': {
-    id: "ice_fracture",
-    name: "Ice Fracture",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold", "amplify"],
-    requiresWeakness: { family: "cold", tierAtLeast: 1 },
-    rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 15, turns: 2 } },
-    description: "Smash frozen weak points; at higher Cold tiers, crack armor."
-  },
-
-  'executioner_hew': {
-    id: "executioner_hew",
-    name: "Executioner Hew",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 19,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 3, buff: { critMultBonus: 0.5 } },
-    description: "Headsman’s stroke meant to end the fight once the opening is deep."
-  },
-
-  'hemorrhage_cloud': {
-    id: "hemorrhage_cloud",
-    name: "Hemorrhage Cloud",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "INT",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "transform", "aoe"],
-    aoe: { shape: "circle", scale: 1 },
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    // Convert a portion of Bleed into Disease and waft it to nearby targets
-    transformWeakness: { from: "lacerate", to: "disease", ratio: 0.5 },
-    proliferateWeakness: { families: ["disease"], to: "adjacent", ratio: 0.5, maxTargets: 2 },
-    description: "Tear wounds wide to cast a diseased spray, infecting nearby foes."
-  },
-
-  // ===============================
-  // v3.2 — 2h Mace (13)
-  // ===============================
-
-  // -------- Generation (7) --------
-  'guard_smasher': {
-    id: "guard_smasher",
-    name: "Guard Smasher",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["impact", "heavy"],
-    buildupHint: { expose: 70 },
-    description: "A crushing swing that cracks defenses and spikes Expose."
-  },
-
-  'ringing_blow': {
-    id: "ringing_blow",
-    name: "Ringing Blow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
-    buildupHint: { disorient: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { disorient: 25 } } },
-    description: "A bell-ringer to the helm; builds Disorient, worse if they’re already Exposed."
-  },
-
-  'weighty_slam': {
-    id: "weighty_slam",
-    name: "Weighty Slam",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "aoe"],
-    emitTagsOnUse: ["impact", "arc"],
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 40 },
-    description: "A heavy arc that lightly Exposes everyone in the column."
-  },
-
-  'sanctified_hammer': {
-    id: "sanctified_hammer",
-    name: "Sanctified Hammer",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "INT",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "curse"],
-    buildupHint: { curse: 60 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { curse: 20 } } },
-    description: "Channel a rite through the head of the mace to lay a lingering Curse."
-  },
-
-  'bone_jolt': {
-    id: "bone_jolt",
-    name: "Bone Jolt",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 14,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
-    buildupHint: { disorient: 55 },
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { accDownPct: 10, turns: 1 } }],
-    description: "A short, shocking jab—crossing Disorient T1 briefly rattles accuracy."
-  },
-
-  'iron_rebuke': {
-    id: "iron_rebuke",
-    name: "Iron Rebuke",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support", "expose"],
-    buildupHint: { expose: 30 },
-    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { guardPct: 12, turns: 1 } }],
-    description: "Brace behind the haft; if you open a guard this turn, gain brief guard."
-  },
-
-  'ground_tremor': {
-    id: "ground_tremor",
-    name: "Ground Tremor",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "aoe"],
-    emitTagsOnUse: ["impact"],
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { disorient: 40 },
-    description: "Smash the ground and shake the rank; light Disorient across a column."
-  },
-
-  // -------- Payoff (6) --------
-  'hammerfall': {
-    id: "hammerfall",
-    name: "Hammerfall",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 3, buff: { critMultBonus: 0.5 } },
-    description: "A finishing crush that thrives on a deep opening."
-  },
-
-  'concuss': {
-    id: "concuss",
-    name: "Concuss",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "consume"],
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    consumeWeakness: ["disorient"],
-    description: "Convert Disorient into immediate, dazing impact; clears the rattled state."
-  },
-
-  'shatter_guard': {
-    id: "shatter_guard",
-    name: "Shatter Guard",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "amplify"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { armorDownPct: 20, turns: 2 } },
-    description: "Pulverize an opening, reducing armor; worse for foes with deeper Expose."
-  },
-
-  'judgment': {
-    id: "judgment",
-    name: "Judgment",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "curse", "consume"],
-    requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    consumeWeakness: ["curse"],
-    description: "Bring the hammer down with a rite—consume Curse to smite the target."
-  },
-
-  'smite_line': {
-    id: "smite_line",
-    name: "Smite Line",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe", "finisher"],
-    aoe: { shape: "column", scale: 1 },
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { damagePct: 18 } },
-    description: "A punishing line-smite that excels against Exposed formations."
-  },
-
-  'aftershock': {
-    id: "aftershock",
-    name: "Aftershock",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["mace_2h"],
-    requiredStat: "DEX",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning", "amplify"],
-    requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 50 } },
-    description: "A charged impact that echoes once when Shock is high enough."
-  },
-
-
-  // ===============================
-  // v3.2 — Whip (1h) (13)
-  // ===============================
-
-  // -------- Generation (7) --------
-  'snap_mark': {
-    id: "snap_mark",
-    name: "Snap Mark",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["lash"],
-    buildupHint: { expose: 60 },
-    description: "A precise lash that opens guard and builds Expose."
-  },
-
-  'tongue_cut': {
-    id: "tongue_cut",
-    name: "Tongue Cut",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate"],
-    emitTagsOnUse: ["lash"],
-    buildupHint: { lacerate: 65 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 25 } } },
-    description: "The whip’s tip opens skin, seeding Bleed—faster on an Exposed foe."
-  },
-
-  'taunting_crack': {
-    id: "taunting_crack",
-    name: "Taunting Crack",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "CHA",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "taunt"],
-    buildupHint: { disorient: 50 },
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { accDownPct: 10, turns: 1 } }],
-    description: "A sharp snap that rattles and provokes; crossing Disorient T1 jolts accuracy."
-  },
-
-  'ensnaring_flick': {
-    id: "ensnaring_flick",
-    name: "Ensnaring Flick",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "proliferate"],
-    // Spread a portion of Expose to one adjacent target
-    proliferateWeakness: { families: ["expose"], to: "adjacent", ratio: 0.5, maxTargets: 1 },
-    description: "A hooking lash that pulls open guards and spreads the opening nearby."
-  },
-
-  'venom_lash': {
-    id: "venom_lash",
-    name: "Venom Lash",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "toxic"],
-    buildupHint: { toxic: 60 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
-    description: "The barbs carry toxin; Exposed targets take more."
-  },
-
-  'rhythm_control': {
-    id: "rhythm_control",
-    name: "Rhythm Control",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support", "expose"],
-    buildupHint: { expose: 30 },
-    statusEffects: [{ id: "whip_rhythm", turns: 1, nextVsExposeDamagePct: 15 }],
-    description: "Set the tempo; your next strike against an Exposed target hits harder."
-  },
-
-  'crowd_teaser': {
-    id: "crowd_teaser",
-    name: "Crowd Teaser",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "CHA",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "aoe"],
-    aoe: { shape: "cone", scale: 1 },
-    buildupHint: { disorient: 40 },
-    description: "A flashy sweep that lightly Disorients multiple nearby foes."
-  },
-
-  // -------- Payoff (6) --------
-  'drag_down': {
-    id: "drag_down",
-    name: "Drag Down",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "consume", "expose"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    consumeWeakness: ["expose"],
-    statusEffects: [{ id: "immobilized", turns: 1 }],
-    description: "Yank them off balance—consume Expose and briefly immobilize."
-  },
-
-  'stranglehold': {
-    id: "stranglehold",
-    name: "Stranglehold",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "STR",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient", "amplify"],
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 20 } },
-    description: "Tighten control; Disoriented foes suffer heavier damage."
-  },
-
-  'barbed_bloom': {
-    id: "barbed_bloom",
-    name: "Barbed Bloom",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "consume"],
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    consumeWeakness: ["lacerate"],
-    description: "Rip open existing wounds for a savage burst, consuming Bleed."
-  },
-
-  'toxin_whipover': {
-    id: "toxin_whipover",
-    name: "Toxin Whipover",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "transform", "aoe"],
-    aoe: { shape: "circle", scale: 1 },
-    requiresWeakness: { family: "toxic", tierAtLeast: 1 },
-    transformWeakness: { from: "toxic", to: "disease", ratio: 0.6 },
-    proliferateWeakness: { families: ["disease"], to: "adjacent", ratio: 0.5, maxTargets: 2 },
-    description: "Concentrate toxins into a miasma; convert some Poison to Disease and spread it."
-  },
-
-  'snapback': {
-    id: "snapback",
-    name: "Snapback",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 3, buff: { critMultBonus: 0.45 } },
-    description: "A punishing snap that shines when the opening is deep."
-  },
-
-  'entangle_whip': {
-    id: "entangle_whip",
-    name: "Entangle",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.2",
-    requiredWeapon: ["whip"],
-    requiredStat: "WIS",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "restrict", "amplify"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    // “Restrict” is a future global tag; here we just add a slow/immobilize flavor
-    statusEffects: [{ id: "slowed", turns: 2, speedDownPct: 25 }],
-    description: "Bind their limbs and limit motion—especially effective once an opening is found."
-  },
-
-
-  // ===============================
-  // v3.2 — Sling (1h) (13)
+  // v3.21 - Sling (1h) (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -4506,7 +3859,7 @@ Object.assign(RAW_SKILLS, {
     name: "Pouch Probe",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -4517,6 +3870,30 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "expose"],
     emitTagsOnUse: ["projectile"],
     buildupHint: { expose: 55 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.pouch_probe;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const exposeMeter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(exposeMeter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 55;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.06 * exposeTier));
+        buildup += Math.max(4, Math.floor(5 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: buildup },
+      };
+    },
     description: "A testing shot that opens guard and builds Expose."
   },
 
@@ -4525,7 +3902,7 @@ Object.assign(RAW_SKILLS, {
     name: "Concussive Pellet",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "STR",
     requiredValue: 12,
@@ -4537,7 +3914,30 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { disorient: 65 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { disorient: 25 } } },
-    description: "A weighted strike that rattles the target; worse if they’re already Exposed."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.concussive_pellet;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.disorient ?? 65;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.disorient ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "A weighted strike that rattles the target; worse if they're already Exposed."
   },
 
   'seeding_shot': {
@@ -4545,7 +3945,7 @@ Object.assign(RAW_SKILLS, {
     name: "Seeding Shot",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -4557,6 +3957,29 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { toxic: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.seeding_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.toxic ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A resin-tipped stone that seeds Poison; Exposed foes take more buildup."
   },
 
@@ -4565,7 +3988,7 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Pebble",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -4577,6 +4000,34 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { cold: 60 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frost_pebble;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const coldMeter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(coldMeter) || 1);
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(4, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A chilled shot; crossing Cold T1 briefly slows the target."
   },
 
@@ -4585,7 +4036,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ricochet Mark",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -4595,9 +4046,53 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "expose", "proliferate"],
     emitTagsOnUse: ["projectile"],
-    // Spread Expose from primary to one adjacent enemy (50%)
+    buildupHint: { expose: 45 },
     proliferateWeakness: { families: ["expose"], to: "adjacent", ratio: 0.5, maxTargets: 1 },
-    description: "Bank the shot—your opening pressure transfers to a nearby foe."
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.ricochet_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 45;
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+          const sourceMeter = target?.weakness?.meters?.expose || 0;
+
+          neighbors.slice(0, maxTargets).forEach(char => {
+            const transfer = Math.max(0, Math.floor(sourceMeter * ratio));
+            if (transfer > 0) {
+              char.weakness = char.weakness || { meters: {}, tiers: {} };
+              char.weakness.meters = char.weakness.meters || {};
+              char.weakness.tiers = char.weakness.tiers || {};
+              char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
+              char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
+              spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
+    description: "Bank the shot-your opening pressure transfers to a nearby foe."
   },
 
   'lodging_stone': {
@@ -4605,7 +4100,7 @@ Object.assign(RAW_SKILLS, {
     name: "Lodging Stone",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -4615,8 +4110,29 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lodge"],
     emitTagsOnUse: ["projectile", "lodge"],
-    // Inert hint: mark as lodged (you’ll implement the effect later)
+    buildupHint: { lodged: 80 },
     statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.lodging_stone;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      const buildup = ability?.buildupHint?.lodged ?? 80;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lodged: buildup },
+        statusEffects,
+      };
+    },
     description: "A flat, sharp stone that tends to lodge in the wound."
   },
 
@@ -4625,7 +4141,7 @@ Object.assign(RAW_SKILLS, {
     name: "Steady Breath",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -4634,9 +4150,19 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "mp", "stance"],
-    // Inert hint: small MP restore and accuracy buff for next projectile this turn
     statusEffects: [{ id: "steady_breath", turns: 1, mpRestoreFlat: 2, nextProjectileAccPct: 10 }],
-    description: "Focus and breathe—restore a little MP and line up your next shot."
+    apply: (attacker) => {
+      const ability = SKILLS?.steady_breath;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
+    description: "Focus and breathe-restore a little MP and line up your next shot."
   },
 
   // -------- Payoff (6) --------
@@ -4645,7 +4171,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shatter Lodge",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4654,8 +4180,30 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "consume"],
-    requiresWeakness: { family: "lodged", tierAtLeast: 1 },   // treat 'lodged' as a pseudo-family
+    requiresWeakness: { family: "lodged", tierAtLeast: 1 },
     consumeWeakness: ["lodged"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shatter_lodge;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lodged || 0;
+      const tier = target?.weakness?.tiers?.lodged || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 8) + Math.max(0, intensity - 1) * 7));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: burst ? `${attacker?.name || 'The slinger'} shatters the lodged stone for +${burst} damage.` : undefined,
+      };
+    },
     description: "Strike the lodged stone to shatter it inside the wound for burst damage."
   },
 
@@ -4664,7 +4212,7 @@ Object.assign(RAW_SKILLS, {
     name: "Skull Crack",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -4675,6 +4223,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "disorient", "finisher"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.skull_crack;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A brutal, temple-seeking shot that thrives on a rattled foe."
   },
 
@@ -4683,7 +4260,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ice Breaker",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -4694,7 +4271,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
-    description: "A cracking shot that exploits frost—at higher Cold tiers, it fractures armor."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ice_breaker;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "A cracking shot that exploits frost-at higher Cold tiers, it fractures armor."
   },
 
   'toxin_bloom': {
@@ -4702,7 +4307,7 @@ Object.assign(RAW_SKILLS, {
     name: "Toxin Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4714,6 +4319,29 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     consumeWeakness: ["toxic"],
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.toxin_bloom;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.toxic || 0;
+      const tier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        log: burst ? `${attacker?.name || 'The slinger'} ruptures the poison for +${burst} damage.` : undefined,
+      };
+    },
     description: "Detonate built-up Poison into rapid ticks; adds an extra tick at higher tiers."
   },
 
@@ -4722,7 +4350,7 @@ Object.assign(RAW_SKILLS, {
     name: "Thread the Gap",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -4733,6 +4361,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.thread_the_gap;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A pinpoint strike that sails through a small opening; deadlier at deeper Expose."
   },
 
@@ -4741,7 +4398,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ricochet Spread",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["sling"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -4752,14 +4409,81 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "proliferate", "aoe"],
     emitTagsOnUse: ["projectile"],
     aoe: { shape: "column", scale: 1 },
-    // Copy a portion of the primary target’s highest-tier weakness down the column
-    proliferateWeakness: { families: ["expose", "disorient", "cold", "toxic", "lacerate"], to: "column", ratio: 0.4, maxTargets: 2 },
-    description: "A trick shot that skips down the line, spreading the primary target’s condition."
+    proliferateWeakness: { families: ["expose", "disorient", "cold", "toxic", "lacerate", "lodged"], to: "column", ratio: 0.4, maxTargets: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.ricochet_spread;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const splash = [];
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          const families = ability?.proliferateWeakness?.families || [];
+          let chosenFamily = null;
+          let bestTier = -1;
+          let bestMeter = 0;
+          families.forEach(fam => {
+            const tier = target?.weakness?.tiers?.[fam] || 0;
+            const meter = target?.weakness?.meters?.[fam] || 0;
+            if (tier > bestTier || (tier === bestTier && meter > bestMeter)) {
+              bestTier = tier;
+              bestMeter = meter;
+              chosenFamily = fam;
+            }
+          });
+          if (bestTier <= 0) {
+            chosenFamily = null;
+            bestMeter = 0;
+          }
+
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.4;
+
+          others.forEach((char, idx) => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+
+            if (idx < maxTargets && chosenFamily && bestMeter > 0) {
+              const transfer = Math.max(0, Math.floor(bestMeter * ratio));
+              if (transfer > 0) {
+                char.weakness = char.weakness || { meters: {}, tiers: {} };
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters[chosenFamily] = (char.weakness.meters[chosenFamily] || 0) + transfer;
+                char.weakness.tiers[chosenFamily] = weaknessTierFromMeter(char.weakness.meters[chosenFamily]);
+                spreadMeta.push({ targetId: char.id || char.name, family: chosenFamily, amount: transfer });
+              }
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
+    description: "A trick shot that skips down the line, spreading the primary target's condition."
   },
-
-
   // ===============================
-  // v3.2 — Bow (2h) (13)
+  // v3.21 - Bow (2h) (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -4768,7 +4492,7 @@ Object.assign(RAW_SKILLS, {
     name: "Pinning Shot",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -4779,7 +4503,31 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "expose"],
     emitTagsOnUse: ["projectile"],
     buildupHint: { expose: 60 },
-    description: "A precise shaft that opens the target’s guard and builds Expose."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.pinning_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+        buildup += Math.max(5, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: buildup },
+      };
+    },
+    description: "A precise shaft that opens the target's guard and builds Expose."
   },
 
   'barbed_arrow': {
@@ -4787,7 +4535,7 @@ Object.assign(RAW_SKILLS, {
     name: "Barbed Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4799,7 +4547,30 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { lacerate: 70 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 25 } } },
-    description: "Barbed head tears flesh, seeding Bleed—worse on an Exposed foe."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.barbed_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.lacerate ?? 70;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.lacerate ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lacerate: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "Barbed head tears flesh, seeding Bleed-worse on an Exposed foe."
   },
 
   'tainted_arrow': {
@@ -4807,7 +4578,7 @@ Object.assign(RAW_SKILLS, {
     name: "Tainted Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -4819,6 +4590,29 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { toxic: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.tainted_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.toxic ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A resin-coated tip that poisons the wound; Exposed targets take more buildup."
   },
 
@@ -4827,7 +4621,7 @@ Object.assign(RAW_SKILLS, {
     name: "Frosthead Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -4839,6 +4633,34 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { cold: 60 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frosthead_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(4, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A chilled arrow; crossing Cold T1 briefly slows the target."
   },
 
@@ -4847,7 +4669,7 @@ Object.assign(RAW_SKILLS, {
     name: "Marking Volley",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4859,6 +4681,45 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     aoe: { shape: "column", scale: 1 },
     buildupHint: { expose: 40 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.marking_volley;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const splash = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
+          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
+          neighbors.forEach(char => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+      };
+    },
     description: "Loose several shafts to lightly Expose every foe down the line."
   },
 
@@ -4867,7 +4728,7 @@ Object.assign(RAW_SKILLS, {
     name: "Lodging Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -4877,7 +4738,28 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lodge"],
     emitTagsOnUse: ["projectile", "lodge"],
+    buildupHint: { lodged: 90 },
     statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.lodging_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lodged: ability?.buildupHint?.lodged ?? 90 },
+        statusEffects,
+      };
+    },
     description: "A broadhead designed to stick; leaves an arrow lodged in the target."
   },
 
@@ -4886,7 +4768,7 @@ Object.assign(RAW_SKILLS, {
     name: "Eagle Focus",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -4896,7 +4778,18 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mp", "stance"],
     statusEffects: [{ id: "eagle_focus", turns: 1, mpRestoreFlat: 2, nextProjectileAccPct: 10 }],
-    description: "Steady your aim—restore a little MP and line up your next shot."
+    apply: (attacker) => {
+      const ability = SKILLS?.eagle_focus;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
+    description: "Steady your aim-restore a little MP and line up your next shot."
   },
 
   // -------- Payoff (6) --------
@@ -4905,7 +4798,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shaft Splinter",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4916,6 +4809,28 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "consume"],
     requiresWeakness: { family: "lodged", tierAtLeast: 1 },
     consumeWeakness: ["lodged"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shaft_splinter;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lodged || 0;
+      const tier = target?.weakness?.tiers?.lodged || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 8) + Math.max(0, intensity - 1) * 8));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: burst ? `${attacker?.name || 'The archer'} splinters the lodged arrow for +${burst} damage.` : undefined,
+      };
+    },
     description: "Strike the embedded arrow to splinter it internally for burst damage."
   },
 
@@ -4924,7 +4839,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ice Lance",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -4935,6 +4850,34 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ice_lance;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A condensed shard of frost; at higher Cold tiers, it fractures armor."
   },
 
@@ -4943,7 +4886,7 @@ Object.assign(RAW_SKILLS, {
     name: "Skull Pierce",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -4954,6 +4897,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "disorient", "finisher"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.skull_pierce;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A temple-seeking shot that thrives on a rattled foe."
   },
 
@@ -4962,7 +4934,7 @@ Object.assign(RAW_SKILLS, {
     name: "Toxin Burst",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -4974,6 +4946,29 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     consumeWeakness: ["toxic"],
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.toxin_burst;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.toxic || 0;
+      const tier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        log: burst ? `${attacker?.name || 'The archer'} detonates the poison for +${burst} damage.` : undefined,
+      };
+    },
     description: "Rupture the poisoned wound to force rapid ticks; adds an extra tick at higher tiers."
   },
 
@@ -4982,7 +4977,7 @@ Object.assign(RAW_SKILLS, {
     name: "Perfect Release",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 17,
@@ -4993,6 +4988,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.perfect_release;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A perfect draw and loose through a narrow opening; deadlier at deeper Expose."
   },
 
@@ -5001,7 +5025,7 @@ Object.assign(RAW_SKILLS, {
     name: "Weakpoint Cascade",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -5012,13 +5036,82 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "proliferate", "aoe"],
     emitTagsOnUse: ["projectile"],
     aoe: { shape: "column", scale: 1 },
-    // Copy a portion of the primary target’s highest-tier weakness down the column
     proliferateWeakness: { families: ["expose", "disorient", "cold", "toxic", "lacerate", "lodged"], to: "column", ratio: 0.4, maxTargets: 2 },
-    description: "A trick sequence that threads multiple foes, spreading the primary target’s condition."
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.weakpoint_cascade;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const splash = [];
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          const families = ability?.proliferateWeakness?.families || [];
+          let chosenFamily = null;
+          let bestTier = -1;
+          let bestMeter = 0;
+          families.forEach(fam => {
+            const tier = target?.weakness?.tiers?.[fam] || 0;
+            const meter = target?.weakness?.meters?.[fam] || 0;
+            if (tier > bestTier || (tier === bestTier && meter > bestMeter)) {
+              bestTier = tier;
+              bestMeter = meter;
+              chosenFamily = fam;
+            }
+          });
+          if (bestTier <= 0) {
+            chosenFamily = null;
+            bestMeter = 0;
+          }
+
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.4;
+
+          others.forEach((char, idx) => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+
+            if (idx < maxTargets && chosenFamily && bestMeter > 0) {
+              const transfer = Math.max(0, Math.floor(bestMeter * ratio));
+              if (transfer > 0) {
+                char.weakness = char.weakness || { meters: {}, tiers: {} };
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters[chosenFamily] = (char.weakness.meters[chosenFamily] || 0) + transfer;
+                char.weakness.tiers[chosenFamily] = weaknessTierFromMeter(char.weakness.meters[chosenFamily]);
+                spreadMeta.push({ targetId: char.id || char.name, family: chosenFamily, amount: transfer });
+              }
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
+    description: "A trick sequence that threads multiple foes, spreading the primary target's condition."
   },
 
   // ===============================
-  // v3.2 — Gun (2h) (13)
+  // v3.21 - Gun (2h) (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -5027,7 +5120,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sighting Shot",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -5038,6 +5131,30 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "expose"],
     emitTagsOnUse: ["projectile"],
     buildupHint: { expose: 55 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.sighting_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 55;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.07 * exposeTier));
+        buildup += Math.max(4, Math.floor(5 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: buildup },
+      };
+    },
     description: "A careful opening shot that pressures guard and builds Expose."
   },
 
@@ -5046,7 +5163,7 @@ Object.assign(RAW_SKILLS, {
     name: "Stagger Round",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "STR",
     requiredValue: 13,
@@ -5058,7 +5175,30 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { disorient: 65 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { disorient: 25 } } },
-    description: "A heavy slug that rattles the target; worse if they’re already Exposed."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.stagger_round;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.disorient ?? 65;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.disorient ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "A heavy slug that rattles the target; worse if they're already Exposed."
   },
 
   'alchemical_slug': {
@@ -5066,7 +5206,7 @@ Object.assign(RAW_SKILLS, {
     name: "Alchemical Slug",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -5078,6 +5218,29 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { toxic: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.alchemical_slug;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.toxic ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A resin-laced shot that poisons the wound; Exposed targets accrue more toxin."
   },
 
@@ -5086,7 +5249,7 @@ Object.assign(RAW_SKILLS, {
     name: "Cryo Round",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5098,6 +5261,34 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["projectile"],
     buildupHint: { cold: 60 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.cryo_round;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(4, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A chilled cartridge; crossing Cold T1 briefly slows the target."
   },
 
@@ -5106,7 +5297,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ricochet Lane",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -5117,8 +5308,63 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "expose", "proliferate", "aoe"],
     emitTagsOnUse: ["projectile"],
     aoe: { shape: "column", scale: 1 },
-    // Spread Expose from primary to one other in the column (50%)
+    buildupHint: { expose: 40 },
     proliferateWeakness: { families: ["expose"], to: "column", ratio: 0.5, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.ricochet_lane;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const splash = [];
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
+          neighbors.forEach((char, idx) => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+
+            if (idx < (ability?.proliferateWeakness?.maxTargets ?? 1)) {
+              const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+              const sourceMeter = target?.weakness?.meters?.expose || 0;
+              const transfer = Math.max(0, Math.floor(sourceMeter * ratio));
+              if (transfer > 0) {
+                char.weakness = char.weakness || { meters: {}, tiers: {} };
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
+                char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
+                spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
+              }
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "Skip a shot down the lane, passing the opening pressure along the column."
   },
 
@@ -5127,7 +5373,7 @@ Object.assign(RAW_SKILLS, {
     name: "Lodging Slug",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -5137,7 +5383,28 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lodge"],
     emitTagsOnUse: ["projectile", "lodge"],
+    buildupHint: { lodged: 90 },
     statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.lodging_slug;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lodged: ability?.buildupHint?.lodged ?? 90 },
+        statusEffects,
+      };
+    },
     description: "A soft-nosed round likely to lodge in the wound."
   },
 
@@ -5146,7 +5413,7 @@ Object.assign(RAW_SKILLS, {
     name: "Steady Aim",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -5156,7 +5423,18 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mp", "stance"],
     statusEffects: [{ id: "steady_aim", turns: 1, mpRestoreFlat: 2, nextProjectileAccPct: 10 }],
-    description: "Control breath and trigger—restore a little MP and line up your next shot."
+    apply: (attacker) => {
+      const ability = SKILLS?.steady_aim;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
+    description: "Control breath and trigger-restore a little MP and line up your next shot."
   },
 
   // -------- Payoff (6) --------
@@ -5165,7 +5443,7 @@ Object.assign(RAW_SKILLS, {
     name: "Implode Lodge",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -5176,6 +5454,28 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "consume"],
     requiresWeakness: { family: "lodged", tierAtLeast: 1 },
     consumeWeakness: ["lodged"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.implode_lodge;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lodged || 0;
+      const tier = target?.weakness?.tiers?.lodged || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 8) + Math.max(0, intensity - 1) * 8));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: burst ? `${attacker?.name || 'The gunner'} collapses the lodged slug for +${burst} damage.` : undefined,
+      };
+    },
     description: "A precise follow-up that collapses a lodged slug inside the wound for burst damage."
   },
 
@@ -5184,7 +5484,7 @@ Object.assign(RAW_SKILLS, {
     name: "Temple Shot",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -5195,6 +5495,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "disorient", "finisher"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.temple_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A brutal headshot that thrives on a rattled foe."
   },
 
@@ -5203,7 +5532,7 @@ Object.assign(RAW_SKILLS, {
     name: "Glacial Core",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5214,6 +5543,34 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacial_core;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A core-chilled round that fractures armor when Cold is already high."
   },
 
@@ -5222,7 +5579,7 @@ Object.assign(RAW_SKILLS, {
     name: "Toxin Rupture",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -5234,6 +5591,29 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     consumeWeakness: ["toxic"],
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.toxin_rupture;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.toxic || 0;
+      const tier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        log: burst ? `${attacker?.name || 'The gunner'} ruptures the poison for +${burst} damage.` : undefined,
+      };
+    },
     description: "Burst the poisoned wound to force rapid ticks; adds an extra tick at higher tiers."
   },
 
@@ -5242,7 +5622,7 @@ Object.assign(RAW_SKILLS, {
     name: "Weakpoint Drill",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 17,
@@ -5253,6 +5633,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.weakpoint_drill;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A tight grouping through a small opening; deadlier at deeper Expose."
   },
 
@@ -5261,7 +5670,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shrapnel Spray",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["gun"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -5272,13 +5681,82 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "proliferate", "aoe"],
     emitTagsOnUse: ["projectile"],
     aoe: { shape: "column", scale: 1 },
-    // Copy a portion of the primary target’s highest-tier weakness down the column
     proliferateWeakness: { families: ["expose", "disorient", "cold", "toxic", "lacerate", "lodged"], to: "column", ratio: 0.4, maxTargets: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.shrapnel_spray;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const splash = [];
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          const families = ability?.proliferateWeakness?.families || [];
+          let chosenFamily = null;
+          let bestTier = -1;
+          let bestMeter = 0;
+          families.forEach(fam => {
+            const tier = target?.weakness?.tiers?.[fam] || 0;
+            const meter = target?.weakness?.meters?.[fam] || 0;
+            if (tier > bestTier || (tier === bestTier && meter > bestMeter)) {
+              bestTier = tier;
+              bestMeter = meter;
+              chosenFamily = fam;
+            }
+          });
+          if (bestTier <= 0) {
+            chosenFamily = null;
+            bestMeter = 0;
+          }
+
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.4;
+
+          others.forEach((char, idx) => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+
+            if (idx < maxTargets && chosenFamily && bestMeter > 0) {
+              const transfer = Math.max(0, Math.floor(bestMeter * ratio));
+              if (transfer > 0) {
+                char.weakness = char.weakness || { meters: {}, tiers: {} };
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters[chosenFamily] = (char.weakness.meters[chosenFamily] || 0) + transfer;
+                char.weakness.tiers[chosenFamily] = weaknessTierFromMeter(char.weakness.meters[chosenFamily]);
+                spreadMeta.push({ targetId: char.id || char.name, family: chosenFamily, amount: transfer });
+              }
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "Scatter shrapnel through the rank, spreading the primary condition to others."
   },
 
   // ===============================
-  // v3.2 — Wand (1h) (13)
+  // v3.21 - Wand (1h) (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -5287,7 +5765,7 @@ Object.assign(RAW_SKILLS, {
     name: "Spark Mark",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5298,6 +5776,44 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "lightning", "expose"],
     emitTagsOnUse: ["spell", "lightning"],
     buildupHint: { expose: 40, lightning: 40 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.spark_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const exposeMeter = target?.weakness?.meters?.expose || 0;
+      const lightningMeter = target?.weakness?.meters?.lightning || 0;
+      const exposeIntensity = Math.max(1, weaknessIntensityMult(exposeMeter) || 1);
+      const lightningIntensity = Math.max(1, weaknessIntensityMult(lightningMeter) || 1);
+
+      let exposeBuildup = ability?.buildupHint?.expose ?? 40;
+      let lightningBuildup = ability?.buildupHint?.lightning ?? 40;
+
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.05 * exposeTier));
+        exposeBuildup += Math.max(3, Math.floor(4 * exposeIntensity));
+      }
+      if (lightningTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * lightningTier));
+        lightningBuildup += Math.max(4, Math.floor(6 * lightningIntensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'lightning',
+        buildup: { expose: exposeBuildup, lightning: lightningBuildup },
+      };
+    },
     description: "A pricking spark that opens guard and seeds a little Shock."
   },
 
@@ -5306,7 +5822,7 @@ Object.assign(RAW_SKILLS, {
     name: "Hex Pin",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5316,6 +5832,29 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse"],
     buildupHint: { curse: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hex_pin;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.curse || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
+
+      const buildup = Math.max(1, Math.floor((ability?.buildupHint?.curse ?? 60) * intensity));
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { curse: buildup },
+      };
+    },
     description: "Affix a minor curse that lingers and prepares targets for curse synergies."
   },
 
@@ -5324,7 +5863,7 @@ Object.assign(RAW_SKILLS, {
     name: "Chill Thread",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5335,6 +5874,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "cold"],
     buildupHint: { cold: 60 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.chill_thread;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(4, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A thread of frost; crossing Cold T1 briefly slows the target."
   },
 
@@ -5343,7 +5911,7 @@ Object.assign(RAW_SKILLS, {
     name: "Venom Sigil",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -5354,6 +5922,31 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "toxic"],
     buildupHint: { toxic: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_sigil;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.toxic ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { toxic: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Inscribe venomous runes; Exposed foes accrue more Poison."
   },
 
@@ -5362,7 +5955,7 @@ Object.assign(RAW_SKILLS, {
     name: "Fracture Rune",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5371,8 +5964,55 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "expose", "proliferate"],
-    // Spread Expose to one adjacent (50%)
+    emitTagsOnUse: ["spell"],
+    buildupHint: { expose: 50 },
     proliferateWeakness: { families: ["expose"], to: "adjacent", ratio: 0.5, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.fracture_rune;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 50;
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+          const sourceMeter = target?.weakness?.meters?.expose || 0;
+
+          neighbors.slice(0, maxTargets).forEach(char => {
+            const transfer = Math.max(0, Math.floor(sourceMeter * ratio));
+            if (transfer > 0) {
+              char.weakness = char.weakness || { meters: {}, tiers: {} };
+              char.weakness.meters = char.weakness.meters || {};
+              char.weakness.tiers = char.weakness.tiers || {};
+              char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
+              char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
+              spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { expose: baseBuildup },
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "A shattering glyph that transfers opening pressure to a nearby foe."
   },
 
@@ -5381,7 +6021,7 @@ Object.assign(RAW_SKILLS, {
     name: "Focus Meditation",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -5391,7 +6031,18 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mp", "stance"],
     statusEffects: [{ id: "focus_meditation", turns: 1, mpRestoreFlat: 3, nextSpellAccPct: 10 }],
-    description: "Steady mind and channel—restore MP and steady your next spell."
+    apply: (attacker) => {
+      const ability = SKILLS?.focus_meditation;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
+    description: "Steady mind and channel-restore MP and steady your next spell."
   },
 
   'conductive_touch': {
@@ -5399,7 +6050,7 @@ Object.assign(RAW_SKILLS, {
     name: "Conductive Touch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -5410,6 +6061,41 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "lightning"],
     buildupHint: { lightning: 50 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 1, buff: { chanceExtraHitPct: 25 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.conductive_touch;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      let buildup = ability?.buildupHint?.lightning ?? 50;
+      if (lightningTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * lightningTier));
+        buildup += 10 * lightningTier;
+      }
+
+      let extraDamage = 0;
+      if (lightningTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 1)) {
+        const pct = ability?.rewardIfWeak?.buff?.chanceExtraHitPct ?? 25;
+        extraDamage = Math.max(1, Math.floor(amount * (pct / 100)));
+        amount += extraDamage;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'lightning',
+        buildup: { lightning: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: extraDamage ? [{ amount: extraDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
+      };
+    },
     description: "A palm-channelled jolt; Shocked foes may suffer an extra zap."
   },
 
@@ -5419,7 +6105,7 @@ Object.assign(RAW_SKILLS, {
     name: "Curse Snap",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -5429,6 +6115,32 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse", "amplify"],
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.curse_snap_wand;
+      const roll = calculateDamage(attacker, target, ability);
+      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
+      const base = roll.amount + intBonus;
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'curse',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.curse || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.08));
+
+      const status = { id: 'curse_snap', turns: 1, doubleCurseTicks: true };
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        statusEffects: [status],
+      };
+    },
     description: "For one turn, all Curse effects on the target tick twice (amplify only; no consume)."
   },
 
@@ -5437,7 +6149,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ice Shatter",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 15,
@@ -5448,7 +6160,36 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
-    description: "Exploit brittle frost; at higher Cold tiers, fracture armor."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ice_shatter_wand;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "Exploit brittle frost; at higher Cold tiers, it fractures armor."
   },
 
   'venom_bloom_wand': {
@@ -5456,7 +6197,7 @@ Object.assign(RAW_SKILLS, {
     name: "Venom Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 15,
@@ -5468,6 +6209,31 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     consumeWeakness: ["toxic"],
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_bloom_wand;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.toxic || 0;
+      const tier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        log: burst ? `${attacker?.name || 'The caster'} blooms the toxin for +${burst} damage.` : undefined,
+      };
+    },
     description: "Consume Poison to trigger rapid ticks; adds an extra tick at higher tiers."
   },
 
@@ -5476,7 +6242,7 @@ Object.assign(RAW_SKILLS, {
     name: "Arc Resonance",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -5487,7 +6253,44 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "lightning", "amplify"],
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 55 } },
-    description: "Tune to the target’s Shock and echo the discharge once at reduced power."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arc_resonance;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lightning || 0;
+      const tier = target?.weakness?.tiers?.lightning || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      let repeatDamage = 0;
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const pct = ability?.rewardIfWeak?.buff?.repeatPowerPct ?? 55;
+        repeatDamage = Math.max(1, Math.floor(amount * (pct / 100)));
+        amount += repeatDamage;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'lightning',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: repeatDamage ? [{ amount: repeatDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
+      };
+    },
+    description: "Tune to the target's Shock and echo the discharge once at reduced power."
   },
 
   'rune_conversion': {
@@ -5495,7 +6298,7 @@ Object.assign(RAW_SKILLS, {
     name: "Rune Conversion",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -5507,6 +6310,43 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
     transformWeakness: { from: "lacerate", to: "curse", ratio: 0.7 },
     buildupHint: { lacerate: 100 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.rune_conversion;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const transform = ability?.transformWeakness;
+      let transformed;
+      if (transform && target?.weakness) {
+        const fromKey = transform.from;
+        const toKey = transform.to;
+        const ratio = transform.ratio ?? 1;
+        const current = target.weakness.meters?.[fromKey] || 0;
+        if (current > 0) {
+          const transfer = Math.max(0, Math.floor(current * ratio));
+          const remaining = Math.max(0, current - transfer);
+          target.weakness.meters[fromKey] = remaining;
+          target.weakness.meters[toKey] = (target.weakness.meters[toKey] || 0) + transfer;
+          if (target.weakness.tiers) {
+            target.weakness.tiers[fromKey] = weaknessTierFromMeter(target.weakness.meters[fromKey]);
+            target.weakness.tiers[toKey] = weaknessTierFromMeter(target.weakness.meters[toKey]);
+          }
+          transformed = { from: fromKey, to: toKey, amount: transfer };
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        transformedWeakness: transformed,
+      };
+    },
     description: "Convert physical Bleed into a binding Curse to shift the weakness profile."
   },
 
@@ -5515,7 +6355,7 @@ Object.assign(RAW_SKILLS, {
     name: "Weakpoint Lance",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["wand"],
     requiredStat: "INT",
     requiredValue: 17,
@@ -5526,12 +6366,42 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.weakpoint_lance;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Condense mana into a piercing ray that drills through a narrow opening."
   },
 
-
   // ===============================
-  // v3.2 — Shield (13)
+  // v3.21 - Shield (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -5540,7 +6410,7 @@ Object.assign(RAW_SKILLS, {
     name: "Edge Probe",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -5551,7 +6421,31 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["bash"],
     buildupHint: { expose: 55 },
-    description: "Test the foe with the shield’s rim, prying open a small guard gap."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.edge_probe;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 55;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+        buildup += Math.max(4, Math.floor(5 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: buildup },
+      };
+    },
+    description: "Test the foe with the shield's rim, prying open a small guard gap."
   },
 
   'stagger_bash': {
@@ -5559,7 +6453,7 @@ Object.assign(RAW_SKILLS, {
     name: "Stagger Bash",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -5570,6 +6464,29 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     buildupHint: { disorient: 65 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { disorient: 25 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.stagger_bash;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.disorient ?? 65;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.disorient ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A jarring slam that rattles the head; worse if the foe is already Exposed."
   },
 
@@ -5578,7 +6495,7 @@ Object.assign(RAW_SKILLS, {
     name: "Brace and Press",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "CON",
     requiredValue: 14,
@@ -5590,7 +6507,19 @@ Object.assign(RAW_SKILLS, {
     buildupHint: { expose: 30 },
     statusEffects: [{ id: "braced", turns: 1, guardPct: 15 }],
     rewardIfTierCross: [{ family: "expose", tier: 1, buff: { accPct: 10, turns: 1 } }],
-    description: "Raise the shield and pressure forward—gain guard; if you open a guard this turn, gain accuracy."
+    apply: (attacker) => {
+      const ability = SKILLS?.brace_and_press;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Raise the shield and pressure forward-gain guard; if you open a guard this turn, gain accuracy."
   },
 
   'line_bulldoze': {
@@ -5598,7 +6527,7 @@ Object.assign(RAW_SKILLS, {
     name: "Line Bulldoze",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -5610,6 +6539,45 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["bash", "push"],
     aoe: { shape: "column", scale: 1 },
     buildupHint: { expose: 40 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.line_bulldoze;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const splash = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.75));
+          neighbors.forEach(char => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+      };
+    },
     description: "Drive the formation back with a wall of iron; lightly Exposes every foe in the column."
   },
 
@@ -5618,7 +6586,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ringing Rim",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 13,
@@ -5629,6 +6597,24 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     buildupHint: { disorient: 55 },
     rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { accDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ringing_rim;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const buildup = ability?.buildupHint?.disorient ?? 55;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "Clip the ear with the rim; crossing Disorient T1 rattles aim."
   },
 
@@ -5637,7 +6623,7 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Ward",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5648,6 +6634,33 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "cold"],
     buildupHint: { cold: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { cold: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frost_ward;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.cold ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Channel cold across the bossing and strike; Exposed foes chill faster."
   },
 
@@ -5656,7 +6669,7 @@ Object.assign(RAW_SKILLS, {
     name: "Lockstep",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -5666,6 +6679,17 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "ally",
     tags: ["support", "mp", "stance"],
     statusEffects: [{ id: "lockstep", turns: 1, teamGuardPct: 5, nextBlockBonusPct: 15 }],
+    apply: (attacker) => {
+      const ability = SKILLS?.lockstep;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
     description: "Set the cadence for the line; minor team guard and a boosted first block."
   },
 
@@ -5675,7 +6699,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shield Hook",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -5687,7 +6711,34 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     consumeWeakness: ["expose"],
     statusEffects: [{ id: "immobilized", turns: 1 }],
-    description: "Hook and yank—consume Expose and briefly immobilize the target."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shield_hook;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.expose || 0;
+      const tier = target?.weakness?.tiers?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const bonus = Math.max(0, Math.floor((meter / 10) + (tier * 6) + Math.max(0, intensity - 1) * 6));
+      amount += bonus;
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: bonus ? `${attacker?.name || 'The shieldbearer'} hooks the target for +${bonus} damage.` : undefined,
+      };
+    },
+    description: "Hook and yank-consume Expose and briefly immobilize the target."
   },
 
   'body_check': {
@@ -5695,7 +6746,7 @@ Object.assign(RAW_SKILLS, {
     name: "Body Check",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "CON",
     requiredValue: 16,
@@ -5706,6 +6757,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "finisher"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.body_check;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Lead with the shoulder; excels when the enemy is rattled."
   },
 
@@ -5714,7 +6794,7 @@ Object.assign(RAW_SKILLS, {
     name: "Shield Crush",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 17,
@@ -5725,6 +6805,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "amplify"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { armorDownPct: 18, turns: 2 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shield_crush;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.expose || 0;
+      const tier = target?.weakness?.tiers?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.armorDownPct ?? 0;
+        amount = Math.floor(amount * (1 + (bonus / 100) * 0.5));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Pulverize an opening to crack armor; nastier at deeper Expose."
   },
 
@@ -5733,7 +6842,7 @@ Object.assign(RAW_SKILLS, {
     name: "Cold Pin",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5745,7 +6854,38 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "cold", tierAtLeast: 2 },
     consumeWeakness: ["cold"],
     statusEffects: [{ id: "immobilized", turns: 1 }],
-    description: "Drive the frozen edge in and pin—consumes Cold and roots the target briefly."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.cold_pin;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 6) + Math.max(0, intensity - 1) * 7));
+      amount += burst;
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: burst ? `${attacker?.name || 'The shieldbearer'} pins the frozen target for +${burst} damage.` : undefined,
+      };
+    },
+    description: "Drive the frozen edge in and pin-consumes Cold and roots the target briefly."
   },
 
   'bulwark_slam': {
@@ -5753,7 +6893,7 @@ Object.assign(RAW_SKILLS, {
     name: "Bulwark Slam",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "STR",
     requiredValue: 16,
@@ -5765,6 +6905,50 @@ Object.assign(RAW_SKILLS, {
     aoe: { shape: "column", scale: 1 },
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { damagePct: 16 } },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.bulwark_slam;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * exposeTier));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 16;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          others.forEach(char => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        splash: splash.length ? splash : undefined,
+      };
+    },
     description: "A driving wall-of-iron impact that excels against Exposed ranks."
   },
 
@@ -5773,7 +6957,7 @@ Object.assign(RAW_SKILLS, {
     name: "Standfast Rebuke",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["shield"],
     requiredStat: "WIS",
     requiredValue: 15,
@@ -5784,11 +6968,36 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "amplify", "disorient"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { guardBreakPct: 20, turns: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.standfast_rebuke;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.2 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.18));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A disciplined rebuke that capitalizes on rattled minds, briefly worsening guard break."
   },
 
   // ===============================
-  // v3.2 — Staff (2h) (13)
+  // v3.21 - Staff (2h) (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -5797,7 +7006,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sigil Mark",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5808,6 +7017,32 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "expose"],
     emitTagsOnUse: ["spell"],
     buildupHint: { expose: 50 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.sigil_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 50;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+        buildup += Math.max(5, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { expose: buildup },
+      };
+    },
     description: "Etch a binding sigil that pries at defenses and builds Expose."
   },
 
@@ -5816,7 +7051,7 @@ Object.assign(RAW_SKILLS, {
     name: "Hex Bind",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5827,6 +7062,31 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "curse"],
     buildupHint: { curse: 70 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { curse: 25 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hex_bind;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.curse ?? 70;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.curse ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { curse: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A constricting hex that lingers; Exposed targets suffer stronger binding."
   },
 
@@ -5835,7 +7095,7 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Swell",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -5846,6 +7106,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "cold"],
     buildupHint: { cold: 65 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frost_swell;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.cold ?? 65;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(5, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A wave of chill; crossing Cold T1 briefly slows the target."
   },
 
@@ -5854,7 +7143,7 @@ Object.assign(RAW_SKILLS, {
     name: "Galvanic Touch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -5865,6 +7154,41 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "lightning"],
     buildupHint: { lightning: 55 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 1, buff: { chanceExtraHitPct: 25 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.galvanic_touch;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      let buildup = ability?.buildupHint?.lightning ?? 55;
+      if (lightningTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * lightningTier));
+        buildup += 10 * lightningTier;
+      }
+
+      let extraDamage = 0;
+      if (lightningTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 1)) {
+        const pct = ability?.rewardIfWeak?.buff?.chanceExtraHitPct ?? 25;
+        extraDamage = Math.max(1, Math.floor(amount * (pct / 100)));
+        amount += extraDamage;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'lightning',
+        buildup: { lightning: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: extraDamage ? [{ amount: extraDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
+      };
+    },
     description: "Channel an arc through the focus; Shocked targets may suffer an extra jolt."
   },
 
@@ -5873,7 +7197,7 @@ Object.assign(RAW_SKILLS, {
     name: "Miasma Trace",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -5884,6 +7208,31 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "toxic"],
     buildupHint: { toxic: 60 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.miasma_trace;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.toxic ?? 60;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { toxic: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Lace the air with poison threads; Exposed foes accumulate toxin faster."
   },
 
@@ -5892,7 +7241,7 @@ Object.assign(RAW_SKILLS, {
     name: "Rune Diffusion",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -5902,7 +7251,65 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "expose", "proliferate", "aoe"],
     aoe: { shape: "column", scale: 1 },
+    buildupHint: { expose: 40 },
     proliferateWeakness: { families: ["expose"], to: "column", ratio: 0.5, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.rune_diffusion;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const spreadMeta = [];
+      const splash = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
+          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
+          neighbors.forEach((char, idx) => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+
+            if (idx < (ability?.proliferateWeakness?.maxTargets ?? 1)) {
+              const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+              const sourceMeter = target?.weakness?.meters?.expose || 0;
+              const transfer = Math.max(0, Math.floor(sourceMeter * ratio));
+              if (transfer > 0) {
+                char.weakness = char.weakness || { meters: {}, tiers: {} };
+                char.weakness.meters = char.weakness.meters || {};
+                char.weakness.tiers = char.weakness.tiers || {};
+                char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
+                char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
+                spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
+              }
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "Unravel a glyph to carry Expose down the rank."
   },
 
@@ -5911,7 +7318,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ward Focus",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -5921,7 +7328,18 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mp", "stance"],
     statusEffects: [{ id: "ward_focus", turns: 1, mpRestoreFlat: 3, nextSpellAccPct: 10 }],
-    description: "Reinforce the flow—restore MP and steady your next spell."
+    apply: (attacker) => {
+      const ability = SKILLS?.ward_focus;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+      };
+    },
+    description: "Reinforce the flow-restore MP and steady your next spell."
   },
 
   // -------- Payoff (6) --------
@@ -5930,7 +7348,7 @@ Object.assign(RAW_SKILLS, {
     name: "Curse Snap",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -5940,6 +7358,32 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse", "amplify"],
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.curse_snap_staff;
+      const roll = calculateDamage(attacker, target, ability);
+      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
+      const base = roll.amount + intBonus;
+      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'curse',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.curse || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.08));
+
+      const status = { id: 'curse_snap', turns: 1, doubleCurseTicks: true };
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        statusEffects: [status],
+      };
+    },
     description: "For one turn, all Curse effects on the target tick twice (amplify only; no consume)."
   },
 
@@ -5948,7 +7392,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ice Fracture",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 15,
@@ -5959,7 +7403,36 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 14, turns: 2 } },
-    description: "Shatter brittle frost—higher Cold tiers crack armor more."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ice_fracture_staff;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
+    description: "Shatter brittle frost-higher Cold tiers crack armor more."
   },
 
   'venom_bloom_staff': {
@@ -5967,7 +7440,7 @@ Object.assign(RAW_SKILLS, {
     name: "Venom Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 15,
@@ -5979,6 +7452,31 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     consumeWeakness: ["toxic"],
     rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_bloom_staff;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.toxic || 0;
+      const tier = target?.weakness?.tiers?.toxic || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        log: burst ? `${attacker?.name || 'The caster'} blooms the toxin for +${burst} damage.` : undefined,
+      };
+    },
     description: "Consume Poison to force rapid ticks; adds a bonus tick at higher tiers."
   },
 
@@ -5987,7 +7485,7 @@ Object.assign(RAW_SKILLS, {
     name: "Arc Echo",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -5998,6 +7496,43 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "lightning", "amplify"],
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
     rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 55 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arc_echo;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'lightning',
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lightning || 0;
+      const tier = target?.weakness?.tiers?.lightning || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      let repeatDamage = 0;
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const pct = ability?.rewardIfWeak?.buff?.repeatPowerPct ?? 55;
+        repeatDamage = Math.max(1, Math.floor(amount * (pct / 100)));
+        amount += repeatDamage;
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: 'lightning',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        extraHits: repeatDamage ? [{ amount: repeatDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
+      };
+    },
     description: "Synchronize with Shock to echo the discharge once at reduced power."
   },
 
@@ -6006,7 +7541,7 @@ Object.assign(RAW_SKILLS, {
     name: "Hemorrhage Rite",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -6019,6 +7554,63 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
     transformWeakness: { from: "lacerate", to: "curse", ratio: 0.6 },
     proliferateWeakness: { families: ["curse"], to: "adjacent", ratio: 0.5, maxTargets: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.hemorrhage_rite;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      let transformed;
+      const transform = ability?.transformWeakness;
+      if (transform && target?.weakness) {
+        const fromKey = transform.from;
+        const toKey = transform.to;
+        const ratio = transform.ratio ?? 1;
+        const current = target.weakness.meters?.[fromKey] || 0;
+        if (current > 0) {
+          const transfer = Math.max(0, Math.floor(current * ratio));
+          const remaining = Math.max(0, current - transfer);
+          target.weakness.meters[fromKey] = remaining;
+          target.weakness.meters[toKey] = (target.weakness.meters[toKey] || 0) + transfer;
+          target.weakness.tiers = target.weakness.tiers || {};
+          target.weakness.tiers[fromKey] = weaknessTierFromMeter(target.weakness.meters[fromKey]);
+          target.weakness.tiers[toKey] = weaknessTierFromMeter(target.weakness.meters[toKey]);
+          transformed = { from: fromKey, to: toKey, amount: transfer };
+        }
+      }
+
+      const spreadMeta = [];
+      if (scene && target && typeof scene._getUnitColumn === 'function') {
+        const originColumn = scene._getUnitColumn(target);
+        const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+        const neighbors = sideSlots
+          ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated')
+          .map(slot => slot.char) || [];
+        const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
+        const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+        neighbors.slice(0, maxTargets).forEach(char => {
+          const transfer = Math.max(0, Math.floor((target?.weakness?.meters?.curse || 0) * ratio));
+          if (transfer > 0) {
+            char.weakness = char.weakness || { meters: {}, tiers: {} };
+            char.weakness.meters.curse = (char.weakness.meters.curse || 0) + transfer;
+            char.weakness.tiers.curse = weaknessTierFromMeter(char.weakness.meters.curse);
+            spreadMeta.push({ targetId: char.id || char.name, family: 'curse', amount: transfer });
+          }
+        });
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        transformedWeakness: transformed,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "Subvert bleeding into binding hexes and spread the malediction nearby."
   },
 
@@ -6027,7 +7619,7 @@ Object.assign(RAW_SKILLS, {
     name: "Weakpoint Lattice",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 17,
@@ -6038,11 +7630,42 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.weakpoint_lattice;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Weave mana along stress lines and lance through the opening."
   },
 
   // ===============================
-  // v3.2 — 1h Spear (13)
+  // v3.21 - 1h Spear (13)
   // ===============================
 
   // -------- Generation (7) --------
@@ -6051,7 +7674,7 @@ Object.assign(RAW_SKILLS, {
     name: "Reach Test",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -6062,6 +7685,30 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     emitTagsOnUse: ["thrust"],
     buildupHint: { expose: 55 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.reach_test;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.expose ?? 55;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
+        buildup += Math.max(4, Math.floor(5 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: buildup },
+      };
+    },
     description: "Probe from a safe distance to pry an opening."
   },
 
@@ -6070,7 +7717,7 @@ Object.assign(RAW_SKILLS, {
     name: "Tendon Pick",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 15,
@@ -6082,6 +7729,29 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["thrust"],
     buildupHint: { lacerate: 70 },
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 25 } } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.tendon_pick;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let buildup = ability?.buildupHint?.lacerate ?? 70;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * exposeTier));
+        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.lacerate ?? 25;
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lacerate: buildup },
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A gouging thrust that seeds Bleed; worse on Exposed foes."
   },
 
@@ -6090,7 +7760,7 @@ Object.assign(RAW_SKILLS, {
     name: "Stagger Set",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -6101,6 +7771,24 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     buildupHint: { disorient: 55 },
     rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { accDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.stagger_set;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const buildup = ability?.buildupHint?.disorient ?? 55;
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "Butt-end jab that rattles; crossing Disorient T1 jolts aim."
   },
 
@@ -6109,7 +7797,7 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Tip",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -6120,6 +7808,32 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "cold"],
     buildupHint: { cold: 60 },
     rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.frost_tip;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      let buildup = ability?.buildupHint?.cold ?? 60;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * coldTier));
+        buildup += Math.max(4, Math.floor(6 * intensity));
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { cold: buildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
     description: "A chilled point; crossing Cold T1 briefly slows the target."
   },
 
@@ -6128,7 +7842,7 @@ Object.assign(RAW_SKILLS, {
     name: "Line Probe",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -6140,7 +7854,46 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["thrust"],
     aoe: { shape: "column", scale: 1 },
     buildupHint: { expose: 40 },
-    description: "A driving thrust through the rank that lightly Exposes a column."
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.line_probe;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const splash = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
+          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
+          neighbors.forEach(char => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { expose: splashBuildup },
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: baseBuildup },
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Drive a thrust through the rank, lightly Exposing a column."
   },
 
   'anchor_stance': {
@@ -6148,7 +7901,7 @@ Object.assign(RAW_SKILLS, {
     name: "Anchor Stance",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "CON",
     requiredValue: 12,
@@ -6160,7 +7913,19 @@ Object.assign(RAW_SKILLS, {
     buildupHint: { expose: 30 },
     statusEffects: [{ id: "anchor_stance", turns: 1, guardPct: 12 }],
     rewardIfTierCross: [{ family: "expose", tier: 1, buff: { accPct: 10, turns: 1 } }],
-    description: "Set the haft and pressure forward—gain guard; opening a guard sharpens accuracy."
+    apply: (attacker) => {
+      const ability = SKILLS?.anchor_stance;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : [];
+
+      return {
+        amount: 0,
+        statusEffects,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Set the haft and pressure forward-gain guard; opening a guard sharpens accuracy."
   },
 
   'barbed_set': {
@@ -6168,7 +7933,7 @@ Object.assign(RAW_SKILLS, {
     name: "Barbed Set",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -6177,8 +7942,51 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "proliferate"],
-    // Splash a portion of Bleed to one adjacent enemy
+    emitTagsOnUse: ["thrust"],
+    buildupHint: { lacerate: 60 },
     proliferateWeakness: { families: ["lacerate"], to: "adjacent", ratio: 0.5, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.barbed_set;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      let buildup = ability?.buildupHint?.lacerate ?? 60;
+      const spreadMeta = [];
+
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
+          const ratio = ability?.proliferateWeakness?.ratio ?? 0.5;
+          const sourceMeter = target?.weakness?.meters?.lacerate || 0;
+
+          neighbors.slice(0, maxTargets).forEach(char => {
+            const transfer = Math.max(0, Math.floor(sourceMeter * ratio));
+            if (transfer > 0) {
+              char.weakness = char.weakness || { meters: {}, tiers: {} };
+              char.weakness.meters.lacerate = (char.weakness.meters.lacerate || 0) + transfer;
+              char.weakness.tiers.lacerate = weaknessTierFromMeter(char.weakness.meters.lacerate);
+              spreadMeta.push({ targetId: char.id || char.name, family: 'lacerate', amount: transfer });
+            }
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { lacerate: buildup },
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
     description: "Set the barbs and twist, letting the wound bleed into a nearby foe."
   },
 
@@ -6188,7 +7996,7 @@ Object.assign(RAW_SKILLS, {
     name: "Impale",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 17,
@@ -6199,6 +8007,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "finisher"],
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.45 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.impale;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const meter = target?.weakness?.meters?.expose || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (exposeTier > 1) {
+        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.45;
+        amount = Math.floor(amount * (1 + critBonus));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Drive through a narrow opening; devastating at deeper Expose."
   },
 
@@ -6207,7 +8044,7 @@ Object.assign(RAW_SKILLS, {
     name: "Arterial Burst",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -6218,6 +8055,28 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "lacerate", "consume"],
     requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
     consumeWeakness: ["lacerate"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arterial_burst;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.lacerate || 0;
+      const tier = target?.weakness?.tiers?.lacerate || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 6) + Math.max(0, intensity - 1) * 7));
+      amount += burst;
+
+      return {
+        ...roll,
+        amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        log: burst ? `${attacker?.name || 'The lancer'} tears the wound for +${burst} damage.` : undefined,
+      };
+    },
     description: "Tear the wound open for immediate burst damage, consuming Bleed."
   },
 
@@ -6226,7 +8085,7 @@ Object.assign(RAW_SKILLS, {
     name: "Brain Stem",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "STR",
     requiredValue: 15,
@@ -6237,6 +8096,35 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient", "finisher"],
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.brain_stem;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const tier = target?.weakness?.tiers?.disorient || 0;
+      const meter = target?.weakness?.meters?.disorient || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
+      }
+      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "A brutal cranial pick that thrives on a rattled foe."
   },
 
@@ -6245,7 +8133,7 @@ Object.assign(RAW_SKILLS, {
     name: "Ice Wedge",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -6256,6 +8144,33 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "cold", "amplify"],
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ice_wedge;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: 'cold',
+        skipGearMultiplier: true,
+      }));
+
+      const meter = target?.weakness?.meters?.cold || 0;
+      const tier = target?.weakness?.tiers?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier >= 1) {
+        amount = Math.floor(amount * (1 + 0.15 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      return {
+        ...roll,
+        amount,
+        element: 'cold',
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+      };
+    },
     description: "Hammer a wedge of ice into brittle seams to fracture armor."
   },
 
@@ -6264,7 +8179,7 @@ Object.assign(RAW_SKILLS, {
     name: "Line Skewer",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "STR",
     requiredValue: 16,
@@ -6276,7 +8191,51 @@ Object.assign(RAW_SKILLS, {
     aoe: { shape: "column", scale: 1 },
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { damagePct: 18 } },
-    description: "Run them through and catch the rank behind—excels against Exposed formations."
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.line_skewer;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.18 * exposeTier));
+      }
+      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
+        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
+        amount = Math.floor(amount * (1 + bonus / 100));
+      }
+
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+          neighbors.forEach(char => {
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Run them through and catch the rank behind-excels against Exposed formations."
   },
 
   'sever_sinew': {
@@ -6284,7 +8243,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sever Sinew",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.2",
+    versionTag: "v3.21",
     requiredWeapon: ["spear_1h"],
     requiredStat: "DEX",
     requiredValue: 16,
@@ -6296,17 +8255,51 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
     transformWeakness: { from: "lacerate", to: "toxic", ratio: 0.6 },
     buildupHint: { lacerate: 100 },
-    description: "Twist the blade and infuse the wound—convert Bleed into Poison."
+    apply: (attacker, target) => {
+      const ability = SKILLS?.sever_sinew;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const transform = ability?.transformWeakness;
+      let transformed;
+      if (transform && target?.weakness) {
+        const fromKey = transform.from;
+        const toKey = transform.to;
+        const ratio = transform.ratio ?? 1;
+        const current = target.weakness.meters?.[fromKey] || 0;
+        if (current > 0) {
+          const transfer = Math.max(0, Math.floor(current * ratio));
+          const remaining = Math.max(0, current - transfer);
+          target.weakness.meters[fromKey] = remaining;
+          target.weakness.meters[toKey] = (target.weakness.meters[toKey] || 0) + transfer;
+          target.weakness.tiers = target.weakness.tiers || {};
+          target.weakness.tiers[fromKey] = weaknessTierFromMeter(target.weakness.meters[fromKey]);
+          target.weakness.tiers[toKey] = weaknessTierFromMeter(target.weakness.meters[toKey]);
+          transformed = { from: fromKey, to: toKey, amount: transfer };
+        }
+      }
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const toxicBuildup = exposeTier >= 1 ? { toxic: 30 } : undefined;
+
+      return {
+        ...roll,
+        amount,
+        transformedWeakness: transformed,
+        buildup: toxicBuildup,
+      };
+    },
+    description: "Twist the blade and infuse the wound-convert Bleed into Poison."
   },
-
-
-
-
 
 });
 
 export const SKILLS = buildSkillRegistry(RAW_SKILLS);
-// ======== Global Skill Test Mode (opt-in) — works on SKILLS object ========
+// ======== Global Skill Test Mode (opt-in) - works on SKILLS object ========
 const DEV_SKILL_TEST = {
   ENABLE: false,              // flip true for dev sessions
   zeroMpCost: true,
@@ -6324,7 +8317,7 @@ function applyTestOverridesToAll(skillsObj, cfg = DEV_SKILL_TEST) {
     if (cfg.zeroMpCost && typeof s.mpCost === "number") s.mpCost = 0;
     if (cfg.zeroCooldown && typeof s.cooldown === "number") s.cooldown = 0;
     if (cfg.ignoreStatReqs && typeof s.requiredValue === "number") s.requiredValue = 0;
-    if (cfg.ignoreWeaknessGates) s._skipWeaknessGates = true; // honor in your canUseSkill gate
+    if (cfg.ignoreWeaknessGates) s._skipWeaknessGates = true; // honor in canUseSkill gate
     // if (cfg.amplifyDamagePct) s._tempDamageAmpPct = cfg.amplifyDamagePct;
   }
 }

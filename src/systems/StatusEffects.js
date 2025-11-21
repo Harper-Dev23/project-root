@@ -15,6 +15,66 @@ export const StatusEffects = {
     name: 'Feint Advantage',
     icon: '✦'
   },
+  shattering_cut_sundered: {
+    id: 'shattering_cut_sundered',
+    name: 'Shattered Guard',
+    icon: 'S'
+  },
+  ice_shatter_armorbreak: {
+    id: 'ice_shatter_armorbreak',
+    name: 'Frost Fracture',
+    icon: 'I'
+  },
+  roaring_focus: {
+    id: 'roaring_focus',
+    name: 'Roaring Focus',
+    icon: 'R'
+  },
+  whip_rhythm: {
+    id: 'whip_rhythm',
+    name: 'Whip Rhythm',
+    icon: 'W'
+  },
+  steady_breath: {
+    id: 'steady_breath',
+    name: 'Steady Breath',
+    icon: 'B'
+  },
+  eagle_focus: {
+    id: 'eagle_focus',
+    name: 'Eagle Focus',
+    icon: 'E'
+  },
+  steady_aim: {
+    id: 'steady_aim',
+    name: 'Steady Aim',
+    icon: 'A'
+  },
+  focus_meditation: {
+    id: 'focus_meditation',
+    name: 'Focus Meditation',
+    icon: 'M'
+  },
+  braced: {
+    id: 'braced',
+    name: 'Braced Guard',
+    icon: 'G'
+  },
+  lockstep: {
+    id: 'lockstep',
+    name: 'Lockstep',
+    icon: 'L'
+  },
+  ward_focus: {
+    id: 'ward_focus',
+    name: 'Ward Focus',
+    icon: 'W'
+  },
+  anchor_stance: {
+    id: 'anchor_stance',
+    name: 'Anchor Stance',
+    icon: 'A'
+  },
 
   regen: { name: 'Regen', duration: 2, tickHeal: 3 },
   // Add any other *non-weakness* statuses here (e.g., shields, buffs, etc.)
