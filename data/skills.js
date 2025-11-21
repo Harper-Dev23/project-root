@@ -1,4 +1,4 @@
-// data/skills.js
+﻿// data/skills.js
 import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
@@ -448,37 +448,6 @@ const RAW_SKILLS = {
       'A deceptive jab that catches the opponent off guard, dealing damage and confusing them.'
   },
 
-
-  'barbed_arrow': {            //TESTINGTESTING
-    id: 'barbed_arrow',
-    name: 'Barbed Arrow',
-    type: 'weapon',
-    mechanic: 'active',
-    actionCost: 'major',
-    requiredStat: 'DEX',
-    requiredValue: 15,
-    requiredWeapon: ['bow'],
-    mpCost: 0,
-    hpCost: 0,
-    positionRequirement: ['back'],
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    targetColumns: ['front', 'mid', 'back'], // shoot any enemy row
-    cooldown: 2,
-    tags: ['physical', 'projectile', 'piercing', 'attack'],
-    // optional static hints for tooltip
-    buildupHint: { lacerate: 600 },
-    apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      return {
-        ...r,
-        amount,
-        buildup: { lacerate: 600 }, // feeds the Physical: Bleed meter
-      };
-    },
-    description: 'Fires a barbed arrow that causes bleeding.'
-  },
 
 
   'bonecrusher': {            //TESTINGTESTING
@@ -3390,7 +3359,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
-    buildupHint: { expose: 60 },
+    buildupHint: { expose: 600 }, //testing
     rewardIfTierCross: [{ family: "expose", tier: 2, debuff: { physicalVulnPct: 10, turns: 2 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.soft_spot_exposed;
@@ -3409,7 +3378,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 60 },
+        buildup: { expose: ability?.buildupHint?.expose ?? 600 }, //testing
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
@@ -4545,7 +4514,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lacerate"],
     emitTagsOnUse: ["projectile"],
-    buildupHint: { lacerate: 70 },
+    buildupHint: { lacerate: 700 }, //testing
     rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 25 } } },
     apply: (attacker, target) => {
       const ability = SKILLS?.barbed_arrow;
@@ -4557,7 +4526,7 @@ Object.assign(RAW_SKILLS, {
       }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let buildup = ability?.buildupHint?.lacerate ?? 70;
+      let buildup = ability?.buildupHint?.lacerate ?? 700; //testing
       if (exposeTier >= 1) {
         amount = Math.floor(amount * (1 + 0.1 * exposeTier));
         buildup += ability?.rewardIfWeak?.buff?.addBuildup?.lacerate ?? 25;
@@ -8301,7 +8270,7 @@ Object.assign(RAW_SKILLS, {
 export const SKILLS = buildSkillRegistry(RAW_SKILLS);
 // ======== Global Skill Test Mode (opt-in) - works on SKILLS object ========
 const DEV_SKILL_TEST = {
-  ENABLE: false,              // flip true for dev sessions
+  ENABLE: true,              // flip true for dev sessions
   zeroMpCost: true,
   zeroCooldown: true,
   ignoreStatReqs: true,       // sets requiredValue to 0
