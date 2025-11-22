@@ -891,10 +891,10 @@ const NPC_ONLY_SKILLS = {
     apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] })
   },
 
-  // Encounter 4 – Huntsman & Beasts
+  // Encounter 4 - Huntsman & Beasts
   'huntsman_mark': {
     id: 'huntsman_mark',
-    name: 'Huntmaster's Mark',
+    name: "Huntmaster's Mark",
     type: 'enemy',
     actionCost: 'bonus',
     mpCost: 4,
