@@ -98,13 +98,24 @@ export const WEAKNESS_T2 = 200;
 /** v3 tuning aligned to Final Draft v1 (tweak freely) */
 export const WeaknessV3 = {
   globals: {
-    // overflow → intensity multiplier  1 + (overflow / S), clamped at CAP
+    // overflow -> intensity multiplier: 1 + (overflow / S), clamped at CAP
     INTENSITY_S: 300,
     INTENSITY_CAP: 2.5,
 
-    // overflow → extra decay multiplier (self-limiting)
-    DECAY_D: 150,
-    DECAY_CAP_X: 4,
+    // Decay curve shaping (applies to all families, scaled by each family's baseDecay)
+    //  - 0-100: light chip decay, capped low so buildup can stick
+    //  - 100-200: ramps toward the "20ish" band
+    //  - 200+: jumps to ~50, then ramps into the 200s at extreme overflow
+    DECAY_BASELINE: 35,      // reference baseDecay used to derive thematic weights
+    DECAY_LOW_BASE: 4,       // tuned so most land ~3-5 decay below T1
+    DECAY_LOW_FLOOR: 2,
+    DECAY_LOW_CAP: 5,
+    DECAY_MID_START: 14,     // decay around 14 at 100 (pre-scaling)
+    DECAY_MID_END: 22,       // decay approaches ~20 near T2 (pre-scaling)
+    DECAY_MID_CAP: 24,
+    DECAY_HIGH_BASE: 50,     // baseline decay once T2 is reached
+    DECAY_HIGH_PER_100: 35,  // additional decay per 100 overflow (before scaling)
+    DECAY_HIGH_CAP: 240,     // soft cap so even extreme overflow stays sane
   },
 
   families: {
@@ -125,9 +136,9 @@ export const WeaknessV3 = {
       },
     },
 
-    // In WeaknessV3.families.cold (add or replace these props)
     cold: {
-      intensity: { formula: 'quad', S: 220, cap: 3.0, a: 1.0, b: 0.6 }, // you already added earlier
+      // Linear intensity ramp: ~+0.7 per 100 overflow, caps at 3.0
+      intensity: { formula: 'linear', slope: 0.007, cap: 3.0 },
 
       t1: {
         initiativePenalty: 0.15,
@@ -154,14 +165,14 @@ export const WeaknessV3 = {
 
     fire: {
       baseDecay: 40,
-      // === Fire-specific intensity curve (does NOT affect Lightning or others) ===
-      //  - At t2 (e.g. 200) → 1.0×
-      //  - ~400 → ~3.0×
-      //  - 650–700 → capped at ~8.0×
-      intensity: { formula: 'quad', S: 200, cap: 8.0, a: 1.0, b: 1.0 },
+      // === Fire-specific intensity curve (smooth linear ramp past T2) ===
+      //  - At t2 (e.g. 200) -> 1.0x intensity (no overflow yet)
+      //  - +0.01 per overflow point (e.g., +2.0 at +200 overflow => 3.0 total)
+      //  - Caps at 8.0 around ~700 overflow
+      intensity: { formula: 'linear', slope: 0.01, cap: 8.0 },
 
       t1: {
-        onActLoss: 13,         // was 50; at I≈2.3 this yields ~30 per action (13 * 2.3 ≈ 30)
+        onActLoss: 10,         // was 3; stronger on-act burn loss
         incomingFireBonus: 0.25
       },
       t2: {
@@ -169,15 +180,16 @@ export const WeaknessV3 = {
         startTickBase: 10,
 
         // Optional: extra meter consumption at start of turn (scales with intensity)
-        // Targets: ~150 at 400, ~300–350 at 650–700; clamped by 'cap'
+        // Targets: ~150 at 400, ~300-350 at 650-700; clamped by 'cap'
         startConsume: { base: 50, c1: 0.5, c2: 0.2, S2: 1000, cap: 400 },
       },
     },
 
+
     // === Physical =============================================================
     disorient: {
-      // Smooth curve: mult = 1 + a*x + b*x^2, x = (meter - t2)/S, capped
-      intensity: { formula: 'quad', S: 220, cap: 3.0, a: 1.0, b: 0.6 },
+      // Linear intensity ramp: ~+0.7 per 100 overflow, caps at 3.0
+      intensity: { formula: 'linear', slope: 0.007, cap: 3.0 },
 
       t1: {
         // T1: Skill cost multiplier (applies to MP now; you can extend to HP/etc later)
@@ -191,6 +203,14 @@ export const WeaknessV3 = {
         startDrainMPBase: 6,
         startDrainMPCap: 40
       }
+    },
+
+    lacerate: {
+      baseDecay: 35,
+      t1: {
+        // was effectively 0 (unset); set to 10 = 50% of the old 20 baseline
+        onActBuildupFlat: 10,
+      },
     },
 
 
@@ -261,7 +281,7 @@ export function makeWeaknessState() {
   return { meters, tiers, grace };
 }
 
-/** Overflow → effect intensity multiplier */
+/** Overflow -> effect intensity multiplier */
 export function weaknessIntensityMult(m) {
   const S = WeaknessV3.globals.INTENSITY_S;
   const cap = WeaknessV3.globals.INTENSITY_CAP;
@@ -269,13 +289,49 @@ export function weaknessIntensityMult(m) {
   return Math.min(cap, 1 + (overflow / S));
 }
 
-/** Overflow → decay amount */
+/** Overflow-aware decay amount (piecewise curve keeping low tiers modest) */
 export function weaknessDecayAmount(baseDecay, m) {
-  const D = WeaknessV3.globals.DECAY_D;
-  const capX = WeaknessV3.globals.DECAY_CAP_X;
-  const overflow = Math.max(0, m - WEAKNESS_T2);
-  const mult = Math.min(capX, 1 + (overflow / D));
-  return Math.max(baseDecay, Math.floor(baseDecay * mult));
+  const g = WeaknessV3.globals || {};
+  const baseline = g.DECAY_BASELINE || 35;
+  const weight = Math.max(0.5, (baseDecay || baseline) / baseline);
+
+  const lowBase = (g.DECAY_LOW_BASE ?? 4) * weight;
+  const lowFloor = g.DECAY_LOW_FLOOR ?? 2;
+  const lowCap = g.DECAY_LOW_CAP ?? 5;
+
+  const midStart = (g.DECAY_MID_START ?? 14) * weight;
+  const midEnd = (g.DECAY_MID_END ?? 22) * weight;
+  const midCap = g.DECAY_MID_CAP ?? 24;
+
+  const highBase = (g.DECAY_HIGH_BASE ?? 50) * weight;
+  const highPer100 = (g.DECAY_HIGH_PER_100 ?? 35) * weight;
+  const highCap = g.DECAY_HIGH_CAP ?? 240;
+
+  const meter = Math.max(0, m | 0);
+
+  if (meter <= 0) return 0;
+
+  // 0-100: keep decay tiny so buildup sticks (max 5, themed by weight)
+  if (meter < WEAKNESS_T1) {
+    const decay = Math.min(lowCap, Math.max(lowFloor, Math.round(lowBase)));
+    return decay;
+  }
+
+  // 100-200: ease into the ~20 decay band, keeping family scaling
+  if (meter < WEAKNESS_T2) {
+    const t = (meter - WEAKNESS_T1) / Math.max(1, WEAKNESS_T2 - WEAKNESS_T1);
+    const start = Math.min(midCap, Math.max(lowFloor, Math.round(midStart)));
+    const end = Math.min(midCap, Math.max(start, Math.round(midEnd)));
+    const decay = Math.min(midCap, Math.max(lowFloor, Math.round(start + (end - start) * t)));
+    return decay;
+  }
+
+  // 200+: start around 50 decay, then ramp with overflow toward the 200s
+  const overflow = meter - WEAKNESS_T2;
+  const base = Math.min(highCap, Math.max(lowFloor, Math.round(highBase)));
+  const ramp = Math.max(0, overflow / 100) * highPer100;
+  const decay = Math.min(highCap, Math.max(base, Math.round(base + ramp)));
+  return decay;
 }
 
 /** Meter → Tier helper */
@@ -322,6 +378,11 @@ export function familyIntensityMult(family, meters, families = WeaknessFamilies,
       const cap = cfg.cap ?? (v3?.globals?.INTENSITY_CAP ?? 2.5);
       const x = overflow / Math.max(1, S);
       return Math.min(cap, 1 + a * x + b * x * x);
+    }
+    if (cfg.formula === 'linear') {
+      const cap = cfg.cap ?? (v3?.globals?.INTENSITY_CAP ?? 2.5);
+      const slope = (cfg.k ?? cfg.slope ?? (1 / Math.max(1, cfg.S ?? 200)));
+      return Math.min(cap, 1 + slope * overflow);
     }
     // Future formulas here...
     return weaknessIntensityMult(m);
@@ -394,3 +455,5 @@ export function curseOverflowFactor(target) {
   if (m <= 200) return 0;
   return (m - 200) / 100; // 1.0 per +100 overflow; adjust if you prefer milder curves
 }
+
+

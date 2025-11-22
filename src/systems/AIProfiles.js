@@ -1,27 +1,79 @@
+import { SKILLS } from '../../data/skills.js';
+
 // Advanced encounter AI profiles
 //test
 const isAlive = unit => unit && unit.status !== 'incapacitated';
-
 const hasAction = (npc, type) => (npc?.actionsLeft?.[type] || 0) > 0;
 
-const firstAlive = list => Array.isArray(list) ? list.find(isAlive) : null;
+const hpRatio = (unit) => {
+  const max = Math.max(1, unit?.maxHP || 1);
+  return Math.max(0, (unit?.currentHP || 0) / max);
+};
+const mpAvailable = npc => Math.max(0, npc?.currentMP ?? 0);
+const cooldownFor = (npc, skillId) => npc?.cooldowns?.[skillId] || 0;
+const actionTypeFor = skillId => SKILLS?.[skillId]?.actionCost || 'major';
+const buildAction = (skillId, target = null) => ({ type: actionTypeFor(skillId), skill: skillId, target });
 
-const weakest = list => {
-  const alive = (list || []).filter(isAlive);
-  if (!alive.length) return null;
-  return alive.reduce((a, b) => ((a.currentHP / (a.maxHP || 1)) <= (b.currentHP / (b.maxHP || 1))) ? a : b);
+const canUseSkill = (npc, skillId) => {
+  const skill = SKILLS?.[skillId];
+  if (!skill) return false;
+  const actionType = skill.actionCost || 'major';
+  if (!hasAction(npc, actionType)) return false;
+  if (cooldownFor(npc, skillId) > 0) return false;
+  const mpCost = Math.max(0, skill.mpCost || 0);
+  return mpAvailable(npc) >= mpCost;
 };
 
+const randomRange = (min = 0.1, max = 0.6) => min + Math.random() * (max - min);
+const weightedPick = (list, weightFn) => {
+  if (!Array.isArray(list) || !list.length) return null;
+  let total = 0;
+  const scored = [];
+  for (const item of list) {
+    const weight = Math.max(0, weightFn?.(item) || 0);
+    if (weight <= 0) continue;
+    total += weight;
+    scored.push({ item, total });
+  }
+  if (!scored.length || total <= 0) return null;
+  const roll = Math.random() * total;
+  for (const entry of scored) {
+    if (roll <= entry.total) return entry.item;
+  }
+  return scored[scored.length - 1].item;
+};
+
+const targetScore = (target, opts = {}) => {
+  const noise = randomRange(0, opts.noise ?? 0.9);
+  const hpBias = opts.preferLowHP ? (1 - hpRatio(target)) * 2.4 : 0.5 * (1 - hpRatio(target));
+  const families = Array.isArray(opts.preferWeakness) ? opts.preferWeakness : (opts.preferWeakness ? [opts.preferWeakness] : []);
+  const weaknessBias = families.reduce((sum, fam) => {
+    const tier = target?.weakness?.tiers?.[fam] || 0;
+    if (opts.minTier && tier < opts.minTier) return sum;
+    const meter = target?.weakness?.meters?.[fam] || 0;
+    return sum + tier * (opts.weaknessWeight ?? 1.4) + meter / 80;
+  }, 0);
+  const markBias = opts.preferMarked && Array.isArray(target?.statusEffects) && target.statusEffects.some(se => se?.id === 'huntsman_marked') ? 1.6 : 0;
+  return Math.max(0.1, 1 + noise + hpBias + weaknessBias + markBias);
+};
+
+const pickTarget = (list, opts = {}) => {
+  const alive = (list || []).filter(isAlive);
+  if (!alive.length) return null;
+  return weightedPick(alive, t => targetScore(t, opts));
+};
+
+const firstAlive = list => pickTarget(list, { noise: 0.8, preferLowHP: false }) || null;
+const weakest = list => pickTarget(list, { preferLowHP: true, noise: 1.1 }) || null;
 const highestWeakness = (targets, family, minTier = 1) => {
   const filtered = (targets || []).filter(t => isAlive(t) && ((t.weakness?.tiers?.[family] || 0) >= minTier));
   if (!filtered.length) return null;
-  return filtered.reduce((best, curr) => {
-    const bestMeter = best?.weakness?.meters?.[family] || 0;
-    const currMeter = curr?.weakness?.meters?.[family] || 0;
-    return currMeter > bestMeter ? curr : best;
-  }, filtered[0]);
+  return weightedPick(filtered, t => {
+    const tier = t?.weakness?.tiers?.[family] || 0;
+    const meter = t?.weakness?.meters?.[family] || 0;
+    return Math.max(0.1, tier * 2 + meter / 60 + randomRange(0, 0.8));
+  });
 };
-
 const alliesOf = (npc, scene) => (scene?.enemies || []).filter(unit => unit && unit.isEnemy === npc.isEnemy && isAlive(unit));
 const enemiesOf = enemies => (enemies || []).filter(isAlive);
 
@@ -37,7 +89,9 @@ const buildTargetList = (npc, scene, enemies) => ({
 });
 
 function pickMarkedTarget(enemies) {
-  return (enemies || []).find(e => Array.isArray(e?.statusEffects) && e.statusEffects.some(se => se?.id === 'huntsman_marked')) || null;
+  const marked = (enemies || []).filter(e => Array.isArray(e?.statusEffects) && e.statusEffects.some(se => se?.id === 'huntsman_marked'));
+  if (!marked.length) return null;
+  return weightedPick(marked, t => targetScore(t, { preferLowHP: true, preferMarked: true, noise: 0.9 }));
 }
 
 export const AI_PROFILES = {
@@ -45,8 +99,8 @@ export const AI_PROFILES = {
 
   stationary_dummy: {
     decide(npc) {
-      if (hasAction(npc, 'major') && (npc.skills || []).includes('dummy_sway')) {
-        return { type: 'major', skill: 'dummy_sway', target: null };
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
       }
       return null;
     }
@@ -57,14 +111,15 @@ export const AI_PROFILES = {
       const { foes } = buildTargetList(npc, scene, enemies);
       const target = weakest(foes);
       if (!target) return null;
-      if (hasAction(npc, 'class') && (npc.currentHP || 0) <= 0.6 * (npc.maxHP || 1)) {
-        return { type: 'class', skill: 'warmup_patch', target: npc };
+      const hpPct = hpRatio(npc);
+      if (canUseSkill(npc, 'warmup_patch') && hpPct <= 0.6) {
+        return buildAction('warmup_patch', npc);
       }
-      if (hasAction(npc, 'major')) {
-        return { type: 'major', skill: 'warmup_swing', target };
+      if (canUseSkill(npc, 'warmup_swing')) {
+        return buildAction('warmup_swing', target);
       }
-      if (hasAction(npc, 'bonus')) {
-        return { type: 'bonus', skill: 'dummy_sway', target: null };
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
       }
       return null;
     }
@@ -73,17 +128,16 @@ export const AI_PROFILES = {
   defensive_dummy: {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);
-      const allyToHeal = allies.find(a => (a.currentHP || 0) < 0.65 * (a.maxHP || 1));
-      if (hasAction(npc, 'class') && allyToHeal) {
-        return { type: 'class', skill: 'defender_small_heal', target: allyToHeal };
+      const allyToHeal = pickTarget(allies, { preferLowHP: true, noise: 1 });
+      if (canUseSkill(npc, 'defender_small_heal') && allyToHeal) {
+        return buildAction('defender_small_heal', allyToHeal);
       }
-      if (hasAction(npc, 'bonus') && !hasStatus(npc, 'defender_guard')) {
-        return { type: 'bonus', skill: 'defender_guard_raise', target: npc };
+      if (canUseSkill(npc, 'defender_guard_raise') && !hasStatus(npc, 'defender_guard')) {
+        return buildAction('defender_guard_raise', npc);
       }
-      if (hasAction(npc, 'major')) {
-        const exposedTarget = highestWeakness(foes, 'expose', 1) || weakest(foes);
-        if (!exposedTarget) return null;
-        return { type: 'major', skill: 'defender_taunt', target: exposedTarget };
+      const exposedTarget = highestWeakness(foes, 'expose', 1) || weakest(foes);
+      if (canUseSkill(npc, 'defender_taunt') && exposedTarget) {
+        return buildAction('defender_taunt', exposedTarget);
       }
       return null;
     }
@@ -94,11 +148,11 @@ export const AI_PROFILES = {
       const { foes } = buildTargetList(npc, scene, enemies);
       const target = weakest(foes);
       if (!target) return null;
-      if (hasAction(npc, 'major')) {
-        return { type: 'major', skill: 'offender_expose_strike', target };
+      if (canUseSkill(npc, 'offender_expose_strike')) {
+        return buildAction('offender_expose_strike', target);
       }
-      if (hasAction(npc, 'bonus') && Math.random() < 0.4) {
-        return { type: 'bonus', skill: 'dummy_shuffle', target: null };
+      if (canUseSkill(npc, 'dummy_shuffle') && Math.random() < 0.45) {
+        return buildAction('dummy_shuffle', null);
       }
       return null;
     }
@@ -108,20 +162,20 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const executionTarget = highestWeakness(foes, 'expose', 2);
-      if (hasAction(npc, 'major') && executionTarget) {
-        return { type: 'major', skill: 'fighter_executioner', target: executionTarget };
+      if (canUseSkill(npc, 'fighter_executioner') && executionTarget) {
+        return buildAction('fighter_executioner', executionTarget);
       }
       const tauntTarget = highestWeakness(foes, 'expose', 1);
-      if (hasAction(npc, 'class') && tauntTarget) {
-        return { type: 'class', skill: 'fighter_taunt', target: tauntTarget };
+      if (canUseSkill(npc, 'fighter_taunt') && tauntTarget) {
+        return buildAction('fighter_taunt', tauntTarget);
       }
-      if (hasAction(npc, 'bonus') && !hasStatus(npc, 'fighter_guard')) {
+      if (canUseSkill(npc, 'fighter_guarded_blow') && !hasStatus(npc, 'fighter_guard')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'fighter_guarded_blow', target };
+        if (target) return buildAction('fighter_guarded_blow', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'fighter_heavy_slash')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'fighter_heavy_slash', target };
+        if (target) return buildAction('fighter_heavy_slash', target);
       }
       return null;
     }
@@ -130,21 +184,23 @@ export const AI_PROFILES = {
   healer_dummy: {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);
-      const lowAlly = allies.find(a => (a.currentHP || 0) < 0.75 * (a.maxHP || 1));
-      if (hasAction(npc, 'major') && lowAlly) {
-        return { type: 'major', skill: 'healer_heal', target: lowAlly };
+      const lowAlly = pickTarget(allies, { preferLowHP: true, noise: 1 });
+      if (canUseSkill(npc, 'healer_heal') && lowAlly) {
+        return buildAction('healer_heal', lowAlly);
       }
-      const afflicted = allies.find(a => hasAnyWeakness(a, ['curse', 'disease', 'toxic']));
-      if (hasAction(npc, 'class') && afflicted) {
-        return { type: 'class', skill: 'healer_cleanse', target: afflicted };
+      const afflicted = pickTarget(allies, { preferWeakness: ['curse', 'disease', 'toxic'], minTier: 1, preferLowHP: true });
+      if (canUseSkill(npc, 'healer_cleanse') && afflicted) {
+        return buildAction('healer_cleanse', afflicted);
       }
-      if (hasAction(npc, 'bonus')) {
-        const blessTarget = allies.find(a => !hasStatus(a, 'healer_blessing'));
+      if (canUseSkill(npc, 'healer_blessing')) {
+        const blessTarget = pickTarget(allies.filter(a => !hasStatus(a, 'healer_blessing')), { noise: 1, preferLowHP: false });
         if (blessTarget) {
-          return { type: 'bonus', skill: 'healer_blessing', target: blessTarget };
+          return buildAction('healer_blessing', blessTarget);
         }
+      }
+      if (canUseSkill(npc, 'healer_flame_flick')) {
         const enemy = weakest(foes);
-        if (enemy) return { type: 'bonus', skill: 'healer_flame_flick', target: enemy };
+        if (enemy) return buildAction('healer_flame_flick', enemy);
       }
       return null;
     }
@@ -154,22 +210,22 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const cursed = highestWeakness(foes, 'curse', 2) || highestWeakness(foes, 'curse', 1);
-      if (hasAction(npc, 'major') && cursed) {
-        return { type: 'major', skill: 'warlock_drain_life', target: cursed };
+      if (canUseSkill(npc, 'warlock_drain_life') && cursed) {
+        return buildAction('warlock_drain_life', cursed);
       }
-      if (hasAction(npc, 'class')) {
+      if (canUseSkill(npc, 'warlock_curse_amplify')) {
         const amplifyTarget = highestWeakness(foes, 'curse', 1);
         if (amplifyTarget) {
-          return { type: 'class', skill: 'warlock_curse_amplify', target: amplifyTarget };
+          return buildAction('warlock_curse_amplify', amplifyTarget);
         }
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'warlock_dark_bolts')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'warlock_dark_bolts', target };
+        if (target) return buildAction('warlock_dark_bolts', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'warlock_hex')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'warlock_hex', target };
+        if (target) return buildAction('warlock_hex', target);
       }
       return null;
     }
@@ -179,19 +235,20 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const exposed = highestWeakness(foes, 'expose', 1);
-      if (hasAction(npc, 'major') && exposed) {
-        return { type: 'major', skill: 'ranger_aimed_shot', target: exposed };
+      if (canUseSkill(npc, 'ranger_aimed_shot') && exposed) {
+        return buildAction('ranger_aimed_shot', exposed);
       }
-      if (hasAction(npc, 'class') && foes.length >= 2) {
-        return { type: 'class', skill: 'ranger_volley', target: foes[0] };
+      if (canUseSkill(npc, 'ranger_volley') && foes.length >= 2) {
+        const focus = pickTarget(foes, { preferLowHP: true, noise: 0.9 }) || foes[0];
+        return buildAction('ranger_volley', focus);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'ranger_frost_arrow')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'ranger_frost_arrow', target };
+        if (target) return buildAction('ranger_frost_arrow', target);
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'ranger_quick_shot')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'ranger_quick_shot', target };
+        if (target) return buildAction('ranger_quick_shot', target);
       }
       return null;
     }
@@ -201,24 +258,24 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const weaknessFamilies = ['expose', 'toxic', 'cold', 'fire', 'lacerate', 'disease', 'curse'];
-      const finishingTarget = foes.find(t => countWeaknessFamilies(t, weaknessFamilies, 1) >= 2);
-      if (hasAction(npc, 'class') && finishingTarget) {
-        return { type: 'class', skill: 'rogue_finishing_strike', target: finishingTarget };
+      const finishingTarget = pickTarget(foes.filter(t => countWeaknessFamilies(t, weaknessFamilies, 1) >= 2), { preferLowHP: true, noise: 1 });
+      if (canUseSkill(npc, 'rogue_finishing_strike') && finishingTarget) {
+        return buildAction('rogue_finishing_strike', finishingTarget);
       }
       const exposed = highestWeakness(foes, 'expose', 1);
-      if (hasAction(npc, 'major') && exposed) {
-        return { type: 'major', skill: 'rogue_sneak_attack', target: exposed };
+      if (canUseSkill(npc, 'rogue_sneak_attack') && exposed) {
+        return buildAction('rogue_sneak_attack', exposed);
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'rogue_poisoned_knife')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'rogue_poisoned_knife', target };
+        if (target) return buildAction('rogue_poisoned_knife', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'rogue_hamstring')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'rogue_hamstring', target };
+        if (target) return buildAction('rogue_hamstring', target);
       }
-      if (hasAction(npc, 'bonus')) {
-        return { type: 'bonus', skill: 'rogue_evasion', target: npc };
+      if (canUseSkill(npc, 'rogue_evasion')) {
+        return buildAction('rogue_evasion', npc);
       }
       return null;
     }
@@ -227,21 +284,21 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);
       const marked = pickMarkedTarget(foes);
-      if (hasAction(npc, 'bonus') && !marked) {
+      if (canUseSkill(npc, 'huntsman_mark') && !marked) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'huntsman_mark', target };
+        if (target) return buildAction('huntsman_mark', target);
       }
-      if (hasAction(npc, 'class')) {
+      if (canUseSkill(npc, 'huntsman_command')) {
         const beasts = allies.filter(a => a !== npc && a.tags?.includes('beast'));
         const beast = firstAlive(beasts);
-        if (beast) return { type: 'class', skill: 'huntsman_command', target: beast };
+        if (beast) return buildAction('huntsman_command', beast);
       }
-      if (hasAction(npc, 'bonus') && marked && hasAnyWeakness(marked, ['expose', 'lacerate', 'disease', 'toxic'], 2)) {
-        return { type: 'bonus', skill: 'huntsman_empower_pack', target: marked };
+      if (canUseSkill(npc, 'huntsman_empower_pack') && marked && hasAnyWeakness(marked, ['expose', 'lacerate', 'disease', 'toxic'], 2)) {
+        return buildAction('huntsman_empower_pack', marked);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'huntsman_trap_shot')) {
         const target = marked || weakest(foes);
-        if (target) return { type: 'major', skill: 'huntsman_trap_shot', target };
+        if (target) return buildAction('huntsman_trap_shot', target);
       }
       return null;
     }
@@ -250,20 +307,20 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const lacTarget = highestWeakness(foes, 'lacerate', 1);
-      if (hasAction(npc, 'major') && lacTarget && hasAnyWeakness(lacTarget, ['lacerate'], 2)) {
-        return { type: 'major', skill: 'oskar_maw_rip', target: lacTarget };
+      if (canUseSkill(npc, 'oskar_maw_rip') && lacTarget && hasAnyWeakness(lacTarget, ['lacerate'], 2)) {
+        return buildAction('oskar_maw_rip', lacTarget);
       }
       const diseaseTarget = highestWeakness(foes, 'disease', 2);
-      if (hasAction(npc, 'class') && diseaseTarget) {
-        return { type: 'class', skill: 'oskar_rotting_maw', target: diseaseTarget };
+      if (canUseSkill(npc, 'oskar_rotting_maw') && diseaseTarget) {
+        return buildAction('oskar_rotting_maw', diseaseTarget);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'oskar_rending_bite')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'oskar_rending_bite', target };
+        if (target) return buildAction('oskar_rending_bite', target);
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'oskar_infectious_claw')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'oskar_infectious_claw', target };
+        if (target) return buildAction('oskar_infectious_claw', target);
       }
       return null;
     }
@@ -273,20 +330,20 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const toxicTarget = highestWeakness(foes, 'toxic', 2);
-      if (hasAction(npc, 'major') && toxicTarget) {
-        return { type: 'major', skill: 'kiro_corrosive_bite', target: toxicTarget };
+      if (canUseSkill(npc, 'kiro_corrosive_bite') && toxicTarget) {
+        return buildAction('kiro_corrosive_bite', toxicTarget);
       }
       const spreadTarget = highestWeakness(foes, 'toxic', 1);
-      if (hasAction(npc, 'class') && spreadTarget) {
-        return { type: 'class', skill: 'kiro_poison_cloud', target: spreadTarget };
+      if (canUseSkill(npc, 'kiro_poison_cloud') && spreadTarget) {
+        return buildAction('kiro_poison_cloud', spreadTarget);
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'kiro_toxic_spit')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'kiro_toxic_spit', target };
+        if (target) return buildAction('kiro_toxic_spit', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'kiro_venomous_swipe')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'kiro_venomous_swipe', target };
+        if (target) return buildAction('kiro_venomous_swipe', target);
       }
       return null;
     }
@@ -296,18 +353,19 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const fireCharged = highestWeakness(foes, 'fire', 2);
-      if (hasAction(npc, 'class') && fireCharged) {
-        return { type: 'class', skill: 'fire_burst', target: fireCharged };
+      if (canUseSkill(npc, 'fire_burst') && fireCharged) {
+        return buildAction('fire_burst', fireCharged);
       }
-      if (hasAction(npc, 'bonus') && !hasStatus(npc, 'heated_guard')) {
-        return { type: 'bonus', skill: 'fire_heated_guard', target: npc };
+      if (canUseSkill(npc, 'fire_heated_guard') && !hasStatus(npc, 'heated_guard')) {
+        return buildAction('fire_heated_guard', npc);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'fire_flare_wave') && foes.length >= 2) {
+        const target = weakest(foes) || foes[0];
+        return buildAction('fire_flare_wave', target);
+      }
+      if (canUseSkill(npc, 'fire_flame_slash')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'fire_flame_slash', target };
-      }
-      if (hasAction(npc, 'major') && foes.length >= 2) {
-        return { type: 'major', skill: 'fire_flare_wave', target: foes[0] };
+        if (target) return buildAction('fire_flame_slash', target);
       }
       return null;
     }
@@ -317,18 +375,19 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
       const frozen = highestWeakness(foes, 'cold', 2);
-      if (hasAction(npc, 'class') && frozen) {
-        return { type: 'class', skill: 'ice_freeze_point', target: frozen };
+      if (canUseSkill(npc, 'ice_freeze_point') && frozen) {
+        return buildAction('ice_freeze_point', frozen);
       }
-      if (hasAction(npc, 'bonus') && !hasStatus(npc, 'icy_guard')) {
-        return { type: 'bonus', skill: 'ice_icy_guard', target: npc };
+      if (canUseSkill(npc, 'ice_icy_guard') && !hasStatus(npc, 'icy_guard')) {
+        return buildAction('ice_icy_guard', npc);
       }
-      if (hasAction(npc, 'major') && foes.length >= 2) {
-        return { type: 'major', skill: 'ice_shard_storm', target: foes[0] };
+      if (canUseSkill(npc, 'ice_shard_storm') && foes.length >= 2) {
+        const target = weakest(foes) || foes[0];
+        return buildAction('ice_shard_storm', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'ice_frost_strike')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'ice_frost_strike', target };
+        if (target) return buildAction('ice_frost_strike', target);
       }
       return null;
     }
@@ -337,27 +396,27 @@ export const AI_PROFILES = {
   berserker_boss: {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
-      const heavyTarget = foes.find(t => hasAnyWeakness(t, ['expose', 'lacerate'], 2));
-      if (hasAction(npc, 'class') && heavyTarget) {
-        return { type: 'class', skill: 'berserker_death_spiral', target: heavyTarget };
+      const heavyTarget = pickTarget(foes.filter(t => hasAnyWeakness(t, ['expose', 'lacerate'], 2)), { preferLowHP: true, noise: 0.9 });
+      if (canUseSkill(npc, 'berserker_death_spiral') && heavyTarget) {
+        return buildAction('berserker_death_spiral', heavyTarget);
       }
-      if (hasAction(npc, 'bonus') && !hasStatus(npc, 'battle_frenzy')) {
-        return { type: 'bonus', skill: 'berserker_battle_frenzy', target: npc };
+      if (canUseSkill(npc, 'berserker_battle_frenzy') && !hasStatus(npc, 'battle_frenzy')) {
+        return buildAction('berserker_battle_frenzy', npc);
       }
-      if (hasAction(npc, 'major') && (npc.initiativeGauge || 0) >= 50) {
+      if (canUseSkill(npc, 'berserker_unstoppable_rush') && (npc.initiativeGauge || 0) >= 50) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'berserker_unstoppable_rush', target };
+        if (target) return buildAction('berserker_unstoppable_rush', target);
       }
-      if (hasAction(npc, 'major')) {
+      if (canUseSkill(npc, 'berserker_crushing_blow')) {
         const target = weakest(foes);
-        if (target) return { type: 'major', skill: 'berserker_crushing_blow', target };
+        if (target) return buildAction('berserker_crushing_blow', target);
       }
-      if (hasAction(npc, 'bonus')) {
+      if (canUseSkill(npc, 'berserker_guarded_fury')) {
         const target = weakest(foes);
-        if (target) return { type: 'bonus', skill: 'berserker_guarded_fury', target };
+        if (target) return buildAction('berserker_guarded_fury', target);
       }
-      if (hasAction(npc, 'class')) {
-        return { type: 'class', skill: 'berserker_disrupting_roar', target: npc };
+      if (canUseSkill(npc, 'berserker_disrupting_roar')) {
+        return buildAction('berserker_disrupting_roar', npc);
       }
       return null;
     }
