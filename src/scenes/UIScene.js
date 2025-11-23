@@ -575,7 +575,11 @@ export default class UIScene extends Phaser.Scene {
     };
 
     const performSave = (slotName) => {
+      // ensure overwrite uses fresh payload
+      localStorage.removeItem(`bmSave_${slotName}`);
       GameState.save(slotName);
+      this.overwriteConfirmGroup?.destroy(true);
+      this.overwriteConfirmGroup = null;
       this.cleanupPopup();
       this.refreshUI?.();
       this.showToast?.(`Saved to ${slotName}`);
@@ -586,7 +590,8 @@ export default class UIScene extends Phaser.Scene {
         this.overwriteConfirmGroup.destroy(true);
       }
       this.overwriteConfirmGroup = this.add.container(0, 0)
-        .setScrollFactor(0);
+        .setScrollFactor(0)
+        .setDepth(DEPTH.MODAL_PANEL + 10);
 
       const dim = this.add.rectangle(w / 2, h / 2, panelW + 40, panelH + 20, 0x000000, 0.55)
         .setOrigin(0.5)
@@ -607,8 +612,6 @@ export default class UIScene extends Phaser.Scene {
       }).setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          this.overwriteConfirmGroup?.destroy(true);
-          this.overwriteConfirmGroup = null;
           performSave(slotName);
         })
         .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
@@ -667,14 +670,13 @@ export default class UIScene extends Phaser.Scene {
 
     const slotsContainer = this.add.container(w / 2, h / 2);
 
-    const maskShape = this.add.graphics();
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
-    maskShape.setVisible(false);
-    const mask = maskShape.createGeometryMask();
-    slotsContainer.setMask(mask);
+    const maskGfx = this.add.graphics();
+    maskGfx.fillStyle(0xffffff, 1);
+    maskGfx.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
+    maskGfx.setVisible(false);
+    slotsContainer.setMask(maskGfx.createGeometryMask());
 
-    this.modalPanelGroup.add([maskShape, slotsContainer]);
+    this.modalPanelGroup.add([maskGfx, slotsContainer]);
 
     let scrollOffset = 0;
     const totalHeight = slots.length * slotSpacing;
@@ -693,10 +695,15 @@ export default class UIScene extends Phaser.Scene {
     );
     const handleWheel = (pointer, _over, dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
-      applyScroll(-dy * 0.5);
+      const step = Math.min(Math.abs(dy) * 0.35, 50) * Math.sign(-dy || 1);
+      applyScroll(step);
     };
     this.input.on('wheel', handleWheel);
-    this.modalPanelGroup.once('destroy', () => this.input.off('wheel', handleWheel));
+    this.modalPanelGroup.once('destroy', () => {
+      this.input.off('wheel', handleWheel);
+      maskGfx.destroy();
+    });
+
 
     if (slots.length === 0) {
       const emptyText = this.add.text(0, listTop + listHeight / 2, 'No existing saves', {
@@ -778,14 +785,13 @@ export default class UIScene extends Phaser.Scene {
 
     const slotsContainer = this.add.container(w / 2, h / 2);
 
-    const maskShape = this.add.graphics();
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
-    maskShape.setVisible(false);
-    const mask = maskShape.createGeometryMask();
-    slotsContainer.setMask(mask);
+    const maskGfx = this.add.graphics();
+    maskGfx.fillStyle(0xffffff, 1);
+    maskGfx.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
+    maskGfx.setVisible(false);
+    slotsContainer.setMask(maskGfx.createGeometryMask());
 
-    this.modalPanelGroup.add([maskShape, slotsContainer]);
+    this.modalPanelGroup.add([maskGfx, slotsContainer]);
 
     let scrollOffset = 0;
     const totalHeight = slots.length * slotSpacing;
@@ -804,10 +810,15 @@ export default class UIScene extends Phaser.Scene {
     );
     const handleWheel = (pointer, _over, dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
-      applyScroll(-dy * 0.5);
+      const step = Math.min(Math.abs(dy) * 0.35, 60) * Math.sign(-dy || 1);
+      applyScroll(step);
     };
     this.input.on('wheel', handleWheel);
-    this.modalPanelGroup.once('destroy', () => this.input.off('wheel', handleWheel));
+    this.modalPanelGroup.once('destroy', () => {
+      this.input.off('wheel', handleWheel);
+      maskGfx.destroy();
+    });
+
 
     if (slots.length === 0) {
       const emptyText = this.add.text(0, listTop + listHeight / 2, 'No saved games found', {
@@ -832,7 +843,7 @@ export default class UIScene extends Phaser.Scene {
           .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
           .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
 
-        const deleteBtn = this.add.text(listWidth / 2 - 30, y, '[dY-`?,?]', {
+        const deleteBtn = this.add.text(listWidth / 2 - 30, y, '[ Delete ]', {
           fontSize: '16px', color: '#ff5555'
         })
           .setOrigin(0.5)

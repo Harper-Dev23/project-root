@@ -91,14 +91,13 @@ export default class MainMenuScene extends Phaser.Scene {
     const slotSpacing = 60;
     const slotsContainer = this.add.container(0, 0);
 
-    const maskShape = this.add.graphics();
-    maskShape.fillStyle(0xffffff, 1);
-    maskShape.fillRect(-listWidth / 2, listTop, listWidth, listHeight);
-    maskShape.setVisible(false);
-    const mask = maskShape.createGeometryMask();
-    slotsContainer.setMask(mask);
+    const maskGfx = this.add.graphics();
+    maskGfx.fillStyle(0xffffff, 1);
+    maskGfx.fillRect(width / 2 - listWidth / 2, height / 2 + listTop, listWidth, listHeight);
+    maskGfx.setVisible(false);
+    slotsContainer.setMask(maskGfx.createGeometryMask());
 
-    this.loadPopup.add([maskShape, slotsContainer]);
+    this.loadPopup.add([maskGfx, slotsContainer]);
 
     let scrollOffset = 0;
     const totalHeight = slots.length * slotSpacing;
@@ -117,11 +116,13 @@ export default class MainMenuScene extends Phaser.Scene {
     );
     const handleWheel = (pointer, _over, dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
-      applyScroll(-dy * 0.5);
+      const step = Math.min(Math.abs(dy) * 0.35, 60) * Math.sign(-dy || 1);
+      applyScroll(step);
     };
     this.input.on('wheel', handleWheel);
     this.loadPopup.once('destroy', () => {
       this.input.off('wheel', handleWheel);
+      maskGfx.destroy();
     });
 
     if (slots.length === 0) {
