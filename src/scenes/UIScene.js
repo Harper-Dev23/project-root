@@ -451,6 +451,60 @@ export default class UIScene extends Phaser.Scene {
   }
 
   exitToMainMenu() {
+    if (this.exitConfirmOpen) return;
+
+    this.cleanupPopup?.();
+    this.exitConfirmOpen = true;
+
+    const w = this.sys.game.canvas.width;
+    const h = this.sys.game.canvas.height;
+
+    this.modalBlockerGroup = this.add.container(0, 0)
+      .setDepth(DEPTH.MODAL_BLOCKER)
+      .setScrollFactor(0);
+
+    const blocker = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.4)
+      .setOrigin(0.5)
+      .setInteractive();
+    this.modalBlockerGroup.add(blocker);
+
+    this.modalPanelGroup = this.add.container(0, 0)
+      .setDepth(DEPTH.MODAL_PANEL)
+      .setScrollFactor(0);
+
+    const panel = this.add.rectangle(w / 2, h / 2, 420, 180, 0x111111, 0.95)
+      .setOrigin(0.5)
+      .setStrokeStyle(2, 0xffffff);
+
+    const title = this.add.text(w / 2, h / 2 - 30, 'Exit to main menu?', {
+      fontSize: '20px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+
+    const yesBtn = this.add.text(w / 2 - 70, h / 2 + 35, '[ Yes ]', {
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => this._confirmExitToMainMenu())
+      .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
+
+    const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        this.cleanupPopup();
+      })
+      .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
+
+    this.modalPanelGroup.add([panel, title, yesBtn, noBtn]);
+  }
+
+  _confirmExitToMainMenu() {
     this.cleanupPopup?.();
     const overlays = [
       'CharacterListOverlay',
@@ -481,6 +535,7 @@ export default class UIScene extends Phaser.Scene {
 
     const w = this.sys.game.canvas.width;
     const h = this.sys.game.canvas.height;
+    const slots = GameState.listSaveSlots();
 
     // 1) FULL-SCREEN BLOCKER (transparent, eats clicks; below UI)
     this.modalBlockerGroup = this.add.container(0, 0)
@@ -497,36 +552,101 @@ export default class UIScene extends Phaser.Scene {
       .setDepth(DEPTH.MODAL_PANEL)
       .setScrollFactor(0);
 
-    // 🔄 NO halo/dim rectangle here. Just the panel itself:
-    const panelW = 420, panelH = 200;
+    const panelW = 460, panelH = 360;
     const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, 0x111111, 0.95)
       .setOrigin(0.5)
       .setStrokeStyle(2, 0xffffff);
-    const title = this.add.text(w / 2, h / 2 - 70, 'Enter Save Name:', {
+    const title = this.add.text(w / 2, h / 2 - (panelH / 2) + 30, 'Enter Save Name:', {
       fontSize: '20px', color: '#fff'
     }).setOrigin(0.5);
 
     this.modalPanelGroup.add([panel, title]);
 
     // DOM input
-    this.nameInputDOM = this.add.dom(w / 2, h / 2 - 25).createFromHTML(`
+    this.nameInputDOM = this.add.dom(w / 2, h / 2 - 100).createFromHTML(`
   <input type="text" name="saveName" placeholder="Save name"
-         style="font-size:18px;padding:5px;width:260px;">
+         style="font-size:18px;padding:6px 8px;width:280px;">
 `);
     this.modalPanelGroup.add(this.nameInputDOM);
 
+    const setInputValue = (val) => {
+      const input = this.nameInputDOM?.getChildByName('saveName');
+      if (input) input.value = val;
+    };
+
+    const performSave = (slotName) => {
+      GameState.save(slotName);
+      this.cleanupPopup();
+      this.refreshUI?.();
+      this.showToast?.(`Saved to ${slotName}`);
+    };
+
+    const showOverwriteConfirm = (slotName) => {
+      if (this.overwriteConfirmGroup) {
+        this.overwriteConfirmGroup.destroy(true);
+      }
+      this.overwriteConfirmGroup = this.add.container(0, 0)
+        .setScrollFactor(0);
+
+      const dim = this.add.rectangle(w / 2, h / 2, panelW + 40, panelH + 20, 0x000000, 0.55)
+        .setOrigin(0.5)
+        .setInteractive();
+      const confirmPanel = this.add.rectangle(w / 2, h / 2, 440, 180, 0x111111, 0.95)
+        .setOrigin(0.5)
+        .setStrokeStyle(2, 0xffffff);
+
+      const prompt = this.add.text(w / 2, h / 2 - 30, `Overwrite "${slotName}"?`, {
+        fontSize: '18px',
+        color: '#ffffff',
+        wordWrap: { width: 380 }
+      }).setOrigin(0.5);
+
+      const yesBtn = this.add.text(w / 2 - 70, h / 2 + 35, '[ Yes ]', {
+        fontSize: '18px',
+        color: '#ffffff'
+      }).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          this.overwriteConfirmGroup?.destroy(true);
+          this.overwriteConfirmGroup = null;
+          performSave(slotName);
+        })
+        .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
+        .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
+
+      const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
+        fontSize: '18px',
+        color: '#ffffff'
+      }).setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          this.overwriteConfirmGroup?.destroy(true);
+          this.overwriteConfirmGroup = null;
+        })
+        .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
+        .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
+
+      this.overwriteConfirmGroup.add([dim, confirmPanel, prompt, yesBtn, noBtn]);
+      this.modalPanelGroup.add(this.overwriteConfirmGroup);
+    };
+
     // Buttons
-    const saveBtn = this.add.text(w / 2 - 70, h / 2 + 50, '[ Save ]', { fontSize: '18px', color: '#ffffff' })
+    const saveBtn = this.add.text(w / 2 - 80, h / 2 - 40, '[ Save ]', { fontSize: '18px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        const nm = this.nameInputDOM.getChildByName('saveName').value.trim();
-        if (nm) GameState.save(nm);
-        this.cleanupPopup();
+        const nm = this.nameInputDOM?.getChildByName('saveName')?.value.trim();
+        if (!nm) return;
+        setInputValue(nm);
+        if (slots.includes(nm)) {
+          showOverwriteConfirm(nm);
+        } else {
+          performSave(nm);
+        }
       })
       .on('pointerover', () => saveBtn.setStyle({ color: '#ffffaa' }))
       .on('pointerout', () => saveBtn.setStyle({ color: '#ffffff' }));
 
-    const cancelBtn = this.add.text(w / 2 + 70, h / 2 + 50, '[ Cancel ]', { fontSize: '18px', color: '#ffffff' })
+    const cancelBtn = this.add.text(w / 2 + 80, h / 2 - 40, '[ Cancel ]', { fontSize: '18px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanupPopup())
       .on('pointerover', () => cancelBtn.setStyle({ color: '#ffffaa' }))
@@ -534,7 +654,86 @@ export default class UIScene extends Phaser.Scene {
 
     this.modalPanelGroup.add([saveBtn, cancelBtn]);
 
+    const listHeader = this.add.text(w / 2, h / 2 + 10, 'Existing Slots (click to fill):', {
+      fontSize: '16px',
+      color: '#cccccc'
+    }).setOrigin(0.5);
+    this.modalPanelGroup.add(listHeader);
+
+    const listWidth = panelW - 40;
+    const listHeight = 140;
+    const listTop = 40;
+    const slotSpacing = 32;
+
+    const slotsContainer = this.add.container(w / 2, h / 2);
+
+    const maskShape = this.add.graphics();
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
+    maskShape.setVisible(false);
+    const mask = maskShape.createGeometryMask();
+    slotsContainer.setMask(mask);
+
+    this.modalPanelGroup.add([maskShape, slotsContainer]);
+
+    let scrollOffset = 0;
+    const totalHeight = slots.length * slotSpacing;
+    const maxScroll = Math.max(0, totalHeight - listHeight);
+    const applyScroll = (delta) => {
+      if (!maxScroll) return;
+      scrollOffset = Phaser.Math.Clamp(scrollOffset + delta, -maxScroll, 0);
+      slotsContainer.y = scrollOffset;
+    };
+
+    const listArea = new Phaser.Geom.Rectangle(
+      w / 2 - listWidth / 2,
+      h / 2 + listTop,
+      listWidth,
+      listHeight
+    );
+    const handleWheel = (pointer, _over, dx, dy) => {
+      if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
+      applyScroll(-dy * 0.5);
+    };
+    this.input.on('wheel', handleWheel);
+    this.modalPanelGroup.once('destroy', () => this.input.off('wheel', handleWheel));
+
+    if (slots.length === 0) {
+      const emptyText = this.add.text(0, listTop + listHeight / 2, 'No existing saves', {
+        fontSize: '16px',
+        color: '#cccccc'
+      }).setOrigin(0.5);
+      slotsContainer.add(emptyText);
+    } else {
+      slots.forEach((sl, i) => {
+        const rowY = listTop + i * slotSpacing;
+
+        const slotText = this.add.text(-listWidth / 2 + 10, rowY, sl, {
+          fontSize: '16px', color: '#fff'
+        })
+          .setOrigin(0, 0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => setInputValue(sl))
+          .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
+          .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
+
+        const overwriteBtn = this.add.text(listWidth / 2 - 70, rowY, '[ Overwrite ]', {
+          fontSize: '15px', color: '#ffcc66'
+        })
+          .setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+            setInputValue(sl);
+            showOverwriteConfirm(sl);
+          })
+          .on('pointerover', () => overwriteBtn.setStyle({ color: '#ffffaa' }))
+          .on('pointerout', () => overwriteBtn.setStyle({ color: '#ffcc66' }));
+
+        slotsContainer.add([slotText, overwriteBtn]);
+      });
+    }
   }
+
 
 
 
@@ -571,36 +770,80 @@ export default class UIScene extends Phaser.Scene {
 
     this.modalPanelGroup.add([panel, title]);
 
-    // Slots
     const slots = GameState.listSaveSlots();
-    const startY = h / 2 - 110;
-    slots.forEach((sl, i) => {
-      const y = startY + i * 40;
+    const listWidth = panelW - 40;
+    const listHeight = 220;
+    const listTop = -110;
+    const slotSpacing = 40;
 
-      const slotText = this.add.text(w / 2 - 120, y, sl, {
-        fontSize: '18px', color: '#fff'
-      })
-        .setOrigin(0, 0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          GameState.load(sl);
-          this.cleanupPopup();
-          this.refreshUI?.();
+    const slotsContainer = this.add.container(w / 2, h / 2);
+
+    const maskShape = this.add.graphics();
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
+    maskShape.setVisible(false);
+    const mask = maskShape.createGeometryMask();
+    slotsContainer.setMask(mask);
+
+    this.modalPanelGroup.add([maskShape, slotsContainer]);
+
+    let scrollOffset = 0;
+    const totalHeight = slots.length * slotSpacing;
+    const maxScroll = Math.max(0, totalHeight - listHeight);
+    const applyScroll = (delta) => {
+      if (!maxScroll) return;
+      scrollOffset = Phaser.Math.Clamp(scrollOffset + delta, -maxScroll, 0);
+      slotsContainer.y = scrollOffset;
+    };
+
+    const listArea = new Phaser.Geom.Rectangle(
+      w / 2 - listWidth / 2,
+      h / 2 + listTop,
+      listWidth,
+      listHeight
+    );
+    const handleWheel = (pointer, _over, dx, dy) => {
+      if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
+      applyScroll(-dy * 0.5);
+    };
+    this.input.on('wheel', handleWheel);
+    this.modalPanelGroup.once('destroy', () => this.input.off('wheel', handleWheel));
+
+    if (slots.length === 0) {
+      const emptyText = this.add.text(0, listTop + listHeight / 2, 'No saved games found', {
+        fontSize: '18px',
+        color: '#cccccc'
+      }).setOrigin(0.5);
+      slotsContainer.add(emptyText);
+    } else {
+      slots.forEach((sl, i) => {
+        const y = listTop + i * slotSpacing;
+
+        const slotText = this.add.text(-listWidth / 2 + 10, y, sl, {
+          fontSize: '18px', color: '#fff'
         })
-        .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
-        .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
+          .setOrigin(0, 0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+            GameState.load(sl);
+            this.cleanupPopup();
+            this.refreshUI?.();
+          })
+          .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
+          .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
 
-      const deleteBtn = this.add.text(w / 2 + 130, y, '[🗑️]', {
-        fontSize: '16px', color: '#ff5555'
-      })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.confirmDeleteSlot(sl))
-        .on('pointerover', () => deleteBtn.setStyle({ color: '#ff0000' }))
-        .on('pointerout', () => deleteBtn.setStyle({ color: '#ff5555' }));
+        const deleteBtn = this.add.text(listWidth / 2 - 30, y, '[dY-`?,?]', {
+          fontSize: '16px', color: '#ff5555'
+        })
+          .setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => this.confirmDeleteSlot(sl))
+          .on('pointerover', () => deleteBtn.setStyle({ color: '#ff0000' }))
+          .on('pointerout', () => deleteBtn.setStyle({ color: '#ff5555' }));
 
-      this.modalPanelGroup.add([slotText, deleteBtn]);
-    });
+        slotsContainer.add([slotText, deleteBtn]);
+      });
+    }
 
     // Cancel button
     const cancelBtn = this.add.text(w / 2, h / 2 + (panelH / 2) - 25, '[ Cancel ]', {
@@ -614,6 +857,7 @@ export default class UIScene extends Phaser.Scene {
 
     this.modalPanelGroup.add(cancelBtn);
   }
+
 
 
   // Replace your addButton with this (same signature)
@@ -642,6 +886,8 @@ export default class UIScene extends Phaser.Scene {
     if (this.modalBlockerGroup) { this.modalBlockerGroup.destroy(true); this.modalBlockerGroup = null; }
     if (this.popupGroup) { this.popupGroup.destroy(true); this.popupGroup = null; }
     if (this.popupButtons) { this.popupButtons.length = 0; }
+    this.overwriteConfirmGroup = null;
+    this.exitConfirmOpen = false;
   }
 
   showSelectionMenu(title, options) {

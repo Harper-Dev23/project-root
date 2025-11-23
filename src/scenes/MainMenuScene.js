@@ -54,94 +54,133 @@ export default class MainMenuScene extends Phaser.Scene {
       .on('pointerout', () => btn.setStyle({ color: '#ffffaa' }));
   }
 
-showLoadGamePopup() {
-  const width = this.sys.game.canvas.width;
-  const height = this.sys.game.canvas.height;
+  showLoadGamePopup() {
+    const width = this.sys.game.canvas.width;
+    const height = this.sys.game.canvas.height;
 
-  const slots = GameState.listSaveSlots();
+    const slots = GameState.listSaveSlots();
 
-  // Remove existing popup if any
-  if (this.loadPopup) {
-    this.loadPopup.destroy(true);
-  }
-
-  // === Blocker layer to prevent clicks under popup ===
-  const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.3)
-    .setInteractive()
-    .setDepth(999); // ensure it's above menu but below popup
-  blocker.on('pointerdown', () => {}); // do nothing, just absorb clicks
-
-  // === Popup container ===
-  this.loadPopup = this.add.container(width / 2, height / 2).setDepth(1000);
-
-  // Background
-  const bg = this.add.rectangle(0, 0, 500, 400, 0x111111, 0.95)
-    .setStrokeStyle(2, 0xffffff)
-    .setOrigin(0.5);
-  this.loadPopup.add(bg);
-
-  this.loadPopup.add(this.add.text(0, -170, 'Select Save Slot', {
-    fontSize: '20px',
-    color: '#ffffaa'
-  }).setOrigin(0.5));
-
-  if (slots.length === 0) {
-    this.loadPopup.add(this.add.text(0, 0, 'No saved games found', {
-      fontSize: '18px',
-      color: '#cccccc'
-    }).setOrigin(0.5));
-  } else {
-    slots.forEach((slot, i) => {
-      const rawData = localStorage.getItem(`bmSave_${slot}`);
-      let partyPreview = '';
-      try {
-        const parsed = JSON.parse(rawData);
-        if (parsed?.partyIds?.length) {
-          const partyChars = (parsed.characters || [])
-            .filter(c => parsed.partyIds.includes(c.id))
-            .map(c => `${c.name} (Lv ${c.level})`);
-          partyPreview = partyChars.join(', ');
-        }
-      } catch (e) {
-        console.warn(`Failed to read save slot ${slot}:`, e);
-      }
-
-      const btnY = -120 + i * 60;
-      const btn = this.add.text(0, btnY, `[ Slot ${slot} ]`, {
-        fontSize: '18px',
-        color: '#88ccff'
-      }).setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          GameState.load(slot);
-          this.loadPopup.destroy(true);
-          blocker.destroy();
-          this.sceneManager.enterTown();
-        });
-      this.loadPopup.add(btn);
-
-      if (partyPreview) {
-        const previewText = this.add.text(0, btnY + 20, partyPreview, {
-          fontSize: '14px',
-          color: '#cccccc',
-          wordWrap: { width: 460 }
-        }).setOrigin(0.5);
-        this.loadPopup.add(previewText);
-      }
-    });
-  }
-
-  // Close button
-  const closeBtn = this.add.text(0, 170, '[ Close ]', {
-    fontSize: '18px',
-    color: '#ff6666'
-  }).setOrigin(0.5)
-    .setInteractive({ useHandCursor: true })
-    .on('pointerdown', () => {
+    // Remove existing popup if any
+    if (this.loadPopup) {
       this.loadPopup.destroy(true);
-      blocker.destroy();
+    }
+
+    // === Blocker layer to prevent clicks under popup ===
+    const blocker = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.3)
+      .setInteractive()
+      .setDepth(999); // ensure it's above menu but below popup
+    blocker.on('pointerdown', () => {}); // do nothing, just absorb clicks
+
+    // === Popup container ===
+    this.loadPopup = this.add.container(width / 2, height / 2).setDepth(1000);
+
+    // Background
+    const bg = this.add.rectangle(0, 0, 500, 400, 0x111111, 0.95)
+      .setStrokeStyle(2, 0xffffff)
+      .setOrigin(0.5);
+    this.loadPopup.add(bg);
+
+    this.loadPopup.add(this.add.text(0, -170, 'Select Save Slot', {
+      fontSize: '20px',
+      color: '#ffffaa'
+    }).setOrigin(0.5));
+
+    const listWidth = 460;
+    const listHeight = 240;
+    const listTop = -140;
+    const slotSpacing = 60;
+    const slotsContainer = this.add.container(0, 0);
+
+    const maskShape = this.add.graphics();
+    maskShape.fillStyle(0xffffff, 1);
+    maskShape.fillRect(-listWidth / 2, listTop, listWidth, listHeight);
+    maskShape.setVisible(false);
+    const mask = maskShape.createGeometryMask();
+    slotsContainer.setMask(mask);
+
+    this.loadPopup.add([maskShape, slotsContainer]);
+
+    let scrollOffset = 0;
+    const totalHeight = slots.length * slotSpacing;
+    const maxScroll = Math.max(0, totalHeight - listHeight);
+    const applyScroll = (delta) => {
+      if (!maxScroll) return;
+      scrollOffset = Phaser.Math.Clamp(scrollOffset + delta, -maxScroll, 0);
+      slotsContainer.y = scrollOffset;
+    };
+
+    const listArea = new Phaser.Geom.Rectangle(
+      width / 2 - listWidth / 2,
+      height / 2 + listTop,
+      listWidth,
+      listHeight
+    );
+    const handleWheel = (pointer, _over, dx, dy) => {
+      if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
+      applyScroll(-dy * 0.5);
+    };
+    this.input.on('wheel', handleWheel);
+    this.loadPopup.once('destroy', () => {
+      this.input.off('wheel', handleWheel);
     });
-  this.loadPopup.add(closeBtn);
-}
+
+    if (slots.length === 0) {
+      slotsContainer.add(this.add.text(0, listTop + listHeight / 2, 'No saved games found', {
+        fontSize: '18px',
+        color: '#cccccc'
+      }).setOrigin(0.5));
+    } else {
+      slots.forEach((slot, i) => {
+        const rawData = localStorage.getItem(`bmSave_${slot}`);
+        let partyPreview = '';
+        try {
+          const parsed = JSON.parse(rawData);
+          if (parsed?.partyIds?.length) {
+            const partyChars = (parsed.characters || [])
+              .filter(c => parsed.partyIds.includes(c.id))
+              .map(c => `${c.name} (Lv ${c.level})`);
+            partyPreview = partyChars.join(', ');
+          }
+        } catch (e) {
+          console.warn(`Failed to read save slot ${slot}:`, e);
+        }
+
+        const btnY = listTop + 20 + i * slotSpacing;
+        const btn = this.add.text(0, btnY, `[ Slot ${slot} ]`, {
+          fontSize: '18px',
+          color: '#88ccff'
+        }).setOrigin(0.5)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => {
+            GameState.load(slot);
+            this.loadPopup.destroy(true);
+            blocker.destroy();
+            this.sceneManager.enterTown();
+          });
+        slotsContainer.add(btn);
+
+        if (partyPreview) {
+          const previewText = this.add.text(0, btnY + 20, partyPreview, {
+            fontSize: '14px',
+            color: '#cccccc',
+            wordWrap: { width: listWidth - 20 }
+          }).setOrigin(0.5);
+          slotsContainer.add(previewText);
+        }
+      });
+    }
+
+    // Close button
+    const closeBtn = this.add.text(0, 170, '[ Close ]', {
+      fontSize: '18px',
+      color: '#ff6666'
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        this.loadPopup.destroy(true);
+        blocker.destroy();
+      });
+    this.loadPopup.add(closeBtn);
+  }
 
 }

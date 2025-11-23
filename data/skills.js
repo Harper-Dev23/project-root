@@ -2601,6 +2601,816 @@ Object.assign(RAW_SKILLS, {
   },
 
   // ===============================
+  // v3.21 - Sword (2h) (13)
+  // ===============================
+
+  // -------- Generation (6) --------
+  'wide_sweep': {
+    id: "wide_sweep",
+    name: "Wide Sweep",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "STR",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate", "aoe"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 2,
+    aoe: { shape: "column", scale: 1 },
+    buildupHint: { lacerate: 100 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.wide_sweep;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.max(1, Math.floor(amount * 0.95));
+      const buildupVal = ability?.buildupHint?.lacerate ?? 100;
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            const splashAmount = Math.max(1, Math.floor(amount * 0.8));
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              buildup: { lacerate: buildupVal },
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+      return {
+        ...roll,
+        amount,
+        buildup: { lacerate: buildupVal },
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "A broad arc that strikes up to three foes ahead, opening each with bleeding cuts."
+  },
+
+  'winters_mark': {
+    id: "winters_mark",
+    name: "Winter's Mark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "WIS",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold"],
+    emitTagsOnUse: ["thrust"],
+    cooldown: 2,
+    buildupHint: { cold: 100 },
+    rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.winters_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        skipGearMultiplier: true,
+      }));
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      if (coldTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.08 * coldTier));
+      }
+      return {
+        ...roll,
+        amount,
+        element: "cold",
+        buildup: { cold: ability?.buildupHint?.cold ?? 100 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A precise mark that seeds Frost—crossing a tier chills the target's footing."
+  },
+
+  'defensive_stand': {
+    id: "defensive_stand",
+    name: "Defensive Stand",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "CON",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["stance", "support", "cold"],
+    cooldown: 3,
+    buildupHint: { cold: 100 },
+    rewardIfTier: { family: "cold", tierAtLeast: 1, buff: { guardPct: 12, turns: 1 } },
+    statusEffects: [{ id: "defensive_stand", turns: 1, guardPct: 15, nextHitBuildup: { cold: 100 }, nextHitOnly: true }],
+    apply: (attacker) => {
+      const ability = SKILLS?.defensive_stand;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({
+          ...effect,
+          nextHitBuildup: { cold: ability?.buildupHint?.cold ?? 100 }
+        }))
+        : undefined;
+      return {
+        amount: 0,
+        statusEffects,
+        rewardIfTier: cloneRewardStruct(ability?.rewardIfTier),
+      };
+    },
+    description: "Brace behind the greatsword, gaining guard; the next attacker is chilled."
+  },
+
+  'threatening_posture': {
+    id: "threatening_posture",
+    name: "Threatening Posture",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "CHA",
+    requiredValue: 13,
+    actionCost: "bonus",
+    mpCost: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["support", "taunt", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 100 },
+    statusEffects: [{ id: "taunted", turns: 1 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.threatening_posture;
+      const turns = ability?.statusEffects?.[0]?.turns ?? 1;
+      const statusEffects = [{
+        id: "taunted",
+        turns,
+        data: { forcedTarget: attacker?.id || attacker?.name || null },
+      }];
+      return {
+        amount: 0,
+        statusEffects,
+        buildup: { expose: ability?.buildupHint?.expose ?? 100 },
+      };
+    },
+    description: "A menacing stance that taunts the foe and exposes a soft spot."
+  },
+
+  'sundering_blade': {
+    id: "sundering_blade",
+    name: "Sundering Blade",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "STR",
+    requiredValue: 17,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate", "expose"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 3,
+    buildupHint: { lacerate: 100, expose: 80 },
+    rewardIfTierCross: [{ family: "lacerate", tier: 1, debuff: { bleedTakenPct: 15, turns: 2 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.sundering_blade;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
+      }
+      return {
+        ...roll,
+        amount,
+        buildup: {
+          lacerate: ability?.buildupHint?.lacerate ?? 100,
+          expose: ability?.buildupHint?.expose ?? 80,
+        },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A brutal cut that both rends and reveals; deeper bleeds amplify the pain."
+  },
+
+  'footwork_drill': {
+    id: "footwork_drill",
+    name: "Footwork Drill",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "DEX",
+    requiredValue: 15,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold", "proliferate"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 2,
+    proliferateWeakness: { families: ["cold"], to: "adjacent", ratio: 1.0, maxTargets: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.footwork_drill;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        skipGearMultiplier: true,
+      }));
+      amount = Math.max(1, Math.floor(amount * 0.9));
+
+      const hasWeakness = !!(target?.weakness && Object.values(target.weakness.tiers || {}).some(val => (val || 0) > 0));
+      let log;
+      if (hasWeakness && attacker) {
+        const before = attacker.initiativeGauge || 0;
+        attacker.initiativeGauge = Math.max(0, before - 15);
+        const gain = Math.max(0, before - attacker.initiativeGauge);
+        log = gain ? `${attacker.name || "The duelist"} seizes tempo, gaining initiative.` : undefined;
+      }
+
+      const spreadMeta = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const neighbors = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          const coldMeter = target?.weakness?.meters?.cold || 0;
+          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
+          neighbors.slice(0, maxTargets).forEach(char => {
+            if (coldMeter <= 0) return;
+            char.weakness = char.weakness || { meters: {}, tiers: {} };
+            char.weakness.meters = char.weakness.meters || {};
+            char.weakness.tiers = char.weakness.tiers || {};
+            char.weakness.meters.cold = (char.weakness.meters.cold || 0) + coldMeter;
+            char.weakness.tiers.cold = weaknessTierFromMeter(char.weakness.meters.cold);
+            spreadMeta.push({ targetId: char.id || char.name, family: "cold", amount: coldMeter });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        element: "cold",
+        log,
+        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
+      };
+    },
+    description: "Agile steps cut in and out—steal tempo against weakened foes and mirror their Frost to a neighbor."
+  },
+
+  // -------- Payoff (7) --------
+  'arc_finish': {
+    id: "arc_finish",
+    name: "Arc Finish",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "STR",
+    requiredValue: 17,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "aoe", "finisher", "consume"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 3,
+    aoe: { shape: "column", scale: 1 },
+    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
+    consumeWeakness: ["lacerate"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.arc_finish;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseAmount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const computeDamage = (victim, base, scale = 1) => {
+        if (!victim) return { amount: Math.max(1, Math.floor(base * scale)), burst: 0, cleared: false };
+        let amount = Math.max(1, Math.floor(base * scale));
+        const meter = victim?.weakness?.meters?.lacerate || 0;
+        const tier = victim?.weakness?.tiers?.lacerate || 0;
+        if (tier >= 1) {
+          amount = Math.floor(amount * (1 + 0.12 * tier));
+        }
+        let burst = 0;
+        if (meter > 0) {
+          const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+          burst = Math.max(0, Math.floor((meter / 14) + (tier * 6) + Math.max(0, intensity - 1) * 8));
+          amount += burst;
+        }
+        let cleared = false;
+        if (victim?.weakness?.meters) {
+          victim.weakness.meters.lacerate = 0;
+          if (victim.weakness.tiers) {
+            victim.weakness.tiers.lacerate = weaknessTierFromMeter(0);
+          }
+          cleared = meter > 0;
+        }
+        return { amount: Math.max(1, amount), burst, cleared };
+      };
+
+      const main = computeDamage(target, baseAmount, 1);
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            const res = computeDamage(char, baseAmount, 0.85);
+            splash.push({
+              target: char,
+              amount: res.amount,
+              consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount: main.amount,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "A crushing follow-through against bleeding foes; converts stored blood into a finishing sweep."
+  },
+
+  'glacial_crack': {
+    id: "glacial_crack",
+    name: "Glacial Crack",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "WIS",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold", "consume", "control"],
+    emitTagsOnUse: ["smash"],
+    cooldown: 3,
+    requiresWeakness: { family: "cold", tierAtLeast: 2 },
+    consumeWeakness: ["cold"],
+    statusEffects: [{ id: "rooted", turns: 1 }],
+    transformWeakness: { from: "cold", to: "immobilized", ratio: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacial_crack;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        skipGearMultiplier: true,
+      }));
+      const meter = target?.weakness?.meters?.cold || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      amount = Math.floor(amount * (1 + Math.max(0.15, (intensity - 1) * 0.15)));
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        isMagic: true,
+        element: "cold",
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        transformWeakness: ability?.transformWeakness ? { ...ability.transformWeakness } : undefined,
+      };
+    },
+    description: "Bring the blade down to shatter Frost, rooting the frozen target and converting Cold into binding ice."
+  },
+
+  'avalanche_crash': {
+    id: "avalanche_crash",
+    name: "Avalanche Crash",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "STR",
+    requiredValue: 17,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold", "aoe", "consume"],
+    emitTagsOnUse: ["smash"],
+    cooldown: 3,
+    aoe: { shape: "cone", scale: 1 },
+    conditionHint: { requiresColdInArea: true },
+    consumeWeakness: ["cold"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.avalanche_crash;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseAmount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        skipGearMultiplier: true,
+      }));
+
+      const hitOne = (victim, scale = 1) => {
+        if (!victim) return { amount: 0 };
+        let amt = Math.max(1, Math.floor(baseAmount * scale));
+        const coldTier = victim?.weakness?.tiers?.cold || 0;
+        if (coldTier > 0) {
+          amt = Math.floor(amt * (1 + 0.12 * coldTier));
+        }
+        const meter = victim?.weakness?.meters?.cold || 0;
+        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+        if (intensity > 1) {
+          amt = Math.floor(amt * (1 + Math.max(0, intensity - 1) * 0.12));
+        }
+        if (victim?.weakness?.meters) {
+          victim.weakness.meters.cold = 0;
+          if (victim.weakness.tiers) {
+            victim.weakness.tiers.cold = weaknessTierFromMeter(0);
+          }
+        }
+        return { amount: Math.max(1, amt) };
+      };
+
+      const main = hitOne(target, 1);
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            const res = hitOne(char, 0.8);
+            splash.push({
+              target: char,
+              amount: res.amount,
+              element: "cold",
+              consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount: main.amount,
+        isMagic: true,
+        element: "cold",
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Drive the blade into the ground, sending a frost wave through the line and collapsing Cold stacks."
+  },
+
+  'riposte_cyclone': {
+    id: "riposte_cyclone",
+    name: "Riposte Cyclone",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "DEX",
+    requiredValue: 16,
+    actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "aoe"],
+    emitTagsOnUse: ["spin"],
+    cooldown: 3,
+    aoe: { shape: "cone", scale: 1 },
+    conditionHint: { dodgedOrParriedThisRound: true },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.riposte_cyclone;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.max(1, Math.floor(amount * 0.9));
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * exposeTier));
+      }
+
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            let splashAmount = Math.max(1, Math.floor(amount * 0.75));
+            const tier = char?.weakness?.tiers?.expose || 0;
+            if (tier >= 1) {
+              splashAmount = Math.floor(splashAmount * (1 + 0.1 * tier));
+            }
+            splash.push({
+              target: char,
+              amount: splashAmount,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "A spinning counter released after an evade; harsher on exposed foes nearby."
+  },
+
+  'aura_of_frost': {
+    id: "aura_of_frost",
+    name: "Aura of Frost",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "attack", "cold", "aoe", "consume"],
+    emitTagsOnUse: ["frost"],
+    cooldown: 4,
+    aoe: { shape: "cone", scale: 1 },
+    conditionHint: { requiresFrostZone: true },
+    consumeWeakness: ["cold"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.aura_of_frost;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseAmount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "cold",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+
+      const hitOne = (victim, scale = 1) => {
+        if (!victim) return { amount: 0 };
+        let amt = Math.max(1, Math.floor(baseAmount * scale));
+        const coldTier = victim?.weakness?.tiers?.cold || 0;
+        if (coldTier > 0) {
+          amt = Math.floor(amt * (1 + 0.1 * coldTier));
+        }
+        if (victim?.weakness?.meters?.cold) {
+          victim.weakness.meters.cold = 0;
+          if (victim.weakness.tiers) {
+            victim.weakness.tiers.cold = weaknessTierFromMeter(victim.weakness.meters.cold);
+          }
+        }
+        return { amount: Math.max(1, amt) };
+      };
+
+      const main = hitOne(target, 1);
+      const splash = [];
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            const res = hitOne(char, 0.85);
+            splash.push({
+              target: char,
+              amount: res.amount,
+              isMagic: true,
+              element: "cold",
+              consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      return {
+        ...roll,
+        amount: main.amount,
+        isMagic: true,
+        element: "cold",
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Unleash a frost aura around the swing; chilled foes suffer more before their Cold dissipates."
+  },
+
+  'executioners_edge': {
+    id: "executioners_edge",
+    name: "Executioner's Edge",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "STR",
+    requiredValue: 18,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "execute", "consume"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 3,
+    requiresWeakness: { family: "lacerate", tierAtLeast: 2 },
+    consumeWeakness: ["lacerate"],
+    statusEffects: [{ id: "weakened", turns: 2, mods: { PhysicalResist: -12, damageDownPct: 10 } }],
+    rewardIfTierCross: [{ family: "lacerate", tier: 2, debuff: { bleedResDownPct: 20, turns: 2 } }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.executioners_edge;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.25);
+
+      const meter = target?.weakness?.meters?.lacerate || 0;
+      const tier = target?.weakness?.tiers?.lacerate || 0;
+      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+      if (tier > 0) {
+        amount = Math.floor(amount * (1 + 0.18 * tier));
+      }
+      if (intensity > 1) {
+        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      }
+
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+
+      return {
+        ...roll,
+        amount,
+        statusEffects,
+        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A decisive finisher for deeply bleeding foes; leaves them weakened and strips bleed resistance."
+  },
+
+  'harmony_strike': {
+    id: "harmony_strike",
+    name: "Harmony Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["sword_2h"],
+    requiredStat: "CHA",
+    requiredValue: 17,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "aoe", "support"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 3,
+    aoe: { shape: "column", scale: 1 },
+    conditionHint: { requiresMultipleWeakenedEnemies: true },
+    healPerStatus: 3,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.harmony_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const baseAmount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+
+      const families = ["expose", "lacerate"];
+      const trimOneStack = (victim) => {
+        let consumed = 0;
+        if (!victim?.weakness) return consumed;
+        victim.weakness.meters = victim.weakness.meters || {};
+        victim.weakness.tiers = victim.weakness.tiers || {};
+        families.forEach(f => {
+          const meter = victim.weakness.meters?.[f] || 0;
+          if (meter > 0) {
+            const newMeter = Math.max(0, meter - 100);
+            victim.weakness.meters[f] = newMeter;
+            victim.weakness.tiers[f] = weaknessTierFromMeter(newMeter);
+            consumed += 1;
+          }
+        });
+        return consumed;
+      };
+
+      const applyOn = (victim, scale = 1) => {
+        if (!victim) return { amount: 0, consumed: 0 };
+        let amt = Math.max(1, Math.floor(baseAmount * scale));
+        const consumed = trimOneStack(victim);
+        if (consumed > 0) {
+          amt = Math.floor(amt * (1 + 0.1 * consumed));
+        }
+        return { amount: Math.max(1, amt), consumed };
+      };
+
+      const main = applyOn(target, 1);
+      const splash = [];
+      let totalConsumed = main.consumed;
+      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const others = sideSlots
+            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char) || [];
+          others.slice(0, 2).forEach(char => {
+            const res = applyOn(char, 0.9);
+            totalConsumed += res.consumed;
+            splash.push({
+              target: char,
+              amount: res.amount,
+              tags: ability?.tags,
+            });
+          });
+        }
+      }
+
+      const healPerStatus = ability?.healPerStatus ?? 3;
+      let healedAllies;
+      if (attacker?.team && totalConsumed > 0) {
+        healedAllies = [];
+        attacker.team.forEach(ally => {
+          if (!ally) return;
+          const maxHP = ally.maxHP ?? ally.derivedStats?.maxHP ?? 0;
+          if (maxHP <= 0) return;
+          const heal = totalConsumed * healPerStatus;
+          const before = ally.currentHP ?? 0;
+          const after = Math.min(maxHP, before + heal);
+          ally.currentHP = after;
+          healedAllies.push({ id: ally.id || ally.name, healed: after - before });
+        });
+      }
+
+      return {
+        ...roll,
+        amount: main.amount,
+        splash: splash.length ? splash : undefined,
+        healedAllies: healedAllies && healedAllies.length ? healedAllies : undefined,
+      };
+    },
+    description: "A sweeping cut that harmonizes the battlefield—prunes Expose/Bleed by a stack and shares a small heal per status to nearby allies."
+  },
+
+  // ===============================
   // v3.21 - Sling (1h) (13)
   // ===============================
 
