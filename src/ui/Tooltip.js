@@ -16,32 +16,35 @@ export default class Tooltip {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
 
+    const topDepth = (UI_DEPTH?.tooltip ?? 5000) + 500; // sit above any overlay panels
+    this.topDepth = topDepth;
+
     // Title
     const title = scene.add.text(this.padding, this.padding, '', {
       ...FONTS.body,
       color: '#dddddd',
       wordWrap: { width: 320 }
-    }).setOrigin(0, 0).setDepth(UI_DEPTH.tooltip);
+    }).setOrigin(0, 0).setDepth(topDepth);
 
     // Pills row container (rendered as children rect+text)
     const pills = scene.add.container(this.padding, this.padding)
-      .setDepth(UI_DEPTH.tooltip);
+      .setDepth(topDepth);
 
     // Body
     const body = scene.add.text(this.padding, this.padding, '', {
       ...FONTS.muted,
       color: '#dddddd',       // force CSS string at creation
       wordWrap: { width: 320 }
-    }).setOrigin(0, 0).setDepth(UI_DEPTH.tooltip);
+    }).setOrigin(0, 0).setDepth(topDepth);
 
     // Background
     const bg = scene.add.rectangle(0, 0, 340, 1, COLORS.panel)
       .setOrigin(0)
       .setStrokeStyle(1, COLORS.border)
-      .setDepth(UI_DEPTH.tooltip);
+      .setDepth(topDepth);
 
     this.container = scene.add.container(0, 0, [bg, title, pills, body])
-      .setDepth(UI_DEPTH.tooltip)
+      .setDepth(topDepth)
       .setVisible(false);
 
     // Disable interactivity for the tooltip container and all child elements (prevents blocking clicks)
@@ -106,13 +109,13 @@ _renderPills(tags = []) {
     const txt = this.scene.add.text(0, 0, tag, {
       ...FONTS.muted,
       color: '#ffffff'
-    }).setDepth(UI_DEPTH.tooltip).setOrigin(0, 0.5);
+    }).setDepth(this.topDepth).setOrigin(0, 0.5);
 
     const w = txt.width + this.pillPadX * 2;  // Width of the pill (based on text width + padding)
     const h = Math.max(this.pillH, txt.height + this.pillPadY * 2);  // Height of the pill (with padding)
 
     // Create a graphics object for the pill background
-    const graphics = this.scene.add.graphics();
+    const graphics = this.scene.add.graphics().setDepth(this.topDepth);
     graphics.fillStyle(fill, 1);  // Set the fill color
     graphics.fillRoundedRect(0, 0, w, h, 8);  // Create rounded rectangle (pill background)
     graphics.lineStyle(1, stroke, 1);  // Set stroke color and thickness

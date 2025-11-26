@@ -4,6 +4,7 @@ import { COLORS, UI_DEPTH, CLASS_COLORS } from '../ui/styles.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
 import UIButton from '../ui/Button.js';
+import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 
 // Data
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
@@ -240,6 +241,7 @@ export default class CombatScene extends Phaser.Scene {
     this.characterScrollZone = null;
     this.isHoveringCharacterInfo = false;
     this.characterInfoTab = 'info'; // 'info' | 'equipment'
+    this._charStatusIconContainer = null;
 
     // Input enable delay (unchanged)
     this.input.enabled = false;
@@ -1192,6 +1194,7 @@ export default class CombatScene extends Phaser.Scene {
   _clearCharacterInfoHeader() {
     if (this._charInfoHeaderGroup) this._charInfoHeaderGroup.forEach(c => c.destroy());
     this._charInfoHeaderGroup = [];
+    this._charStatusIconContainer = null;
   }
 
   // Build the persistent header: portrait on the left, name+level under it
@@ -1226,6 +1229,15 @@ export default class CombatScene extends Phaser.Scene {
     }).setOrigin(0, 0);
     this.characterInfoPanel.add(nameText);
     this._charInfoHeaderGroup.push(nameText);
+
+    // Status effect badges (shared across tabs)
+    const statusY = nameY + nameText.height + 26; // nudged down a bit
+    const statusContainer = this.add.container(portraitX, statusY)
+      .setDepth(UI_DEPTH.overlay + 2);
+    this.characterInfoPanel.add(statusContainer);
+    this._charInfoHeaderGroup.push(statusContainer);
+    this._charStatusIconContainer = statusContainer;
+    this._updateInspectedStatusIcons(char);
   }
 
 
@@ -1330,13 +1342,11 @@ export default class CombatScene extends Phaser.Scene {
       .setOrigin(0)
       .setStrokeStyle(2, 0xffffff);
     this.characterInfoPanel.add(bg);
+    //Who's shown
+    this._inspectedChar = char;
     // Persistent header: portrait + name/level under portrait, shows on all tabs
     this._clearCharacterInfoHeader();
     this._renderCharacterInfoHeader(char);
-
-
-    //Who's shown
-    this._inspectedChar = char;
     // Tabs
     this._buildCharacterInfoTabs(char);
 
@@ -1368,6 +1378,56 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _title(f) { return f.charAt(0).toUpperCase() + f.slice(1); }
+
+  _weaknessTooltipData(fam) {
+    const title = this._title(fam);
+    const lines = [];
+    const add = (label, text) => lines.push(`${label}: ${text}`);
+
+    switch (fam) {
+      case 'fire':
+        add('T1', 'Takes burn when acting; fire hits harder.');
+        add('T2', 'Start-of-turn burn tick scales with overflow; can consume meter.');
+        break;
+      case 'cold':
+        add('T1', 'Initiative gain is slowed.');
+        add('T2', 'Gauge drains at turn start; damage dealt and evasion drop.');
+        break;
+      case 'lightning':
+        add('T1', 'Takes random jolts (1-4) of shock damage.');
+        add('T2', 'Chance for multiple extra jolts based on overflow.');
+        break;
+      case 'disorient':
+        add('T1', 'MP costs rise (scales with overflow).');
+        add('T2', 'Loses MP at the start of turn.');
+        break;
+      case 'lacerate':
+        add('T1', 'Acting adds lacerate buildup (bleed threat).');
+        add('T2', 'Higher tiers would inflict heavier bleed if reached.');
+        break;
+      case 'expose':
+        add('T1', 'Physical DR is pierced; takes extra physical buildup.');
+        add('T2', 'Bonus crit chance and crit damage against the target.');
+        break;
+      case 'toxic':
+        add('T1', 'Sometimes skips decay, letting poison linger.');
+        add('T2', 'Flat poison tick at start of turn.');
+        break;
+      case 'disease':
+        add('T1', 'Incoming healing reduced.');
+        add('T2', 'Max HP temporarily reduced.');
+        break;
+      case 'curse':
+        add('T1', 'Curse meter decays slower.');
+        add('T2', 'Decay slows further; curse-tagged effects amplify.');
+        break;
+      default:
+        add('T1', 'Weakness effect not yet described.');
+        add('T2', 'Weakness effect not yet described.');
+    }
+
+    return { title: `${title} Weakness`, lines };
+  }
 
   _renderCharacterInfoWeakness(char) {
     this._clearCharacterInfoBody();
@@ -1402,6 +1462,21 @@ export default class CombatScene extends Phaser.Scene {
 
       const pip = this.add.circle(xRight - text.width - 10, yTop + 8, 5, this._getTierColor(t, fam))
         .setVisible(t > 0);
+
+      const showTip = (pointer) => {
+        const data = this._weaknessTooltipData(fam);
+        this.tooltip?.show(pointer.worldX, pointer.worldY, data);
+      };
+      const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      const hideTip = () => this.tooltip?.hide();
+      text.setInteractive({ useHandCursor: true });
+      pip.setInteractive({ useHandCursor: true });
+      text.on('pointerover', showTip);
+      text.on('pointermove', moveTip);
+      text.on('pointerout', hideTip);
+      pip.on('pointerover', showTip);
+      pip.on('pointermove', moveTip);
+      pip.on('pointerout', hideTip);
 
       this.characterInfoPanel.add(text);
       this.characterInfoPanel.add(pip);
@@ -1491,6 +1566,10 @@ export default class CombatScene extends Phaser.Scene {
         }
       });
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.tooltip = null; });
+
+      // Rebuild status icon interactivity now that tooltip exists
+      const allSlots = [...(this.allySlots || []), ...(this.enemySlots || [])];
+      allSlots.forEach(s => { if (s?.char) this._refreshStatusEffectIcons(s.char); });
     }
 
     // Scrollable viewport setup for the action menu
@@ -3865,16 +3944,6 @@ export default class CombatScene extends Phaser.Scene {
     });
   }
 
-  _getEffectIconGlyph(effectId) {
-    try {
-      const eff = (StatusEffects && StatusEffects[effectId]) ? StatusEffects[effectId] : null;
-      if (eff && eff.icon) return eff.icon;
-    } catch { }
-    if (effectId === 'curse_cinders') return '☠🔥';
-    return '⬢';
-  }
-
-
   _addStatusEffects(target, list) {
     if (!target) return;
     target.statusEffects = target.statusEffects || [];
@@ -3890,6 +3959,8 @@ export default class CombatScene extends Phaser.Scene {
 
   _refreshStatusEffectIcons(unit) {
     const slot = unit?._slot;
+    if (!slot) return;
+
     const anchorX = unit?.portrait?.x ?? slot?.x ?? 0;
     const anchorY = unit?.portrait?.y ?? slot?.y ?? 0;
 
@@ -3902,13 +3973,45 @@ export default class CombatScene extends Phaser.Scene {
       slot._effectIconContainer.removeAll(true);
     }
 
-    const list = unit.statusEffects || [];
-    list.forEach((eff, i) => {
-      const glyph = this._getEffectIconGlyph(eff.id);
-      const t = this.add.text(i * 14, 0, glyph, { fontSize: '14px', color: '#ffffff' })
-        .setOrigin(0, 0.5);
-      slot._effectIconContainer.add(t);
+    const effects = combineStatusEffects(unit);
+    const size = 9;
+    const spacing = size * 2 + 6;
+
+    effects.forEach((eff, i) => {
+      const { container } = createStatusIcon(this, eff, {
+        size,
+        depth: UI_DEPTH.overlay + 1,
+        tooltip: this.tooltip,
+      });
+      container.x = i * spacing;
+      slot._effectIconContainer.add(container);
     });
+
+    slot._effectIconContainer.setVisible(effects.length > 0);
+    this._updateInspectedStatusIcons(unit);
+  }
+
+  _updateInspectedStatusIcons(unit) {
+    if (!unit || unit !== this._inspectedChar) return;
+    if (!this._charStatusIconContainer) return;
+
+    this._charStatusIconContainer.removeAll(true);
+    const effects = combineStatusEffects(unit);
+    const size = 10;
+    const spacing = size * 2 + 6;
+
+    effects.forEach((eff, i) => {
+      const { container } = createStatusIcon(this, eff, {
+        size,
+        depth: UI_DEPTH.overlay + 2,
+        tooltip: this.tooltip,
+      });
+      container.x = i * spacing;
+      container.y = 0;
+      this._charStatusIconContainer.add(container);
+    });
+
+    this._charStatusIconContainer.setVisible(effects.length > 0);
   }
 
 

@@ -122,5 +122,15 @@ export const DEPTH = {
     
 };
 
-// Optional backward-compat so older files with UI_DEPTH.tooltip still work:
-export const UI_DEPTH = { tooltip: DEPTH.TOOLTIP };
+// Shared depth tokens for UI building (kept simple/intuitive)
+export const UI_DEPTH = {
+  world: DEPTH.WORLD,
+  worldOverlay: DEPTH.WORLD_OVERLAY,
+  base: DEPTH.UI_BASE,
+  overlay: DEPTH.UI_OVERLAY,
+  panel: DEPTH.UI_OVERLAY,     // panels/buttons sit on the overlay layer
+  menu: DEPTH.MENU,
+  modalBlocker: DEPTH.MODAL_BLOCKER,
+  modal: DEPTH.MODAL_PANEL,
+  tooltip: DEPTH.TOOLTIP       // tooltips are the top-most layer
+};
