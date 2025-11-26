@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 // data/skills.js
 import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
@@ -108,6 +109,9 @@ function buildSkillRegistry(skillDefs = {}) {
   }
   return registry;
 }
+
+// Initialized upfront so downstream code can safely reference SKILLS before it is populated.
+export const SKILLS = {};
 
 export const SkillTypes = ['weapon', 'class', 'reaction', 'special'];
 export const ActionTypes = ['major', 'bonus', 'class', 'reaction'];
@@ -9487,7 +9491,7 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Collapse all fault and quake zones you created, crushing foes caught along the line."
-  },
+  },`
 
   'bell_ringer': {
     id: "bell_ringer",
@@ -11562,7 +11566,7 @@ Object.assign(RAW_SKILLS, {
 
 });
 
-export const SKILLS = buildSkillRegistry(RAW_SKILLS);
+Object.assign(SKILLS, buildSkillRegistry(RAW_SKILLS));
 // ======== Global Skill Test Mode (opt-in) - works on SKILLS object ========
 const DEV_SKILL_TEST = {
   ENABLE: true,              // flip true for dev sessions
