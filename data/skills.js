@@ -9491,7 +9491,7 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Collapse all fault and quake zones you created, crushing foes caught along the line."
-  },`
+  },
 
   'bell_ringer': {
     id: "bell_ringer",
