@@ -4274,6 +4274,14 @@ export default class CombatScene extends Phaser.Scene {
   _clearPortrait(slot) {
     // keep the rectangle (index 0), remove everything else
     slot.removeBetween(1, slot.length, true);
+    this._clearSlotEffectIcons(slot);
+  }
+
+  _clearSlotEffectIcons(slot) {
+    if (slot?._effectIconContainer) {
+      slot._effectIconContainer.destroy(true);
+      slot._effectIconContainer = null;
+    }
   }
 
 

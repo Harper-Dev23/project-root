@@ -665,40 +665,37 @@ export default class UIScene extends Phaser.Scene {
 
     const listWidth = panelW - 40;
     const listHeight = 140;
-    const listTop = 40;
     const slotSpacing = 32;
+    const firstRowY = slotSpacing * 1; // start slightly lower so row 2 is centered
 
-    const slotsContainer = this.add.container(w / 2, h / 2);
+    const listX = w / 2 - listWidth / 2;
+    const listY = h / 2 - listHeight / 2;
 
-    const maskGfx = this.add.graphics();
+    const maskGfx = this.make.graphics({ x: listX, y: listY, add: false });
     maskGfx.fillStyle(0xffffff, 1);
-    maskGfx.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
-    maskGfx.setVisible(false);
-    slotsContainer.setMask(maskGfx.createGeometryMask());
+    maskGfx.fillRect(0, 0, listWidth, listHeight);
+    const mask = new Phaser.Display.Masks.GeometryMask(this, maskGfx);
 
-    this.modalPanelGroup.add([maskGfx, slotsContainer]);
+    const slotsContainer = this.add.container(listX, listY);
+    slotsContainer.setMask(mask);
+    this.modalPanelGroup.add(slotsContainer);
 
-    let scrollOffset = 0;
     const totalHeight = slots.length * slotSpacing;
     const maxScroll = Math.max(0, totalHeight - listHeight);
     const applyScroll = (delta) => {
       if (!maxScroll) return;
-      scrollOffset = Phaser.Math.Clamp(scrollOffset + delta, -maxScroll, 0);
-      slotsContainer.y = scrollOffset;
+      const next = slotsContainer.y - delta;
+      slotsContainer.y = Phaser.Math.Clamp(next, listY - maxScroll, listY);
     };
 
-    const listArea = new Phaser.Geom.Rectangle(
-      w / 2 - listWidth / 2,
-      h / 2 + listTop,
-      listWidth,
-      listHeight
-    );
+    const listArea = new Phaser.Geom.Rectangle(listX, listY, listWidth, listHeight);
     const handleWheel = (pointer, _over, dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
-      const step = Math.min(Math.abs(dy) * 0.35, 50) * Math.sign(-dy || 1);
+      const step = Phaser.Math.Clamp(dy * 0.25, -30, 30);
       applyScroll(step);
     };
     this.input.on('wheel', handleWheel);
+
     this.modalPanelGroup.once('destroy', () => {
       this.input.off('wheel', handleWheel);
       maskGfx.destroy();
@@ -713,9 +710,9 @@ export default class UIScene extends Phaser.Scene {
       slotsContainer.add(emptyText);
     } else {
       slots.forEach((sl, i) => {
-        const rowY = listTop + i * slotSpacing;
+        const rowY = firstRowY + i * slotSpacing;
 
-        const slotText = this.add.text(-listWidth / 2 + 10, rowY, sl, {
+        const slotText = this.add.text(10, rowY, sl, {
           fontSize: '16px', color: '#fff'
         })
           .setOrigin(0, 0.5)
@@ -724,7 +721,7 @@ export default class UIScene extends Phaser.Scene {
           .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
           .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
 
-        const overwriteBtn = this.add.text(listWidth / 2 - 70, rowY, '[ Overwrite ]', {
+        const overwriteBtn = this.add.text(listWidth - 90, rowY, '[ Overwrite ]', {
           fontSize: '15px', color: '#ffcc66'
         })
           .setOrigin(0.5)
@@ -780,45 +777,41 @@ export default class UIScene extends Phaser.Scene {
     const slots = GameState.listSaveSlots();
     const listWidth = panelW - 40;
     const listHeight = 220;
-    const listTop = -110;
     const slotSpacing = 40;
+    const firstRowY = slotSpacing * 1; // second-row-ish start
 
-    const slotsContainer = this.add.container(w / 2, h / 2);
+    const listX = w / 2 - listWidth / 2;
+    const listY = h / 2 - listHeight / 2;
 
-    const maskGfx = this.add.graphics();
+    const maskGfx = this.make.graphics({ x: listX, y: listY, add: false });
     maskGfx.fillStyle(0xffffff, 1);
-    maskGfx.fillRect(w / 2 - listWidth / 2, h / 2 + listTop, listWidth, listHeight);
-    maskGfx.setVisible(false);
-    slotsContainer.setMask(maskGfx.createGeometryMask());
+    maskGfx.fillRect(0, 0, listWidth, listHeight);
+    const mask = new Phaser.Display.Masks.GeometryMask(this, maskGfx);
 
-    this.modalPanelGroup.add([maskGfx, slotsContainer]);
+    const slotsContainer = this.add.container(listX, listY);
+    slotsContainer.setMask(mask);
+    this.modalPanelGroup.add(slotsContainer);
 
-    let scrollOffset = 0;
     const totalHeight = slots.length * slotSpacing;
     const maxScroll = Math.max(0, totalHeight - listHeight);
     const applyScroll = (delta) => {
       if (!maxScroll) return;
-      scrollOffset = Phaser.Math.Clamp(scrollOffset + delta, -maxScroll, 0);
-      slotsContainer.y = scrollOffset;
+      const next = slotsContainer.y - delta;
+      slotsContainer.y = Phaser.Math.Clamp(next, listY - maxScroll, listY);
     };
 
-    const listArea = new Phaser.Geom.Rectangle(
-      w / 2 - listWidth / 2,
-      h / 2 + listTop,
-      listWidth,
-      listHeight
-    );
+    const listArea = new Phaser.Geom.Rectangle(listX, listY, listWidth, listHeight);
     const handleWheel = (pointer, _over, dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
-      const step = Math.min(Math.abs(dy) * 0.35, 60) * Math.sign(-dy || 1);
+      const step = Phaser.Math.Clamp(dy * 0.25, -50, 50);
       applyScroll(step);
     };
     this.input.on('wheel', handleWheel);
+
     this.modalPanelGroup.once('destroy', () => {
       this.input.off('wheel', handleWheel);
       maskGfx.destroy();
     });
-
 
     if (slots.length === 0) {
       const emptyText = this.add.text(0, listTop + listHeight / 2, 'No saved games found', {
@@ -828,9 +821,9 @@ export default class UIScene extends Phaser.Scene {
       slotsContainer.add(emptyText);
     } else {
       slots.forEach((sl, i) => {
-        const y = listTop + i * slotSpacing;
+        const y = firstRowY + i * slotSpacing;
 
-        const slotText = this.add.text(-listWidth / 2 + 10, y, sl, {
+        const slotText = this.add.text(10, y, sl, {
           fontSize: '18px', color: '#fff'
         })
           .setOrigin(0, 0.5)
@@ -843,7 +836,7 @@ export default class UIScene extends Phaser.Scene {
           .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
           .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
 
-        const deleteBtn = this.add.text(listWidth / 2 - 30, y, '[ Delete ]', {
+        const deleteBtn = this.add.text(listWidth - 60, y, '[ Delete ]', {
           fontSize: '16px', color: '#ff5555'
         })
           .setOrigin(0.5)
@@ -868,6 +861,7 @@ export default class UIScene extends Phaser.Scene {
 
     this.modalPanelGroup.add(cancelBtn);
   }
+
 
 
 
