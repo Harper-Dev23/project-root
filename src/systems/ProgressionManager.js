@@ -32,9 +32,17 @@ const TICKET_REWARDS = {
   'training_encounter_6': 0,
 };
 
-// Scenario 1 first clear unlocks the tribe choice event at the Elder's Tower.
+// Quest flags auto-set on first clear of each scenario.
 const SCENARIO_FLAGS = {
   'training_encounter_1': 'tribe_choice',
+  'training_encounter_2': 'elder_bonepile',   // Elder explains Bone Pile / gambling
+  'training_encounter_3': 'elder_leveling',   // Elder explains stats & leveling
+  'training_encounter_4': 'samuel_mourne',    // Intro meeting with Samuel Mourne
+};
+
+// Feature gates: which scenario must be completed to unlock a feature.
+const FEATURE_UNLOCKS = {
+  bonepile: 'training_encounter_2',
 };
 
 // localStorage key for the dev bypass — outside any save slot.
@@ -100,6 +108,16 @@ const ProgressionManager = {
     this.tribeTickets += 1;         // the Tribe Ticket mentioned in the demo doc
     this.clearQuestFlag('tribe_choice');
     return true;
+  },
+
+  // ----- Feature unlock queries --------------------------------------------
+
+  /** Returns true if the named feature (e.g. 'bonepile') has been unlocked. */
+  isFeatureUnlocked(featureId) {
+    if (this.isBypassEnabled()) return true;
+    const req = FEATURE_UNLOCKS[featureId];
+    if (!req) return false;
+    return this.completedScenarios.includes(req);
   },
 
   // ----- Scenario unlock queries -------------------------------------------

@@ -1,5 +1,6 @@
 import SceneManager from '../systems/SceneManager.js';
 import GameState from '../systems/GameState.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -22,6 +23,11 @@ export default class MainMenuScene extends Phaser.Scene {
     this.sceneManager = new SceneManager(this);
 
     this.createMenuButton('▶ Start New Game', width / 2, height / 2 - 20, () => {
+      // Reset all in-memory state for a clean new game.
+      GameState.reset();
+      ProgressionManager.reset();
+      // Seed the orientation flow — first flag points the player to the bonfire.
+      ProgressionManager.setQuestFlag('orientation_bonfire');
       this.sceneManager.enterTown();
     });
 

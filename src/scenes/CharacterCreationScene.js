@@ -1,5 +1,6 @@
 // src/scenes/CharacterCreationScene.js
 import GameState from '../systems/GameState.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 import UIButton from '../ui/Button.js';
 import { FONTS } from '../ui/styles.js';
 import {
@@ -182,6 +183,13 @@ export default class CharacterCreationScene extends Phaser.Scene {
       GameState.addCharacter(newChar);
       // you may choose to auto-add to party:
       // GameState.addToParty(newChar);
+
+      // Orientation flow: first character created transitions the bonfire flag
+      // to the Elder's Tower so the player knows to go there next.
+      if (ProgressionManager.hasQuestFlag('orientation_bonfire')) {
+        ProgressionManager.clearQuestFlag('orientation_bonfire');
+        ProgressionManager.setQuestFlag('orientation_elder');
+      }
 
       // move on
       this.scene.stop();

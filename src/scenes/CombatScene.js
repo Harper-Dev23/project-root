@@ -146,10 +146,20 @@ export default class CombatScene extends Phaser.Scene {
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
     this.scenarioId = data.scenarioId || 'training_encounter_1';
-    // === Reactions UI state ===
-    this._rxSelection = [];
-    // Store scenario data if available
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
+
+    // Reset all per-combat state — Phaser reuses the same scene instance on
+    // scene.start(), so the constructor only runs once. Everything that must
+    // start fresh each combat belongs here, not in the constructor.
+    this._rxSelection = [];
+    this.combatEnded = false;
+    this.currentTurnIndex = 0;
+    this.menuLevel = 'root';
+    this.slotEffects = {};
+    this.turnOrder = [];
+    this.enemies = [];
+    this.unitSlots = [];
+    this.koArea = [];
   }
 
   create() {
@@ -2237,6 +2247,21 @@ export default class CombatScene extends Phaser.Scene {
         xpSummary.push(summary);
       }
     });
+
+    // Scenario 3 forces the whole party to level 2 as a scripted story beat.
+    if (this.scenarioId === 'training_encounter_3') {
+      GameState.party.forEach(char => {
+        if (char.level < 2) {
+          char.experience = 0;
+          char.level = 2;
+          applyLevelUp(char);
+          // Replace any existing XP line with the level-up message.
+          const idx = xpSummary.findIndex(l => l.startsWith(char.name));
+          const line = `${char.name} — Level Up! (Lv 2)`;
+          if (idx !== -1) xpSummary[idx] = line; else xpSummary.push(line);
+        }
+      });
+    }
 
     const uiScene = this.scene.get('UIScene');
     if (uiScene?.refreshUI) uiScene.refreshUI();

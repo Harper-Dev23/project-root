@@ -290,6 +290,17 @@ const GameState = {
     console.log(`Deleted save slot: ${slot}`);
   },
 
+  /* -------------------- New Game Reset -------------------- */
+  /** Wipes all in-memory state for a fresh new game (does not touch localStorage). */
+  reset() {
+    this.characters = [];
+    this.party = [];
+    this.inventory = [];
+    this.quests = [];
+    this.flags = {};
+    this.currentScene = 'MainMenu';
+  },
+
   /* -------------------- Scene Hooks ----------------------- */
   setCurrentScene(key) { this.currentScene = key; },
   getCurrentScene() { return this.currentScene; }

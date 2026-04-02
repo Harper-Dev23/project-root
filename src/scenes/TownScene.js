@@ -11,7 +11,31 @@ import Tooltip from '../ui/Tooltip.js';
 // and the tribe vendor inventory contents per tribe.
 // ---------------------------------------------------------------------------
 const QUEST_FLAG_POSITIONS = {
-  tribe_choice: { x: 857, y: 342 },
+  tribe_choice:   { x: 857, y: 342 },
+  lodge_styx:     { x: 271, y: 199 },
+  lodge_zafaar:   { x: 665, y: 52  },
+  lodge_elseth:   { x: 935, y: 171 },
+  lodge_lesse:    { x: 582, y: 478 },
+  tribe_vendor:   { x: 610, y: 404 },
+  vendor_row:     { x: 524, y: 344 },
+  combat_pit:     { x: 824, y: 56  },
+  orientation_bonfire: { x: 683, y: 302 },
+  orientation_elder:   { x: 857, y: 342 },
+  elder_bonepile:      { x: 857, y: 342 },
+  elder_leveling:      { x: 857, y: 342 },
+  samuel_mourne:       { x: 837, y: 493 },
+};
+
+// Flag IDs for the four lodge "explore before choosing" prompts.
+const LODGE_FLAGS = ['lodge_styx', 'lodge_zafaar', 'lodge_elseth', 'lodge_lesse'];
+
+// Lodge-specific flavour shown BEFORE the player has chosen a tribe.
+// Gives enough information to make an informed decision.
+const PRE_CHOICE_LODGE_TEXT = {
+  styx:   '"The Styx do not rush. We study the wound before we strike."\n\nA hooded figure counts vials of dark liquid without looking up.',
+  zafaar: '"Strength is the only argument the Zafaar respect. Prove yours."\n\nThe air smells of smoke and iron. Members spar in the corner.',
+  elseth: '"We track, we wait, we strike once. The forest remembers everything."\n\nFurs and antlers line the walls. A hunter sharpens a blade.',
+  lesse:  '"The spirit moves through all things. We simply learn to listen."\n\nLanterns sway without wind. A scribe reads at a low table.',
 };
 
 // Items each tribe vendor sells, purchasable with 1 Tribe Ticket each.
@@ -663,12 +687,10 @@ export default class TownScene extends Phaser.Scene {
    * that need to reflect the new tribe (Elder's Tower F1 and lodges).
    */
   _refreshQuestFlags() {
-    const currentTribe    = ProgressionManager.getTribe();
-    const hasTribeFlag    = ProgressionManager.hasQuestFlag('tribe_choice');
+    const currentTribe = ProgressionManager.getTribe();
 
-    // If tribe state changed since last visit, invalidate cached interiors
-    // so they rebuild with up-to-date tribe-aware content.
-    if (currentTribe !== this._lastKnownTribe || hasTribeFlag !== this._lastKnownTribeFlag) {
+    // If tribe state changed, invalidate post-choice interiors.
+    if (currentTribe !== this._lastKnownTribe) {
       if (this.eldersTowerGroups?.[1]) {
         this.eldersTowerGroups[1].destroy(true);
         this.eldersTowerGroups[1] = null;
@@ -677,8 +699,29 @@ export default class TownScene extends Phaser.Scene {
         Object.values(this.lodgeGroups).forEach(g => g.destroy(true));
         this.lodgeGroups = {};
       }
-      this._lastKnownTribe     = currentTribe;
-      this._lastKnownTribeFlag = hasTribeFlag;
+      this._lastKnownTribe = currentTribe;
+    }
+
+    // Elder Tower F1 is always rebuilt fresh when tribe isn't chosen, or when
+    // a pending elder lore flag means its content has changed since last visit.
+    const hasElderFlag = ProgressionManager.hasQuestFlag('orientation_elder') ||
+                         ProgressionManager.hasQuestFlag('elder_bonepile') ||
+                         ProgressionManager.hasQuestFlag('elder_leveling');
+    if (!currentTribe || hasElderFlag) {
+      if (this.eldersTowerGroups?.[1]) {
+        this.eldersTowerGroups[1].destroy(true);
+        this.eldersTowerGroups[1] = null;
+      }
+      if (this.lodgeGroups) {
+        Object.values(this.lodgeGroups).forEach(g => g.destroy(true));
+        this.lodgeGroups = {};
+      }
+    }
+
+    // Samuel interior must rebuild when the intro flag is pending.
+    if (ProgressionManager.hasQuestFlag('samuel_mourne') && this.samuelInteriorGroup) {
+      this.samuelInteriorGroup.destroy(true);
+      this.samuelInteriorGroup = null;
     }
 
     this._buildQuestFlags();
@@ -775,16 +818,52 @@ export default class TownScene extends Phaser.Scene {
   enterSamuelTent() {
     if (this.campMap) this.campMap.setVisible(false);
 
+    const hasIntroFlag = ProgressionManager.hasQuestFlag('samuel_mourne');
+
+    // If the intro flag is pending, always rebuild so the introductory text shows.
+    if (hasIntroFlag && this.samuelInteriorGroup) {
+      this.samuelInteriorGroup.destroy(true);
+      this.samuelInteriorGroup = null;
+    }
+
     if (this.samuelInteriorGroup) {
       this.samuelInteriorGroup.setVisible(true);
       return;
     }
 
-    this.samuelInteriorGroup = this._buildInteriorLayout({
-      titleText: 'Samuel Mourne',
-      flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
-      onExit: () => this.leaveSamuelTent()
-    });
+    if (hasIntroFlag) {
+      // First meeting after S4 — play intro, clear the flag.
+      ProgressionManager.clearQuestFlag('samuel_mourne');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+
+      const layout = this._buildInteriorLayout({
+        titleText: 'Samuel Mourne',
+        flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
+        onExit: () => this.leaveSamuelTent()
+      });
+
+      const introText = this.add.text(640, 310,
+        '"You have done well to reach this point.\n\n' +
+        'I am Samuel Mourne. I have been watching your progress\n' +
+        'through the training grounds — most do not make it this far.\n\n' +
+        'There is more to the Sacred Hunt than these exercises suggest.\n' +
+        'We will speak again when the time is right."',
+        {
+          fontSize: '14px', color: '#ccddcc', fontStyle: 'italic',
+          align: 'center', wordWrap: { width: 520 }
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      layout.add(introText);
+      this.samuelInteriorGroup = layout;
+    } else {
+      this.samuelInteriorGroup = this._buildInteriorLayout({
+        titleText: 'Samuel Mourne',
+        flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
+        onExit: () => this.leaveSamuelTent()
+      });
+    }
   }
 
   // =====================================================
@@ -830,6 +909,16 @@ export default class TownScene extends Phaser.Scene {
 
   enterVendorRow() {
     this._hideExteriorsAndOtherInteriors();
+
+    // Orientation flow: visiting vendor row for the first time (before S1) clears
+    // the vendor_row flag and nudges the player toward the Combat Pit.
+    if (ProgressionManager.hasQuestFlag('vendor_row') &&
+        !ProgressionManager.isScenarioCompleted('training_encounter_1')) {
+      ProgressionManager.clearQuestFlag('vendor_row');
+      ProgressionManager.setQuestFlag('combat_pit');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    }
 
     if (this.vendorRowGroup) {
       this.vendorRowGroup.setVisible(true);
@@ -987,6 +1076,9 @@ export default class TownScene extends Phaser.Scene {
     let i = 0;
 
     Object.keys(vendors).forEach(vKey => {
+      // Bone Pile is locked until Scenario 2 is complete.
+      if (vKey === 'bonepile' && !ProgressionManager.isFeatureUnlocked('bonepile')) return;
+
       const vendorDef = vendors[vKey];
       const txt = this.add.text(230, startY + i * 40, `• ${vendorDef.displayName}`, {
         fontSize: '20px',
@@ -1004,6 +1096,14 @@ export default class TownScene extends Phaser.Scene {
 
   showSingleVendor(vendorKey) {
     if (this.vendorListContainer) this.vendorListContainer.removeAll(true);
+
+    // First visit to Bone Pile — clear vendor_row flag and move to combat_pit.
+    if (vendorKey === 'bonepile' && ProgressionManager.hasQuestFlag('vendor_row')) {
+      ProgressionManager.clearQuestFlag('vendor_row');
+      ProgressionManager.setQuestFlag('combat_pit');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    }
 
     const vendors = this.getVendorDefinitions();
     const vendorDef = vendors[vendorKey];
@@ -1356,38 +1456,52 @@ export default class TownScene extends Phaser.Scene {
   // =====================================================
   // 🌑 Styx Lodge Interior (placeholder)
   // =====================================================
-  enterStyxLodge()   { this._enterGenericLodge('Styx Lodge',   0x2a1f29, "A dusky hall draped in violet banners.",   'styx');   }
-  enterZafaarLodge() { this._enterGenericLodge('Zafaar Lodge', 0x2a2a1f, "Crackling braziers light ornate stonework.", 'zafaar'); }
-  enterElsethLodge() { this._enterGenericLodge('Elseth Lodge', 0x1f2a1f, "Pine scent fills an airy wooden hall.",     'elseth'); }
-  enterLesseLodge()  { this._enterGenericLodge("Le'sse Lodge", 0x1f262a, "Soft lanterns sway amid silk canopies.",   'lesse');  }
+  enterStyxLodge()   { this._enterGenericLodge('Styx Lodge',   0x2a1f29, "A dusky hall draped in violet banners.",    'styx',   'lodge_styx');   }
+  enterZafaarLodge() { this._enterGenericLodge('Zafaar Lodge', 0x2a2a1f, "Crackling braziers light ornate stonework.", 'zafaar', 'lodge_zafaar'); }
+  enterElsethLodge() { this._enterGenericLodge('Elseth Lodge', 0x1f2a1f, "Pine scent fills an airy wooden hall.",      'elseth', 'lodge_elseth'); }
+  enterLesseLodge()  { this._enterGenericLodge("Le'sse Lodge", 0x1f262a, "Soft lanterns sway amid silk canopies.",    'lesse',  'lodge_lesse');  }
 
   /**
-   * Generic lodge builder. Now tribe-aware: the flavor line changes depending
-   * on whether this is the player's chosen tribe or an opposing one.
+   * Generic lodge builder.
    *
-   * Lodges are cached (built once per session). When tribe state changes,
-   * _refreshQuestFlags() destroys the cache so they rebuild fresh.
+   * Pre-choice (tribe not chosen): shows exploration flavour to help the player
+   * decide. Clears the lodge's quest flag on first visit.
+   *
+   * Post-choice: shows "welcome home" for their tribe, curt message for others.
+   *
+   * Lodges are NOT cached before a tribe is chosen (content depends on which
+   * flags are still active). After choosing, they cache normally.
    */
-  _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null) {
+  _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null, lodgeFlagId = null) {
     this._hideExteriorsAndOtherInteriors();
 
     if (!this.lodgeGroups) this.lodgeGroups = {};
+
+    const playerTribe    = ProgressionManager.getTribe();
+    const hasLodgeFlag   = lodgeFlagId ? ProgressionManager.hasQuestFlag(lodgeFlagId) : false;
+
+    // Clear the lodge quest flag the moment the player steps inside.
+    if (hasLodgeFlag) {
+      ProgressionManager.clearQuestFlag(lodgeFlagId);
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    }
+
+    // Use cached layout if available (only cached post-choice).
     if (this.lodgeGroups[titleText]) {
       this.lodgeGroups[titleText].setVisible(true);
       return;
     }
 
-    const playerTribe = ProgressionManager.getTribe();
-    const isOwnTribe  = tribeId && playerTribe === tribeId;
-    const isOpposing  = playerTribe && tribeId && playerTribe !== tribeId;
-
+    // Build flavour suffix based on tribe state.
     let tribeLine = '';
-    if (isOwnTribe) {
+    if (!playerTribe) {
+      // Pre-choice — show the tribe's pitch to the player.
+      tribeLine = '\n\n' + (PRE_CHOICE_LODGE_TEXT[tribeId] || 'The lodge members eye you with neutral curiosity.');
+    } else if (playerTribe === tribeId) {
       tribeLine = `\n\n"Welcome home, ${TRIBE_DISPLAY_NAMES[tribeId]} hunter.\nThe lodge is yours."`;
-    } else if (isOpposing) {
+    } else {
       tribeLine = `\n\n"We've enough outsiders for one season."\n(Fewer options are available here.)`;
-    } else if (!playerTribe) {
-      tribeLine = '\n\nThe lodge members eye you with neutral curiosity.';
     }
 
     const group = this._buildInteriorLayout({
@@ -1395,12 +1509,15 @@ export default class TownScene extends Phaser.Scene {
       flavorText: baseFlavorText + tribeLine,
       bgColor,
       onExit: () => {
-        this.lodgeGroups[titleText].setVisible(false);
+        group.setVisible(false);
         this._showExterior();
       }
     });
 
-    this.lodgeGroups[titleText] = group;
+    // Only cache post-choice layouts — pre-choice content varies by flag state.
+    if (playerTribe) {
+      this.lodgeGroups[titleText] = group;
+    }
   }
 
 
@@ -1495,23 +1612,59 @@ export default class TownScene extends Phaser.Scene {
       navButtons.forEach(btn => btn.setDepth(12));
       layout.add([...navButtons]);
 
-      // Floor 1 — tribe choice content (tribe-state-dependent, built once per visit).
+      // Floor 1 — content depends on current quest flag state.
       if (floor === 1) {
-        const tribe         = ProgressionManager.getTribe();
-        const hasTribeFlag  = ProgressionManager.hasQuestFlag('tribe_choice');
+        const tribe              = ProgressionManager.getTribe();
+        const hasOrientationFlag = ProgressionManager.hasQuestFlag('orientation_elder');
+        const hasTribeFlag       = ProgressionManager.hasQuestFlag('tribe_choice');
+        const hasBonepileFlag    = ProgressionManager.hasQuestFlag('elder_bonepile');
+        const hasLevelingFlag    = ProgressionManager.hasQuestFlag('elder_leveling');
 
-        if (!tribe && hasTribeFlag) {
-          // Player hasn't chosen yet and the choice event is active.
-          this._addTribeChoiceToLayout(layout);
+        if (hasOrientationFlag) {
+          // Very first visit — welcome the party, explain the Sacred Hunt and tickets.
+          ProgressionManager.clearQuestFlag('orientation_elder');
+          ProgressionManager.setQuestFlag('vendor_row');
+          GameState.save('autosave');
+          this._buildQuestFlags();
+          this._addElderLoreToLayout(layout, 'orientation');
+        } else if (!tribe && hasTribeFlag) {
+          // First visit with tribe choice active — transition flags to lodge markers.
+          ProgressionManager.clearQuestFlag('tribe_choice');
+          LODGE_FLAGS.forEach(f => ProgressionManager.setQuestFlag(f));
+          GameState.save('autosave');
+          this._buildQuestFlags();
+          this._addTribeChoiceToLayout(layout, true);
+        } else if (!tribe) {
+          // Subsequent visits before choosing.
+          this._addTribeChoiceToLayout(layout, false);
+        } else if (hasLevelingFlag) {
+          // Scenario 3 cleared — explain stats, progression, growth.
+          // Also clear bonepile flag if it was skipped; the leveling lesson supersedes it
+          // and the vendor_row flag is still granted so the player can find the bone pile.
+          ProgressionManager.clearQuestFlag('elder_leveling');
+          if (hasBonepileFlag) {
+            ProgressionManager.clearQuestFlag('elder_bonepile');
+            ProgressionManager.setQuestFlag('vendor_row');
+          }
+          GameState.save('autosave');
+          this._buildQuestFlags();
+          this._addElderLoreToLayout(layout, 'leveling');
+        } else if (hasBonepileFlag) {
+          // Scenario 2 cleared — explain Bone Pile and gambling, then unlock vendor_row flag.
+          ProgressionManager.clearQuestFlag('elder_bonepile');
+          ProgressionManager.setQuestFlag('vendor_row');
+          GameState.save('autosave');
+          this._buildQuestFlags();
+          this._addElderLoreToLayout(layout, 'bonepile');
         } else if (tribe) {
-          // Tribe already chosen — show allegiance confirmation.
+          // Tribe chosen, no pending flags — show allegiance reminder.
           const pledgeTxt = this.add.text(640, 340,
             `You are pledged to the ${TRIBE_DISPLAY_NAMES[tribe]}.\n\nVisit your lodge and tribe vendor\nto see what awaits you.`,
             { fontSize: '16px', color: '#aaddaa', align: 'center', wordWrap: { width: 500 } }
           ).setOrigin(0.5).setDepth(12);
           layout.add(pledgeTxt);
         }
-        // If neither flag nor tribe, just floor flavor — the choice hasn't unlocked yet.
+        // If no flag and no tribe: choice hasn't unlocked yet — just floor flavour.
       }
 
       layout.setDepth(11);
@@ -1526,9 +1679,12 @@ export default class TownScene extends Phaser.Scene {
    * Adds the tribe allegiance choice UI to an Elder's Tower F1 layout.
    * Four buttons, one per tribe, with short flavour descriptions.
    */
-  _addTribeChoiceToLayout(layout) {
-    const elderQuote = this.add.text(640, 268,
-      '"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."',
+  _addTribeChoiceToLayout(layout, showLodgeNudge = false) {
+    const quoteText = showLodgeNudge
+      ? '"The four great tribes await your pledge. Do not rush this decision.\nVisit the lodges — let them speak for themselves — then return."'
+      : '"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."';
+
+    const elderQuote = this.add.text(640, 268, quoteText,
       { fontSize: '14px', color: '#ccddcc', align: 'center', fontStyle: 'italic', wordWrap: { width: 560 } }
     ).setOrigin(0.5).setDepth(12);
     layout.add(elderQuote);
@@ -1557,10 +1713,72 @@ export default class TownScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerover', () => btn.setStyle({ color: '#ffffaa', backgroundColor: '#3a3a2a' }))
         .on('pointerout',  () => btn.setStyle({ color: '#cccccc', backgroundColor: '#2a2a2a' }))
-        .on('pointerdown', () => this._pledgeTribe(t.id, t.name));
+        .on('pointerdown', () => {
+          this.scene.get('UIScene')?.showConfirmationDialogue(
+            `Pledge your allegiance to the ${t.name}?\n\nThis cannot be undone. Your tribe defines you.`,
+            () => this._pledgeTribe(t.id, t.name)
+          );
+        });
 
       layout.add(btn);
     });
+  }
+
+  /**
+   * Adds elder lore text to the F1 layout for post-scenario story beats.
+   * topic: 'orientation' | 'bonepile' | 'leveling'
+   */
+  _addElderLoreToLayout(layout, topic) {
+    const lore = {
+      orientation: {
+        title: 'Welcome to Camp Nehemiah',
+        body:
+          '"You have arrived at the right time.\n\n' +
+          'I am Elder Varek. This camp is home to those who participate in the Sacred Hunt —\n' +
+          'a tradition of trial, combat, and growth that has shaped hunters for generations.\n\n' +
+          'Your party will face a series of training encounters in the Combat Pit.\n' +
+          'Victory earns Hunt Tickets — currency used at the vendor row and Bone Pile.\n\n' +
+          'Visit the vendor row across the camp, then report to the Combat Pit.\n' +
+          'Your first trial awaits."',
+        color: '#ccddff',
+      },
+      bonepile: {
+        title: 'The Elder speaks of the Bone Pile',
+        body:
+          '"The hunters who return from the Sacred Hunt bring more than trophies.\n' +
+          'They bring currency — Hunt Tickets, earned through trial and combat.\n\n' +
+          'The Bonepile keeper accepts these tickets. One ticket, one gamble.\n' +
+          'The rewards are unpredictable, but rarely worthless.\n\n' +
+          'You will find the Bonepile in the vendor row. Spend wisely — or not at all.\n' +
+          'Luck has its own wisdom."',
+        color: '#ddbb88',
+      },
+      leveling: {
+        title: 'The Elder speaks of growth',
+        body:
+          '"Your hunters have grown stronger — this is the nature of the Sacred Hunt.\n\n' +
+          'Each encounter tempers the body and sharpens the mind.\n' +
+          'Statistics define a hunter: their strength, their cunning, their resilience.\n\n' +
+          'As levels rise, these numbers shift — new possibilities emerge.\n' +
+          'Study your party\'s sheet. Understand what each value means.\n\n' +
+          'The hunt ahead will demand more than courage."',
+        color: '#aaddaa',
+      },
+    };
+
+    const cfg = lore[topic];
+    if (!cfg) return;
+
+    const title = this.add.text(640, 260, cfg.title, {
+      fontSize: '16px', color: '#ffddaa', fontStyle: 'bold', align: 'center'
+    }).setOrigin(0.5).setDepth(12);
+
+    const body = this.add.text(640, 310, cfg.body, {
+      fontSize: '14px', color: cfg.color, align: 'center',
+      fontStyle: 'italic', wordWrap: { width: 560 }
+    }).setOrigin(0.5, 0).setDepth(12);
+
+    layout.add([title, body]);
   }
 
   /**
@@ -1570,6 +1788,12 @@ export default class TownScene extends Phaser.Scene {
   _pledgeTribe(tribeId, tribeName) {
     const success = ProgressionManager.setTribe(tribeId);
     if (!success) return;   // already pledged (shouldn't happen but guard anyway)
+
+    // Clear any remaining lodge flags (player may have skipped some lodges).
+    LODGE_FLAGS.forEach(f => ProgressionManager.clearQuestFlag(f));
+
+    // The tribe ticket is now ready to spend — point the player at the tribe vendors.
+    ProgressionManager.setQuestFlag('tribe_vendor');
 
     GameState.save('autosave');
 
@@ -1582,10 +1806,9 @@ export default class TownScene extends Phaser.Scene {
       Object.values(this.lodgeGroups).forEach(g => g.destroy(true));
       this.lodgeGroups = {};
     }
-    this._lastKnownTribe     = tribeId;
-    this._lastKnownTribeFlag = false;
+    this._lastKnownTribe = tribeId;
 
-    // Remove the quest flag marker from the map.
+    // Rebuild quest flag markers on the map.
     this._buildQuestFlags();
 
     // Return to exterior and show confirmation.
@@ -1819,8 +2042,16 @@ export default class TownScene extends Phaser.Scene {
           }
           ProgressionManager.tribeTickets -= 1;
           InventorySystem.addGlobalItem(createItemInstance(itemId));
+
+          // Once the tribe ticket is spent, nudge the player toward the next scenario.
+          if (ProgressionManager.tribeTickets < 1) {
+            ProgressionManager.clearQuestFlag('tribe_vendor');
+            ProgressionManager.setQuestFlag('combat_pit');
+          }
+
           GameState.save('autosave');
           this._updateVendorCurrencyDisplay();
+          this._buildQuestFlags();
           this.vendorBody.setText(`Purchased: ${baseItem.name}`);
         });
 
