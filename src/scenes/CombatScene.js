@@ -14,6 +14,7 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor } f
 import { getXPNeededForLevel } from '../../data/xpTable.js';
 
 // Character / Items / AI systems
+import ProgressionManager from '../systems/ProgressionManager.js';
 import { applyLevelUp, rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
 import { isItemInstance } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
@@ -2240,8 +2241,12 @@ export default class CombatScene extends Phaser.Scene {
     const uiScene = this.scene.get('UIScene');
     if (uiScene?.refreshUI) uiScene.refreshUI();
 
+    // Record progression and collect ticket reward for the victory screen.
+    const progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
+    GameState.save('autosave');
+
     // Pass summary to victory screen
-    this._showVictoryScreen('Victory!', xpSummary);
+    this._showVictoryScreen('Victory!', xpSummary, progressReward);
   }
 
 
@@ -4704,7 +4709,7 @@ export default class CombatScene extends Phaser.Scene {
     unit.mpBar = mpBar;
   }
 
-  _showVictoryScreen(title = 'Victory!', xpSummary = []) {
+  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null) {
     const { width, height } = this.sys.game.canvas;
 
     // Dark overlay
@@ -4725,6 +4730,17 @@ export default class CombatScene extends Phaser.Scene {
         color: '#ffff66'
       }).setOrigin(0.5).setDepth(2001);
     });
+
+    // Hunt Ticket reward (shown only on first completion and if tickets were earned)
+    if (progressReward?.firstCompletion && progressReward.huntTicketsEarned > 0) {
+      const ticketY = height / 2 - 50 + (xpSummary.length * 25) + 15;
+      this.add.text(width / 2, ticketY,
+        `+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, {
+          fontSize: '18px',
+          color: '#ffe066',
+          fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(2001);
+    }
 
     // Return button
     const btn = this.add.text(width / 2, height / 2 + 150, '[ Return to Camp ]', {

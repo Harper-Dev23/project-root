@@ -1,9 +1,42 @@
 import GameState from '../systems/GameState.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import { Items } from '../../data/items.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import Tooltip from '../ui/Tooltip.js';
+
+// ---------------------------------------------------------------------------
+// Quest flag config — maps flag IDs to the world coordinates of the "!" marker
+// and the tribe vendor inventory contents per tribe.
+// ---------------------------------------------------------------------------
+const QUEST_FLAG_POSITIONS = {
+  tribe_choice: { x: 857, y: 342 },
+};
+
+// Items each tribe vendor sells, purchasable with 1 Tribe Ticket each.
+// Add more as content expands — these are starter placeholders.
+const TRIBE_VENDOR_INVENTORY = {
+  styx:   ['crude_dagger',    'healing_potion', 'mana_potion'],
+  zafaar: ['crude_sword_1h',  'healing_potion', 'mana_potion'],
+  elseth: ['crude_spear_1h',  'healing_potion', 'mana_potion'],
+  lesse:  ['crude_dagger',    'healing_potion', 'mana_potion'],
+};
+
+const TRIBE_DISPLAY_NAMES = {
+  styx:   'Styx',
+  zafaar: 'Zafaar',
+  elseth: 'Elseth',
+  lesse:  "Le'sse",
+};
+
+// Tribe vendor NPC key → tribe ID mapping, so we know which inventory to show.
+const VENDOR_KEY_TO_TRIBE = {
+  vashra:  'styx',
+  baruun:  'zafaar',
+  nahlia:  'elseth',
+  aivorel: 'lesse',
+};
 
 // === Shared quality colors ===
 const QUALITY_COLORS = {
@@ -613,8 +646,92 @@ export default class TownScene extends Phaser.Scene {
       onClick: () => this._enterHuntGate()
     });
 
+    // Refresh quest flag markers whenever TownScene wakes (e.g. returning from combat).
+    this.events.on('wake', () => this._refreshQuestFlags(), this);
 
+    // Show quest flags that are already active on first load.
+    this._buildQuestFlags();
+  }
 
+  // ===========================================================
+  // Quest Flags — pulsing "!" markers over locations
+  // ===========================================================
+
+  /**
+   * Call this whenever quest flag state may have changed.
+   * Also checks whether tribe state changed and clears cached interiors
+   * that need to reflect the new tribe (Elder's Tower F1 and lodges).
+   */
+  _refreshQuestFlags() {
+    const currentTribe    = ProgressionManager.getTribe();
+    const hasTribeFlag    = ProgressionManager.hasQuestFlag('tribe_choice');
+
+    // If tribe state changed since last visit, invalidate cached interiors
+    // so they rebuild with up-to-date tribe-aware content.
+    if (currentTribe !== this._lastKnownTribe || hasTribeFlag !== this._lastKnownTribeFlag) {
+      if (this.eldersTowerGroups?.[1]) {
+        this.eldersTowerGroups[1].destroy(true);
+        this.eldersTowerGroups[1] = null;
+      }
+      if (this.lodgeGroups) {
+        Object.values(this.lodgeGroups).forEach(g => g.destroy(true));
+        this.lodgeGroups = {};
+      }
+      this._lastKnownTribe     = currentTribe;
+      this._lastKnownTribeFlag = hasTribeFlag;
+    }
+
+    this._buildQuestFlags();
+
+    // Keep UIScene currency display in sync after returning from combat.
+    this.scene.get('UIScene')?.refreshUI?.();
+  }
+
+  /**
+   * Destroys any existing flag markers then creates a pulsing "!" circle
+   * for every currently-active quest flag.
+   */
+  _buildQuestFlags() {
+    if (this._questFlagObjects) {
+      this._questFlagObjects.forEach(o => o.destroy());
+    }
+    this._questFlagObjects = [];
+
+    for (const [flagId, cfg] of Object.entries(QUEST_FLAG_POSITIONS)) {
+      if (!ProgressionManager.hasQuestFlag(flagId)) continue;
+
+      const circle = this.add.circle(cfg.x, cfg.y, 11, 0xffaa00).setDepth(5);
+      const label  = this.add.text(cfg.x, cfg.y, '!', {
+        fontSize: '15px', color: '#ffffff', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(6);
+
+      this.tweens.add({
+        targets: [circle, label],
+        scaleX: 1.25, scaleY: 1.25,
+        duration: 550,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      this._questFlagObjects.push(circle, label);
+    }
+  }
+
+  // ===========================================================
+  // Shared helper — currency strip text used by vendor panels
+  // ===========================================================
+
+  /** Returns a formatted currency string for vendor panel headers. */
+  _currencyLine() {
+    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}`;
+  }
+
+  /** Updates any live vendor currency text objects. */
+  _updateVendorCurrencyDisplay() {
+    const line = this._currencyLine();
+    if (this.vendorCurrencyDisplay)      this.vendorCurrencyDisplay.setText(line);
+    if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
   }
 
   _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, exitText = '[ Exit ]', onExit }) {
@@ -752,6 +869,11 @@ export default class TownScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#ffddaa'
     }).setOrigin(0.5);
+    // Currency strip — updates whenever a purchase or gamble happens.
+    this.vendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
+      fontSize: '12px',
+      color: '#aaaaaa'
+    }).setOrigin(0.5).setDepth(13);
     this.vendorInventoryText = this.add.text(610, 210, '', {
       fontSize: '16px',
       color: '#dddddd',
@@ -963,7 +1085,7 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.y = 0;
 
       const createGambleButton = ({ label, y, poolGetter, emptyMessage }) => {
-        const btn = this.add.text(620, y, `[ Gamble ${label} ]`, {
+        const btn = this.add.text(620, y, `[ Gamble ${label} — 1 Hunt Ticket ]`, {
           fontSize: '20px',
           color: '#ffddaa'
         })
@@ -972,6 +1094,15 @@ export default class TownScene extends Phaser.Scene {
           .on('pointerover', function () { this.setColor('#ffffff'); })
           .on('pointerout', function () { this.setColor('#ffddaa'); })
           .on('pointerdown', () => {
+            // Cost: 1 Hunt Ticket per gamble (per demo doc: "1 ticket = 1 gamble").
+            if (ProgressionManager.huntTickets < 1) {
+              this.vendorInventoryText.setText("You need at least 1 Hunt Ticket to gamble here.");
+              return;
+            }
+            ProgressionManager.huntTickets -= 1;
+            GameState.save('autosave');
+            this._updateVendorCurrencyDisplay();
+
             const pool = poolGetter();
             if (!pool.length) {
               this.vendorInventoryText.setText(emptyMessage);
@@ -1224,48 +1355,19 @@ export default class TownScene extends Phaser.Scene {
   // =====================================================
   // 🌑 Styx Lodge Interior (placeholder)
   // =====================================================
-  enterStyxLodge() {
-    this._enterGenericLodge(
-      'Styx Lodge',
-      0x2a1f29,
-      "A dusky hall draped in violet banners."
-    );
-  }
+  enterStyxLodge()   { this._enterGenericLodge('Styx Lodge',   0x2a1f29, "A dusky hall draped in violet banners.",   'styx');   }
+  enterZafaarLodge() { this._enterGenericLodge('Zafaar Lodge', 0x2a2a1f, "Crackling braziers light ornate stonework.", 'zafaar'); }
+  enterElsethLodge() { this._enterGenericLodge('Elseth Lodge', 0x1f2a1f, "Pine scent fills an airy wooden hall.",     'elseth'); }
+  enterLesseLodge()  { this._enterGenericLodge("Le'sse Lodge", 0x1f262a, "Soft lanterns sway amid silk canopies.",   'lesse');  }
 
-  // =====================================================
-  // 🔥 Zafaar Lodge Interior (placeholder)
-  // =====================================================
-  enterZafaarLodge() {
-    this._enterGenericLodge(
-      'Zafaar Lodge',
-      0x2a2a1f,
-      "Crackling braziers light ornate stonework."
-    );
-  }
-
-  // =====================================================
-  // 🌲 Elseth Lodge Interior (placeholder)
-  // =====================================================
-  enterElsethLodge() {
-    this._enterGenericLodge(
-      'Elseth Lodge',
-      0x1f2a1f,
-      "Pine scent fills an airy wooden hall."
-    );
-  }
-
-  // =====================================================
-  // 🍃 Le'sse Lodge Interior (placeholder)
-  // =====================================================
-  enterLesseLodge() {
-    this._enterGenericLodge(
-      "Le'sse Lodge",
-      0x1f262a,
-      "Soft lanterns sway amid silk canopies."
-    );
-  }
-
-  _enterGenericLodge(titleText, bgColor, flavorText) {
+  /**
+   * Generic lodge builder. Now tribe-aware: the flavor line changes depending
+   * on whether this is the player's chosen tribe or an opposing one.
+   *
+   * Lodges are cached (built once per session). When tribe state changes,
+   * _refreshQuestFlags() destroys the cache so they rebuild fresh.
+   */
+  _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null) {
     this._hideExteriorsAndOtherInteriors();
 
     if (!this.lodgeGroups) this.lodgeGroups = {};
@@ -1274,9 +1376,22 @@ export default class TownScene extends Phaser.Scene {
       return;
     }
 
+    const playerTribe = ProgressionManager.getTribe();
+    const isOwnTribe  = tribeId && playerTribe === tribeId;
+    const isOpposing  = playerTribe && tribeId && playerTribe !== tribeId;
+
+    let tribeLine = '';
+    if (isOwnTribe) {
+      tribeLine = `\n\n"Welcome home, ${TRIBE_DISPLAY_NAMES[tribeId]} hunter.\nThe lodge is yours."`;
+    } else if (isOpposing) {
+      tribeLine = `\n\n"We've enough outsiders for one season."\n(Fewer options are available here.)`;
+    } else if (!playerTribe) {
+      tribeLine = '\n\nThe lodge members eye you with neutral curiosity.';
+    }
+
     const group = this._buildInteriorLayout({
       titleText,
-      flavorText,
+      flavorText: baseFlavorText + tribeLine,
       bgColor,
       onExit: () => {
         this.lodgeGroups[titleText].setVisible(false);
@@ -1338,20 +1453,18 @@ export default class TownScene extends Phaser.Scene {
 
 
   // =====================================================
-  // 🗼 Elders’ Tower (multi‑floor prototype)
+  // 🗼 Elders’ Tower (multi-floor)
   // =====================================================
   _enterEldersTower(floor = 1) {
     this._hideExteriorsAndOtherInteriors();
 
-    // Build once if needed
     if (!this.eldersTowerGroups) this.eldersTowerGroups = {};
 
-    // Build requested floor if not yet created
     if (!this.eldersTowerGroups[floor]) {
       const colors = { 1: 0x30241c, 2: 0x263028, 3: 0x20202f };
       const titles = { 1: "Elders’ Tower — F1", 2: "Elders’ Tower — F2", 3: "Elders’ Tower — F3 (Restricted)" };
-      const descs = {
-        1: "A quiet reception with ancient tomes.",
+      const descs  = {
+        1: "A quiet reception with ancient tomes.\nAn elder looks up from the desk.",
         2: "Large stacks of scrolls and brewing incense.",
         3: "The doorway is barred by heavy iron runes."
       };
@@ -1360,42 +1473,129 @@ export default class TownScene extends Phaser.Scene {
         titleText: titles[floor],
         flavorText: descs[floor],
         bgColor: colors[floor] || 0x222222,
-        onExit: () => {
-          this._hideAllTowerFloors();
-          this._showExterior();
-        }
+        onExit: () => { this._hideAllTowerFloors(); this._showExterior(); }
       });
 
-      // Floor navigation buttons
+      // Floor navigation
       const navButtons = [];
       if (floor > 1) {
-        navButtons.push(this._buildSmallButton(450, 520, '⬆ Floor ' + (floor - 1), () => {
-          this._enterEldersTower(floor - 1);
-        }));
+        navButtons.push(this._buildSmallButton(450, 520, ‘⬆ Floor ‘ + (floor - 1),
+          () => this._enterEldersTower(floor - 1)));
       }
       if (floor < 3) {
-        navButtons.push(this._buildSmallButton(830, 520, '⬇ Floor ' + (floor + 1), () => {
+        navButtons.push(this._buildSmallButton(830, 520, ‘⬇ Floor ‘ + (floor + 1), () => {
           if (floor === 2) {
-            // Floor 3 is restricted: simple notice
-            this.scene.get('UIScene')?.showDialogue("The elders forbid entry to the top floor.");
+            this.scene.get(‘UIScene’)?.showDialogue("The elders forbid entry to the top floor.");
           } else {
             this._enterEldersTower(floor + 1);
           }
         }));
       }
-
-
-      layout.add([...navButtons]);
       navButtons.forEach(btn => btn.setDepth(12));
-      const group = layout;
+      layout.add([...navButtons]);
 
-      group.setDepth(11);
+      // Floor 1 — tribe choice content (tribe-state-dependent, built once per visit).
+      if (floor === 1) {
+        const tribe         = ProgressionManager.getTribe();
+        const hasTribeFlag  = ProgressionManager.hasQuestFlag(‘tribe_choice’);
+
+        if (!tribe && hasTribeFlag) {
+          // Player hasn’t chosen yet and the choice event is active.
+          this._addTribeChoiceToLayout(layout);
+        } else if (tribe) {
+          // Tribe already chosen — show allegiance confirmation.
+          const pledgeTxt = this.add.text(640, 340,
+            `You are pledged to the ${TRIBE_DISPLAY_NAMES[tribe]}.\n\nVisit your lodge and tribe vendor\nto see what awaits you.`,
+            { fontSize: ‘16px’, color: ‘#aaddaa’, align: ‘center’, wordWrap: { width: 500 } }
+          ).setOrigin(0.5).setDepth(12);
+          layout.add(pledgeTxt);
+        }
+        // If neither flag nor tribe, just floor flavor — the choice hasn’t unlocked yet.
+      }
+
+      layout.setDepth(11);
       this.eldersTowerGroups[floor] = layout;
     }
 
-    // Hide all floors then show requested one
     this._hideAllTowerFloors();
     this.eldersTowerGroups[floor].setVisible(true);
+  }
+
+  /**
+   * Adds the tribe allegiance choice UI to an Elder’s Tower F1 layout.
+   * Four buttons, one per tribe, with short flavour descriptions.
+   */
+  _addTribeChoiceToLayout(layout) {
+    const elderQuote = this.add.text(640, 268,
+      ‘"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."’,
+      { fontSize: ‘14px’, color: ‘#ccddcc’, align: ‘center’, fontStyle: ‘italic’, wordWrap: { width: 560 } }
+    ).setOrigin(0.5).setDepth(12);
+    layout.add(elderQuote);
+
+    const tribes = [
+      { id: ‘styx’,   name: ‘Styx’,   desc: ‘Shadows & poison\nPatient and deadly.’ },
+      { id: ‘zafaar’, name: ‘Zafaar’, desc: ‘Fire & fury\nStrength above all.’ },
+      { id: ‘elseth’, name: ‘Elseth’, desc: ‘Nature & the hunt\nSwift and cunning.’ },
+      { id: ‘lesse’,  name: "Le’sse", desc: ‘Spirit & mind\nMagic runs deep.’ },
+    ];
+
+    // 2×2 grid of choice buttons centered in the tower panel.
+    tribes.forEach((t, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const x   = 440 + col * 260;
+      const y   = 370 + row * 90;
+
+      const btn = this.add.text(x, y, `[ ${t.name} ]\n${t.desc}`, {
+        fontSize: ‘14px’,
+        color: ‘#cccccc’,
+        backgroundColor: ‘#2a2a2a’,
+        padding: { x: 14, y: 8 },
+        align: ‘center’,
+      }).setOrigin(0.5).setDepth(12)
+        .setInteractive({ useHandCursor: true })
+        .on(‘pointerover’, () => btn.setStyle({ color: ‘#ffffaa’, backgroundColor: ‘#3a3a2a’ }))
+        .on(‘pointerout’,  () => btn.setStyle({ color: ‘#cccccc’, backgroundColor: ‘#2a2a2a’ }))
+        .on(‘pointerdown’, () => this._pledgeTribe(t.id, t.name));
+
+      layout.add(btn);
+    });
+  }
+
+  /**
+   * Handles the tribe pledge: saves, clears the quest flag, invalidates
+   * cached interiors, and shows confirmation dialogue.
+   */
+  _pledgeTribe(tribeId, tribeName) {
+    const success = ProgressionManager.setTribe(tribeId);
+    if (!success) return;   // already pledged (shouldn’t happen but guard anyway)
+
+    GameState.save(‘autosave’);
+
+    // Invalidate cached interiors that depend on tribe state.
+    if (this.eldersTowerGroups?.[1]) {
+      this.eldersTowerGroups[1].destroy(true);
+      this.eldersTowerGroups[1] = null;
+    }
+    if (this.lodgeGroups) {
+      Object.values(this.lodgeGroups).forEach(g => g.destroy(true));
+      this.lodgeGroups = {};
+    }
+    this._lastKnownTribe     = tribeId;
+    this._lastKnownTribeFlag = false;
+
+    // Remove the quest flag marker from the map.
+    this._buildQuestFlags();
+
+    // Return to exterior and show confirmation.
+    this._hideExteriorsAndOtherInteriors();
+    this._showExterior();
+    this.scene.get(‘UIScene’)?.showDialogue(
+      `You have pledged your allegiance to the ${tribeName}.\n\n` +
+      `A Tribe Ticket has been added to your wallet.\n` +
+      `Visit the tribe vendor row and your lodge — ` +
+      `the ${tribeName} will greet you as one of their own.`
+    );
   }
 
   _hideAllTowerFloors() {
@@ -1502,17 +1702,38 @@ export default class TownScene extends Phaser.Scene {
 
     const menuOptions = scenarioIds.map(id => {
       const scenario = COMBAT_SCENARIOS[id];
+      const unlocked  = ProgressionManager.isScenarioUnlocked(id);
+      const completed = ProgressionManager.isScenarioCompleted(id);
+
+      // Label shows a checkmark for already-beaten scenarios.
+      const label = completed ? `${scenario.name}  ✓` : scenario.name;
+
       return {
-        label: scenario.name,
-        description: scenario.description, // short blurb for left column
-        longDescription: scenario.longDescription || scenario.description, // detailed text for right panel
-        portraitKey: scenario.portraitKey || null, // optional texture for right panel portrait
-        onSelect: () => this._startTraining(id)
+        label,
+        description:     unlocked ? scenario.description : 'Complete the previous scenario to unlock.',
+        longDescription: unlocked ? (scenario.longDescription || scenario.description) : 'Finish the previous scenario first to unlock this challenge.',
+        portraitKey:     scenario.portraitKey || null,
+        locked:          !unlocked,
+        onSelect:        unlocked ? () => this._startTraining(id) : null,
       };
     });
 
-    // Call UIScene's selection menu with full data
-    this.scene.get('UIScene')?.showSelectionMenu("Choose Training Scenario", menuOptions);
+    // Dev bypass toggle — flips the bypass and re-opens the menu so the
+    // locked/unlocked state refreshes immediately.
+    const bypassToggle = {
+      enabled:  ProgressionManager.isBypassEnabled(),
+      onToggle: () => {
+        ProgressionManager.toggleBypass();
+        this.scene.get('UIScene')?.cleanupPopup();
+        this._enterCombatPit();
+      },
+    };
+
+    this.scene.get('UIScene')?.showSelectionMenu(
+      'Choose Training Scenario',
+      menuOptions,
+      { bypassToggle }
+    );
   }
 
 
@@ -1545,9 +1766,67 @@ export default class TownScene extends Phaser.Scene {
   }
   ////////////Vendors///////////////////////////
 
-  _openTribeVendor(key, displayName) {
+  _openTribeVendor(vendorKey, displayName) {
     this.vendorTitle.setText(displayName);
-    this.vendorBody.setText(`Inventory for ${displayName}\n\n(Tribe inventory placeholder)`);
+
+    // Clear any item buttons left over from a previous vendor selection.
+    if (this._tribeVendorItemButtons) {
+      this._tribeVendorItemButtons.forEach(b => b.destroy());
+    }
+    this._tribeVendorItemButtons = [];
+
+    const playerTribe = ProgressionManager.getTribe();
+    const vendorTribe = VENDOR_KEY_TO_TRIBE[vendorKey] || null;
+
+    // --- No tribe chosen yet ---
+    if (!playerTribe) {
+      this.vendorBody.setText(
+        'Pledge your allegiance at the Elder\'s Tower first.\nThen return to your tribe\'s vendor.'
+      );
+      return;
+    }
+
+    // --- Wrong tribe vendor ---
+    if (vendorTribe !== playerTribe) {
+      const npcName = displayName.split(' —')[0].trim();
+      this.vendorBody.setText(
+        `${npcName} turns away.\n\n"We trade only with our own. Seek your tribe's vendor."`
+      );
+      return;
+    }
+
+    // --- Player's own tribe vendor — show inventory ---
+    this.vendorBody.setText('');
+    const itemIds = TRIBE_VENDOR_INVENTORY[playerTribe] || [];
+
+    itemIds.forEach((itemId, i) => {
+      const baseItem = Items[itemId];
+      if (!baseItem) return;
+
+      const rowY = 240 + i * 42;
+      const btn = this.add.text(610, rowY,
+        `• ${baseItem.name}  [ 1 Tribe Ticket ]`,
+        { fontSize: '16px', color: '#cccccc' }
+      ).setDepth(13)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => btn.setColor('#ffffaa'))
+        .on('pointerout',  () => btn.setColor('#cccccc'))
+        .on('pointerdown', () => {
+          if (ProgressionManager.tribeTickets < 1) {
+            this.vendorBody.setText('You have no Tribe Tickets to spend.');
+            return;
+          }
+          ProgressionManager.tribeTickets -= 1;
+          InventorySystem.addGlobalItem(createItemInstance(itemId));
+          GameState.save('autosave');
+          this._updateVendorCurrencyDisplay();
+          this.vendorBody.setText(`Purchased: ${baseItem.name}`);
+        });
+
+      // Add to the tribe vendor group so it's cleaned up on exit.
+      this.tribeVendorGroup.add(btn);
+      this._tribeVendorItemButtons.push(btn);
+    });
   }
 
   _enterTribeVendorRow() {
@@ -1597,13 +1876,19 @@ export default class TownScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#ffddaa'
     }).setOrigin(0.5);
+    // Currency strip — updated on every purchase so the player always sees
+    // their current ticket count without leaving the market.
+    this.tribeVendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
+      fontSize: '12px',
+      color: '#aaaaaa'
+    }).setOrigin(0.5).setDepth(13);
     this.vendorBody = this.add.text(610, 210, '', {
       fontSize: '16px',
       color: '#dddddd',
       wordWrap: { width: 470 }
     });
 
-    layout.add([this.vendorPanel, this.vendorTitle, this.vendorBody]);
+    layout.add([this.vendorPanel, this.vendorTitle, this.tribeVendorCurrencyDisplay, this.vendorBody]);
     layout.setDepth(11);
     this.tribeVendorGroup = layout;
   }

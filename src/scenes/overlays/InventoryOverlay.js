@@ -1,4 +1,5 @@
 import GameState from '../../systems/GameState.js';
+import ProgressionManager from '../../systems/ProgressionManager.js';
 import { Items } from '../../../data/items.js';
 import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.js';
 import InventorySystem from '../../systems/InventorySystem.js';
@@ -131,6 +132,14 @@ export default class InventoryOverlay extends Phaser.Scene {
     const safeHeight = frame.bounds.height;
     const contentDepth = frame.depth;
 
+    // Currency strip — top-right corner of the overlay.
+    // Reminds the player of spendable tickets without leaving the inventory screen.
+    this.add.text(
+      frame.bounds.x + frame.bounds.width - 16,
+      frame.bounds.y + 14,
+      `🎟 Hunt Tickets: ${ProgressionManager.huntTickets}   🏷 Tribe Tickets: ${ProgressionManager.tribeTickets}`,
+      { fontSize: '13px', color: '#ffddaa' }
+    ).setOrigin(1, 0).setDepth(contentDepth + 1);
 
     const globalListWidth = (safeWidth - 100) - 150;
     const globalListLeft = (180 + 100) + (safeWidth - 100) - globalListWidth;

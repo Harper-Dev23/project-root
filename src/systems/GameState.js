@@ -1,6 +1,7 @@
 import { SKILLS } from '../../data/skills.js'; // adjust path if needed
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats } from './CharacterBuilder.js'; // ← make sure this exists
+import ProgressionManager from './ProgressionManager.js';
 
 const defaultEquipment = {
   weaponMain: null,
@@ -220,6 +221,7 @@ const GameState = {
       currentScene: this.currentScene,
       quests: this.quests,
       flags: this.flags,
+      progression: ProgressionManager.serialize(),
 
       partyOrder: Array.isArray(this.partyOrder) ? this.partyOrder.slice() : [],
       partySlots: this.partySlots ? { ...this.partySlots } : {}
@@ -256,6 +258,7 @@ const GameState = {
     this.currentScene = data.currentScene || this.currentScene;
     this.quests = data.quests || this.quests || [];
     this.flags = data.flags || this.flags || {};
+    ProgressionManager.deserialize(data.progression);
 
     // NEW: restore slot/order metadata (both optional)
     this.partyOrder = Array.isArray(data.partyOrder) ? data.partyOrder.slice() : [];

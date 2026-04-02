@@ -1,4 +1,5 @@
 import GameState from '../systems/GameState.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 import StatusBar from '../ui/StatusBar.js';
 import { COLORS } from '../ui/styles.js';
 import { DEPTH } from '../ui/styles.js';
@@ -135,7 +136,7 @@ export default class UIScene extends Phaser.Scene {
     const leftPanelWidth = 180;
     const rightPanelWidth = 180;
 
-    // LEFT PANEL background 
+    // LEFT PANEL background
     this.leftPanelBg = this.add.rectangle(
       leftPanelWidth / 2,
       height / 2,
@@ -147,6 +148,13 @@ export default class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(DEPTH.UI_BASE)
       .setScrollFactor(0);
+
+    // Currency display — bottom of the left panel, always visible.
+    // Hunt Tickets are spent at the Bone Pile; Tribe Tickets at tribe vendors.
+    this.add.text(leftPanelWidth / 2, height - 42,
+      `🎟 ${ProgressionManager.huntTickets}  Hunt\n🏷 ${ProgressionManager.tribeTickets}  Tribe`,
+      { fontSize: '12px', color: '#ffddaa', align: 'center', lineSpacing: 4 }
+    ).setOrigin(0.5, 1).setDepth(DEPTH.UI_BASE + 1).setScrollFactor(0);
 
     this.add.image(width - 90, height / 2, 'sidebar_left')  // 90 centers it in a 180px-wide space
       .setOrigin(0.5)
@@ -895,7 +903,10 @@ export default class UIScene extends Phaser.Scene {
     this.exitConfirmOpen = false;
   }
 
-  showSelectionMenu(title, options) {
+  // opts.bypassToggle — optional: { enabled: bool, onToggle: fn }
+  //   When provided, renders a small dev toggle button so you can flip
+  //   the unlock bypass on/off without leaving the menu.
+  showSelectionMenu(title, options, opts = {}) {
     this.cleanupPopup();
 
     const w = this.sys.game.canvas.width;
@@ -908,43 +919,57 @@ export default class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive();
 
-
     // Title
     const titleText = this.add.text(220, 80, title, {
       fontSize: '26px',
       color: '#ffffff',
       fontStyle: 'bold'
-    }).setOrigin(0, 0.5)
+    }).setOrigin(0, 0.5);
 
+    // --- Dev bypass toggle (optional) ---
+    // Shown only when the caller passes opts.bypassToggle.
+    // Clicking it flips the bypass and re-opens the menu with fresh state.
+    let bypassBtn = null;
+    if (opts.bypassToggle) {
+      const { enabled, onToggle } = opts.bypassToggle;
+      const bypassLabel = enabled ? '[DEV: Locks OFF]' : '[DEV: Locks ON]';
+      const bypassColor = enabled ? '#ff9944' : '#888888';
+      bypassBtn = this.add.text(w - 220, 80, bypassLabel, {
+        fontSize: '14px',
+        color: bypassColor,
+        backgroundColor: '#1a1a1a',
+        padding: { x: 8, y: 4 }
+      }).setOrigin(1, 0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => onToggle())
+        .on('pointerover', function () { this.setAlpha(0.75); })
+        .on('pointerout',  function () { this.setAlpha(1); });
+    }
 
     // Increased vertical spacing for left column
     const spacing = 75;
     const totalHeight = options.length * spacing;
     let startY = (h / 2) - (totalHeight / 2);
 
-    // Right detail panel (moved further left)
+    // Right detail panel
     const panelX = w - 500;
     const detailPanel = this.add.rectangle(panelX, h / 2, 400, 500, 0x222222, 0.95)
-      .setStrokeStyle(2, 0xffffff)
-
+      .setStrokeStyle(2, 0xffffff);
 
     const detailTitle = this.add.text(panelX, h / 2 - 200, '', {
       fontSize: '22px',
       color: '#ffffff',
       fontStyle: 'bold',
       wordWrap: { width: 360 }
-    }).setOrigin(0.5, 0)
-
+    }).setOrigin(0.5, 0);
 
     const detailDesc = this.add.text(panelX, h / 2 - 160, '', {
       fontSize: '16px',
       color: '#dddddd',
       wordWrap: { width: 360 }
-    }).setOrigin(0.5, 0)
-
+    }).setOrigin(0.5, 0);
 
     const detailPortrait = this.add.image(panelX, h / 2 + 50, '')
-
       .setVisible(false);
 
     // Fight button (starts disabled)
@@ -954,57 +979,71 @@ export default class UIScene extends Phaser.Scene {
       backgroundColor: '#222222',
       padding: { x: 10, y: 5 }
     }).setOrigin(0.5)
-
       .setInteractive({ useHandCursor: false })
       .setVisible(true);
 
     // Left-side options
     options.forEach((opt, index) => {
       const yPos = startY + index * spacing;
+      const isLocked = !!opt.locked;
 
-      const optionText = this.add.text(220, yPos, `[ ${opt.label} ]`, {
+      // Locked items are dimmed and show a lock marker; unlocked items are normal.
+      const labelText  = isLocked ? `[ ${opt.label} ]  🔒` : `[ ${opt.label} ]`;
+      const labelColor = isLocked ? '#555555' : '#cccccc';
+
+      const optionText = this.add.text(220, yPos, labelText, {
         fontSize: '20px',
-        color: '#cccccc',
+        color: labelColor,
         backgroundColor: '#333333',
         padding: { x: 10, y: 5 }
       }).setOrigin(0, 0.5)
+        .setInteractive({ useHandCursor: !isLocked });
 
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          // Update detail panel
+      if (isLocked) {
+        // Clicking a locked entry just shows a note in the detail panel.
+        optionText.on('pointerdown', () => {
           detailTitle.setText(opt.label);
-          detailDesc.setText(opt.longDescription || opt.description || '');
-          if (opt.portraitKey) {
-            detailPortrait.setTexture(opt.portraitKey).setVisible(true);
-          } else {
-            detailPortrait.setVisible(false);
-          }
-
-          // Enable fight button
-          fightButton._startScenario = opt.onSelect;
-          fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
-          fightButton.setInteractive({ useHandCursor: true });
+          detailDesc.setText('Complete the previous scenario to unlock this challenge.');
+          detailPortrait.setVisible(false);
+          // Keep fight button disabled.
+          fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
+          fightButton.disableInteractive();
           fightButton.removeAllListeners('pointerdown');
-          fightButton.on('pointerdown', () => {
-            this.cleanupPopup();
-            fightButton._startScenario();
-          });
-        })
-        .on('pointerover', () => optionText.setStyle({ color: '#ffffaa' }))
-        .on('pointerout', () => optionText.setStyle({ color: '#cccccc' }));
+        });
+      } else {
+        optionText
+          .on('pointerdown', () => {
+            detailTitle.setText(opt.label);
+            detailDesc.setText(opt.longDescription || opt.description || '');
+            if (opt.portraitKey) {
+              detailPortrait.setTexture(opt.portraitKey).setVisible(true);
+            } else {
+              detailPortrait.setVisible(false);
+            }
+            // Enable fight button.
+            fightButton._startScenario = opt.onSelect;
+            fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
+            fightButton.setInteractive({ useHandCursor: true });
+            fightButton.removeAllListeners('pointerdown');
+            fightButton.on('pointerdown', () => {
+              this.cleanupPopup();
+              fightButton._startScenario();
+            });
+          })
+          .on('pointerover', () => optionText.setStyle({ color: '#ffffaa' }))
+          .on('pointerout',  () => optionText.setStyle({ color: '#cccccc' }));
+      }
 
       const descText = this.add.text(220, yPos + 20, opt.description || '', {
         fontSize: '14px',
-        color: '#aaaaaa',
+        color: isLocked ? '#444444' : '#aaaaaa',
         wordWrap: { width: 200 }
-      }).setOrigin(0, 0)
-
+      }).setOrigin(0, 0);
 
       this.popupButtons.push(optionText, descText);
     });
 
     // === Exit Button ===
-    // Position it 40px below the last option row
     const exitButtonY = startY + options.length * spacing + 40;
 
     const exitButton = this.add.text(220, exitButtonY, '[ Exit ]', {
@@ -1013,23 +1052,19 @@ export default class UIScene extends Phaser.Scene {
       backgroundColor: '#333333',
       padding: { x: 8, y: 4 }
     }).setOrigin(0, 0.5)
-
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        this.cleanupPopup();
-      })
+      .on('pointerdown', () => { this.cleanupPopup(); })
       .on('pointerover', () => exitButton.setStyle({ color: '#ffffaa' }))
-      .on('pointerout', () => exitButton.setStyle({ color: '#cccccc' }));
+      .on('pointerout',  () => exitButton.setStyle({ color: '#cccccc' }));
 
     this.popupButtons.push(exitButton);
 
-    // Add everything to the group
-    // Add in this order:
-    this.popupGroup.add(overlay);            // first = back
+    // Add everything to the group (back → front order).
+    this.popupGroup.add(overlay);
     this.popupGroup.add(titleText);
+    if (bypassBtn) this.popupGroup.add(bypassBtn);
     this.popupGroup.add(detailPanel);
     this.popupGroup.add([detailTitle, detailDesc, detailPortrait, fightButton]);
-    // add options + exit last
     this.popupGroup.add([...this.popupButtons]);
   }
 
