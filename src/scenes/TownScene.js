@@ -495,7 +495,7 @@ export default class TownScene extends Phaser.Scene {
       onClick: () => this.enterElsethLodge()
     });
 
-    // --- Le’sse ---
+    // --- Le'sse ---
     this._registerGlowZone('LodgeLesse', {
       key: 'glow_lodge_lesse',                          // TEMP art
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
@@ -510,7 +510,7 @@ export default class TownScene extends Phaser.Scene {
     });
 
 
-    // Seers’ Tent
+    // Seers' Tent
     this._registerGlowZone('SeersTent', {
       key: 'glow_seers_tent',
       frames: COMMON_FRAMES,
@@ -540,7 +540,7 @@ export default class TownScene extends Phaser.Scene {
     });
 
 
-    // Elders’ Tower
+    // Elders' Tower
     this._registerGlowZone('EldersTower', {
       key: 'glow_elders_tower',
       frames: COMMON_FRAMES,
@@ -888,6 +888,7 @@ export default class TownScene extends Phaser.Scene {
     layout.add([
       this.vendorInventoryPanel,
       this.vendorInventoryTitle,
+      this.vendorCurrencyDisplay,
       this.vendorInventoryText,
       this.vendorInventoryContainer
     ]);
@@ -1268,7 +1269,7 @@ export default class TownScene extends Phaser.Scene {
   getVendorDefinitions() {
     return {
       ironbinder: {
-        displayName: "Ironbinder’s Stand",
+        displayName: "Ironbinder's Stand",
         flavor: `"A hunched smith adjusts warped blades behind a curtain
          of smoke. The air smells of charcoal, sweat, and old metal. 
          'Not much, but it kills,' he mutters without looking up."`,
@@ -1326,7 +1327,7 @@ export default class TownScene extends Phaser.Scene {
       bonepile: {
         displayName: "Bonepile",
         flavor: `"A crooked figure wrapped in bone necklaces cackles softly.
-  'Trade your coin, tempt your fate,' they beckon. You’re not sure which
+  'Trade your coin, tempt your fate,' they beckon. You're not sure which
   items are cursed and which are just... odd."`,
         // Single logical entry; we'll render a special button in openVendorInventory
         inventory: [{ id: "__GAMBLE__", cost: 0, desc: "Random weapon (Uncommon/Rare/Epic). Free for testing." }]
@@ -1412,7 +1413,7 @@ export default class TownScene extends Phaser.Scene {
     }
 
     this.seersGroup = this._buildInteriorLayout({
-      titleText: "Seers’ Tent",
+      titleText: "Seers' Tent",
       flavorText: "Six veiled figures sit motionless.\nTheir gazes pierce reality itself.",
       bgColor: 0x201e29,
       onExit: () => {
@@ -1453,7 +1454,7 @@ export default class TownScene extends Phaser.Scene {
 
 
   // =====================================================
-  // 🗼 Elders’ Tower (multi-floor)
+  // 🗼 Elders' Tower (multi-floor)
   // =====================================================
   _enterEldersTower(floor = 1) {
     this._hideExteriorsAndOtherInteriors();
@@ -1462,7 +1463,7 @@ export default class TownScene extends Phaser.Scene {
 
     if (!this.eldersTowerGroups[floor]) {
       const colors = { 1: 0x30241c, 2: 0x263028, 3: 0x20202f };
-      const titles = { 1: "Elders’ Tower — F1", 2: "Elders’ Tower — F2", 3: "Elders’ Tower — F3 (Restricted)" };
+      const titles = { 1: "Elders' Tower — F1", 2: "Elders' Tower — F2", 3: "Elders' Tower — F3 (Restricted)" };
       const descs  = {
         1: "A quiet reception with ancient tomes.\nAn elder looks up from the desk.",
         2: "Large stacks of scrolls and brewing incense.",
@@ -1479,13 +1480,13 @@ export default class TownScene extends Phaser.Scene {
       // Floor navigation
       const navButtons = [];
       if (floor > 1) {
-        navButtons.push(this._buildSmallButton(450, 520, ‘⬆ Floor ‘ + (floor - 1),
+        navButtons.push(this._buildSmallButton(450, 520, '⬆ Floor ' + (floor - 1),
           () => this._enterEldersTower(floor - 1)));
       }
       if (floor < 3) {
-        navButtons.push(this._buildSmallButton(830, 520, ‘⬇ Floor ‘ + (floor + 1), () => {
+        navButtons.push(this._buildSmallButton(830, 520, '⬇ Floor ' + (floor + 1), () => {
           if (floor === 2) {
-            this.scene.get(‘UIScene’)?.showDialogue("The elders forbid entry to the top floor.");
+            this.scene.get('UIScene')?.showDialogue("The elders forbid entry to the top floor.");
           } else {
             this._enterEldersTower(floor + 1);
           }
@@ -1497,20 +1498,20 @@ export default class TownScene extends Phaser.Scene {
       // Floor 1 — tribe choice content (tribe-state-dependent, built once per visit).
       if (floor === 1) {
         const tribe         = ProgressionManager.getTribe();
-        const hasTribeFlag  = ProgressionManager.hasQuestFlag(‘tribe_choice’);
+        const hasTribeFlag  = ProgressionManager.hasQuestFlag('tribe_choice');
 
         if (!tribe && hasTribeFlag) {
-          // Player hasn’t chosen yet and the choice event is active.
+          // Player hasn't chosen yet and the choice event is active.
           this._addTribeChoiceToLayout(layout);
         } else if (tribe) {
           // Tribe already chosen — show allegiance confirmation.
           const pledgeTxt = this.add.text(640, 340,
             `You are pledged to the ${TRIBE_DISPLAY_NAMES[tribe]}.\n\nVisit your lodge and tribe vendor\nto see what awaits you.`,
-            { fontSize: ‘16px’, color: ‘#aaddaa’, align: ‘center’, wordWrap: { width: 500 } }
+            { fontSize: '16px', color: '#aaddaa', align: 'center', wordWrap: { width: 500 } }
           ).setOrigin(0.5).setDepth(12);
           layout.add(pledgeTxt);
         }
-        // If neither flag nor tribe, just floor flavor — the choice hasn’t unlocked yet.
+        // If neither flag nor tribe, just floor flavor — the choice hasn't unlocked yet.
       }
 
       layout.setDepth(11);
@@ -1522,21 +1523,21 @@ export default class TownScene extends Phaser.Scene {
   }
 
   /**
-   * Adds the tribe allegiance choice UI to an Elder’s Tower F1 layout.
+   * Adds the tribe allegiance choice UI to an Elder's Tower F1 layout.
    * Four buttons, one per tribe, with short flavour descriptions.
    */
   _addTribeChoiceToLayout(layout) {
     const elderQuote = this.add.text(640, 268,
-      ‘"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."’,
-      { fontSize: ‘14px’, color: ‘#ccddcc’, align: ‘center’, fontStyle: ‘italic’, wordWrap: { width: 560 } }
+      '"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."',
+      { fontSize: '14px', color: '#ccddcc', align: 'center', fontStyle: 'italic', wordWrap: { width: 560 } }
     ).setOrigin(0.5).setDepth(12);
     layout.add(elderQuote);
 
     const tribes = [
-      { id: ‘styx’,   name: ‘Styx’,   desc: ‘Shadows & poison\nPatient and deadly.’ },
-      { id: ‘zafaar’, name: ‘Zafaar’, desc: ‘Fire & fury\nStrength above all.’ },
-      { id: ‘elseth’, name: ‘Elseth’, desc: ‘Nature & the hunt\nSwift and cunning.’ },
-      { id: ‘lesse’,  name: "Le’sse", desc: ‘Spirit & mind\nMagic runs deep.’ },
+      { id: 'styx',   name: 'Styx',   desc: 'Shadows & poison\nPatient and deadly.' },
+      { id: 'zafaar', name: 'Zafaar', desc: 'Fire & fury\nStrength above all.' },
+      { id: 'elseth', name: 'Elseth', desc: 'Nature & the hunt\nSwift and cunning.' },
+      { id: 'lesse',  name: "Le'sse", desc: 'Spirit & mind\nMagic runs deep.' },
     ];
 
     // 2×2 grid of choice buttons centered in the tower panel.
@@ -1547,16 +1548,16 @@ export default class TownScene extends Phaser.Scene {
       const y   = 370 + row * 90;
 
       const btn = this.add.text(x, y, `[ ${t.name} ]\n${t.desc}`, {
-        fontSize: ‘14px’,
-        color: ‘#cccccc’,
-        backgroundColor: ‘#2a2a2a’,
+        fontSize: '14px',
+        color: '#cccccc',
+        backgroundColor: '#2a2a2a',
         padding: { x: 14, y: 8 },
-        align: ‘center’,
+        align: 'center',
       }).setOrigin(0.5).setDepth(12)
         .setInteractive({ useHandCursor: true })
-        .on(‘pointerover’, () => btn.setStyle({ color: ‘#ffffaa’, backgroundColor: ‘#3a3a2a’ }))
-        .on(‘pointerout’,  () => btn.setStyle({ color: ‘#cccccc’, backgroundColor: ‘#2a2a2a’ }))
-        .on(‘pointerdown’, () => this._pledgeTribe(t.id, t.name));
+        .on('pointerover', () => btn.setStyle({ color: '#ffffaa', backgroundColor: '#3a3a2a' }))
+        .on('pointerout',  () => btn.setStyle({ color: '#cccccc', backgroundColor: '#2a2a2a' }))
+        .on('pointerdown', () => this._pledgeTribe(t.id, t.name));
 
       layout.add(btn);
     });
@@ -1568,9 +1569,9 @@ export default class TownScene extends Phaser.Scene {
    */
   _pledgeTribe(tribeId, tribeName) {
     const success = ProgressionManager.setTribe(tribeId);
-    if (!success) return;   // already pledged (shouldn’t happen but guard anyway)
+    if (!success) return;   // already pledged (shouldn't happen but guard anyway)
 
-    GameState.save(‘autosave’);
+    GameState.save('autosave');
 
     // Invalidate cached interiors that depend on tribe state.
     if (this.eldersTowerGroups?.[1]) {
@@ -1590,7 +1591,7 @@ export default class TownScene extends Phaser.Scene {
     // Return to exterior and show confirmation.
     this._hideExteriorsAndOtherInteriors();
     this._showExterior();
-    this.scene.get(‘UIScene’)?.showDialogue(
+    this.scene.get('UIScene')?.showDialogue(
       `You have pledged your allegiance to the ${tribeName}.\n\n` +
       `A Tribe Ticket has been added to your wallet.\n` +
       `Visit the tribe vendor row and your lodge — ` +
@@ -1600,7 +1601,7 @@ export default class TownScene extends Phaser.Scene {
 
   _hideAllTowerFloors() {
     if (this.eldersTowerGroups) {
-      Object.values(this.eldersTowerGroups).forEach(g => g.setVisible(false));
+      Object.values(this.eldersTowerGroups).forEach(g => g?.setVisible(false));
     }
   }
 

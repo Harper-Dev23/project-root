@@ -1,5 +1,4 @@
 import GameState from '../systems/GameState.js';
-import ProgressionManager from '../systems/ProgressionManager.js';
 import StatusBar from '../ui/StatusBar.js';
 import { COLORS } from '../ui/styles.js';
 import { DEPTH } from '../ui/styles.js';
@@ -149,12 +148,6 @@ export default class UIScene extends Phaser.Scene {
       .setDepth(DEPTH.UI_BASE)
       .setScrollFactor(0);
 
-    // Currency display — bottom of the left panel, always visible.
-    // Hunt Tickets are spent at the Bone Pile; Tribe Tickets at tribe vendors.
-    this.add.text(leftPanelWidth / 2, height - 42,
-      `🎟 ${ProgressionManager.huntTickets}  Hunt\n🏷 ${ProgressionManager.tribeTickets}  Tribe`,
-      { fontSize: '12px', color: '#ffddaa', align: 'center', lineSpacing: 4 }
-    ).setOrigin(0.5, 1).setDepth(DEPTH.UI_BASE + 1).setScrollFactor(0);
 
     this.add.image(width - 90, height / 2, 'sidebar_left')  // 90 centers it in a 180px-wide space
       .setOrigin(0.5)
