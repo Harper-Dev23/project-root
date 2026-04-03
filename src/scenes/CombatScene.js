@@ -260,7 +260,6 @@ export default class CombatScene extends Phaser.Scene {
       this.input.enabled = true;
     });
 
-    console.log('[DEBUG] Current character skill list:', GameState.party[0].skills);
     this.events.once('shutdown', this._shutdownCleanup, this);
   }
 

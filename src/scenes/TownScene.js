@@ -673,6 +673,16 @@ export default class TownScene extends Phaser.Scene {
     // Refresh quest flag markers whenever TownScene wakes (e.g. returning from combat).
     this.events.on('wake', () => this._refreshQuestFlags(), this);
 
+    // Auto-seed orientation flag on first ever load (no scenarios, no flags set).
+    // This ensures a browser refresh doesn't strand the player with no guidance.
+    const nothingInProgress =
+      ProgressionManager.completedScenarios.length === 0 &&
+      ProgressionManager.questFlags.length === 0 &&
+      !ProgressionManager.getTribe();
+    if (nothingInProgress) {
+      ProgressionManager.setQuestFlag('orientation_bonfire');
+    }
+
     // Show quest flags that are already active on first load.
     this._buildQuestFlags();
   }
@@ -1634,8 +1644,8 @@ export default class TownScene extends Phaser.Scene {
           GameState.save('autosave');
           this._buildQuestFlags();
           this._addTribeChoiceToLayout(layout, true);
-        } else if (!tribe) {
-          // Subsequent visits before choosing.
+        } else if (!tribe && ProgressionManager.isScenarioCompleted('training_encounter_1')) {
+          // Subsequent visits before choosing (S1 done, tribe choice is available).
           this._addTribeChoiceToLayout(layout, false);
         } else if (hasLevelingFlag) {
           // Scenario 3 cleared — explain stats, progression, growth.
@@ -1962,6 +1972,12 @@ export default class TownScene extends Phaser.Scene {
 
 
   _startTraining(scenarioId) {
+    if (!GameState.party || GameState.party.length === 0) {
+      this.scene.get('UIScene')?.showDialogue(
+        'Assemble your party first.\nVisit the bonfire to create hunters, then add them to your party.'
+      );
+      return;
+    }
     window.sceneManager.loadScene(
       'CombatScene',
       'Training begins…',

@@ -129,8 +129,10 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
   const movementId = RACE_MOVE_SKILL_ID[race];
 
 
+  const instanceId = generateUniqueId();
   return {
-    id: generateUniqueId(),
+    id: instanceId,
+    instanceId,  // PartyManagementScene and save/load both rely on this field
     name,
     race,
     baseClass,

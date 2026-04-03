@@ -568,6 +568,9 @@ export default class PartyManagementScene extends Phaser.Scene {
   _closeAndReturn() {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
+    // Refresh quest flags — TownScene stays running throughout (never sleeps),
+    // so its 'wake' event never fires. We must call it explicitly here.
+    town?._refreshQuestFlags?.();
     const ui = this.scene.get('UIScene');
     ui?.refreshUI?.();
     this.scene.stop('PartyManagementScene');
