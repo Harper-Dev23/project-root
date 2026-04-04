@@ -51,6 +51,9 @@ export default class LoadingScene extends Phaser.Scene {
     // Main menu background
     this.load.image('main_menu_bg', 'assets/MainMenu_Background.png');
 
+    // Combat pit background
+    this.load.image('combat_pit_bg', 'assets/Combat_Pit.png');
+
 
     // 🔄 Batch load glow frame sequences
     // 🔄 Load glow atlases (PNG+JSON pairs)

@@ -163,7 +163,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.rectangle(640, 360, 1280, 720, 0x000000).setDepth(-1);
+    this.add.image(640, 360, 'combat_pit_bg').setDisplaySize(1280, 720).setDepth(-1);
     this.scene.sleep('TownScene');
     this.scene.sleep('UIScene');
 
