@@ -528,6 +528,10 @@ export default class PartyManagementScene extends Phaser.Scene {
     const party = GameState.party || [];
     const idToChar = new Map(party.map(c => [c.instanceId, c]));
 
+    // Snapshot before applying so we can detect a real change.
+    const prevSlots = JSON.stringify(GameState.partySlots || {});
+    const prevOrder = JSON.stringify((GameState.party || []).map(c => c.instanceId));
+
     // 1) ordered list (visual left→right)
     const ordered = this.slotAssignments
       .map(id => (id ? idToChar.get(id) : null))
@@ -551,6 +555,41 @@ export default class PartyManagementScene extends Phaser.Scene {
 
     this.sound?.play?.('ui_confirm');
     this._syncPortraitPositionsToSlots();
+
+    // Only show feedback if something actually changed.
+    const newSlots = JSON.stringify(GameState.partySlots);
+    const newOrder = JSON.stringify(finalOrder.map(c => c.instanceId));
+    if (prevSlots !== newSlots || prevOrder !== newOrder) {
+      this._showSaveFeedback();
+    }
+  }
+
+  _showSaveFeedback() {
+    // Kill any in-progress feedback tween so it can't stack.
+    if (this._saveFeedbackText) {
+      this.tweens.killTweensOf(this._saveFeedbackText);
+      this._saveFeedbackText.destroy();
+      this._saveFeedbackText = null;
+    }
+
+    const x = LEFT_MARGIN;
+    const y = this.scale.height - 78; // just above the save button at height-50
+
+    this._saveFeedbackText = this.add.text(x, y, 'Party saved!', {
+      fontSize: '16px',
+      color: '#88ff88',
+    }).setDepth(1100).setAlpha(1);
+
+    this.tweens.add({
+      targets: this._saveFeedbackText,
+      alpha: 0,
+      delay: 1200,
+      duration: 600,
+      onComplete: () => {
+        this._saveFeedbackText?.destroy();
+        this._saveFeedbackText = null;
+      }
+    });
   }
 
   _showCharInfo(char) {
