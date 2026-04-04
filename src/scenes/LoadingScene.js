@@ -48,6 +48,9 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('campMap', 'assets/maps/Camp_Nehemiah_NIGHTSCENE.webp');
     this.load.image('map_behelith_island', 'assets/maps/Behelith_Island_Map.webp');
 
+    // Main menu background
+    this.load.image('main_menu_bg', 'assets/MainMenu_Background.png');
+
 
     // 🔄 Batch load glow frame sequences
     // 🔄 Load glow atlases (PNG+JSON pairs)

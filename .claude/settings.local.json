@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/eddie/Desktop/**)",
+      "Read(//c/Users/eddie/Pictures/**)"
+    ]
+  }
+}
