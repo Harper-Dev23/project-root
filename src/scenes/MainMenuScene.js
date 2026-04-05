@@ -3,6 +3,7 @@ import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { createButton } from '../ui/Button.js';
 import { createPanel } from '../ui/GamePanel.js';
+import { SoundManager, AUDIO_MANIFEST } from '../systems/SoundManager.js';
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -11,9 +12,13 @@ export default class MainMenuScene extends Phaser.Scene {
 
   preload() {
     this.load.image('main_menu_bg', 'assets/MainMenu_Background.png');
+    AUDIO_MANIFEST.forEach(s => {
+      this.load.audio(`sfx_${s.id}`, `assets/audio/${s.file}`);
+    });
   }
 
   create() {
+    SoundManager.init(this);
     const { width, height } = this.sys.game.canvas;
 
     // Background
@@ -120,7 +125,7 @@ export default class MainMenuScene extends Phaser.Scene {
       listWidth,
       listHeight
     );
-    const handleWheel = (pointer, _over, dx, dy) => {
+    const handleWheel = (pointer, _over, _dx, dy) => {
       if (!Phaser.Geom.Rectangle.Contains(listArea, pointer.worldX, pointer.worldY)) return;
       const step = Math.min(Math.abs(dy) * 0.35, 60) * Math.sign(-dy || 1);
       applyScroll(step);

@@ -1,4 +1,5 @@
 import { COLORS, FONTS, UI_DEPTH, BUTTON_STYLES } from './styles.js';
+import { SoundManager } from '../systems/SoundManager.js';
 
 // ---------------------------------------------------------------------------
 // createButton — factory for themed, interactive buttons
@@ -80,7 +81,7 @@ export function createButton(scene, cx, cy, label, callback, style = 'primary', 
   container.setInteractive({ useHandCursor: true })
     .on('pointerover', () => { drawBg(true);  txt.setStyle({ color: cfg.hoverTextColor }); })
     .on('pointerout',  () => { drawBg(false); txt.setStyle({ color: cfg.textColor }); })
-    .on('pointerdown', callback);
+    .on('pointerdown', () => { SoundManager.play('select'); callback(); });
 
   return container;
 }
@@ -109,13 +110,13 @@ export default class UIButton extends Phaser.GameObjects.Container {
 
     this.on('pointerover', () => {
       if (!this._isSelected) {
-        this.background.setFillStyle(0x280d0d);       // dark crimson
-        this.background.setStrokeStyle(1.5, 0xaa2222); // crimson border
+        this.background.setFillStyle(0x280d0d);
+        this.background.setStrokeStyle(1.5, 0xaa2222);
         this.text.setStyle({ color: '#ff9999' });
       }
     });
     this.on('pointerout', () => this._applyState());
-    this.on('pointerup', () => callback());
+    this.on('pointerup', () => { SoundManager.play('select'); callback(); });
 
     scene.add.existing(this);
   }

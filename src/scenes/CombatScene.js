@@ -5,6 +5,7 @@ import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
 import UIButton, { createButton } from '../ui/Button.js';
+import { SoundManager } from '../systems/SoundManager.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 
 // Data
@@ -166,6 +167,8 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   create() {
+    SoundManager.init(this);
+    SoundManager.wireEmptyClick(this, 'dirtClick');
     this.add.image(640, 360, 'combat_pit_bg').setDisplaySize(1280, 720).setDepth(-1);
     this.scene.sleep('TownScene');
     this.scene.sleep('UIScene');

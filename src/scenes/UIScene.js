@@ -3,6 +3,7 @@ import StatusBar from '../ui/StatusBar.js';
 import { COLORS, DEPTH } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { createButton } from '../ui/Button.js';
+import { SoundManager } from '../systems/SoundManager.js';
 import { JournalState } from '../systems/JournalState.js';
 
 function getXPNeededForLevel(level) {
@@ -18,6 +19,7 @@ export default class UIScene extends Phaser.Scene {
     this.rightPanelVisible = data?.rightPanelVisible ?? false;
   }
   create() {
+    SoundManager.init(this);
     this.bottomMode = 'default'; // 'dialogue', 'combat', etc.
     this.currentEnterAction = null; // holds a function when a confirmation dialogue is open
     this.refreshUI();

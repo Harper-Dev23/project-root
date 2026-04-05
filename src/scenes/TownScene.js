@@ -6,6 +6,7 @@ import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import Tooltip from '../ui/Tooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
+import { SoundManager } from '../systems/SoundManager.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -375,6 +376,8 @@ export default class TownScene extends Phaser.Scene {
 
 
   create() {
+    SoundManager.init(this);
+    SoundManager.wireEmptyClick(this, 'dullClick');
     const centerX = 640;
     const centerY = 360;
 
