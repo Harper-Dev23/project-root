@@ -1,7 +1,7 @@
 // src/scenes/CharacterCreationScene.js
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
-import UIButton from '../ui/Button.js';
+import UIButton, { createButton } from '../ui/Button.js';
 import { FONTS } from '../ui/styles.js';
 import {
   buildCharacter,
@@ -167,9 +167,9 @@ export default class CharacterCreationScene extends Phaser.Scene {
      * ----------------------------------------------------- */
     const bottomY = height - 80;
 
-    const confirmBtn = new UIButton(this, width / 2 - 100, bottomY, 'Confirm', () => {
+    createButton(this, width / 2 - 100, bottomY, 'Confirm', () => {
       const name = (this.nameInput.getChildByName('charName')?.value || '').trim();
-      if (!name) return; // maybe flash error?
+      if (!name) return;
 
       const newChar = buildCharacter({
         name,
@@ -179,29 +179,21 @@ export default class CharacterCreationScene extends Phaser.Scene {
         skin: this.selectedSkin
       });
 
-      // store
       GameState.addCharacter(newChar);
-      // you may choose to auto-add to party:
-      // GameState.addToParty(newChar);
 
-      // Orientation flow: first character created transitions the bonfire flag
-      // to the Elder's Tower so the player knows to go there next.
       if (ProgressionManager.hasQuestFlag('orientation_bonfire')) {
         ProgressionManager.clearQuestFlag('orientation_bonfire');
         ProgressionManager.setQuestFlag('orientation_elder');
       }
 
-      // move on
       this.scene.stop();
       this.scene.start('PartyManagementScene');
-    }, 140, 40);
-    this.add.existing(confirmBtn);
+    }, 'confirm', { fontSize: '20px' });
 
-    const cancelBtn = new UIButton(this, width / 2 + 100, bottomY, 'Cancel', () => {
+    createButton(this, width / 2 + 100, bottomY, 'Cancel', () => {
       this.scene.stop();
       this.scene.start('MainMenuScene');
-    }, 140, 40);
-    this.add.existing(cancelBtn);
+    }, 'danger', { fontSize: '20px' });
   }
 
   /* ---------------------------------------------------------

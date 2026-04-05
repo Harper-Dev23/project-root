@@ -2,6 +2,7 @@ import GameState from '../systems/GameState.js';
 import StatusBar from '../ui/StatusBar.js';
 import { COLORS, DEPTH } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
+import { createButton } from '../ui/Button.js';
 import { JournalState } from '../systems/JournalState.js';
 
 function getXPNeededForLevel(level) {
@@ -318,36 +319,7 @@ export default class UIScene extends Phaser.Scene {
       const barWidth = 130;
       const barX = (leftPanelWidth - barWidth) / 2;
 
-      // Name and Level (centered)
-      const nameText = this.add.text(centerX, panelY, `${char.name} (Lv ${char.level})`, {
-        fontSize: '18px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      }).setOrigin(0.5, 0);  // Center horizontally
-
-      // Determine center X of the left panel
-      const panelCenterX = leftPanelWidth / 2;
-
-      // HP / MP Bars (centered by X position)
-      const hpBar = new StatusBar(this, panelCenterX, panelY + 22, barWidth, 8, char.currentHP, char.maxHP, 0xff4444, 'HP');
-      const mpBar = new StatusBar(this, panelCenterX, panelY + 34, barWidth, 8, char.currentMP, char.maxMP, 0x4444ff, 'MP');
-
-      // XP Bar (centered by X position)
-      const xpColor = 0xffff66; // Always yellow for XP
-      const xpBar = new StatusBar(
-        this,
-        panelCenterX,
-        panelY + 46,
-        barWidth,
-        4,
-        char.experience,
-        getXPNeededForLevel(char.level),
-        xpColor,
-        0x222222
-      );
-
-
-      // Class label
+      // Class color for name
       const classColors = {
         Beggar: '#bbbbbb',
         Acolyte: '#ffe680',
@@ -356,27 +328,46 @@ export default class UIScene extends Phaser.Scene {
         Scholar: '#88c7ff',
         Shepherd: '#c3ffa1'
       };
-      const classLabel = char.specialization
-        ? `${char.baseClass} – ${char.specialization}`
-        : `${char.baseClass}`;
-      const classColor = classColors[char.baseClass] || '#aaaaaa';
+      const classColor = classColors[char.baseClass] || '#ffffff';
 
-      const classText = this.add.text(centerX, panelY + 50, classLabel, {
-        fontSize: '18px',
+      // Name colored by class
+      const nameText = this.add.text(centerX, panelY, `${char.name} (Lv ${char.level})`, {
+        fontSize: '14px',
         color: classColor,
         fontStyle: 'bold',
         fontFamily: 'Georgia'
-      }).setOrigin(0.5, 0);  // Centered
+      }).setOrigin(0.5, 0);
+
+      const panelCenterX = leftPanelWidth / 2;
+
+      // HP / MP / XP bars
+      const hpBar = new StatusBar(this, panelCenterX, panelY + 18, barWidth, 8, char.currentHP, char.maxHP, 0xff4444, 'HP');
+      const mpBar = new StatusBar(this, panelCenterX, panelY + 30, barWidth, 8, char.currentMP, char.maxMP, 0x4444ff, 'MP');
+      const xpBar = new StatusBar(
+        this, panelCenterX, panelY + 42, barWidth, 4,
+        char.experience, getXPNeededForLevel(char.level), 0xffff66, 0x222222
+      );
 
       // Favor
-      const favorText = this.add.text(centerX, panelY + 70, `Favor: ${char.favor}`, {
-        fontSize: '12px',
+      const favorText = this.add.text(centerX, panelY + 50, `Favor: ${char.favor}`, {
+        fontSize: '11px',
         color: '#88ccff',
-        fontStyle: 'bold',
         fontFamily: 'Georgia'
-      }).setOrigin(0.5, 0);  // Centered
+      }).setOrigin(0.5, 0);
 
-      this.leftPartyPanel.add([nameText, hpBar, mpBar, xpBar, classText, favorText]);
+      // Thin separator line after each member except the last
+      const items = [nameText, hpBar, mpBar, xpBar, favorText];
+      if (i < GameState.party.length - 1) {
+        const sep = this.add.graphics();
+        sep.lineStyle(1, 0x5a4a3a, 0.6);
+        sep.beginPath();
+        sep.moveTo(14, panelY + spacingY - 8);
+        sep.lineTo(leftPanelWidth - 14, panelY + spacingY - 8);
+        sep.strokePath();
+        items.push(sep);
+      }
+
+      this.leftPartyPanel.add(items);
     });
 
     this._buildToastLayer(width);
@@ -844,23 +835,9 @@ export default class UIScene extends Phaser.Scene {
 
 
 
-  // Replace your addButton with this (same signature)
   addButton(x, y, label, callback) {
-    const btn = this.add.text(x, y, `[ ${label} ]`, {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#444',
-      padding: { x: 10, y: 5 }
-    })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', callback)
-      .on('pointerover', () => btn.setStyle({ color: '#ffffaa' }))
-      .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
-
-    // ✅ ensure popup layering is consistent
+    const btn = createButton(this, x, y, label, callback, 'primary', { fontSize: '20px' });
     if (this.popupGroup) this.popupGroup.add(btn);
-
     this.popupButtons.push(btn);
   }
 

@@ -145,9 +145,12 @@ _renderPills(tags = []) {
   // Reposition the tooltip to follow the cursor (with bounds checking)
   reposition(x, y) {
     if (!this.container?.visible) return;
-    const maxX = 1280 - this.bg.width - 8;
-    const maxY = 720 - this.bg.height - 8;
-    this.container.setPosition(Math.min(x + 12, maxX), Math.min(y + 12, maxY));
+    const ttW = this.bg.width;
+    const ttH = this.bg.height;
+    const margin = 12;
+    const px = Math.min(x + margin, 1280 - ttW - 8);
+    const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;
+    this.container.setPosition(px, py);
   }
 
   /**
@@ -202,10 +205,13 @@ _renderPills(tags = []) {
     this.bg.width = Math.max(320, contentWidth + this.padding * 2);
     this.bg.height = Math.max(this.padding * 2 + contentHeight, 24);
 
-    // Clamp to screen & show
-    const maxX = 1280 - this.bg.width - 8;
-    const maxY = 720 - this.bg.height - 8;
-    this.container.setPosition(Math.min(x + 12, maxX), Math.min(y + 12, maxY));
+    // Place above cursor; fall back to below if too close to top edge
+    const ttW = this.bg.width;
+    const ttH = this.bg.height;
+    const margin = 12;
+    const px = Math.min(x + margin, 1280 - ttW - 8);
+    const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;
+    this.container.setPosition(px, py);
     this.container.setVisible(true);
   }
 

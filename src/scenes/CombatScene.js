@@ -4,7 +4,7 @@ import { COLORS, UI_DEPTH, CLASS_COLORS } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
-import UIButton from '../ui/Button.js';
+import UIButton, { createButton } from '../ui/Button.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 
 // Data
@@ -161,6 +161,8 @@ export default class CombatScene extends Phaser.Scene {
     this.enemies = [];
     this.unitSlots = [];
     this.koArea = [];
+    this.targetingAbility = null;
+    this.targetingAbilityBtn = null;
   }
 
   create() {
@@ -1555,6 +1557,7 @@ export default class CombatScene extends Phaser.Scene {
       if (actor?.isEnemy) return;  // don’t let players skip NPCs
       this._advanceTurn();
     });
+    this.endTurnButton.setDepth(UI_DEPTH.overlay + 1);
     this.add.existing(this.endTurnButton);
   }
 
@@ -1975,8 +1978,13 @@ export default class CombatScene extends Phaser.Scene {
       const label = onCD ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
       const btn = new UIButton(this, baseX, i * 50, label, () => {
-        if (onCD || noAction) return;                      // hard gate: do nothing
-        this._useAbility(full);                            // use the hydrated skill
+        if (onCD || noAction) return;
+        // Re-clicking the active targeting ability cancels targeting mode
+        if (this.targetingAbility?.id === full.id) {
+          this._exitTargetingMode();
+          return;
+        }
+        this._useAbility(full, btn);
       });
 
       // Make sure tooltip uses the hydrated object
@@ -2047,7 +2055,7 @@ export default class CombatScene extends Phaser.Scene {
     return char.actionsLeft?.[type] > 0;
   }
 
-  _useAbility(ability) {
+  _useAbility(ability, sourceBtn = null) {
     const type = ability.actionCost || 'major';
     if (!this._canUseActionType(type)) return;
 
@@ -2078,7 +2086,7 @@ export default class CombatScene extends Phaser.Scene {
         return;
       }
       // Normal targeting (enemy/ally/self/etc.)
-      this._enterTargetingMode(ability);
+      this._enterTargetingMode(ability, sourceBtn);
       return;
     }
 
@@ -2095,13 +2103,14 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
-  _enterTargetingMode(ability) {
-    console.log('[BasicAttack] Entering targeting mode');
-
+  _enterTargetingMode(ability, sourceBtn = null) {
     this.targetingAbility = ability;
+
+    // Highlight the source button amber-gold so the player sees which ability is armed
+    this.targetingAbilityBtn = sourceBtn;
+    sourceBtn?.setFill(0x88ff88);  // UIButton interprets this as "selected" → amber-gold style
+
     const slots = ability.targetRequirement === 'enemy' ? this.enemySlots : this.allySlots;
-    console.log('[DEBUG] Targeting ability:', ability.name);
-    console.log('[DEBUG] Target slots:', slots.map(s => s.char?.name || 'empty'));
     // Optional per-column target filter
     let filtered = slots;
     if (ability.targetColumns?.length) {
@@ -2127,9 +2136,8 @@ export default class CombatScene extends Phaser.Scene {
       /* ---- 2️⃣  Make the entire container clickable ---- */
       slot.removeAllListeners();          // safety
       slot.once('pointerdown', () => {
-        console.log(`[${ability.name}] Clicked`, slot.char.name);
         this._applyAbilityToTarget(this._currentChar(), slot.char, ability);
-        this._exitTargetingMode();
+        // _buildActionMenuRoot (called inside _applyAbilityToTarget) handles _exitTargetingMode
       });
 
       /* ---- 3️⃣  Gold outline for feedback ---- */
@@ -2141,8 +2149,22 @@ export default class CombatScene extends Phaser.Scene {
   _exitTargetingMode() {
     this._clearSlotHighlights();   // redraw green/red borders
     this._clearSlotListeners();    // remove targeting-mode listeners, keep hitboxes
-    this.targetingAbility = null;  // clear ability selection
-    // if you track this: this.targetingTargets = null;
+
+    // Reset the ability button that was highlighted amber-gold
+    if (this.targetingAbilityBtn) {
+      const btn = this.targetingAbilityBtn;
+      this.targetingAbilityBtn = null;
+      btn._isSelected = false;
+      if (btn.background?.active) {
+        btn.background.setFillStyle(0x1c1c1c);
+        btn.background.setStrokeStyle(1.5, 0x6a7080);
+      }
+      if (btn.text?.active) {
+        btn.text.setStyle({ color: '#b8bccf' });
+      }
+    }
+
+    this.targetingAbility = null;
 
     // Restore click handlers for all visible portraits/slots
     [...this.allySlots, ...this.enemySlots].forEach(slot => {
@@ -2984,8 +3006,8 @@ export default class CombatScene extends Phaser.Scene {
     this._updateHealthBars?.();
     this._updateHPMPBars?.();
     this._updateActionLights?.();
+    // _buildActionMenuRoot calls _exitTargetingMode internally — no need to call it again.
     if (!this._currentChar?.()?.isEnemy) this._buildActionMenuRoot?.();
-    if (this.targetingAbility) this._exitTargetingMode();
   }
 
 
@@ -4762,18 +4784,11 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Return button
-    const btn = this.add.text(width / 2, height / 2 + 150, '[ Return to Camp ]', {
-      fontSize: '24px',
-      color: '#cccccc',
-      backgroundColor: '#333333',
-      padding: { x: 10, y: 5 }
-    }).setOrigin(0.5).setDepth(2001).setInteractive();
-
-    btn.on('pointerdown', () => {
+    createButton(this, width / 2, height / 2 + 150, 'Return to Camp', () => {
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
-    });
+    }, 'primary', { fontSize: '24px' }).setDepth(2001);
   }
 
   _showDefeatScreen(title = 'Defeat', subtitle = '', opts = {}) {
@@ -4804,21 +4819,12 @@ export default class CombatScene extends Phaser.Scene {
 
     // Button builder
     const makeBtn = (label, x, onClick) => {
-      const t = this.add.text(x, height / 2 + 80, label, {
-        fontSize: '24px',
-        color: '#e0e0e0',
-        backgroundColor: '#333333',
-        padding: { x: 14, y: 8 }
-      }).setOrigin(0.5).setDepth(3001).setInteractive({ useHandCursor: true });
-
-      t.on('pointerover', () => t.setStyle({ backgroundColor: '#555555', color: '#ffffff' }));
-      t.on('pointerout', () => t.setStyle({ backgroundColor: '#333333', color: '#e0e0e0' }));
-      t.on('pointerdown', () => {
-        // prevent double clicks
-        t.disableInteractive();
+      const btn = createButton(this, x, height / 2 + 80, label, () => {
+        btn.disableInteractive();
         onClick();
-      });
-      return t;
+      }, 'primary', { fontSize: '24px' });
+      btn.setDepth(3001);
+      return btn;
     };
 
     const buttons = [];
@@ -4841,16 +4847,11 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _addExitButton() {
-    const exitBtn = new UIButton(this, 400, 400, 'Exit Training', () => {
+    createButton(this, 400, 400, 'Exit Training', () => {
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
-    });
-
-    // 🔺 Make sure button has correct depth
-    exitBtn.setDepth(UI_DEPTH.overlay);
-
-    this.add.existing(exitBtn);
+    }, 'danger').setDepth(UI_DEPTH.overlay);
   }
 
   _placePortrait(char, slot) {

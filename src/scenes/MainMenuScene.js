@@ -1,6 +1,8 @@
 import SceneManager from '../systems/SceneManager.js';
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { createButton } from '../ui/Button.js';
+import { createPanel } from '../ui/GamePanel.js';
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -56,14 +58,8 @@ export default class MainMenuScene extends Phaser.Scene {
   }
 
   createMenuButton(label, x, y, callback) {
-    const btn = this.add.text(x, y, label, {
-      fontSize: '24px',
-      color: '#ffffff'
-    }).setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', callback)
-      .on('pointerover', () => btn.setStyle({ color: '#dddddd' }))
-      .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
+    createButton(this, x, y, label, callback, 'primary', { fontSize: '24px' })
+      .setDepth(2);
   }
 
   showLoadGamePopup() {
@@ -87,9 +83,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.loadPopup = this.add.container(width / 2, height / 2).setDepth(1000);
 
     // Background
-    const bg = this.add.rectangle(0, 0, 500, 400, 0x111111, 0.95)
-      .setStrokeStyle(2, 0xffffff)
-      .setOrigin(0.5);
+    const bg = createPanel(this, -250, -200, 500, 400, 'menu');
     this.loadPopup.add(bg);
 
     this.loadPopup.add(this.add.text(0, -170, 'Select Save Slot', {
@@ -159,17 +153,12 @@ export default class MainMenuScene extends Phaser.Scene {
         }
 
         const btnY = listTop + 20 + i * slotSpacing;
-        const btn = this.add.text(0, btnY, `[ Slot ${slot} ]`, {
-          fontSize: '18px',
-          color: '#88ccff'
-        }).setOrigin(0.5)
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => {
-            GameState.load(slot);
-            this.loadPopup.destroy(true);
-            blocker.destroy();
-            this.sceneManager.enterTown();
-          });
+        const btn = createButton(this, 0, btnY, `Slot ${slot}`, () => {
+          GameState.load(slot);
+          this.loadPopup.destroy(true);
+          blocker.destroy();
+          this.sceneManager.enterTown();
+        }, 'primary', { fontSize: '18px' });
         slotsContainer.add(btn);
 
         if (partyPreview) {
@@ -184,15 +173,10 @@ export default class MainMenuScene extends Phaser.Scene {
     }
 
     // Close button
-    const closeBtn = this.add.text(0, 170, '[ Close ]', {
-      fontSize: '18px',
-      color: '#ff6666'
-    }).setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        this.loadPopup.destroy(true);
-        blocker.destroy();
-      });
+    const closeBtn = createButton(this, 0, 170, 'Close', () => {
+      this.loadPopup.destroy(true);
+      blocker.destroy();
+    }, 'danger', { fontSize: '18px' });
     this.loadPopup.add(closeBtn);
   }
 

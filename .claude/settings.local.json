@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Read(//c/Users/eddie/Desktop/**)",
-      "Read(//c/Users/eddie/Pictures/**)"
+      "Read(//c/Users/eddie/Pictures/**)",
+      "Bash(curl -L \"https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js\" -o \"c:/Users/eddie/Desktop/project-root/phaser.js\")",
+      "Bash(python3 -c ':*)",
+      "Bash(node -e ':*)",
+      "Bash(node -c \"c:/Users/eddie/Desktop/project-root/src/scenes/CombatScene.js\")",
+      "Bash(node --input-type=module)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

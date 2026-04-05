@@ -136,6 +136,66 @@ export const PANEL_STYLES = {
 };
 
 
+// ---- Button Styles -------------------------------------------
+// Used by Button.js createButton(). Silver resting state → crimson on hover.
+export const BUTTON_STYLES = {
+  // Standard interactive button — silver outline, crimson hover
+  primary: {
+    fill:             0x1c1c1c,
+    fillAlpha:        0.92,
+    stroke:           0x6a7080,   // cool silver-gray border
+    strokeWidth:      1.5,
+    radius:           4,
+    cornerSize:       6,
+    cornerColor:      0x8890a8,   // steel blue-silver ornament
+    cornerAlpha:      0.8,
+    textColor:        '#b8bccf',  // silver text
+    hoverFill:        0x280d0d,   // dark crimson fill
+    hoverStroke:      0xaa2222,   // crimson border
+    hoverTextColor:   '#ff9999',  // warm crimson text
+    hoverCornerColor: 0xcc3333,
+    padX: 18,
+    padY:  8,
+  },
+  // Destructive / exit actions — red-tinted resting state
+  danger: {
+    fill:             0x200808,
+    fillAlpha:        0.92,
+    stroke:           0x882222,
+    strokeWidth:      1.5,
+    radius:           4,
+    cornerSize:       6,
+    cornerColor:      0xaa3333,
+    cornerAlpha:      0.8,
+    textColor:        '#cc7777',
+    hoverFill:        0x300a0a,
+    hoverStroke:      0xff3333,
+    hoverTextColor:   '#ff8888',
+    hoverCornerColor: 0xff4444,
+    padX: 18,
+    padY:  8,
+  },
+  // Confirmations / proceed actions — green-tinted
+  confirm: {
+    fill:             0x0a1a10,
+    fillAlpha:        0.92,
+    stroke:           0x336644,
+    strokeWidth:      1.5,
+    radius:           4,
+    cornerSize:       6,
+    cornerColor:      0x44aa66,
+    cornerAlpha:      0.8,
+    textColor:        '#88cc99',
+    hoverFill:        0x0f2a1a,
+    hoverStroke:      0x44ff88,
+    hoverTextColor:   '#aaffcc',
+    hoverCornerColor: 0x44ff88,
+    padX: 18,
+    padY:  8,
+  },
+};
+
+
 // ---- Depths --------------------------------------------------
 // styles.js
 export const DEPTH = {
