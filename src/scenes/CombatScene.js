@@ -1,6 +1,7 @@
 // Core state & UI
 import GameState from '../systems/GameState.js';
 import { COLORS, UI_DEPTH, CLASS_COLORS } from '../ui/styles.js';
+import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
 import UIButton from '../ui/Button.js';
@@ -275,9 +276,7 @@ export default class CombatScene extends Phaser.Scene {
     const { x, y, width, height, padding } = config;
 
     // Background box
-    const bg = this.add.rectangle(x, y, width, height, 0x000000, 0.6)
-      .setOrigin(0)
-      .setStrokeStyle(2, 0xffffff)
+    const bg = createPanel(this, x, y, width, height, 'default')
       .setDepth(UI_DEPTH.overlay);
 
 
@@ -1348,9 +1347,7 @@ export default class CombatScene extends Phaser.Scene {
     const rightX = width - 10;
 
     // Background
-    const bg = this.add.rectangle(x, y, width, height, 0x111111, 0.85)
-      .setOrigin(0)
-      .setStrokeStyle(2, 0xffffff);
+    const bg = createPanel(this, x, y, width, height, 'default');
     this.characterInfoPanel.add(bg);
     //Who's shown
     this._inspectedChar = char;
@@ -1518,7 +1515,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Background + unit list
     this.turnOrderContent = this.add.container(0, 0);
-    const bg = this.add.rectangle(0, 0, 180, 300, 0x222222, 0.9).setOrigin(0, 0);
+    const bg = createPanel(this, 0, 0, 180, 300, 'default');
     this.turnOrderContent.add(bg);
 
     this.turnOrderEntries = [];
@@ -1591,12 +1588,10 @@ export default class CombatScene extends Phaser.Scene {
       height: viewportHeight
     } = this.actionMenuViewport;
 
-    const bg = this.add.rectangle(viewportX - 12, viewportY - 12,
-      viewportWidth + 24,
-      viewportHeight + 24,
-      0x000000, 0.55)
-      .setOrigin(0)
-      .setStrokeStyle(2, 0xffffff)
+    const bg = createPanel(this,
+      viewportX - 12, viewportY - 12,
+      viewportWidth + 24, viewportHeight + 24,
+      'menu')
       .setDepth(UI_DEPTH.overlay - 1);
     this.actionMenuBg = bg;
     this.actionMenu.add(bg);

@@ -97,6 +97,45 @@ export const SPACING = {
 };
 
 
+// ---- Panel Styles --------------------------------------------
+// Used by GamePanel.js. Pass a key name or a custom config object to createPanel().
+export const PANEL_STYLES = {
+  // Standard dark info panel — combat log, stat displays
+  default: {
+    fill:        0x0d0d0d,
+    fillAlpha:   0.82,
+    stroke:      0x5a4a3a,   // warm dark brown
+    strokeWidth: 2,
+    radius:      6,
+    cornerSize:  10,         // length of the L-bracket arms
+    cornerColor: 0xb8922a,   // amber gold
+    cornerAlpha: 0.9,
+  },
+  // Action menus, selection lists
+  menu: {
+    fill:        0x111111,
+    fillAlpha:   0.88,
+    stroke:      0x7a6a5a,
+    strokeWidth: 2,
+    radius:      4,
+    cornerSize:  8,
+    cornerColor: 0xb8922a,
+    cornerAlpha: 0.85,
+  },
+  // Combat unit slots — kept subtle
+  slot: {
+    fill:        0x000000,
+    fillAlpha:   0.25,
+    stroke:      0xaaaaaa,
+    strokeWidth: 2,
+    radius:      3,
+    cornerSize:  6,
+    cornerColor: 0xc8a84a,
+    cornerAlpha: 0.7,
+  },
+};
+
+
 // ---- Depths --------------------------------------------------
 // styles.js
 export const DEPTH = {

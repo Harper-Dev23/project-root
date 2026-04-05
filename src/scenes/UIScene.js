@@ -1,7 +1,7 @@
 import GameState from '../systems/GameState.js';
 import StatusBar from '../ui/StatusBar.js';
-import { COLORS } from '../ui/styles.js';
-import { DEPTH } from '../ui/styles.js';
+import { COLORS, DEPTH } from '../ui/styles.js';
+import { createPanel } from '../ui/GamePanel.js';
 import { JournalState } from '../systems/JournalState.js';
 
 function getXPNeededForLevel(level) {
@@ -136,15 +136,7 @@ export default class UIScene extends Phaser.Scene {
     const rightPanelWidth = 180;
 
     // LEFT PANEL background
-    this.leftPanelBg = this.add.rectangle(
-      leftPanelWidth / 2,
-      height / 2,
-      leftPanelWidth,
-      height,
-      0x222222,
-      0.85
-    )
-      .setOrigin(0.5)
+    this.leftPanelBg = createPanel(this, 0, 0, leftPanelWidth, height, 'default')
       .setDepth(DEPTH.UI_BASE)
       .setScrollFactor(0);
 
@@ -166,8 +158,7 @@ export default class UIScene extends Phaser.Scene {
     this.rightPanel.setDepth(DEPTH.UI_BASE).setScrollFactor(0);
     this.rightPanel.setVisible(this.rightPanelVisible); // ⬅️ NEW: respect collapsed state
 
-    const bg = this.add.rectangle(0, 0, rightPanelWidth, height, 0x222222, 0.95)
-      .setOrigin(0.5);
+    const bg = createPanel(this, -rightPanelWidth / 2, -height / 2, rightPanelWidth, height, 'default');
     this.rightPanel.add(bg);
 
     const menuItems = [
@@ -236,15 +227,10 @@ export default class UIScene extends Phaser.Scene {
     const dialogueCenterY = height - 75;
     const dialogueHeight = 150;
 
-    this.bottomBar = this.add.rectangle(
-      dialogueCenterX,
-      dialogueCenterY,
-      dialogueWidth,
-      dialogueHeight,
-      0x111111,
-      0.85
-    )
-      .setStrokeStyle(2, 0xffffff)
+    this.bottomBar = createPanel(this,
+      dialogueCenterX - dialogueWidth / 2,
+      dialogueCenterY - dialogueHeight / 2,
+      dialogueWidth, dialogueHeight, 'default')
       .setDepth(DEPTH.UI_BASE)
       .setVisible(false);
 
@@ -473,9 +459,7 @@ export default class UIScene extends Phaser.Scene {
       .setDepth(DEPTH.MODAL_PANEL)
       .setScrollFactor(0);
 
-    const panel = this.add.rectangle(w / 2, h / 2, 420, 180, 0x111111, 0.95)
-      .setOrigin(0.5)
-      .setStrokeStyle(2, 0xffffff);
+    const panel = createPanel(this, w / 2 - 210, h / 2 - 90, 420, 180, 'menu');
 
     const title = this.add.text(w / 2, h / 2 - 30, 'Exit to main menu?', {
       fontSize: '20px',
@@ -554,9 +538,7 @@ export default class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     const panelW = 460, panelH = 360;
-    const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, 0x111111, 0.95)
-      .setOrigin(0.5)
-      .setStrokeStyle(2, 0xffffff);
+    const panel = createPanel(this, w / 2 - panelW / 2, h / 2 - panelH / 2, panelW, panelH, 'menu');
     const title = this.add.text(w / 2, h / 2 - (panelH / 2) + 30, 'Enter Save Name:', {
       fontSize: '20px', color: '#fff'
     }).setOrigin(0.5);
@@ -597,9 +579,7 @@ export default class UIScene extends Phaser.Scene {
       const dim = this.add.rectangle(w / 2, h / 2, panelW + 40, panelH + 20, 0x000000, 0.55)
         .setOrigin(0.5)
         .setInteractive();
-      const confirmPanel = this.add.rectangle(w / 2, h / 2, 440, 180, 0x111111, 0.95)
-        .setOrigin(0.5)
-        .setStrokeStyle(2, 0xffffff);
+      const confirmPanel = createPanel(this, w / 2 - 220, h / 2 - 90, 440, 180, 'menu');
 
       const prompt = this.add.text(w / 2, h / 2 - 30, `Overwrite "${slotName}"?`, {
         fontSize: '18px',
@@ -765,9 +745,7 @@ export default class UIScene extends Phaser.Scene {
 
     // Panel (no semi-transparent "dim" behind; just the panel)
     const panelW = 420, panelH = 360;
-    const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, 0x111111, 0.95)
-      .setOrigin(0.5)
-      .setStrokeStyle(2, 0xffffff);
+    const panel = createPanel(this, w / 2 - panelW / 2, h / 2 - panelH / 2, panelW, panelH, 'menu');
 
     const title = this.add.text(w / 2, h / 2 - (panelH / 2) + 30, 'Select Save Slot:', {
       fontSize: '20px', color: '#fff'
@@ -946,8 +924,7 @@ export default class UIScene extends Phaser.Scene {
 
     // Right detail panel
     const panelX = w - 500;
-    const detailPanel = this.add.rectangle(panelX, h / 2, 400, 500, 0x222222, 0.95)
-      .setStrokeStyle(2, 0xffffff);
+    const detailPanel = createPanel(this, panelX - 200, h / 2 - 250, 400, 500, 'default');
 
     const detailTitle = this.add.text(panelX, h / 2 - 200, '', {
       fontSize: '22px',
@@ -1088,9 +1065,7 @@ export default class UIScene extends Phaser.Scene {
 
     // Local dim ONLY around the dialog (doesn't cover right UI)
     const dim = this.add.rectangle(w / 2, h / 2, 460, 220, 0x000000, 0.5).setOrigin(0.5);
-    const panel = this.add.rectangle(w / 2, h / 2, 400, 150, 0x111111, 0.95)
-      .setOrigin(0.5)
-      .setStrokeStyle(2, 0xffffff);
+    const panel = createPanel(this, w / 2 - 200, h / 2 - 75, 400, 150, 'menu');
 
     const title = this.add.text(w / 2, h / 2 - 38, `Delete "${slotName}"?`, {
       fontSize: '20px',

@@ -1,6 +1,7 @@
 // PartyManagementScene.js — FULL REPLACEMENT
 
 import GameState from '../systems/GameState.js';
+import { createPanel } from '../ui/GamePanel.js';
 
 // ===== Central UI frame geometry =====
 // Screen is 1280x720; you said side panels are 180px each; top/bottom ≈ 14px.
@@ -122,6 +123,12 @@ export default class PartyManagementScene extends Phaser.Scene {
     // Dark, clickable blocker to stop click-through
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
       .setDepth(1000);
+
+    // Styled border panel (matches other overlay menus)
+    const panelW = 920;
+    const panelH = 692;
+    createPanel(this, (width - panelW) / 2, (height - panelH) / 2, panelW, panelH, 'default')
+      .setDepth(1001);
 
     // Header + Close
     this.add.text(width / 2, 40, 'Party Management', { fontSize: '32px', color: '#fff' })

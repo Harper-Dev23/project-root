@@ -1,5 +1,6 @@
 
 import { DEPTH } from './styles.js';
+import { createPanel } from './GamePanel.js';
 
 /**
  * Creates a standardized overlay frame with a dimmer, panel, title, and close button.
@@ -68,8 +69,7 @@ export function createOverlayFrame(scene, {
         bounds.height
     );
 
-    const panel = scene.add.rectangle(centerX, centerY, width, height, 0x111111, 0.95)
-        .setStrokeStyle(3, 0xffffff)
+    const panel = createPanel(scene, bounds.x, bounds.y, width, height, 'default')
         .setDepth(depth + 1);
 
     const titleStyle = {

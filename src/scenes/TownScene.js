@@ -5,6 +5,7 @@ import { Items } from '../../data/items.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import Tooltip from '../ui/Tooltip.js';
+import { createPanel } from '../ui/GamePanel.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -792,8 +793,7 @@ export default class TownScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive();
 
-    const bg = this.add.rectangle(640, 360, 915, 685, bgColor, 1)
-      .setStrokeStyle(4, 0x886644)
+    const bg = createPanel(this, 640 - 915 / 2, 360 - 685 / 2, 915, 685, { fill: bgColor, fillAlpha: 1, stroke: 0x886644, strokeWidth: 4, radius: 6, cornerSize: 10, cornerColor: 0xb8922a, cornerAlpha: 0.9 })
       .setDepth(0);
 
     const title = this.add.text(640, 120, titleText, {
@@ -962,8 +962,7 @@ export default class TownScene extends Phaser.Scene {
     layout.add(this.vendorListContainer);
 
     // Inventory panel
-    this.vendorInventoryPanel = this.add.rectangle(800, 375, 510, 440, 0x111111, 0.9)
-      .setStrokeStyle(2, 0xffffff);
+    this.vendorInventoryPanel = createPanel(this, 545, 155, 510, 440, 'menu');
     this.vendorInventoryTitle = this.add.text(800, 165, 'Select a Vendor', {
       fontSize: '22px',
       color: '#ffddaa'
@@ -2118,8 +2117,7 @@ export default class TownScene extends Phaser.Scene {
     });
 
     // Inventory Panel + Info (wider + lower)
-    this.vendorPanel = this.add.rectangle(800, 375, 510, 440, 0x111111, 0.9)
-      .setStrokeStyle(2, 0xffffff);
+    this.vendorPanel = createPanel(this, 545, 155, 510, 440, 'menu');
     this.vendorTitle = this.add.text(800, 165, 'Select a Vendor', {
       fontSize: '22px',
       color: '#ffddaa'

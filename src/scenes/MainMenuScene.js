@@ -20,19 +20,6 @@ export default class MainMenuScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(0);
 
-    // Hazy darkened halo behind the title — three layers, outermost to innermost
-    const titleHaze = this.add.graphics().setDepth(1);
-    const hazeW = 520, hazeH = 70, hazeX = width / 2, hazeY = height / 2 - 110;
-    // outer — widest, barely visible
-    titleHaze.fillStyle(0x0a0a0a, 0.10);
-    titleHaze.fillRoundedRect(hazeX - hazeW / 2 - 20, hazeY - hazeH / 2 - 14, hazeW + 40, hazeH + 28, 18);
-    // mid — between outer and inner
-    titleHaze.fillStyle(0x0a0a0a, 0.16);
-    titleHaze.fillRoundedRect(hazeX - hazeW / 2 - 8, hazeY - hazeH / 2 - 5, hazeW + 16, hazeH + 10, 14);
-    // inner — tightest, slightly more present but still subtle
-    titleHaze.fillStyle(0x0a0a0a, 0.22);
-    titleHaze.fillRoundedRect(hazeX - hazeW / 2 + 2, hazeY - hazeH / 2 + 2, hazeW - 4, hazeH - 4, 10);
-
     this.add.text(width / 2, height / 2 - 110, 'Behel\'ith: Sacred Hunt', {
       fontSize: '40px',
       color: '#f3dede'
@@ -71,12 +58,12 @@ export default class MainMenuScene extends Phaser.Scene {
   createMenuButton(label, x, y, callback) {
     const btn = this.add.text(x, y, label, {
       fontSize: '24px',
-      color: '#2a2a2a'
+      color: '#ffffff'
     }).setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', callback)
-      .on('pointerover', () => btn.setStyle({ color: '#000000' }))
-      .on('pointerout', () => btn.setStyle({ color: '#2a2a2a' }));
+      .on('pointerover', () => btn.setStyle({ color: '#dddddd' }))
+      .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
   }
 
   showLoadGamePopup() {
