@@ -20,7 +20,8 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Camp Nehemiah - Character Roster',
-      onClose: () => this._close()
+      onClose: () => this._close(),
+      bgImage: 'menu_parchment_background'
     });
 
     this.frame = frame;

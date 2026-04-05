@@ -127,8 +127,18 @@ export default class PartyManagementScene extends Phaser.Scene {
     // Styled border panel (matches other overlay menus)
     const panelW = 920;
     const panelH = 692;
-    createPanel(this, (width - panelW) / 2, (height - panelH) / 2, panelW, panelH, 'default')
-      .setDepth(1001);
+    const panelX = (width - panelW) / 2;
+    const panelY = (height - panelH) / 2;
+    if (this.textures.exists('menu_parchment_background')) {
+      this.add.image(width / 2, height / 2, 'menu_parchment_background')
+        .setDisplaySize(panelW, panelH)
+        .setDepth(1001);
+    }
+    createPanel(this, panelX, panelY, panelW, panelH,
+      this.textures.exists('menu_parchment_background')
+        ? { fill: 0x000000, fillAlpha: 0, stroke: 0x5a4a3a, strokeWidth: 2, radius: 6, cornerSize: 0 }
+        : 'default'
+    ).setDepth(1001);
 
     // Header + Close
     this.add.text(width / 2, 40, 'Party Management', { fontSize: '32px', color: '#fff' })

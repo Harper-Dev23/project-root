@@ -61,6 +61,15 @@ export default class LoadingScene extends Phaser.Scene {
     // Combat pit background
     this.load.image('combat_pit_bg', 'assets/Combat_Pit.png');
 
+    // Interior backgrounds
+    this.load.image('zafaar_interior', 'assets/interiors/zafaar_interior.png');
+    this.load.image('styx_interior',   'assets/interiors/styx_interior.png');
+    this.load.image('elseth_interior', 'assets/interiors/elseth_interior.png');
+    this.load.image('lesse_interior',  "assets/interiors/le'sse_interior.png");
+
+    // Overlay menu parchment background
+    this.load.image('menu_parchment_background', 'assets/UIinterface/menu_parchment_background.png');
+
 
     // 🔄 Batch load glow frame sequences
     // 🔄 Load glow atlases (PNG+JSON pairs)

@@ -125,7 +125,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Inventory',
-      onClose: () => this._handleClose()
+      onClose: () => this._handleClose(),
+      bgImage: 'menu_parchment_background'
     });
 
     const safeWidth = frame.bounds.width;

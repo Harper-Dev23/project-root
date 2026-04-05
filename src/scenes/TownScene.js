@@ -791,13 +791,31 @@ export default class TownScene extends Phaser.Scene {
     if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
   }
 
-  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, exitText = '[ Exit ]', onExit }) {
+  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, exitText = '[ Exit ]', onExit }) {
+    const PANEL_W = 915, PANEL_H = 685;
     const blocker = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
       .setOrigin(0.5)
       .setInteractive();
 
-    const bg = createPanel(this, 640 - 915 / 2, 360 - 685 / 2, 915, 685, { fill: bgColor, fillAlpha: 1, stroke: 0x886644, strokeWidth: 4, radius: 6, cornerSize: 10, cornerColor: 0xb8922a, cornerAlpha: 0.9 })
-      .setDepth(0);
+    // If a painted background image is provided, display it behind the ornament frame.
+    // The panel fill becomes transparent so only stroke + corners show.
+    let bgImg = null;
+    if (bgImage && this.textures.exists(bgImage)) {
+      bgImg = this.add.image(640, 360, bgImage)
+        .setDisplaySize(PANEL_W, PANEL_H)
+        .setDepth(0);
+    }
+
+    const bg = createPanel(this, 640 - PANEL_W / 2, 360 - PANEL_H / 2, PANEL_W, PANEL_H, {
+      fill:        bgImage ? 0x000000 : bgColor,
+      fillAlpha:   bgImage ? 0        : 1,
+      stroke:      0x886644,
+      strokeWidth: 4,
+      radius:      6,
+      cornerSize:  10,
+      cornerColor: 0xb8922a,
+      cornerAlpha: 0.9,
+    }).setDepth(0);
 
     const title = this.add.text(640, 120, titleText, {
       fontSize: '28px',
@@ -821,7 +839,8 @@ export default class TownScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', onExit);
 
-    return this.add.container(0, 0, [blocker, bg, title, flavor, exitBtn]).setDepth(11);
+    const items = [blocker, ...(bgImg ? [bgImg] : []), bg, title, flavor, exitBtn];
+    return this.add.container(0, 0, items).setDepth(11);
   }
 
 
@@ -1468,10 +1487,10 @@ export default class TownScene extends Phaser.Scene {
   // =====================================================
   // 🌑 Styx Lodge Interior (placeholder)
   // =====================================================
-  enterStyxLodge()   { this._enterGenericLodge('Styx Lodge',   0x2a1f29, "A dusky hall draped in violet banners.",    'styx',   'lodge_styx');   }
-  enterZafaarLodge() { this._enterGenericLodge('Zafaar Lodge', 0x2a2a1f, "Crackling braziers light ornate stonework.", 'zafaar', 'lodge_zafaar'); }
-  enterElsethLodge() { this._enterGenericLodge('Elseth Lodge', 0x1f2a1f, "Pine scent fills an airy wooden hall.",      'elseth', 'lodge_elseth'); }
-  enterLesseLodge()  { this._enterGenericLodge("Le'sse Lodge", 0x1f262a, "Soft lanterns sway amid silk canopies.",    'lesse',  'lodge_lesse');  }
+  enterStyxLodge()   { this._enterGenericLodge('Styx Lodge',   0x2a1f29, "A dusky hall draped in violet banners.",    'styx',   'lodge_styx',   'styx_interior');   }
+  enterZafaarLodge() { this._enterGenericLodge('Zafaar Lodge', 0x2a2a1f, "Crackling braziers light ornate stonework.", 'zafaar', 'lodge_zafaar', 'zafaar_interior'); }
+  enterElsethLodge() { this._enterGenericLodge('Elseth Lodge', 0x1f2a1f, "Pine scent fills an airy wooden hall.",      'elseth', 'lodge_elseth', 'elseth_interior'); }
+  enterLesseLodge()  { this._enterGenericLodge("Le'sse Lodge", 0x1f262a, "Soft lanterns sway amid silk canopies.",    'lesse',  'lodge_lesse',  'lesse_interior');  }
 
   /**
    * Generic lodge builder.
@@ -1484,7 +1503,7 @@ export default class TownScene extends Phaser.Scene {
    * Lodges are NOT cached before a tribe is chosen (content depends on which
    * flags are still active). After choosing, they cache normally.
    */
-  _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null, lodgeFlagId = null) {
+  _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null, lodgeFlagId = null, bgImage = null) {
     this._hideExteriorsAndOtherInteriors();
 
     if (!this.lodgeGroups) this.lodgeGroups = {};
@@ -1520,6 +1539,7 @@ export default class TownScene extends Phaser.Scene {
       titleText,
       flavorText: baseFlavorText + tribeLine,
       bgColor,
+      bgImage,
       onExit: () => {
         group.setVisible(false);
         this._showExterior();
@@ -1909,10 +1929,18 @@ export default class TownScene extends Phaser.Scene {
       "Le'sse": 0x1c1f24
     };
 
+    const interiorImages = {
+      Zafaar:  'zafaar_interior',
+      Styx:    'styx_interior',
+      Elseth:  'elseth_interior',
+      "Le'sse": 'lesse_interior',
+    };
+
     const group = this._buildInteriorLayout({
       titleText: `${tribe} Leader Hut`,
       flavorText: `The ${tribe.toLowerCase()} leader studies your approach.`,
       bgColor: colors[tribe] || 0x222222,
+      bgImage: interiorImages[tribe] ?? null,
       onExit: () => {
         this.leaderGroups[tribe].setVisible(false);
         this._showExterior();

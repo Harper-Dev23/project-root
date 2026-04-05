@@ -16,7 +16,8 @@ export default class MapOverlay extends Phaser.Scene {
   create() {
     const frame = createOverlayFrame(this, {
       title: 'Regional Map',
-      onClose: () => this._close()
+      onClose: () => this._close(),
+      bgImage: 'menu_parchment_background'
     });
 
     const contentDepth = frame.depth;

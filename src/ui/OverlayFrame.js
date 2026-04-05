@@ -11,7 +11,8 @@ export function createOverlayFrame(scene, {
     width = 910,
     height = 690,
     onClose = () => scene.scene.stop(),
-    depth = DEPTH.MENU
+    depth = DEPTH.MENU,
+    bgImage = null
 } = {}) {
     const gameWidth = scene.scale.width;
     const gameHeight = scene.scale.height;
@@ -69,8 +70,16 @@ export function createOverlayFrame(scene, {
         bounds.height
     );
 
-    const panel = createPanel(scene, bounds.x, bounds.y, width, height, 'default')
-        .setDepth(depth + 1);
+    // Optional painted background image (e.g. parchment texture)
+    if (bgImage && scene.textures.exists(bgImage)) {
+        scene.add.image(bounds.x + width / 2, bounds.y + height / 2, bgImage)
+            .setDisplaySize(width, height)
+            .setDepth(depth + 1);
+    }
+
+    const panel = createPanel(scene, bounds.x, bounds.y, width, height,
+        bgImage ? { fill: 0x000000, fillAlpha: 0, stroke: 0x5a4a3a, strokeWidth: 2, radius: 6, cornerSize: 0 } : 'default'
+    ).setDepth(depth + 1);
 
     const titleStyle = {
         fontSize: '28px',

@@ -30,7 +30,8 @@ export default class SkillsOverlay extends Phaser.Scene {
   create() {
     const frame = createOverlayFrame(this, {
       title: 'Skills',
-      onClose: () => this._close()
+      onClose: () => this._close(),
+      bgImage: 'menu_parchment_background'
     });
 
     this.root = frame.content;
