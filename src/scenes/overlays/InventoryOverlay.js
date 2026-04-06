@@ -5,6 +5,7 @@ import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.j
 import InventorySystem from '../../systems/InventorySystem.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
+import { SoundManager } from '../../systems/SoundManager.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -113,6 +114,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
 
   create() {
+    SoundManager.init(this);
     // ensure clean state on every create()
     if (this.tooltip) { this.tooltip.destroy(); this.tooltip = null; }
 
@@ -159,7 +161,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         fontSize: '18px',
         color: (i === this.selectedCharIndex) ? '#ffff88' : '#cccccc'
       }).setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => { this.selectedCharIndex = i; this.scene.restart(); })
+        .on('pointerdown', () => { SoundManager.play('select'); this.selectedCharIndex = i; this.scene.restart(); })
         .setDepth(contentDepth);
     });
 
@@ -216,10 +218,10 @@ export default class InventoryOverlay extends Phaser.Scene {
         this.add.text(380, lineY, '[X]', { fontSize: '12px', color: '#ff5555' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', () => {
+            SoundManager.play('dullClick');
             const updatedChar = InventorySystem.unequipItemFromSlot(char, slot);
             this._commitChar(updatedChar);
             this.scene.restart();
-
           })
 
           .setDepth(contentDepth);
@@ -321,24 +323,19 @@ export default class InventoryOverlay extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', (p) => {
           if (!this._isPointerWithinArea(p, pArea)) return;
-          // remove from character immutably
+          SoundManager.play('dullClick');
           const updatedChar = InventorySystem.removeItemFromCharacter(char, item);
-
-          // add to global via system helper
           InventorySystem.addGlobalItem(item);
-
-          // commit back to party
           this._commitChar(updatedChar);
           this.scene.restart();
-
         });
-
 
       if (baseItem.type === 'weapon') {
         const mBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[M]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, pArea)) return;
+            SoundManager.play('dullClick');
             const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponMain');
             this._commitChar(updatedChar);
             this.scene.restart();
@@ -350,6 +347,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           oBtn.setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, pArea)) return;
+              SoundManager.play('dullClick');
               const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponOff');
               this._commitChar(updatedChar);
               this.scene.restart();
@@ -361,6 +359,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, pArea)) return;
+            SoundManager.play('dullClick');
             const updatedChar = InventorySystem.equipItemFromInventory(char, item, baseItem.slot);
             this._commitChar(updatedChar);
             this.scene.restart();
@@ -472,12 +471,9 @@ export default class InventoryOverlay extends Phaser.Scene {
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', (p) => {
           if (!this._isPointerWithinArea(p, gArea)) return;
-          // remove instance from global via system helper
+          SoundManager.play('dullClick');
           InventorySystem.removeGlobalItem(item);
-
-          // add to character immutably
           const updatedChar = InventorySystem.addItemToCharacter(char, item);
-
           this._commitChar(updatedChar);
           this.scene.restart();
         });
@@ -487,20 +483,13 @@ export default class InventoryOverlay extends Phaser.Scene {
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, gArea)) return;
-            // 1) remove from global
+            SoundManager.play('dullClick');
             InventorySystem.removeGlobalItem(item);
-
-            // 2) add to character inventory (immutable)
             let updatedChar = InventorySystem.addItemToCharacter(char, item);
-
-            // 3) equip from that inventory state
             updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponMain');
-
             this._commitChar(updatedChar);
             this.scene.restart();
-
-          })
-
+          });
 
         const offColor = (baseItem.hands === 2 || mainHandIsTwoHand) ? '#555555' : '#88ff88';
         const oBtn = this.add.text(500, y, '[Off]', { fontSize: '14px', color: offColor });
@@ -508,15 +497,13 @@ export default class InventoryOverlay extends Phaser.Scene {
           oBtn.setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
               InventorySystem.removeGlobalItem(item);
               let updatedChar = InventorySystem.addItemToCharacter(char, item);
               updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponOff');
-
               this._commitChar(updatedChar);
               this.scene.restart();
-
-            })
-
+            });
         }
         listContainer.add([transferBtn, mBtn, oBtn]);
       } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
@@ -524,14 +511,13 @@ export default class InventoryOverlay extends Phaser.Scene {
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, gArea)) return;
+            SoundManager.play('dullClick');
             InventorySystem.removeGlobalItem(item);
             let updatedChar = InventorySystem.addItemToCharacter(char, item);
             updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, baseItem.slot);
-
             this._commitChar(updatedChar);
             this.scene.restart();
-
-          })
+          });
 
         listContainer.add([transferBtn, eqBtn]);
       } else {

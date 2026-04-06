@@ -67,8 +67,9 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('elseth_interior', 'assets/interiors/elseth_interior.png');
     this.load.image('lesse_interior',  "assets/interiors/le'sse_interior.png");
 
-    // Overlay menu parchment background
+    // Overlay menu backgrounds
     this.load.image('menu_parchment_background', 'assets/UIinterface/menu_parchment_background.png');
+    this.load.image('menu_stony_background',     'assets/UIinterface/menu_stony_background.png');
 
 
     // 🔄 Batch load glow frame sequences

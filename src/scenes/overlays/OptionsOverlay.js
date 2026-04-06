@@ -9,7 +9,7 @@ export default class OptionsOverlay extends Phaser.Scene {
     const frame = createOverlayFrame(this, {
       title: 'Options',
       onClose: () => this._close(),
-      bgImage: 'menu_parchment_background'
+      bgImage: 'menu_stony_background'
     });
 
     const depth = frame.depth;

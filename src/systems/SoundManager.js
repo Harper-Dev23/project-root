@@ -19,7 +19,8 @@ export const AUDIO_MANIFEST = [
   { id: 'explosion', file: 'explosion.wav', volume: 0.6 },
   { id: 'projFire',  file: 'projFire.wav',  volume: 0.5 },
   { id: 'gamble',    file: 'gamble.wav',    volume: 0.5 },
-  { id: 'huh',       file: 'huh.wav',       volume: 0.4 },
+  { id: 'huh',        file: 'huh.wav',        volume: 0.4 },
+  { id: 'handsClick', file: 'handsClick.wav', volume: 0.45 },
 ];
 
 // Map id → { key, volume } for fast lookup

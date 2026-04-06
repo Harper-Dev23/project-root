@@ -791,7 +791,7 @@ export default class TownScene extends Phaser.Scene {
     if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
   }
 
-  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, exitText = '[ Exit ]', onExit }) {
+  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, titleColor = '#ffddaa', flavorColor = '#dddddd', exitText = '[ Exit ]', onExit }) {
     const PANEL_W = 915, PANEL_H = 685;
     const blocker = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
       .setOrigin(0.5)
@@ -819,14 +819,14 @@ export default class TownScene extends Phaser.Scene {
 
     const title = this.add.text(640, 120, titleText, {
       fontSize: '28px',
-      color: '#ffddaa',
+      color: titleColor,
       fontFamily: 'Georgia',
       fontStyle: 'bold'
     }).setOrigin(0.5);
 
     const flavor = this.add.text(640, 200, flavorText, {
       fontSize: '18px',
-      color: '#dddddd',
+      color: flavorColor,
       fontFamily: 'Georgia',
       align: 'center',
       wordWrap: { width: 600 }
@@ -837,7 +837,7 @@ export default class TownScene extends Phaser.Scene {
       color: '#ff8888'
     }).setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', onExit);
+      .on('pointerdown', () => { SoundManager.play('handsClick'); onExit(); });
 
     const items = [blocker, ...(bgImg ? [bgImg] : []), bg, title, flavor, exitBtn];
     return this.add.container(0, 0, items).setDepth(11);
@@ -962,6 +962,8 @@ export default class TownScene extends Phaser.Scene {
       titleText: 'Vendor Row',
       flavorText: '',  // Empty here — we'll manually place it lower
       bgColor: 0x1a2022,
+      bgImage: 'menu_stony_background',
+      titleColor: '#2a1800',
       exitText: '[ Exit Market ]',
       onExit: () => this.leaveVendorRow()
     });
@@ -974,7 +976,7 @@ export default class TownScene extends Phaser.Scene {
 
     this.vendorLeftFlavor = this.add.text(230, 440,
       DEFAULT_VENDOR_FLAVOR,
-      { fontSize: '16px', color: '#aaaaaa', wordWrap: { width: 280 } }
+      { fontSize: '16px', color: '#3a2818', wordWrap: { width: 280 } }
     );
 
     layout.add(this.vendorLeftFlavor);
@@ -992,7 +994,7 @@ export default class TownScene extends Phaser.Scene {
     // Currency strip — updates whenever a purchase or gamble happens.
     this.vendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
       fontSize: '12px',
-      color: '#aaaaaa'
+      color: '#3a2818'
     }).setOrigin(0.5).setDepth(13);
     this.vendorInventoryText = this.add.text(610, 210, '', {
       fontSize: '16px',
@@ -1113,12 +1115,12 @@ export default class TownScene extends Phaser.Scene {
       const vendorDef = vendors[vKey];
       const txt = this.add.text(230, startY + i * 40, `• ${vendorDef.displayName}`, {
         fontSize: '20px',
-        color: '#cccccc'
+        color: '#2a1800'
       })
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => txt.setColor('#ffffff'))
-        .on('pointerout', () => txt.setColor('#cccccc'))
-        .on('pointerdown', () => this.showSingleVendor(vKey));
+        .on('pointerover', () => txt.setColor('#4a3010'))
+        .on('pointerout', () => txt.setColor('#2a1800'))
+        .on('pointerdown', () => { SoundManager.play('select'); this.showSingleVendor(vKey); });
 
       this.vendorListContainer.add(txt);
       i++;
@@ -1148,7 +1150,7 @@ export default class TownScene extends Phaser.Scene {
     this.vendorListContainer.add(
       this.add.text(230, 160, `• ${vendorDef.displayName}`, {
         fontSize: '20px',
-        color: '#ffffff'
+        color: '#2a1800'
       })
     );
 
@@ -1156,12 +1158,12 @@ export default class TownScene extends Phaser.Scene {
     this.vendorListContainer.add(
       this.add.text(230, 200, '[ Back ]', {
         fontSize: '18px',
-        color: '#ff6666'
+        color: '#880000'
       })
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', function () { this.setColor('#ffffff'); })
-        .on('pointerout', function () { this.setColor('#ff6666'); })
-        .on('pointerdown', () => {
+        .on('pointerover', function () { this.setColor('#550000'); })
+        .on('pointerout', function () { this.setColor('#880000'); })
+        .on('pointerdown', () => { SoundManager.play('handsClick');
           this.vendorInventoryContainer.removeAll(true);
           this.vendorInventoryContainer.y = 0;
           this.showVendorList();
@@ -1232,6 +1234,7 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
             ProgressionManager.huntTickets -= 1;
+            SoundManager.play('gamble');
             GameState.save('autosave');
             this._updateVendorCurrencyDisplay();
 
@@ -1319,7 +1322,7 @@ export default class TownScene extends Phaser.Scene {
         color: filterType === cat.key ? '#ffffff' : '#ffddaa'
       })
         .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.openVendorInventory(vendorKey, cat.key));
+        .on('pointerdown', () => { SoundManager.play('select'); this.openVendorInventory(vendorKey, cat.key); });
 
       this.vendorCategoryButtons.push(btn);
       if (this.vendorRowGroup) this.vendorRowGroup.add(btn);
@@ -1368,6 +1371,7 @@ export default class TownScene extends Phaser.Scene {
             }
 
             InventorySystem.addGlobalItem(instance);
+            SoundManager.play('dullClick');
             this.vendorInventoryText.setText(`Purchased: ${instance.displayName || entry.base.name}`);
             console.log(`✅ Added to global inventory:`, instance);
 
@@ -2087,6 +2091,7 @@ export default class TownScene extends Phaser.Scene {
             return;
           }
           ProgressionManager.tribeTickets -= 1;
+          SoundManager.play('dullClick');
           InventorySystem.addGlobalItem(createItemInstance(itemId));
 
           // Once the tribe ticket is spent, nudge the player toward the next scenario.
@@ -2119,6 +2124,8 @@ export default class TownScene extends Phaser.Scene {
       titleText: "Tribe Vendors",
       flavorText: null,
       bgColor: 0x20201f,
+      bgImage: 'menu_stony_background',
+      titleColor: '#2a1800',
       exitText: '[ Exit Market ]',
       onExit: () => {
         this.tribeVendorGroup.setVisible(false);
@@ -2137,12 +2144,12 @@ export default class TownScene extends Phaser.Scene {
     vendors.forEach((v, i) => {
       const txt = this.add.text(230, 160 + i * 40, `• ${v.name}`, {
         fontSize: '20px',
-        color: '#cccccc'
+        color: '#2a1800'
       })
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => txt.setColor('#ffffff'))
-        .on('pointerout', () => txt.setColor('#cccccc'))
-        .on('pointerdown', () => this._openTribeVendor(v.key, v.name));
+        .on('pointerover', () => txt.setColor('#4a3010'))
+        .on('pointerout', () => txt.setColor('#2a1800'))
+        .on('pointerdown', () => { SoundManager.play('select'); this._openTribeVendor(v.key, v.name); });
 
       layout.add(txt);
     });
@@ -2157,7 +2164,7 @@ export default class TownScene extends Phaser.Scene {
     // their current ticket count without leaving the market.
     this.tribeVendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
       fontSize: '12px',
-      color: '#aaaaaa'
+      color: '#3a2818'
     }).setOrigin(0.5).setDepth(13);
     this.vendorBody = this.add.text(610, 210, '', {
       fontSize: '16px',

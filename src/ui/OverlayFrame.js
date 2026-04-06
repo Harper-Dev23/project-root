@@ -1,6 +1,7 @@
 
 import { DEPTH } from './styles.js';
 import { createPanel } from './GamePanel.js';
+import { SoundManager } from '../systems/SoundManager.js';
 
 /**
  * Creates a standardized overlay frame with a dimmer, panel, title, and close button.
@@ -101,7 +102,7 @@ export function createOverlayFrame(scene, {
         .setOrigin(1, 0)
         .setInteractive({ useHandCursor: true })
         .setDepth(depth + 2);
-    closeButton.on('pointerdown', close);
+    closeButton.on('pointerdown', () => { SoundManager.play('handsClick'); close(); });
 
     const content = scene.add.container(0, 0).setDepth(depth + 2);
 
