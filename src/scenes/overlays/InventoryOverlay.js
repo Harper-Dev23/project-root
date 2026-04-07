@@ -15,6 +15,9 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.firstOpen = true;
     this.currentGlobalCategory = 'all';
     this.currentPersonalCategory = 'all';
+    this.currentWeaponType = 'Any';
+    this.currentArmorSlot = 'Any';
+    this.currentRarity = 'All';
     this.tooltip = null;
   }
 
@@ -403,26 +406,67 @@ export default class InventoryOverlay extends Phaser.Scene {
         fontSize: '16px',
         color: (this.currentGlobalCategory === cat.key) ? '#ffff88' : '#cccccc'
       }).setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => { this.currentGlobalCategory = cat.key; this.scene.restart(); })
+        .on('pointerdown', () => {
+          this.currentGlobalCategory = cat.key;
+          this.currentWeaponType = 'Any';
+          this.currentArmorSlot = 'Any';
+          this.scene.restart();
+        })
         .setDepth(contentDepth)
         .setOrigin(0.5);
     });
 
-    let inventoryItems = [...(GameState.inventory || [])];
-    inventoryItems = this._filterByCategory(inventoryItems, this.currentGlobalCategory);
+    // Subtype + rarity cyclers (right side of global header row)
+    const WEAPON_TYPES = ['Any', 'axe_2h', 'bow', 'dagger', 'gun', 'mace_2h', 'shield', 'sling', 'spear_1h', 'staff', 'sword_1h', 'sword_2h', 'wand', 'whip'];
+    const ARMOR_SLOTS = ['Any', 'boots', 'chest', 'gloves', 'head', 'legs', 'ring', 'amulet'];
+    const RARITIES = ['All', 'common', 'uncommon', 'rare', 'epic'];
+    const cyclerCX = frame.bounds.x + frame.bounds.width - 110;
 
-    const safeHeightAdj = safeHeight - 240;
+    const makeCycler = (cx, cy, prefixLabel, value, list, setter) => {
+      const idx = list.indexOf(value);
+      const prevVal = list[(idx - 1 + list.length) % list.length];
+      const nextVal = list[(idx + 1) % list.length];
+      this.add.text(cx - 68, cy, prefixLabel, { fontSize: '11px', color: '#999999' })
+        .setOrigin(0, 0).setDepth(contentDepth);
+      this.add.text(cx - 32, cy, '◀', { fontSize: '13px', color: '#aaaaaa' })
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => { SoundManager.play('select'); setter(prevVal); this.scene.restart(); })
+        .setDepth(contentDepth);
+      this.add.text(cx, cy, this._formatLabel(value), { fontSize: '12px', color: '#ffff88' })
+        .setOrigin(0.5, 0).setDepth(contentDepth);
+      this.add.text(cx + 32, cy, '▶', { fontSize: '13px', color: '#aaaaaa' })
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => { SoundManager.play('select'); setter(nextVal); this.scene.restart(); })
+        .setDepth(contentDepth);
+    };
+
+    if (this.currentGlobalCategory === 'weapon') {
+      makeCycler(cyclerCX, gToggleY, 'Type:', this.currentWeaponType, WEAPON_TYPES, v => { this.currentWeaponType = v; });
+    } else if (this.currentGlobalCategory === 'armor') {
+      makeCycler(cyclerCX, gToggleY, 'Slot:', this.currentArmorSlot, ARMOR_SLOTS, v => { this.currentArmorSlot = v; });
+    } else {
+      this.add.text(cyclerCX, gToggleY, 'Subtype: —', { fontSize: '11px', color: '#444444' })
+        .setOrigin(0.5, 0).setDepth(contentDepth);
+    }
+    makeCycler(cyclerCX, gToggleY + 22, 'Rarity:', this.currentRarity, RARITIES, v => { this.currentRarity = v; });
+
+    const listStartY = gToggleY + 44;
+
+    let inventoryItems = [...(GameState.inventory || [])];
+    inventoryItems = this._applyGlobalFilters(inventoryItems);
+
+    const safeHeightAdj = safeHeight - 264;
     const newWidth = globalListWidth;
     const newX = globalListLeft;
-    
+
     const mask = this.add.graphics().fillRect(0, 0, newWidth, safeHeightAdj);
     const maskShape = mask.createGeometryMask();
-    mask.setPosition(newX, gToggleY + 20).setDepth(contentDepth);
+    mask.setPosition(newX, listStartY).setDepth(contentDepth);
     mask.setVisible(false);
 
-    const listContainer = this.add.container(newX, gToggleY + 20).setMask(maskShape).setDepth(contentDepth);
+    const listContainer = this.add.container(newX, listStartY).setMask(maskShape).setDepth(contentDepth);
 
-    const gArea = { x: newX, y: gToggleY + 20, w: newWidth, h: safeHeightAdj };
+    const gArea = { x: newX, y: listStartY, w: newWidth, h: safeHeightAdj };
 
     const spacing = 10;
     const GLOBAL_TEXT_WIDTH = 230;
@@ -536,7 +580,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     const gContentHeight = Math.max(globalCursorY, 0);
     const gVisibleHeight = gArea.h;
     // viewport = mask height for global
-    listContainer.setPosition(newX, gToggleY + 20);
+    listContainer.setPosition(newX, listStartY);
 
     // static global scroll hitbox (reuse gArea defined above)
 
@@ -552,7 +596,7 @@ export default class InventoryOverlay extends Phaser.Scene {
       // --- GLOBAL SCROLL ---
       if (mx >= gArea.x && mx <= gArea.x + gArea.w && my >= gArea.y && my <= gArea.y + gArea.h) {
         if (gContentHeight > gVisibleHeight) {
-          const baseYg = gToggleY + 20;
+          const baseYg = listStartY;
           const maxScroll = gContentHeight - gVisibleHeight;
           const next = listContainer.y - deltaY * 0.25;
           listContainer.y = Phaser.Math.Clamp(next, baseYg - maxScroll, baseYg);
@@ -673,6 +717,22 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.tooltip?.hide();
     this.scene.resume('UIScene');
     this.scene.stop();
+  }
+
+  _applyGlobalFilters(items) {
+    let result = this._filterByCategory(items, this.currentGlobalCategory);
+
+    if (this.currentGlobalCategory === 'weapon' && this.currentWeaponType !== 'Any') {
+      result = result.filter(it => Items[it.id]?.weaponType === this.currentWeaponType);
+    } else if (this.currentGlobalCategory === 'armor' && this.currentArmorSlot !== 'Any') {
+      result = result.filter(it => Items[it.id]?.slot === this.currentArmorSlot);
+    }
+
+    if (this.currentRarity !== 'All') {
+      result = result.filter(it => (it.quality || 'common') === this.currentRarity);
+    }
+
+    return result;
   }
 
   _filterByCategory(items, category) {

@@ -203,13 +203,13 @@ export default class PartyManagementScene extends Phaser.Scene {
         frame = this.add.image(x, y, 'ui_frame')
           .setOrigin(0.5)
           .setDisplaySize(SLOT_SIZE, SLOT_SIZE)
-          .setDepth(1000)
-          .setTint(0xffffff);
+          .setDepth(1002)
+          .setTint(0xddccbb);
       } else {
-        frame = this.add.rectangle(x, y, SLOT_SIZE, SLOT_SIZE, 0x000000, 0.15)
+        frame = this.add.rectangle(x, y, SLOT_SIZE, SLOT_SIZE, 0xddccbb, 0.25)
           .setOrigin(0.5)
-          .setStrokeStyle(2, 0xffffff)
-          .setDepth(1000);
+          .setStrokeStyle(2, 0xddccbb)
+          .setDepth(1002);
       }
       // IMPORTANT: do NOT call frame.setInteractive()
 

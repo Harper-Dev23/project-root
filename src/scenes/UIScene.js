@@ -295,9 +295,24 @@ export default class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(DEPTH.UI_OVERLAY + 1)
       .on('pointerdown', () => {
+        SoundManager.play('select');
         this.toggleRightPanel();
         this.toggleButton.setText(this.rightPanelVisible ? '◀' : '▶');
       });
+
+    // ESC toggles the right panel — but only when no overlay scene is open
+    const OVERLAY_KEYS = [
+      'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
+      'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+      'PartyManagementScene'
+    ];
+    this.input.keyboard?.on('keydown-ESC', () => {
+      const anyOpen = OVERLAY_KEYS.some(k => this.scene.isActive(k));
+      if (anyOpen) return; // let the overlay's own ESC handler fire
+      SoundManager.play('select');
+      this.toggleRightPanel();
+      this.toggleButton?.setText(this.rightPanelVisible ? '◀' : '▶');
+    });
 
 
 

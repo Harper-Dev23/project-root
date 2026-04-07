@@ -50,7 +50,7 @@ export function createOverlayFrame(scene, {
         const zone = scene.add.zone(x, y, width, height)
             .setDepth(depth)
             .setInteractive({ useHandCursor: false });
-        zone.on('pointerdown', close);
+        zone.on('pointerdown', () => { SoundManager.play('handsClick'); close(); });
         closeRegions.push(zone);
     };
 
@@ -102,7 +102,15 @@ export function createOverlayFrame(scene, {
         .setOrigin(1, 0)
         .setInteractive({ useHandCursor: true })
         .setDepth(depth + 2);
-    closeButton.on('pointerdown', () => { SoundManager.play('handsClick'); close(); });
+
+    const closeWithSound = () => { SoundManager.play('handsClick'); close(); };
+    closeButton.on('pointerdown', closeWithSound);
+
+    // ESC key closes this overlay
+    const onEsc = () => closeWithSound();
+    scene.input.keyboard?.on('keydown-ESC', onEsc);
+    // Clean up the listener when this scene shuts down so it doesn't stack
+    scene.events.once('shutdown', () => scene.input.keyboard?.off('keydown-ESC', onEsc));
 
     const content = scene.add.container(0, 0).setDepth(depth + 2);
 
