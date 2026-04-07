@@ -31,10 +31,19 @@ export default class SceneManager {
     this.enterTown();
   }
 
-  // ⛔ Return to Main Menu
+  // ⛔ Return to Main Menu — stop every scene that could be active
   returnToMainMenu() {
-    this.scene.stop('TownScene');
-    this.scene.stop('UIScene');
+    const ALL_SCENES = [
+      'TownScene', 'UIScene', 'CombatScene',
+      'CharacterCreationScene', 'PartyManagementScene',
+      'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
+      'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+    ];
+    ALL_SCENES.forEach(key => {
+      if (this.scene.isActive(key) || this.scene.isPaused(key)) {
+        this.scene.stop(key);
+      }
+    });
     this.startMainMenu();
   }
 }

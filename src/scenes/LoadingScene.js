@@ -109,7 +109,21 @@ export default class LoadingScene extends Phaser.Scene {
   create() {
     if (!this.targetScene) return;
 
-    // 👇 Now that assets are loaded, start the scene
+    if (this.targetScene === 'TownScene') {
+      // Stop any overlay/parallel scenes that may be lingering from a previous
+      // session before we (re)start TownScene + UIScene from scratch.
+      const CLEANUP = [
+        'UIScene', 'CombatScene', 'CharacterCreationScene', 'PartyManagementScene',
+        'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
+        'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+      ];
+      CLEANUP.forEach(key => {
+        if (this.scene.isActive(key) || this.scene.isPaused(key)) {
+          this.scene.stop(key);
+        }
+      });
+    }
+
     this.scene.start(this.targetScene, this.targetSceneData);
 
     if (this.targetScene === 'TownScene') {

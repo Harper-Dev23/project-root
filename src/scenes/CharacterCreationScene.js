@@ -191,8 +191,10 @@ export default class CharacterCreationScene extends Phaser.Scene {
     }, 'confirm', { fontSize: '20px' });
 
     createButton(this, width / 2 + 100, bottomY, 'Cancel', () => {
+      // TownScene + UIScene are still active in the background — just stop this
+      // scene and they resume normally. Starting MainMenuScene here would layer
+      // it on top of the still-running TownScene, causing overlap/input chaos.
       this.scene.stop();
-      this.scene.start('MainMenuScene');
     }, 'danger', { fontSize: '20px' });
   }
 

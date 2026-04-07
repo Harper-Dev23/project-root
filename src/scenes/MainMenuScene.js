@@ -87,19 +87,19 @@ export default class MainMenuScene extends Phaser.Scene {
     // === Popup container ===
     this.loadPopup = this.add.container(width / 2, height / 2).setDepth(1000);
 
-    // Background
-    const bg = createPanel(this, -250, -200, 500, 400, 'menu');
+    // Background — wider and taller so slots don't overlap the title
+    const bg = createPanel(this, -280, -260, 560, 520, 'menu');
     this.loadPopup.add(bg);
 
-    this.loadPopup.add(this.add.text(0, -170, 'Select Save Slot', {
+    this.loadPopup.add(this.add.text(0, -230, 'Select Save Slot', {
       fontSize: '20px',
       color: '#ffffaa'
     }).setOrigin(0.5));
 
-    const listWidth = 460;
-    const listHeight = 240;
-    const listTop = -140;
-    const slotSpacing = 60;
+    const listWidth = 520;
+    const listHeight = 330;
+    const listTop = -200;
+    const slotSpacing = 75;
     const slotsContainer = this.add.container(0, 0);
 
     const maskGfx = this.add.graphics();
@@ -167,7 +167,7 @@ export default class MainMenuScene extends Phaser.Scene {
         slotsContainer.add(btn);
 
         if (partyPreview) {
-          const previewText = this.add.text(0, btnY + 20, partyPreview, {
+          const previewText = this.add.text(0, btnY + 38, partyPreview, {
             fontSize: '14px',
             color: '#cccccc',
             wordWrap: { width: listWidth - 20 }
@@ -177,8 +177,8 @@ export default class MainMenuScene extends Phaser.Scene {
       });
     }
 
-    // Close button
-    const closeBtn = createButton(this, 0, 170, 'Close', () => {
+    // Close button — push below the enlarged list
+    const closeBtn = createButton(this, 0, 220, 'Close', () => {
       this.loadPopup.destroy(true);
       blocker.destroy();
     }, 'danger', { fontSize: '18px' });

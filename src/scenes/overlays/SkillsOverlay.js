@@ -3,6 +3,7 @@ import Tooltip from '../../ui/Tooltip.js';
 import { DEPTH } from '../../ui/styles.js';
 import { SKILLS } from '../../../data/skills.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
+import { DevFlags } from '../../systems/DevFlags.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -78,6 +79,9 @@ export default class SkillsOverlay extends Phaser.Scene {
     // Header (persistent; never destroyed on click)
     this._initHeader(panelX, panelY + 48, panelW);
 
+    // Dev toggles
+    this._initDevToggles(panelX, panelY, panelW, frame.depth);
+
     // First render
     this._buildCards();
 
@@ -122,6 +126,43 @@ export default class SkillsOverlay extends Phaser.Scene {
       if (s.requiredStat) set.add(String(s.requiredStat));
     }
     this.statOptions = Array.from(set).sort(); // e.g., ['CHA','CON','DEX','INT','STR','WIS']
+  }
+
+  // ---------- Dev toggles (bottom-right corner of panel) ----------
+  _initDevToggles(panelX, panelY, panelW, depth) {
+    const rightX  = panelX + panelW - 20;
+    const topY    = panelY + 12;
+    const lineH   = 22;
+
+    const makeToggle = (label, isOn, onToggle, y) => {
+      const box  = this.add.text(rightX - 180, y,
+        isOn ? '[✓]' : '[ ]',
+        { fontSize: '13px', color: isOn ? '#88ff88' : '#888888', fontFamily: 'Georgia' }
+      ).setOrigin(0, 0).setDepth(depth).setInteractive({ useHandCursor: true });
+
+      const lbl  = this.add.text(rightX - 155, y,
+        label,
+        { fontSize: '13px', color: isOn ? '#88ff88' : '#888888', fontFamily: 'Georgia' }
+      ).setOrigin(0, 0).setDepth(depth).setInteractive({ useHandCursor: true });
+
+      const refresh = () => {
+        const on = onToggle();
+        box.setText(on ? '[✓]' : '[ ]');
+        box.setColor(on ? '#88ff88' : '#888888');
+        lbl.setColor(on ? '#88ff88' : '#888888');
+        // Rebuild cards so stat-gated skills appear/disappear immediately
+        this._buildCards();
+      };
+      box.on('pointerdown', refresh);
+      lbl.on('pointerdown', refresh);
+
+      this.root.add([box, lbl]);
+    };
+
+    makeToggle('devBreakthrough', DevFlags.isBreakthroughEnabled(),
+      () => DevFlags.toggleBreakthrough(), topY);
+    makeToggle('devBuildup (5×)',  DevFlags.isBuildupEnabled(),
+      () => DevFlags.toggleBuildup(),      topY + lineH);
   }
 
   // ---------- Header (persistent, no destroy on click) ----------

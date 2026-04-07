@@ -530,7 +530,7 @@ export default class UIScene extends Phaser.Scene {
       .setDepth(DEPTH.MODAL_PANEL)
       .setScrollFactor(0);
 
-    const panelW = 460, panelH = 360;
+    const panelW = 520, panelH = 480;
     const panel = createPanel(this, w / 2 - panelW / 2, h / 2 - panelH / 2, panelW, panelH, 'menu');
     const title = this.add.text(w / 2, h / 2 - (panelH / 2) + 30, 'Enter Save Name:', {
       fontSize: '20px', color: '#fff'
@@ -539,9 +539,9 @@ export default class UIScene extends Phaser.Scene {
     this.modalPanelGroup.add([panel, title]);
 
     // DOM input
-    this.nameInputDOM = this.add.dom(w / 2, h / 2 - 100).createFromHTML(`
+    this.nameInputDOM = this.add.dom(w / 2, h / 2 - 160).createFromHTML(`
   <input type="text" name="saveName" placeholder="Save name"
-         style="font-size:18px;padding:6px 8px;width:280px;">
+         style="font-size:18px;padding:6px 8px;width:320px;">
 `);
     this.modalPanelGroup.add(this.nameInputDOM);
 
@@ -608,7 +608,7 @@ export default class UIScene extends Phaser.Scene {
     };
 
     // Buttons
-    const saveBtn = this.add.text(w / 2 - 80, h / 2 - 40, '[ Save ]', { fontSize: '18px', color: '#ffffff' })
+    const saveBtn = this.add.text(w / 2 - 80, h / 2 - 100, '[ Save ]', { fontSize: '18px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
         const nm = this.nameInputDOM?.getChildByName('saveName')?.value.trim();
@@ -623,7 +623,7 @@ export default class UIScene extends Phaser.Scene {
       .on('pointerover', () => saveBtn.setStyle({ color: '#ffffaa' }))
       .on('pointerout', () => saveBtn.setStyle({ color: '#ffffff' }));
 
-    const cancelBtn = this.add.text(w / 2 + 80, h / 2 - 40, '[ Cancel ]', { fontSize: '18px', color: '#ffffff' })
+    const cancelBtn = this.add.text(w / 2 + 80, h / 2 - 100, '[ Cancel ]', { fontSize: '18px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanupPopup())
       .on('pointerover', () => cancelBtn.setStyle({ color: '#ffffaa' }))
@@ -631,19 +631,19 @@ export default class UIScene extends Phaser.Scene {
 
     this.modalPanelGroup.add([saveBtn, cancelBtn]);
 
-    const listHeader = this.add.text(w / 2, h / 2 + 10, 'Existing Slots (click to fill):', {
+    const listHeader = this.add.text(w / 2, h / 2 - 60, 'Existing Slots (click to fill):', {
       fontSize: '16px',
       color: '#cccccc'
     }).setOrigin(0.5);
     this.modalPanelGroup.add(listHeader);
 
     const listWidth = panelW - 40;
-    const listHeight = 140;
-    const slotSpacing = 32;
-    const firstRowY = slotSpacing * 1; // start slightly lower so row 2 is centered
+    const listHeight = 240;
+    const slotSpacing = 38;
+    const firstRowY = slotSpacing * 1;
 
     const listX = w / 2 - listWidth / 2;
-    const listY = h / 2 - listHeight / 2;
+    const listY = h / 2 - 40;
 
     const maskGfx = this.make.graphics({ x: listX, y: listY, add: false });
     maskGfx.fillStyle(0xffffff, 1);

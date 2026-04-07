@@ -18,7 +18,8 @@ export const AUDIO_MANIFEST = [
   { id: 'screech',   file: 'screech.wav',   volume: 0.5 },
   { id: 'explosion', file: 'explosion.wav', volume: 0.6 },
   { id: 'projFire',  file: 'projFire.wav',  volume: 0.5 },
-  { id: 'gamble',    file: 'gamble.wav',    volume: 0.5 },
+  { id: 'gamble',      file: 'gamble.wav',      volume: 0.5 },
+  { id: 'gambleEpic',  file: 'gambleEpic.wav',  volume: 0.65 },
   { id: 'huh',        file: 'huh.wav',        volume: 0.4 },
   { id: 'handsClick', file: 'handsClick.wav', volume: 0.45 },
 ];

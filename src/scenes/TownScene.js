@@ -1234,7 +1234,6 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
             ProgressionManager.huntTickets -= 1;
-            SoundManager.play('gamble');
             GameState.save('autosave');
             this._updateVendorCurrencyDisplay();
 
@@ -1252,6 +1251,7 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
 
+            SoundManager.play(q === 'epic' ? 'gambleEpic' : 'gamble');
             InventorySystem.addGlobalItem(inst);
 
             const lineY = BONEPILE_LOG_START_Y + this.vendorInventoryContainer.listHeight;
@@ -2028,13 +2028,12 @@ export default class TownScene extends Phaser.Scene {
   // 🚪 Hunt Gate (transition placeholder)
   // =====================================================
   _enterHuntGate() {
-    this._hideExteriorsAndOtherInteriors();
-
+    // Don't hide the exterior — this is a placeholder dialogue only.
+    // Hiding without a guaranteed restore path causes the screen to stay dark.
     this.scene.get('UIScene')?.showConfirmationDialogue(
       "Are you ready to depart for the Sacred Hunt?\n(Feature coming soon)",
       () => {
         console.log("TODO: switch to Exploration / Hunt scene.");
-        this._showExterior();
       }
     );
   }

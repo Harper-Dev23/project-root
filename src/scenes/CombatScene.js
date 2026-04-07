@@ -17,6 +17,7 @@ import { getXPNeededForLevel } from '../../data/xpTable.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { DevFlags } from '../systems/DevFlags.js';
 import { applyLevelUp, rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
 import { isItemInstance } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
@@ -2390,7 +2391,8 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
-    if (user.currentMP < calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost) {
+    const _mpCost = DevFlags.isBreakthroughEnabled() ? 0 : calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost;
+    if (user.currentMP < _mpCost) {
       this._log(`${user.name} lacks the MP to use ${skill.name}.`);
       return { ok: false };
     }
@@ -2479,7 +2481,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
-    const baseMpCost = Number.isFinite(ability?.mpCost) ? ability.mpCost : 0;
+    const baseMpCost = DevFlags.isBreakthroughEnabled() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
     const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
     const mpCost = mpInfo?.cost ?? baseMpCost;
 
@@ -3225,6 +3227,8 @@ export default class CombatScene extends Phaser.Scene {
 
       let amt = Math.max(0, Math.floor(buildupMap[rawKey] || 0));
       if (amt <= 0) continue;
+      // devBuildup: 5× amplifier for player skills only
+      if (DevFlags.isBuildupEnabled() && ctx?.user && !ctx.user.isEnemy) amt *= 5;
 
       const w = target.weakness;
 

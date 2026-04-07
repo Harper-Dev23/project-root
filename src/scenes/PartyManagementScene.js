@@ -2,6 +2,7 @@
 
 import GameState from '../systems/GameState.js';
 import { createPanel } from '../ui/GamePanel.js';
+import { SoundManager } from '../systems/SoundManager.js';
 
 // ===== Central UI frame geometry =====
 // Screen is 1280x720; you said side panels are 180px each; top/bottom ≈ 14px.
@@ -120,32 +121,47 @@ export default class PartyManagementScene extends Phaser.Scene {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = false;
 
-    // Dark, clickable blocker to stop click-through
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
-      .setDepth(1000);
+    SoundManager.init(this);
 
-    // Styled border panel (matches other overlay menus)
     const panelW = 920;
     const panelH = 692;
     const panelX = (width - panelW) / 2;
     const panelY = (height - panelH) / 2;
+
+    // Dark dimmer — full-screen, closes on click
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
+      .setDepth(1000)
+      .setInteractive()
+      .on('pointerdown', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
+
+    // Invisible blocker covering only the panel area — sits above the dimmer
+    // and swallows clicks so the dimmer doesn't fire for anything inside the panel
+    this.add.rectangle(width / 2, height / 2, panelW, panelH, 0x000000, 0)
+      .setDepth(1001)
+      .setInteractive();
+
+    // Parchment background image
     if (this.textures.exists('menu_parchment_background')) {
       this.add.image(width / 2, height / 2, 'menu_parchment_background')
         .setDisplaySize(panelW, panelH)
         .setDepth(1001);
     }
+
+    // Panel border
     createPanel(this, panelX, panelY, panelW, panelH,
       this.textures.exists('menu_parchment_background')
         ? { fill: 0x000000, fillAlpha: 0, stroke: 0x5a4a3a, strokeWidth: 2, radius: 6, cornerSize: 0 }
         : 'default'
     ).setDepth(1001);
 
-    // Header + Close
-    this.add.text(width / 2, 40, 'Party Management', { fontSize: '32px', color: '#fff' })
-      .setOrigin(0.5).setDepth(1001);
-    this.add.text(width - 40, 40, '[X]', { fontSize: '24px', color: '#ff6666' })
-      .setOrigin(0.5).setDepth(1001).setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this._closeAndReturn());
+    // Header
+    this.add.text(width / 2, panelY + 24, 'Party Management', { fontSize: '32px', color: '#fff' })
+      .setOrigin(0.5).setDepth(1002);
+
+    // Close [X] — positioned inside the panel top-right, matching other overlays
+    this.add.text(panelX + panelW - 18, panelY + 18, '✕', { fontSize: '24px', color: '#ff8888', fontFamily: 'Georgia' })
+      .setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
 
     this.infoLabel = this.add.text(INFO_LABEL_X, INFO_LABEL_Y, '—', {
       fontSize: '22px',

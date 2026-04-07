@@ -5,6 +5,7 @@ import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
 import { applyDamageModifiers } from '../src/systems/CombatLogic.js';
 import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
+import { DevFlags } from '../src/systems/DevFlags.js';
 
 
 const cloneBuffStruct = (buff) => (buff ? { ...buff } : undefined);
@@ -129,7 +130,7 @@ export function getWeaponSkillsFor(char) {
     const statKey = skill.requiredStat?.toUpperCase();
     const statVal = statKey ? (char.totalStats?.[statKey] || 0) : null;
 
-    if (skill.requiredStat && statVal < skill.requiredValue) continue;
+    if (skill.requiredStat && statVal < skill.requiredValue && !DevFlags.isBreakthroughEnabled()) continue;
 
     // ? Normalize weapon type check
     const mainType = char.equipment?.weaponMain ? Items[char.equipment.weaponMain]?.weaponType : null;
@@ -191,7 +192,7 @@ export function getReactionSkillsFor(char) {
     if (s.enemyOnly) continue;
 
     // stat gate
-    if (s.requiredStat) {
+    if (s.requiredStat && !DevFlags.isBreakthroughEnabled()) {
       const statKey = s.requiredStat.toUpperCase();
       const statVal = char.totalStats?.[statKey] || 0;
       if (statVal < (s.requiredValue || 0)) continue;
@@ -11569,7 +11570,7 @@ Object.assign(RAW_SKILLS, {
 Object.assign(SKILLS, buildSkillRegistry(RAW_SKILLS));
 // ======== Global Skill Test Mode (opt-in) - works on SKILLS object ========
 const DEV_SKILL_TEST = {
-  ENABLE: true,              // flip true for dev sessions
+  ENABLE: false,             // now controlled by DevFlags UI in SkillsOverlay
   zeroMpCost: true,
   zeroCooldown: true,
   ignoreStatReqs: true,       // sets requiredValue to 0
