@@ -817,6 +817,9 @@ export default class JournalOverlay extends Phaser.Scene {
     }
 
     create(data) {
+        const town = this.scene.get('TownScene');
+        if (town?.input) town.input.enabled = false;
+
         const frame = createOverlayFrame(this, {
             title: 'Journal',
             onClose: () => this._close(),
@@ -833,6 +836,8 @@ export default class JournalOverlay extends Phaser.Scene {
     }
 
     _close() {
+        const town = this.scene.get('TownScene');
+        if (town?.input) town.input.enabled = true;
         this.overlay?.destroy();
         this.scene.stop();
     }

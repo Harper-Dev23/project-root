@@ -14,6 +14,9 @@ export default class MapOverlay extends Phaser.Scene {
   }
 
   create() {
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = false;
+
     const frame = createOverlayFrame(this, {
       title: 'Regional Map',
       onClose: () => this._close(),
@@ -174,6 +177,8 @@ export default class MapOverlay extends Phaser.Scene {
   }
 
   _close() {
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = true;
     this.scene.resume('UIScene');
     this.scene.stop();
   }

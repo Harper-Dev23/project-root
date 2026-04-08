@@ -118,6 +118,10 @@ export default class InventoryOverlay extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+
+    // Disable TownScene input so its hover/click zones don't fire through this overlay
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = false;
     // ensure clean state on every create()
     if (this.tooltip) { this.tooltip.destroy(); this.tooltip = null; }
 
@@ -715,6 +719,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
   _handleClose() {
     this.tooltip?.hide();
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = true;
     this.scene.resume('UIScene');
     this.scene.stop();
   }

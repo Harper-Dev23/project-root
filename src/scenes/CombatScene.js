@@ -142,6 +142,8 @@ export default class CombatScene extends Phaser.Scene {
     this.currentTurnIndex = 0;
     this.menuLevel = 'root';
     this.slotEffects = {}; // { [slotId]: [{ id, element, turns, tickPctMaxHP }] }
+    this.groundSprites = {}; // { [slotId]: Phaser.GameObjects.Image[] }
+    this.lodgeSprites = {};  // { [charName]: Phaser.GameObjects.Image[] }
   }
 
   init(data) {
@@ -159,6 +161,8 @@ export default class CombatScene extends Phaser.Scene {
     this.currentTurnIndex = 0;
     this.menuLevel = 'root';
     this.slotEffects = {};
+    this.groundSprites = {};
+    this.lodgeSprites = {};
     this.turnOrder = [];
     this.enemies = [];
     this.unitSlots = [];
@@ -2969,7 +2973,21 @@ export default class CombatScene extends Phaser.Scene {
         this.slotEffects = this.slotEffects || {};
         this.slotEffects[sid] = this.slotEffects[sid] || [];
         this.slotEffects[sid].push({ ...result.slotEffect });
-        this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+        this._refreshGroundSprites(sid);
+        this._log(`${target.name}’s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+      }
+    }
+
+    // (6) Zone-triggered on-hit rewards (attacker benefits from standing zones under the target)
+    if (!missed) {
+      const targetSid = target?._slot?.slotId ?? target?.slotId;
+      const activeZones = targetSid != null ? (this.slotEffects?.[targetSid] || []) : [];
+      for (const ze of activeZones) {
+        if (ze.onHitMpGain > 0) {
+          const gain = ze.onHitMpGain;
+          user.currentMP = Math.min(user.maxMP || 99, (user.currentMP || 0) + gain);
+          this._log(`${user.name} gains ${gain} MP from the sanctified zone.`);
+        }
       }
     }
 
@@ -3414,27 +3432,156 @@ export default class CombatScene extends Phaser.Scene {
 
     const stillActive = [];
     for (const eff of effects) {
-      // Damage-over-time from the ground, optional elemental buildup
-      const maxHP = Math.max(1, char.maxHP || 1);
-      const dot = Math.max(1, Math.floor(maxHP * (eff.tickPctMaxHP || 0.02)));
-      let tileDmg = dot;
-      const dr = getDamageReductionFraction(char, { isMagic: !!eff.element });
-      if (dr) {
-        tileDmg = Math.max(0, Math.floor(tileDmg * (1 - dr)));
+      // Damage-over-time from the ground (tickPctMaxHP: 0 = no damage)
+      if (eff.tickPctMaxHP > 0) {
+        const maxHP = Math.max(1, char.maxHP || 1);
+        const dot = Math.max(1, Math.floor(maxHP * eff.tickPctMaxHP));
+        const dr = getDamageReductionFraction(char, { isMagic: !!eff.element });
+        const tileDmg = dr ? Math.max(0, Math.floor(dot * (1 - dr))) : dot;
+        char.currentHP = Math.max(0, char.currentHP - tileDmg);
+        this._log(`${char.name} suffers ${tileDmg} damage from ${eff.id}.`);
       }
-      char.currentHP = Math.max(0, char.currentHP - tileDmg);
-      this._log(`${char.name} suffers ${tileDmg} damage from ${eff.id}.`);
 
-      // Optional elemental weakness buildup
-      if (eff.element && char.weakness) {
-        char.weakness.meters[eff.element] = (char.weakness.meters[eff.element] || 0) + (eff.buildup || 0);
+      // Named buildup families (e.g. disorient +50 per turn) — explicit map
+      if (eff.buildupFamilies && char.weakness) {
+        char.weakness.meters = char.weakness.meters || {};
+        let anyBuildup = false;
+        for (const [fam, amt] of Object.entries(eff.buildupFamilies)) {
+          if (amt > 0) { char.weakness.meters[fam] = (char.weakness.meters[fam] || 0) + amt; anyBuildup = true; }
+        }
+        if (anyBuildup) {
+          this._recomputeWeaknessTiers(char);
+          const parts = Object.entries(eff.buildupFamilies).map(([f, v]) => `${f} +${v}`).join(', ');
+          this._log(`${char.name} suffers ${parts} from the quake zone.`);
+        }
+      } else if (eff.element && eff.buildup && char.weakness) {
+        // Legacy: single-element buildup via element key
+        char.weakness.meters[eff.element] = (char.weakness.meters[eff.element] || 0) + eff.buildup;
         this._recomputeWeaknessTiers(char);
       }
 
       eff.turns -= 1;
       if (eff.turns > 0) stillActive.push(eff);
+      else this._log(`The ${eff.id.replace(/_/g, ' ')} zone on this tile dissipates.`);
     }
     this.slotEffects[slotId] = stillActive;
+    this._refreshGroundSprites(slotId);
+  }
+
+  // ---------- Ground effect sprites ----------
+  // Tint colors per element family
+  static GROUND_TINT = {
+    fire:      0xff7733,
+    cold:      0x77aaff,
+    lightning: 0xffee44,
+    toxic:     0x88dd44,
+    magic:     0xcc88ff,
+    curse:     0xcc66aa,
+    physical:  0xaa8855,  // warm brown for earth/quake zones
+  };
+
+  // Sprite key per slotEffect id (fall back to 'fx_crack' for all ground effects)
+  static GROUND_SPRITE_KEY = {
+    quake:      'fx_crack',
+    quake_fire: 'fx_crack',
+    quake_cold: 'fx_crack',
+    // Add more as you create new sprites
+  };
+
+  _refreshGroundSprites(slotId) {
+    if (!this.textures?.exists('fx_crack')) return; // sprite not loaded yet
+
+    // Destroy old sprites for this slot
+    const old = this.groundSprites[slotId] || [];
+    old.forEach(s => s.destroy());
+    this.groundSprites[slotId] = [];
+
+    const effects = this.slotEffects[slotId];
+    if (!effects || effects.length === 0) return;
+
+    // Find the slot container to get world position
+    const slotContainer = this.unitSlots.find(c => c.slotId === slotId);
+    if (!slotContainer) return;
+    const { x: sx, y: sy } = slotContainer;
+
+    const total = effects.length;
+    effects.forEach((eff, i) => {
+      const sprite = this._makeGroundSprite(sx, sy, eff, i, total);
+      if (sprite) this.groundSprites[slotId].push(sprite);
+    });
+  }
+
+  _makeGroundSprite(cx, cy, eff, stackIndex, totalStacks) {
+    const key = CombatScene.GROUND_SPRITE_KEY[eff.id] || 'fx_crack';
+    if (!this.textures?.exists(key)) return null;
+
+    // Spread stacks evenly around the clock so they don't fully overlap
+    let ox = 0, oy = 0;
+    if (totalStacks > 1) {
+      const baseAngle = (stackIndex / totalStacks) * Math.PI * 2;
+      const jitter = (Math.random() - 0.5) * 0.4; // ±small arc
+      const angle = baseAngle + jitter;
+      const dist = 6 + Math.random() * 6; // 6–12 px from center
+      ox = Math.cos(angle) * dist;
+      oy = Math.sin(angle) * dist;
+    } else {
+      // Single: tiny random nudge so it doesn't look perfectly machine-placed
+      ox = (Math.random() - 0.5) * 8;
+      oy = (Math.random() - 0.5) * 6;
+    }
+
+    const sprite = this.add.image(cx + ox, cy + oy, key)
+      .setScale(0.75)          // 128px → ~96px: hangs over the 64px slot slightly
+      .setAlpha(0.85)
+      .setDepth(5)             // above slot bg rects, below character sprites
+      .setRotation(Math.random() * Math.PI * 2);
+
+    const tint = CombatScene.GROUND_TINT[eff.element] ?? null;
+    if (tint) sprite.setTint(tint);
+
+    return sprite;
+  }
+
+  // ---------- Lodge arrow sprites (attached to character, one per stack) ----------
+  _refreshLodgeSprites(char) {
+    if (!char) return;
+    if (!this.textures?.exists('fx_lodge_arrow')) return;
+
+    const key = char.name || char.id || 'unknown';
+
+    // Destroy old arrows for this character
+    const old = this.lodgeSprites[key] || [];
+    old.forEach(s => s.destroy());
+    this.lodgeSprites[key] = [];
+
+    // Count lodged stacks
+    const stacks = (char.statusEffects || []).filter(e => e.id === 'lodged').length;
+    if (stacks === 0) return;
+
+    // Find where this character is rendered (portrait position on their slot)
+    const slot = char._slot;
+    if (!slot) return;
+    const cx = char.portrait?.x ?? slot.x ?? 0;
+    const cy = char.portrait?.y ?? slot.y ?? 0;
+
+    for (let i = 0; i < stacks; i++) {
+      // Evenly distribute arrows around the clock + small jitter so they don't overlap
+      const baseAngle = (i / stacks) * Math.PI * 2;
+      const jitter = (Math.random() - 0.5) * (Math.PI / stacks); // spread ±half a slice
+      const angle = baseAngle + jitter;
+      const radius = 16 + Math.random() * 8; // 16–24 px from center
+
+      const ax = cx + Math.cos(angle) * radius;
+      const ay = cy + Math.sin(angle) * radius;
+
+      const sprite = this.add.image(ax, ay, 'fx_lodge_arrow')
+        .setScale(0.35)       // 128×64 → ~45×22 px
+        .setAlpha(0.9)
+        .setDepth(12)         // above portrait sprites
+        .setRotation(angle);  // arrow points outward from center
+
+      this.lodgeSprites[key].push(sprite);
+    }
   }
 
 
@@ -4003,11 +4150,17 @@ export default class CombatScene extends Phaser.Scene {
     for (const incoming of list) {
       if (!incoming || !incoming.id) continue;
       const turns = Math.max(1, incoming.turns | 0);
-      const ex = target.statusEffects.find(e => e.id === incoming.id);
-      if (ex) ex.turns = Math.max(ex.turns | 0, turns);
-      else target.statusEffects.push({ id: incoming.id, turns });
+      if (incoming.stackable) {
+        // Stackable effects: push a new entry each time (e.g. lodged arrows)
+        target.statusEffects.push({ id: incoming.id, turns, stackable: true });
+      } else {
+        const ex = target.statusEffects.find(e => e.id === incoming.id);
+        if (ex) ex.turns = Math.max(ex.turns | 0, turns);
+        else target.statusEffects.push({ id: incoming.id, turns });
+      }
     }
     this._refreshStatusEffectIcons(target);
+    this._refreshLodgeSprites(target);
   }
 
   _refreshStatusEffectIcons(unit) {
@@ -4604,6 +4757,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Legacy array-style statuses: [ { id, turns }, ... ]
+    let lodgeCountChanged = false;
     if (Array.isArray(char?.statusEffects)) {
       for (let i = char.statusEffects.length - 1; i >= 0; i--) {
         const st = char.statusEffects[i];
@@ -4612,11 +4766,13 @@ export default class CombatScene extends Phaser.Scene {
           if (st.turns <= 0) {
             const pretty = (st.name || st.id || 'status');
             this._log(`${char.name}'s ${pretty} fades.`);
+            if (st.id === 'lodged') lodgeCountChanged = true;
             char.statusEffects.splice(i, 1);
           }
         }
       }
     }
+    if (lodgeCountChanged) this._refreshLodgeSprites(char);
 
     // Specific status helpers (safe no-ops if not imported)
     try { tickDownCurseCinders?.(char); } catch { }

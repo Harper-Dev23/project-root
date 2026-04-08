@@ -588,7 +588,6 @@ export function getItemComputedData(itemRef) {
       elementalDamagePercent: misc.elementalDamagePercent || 0,
       necroticDamagePercent: misc.necroticDamagePercent || 0,
       resilience: misc.resilience || 0,
-      buildupPercent: { ...(misc.buildupPercent || {}) }
     };
   }
 

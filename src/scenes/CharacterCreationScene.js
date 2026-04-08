@@ -1,5 +1,6 @@
 // src/scenes/CharacterCreationScene.js
 import GameState from '../systems/GameState.js';
+import { SoundManager } from '../systems/SoundManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import UIButton, { createButton } from '../ui/Button.js';
 import { FONTS } from '../ui/styles.js';
@@ -40,11 +41,42 @@ export default class CharacterCreationScene extends Phaser.Scene {
   create() {
     const { width, height } = this.sys.game.canvas;
 
-    // dark overlay
-    this.add.rectangle(width / 2, height / 2, width, height, 0x111111, 0.95)
-      .setScrollFactor(0)
-      .setDepth(0)
-      .setInteractive();
+    SoundManager.init(this);
+
+    // Looping ambient fire sound — stopped on scene shutdown
+    if (this.cache.audio.has('sfx_bonfireLoop')) {
+      this._bonfireSound = this.sound.add('sfx_bonfireLoop', { loop: true, volume: 0.3 });
+      this._bonfireSound.play();
+      this.events.once('shutdown', () => this._bonfireSound?.stop());
+    }
+
+    // Dark tint behind everything — blocks TownScene from showing through
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.85)
+      .setScrollFactor(0).setDepth(-1);
+
+    // Animated background
+    if (this.textures.exists('char_creation_bg')) {
+      const animKey = 'char_creation_bg_anim';
+      if (!this.anims.exists(animKey)) {
+        // Frame names from TexturePacker match the exported filenames: frame0000, frame0001, etc.
+        const frames = Array.from({ length: 24 }, (_, i) =>
+          ({ key: 'char_creation_bg', frame: `frame${String(i).padStart(4, '0')}.png` })
+        );
+        this.anims.create({ key: animKey, frames, frameRate: 6, repeat: -1 });
+      }
+      this.add.sprite(width / 2, height / 2, 'char_creation_bg', 'frame0000.png')
+        .setDisplaySize(width, height)
+        .setDepth(0)
+        .play(animKey);
+    } else {
+      this.add.rectangle(width / 2, height / 2, width, height, 0x111111, 0.95)
+        .setScrollFactor(0).setDepth(0);
+    }
+
+    // Invisible click blocker — same depth as buttons (0), added first so buttons
+    // take input priority. Catches any stray clicks that would otherwise reach TownScene.
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0)
+      .setScrollFactor(0).setDepth(0).setInteractive();
 
     // title
     this.add.text(width / 2, 40, 'Create Your Hunter', FONTS.heading)

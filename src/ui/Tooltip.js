@@ -37,11 +37,10 @@ export default class Tooltip {
       wordWrap: { width: 320 }
     }).setOrigin(0, 0).setDepth(topDepth);
 
-    // Background
-    const bg = scene.add.rectangle(0, 0, 340, 1, COLORS.panel)
-      .setOrigin(0)
-      .setStrokeStyle(1, COLORS.border)
-      .setDepth(topDepth);
+    // Background drawn via Graphics so clear()+redraw every show() guarantees correct size
+    const bg = scene.add.graphics().setDepth(topDepth);
+    this._bgW = 0;
+    this._bgH = 0;
 
     this.container = scene.add.container(0, 0, [bg, title, pills, body])
       .setDepth(topDepth)
@@ -54,8 +53,7 @@ export default class Tooltip {
     this.pills = pills;
     this.body = body;
 
-    // Disable interactivity for the background, title, pills, and body text (to ensure it doesn't block clicks)
-    this.bg.disableInteractive?.();
+    // Disable interactivity for title, pills, and body text (to ensure it doesn't block clicks)
     this.title.disableInteractive?.();
     this.pills.disableInteractive?.();
     this.body.disableInteractive?.();
@@ -145,8 +143,8 @@ _renderPills(tags = []) {
   // Reposition the tooltip to follow the cursor (with bounds checking)
   reposition(x, y) {
     if (!this.container?.visible) return;
-    const ttW = this.bg.width;
-    const ttH = this.bg.height;
+    const ttW = this._bgW;
+    const ttH = this._bgH;
     const margin = 12;
     const px = Math.min(x + margin, 1280 - ttW - 8);
     const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;
@@ -195,19 +193,32 @@ _renderPills(tags = []) {
       .setText(bodyLines.join('\n'))
       .setColor(this._toCss(FONTS.muted?.color || '#dddddd'));
 
-    const bodyBounds = this.body.getBounds();
-    const contentWidth = Math.max(titleBounds.width, bodyBounds.width, this.pills.getBounds().width || 0);
+    // Use .width/.height directly — reliably set synchronously after setText(),
+    // unlike getBounds() which can return NaN before the first render cycle.
+    const tw = this.title.width || 0;
+    const th = this.title.height || 0;
+    const bw = this.body.width || 0;
+    const bh = this.body.height || 0;
+    const pw = this.pills.getBounds().width || 0;
+    const contentWidth = Math.max(tw, bw, pw);
     const contentHeight =
-      (titleBounds.height ? titleBounds.height + this.gapTitleBody : 0) +
+      (th ? th + this.gapTitleBody : 0) +
       (pillH ? pillH + this.gapPillsBody : 0) +
-      bodyBounds.height;
+      bh;
 
-    this.bg.width = Math.max(320, contentWidth + this.padding * 2);
-    this.bg.height = Math.max(this.padding * 2 + contentHeight, 24);
+    const bgW = contentWidth + this.padding * 2;
+    const bgH = Math.max(this.padding * 2 + contentHeight, 24);
+    this.bg.clear();
+    this.bg.fillStyle(COLORS.panel, 1);
+    this.bg.fillRect(0, 0, bgW, bgH);
+    this.bg.lineStyle(1, COLORS.border, 1);
+    this.bg.strokeRect(0, 0, bgW, bgH);
+    this._bgW = bgW;
+    this._bgH = bgH;
 
     // Place above cursor; fall back to below if too close to top edge
-    const ttW = this.bg.width;
-    const ttH = this.bg.height;
+    const ttW = bgW;
+    const ttH = bgH;
     const margin = 12;
     const px = Math.min(x + margin, 1280 - ttW - 8);
     const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;

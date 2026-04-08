@@ -6,6 +6,9 @@ export default class QuestOverlay extends Phaser.Scene {
   }
 
   create() {
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = false;
+
     const frame = createOverlayFrame(this, {
       title: 'Quest Log',
       onClose: () => this._close(),
@@ -59,6 +62,8 @@ export default class QuestOverlay extends Phaser.Scene {
   }
 
   _close() {
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = true;
     this.scene.resume('UIScene');
     this.scene.stop();
   }

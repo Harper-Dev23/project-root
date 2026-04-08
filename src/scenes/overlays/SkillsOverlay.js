@@ -4,6 +4,9 @@ import { DEPTH } from '../../ui/styles.js';
 import { SKILLS } from '../../../data/skills.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { DevFlags } from '../../systems/DevFlags.js';
+import GameState from '../../systems/GameState.js';
+import { Items } from '../../../data/items.js';
+import { isItemInstance } from '../../systems/ItemFactory.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -29,6 +32,9 @@ export default class SkillsOverlay extends Phaser.Scene {
   }
 
   create() {
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = false;
+
     const frame = createOverlayFrame(this, {
       title: 'Skills',
       onClose: () => this._close(),
@@ -318,8 +324,9 @@ export default class SkillsOverlay extends Phaser.Scene {
 
       const showTip = () => {
         const { x, y } = this.input.activePointer;
-        const lines = this._buildTooltipLines(s);
-        this._showTooltipAt(x, y, { title: s.name, lines });
+        const char = GameState.party[0] || null;
+        const { lines, tags } = this._buildTooltipLines(s, char);
+        this._showTooltipAt(x, y, { title: s.name, lines, tags });
         bg.setFillStyle(0x303030, 1);
       };
       const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };
@@ -368,56 +375,140 @@ export default class SkillsOverlay extends Phaser.Scene {
   }
 
   // ---------- Tooltip helpers ----------
-  _buildTooltipLines(s) {
+  _buildTooltipLines(s, char = null) {
     const sk = s.raw || {};
     const lines = [];
+    const tags = Array.isArray(sk.tags) ? [...sk.tags] : [];
 
     // Description
-    if (s.desc) lines.push(s.desc);
+    if (s.desc) { lines.push(s.desc); lines.push(''); }
+
+    // Action cost
+    const costLabel = { major: 'Major Action', bonus: 'Bonus Action', class: 'Class Action', reaction: 'Reaction' };
+    if (sk.actionCost) lines.push(`Cost: ${costLabel[sk.actionCost] || sk.actionCost}`);
+
+    // MP / HP cost
+    const resourceParts = [];
+    if (sk.mpCost > 0) resourceParts.push(`MP: ${sk.mpCost}`);
+    if (sk.hpCost > 0) resourceParts.push(`HP: ${sk.hpCost}`);
+    if (resourceParts.length) lines.push(resourceParts.join('   '));
+
+    // Cooldown
+    if (sk.cooldown > 0) lines.push(`Cooldown: ${sk.cooldown} turn${sk.cooldown === 1 ? '' : 's'}`);
+
+    // Position requirement
+    const allPos = ['front', 'mid', 'back'];
+    const posReq = sk.positionRequirement;
+    if (Array.isArray(posReq) && posReq.length && posReq.length < 3) {
+      lines.push(`Position: ${posReq.join(' / ')}`);
+    }
+
+    // Targeting
+    const tReq = sk.targetRequirement;
+    if (tReq && tReq !== 'enemy') {
+      const tLabel = { ally: 'Target: Ally', self: 'Target: Self', position: 'Target: Position' };
+      lines.push(tLabel[tReq] || `Target: ${tReq}`);
+    }
+    if (Array.isArray(sk.targetColumns) && sk.targetColumns.length && sk.targetColumns.length < 3) {
+      lines.push(`Target columns: ${sk.targetColumns.join(' / ')}`);
+    }
+
+    // Damage calculation (weapon attacks)
+    if (s.weaponList?.length && char) {
+      lines.push('');
+      const weaponInst = char.equipment?.weaponMain;
+      const weaponBase = weaponInst
+        ? (isItemInstance(weaponInst) ? Items[weaponInst.id] : Items[weaponInst])
+        : null;
+      const wMin = weaponBase?.damage?.min ?? 1;
+      const wMax = weaponBase?.damage?.max ?? 2;
+      const str = char.totalStats?.STR ?? 0;
+      const strMod = Math.floor(str / 5);
+      const weapName = weaponBase?.name ?? 'Unarmed';
+      lines.push(`Damage: ${wMin + strMod}–${wMax + strMod}`);
+      lines.push(`  ${weapName} (${wMin}–${wMax}) + STR/5 (+${strMod})`);
+      if (sk.hitCount > 1) lines.push(`  × ${sk.hitCount} hits = ${(wMin + strMod) * sk.hitCount}–${(wMax + strMod) * sk.hitCount} total`);
+      if (sk.damageType) lines.push(`  Type: ${sk.damageType}`);
+    } else if (sk.damageType) {
+      lines.push(''); lines.push(`Damage type: ${sk.damageType}`);
+    }
+
+    // Buildup hints
+    if (sk.buildupHint && typeof sk.buildupHint === 'object') {
+      const parts = Object.entries(sk.buildupHint)
+        .map(([fam, amt]) => `${fam} +${amt}`);
+      if (parts.length) { lines.push(''); lines.push(`Applies: ${parts.join(', ')}`); }
+    }
+
+    // Weakness consumption
+    if (Array.isArray(sk.consumeWeakness) && sk.consumeWeakness.length) {
+      lines.push(`Consumes: ${sk.consumeWeakness.join(', ')} weakness`);
+    }
+
+    // Transform weakness
+    if (sk.transformWeakness) {
+      const tw = sk.transformWeakness;
+      lines.push(`Converts: ${tw.from} → ${tw.to} (×${tw.ratio ?? 1})`);
+    }
+
+    // Reward if weak
+    if (sk.rewardIfWeak) {
+      const rw = sk.rewardIfWeak;
+      const buffStr = this._buffToText(rw.buff);
+      lines.push(`If ${rw.family} tier ≥${rw.tierAtLeast}: ${buffStr}`);
+    }
+
+    // Reward if tier cross
+    if (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length) {
+      lines.push('');
+      sk.rewardIfTierCross.forEach(rule => {
+        const buffStr = this._buffToText(rule.buff ?? rule.debuff);
+        lines.push(`On ${rule.family} tier ${rule.tier}: ${buffStr}`);
+      });
+    }
 
     // Requirements
+    lines.push('');
     const reqParts = [];
-    if (s.reqStat && Number.isFinite(s.reqVal)) reqParts.push(`Requires ${s.reqStat} ${s.reqVal}`);
+    if (s.reqStat && Number.isFinite(s.reqVal) && s.reqVal > 0) reqParts.push(`${s.reqStat} ${s.reqVal}`);
     if (s.weaponList?.length) reqParts.push(`Weapon: ${s.weaponList.join(', ')}`);
-    if (reqParts.length) { lines.push(''); lines.push(reqParts.join(' • ')); }
+    if (reqParts.length) lines.push(`Requires: ${reqParts.join(' • ')}`);
 
-    // Costs
-    const costParts = [];
-    if (Number.isFinite(sk.apCost)) costParts.push(`AP: ${sk.apCost}`);
-    if (Number.isFinite(sk.mpCost)) costParts.push(`MP: ${sk.mpCost}`);
-    if (costParts.length) lines.push(costParts.join('   '));
-
-    // Cooldown / uses
-    if (Number.isFinite(sk.cooldown)) lines.push(`Cooldown: ${sk.cooldown} turn${sk.cooldown === 1 ? '' : 's'}`);
-    if (Number.isFinite(sk.maxUses)) lines.push(`Uses: ${sk.maxUses}`);
-
-    // Scaling / damage type
-    const scale = sk.scaling || sk.scale || sk.damageScale || null;
-    if (scale) {
-      if (typeof scale === 'string') lines.push(`Scaling: ${scale}`);
-      else if (typeof scale === 'object') {
-        const parts = Object.keys(scale).map(k => `${k.toUpperCase()} x${scale[k]}`);
-        if (parts.length) lines.push(`Scaling: ${parts.join(', ')}`);
-      }
-    }
-    if (sk.damageType) lines.push(`Damage: ${sk.damageType}`);
-
-    // Hits / effects
-    if (Number.isFinite(sk.hitCount)) lines.push(`Hits: ${sk.hitCount}`);
-    if (sk.effects && Array.isArray(sk.effects) && sk.effects.length) {
-      lines.push('Effects:');
-      sk.effects.forEach(e => lines.push(`• ${typeof e === 'string' ? e : (e.name || 'Effect')}`));
-    }
-
-    // Tags
-    if (Array.isArray(sk.tags) && sk.tags.length) lines.push(`Tags: ${sk.tags.join(', ')}`);
+    // Trim leading/trailing blank lines
+    while (lines.length && lines[0] === '') lines.shift();
+    while (lines.length && lines[lines.length - 1] === '') lines.pop();
 
     if (lines.length === 0) lines.push('No additional details.');
-    return lines;
+    return { lines, tags };
+  }
+
+  _buffToText(buff) {
+    if (!buff) return '—';
+    const parts = [];
+    if (buff.critChanceBonusPct) parts.push(`+${buff.critChanceBonusPct}% Crit Chance`);
+    if (buff.critMultBonus) parts.push(`+${buff.critMultBonus} Crit Mult`);
+    if (buff.nextSkillDamagePct) parts.push(`+${buff.nextSkillDamagePct}% next skill dmg`);
+    if (buff.damagePct) parts.push(`+${buff.damagePct}% damage`);
+    if (buff.evasionPct) parts.push(`+${buff.evasionPct}% Evasion`);
+    if (buff.guardPct) parts.push(`+${buff.guardPct}% Guard`);
+    if (buff.chanceExtraHitPct) parts.push(`${buff.chanceExtraHitPct}% extra hit`);
+    if (buff.repeatStrikeOnce) parts.push(`repeat strike (${buff.repeatPowerPct ?? 60}%)`);
+    if (buff.extraRapidTicks) parts.push(`+${buff.extraRapidTicks} tick`);
+    if (buff.addBuildup) {
+      const bParts = Object.entries(buff.addBuildup).map(([k, v]) => `${k} +${v}`);
+      parts.push(`add ${bParts.join(', ')}`);
+    }
+    if (buff.physicalVulnPct) parts.push(`-${buff.physicalVulnPct}% phys resist`);
+    if (buff.bleedTakenPct) parts.push(`+${buff.bleedTakenPct}% bleed taken`);
+    if (buff.speedDownPct) parts.push(`-${buff.speedDownPct}% speed`);
+    if (buff.turns) parts.push(`(${buff.turns}t)`);
+    return parts.length ? parts.join(', ') : JSON.stringify(buff);
   }
 
   _close() {
     this._hideTooltip();
+    const town = this.scene.get('TownScene');
+    if (town?.input) town.input.enabled = true;
     this.scene.resume('UIScene');
     this.scene.stop();
   }

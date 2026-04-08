@@ -3693,7 +3693,8 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "lodge"],
     emitTagsOnUse: ["projectile", "lodge"],
     buildupHint: { lodged: 80 },
-    statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
+    // turns:999 = lasts the whole fight; stackable:true = each hit adds another arrow
+    statusEffects: [{ id: "lodged", turns: 999, stackable: true }],
     apply: (attacker, target) => {
       const ability = SKILLS?.lodging_stone;
       const roll = calculateDamage(attacker, target, ability);
@@ -3715,7 +3716,7 @@ Object.assign(RAW_SKILLS, {
         statusEffects,
       };
     },
-    description: "A flat, sharp stone that tends to lodge in the wound."
+    description: "A flat, sharp stone that lodges in the wound and stays until removed. Each cast adds another arrow."
   },
 
   'steady_breath': {
@@ -9079,7 +9080,14 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     buildupHint: { disorient: 100 },
-    slotEffect: { id: "quake_mark_zone", element: "physical", buildup: 100, tickPctMaxHP: 0.0, turns: 2 },
+    // Zone: brownish tint (element: 'physical'), applies +50 disorient per turn for 3 turns
+    slotEffect: {
+      id: "quake_mark_zone",
+      element: "physical",
+      tickPctMaxHP: 0.0,
+      turns: 3,
+      buildupFamilies: { disorient: 50 },
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.quake_mark;
       const roll = calculateDamage(attacker, target, ability);
@@ -9090,7 +9098,8 @@ Object.assign(RAW_SKILLS, {
       }));
       amount = Math.max(1, Math.floor(amount * 0.9));
       const buildupVal = ability?.buildupHint?.disorient ?? 100;
-      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect, buildup: buildupVal } : undefined;
+      // Spread slotEffect from definition so buildupFamilies is preserved
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       const bucket = ensureStatusBucket(attacker);
       if (bucket) bucket.mace_quake_zones = (bucket.mace_quake_zones || 0) + 1;
       return {
@@ -9100,7 +9109,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Smash the ground to leave a trembling zone; enemies in it suffer Disorient buildup."
+    description: "Smash the ground, applying Disorient on hit and leaving a trembling zone for 3 turns. Enemies starting their turn in the zone suffer +50 Disorient buildup."
   },
 
   'ringing_blow': {
@@ -9882,10 +9891,17 @@ Object.assign(RAW_SKILLS, {
     mpCost: 2,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning", "holy"],
+    tags: ["melee", "attack", "lightning", "holy", "terrain"],
     cooldown: 2,
     buildupHint: { lightning: 40 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 1, healMP: 3 },
+    // Zone spawned only if target has lightning t1+: yellow tint, attackers hitting enemies in it gain 2 MP
+    slotEffect: {
+      id: "sanctified_zone",
+      element: "lightning",
+      tickPctMaxHP: 0.0,
+      turns: 2,
+      onHitMpGain: 2,
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.sanctified_slam;
       const roll = calculateDamage(attacker, target, ability);
@@ -9895,15 +9911,20 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      // Bonus damage if target is zapped
       if (lightningTier >= 1) amount = Math.floor(amount * 1.15);
+      // Only drop the zone if target already has lightning weakness t1+
+      const slotEffect = (lightningTier >= 1 && ability?.slotEffect)
+        ? { ...ability.slotEffect }
+        : undefined;
       return {
         ...roll,
         amount,
         buildup: { lightning: ability?.buildupHint?.lightning ?? 40 },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        slotEffect,
       };
     },
-    description: "Blessed impact that restores MP when striking a charged foe."
+    description: "Blessed impact dealing extra damage to a zapped foe. If the target has Lightning weakness (t1+), consecrates the tile for 2 turns — attackers hitting enemies on it gain 2 MP per strike."
   },
 
   // --- Spear (1h) ---

@@ -61,6 +61,10 @@ export default class LoadingScene extends Phaser.Scene {
     // Combat pit background
     this.load.image('combat_pit_bg', 'assets/Combat_Pit.png');
 
+    // Combat VFX sprites (ground effects, status indicators)
+    this.load.image('fx_crack', 'assets/sprites/fx_crack.png');
+    this.load.image('fx_lodge_arrow', 'assets/sprites/fx_lodge_arrow.png');
+
     // Interior backgrounds
     this.load.image('zafaar_interior', 'assets/interiors/zafaar_interior.png');
     this.load.image('styx_interior',   'assets/interiors/styx_interior.png');
@@ -70,6 +74,13 @@ export default class LoadingScene extends Phaser.Scene {
     // Overlay menu backgrounds
     this.load.image('menu_parchment_background', 'assets/UIinterface/menu_parchment_background.png');
     this.load.image('menu_stony_background',     'assets/UIinterface/menu_stony_background.png');
+
+    // Character creation animated background
+    this.load.atlas(
+      'char_creation_bg',
+      'assets/sprites/char_creation_bg.png',
+      'assets/sprites/char_creation_bg.json'
+    );
 
 
     // 🔄 Batch load glow frame sequences
