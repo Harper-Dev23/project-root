@@ -85,7 +85,21 @@ const parseColor = (value, fallback) => {
 
 export const combineStatusEffects = (unit) => {
   const out = [];
-  if (Array.isArray(unit?.statusEffects)) out.push(...unit.statusEffects);
+  // Collapse stackable entries (e.g. multiple 'lodged') into one entry with a stacks count
+  const stackCounts = {};
+  if (Array.isArray(unit?.statusEffects)) {
+    for (const se of unit.statusEffects) {
+      if (se.stackable) {
+        if (!stackCounts[se.id]) {
+          stackCounts[se.id] = { ...se, stacks: 0 };
+          out.push(stackCounts[se.id]);
+        }
+        stackCounts[se.id].stacks += 1;
+      } else {
+        out.push(se);
+      }
+    }
+  }
   if (unit?.statuses && typeof unit.statuses === 'object') {
     Object.keys(unit.statuses).forEach((key) => {
       const st = unit.statuses[key];
@@ -142,6 +156,20 @@ export const createStatusIcon = (scene, effectInput, options = {}) => {
   }).setOrigin(0.5).setDepth(depth + 1);
 
   container.add([hex, text]);
+
+  // Stack count badge — small number in corner when stacks > 1
+  const stacks = effectInput?.stacks ?? info.stacks;
+  if (stacks != null && stacks > 1) {
+    const badge = scene.add.text(size * 0.5, -size * 0.6, String(stacks), {
+      fontSize: `${Math.max(8, size - 1)}px`,
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(depth + 2);
+    container.add(badge);
+  }
+
   container.setSize(size * 2, size * 2);
 
   const tooltip = options.tooltip;

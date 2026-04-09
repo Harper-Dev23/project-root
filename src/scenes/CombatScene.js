@@ -7,6 +7,7 @@ import StatusBar from '../ui/StatusBar.js';
 import UIButton, { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
+import { buildSkillTooltipLines } from '../ui/skillTooltip.js';
 
 // Data
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
@@ -191,11 +192,29 @@ export default class CombatScene extends Phaser.Scene {
 
     this._resetAllCooldowns();
 
-    // Seed Initiative Gauge (resource)
+    // Clean all per-combat transient state off every combatant.
+    // Party members are persistent objects (GameState.party) so leftover statuses,
+    // ground sprites, and gauge values from a previous fight must be wiped here.
     for (const u of this.turnOrder) {
-      if (u.initiativeGaugeMax == null) u.initiativeGaugeMax = 100; // default cap
-      if (u.initiativeGauge == null) u.initiativeGauge = 0;         // starts empty
+      // Status effects — both array-style and map-style
+      u.statusEffects = [];
+      u.statuses = {};
+      // Initiative gauge always starts empty each combat
+      u.initiativeGaugeMax = u.initiativeGaugeMax ?? 100;
+      u.initiativeGauge = 0;
+      // Reset any per-turn derived weakness scratch state
+      if (u._weaknessDerived) {
+        u._weaknessDerived.maxHPDown = 0;
+        u._weaknessDerived.evasionDown = 0;
+        u._weaknessDerived.initiativeSlow = 0;
+      }
     }
+
+    // Destroy any lingering ground/lodge sprites from the previous combat session
+    Object.values(this.groundSprites).forEach(arr => arr.forEach(s => s?.destroy?.()));
+    this.groundSprites = {};
+    Object.values(this.lodgeSprites).forEach(arr => arr.forEach(s => s?.destroy?.()));
+    this.lodgeSprites = {};
 
     // Core UI
     const layout = {
@@ -396,6 +415,19 @@ export default class CombatScene extends Phaser.Scene {
     let y = 0;
 
     for (const entry of this.logEntries) {
+      if (entry?.separator) {
+        // Turn divider — thin horizontal line
+        const g = this.add.graphics();
+        g.lineStyle(1, 0x444444, 0.7);
+        g.beginPath();
+        g.moveTo(0, 3);
+        g.lineTo(wrapWidth, 3);
+        g.strokePath();
+        g.setPosition(0, y);
+        this.combatLogContainer.add(g);
+        y += 8;
+        continue;
+      }
       const { container, height } = this._createLogEntryDisplay(entry, wrapWidth);
       container.setPosition(0, y);
       this.combatLogContainer.add(container);
@@ -751,7 +783,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // ---- Ally slots ------------------------------------------------
     this.allySlots = allyPositions.map((pos, index) => {
-      const container = this.add.container(pos.x, pos.y).setSize(64, 64);
+      const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
       // Centre‑anchored 64×64 hit‑area
       container.setInteractive(
@@ -768,6 +800,7 @@ export default class CombatScene extends Phaser.Scene {
       container.add(rect);
 
       container.slotId = 8 - index;
+      container.uniqueKey = `ally_${8 - index}`;
       container.occupied = false;
       container.rect = rect;
       return container;
@@ -775,7 +808,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // ---- Enemy slots -----------------------------------------------
     this.enemySlots = enemyPositions.map((pos, index) => {
-      const container = this.add.container(pos.x, pos.y).setSize(64, 64);
+      const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
       container.setInteractive(
         new Phaser.Geom.Rectangle(0, 0, 64, 64),
@@ -790,6 +823,7 @@ export default class CombatScene extends Phaser.Scene {
       container.add(rect);
 
       container.slotId = 8 - index;
+      container.uniqueKey = `enemy_${8 - index}`;
       container.occupied = false;
       container.rect = rect;
       return container;
@@ -1694,76 +1728,34 @@ export default class CombatScene extends Phaser.Scene {
   _formatAbilityTooltip(ability, actor) {
     if (!ability) return { title: 'Unknown', lines: [], tags: [] };
 
-    const lines = [];
-
-    // Costs
-    const costBits = [];
-    if (ability.actionCost) costBits.push(`Action: ${String(ability.actionCost)}`);
+    // MP cost with gear/penalty adjustments (CombatScene-specific, prepended to shared lines)
+    let mpPrefix = null;
     if (Number.isFinite(ability.mpCost) && ability.mpCost > 0) {
       const info = calculateEffectiveResourceCost(actor, ability.mpCost, 'mp');
       let mpText = `MP: ${ability.mpCost}`;
-      if (info.gear) mpText += ` → ${info.gear.after}`;
-      if (info.penalty) mpText += ` → ${info.penalty.after}`;
-      costBits.push(mpText);
-    }
-    if (Number.isFinite(ability.hpCost) && ability.hpCost > 0) costBits.push(`HP: ${ability.hpCost}`);
-    if (Number.isFinite(ability.cooldown) && ability.cooldown > 0) costBits.push(`CD: ${ability.cooldown}`);
-    if (costBits.length) lines.push(costBits.join('  •  '));
-
-    // Targeting / range
-    const posArr = Array.isArray(ability.positionRequirement) ? ability.positionRequirement : (ability.positionRequirement ? [ability.positionRequirement] : []);
-    const pos = posArr.length ? posArr.join('/') : '—';
-    const tgt = ability.requiresTarget ? (ability.targetRequirement || 'enemy') : 'self/none';
-    const colsArr = Array.isArray(ability.targetColumns) ? ability.targetColumns : [];
-    const cols = colsArr.length ? `  •  Columns: ${colsArr.join(', ')}` : '';
-    const rng = (ability.range != null) ? ability.range : '—';
-    lines.push(`Range: ${rng}  •  Use from: ${pos}  •  Target: ${tgt}${cols}`);
-
-    // Requirements
-    const reqBits = [];
-    if (ability.requiredStat) {
-      const v = (ability.requiredValue != null) ? ability.requiredValue : '?';
-      reqBits.push(`Req: ${ability.requiredStat} ≥ ${v}`);
-    }
-    const reqWpnArr = Array.isArray(ability.requiredWeapon) ? ability.requiredWeapon : (ability.requiredWeapon ? [ability.requiredWeapon] : []);
-    if (reqWpnArr.length) reqBits.push(`Weapon: ${reqWpnArr.join(', ')}`);
-    if (reqBits.length) lines.push(reqBits.join('  •  '));
-
-    // AoE hint (static)
-    const tags = Array.isArray(ability.tags) ? Array.from(new Set(ability.tags)) : [];
-    if (tags.includes('aoe')) {
-      const shape = ability.aoe?.shape || 'column';
-      const scale = (ability.aoe?.scale != null) ? Math.round(ability.aoe.scale * 100) : 50;
-      lines.push(`AoE: ${shape} splash (${scale}%)`);
+      if (info.gear)    mpText += ` → ${info.gear.after}`;
+      if (info.penalty) mpText += ` → ${info.penalty.after} (Dazed)`;
+      mpPrefix = mpText;
     }
 
-    // Hints
-    if (ability.buildupHint && typeof ability.buildupHint === 'object') {
-      const bu = Object.entries(ability.buildupHint).map(([k, v]) => `${k}+${v}`).join(', ');
-      lines.push(`Buildup: ${bu}`);
+    // Remaining cooldown for this actor
+    const cdRemaining = actor?.cooldowns?.[ability.id] || 0;
+
+    // Shared builder — passes actor for live weapon/stat numbers
+    const { lines, tags, titleColor } = buildSkillTooltipLines(ability, actor, { cdRemaining });
+
+    // Inject MP-with-modifiers line right after the first line (description)
+    // replacing the generic "MP: X" that buildSkillTooltipLines already added
+    if (mpPrefix) {
+      const mpIdx = lines.findIndex(l => l.startsWith('MP:'));
+      if (mpIdx >= 0) lines[mpIdx] = mpPrefix;
     }
-    if (ability.statusHint) lines.push(`Status: ${ability.statusHint}`);
-
-    // Description
-    if (ability.description) lines.push(String(ability.description));
-
-    // Cooldown preview
-    const cdRaw = actor?.cooldowns?.[ability.id] || 0;
-    if (cdRaw > 0) {
-      lines.push(`On cooldown: ${cdRaw} turn${cdRaw === 1 ? '' : 's'} remaining`);
-    }
-
-    const titleColor = (tags.includes('fire') && '#ffb37a')
-      || (tags.includes('cold') && '#88cff2')
-      || (tags.includes('lightning') && '#f0d35c')
-      || (tags.includes('heal') && '#8fe0b0')
-      || '#ffddaa';
 
     return {
       title: ability.name || ability.id || 'Ability',
       titleColor,
       lines,
-      tags
+      tags,
     };
   }
 
@@ -1977,13 +1969,13 @@ export default class CombatScene extends Phaser.Scene {
       const full = (SKILLS[a?.id] || a);
 
       const cdRaw = actor.cooldowns?.[full.id] || 0;
-      const onCD = cdRaw > 0;
+      const onCD = cdRaw > 0 && !DevFlags.isBreakthroughEnabled();
       const noAction = full.actionCost && !this._canUseActionType(full.actionCost);
 
       const baseLabel = (this._displayNameForSkill
         ? this._displayNameForSkill(actor, full)
         : (full.name || a.name || 'Unnamed'));
-      const label = onCD ? `${baseLabel} (CD${cdRaw})` : baseLabel;
+      const label = (cdRaw > 0 && !DevFlags.isBreakthroughEnabled()) ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
       const btn = new UIButton(this, baseX, i * 50, label, () => {
         if (onCD || noAction) return;
@@ -2072,7 +2064,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Cooldown gate BEFORE entering targeting mode
     const cdRemaining = actor.cooldowns?.[ability.id] || 0;
-    if (cdRemaining > 0) {
+    if (cdRemaining > 0 && !DevFlags.isBreakthroughEnabled()) {
       this._log(`${ability.name} is on cooldown (${cdRemaining} turn${cdRemaining > 1 ? 's' : ''} left).`);
       return;
     }
@@ -2404,7 +2396,7 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} has no ${skill.actionCost} actions left.`);
       return { ok: false };
     }
-    if (this._isSkillOnCooldown(user, skill.id)) {
+    if (!DevFlags.isBreakthroughEnabled() && this._isSkillOnCooldown(user, skill.id)) {
       const remain = user.cooldowns?.[skill.id] || 0;
       this._log(`${skill.name} is on cooldown (${remain} turn${remain === 1 ? '' : 's'} remaining).`);
       return { ok: false };
@@ -2945,12 +2937,25 @@ export default class CombatScene extends Phaser.Scene {
 
     // (3) Consume weaknesses
     if (Array.isArray(result?.consumeWeakness)) {
+      let lodgeConsumed = false;
       for (const fam of result.consumeWeakness) {
-        if (!target.weakness?.meters?.[fam]) continue;
-        target.weakness.meters[fam] = 0;
-        target.weakness.tiers[fam] = 0;
-        this._log(`${target.name}'s ${fam} is consumed!`);
+        // Clear traditional weakness meter if present
+        if (target.weakness?.meters?.[fam] != null) {
+          target.weakness.meters[fam] = 0;
+          target.weakness.tiers[fam] = 0;
+          this._log(`${target.name}'s ${fam} weakness is consumed!`);
+        }
+        // Always strip stackable status entries for this family (covers lodged which has no meter)
+        if (Array.isArray(target.statusEffects)) {
+          const before = target.statusEffects.length;
+          target.statusEffects = target.statusEffects.filter(e => e.id !== fam);
+          if (target.statusEffects.length < before) {
+            this._log(`${target.name}'s ${fam} stacks are cleared!`);
+            if (fam === 'lodged') lodgeConsumed = true;
+          }
+        }
       }
+      if (lodgeConsumed) this._refreshLodgeSprites(target);
       if (this.characterInfoTab === 'weakness' && this._inspectedChar === target) {
         this._renderCharacterInfoBody(target);
       }
@@ -2968,7 +2973,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // (5) Slot effects on the target’s tile
     if (result?.slotEffect) {
-      const sid = target?._slot?.slotId ?? target?.slotId;
+      const sid = this._charSlotKey(target);
       if (sid != null) {
         this.slotEffects = this.slotEffects || {};
         this.slotEffects[sid] = this.slotEffects[sid] || [];
@@ -2980,10 +2985,11 @@ export default class CombatScene extends Phaser.Scene {
 
     // (6) Zone-triggered on-hit rewards (attacker benefits from standing zones under the target)
     if (!missed) {
-      const targetSid = target?._slot?.slotId ?? target?.slotId;
-      const activeZones = targetSid != null ? (this.slotEffects?.[targetSid] || []) : [];
+      const targetSid = this._charSlotKey(target);
+      const activeZones = targetSid ? (this.slotEffects?.[targetSid] || []) : [];
       for (const ze of activeZones) {
-        if (ze.onHitMpGain > 0) {
+        if (ze.onHitMpGain > 0 && !user.isEnemy) {
+          // Only player-controlled attackers benefit from sanctified zones
           const gain = ze.onHitMpGain;
           user.currentMP = Math.min(user.maxMP || 99, (user.currentMP || 0) + gain);
           this._log(`${user.name} gains ${gain} MP from the sanctified zone.`);
@@ -3129,12 +3135,15 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _startTurnStatusEffects(char) {
+    // Apply per-turn effects (DOT, HOT, blocksAction) without touching duration.
+    // Duration countdown and expiry is handled exclusively by _tickDownStatusDurations
+    // (called at end of the previous actor's turn). Keeping these roles separate
+    // prevents double-decrement on stackable and long-duration effects.
     const list = Array.isArray(char.statusEffects) ? char.statusEffects : [];
     if (list.length === 0) return { died: false, skip: false };
 
     let died = false;
     let skip = false;
-    const keep = [];
 
     for (const se of list) {
       const name = (StatusEffects?.[se.id]?.name) || se.id;
@@ -3171,13 +3180,8 @@ export default class CombatScene extends Phaser.Scene {
 
       // turn skip (e.g., stunned)
       if (se.blocksAction) skip = true;
-
-      // decrement duration
-      const remaining = (se.turns ?? 1) - 1;
-      if (!died && remaining > 0) keep.push({ ...se, turns: remaining });
     }
 
-    char.statusEffects = keep;
     return { died, skip };
   }
 
@@ -3426,8 +3430,8 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _applySlotEffectsTick(char) {
-    const slotId = char?._slot?.slotId ?? char?.slotId;
-    const effects = (slotId != null) ? this.slotEffects?.[slotId] : null;
+    const slotKey = this._charSlotKey(char);
+    const effects = slotKey ? this.slotEffects?.[slotKey] : null;
     if (!effects || effects.length === 0) return;
 
     const stillActive = [];
@@ -3464,8 +3468,20 @@ export default class CombatScene extends Phaser.Scene {
       if (eff.turns > 0) stillActive.push(eff);
       else this._log(`The ${eff.id.replace(/_/g, ' ')} zone on this tile dissipates.`);
     }
-    this.slotEffects[slotId] = stillActive;
-    this._refreshGroundSprites(slotId);
+    this.slotEffects[slotKey] = stillActive;
+    this._refreshGroundSprites(slotKey);
+  }
+
+  // ---------- Slot key helpers ----------
+  // Returns a unique string key for a character's slot, disambiguating ally vs enemy.
+  // Ally slot 1 → "ally_1", Enemy slot 1 → "enemy_1"
+  _charSlotKey(char) {
+    const slot = char?._slot;
+    if (slot?.uniqueKey) return slot.uniqueKey;
+    // Fallback if uniqueKey not set
+    const side = char?.isEnemy ? 'enemy' : 'ally';
+    const id = slot?.slotId ?? char?.slotId;
+    return id != null ? `${side}_${id}` : null;
   }
 
   // ---------- Ground effect sprites ----------
@@ -3488,26 +3504,26 @@ export default class CombatScene extends Phaser.Scene {
     // Add more as you create new sprites
   };
 
-  _refreshGroundSprites(slotId) {
-    if (!this.textures?.exists('fx_crack')) return; // sprite not loaded yet
+  _refreshGroundSprites(slotKey) {
+    if (!this.textures?.exists('fx_crack')) return;
 
     // Destroy old sprites for this slot
-    const old = this.groundSprites[slotId] || [];
+    const old = this.groundSprites[slotKey] || [];
     old.forEach(s => s.destroy());
-    this.groundSprites[slotId] = [];
+    this.groundSprites[slotKey] = [];
 
-    const effects = this.slotEffects[slotId];
+    const effects = this.slotEffects[slotKey];
     if (!effects || effects.length === 0) return;
 
-    // Find the slot container to get world position
-    const slotContainer = this.unitSlots.find(c => c.slotId === slotId);
+    // Find the slot container by its unique key (not raw slotId — avoids ally/enemy collision)
+    const slotContainer = this.unitSlots.find(c => c.uniqueKey === slotKey);
     if (!slotContainer) return;
     const { x: sx, y: sy } = slotContainer;
 
     const total = effects.length;
     effects.forEach((eff, i) => {
       const sprite = this._makeGroundSprite(sx, sy, eff, i, total);
-      if (sprite) this.groundSprites[slotId].push(sprite);
+      if (sprite) this.groundSprites[slotKey].push(sprite);
     });
   }
 
@@ -3515,25 +3531,24 @@ export default class CombatScene extends Phaser.Scene {
     const key = CombatScene.GROUND_SPRITE_KEY[eff.id] || 'fx_crack';
     if (!this.textures?.exists(key)) return null;
 
-    // Spread stacks evenly around the clock so they don't fully overlap
+    // Spread stacks so they don't fully overlap
     let ox = 0, oy = 0;
     if (totalStacks > 1) {
       const baseAngle = (stackIndex / totalStacks) * Math.PI * 2;
-      const jitter = (Math.random() - 0.5) * 0.4; // ±small arc
+      const jitter = (Math.random() - 0.5) * 0.4;
       const angle = baseAngle + jitter;
-      const dist = 6 + Math.random() * 6; // 6–12 px from center
+      const dist = 6 + Math.random() * 6;
       ox = Math.cos(angle) * dist;
       oy = Math.sin(angle) * dist;
     } else {
-      // Single: tiny random nudge so it doesn't look perfectly machine-placed
       ox = (Math.random() - 0.5) * 8;
       oy = (Math.random() - 0.5) * 6;
     }
 
     const sprite = this.add.image(cx + ox, cy + oy, key)
-      .setScale(0.75)          // 128px → ~96px: hangs over the 64px slot slightly
+      .setScale(0.75)
       .setAlpha(0.85)
-      .setDepth(5)             // above slot bg rects, below character sprites
+      .setDepth(1)    // above bg (-1), below slot containers (2)
       .setRotation(Math.random() * Math.PI * 2);
 
     const tint = CombatScene.GROUND_TINT[eff.element] ?? null;
@@ -3558,27 +3573,27 @@ export default class CombatScene extends Phaser.Scene {
     const stacks = (char.statusEffects || []).filter(e => e.id === 'lodged').length;
     if (stacks === 0) return;
 
-    // Find where this character is rendered (portrait position on their slot)
+    // Find where this character is rendered (icon lives at 0,0 inside the slot container)
     const slot = char._slot;
     if (!slot) return;
-    const cx = char.portrait?.x ?? slot.x ?? 0;
-    const cy = char.portrait?.y ?? slot.y ?? 0;
+    const cx = slot.x ?? 0;
+    const cy = slot.y ?? 0;
 
     for (let i = 0; i < stacks; i++) {
       // Evenly distribute arrows around the clock + small jitter so they don't overlap
       const baseAngle = (i / stacks) * Math.PI * 2;
-      const jitter = (Math.random() - 0.5) * (Math.PI / stacks); // spread ±half a slice
+      const jitter = (Math.random() - 0.5) * (Math.PI / Math.max(stacks, 2)); // spread ±half a slice
       const angle = baseAngle + jitter;
-      const radius = 16 + Math.random() * 8; // 16–24 px from center
+      const radius = 4 + Math.random() * 8; // 4–12 px: near center so shaft crosses through
 
       const ax = cx + Math.cos(angle) * radius;
       const ay = cy + Math.sin(angle) * radius;
 
       const sprite = this.add.image(ax, ay, 'fx_lodge_arrow')
-        .setScale(0.35)       // 128×64 → ~45×22 px
-        .setAlpha(0.9)
-        .setDepth(12)         // above portrait sprites
-        .setRotation(angle);  // arrow points outward from center
+        .setScale(1.1)        // 128×64 → ~141×70 px — shaft clearly passes through the slot
+        .setAlpha(0.92)
+        .setDepth(1)          // depth 1: above bg (-1), behind slot containers (depth 2)
+        .setRotation(angle);  // arrow points outward, shaft passes through center
 
       this.lodgeSprites[key].push(sprite);
     }
@@ -4144,25 +4159,6 @@ export default class CombatScene extends Phaser.Scene {
     });
   }
 
-  _addStatusEffects(target, list) {
-    if (!target) return;
-    target.statusEffects = target.statusEffects || [];
-    for (const incoming of list) {
-      if (!incoming || !incoming.id) continue;
-      const turns = Math.max(1, incoming.turns | 0);
-      if (incoming.stackable) {
-        // Stackable effects: push a new entry each time (e.g. lodged arrows)
-        target.statusEffects.push({ id: incoming.id, turns, stackable: true });
-      } else {
-        const ex = target.statusEffects.find(e => e.id === incoming.id);
-        if (ex) ex.turns = Math.max(ex.turns | 0, turns);
-        else target.statusEffects.push({ id: incoming.id, turns });
-      }
-    }
-    this._refreshStatusEffectIcons(target);
-    this._refreshLodgeSprites(target);
-  }
-
   _refreshStatusEffectIcons(unit) {
     const slot = unit?._slot;
     if (!slot) return;
@@ -4694,6 +4690,8 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // 3) Apply START-OF-TURN ongoings (DOT/skip-turn/penalties)
+    this._applySlotEffectsTick(char);   // ground zone ticks (disorient buildup, DoT, etc.)
+
     const se = this._startTurnStatusEffects(char);    // NEW
     if (this.combatEnded || se.died) return;
 
@@ -4718,6 +4716,9 @@ export default class CombatScene extends Phaser.Scene {
     // 5) Reset action economy for this actor
     char.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
     this.reactions?.onTurnStart(char);
+    // Turn separator in combat log
+    this.logEntries.push({ separator: true });
+    this._renderCombatLog();
     // 6) Update highlights/UI shell
     this._highlightCurrentTurn();
 
@@ -4861,6 +4862,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!target || !Array.isArray(effects) || effects.length === 0) return;
     target.statusEffects = target.statusEffects || [];
 
+    let lodgeChanged = false;
     for (const se of effects) {
       const def = (StatusEffects && StatusEffects[se.id]) || {};
       const incoming = {
@@ -4869,28 +4871,35 @@ export default class CombatScene extends Phaser.Scene {
         tickDamage: se.tickDamage ?? def.tickDamage ?? 0,
         tickHeal: se.tickHeal ?? def.tickHeal ?? 0,
         blocksAction: se.blocksAction ?? def.blocksAction ?? false,
+        stackable: se.stackable ?? def.stackable ?? false,
         mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
 
-      // Coalesce same-id
-      const i = target.statusEffects.findIndex(e => e.id === incoming.id);
-      if (i >= 0) {
-        const cur = target.statusEffects[i];
-        cur.tickHeal = (cur.tickHeal | 0) + (incoming.tickHeal | 0);
-        cur.tickDamage = (cur.tickDamage | 0) + (incoming.tickDamage | 0);
-        cur.turns = Math.max(cur.turns | 0, incoming.turns | 0);
-        // keep blocksAction if either says true
-        cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
-        if (incoming.mods && Object.keys(incoming.mods).length) {
-          cur.mods = { ...(incoming.mods) };
-        }
-      } else {
+      if (incoming.stackable) {
+        // Each application is its own entry — e.g. lodged arrows stack visually
         target.statusEffects.push(incoming);
+        if (incoming.id === 'lodged') lodgeChanged = true;
+      } else {
+        // Coalesce same-id
+        const i = target.statusEffects.findIndex(e => e.id === incoming.id && !e.stackable);
+        if (i >= 0) {
+          const cur = target.statusEffects[i];
+          cur.tickHeal = (cur.tickHeal | 0) + (incoming.tickHeal | 0);
+          cur.tickDamage = (cur.tickDamage | 0) + (incoming.tickDamage | 0);
+          cur.turns = Math.max(cur.turns | 0, incoming.turns | 0);
+          cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
+          if (incoming.mods && Object.keys(incoming.mods).length) {
+            cur.mods = { ...(incoming.mods) };
+          }
+        } else {
+          target.statusEffects.push(incoming);
+        }
       }
     }
 
     this._refreshStatusEffectIcons?.(target);
+    if (lodgeChanged) this._refreshLodgeSprites(target);
   }
 
 
@@ -4948,6 +4957,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Return button
     createButton(this, width / 2, height / 2 + 150, 'Return to Camp', () => {
+      this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
@@ -4997,6 +5007,7 @@ export default class CombatScene extends Phaser.Scene {
       this.scene.restart({ party: this.partyData, mode: 'pit', scenarioId: this.scenarioId });
     }));
     if (showExit) buttons.push(makeBtn('[ Exit ]', width / 2 + (showRetry ? spacing / 2 : 0), () => {
+      this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
@@ -5011,10 +5022,21 @@ export default class CombatScene extends Phaser.Scene {
 
   _addExitButton() {
     createButton(this, 400, 400, 'Exit Training', () => {
+      this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
     }, 'danger').setDepth(UI_DEPTH.overlay);
+  }
+
+  _reviveKnockedOutParty() {
+    // Ensure no party member exits combat with 0 HP — they get 1 HP minimum.
+    GameState.party.forEach(char => {
+      if ((char.currentHP ?? 0) <= 0 || char.status === 'incapacitated') {
+        char.currentHP = 1;
+        char.status = 'alive';
+      }
+    });
   }
 
   _placePortrait(char, slot) {

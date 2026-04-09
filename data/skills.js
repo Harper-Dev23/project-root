@@ -3763,8 +3763,12 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "consume"],
-    requiresWeakness: { family: "lodged", tierAtLeast: 1 },
-    consumeWeakness: ["lodged"],
+    // canExecute gates on lodged status stacks rather than weakness tier
+    canExecute: ({ target }) => {
+      const stacks = (target?.statusEffects || []).filter(e => e.id === 'lodged').length;
+      if (stacks === 0) return { ok: false, reason: "Target has no lodged stones." };
+      return true;
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.shatter_lodge;
       const roll = calculateDamage(attacker, target, ability);
@@ -3774,20 +3778,19 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
 
-      const meter = target?.weakness?.meters?.lodged || 0;
-      const tier = target?.weakness?.tiers?.lodged || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 8) + Math.max(0, intensity - 1) * 7));
+      // Burst damage = 8 per lodged stack
+      const stacks = (target?.statusEffects || []).filter(e => e.id === 'lodged').length;
+      const burst = stacks * 8;
       amount += burst;
 
       return {
         ...roll,
         amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        log: burst ? `${attacker?.name || 'The slinger'} shatters the lodged stone for +${burst} damage.` : undefined,
+        consumeWeakness: ['lodged'],
+        log: burst ? `${attacker?.name || 'The slinger'} shatters ${stacks} lodged stone${stacks > 1 ? 's' : ''} for +${burst} damage!` : undefined,
       };
     },
-    description: "Strike the lodged stone to shatter it inside the wound for burst damage."
+    description: "Strike the lodged stones to shatter them inside the wound. +8 damage per lodged stack. Consumes all stacks."
   },
 
   'skull_crack': {
@@ -9080,13 +9083,13 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     buildupHint: { disorient: 100 },
-    // Zone: brownish tint (element: 'physical'), applies +50 disorient per turn for 3 turns
+    // Zone: brownish tint (element: 'physical'), applies +1000 disorient per turn for 3 turns (TEST VALUE)
     slotEffect: {
       id: "quake_mark_zone",
       element: "physical",
       tickPctMaxHP: 0.0,
       turns: 3,
-      buildupFamilies: { disorient: 50 },
+      buildupFamilies: { disorient: 1000 },
     },
     apply: (attacker, target) => {
       const ability = SKILLS?.quake_mark;
