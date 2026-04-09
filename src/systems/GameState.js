@@ -28,21 +28,24 @@ function serializeItem(entry) {
 }
 function deserializeItem(entry) {
   if (!entry) return null;
+  let out = null;
   // If an object with id/instanceId came from the save, keep it verbatim.
-  if (isItemInstance(entry)) return { ...entry };
-  // If somehow a plain object slipped in with an id, normalize it.
-  if (entry.id) {
-    return {
-      instanceId: entry.instanceId || 'itm_' + Math.random().toString(36).slice(2, 10),
-      ...entry
-    };
-  }
-  // If it’s a string ID, DO NOT roll affixes here.
-  // Make a minimal, “blank” instance with no random mods.
-  if (typeof entry === 'string') {
+  if (isItemInstance(entry)) {
+    out = { ...entry };
+  } else if (entry.id) {
+    // If somehow a plain object slipped in with an id, normalize it.
+    out = { instanceId: entry.instanceId || 'itm_' + Math.random().toString(36).slice(2, 10), ...entry };
+  } else if (typeof entry === 'string') {
+    // If it's a string ID, DO NOT roll affixes here.
     return { id: entry, instanceId: 'itm_' + Math.random().toString(36).slice(2, 10) };
   }
-  return null;
+  if (!out) return null;
+  // Migrate old saves: quality field was renamed to rarity
+  if (out.quality !== undefined && out.rarity === undefined) {
+    out.rarity = out.quality;
+    delete out.quality;
+  }
+  return out;
 }
 function serializeInventory(arr) { return Array.isArray(arr) ? arr.map(serializeItem).filter(Boolean) : []; }
 function deserializeInventory(arr) { return Array.isArray(arr) ? arr.map(deserializeItem).filter(Boolean) : []; }
@@ -145,7 +148,7 @@ function normalizeAfterLoad(c) {
   c.currentHP = Math.max(0, Math.min(c.currentHP ?? maxHP, maxHP));
   c.currentMP = Math.max(0, Math.min(c.currentMP ?? maxMP, maxMP));
 
-  // Skills (functions don’t survive JSON)
+  // Skills (functions don't survive JSON)
   c.skills = restoreSkills(c.skills);
   c.classSkills = restoreSkills(c.classSkills);
   c.reactions = restoreSkills(c.reactions);

@@ -33,11 +33,11 @@ export const COMBAT_SCENARIOS = {
     longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger and rogue—showcases weakness synergies, payoffs and interlocking behaviour.',
     portraitKey: 'dummy_party',
     enemies: [
-      { type: 'animated_fighter_dummy', slotId: 1 },
-      { type: 'animated_healer_dummy', slotId: 5 },
-      { type: 'animated_warlock_dummy', slotId: 7 },
-      { type: 'animated_ranger_dummy', slotId: 6 },
-      { type: 'animated_rogue_dummy', slotId: 2 }
+      { type: 'animated_fighter_dummy', slotId: 1, drops: [{ equip: 'chest', droppable: true }] },
+      { type: 'animated_healer_dummy',  slotId: 5, drops: [{ equip: 'chest', droppable: true }] },
+      { type: 'animated_warlock_dummy', slotId: 7, drops: [{ equip: 'chest', droppable: true }] },
+      { type: 'animated_ranger_dummy',  slotId: 6, drops: [{ equip: 'chest', droppable: true }] },
+      { type: 'animated_rogue_dummy',   slotId: 2, drops: [{ equip: 'chest', droppable: true }] }
     ]
   },
 

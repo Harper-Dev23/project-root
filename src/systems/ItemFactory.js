@@ -1,13 +1,13 @@
 // src/systems/ItemFactory.js
 import { Items } from '../../data/items.js';
 
-/** ---------- Quality Rules (counts) ----------
+/** ---------- Rarity Rules (affix counts) ----------
  * uncommon: 1–2 total affixes (prefix+suffix combined)
  * rare: 3 total affixes
  * epic: 2 prefixes + 2 suffixes (fixed)
  * common: 0
  */
-export const QUALITY_RULES = {
+export const RARITY_RULES = {
   common: { min: 0, max: 0, force: null },          // 0 total
   uncommon: { min: 1, max: 2, force: null },          // 1–2 total
   rare: { min: 3, max: 3, force: null },          // exactly 3 total
@@ -354,9 +354,9 @@ function pickUnique(arr, n, rng) {
   return out;
 }
 
-/** Decide how many prefixes/suffixes for a given quality. */
-function rollAffixCounts(quality, rng) {
-  const rule = QUALITY_RULES[quality] || QUALITY_RULES.common;
+/** Decide how many prefixes/suffixes for a given rarity. */
+function rollAffixCounts(rarity, rng) {
+  const rule = RARITY_RULES[rarity] || RARITY_RULES.common;
   if (rule.force) return { prefixes: rule.force.prefixes, suffixes: rule.force.suffixes };
 
   const total = rule.min === rule.max
@@ -457,11 +457,12 @@ function buildInstanceModifiers(prefixes, suffixes) {
 }
 
 /**
- * Create a new item instance from a base ID with optional quality+affixes.
+ * Create a new item instance from a base ID with optional rarity+affixes.
  * @param {string} id
  * @param {object} opts
- *   - quality: 'common'|'uncommon'|'rare'|'epic' (default: base item quality or 'common')
- *   - rollAffixes: boolean (default true if quality != 'common')
+ *   - rarity: 'common'|'uncommon'|'rare'|'epic' (default: base item rarity or 'common')
+ *   - quality: legacy alias for rarity (old saves/callers), prefer rarity
+ *   - rollAffixes: boolean (default true if rarity != 'common')
  *   - rng: optional function returning 0..1 for deterministic tests
  */
 export function createItemInstance(id, opts = {}) {
@@ -472,14 +473,15 @@ export function createItemInstance(id, opts = {}) {
   }
 
   const rng = typeof opts.rng === 'function' ? opts.rng : Math.random;
-  const quality = opts.quality || base.quality || 'common';
+  // Accept legacy `quality` opt so old call sites don't silently break
+  const rarity = opts.rarity || opts.quality || base.rarity || base.quality || 'common';
   const pools = getAffixPoolsFor(base);
 
   let prefixes = [];
   let suffixes = [];
 
-  if (pools && (opts.rollAffixes ?? (quality !== 'common'))) {
-    const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(quality, rng);
+  if (pools && (opts.rollAffixes ?? (rarity !== 'common'))) {
+    const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(rarity, rng);
     prefixes = pickUnique(pools.prefixes, nPre, rng);
     suffixes = pickUnique(pools.suffixes, nSuf, rng);
   }
@@ -487,7 +489,7 @@ export function createItemInstance(id, opts = {}) {
   const instance = {
     id,
     instanceId: 'itm_' + Math.random().toString(36).slice(2, 10),
-    quality,
+    rarity,
     prefixes: prefixes.map(a => a.key),
     suffixes: suffixes.map(a => a.key),
 
@@ -520,12 +522,13 @@ export function isItemInstance(obj) {
  */
 export function getItemComputedData(itemRef) {
 
-  let base, instanceMods = null, displayName = null, quality = null;
+  let base, instanceMods = null, displayName = null, rarity = null;
   if (isItemInstance(itemRef)) {
     base = Items[itemRef.id];
     instanceMods = itemRef.instanceMods || null;
     displayName = itemRef.displayName || null;
-    quality = itemRef.quality || base?.quality || 'common';
+    // Support both new field (rarity) and legacy field (quality) from old saves
+    rarity = itemRef.rarity || itemRef.quality || base?.rarity || base?.quality || 'common';
   } else {
     base = Items[itemRef];
   }
@@ -535,7 +538,7 @@ export function getItemComputedData(itemRef) {
   const view = {
     ...base,
     name: displayName || base.name,
-    quality: quality || base.quality || 'common',
+    rarity: rarity || base.rarity || base.quality || 'common',
   };
 
   if (instanceMods) {

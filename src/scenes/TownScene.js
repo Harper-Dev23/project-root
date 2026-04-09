@@ -68,8 +68,8 @@ const VENDOR_KEY_TO_TRIBE = {
   aivorel: 'lesse',
 };
 
-// === Shared quality colors ===
-const QUALITY_COLORS = {
+// === Rarity colors ===
+const RARITY_COLORS = {
   common: '#cccccc',
   uncommon: '#33cc33',
   rare: '#3399ff',
@@ -79,8 +79,8 @@ const QUALITY_COLORS = {
 
 
 
-// Bias the gamble towards testing higher tiers but still mostly uncommon/rare
-function randomQualityForGamble() {
+// Bias the gamble towards testing higher rarity tiers but still mostly uncommon/rare
+function randomRarityForGamble() {
   const r = Math.random();
   if (r < 0.60) return 'uncommon';
   if (r < 0.90) return 'rare';
@@ -342,7 +342,7 @@ export default class TownScene extends Phaser.Scene {
 
     return {
       title: view.name,
-      titleColor: QUALITY_COLORS[view.quality] || '#dddddd',
+      titleColor: RARITY_COLORS[view.rarity || view.quality] || '#dddddd',
       lines
     };
   }
@@ -1251,8 +1251,8 @@ export default class TownScene extends Phaser.Scene {
             }
 
             const baseId = pool[(Math.random() * pool.length) | 0];
-            const q = randomQualityForGamble();
-            const inst = createItemInstance(baseId, { quality: q });
+            const q = randomRarityForGamble();
+            const inst = createItemInstance(baseId, { rarity: q });
             if (!inst) {
               this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
               return;
@@ -1262,7 +1262,7 @@ export default class TownScene extends Phaser.Scene {
             InventorySystem.addGlobalItem(inst);
 
             const lineY = BONEPILE_LOG_START_Y + this.vendorInventoryContainer.listHeight;
-            const displayColor = QUALITY_COLORS[q] || '#ffffff';
+            const displayColor = RARITY_COLORS[q] || '#ffffff';
             const line = this.add.text(LOG_X, lineY, `→ ${inst.displayName}`, {
               fontSize: '16px',
               color: displayColor
@@ -1356,7 +1356,7 @@ export default class TownScene extends Phaser.Scene {
       })
       .forEach(entry => {
         if (!entry.base) return;
-        const color = QUALITY_COLORS[entry.base.quality] || '#cccccc';
+        const color = RARITY_COLORS[entry.base.rarity || entry.base.quality] || '#cccccc';
 
         const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name} — ${entry.cost}g`, {
           fontSize: '18px',

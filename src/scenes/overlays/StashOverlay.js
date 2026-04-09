@@ -15,7 +15,7 @@ const TRIBE_DISPLAY_NAMES = {
   lesse:  "Le'sse",
 };
 
-const QUALITY_COLORS = {
+const RARITY_COLORS = {
   common:    '#cccccc',
   uncommon:  '#33cc33',
   rare:      '#3399ff',
@@ -138,8 +138,8 @@ export default class StashOverlay extends Phaser.Scene {
     const computed  = instance ? getItemComputedData(instance) : null;
     const base      = computed || Items[item?.id] || {};
     const name      = instance?.displayName || base.name || item?.id || 'Unknown';
-    const quality   = instance?.quality || base.quality || 'common';
-    const color     = QUALITY_COLORS[quality] || '#cccccc';
+    const rarity    = instance?.rarity || instance?.quality || base.rarity || base.quality || 'common';
+    const color     = RARITY_COLORS[rarity] || '#cccccc';
 
     const lines = [];
     if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);

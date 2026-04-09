@@ -20,7 +20,7 @@ import { getXPNeededForLevel } from '../../data/xpTable.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { applyLevelUp, rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
-import { isItemInstance } from '../systems/ItemFactory.js';
+import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
@@ -132,6 +132,31 @@ const LOG_COLORS = {
 
 const LOG_LINE_HEIGHT = 18;
 
+// ── Enemy loot helpers ────────────────────────────────────────────────────────
+const RARITY_COLORS = {
+  common:    '#cccccc',
+  uncommon:  '#33cc33',
+  rare:      '#3399ff',
+  epic:      '#cc33cc',
+  legendary: '#ff9933',
+};
+
+function rollEnemyDropRarity() {
+  const r = Math.random();
+  if (r < 0.45) return 'common';
+  if (r < 0.75) return 'uncommon';
+  if (r < 0.92) return 'rare';
+  if (r < 0.99) return 'epic';
+  return 'legendary';
+}
+
+// Returns all item IDs of a given type/slot from the Items catalogue.
+function getItemIdsByTypeSlot(type, slot) {
+  return Object.entries(Items)
+    .filter(([, it]) => it?.type === type && (!slot || it?.slot === slot))
+    .map(([id]) => id);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default class CombatScene extends Phaser.Scene {
   constructor() {
@@ -785,11 +810,10 @@ export default class CombatScene extends Phaser.Scene {
     this.allySlots = allyPositions.map((pos, index) => {
       const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
-      // Centre‑anchored 64×64 hit‑area
+      // Centre‑anchored 64×64 hit‑area — Rectangle origin matches visual center at (0,0)
       container.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, 64, 64),
-        Phaser.Geom.Rectangle.Contains,
-        true           // hand cursor
+        new Phaser.Geom.Rectangle(-32, -32, 64, 64),
+        Phaser.Geom.Rectangle.Contains
       );
 
       // Border (also centre‑anchored, so (0,0) is the slot centre)
@@ -811,9 +835,8 @@ export default class CombatScene extends Phaser.Scene {
       const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
       container.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, 64, 64),
-        Phaser.Geom.Rectangle.Contains,
-        true
+        new Phaser.Geom.Rectangle(-32, -32, 64, 64),
+        Phaser.Geom.Rectangle.Contains
       );
 
       const rect = this.add.rectangle(0, 0, 64, 64, 0x330000, 0.2)
@@ -874,6 +897,9 @@ export default class CombatScene extends Phaser.Scene {
     if (typeof this._placePortrait === 'function') {
       this._placePortrait(unit, newSlot);
     }
+
+    // Reposition lodge arrows to the new slot
+    this._refreshLodgeSprites(unit);
 
     return true;
   }
@@ -1048,8 +1074,20 @@ export default class CombatScene extends Phaser.Scene {
         // Initialize weakness + per-turn derived bag
         weakness: makeWeaknessState(),
         _weaknessDerived: { maxHPDown: 0, evasionDown: 0, initiativeSlow: 0 },
-        healingReceivedBonus: 1.0
+        healingReceivedBonus: 1.0,
+
+        // Equipment dict (populated below if config.drops present)
+        equipment: {},
+        // baseline derived stats enemies need for DR calculation
+        derived: { PhysicalResist: 0, ElementalResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5, CritAvoid: 0 },
       };
+
+      // Equip any configured drops (random item + rarity per entry)
+      if (Array.isArray(config.drops)) {
+        config.drops.forEach(dropCfg => {
+          this._equipEnemyItem(enemy, dropCfg);
+        });
+      }
 
       // Find target slot
       const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
@@ -1068,6 +1106,49 @@ export default class CombatScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Creates a random item instance for the given drop config and equips it on the enemy.
+   * Applies stat bonuses directly to the enemy's derived/maxHP without going through
+   * the full rebuildCharacterStats pipeline (which is player-character-specific).
+   *
+   * dropCfg: { equip: 'chest'|'head'|..., itemId?: string, droppable?: bool }
+   */
+  _equipEnemyItem(enemy, dropCfg) {
+    const equipSlot = dropCfg.equip || 'chest';
+    const droppable = dropCfg.droppable ?? false;
+
+    // Pick a specific item ID or choose randomly from the slot pool
+    let itemId = dropCfg.itemId;
+    if (!itemId) {
+      const pool = getItemIdsByTypeSlot('armor', equipSlot);
+      if (!pool.length) return;
+      itemId = pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    const rarity = dropCfg.rarity || rollEnemyDropRarity();
+    const inst = createItemInstance(itemId, { rarity, rollAffixes: rarity !== 'common' });
+    if (!inst) return;
+
+    // Mark whether this instance should drop on victory
+    inst._droppable = droppable;
+
+    // Assign to enemy equipment dict
+    enemy.equipment[equipSlot] = inst;
+
+    // Apply bonuses directly to derived stats and maxHP so combat DR/resist are live
+    const view = getItemComputedData(inst);
+    const bonuses = view?.bonuses || {};
+
+    if (bonuses.CON) {
+      const hpGain = bonuses.CON * 5;
+      enemy.maxHP += hpGain;
+      enemy.currentHP += hpGain;
+      enemy.derived.PhysicalResist += Math.round(bonuses.CON * 0.5);
+    }
+    if (bonuses.WIS) enemy.derived.ElementalResist += Math.round(bonuses.WIS * 0.5);
+    if (bonuses.DEX) enemy.derived.Evasion += bonuses.DEX;
+    if (bonuses.STR) { /* STR on enemies could boost damage — left as future hook */ }
+  }
 
   // ===== Character Info Panel: Tabs & Body (RIGHT-ALIGNED) ===================
   _buildCharacterInfoTabs(char) {
@@ -1348,14 +1429,30 @@ export default class CombatScene extends Phaser.Scene {
     let i = 0;
     slots.forEach(slot => {
       const equipped = char.equipment?.[slot];
-      const data = getEquippedItemData(equipped);
-      const name = data?.name || (isItemInstance(equipped) ? equipped.id : (equipped || 'None'));
+      const inst = isItemInstance(equipped) ? equipped : null;
+      const rarity = inst?.rarity || inst?.quality || null;
+      const rarityColor = (rarity && RARITY_COLORS[rarity]) || '#cccccc';
 
-      const t = this.add.text(rightX, startY + i * 18, `${labelMap[slot]}: ${name}`, {
+      let label;
+      if (!inst) {
+        // Empty slot — show neutral gray
+        label = `${labelMap[slot]}: —`;
+      } else if (char.isEnemy) {
+        // Enemy gear: reveal rarity but not the item name (player can earn the info on victory)
+        const rarityLabel = rarity ? rarity.charAt(0).toUpperCase() + rarity.slice(1) : '?';
+        label = `${labelMap[slot]}: [${rarityLabel}]`;
+      } else {
+        // Allied gear: show full name in rarity color
+        const data = getEquippedItemData(equipped);
+        const name = inst.displayName || data?.name || inst.id;
+        label = `${labelMap[slot]}: ${name}`;
+      }
+
+      const t = this.add.text(rightX, startY + i * 18, label, {
         fontSize: '14px',
-        color: '#cccccc',
+        color: inst ? rarityColor : '#555555',
         align: 'right'
-      }).setOrigin(1, 0); // right align
+      }).setOrigin(1, 0);
 
       this.characterInfoPanel.add(t);
       this._charInfoBodyGroup.push(t);
@@ -1596,7 +1693,7 @@ export default class CombatScene extends Phaser.Scene {
   _createEndTurnButton(x, y) {
     this.endTurnButton = new UIButton(this, x, y, 'End Turn', () => {
       const actor = this._currentChar?.();
-      if (actor?.isEnemy) return;  // don’t let players skip NPCs
+      if (actor?.isEnemy) return;  // don't let players skip NPCs
       this._advanceTurn();
     });
     this.endTurnButton.setDepth(UI_DEPTH.overlay + 1);
@@ -1657,7 +1754,7 @@ export default class CombatScene extends Phaser.Scene {
     this.actionMenuScrollMax = 0;
 
 
-    // Safe to build now because _buildActionMenuRoot() will hide if not the player’s turn
+    // Safe to build now because _buildActionMenuRoot() will hide if not the player's turn
     this._buildActionMenuRoot();
 
     const turnNamePos = this.layout?.turnName || { x: width - 250, y: height - 310 };
@@ -2104,6 +2201,10 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _enterTargetingMode(ability, sourceBtn = null) {
+    // Always clear prior listeners first — prevents stale once() handlers from a previous
+    // ability (different side) firing when the player switches abilities mid-targeting
+    this._clearSlotListeners();
+
     this.targetingAbility = ability;
 
     // Highlight the source button amber-gold so the player sees which ability is armed
@@ -2146,42 +2247,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
-  _exitTargetingMode() {
-    this._clearSlotHighlights();   // redraw green/red borders
-    this._clearSlotListeners();    // remove targeting-mode listeners, keep hitboxes
-
-    // Reset the ability button that was highlighted amber-gold
-    if (this.targetingAbilityBtn) {
-      const btn = this.targetingAbilityBtn;
-      this.targetingAbilityBtn = null;
-      btn._isSelected = false;
-      if (btn.background?.active) {
-        btn.background.setFillStyle(0x1c1c1c);
-        btn.background.setStrokeStyle(1.5, 0x6a7080);
-      }
-      if (btn.text?.active) {
-        btn.text.setStyle({ color: '#b8bccf' });
-      }
-    }
-
-    this.targetingAbility = null;
-
-    // Restore click handlers for all visible portraits/slots
-    [...this.allySlots, ...this.enemySlots].forEach(slot => {
-      const char = slot.char;
-      if (!char || !char.icon || !char.icon.active) return;
-
-      // Portrait
-      char.icon.removeListener('pointerdown');  // remove only this event
-      char.icon.setInteractive({ useHandCursor: true });
-      char.icon.on('pointerdown', () => this._showCharacterInfo(char));
-
-      // Slot (behind portrait)
-      slot.removeListener('pointerdown');
-      slot.setInteractive({ useHandCursor: true });
-      slot.on('pointerdown', () => this._showCharacterInfo(char));
-    });
-  }
+  // NOTE: _exitTargetingMode is defined further below (single canonical version)
 
   //called in combatdefeat(training)
   _restorePartyFull(party) {
@@ -2288,12 +2354,28 @@ export default class CombatScene extends Phaser.Scene {
     const uiScene = this.scene.get('UIScene');
     if (uiScene?.refreshUI) uiScene.refreshUI();
 
+    // Collect droppable items from all defeated enemies → global inventory
+    const loot = [];
+    (this.enemies || []).forEach(enemy => {
+      const equip = enemy.equipment || {};
+      for (const inst of Object.values(equip)) {
+        if (isItemInstance(inst) && inst._droppable) {
+          GameState.addToInventory(inst);
+          loot.push(inst);
+        }
+      }
+    });
+
+    if (loot.length > 0) {
+      this._log(`Collected ${loot.length} item${loot.length > 1 ? 's' : ''} from defeated enemies.`);
+    }
+
     // Record progression and collect ticket reward for the victory screen.
     const progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
     GameState.save('autosave');
 
     // Pass summary to victory screen
-    this._showVictoryScreen('Victory!', xpSummary, progressReward);
+    this._showVictoryScreen('Victory!', xpSummary, progressReward, loot);
   }
 
 
@@ -2425,6 +2507,11 @@ export default class CombatScene extends Phaser.Scene {
   _onUnitKnockedOut(unit) {
     this._log(`${unit.name} has been knocked out!`);
     unit.status = 'incapacitated';
+
+    // Destroy lodge arrow sprites for this unit
+    const _lodgeKey = unit.name || unit.id || 'unknown';
+    (this.lodgeSprites[_lodgeKey] || []).forEach(s => s?.destroy());
+    this.lodgeSprites[_lodgeKey] = [];
 
     if (unit._slot) {
       unit._slot.char = null;
@@ -2796,6 +2883,21 @@ export default class CombatScene extends Phaser.Scene {
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';
+
+            // Capture slot key BEFORE _onUnitKnockedOut clears target._slot,
+            // then apply any tile/slot effect right now so it fires even on a killing blow
+            // (avoids the combatEnded early-return skipping it below).
+            const _deathSlotKey = this._charSlotKey(target);
+            if (result?.slotEffect && _deathSlotKey != null) {
+              this.slotEffects = this.slotEffects || {};
+              this.slotEffects[_deathSlotKey] = this.slotEffects[_deathSlotKey] || [];
+              this.slotEffects[_deathSlotKey].push({ ...result.slotEffect });
+              this._refreshGroundSprites(_deathSlotKey);
+              this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+              // Null out so the normal step (5) below doesn't double-apply
+              result = { ...result, slotEffect: undefined };
+            }
+
             this._onUnitKnockedOut(target);
             if (this.combatEnded) return; // battle ended; stop here
           }
@@ -2977,7 +3079,7 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${attacker.name} grants ${result.teamBuff.effect.id} to their column.`);
     }
 
-    // (5) Slot effects on the target’s tile
+    // (5) Slot effects on the target's tile
     if (result?.slotEffect) {
       const sid = this._charSlotKey(target);
       if (sid != null) {
@@ -2985,7 +3087,7 @@ export default class CombatScene extends Phaser.Scene {
         this.slotEffects[sid] = this.slotEffects[sid] || [];
         this.slotEffects[sid].push({ ...result.slotEffect });
         this._refreshGroundSprites(sid);
-        this._log(`${target.name}’s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+        this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
       }
     }
 
@@ -3887,7 +3989,7 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _tickInitiativeGauge(char) {
-    // Base regen is the character’s Initiative stat (derived preferred)
+    // Base regen is the character's Initiative stat (derived preferred)
     const baseRegen = Math.max(0, (char?.derived?.Initiative ?? char?.initiative ?? 0) | 0);
 
     // Cold modifiers
@@ -4019,7 +4121,7 @@ export default class CombatScene extends Phaser.Scene {
       const btn = new UIButton(this, baseX, i * 50, it.label, () => {
         const actor = this._currentChar?.();
         if (actor?.isEnemy) {
-          this._log(`⛔ It’s ${actor.name}’s (enemy) turn. Player actions are disabled.`);
+          this._log(`⛔ It's ${actor.name}'s (enemy) turn. Player actions are disabled.`);
           return;
         }
         if (it.debugTag === 'BA') {
@@ -4154,7 +4256,7 @@ export default class CombatScene extends Phaser.Scene {
       slot.rect.disableInteractive();
 
       if (slot === activeSlot) {
-        slot.rect.setStrokeStyle(3, 0x00ff00);       // thicker green = “my turn”
+        slot.rect.setStrokeStyle(3, 0x00ff00);       // thicker green = "my turn"
       } else if (slot.char?.isEnemy) {
         slot.rect.setStrokeStyle(2, 0xff4444);       // red for enemies
       } else if (slot.char) {
@@ -4324,7 +4426,7 @@ export default class CombatScene extends Phaser.Scene {
     return this._moveUnitToSlot(user, slotContainer);
   }
 
-  // Reset a slot’s border back to your default
+  // Reset a slot's border back to your default
   _resetSlotStroke(slot) {
     const isEnemy = this.enemySlots.includes(slot);
     slot.rect.setStrokeStyle(2, isEnemy ? 0xff4444 : 0xffffff);
@@ -4391,25 +4493,38 @@ export default class CombatScene extends Phaser.Scene {
 
   // Keep this, but make sure it restores default strokes
   _exitTargetingMode() {
-    // your existing clears
     this._clearSlotHighlights?.();
-    this._clearSlotListeners?.();
+    this._clearSlotListeners?.();   // removes all slot/icon listeners, keeps interactive active
+
+    // Reset the ability button that was highlighted (amber-gold selection state)
+    if (this.targetingAbilityBtn) {
+      const btn = this.targetingAbilityBtn;
+      this.targetingAbilityBtn = null;
+      btn._isSelected = false;
+      if (btn.background?.active) {
+        btn.background.setFillStyle(0x1c1c1c);
+        btn.background.setStrokeStyle(1.5, 0x6a7080);
+      }
+      if (btn.text?.active) btn.text.setStyle({ color: '#b8bccf' });
+    }
+
     this.targetingAbility = null;
 
-    // Hard reset borders so nothing stays dim
+    // Hard reset borders so nothing stays highlighted
     [...this.allySlots, ...this.enemySlots].forEach(slot => this._resetSlotStroke(slot));
 
-    // Restore info-clicks (your existing code is fine here)
+    // Restore info-click handlers for occupied slots.
+    // Do NOT call slot.setInteractive() here — it would overwrite the centered
+    // Rectangle(-32,-32,64,64) geometry set at slot creation with an arbitrary default.
+    // The slot container is still interactive (clearSlotListeners only removes listeners).
+    // The icon WAS disabled in _enterTargetingMode, so it needs re-enabling.
     [...this.allySlots, ...this.enemySlots].forEach(slot => {
       const char = slot.char;
       if (!char || !char.icon || !char.icon.active) return;
 
-      char.icon.removeListener('pointerdown');
       char.icon.setInteractive({ useHandCursor: true });
       char.icon.on('pointerdown', () => this._showCharacterInfo(char));
 
-      slot.removeListener('pointerdown');
-      slot.setInteractive({ useHandCursor: true });
       slot.on('pointerdown', () => this._showCharacterInfo(char));
     });
   }
@@ -4688,6 +4803,7 @@ export default class CombatScene extends Phaser.Scene {
     // 2) Advance to next actor
     if (!this.turnOrder?.length) return;                  // avoid modulo 0
     this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
+    const _isNewRound = this.currentTurnIndex === 0;
 
     const char = this._currentChar?.();
     if (!char) return;
@@ -4696,7 +4812,34 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // 3) Apply START-OF-TURN ongoings (DOT/skip-turn/penalties)
-    this._applySlotEffectsTick(char);   // ground zone ticks (disorient buildup, DoT, etc.)
+    this._applySlotEffectsTick(char);   // ground zone ticks for the current actor's tile
+
+    // Tick down ground zones on unoccupied slots ONCE per full round (when the
+    // turn array wraps back to index 0). Occupied slots are already handled by
+    // _applySlotEffectsTick() above when each character takes their turn.
+    // This prevents empty-slot zones from ticking N times per round (once per
+    // character turn) instead of once. Movement is safe: we check occupancy at
+    // round-end, so a slot vacated mid-round gets one tick; a newly occupied
+    // slot is skipped (the occupant's next turn will tick it instead).
+    if (_isNewRound) {
+      const occupiedKeys = new Set(
+        this.turnOrder.map(u => this._charSlotKey(u)).filter(Boolean)
+      );
+      for (const [key, effects] of Object.entries(this.slotEffects || {})) {
+        if (occupiedKeys.has(key) || !effects?.length) continue;
+        const stillActive = [];
+        for (const eff of effects) {
+          eff.turns -= 1;
+          if (eff.turns > 0) {
+            stillActive.push(eff);
+          } else {
+            this._log(`The ${eff.id.replace(/_/g, ' ')} zone dissipates.`);
+          }
+        }
+        this.slotEffects[key] = stillActive;
+        this._refreshGroundSprites(key);
+      }
+    }
 
     const se = this._startTurnStatusEffects(char);    // NEW
     if (this.combatEnded || se.died) return;
@@ -4928,41 +5071,66 @@ export default class CombatScene extends Phaser.Scene {
     unit.mpBar = mpBar;
   }
 
-  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null) {
+  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null, loot = []) {
     const { width, height } = this.sys.game.canvas;
 
     // Dark overlay
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
       .setDepth(2000);
 
-    // Victory text
-    this.add.text(width / 2, height / 2 - 120, title, {
+    // Victory title
+    this.add.text(width / 2, height / 2 - 130, title, {
       fontSize: '48px',
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(2001);
 
+    let cursorY = height / 2 - 65;
+
     // XP summary list
-    xpSummary.forEach((line, i) => {
-      this.add.text(width / 2, height / 2 - 50 + (i * 25), line, {
-        fontSize: '18px',
-        color: '#ffff66'
+    xpSummary.forEach(line => {
+      this.add.text(width / 2, cursorY, line, {
+        fontSize: '18px', color: '#ffff66'
       }).setOrigin(0.5).setDepth(2001);
+      cursorY += 24;
     });
 
-    // Hunt Ticket reward (shown only on first completion and if tickets were earned)
+    // Hunt Ticket reward (first completion only)
     if (progressReward?.firstCompletion && progressReward.huntTicketsEarned > 0) {
-      const ticketY = height / 2 - 50 + (xpSummary.length * 25) + 15;
-      this.add.text(width / 2, ticketY,
+      cursorY += 6;
+      this.add.text(width / 2, cursorY,
         `+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, {
-          fontSize: '18px',
-          color: '#ffe066',
-          fontStyle: 'bold'
+          fontSize: '18px', color: '#ffe066', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(2001);
+      cursorY += 28;
     }
 
-    // Return button
-    createButton(this, width / 2, height / 2 + 150, 'Return to Camp', () => {
+    // Loot section — only shown if there are droppable items
+    if (loot.length > 0) {
+      cursorY += 10;
+      this.add.text(width / 2, cursorY, '— Loot —', {
+        fontSize: '16px', color: '#aaaaaa', fontStyle: 'italic'
+      }).setOrigin(0.5).setDepth(2001);
+      cursorY += 22;
+
+      loot.forEach(inst => {
+        const rarity = inst.rarity || 'common';
+        const color = RARITY_COLORS[rarity] || '#cccccc';
+        const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+        // Show item type/slot + rarity; full name revealed now that it's in your inventory
+        const base = Items[inst.id];
+        const slotLabel = base?.slot ? `(${base.slot})` : '';
+        const displayName = inst.displayName || base?.name || inst.id;
+        this.add.text(width / 2, cursorY, `${displayName} ${slotLabel}  [${rarityLabel}]`, {
+          fontSize: '16px', color
+        }).setOrigin(0.5).setDepth(2001);
+        cursorY += 22;
+      });
+    }
+
+    // Return button — anchored below all content with some breathing room
+    const btnY = Math.max(cursorY + 30, height / 2 + 120);
+    createButton(this, width / 2, btnY, 'Return to Camp', () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
@@ -5060,10 +5228,11 @@ export default class CombatScene extends Phaser.Scene {
       this._showCharacterInfo(char);
     });
 
-    // 🧽 Clear and reset slot interactivity
-    slot.removeAllListeners();      // ✅ clean existing listeners
-    slot.setSize(80, 80);
-    slot.setInteractive();
+    // Clear listeners and restore info-click.
+    // Do NOT call slot.setInteractive() — it would destroy the centered
+    // Rectangle(-32,-32,64,64) geometry set at creation. The slot stays
+    // interactive from _createBattleSlots; just swap the listener.
+    slot.removeAllListeners();
     slot.on('pointerdown', () => {
       this._showCharacterInfo(char);
     });

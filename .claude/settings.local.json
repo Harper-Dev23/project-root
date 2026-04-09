@@ -9,7 +9,8 @@
       "Bash(node -c \"c:/Users/eddie/Desktop/project-root/src/scenes/CombatScene.js\")",
       "Bash(node --input-type=module)",
       "Bash(echo \"exit: $?\")",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(xargs wc:*)"
     ]
   }
 }

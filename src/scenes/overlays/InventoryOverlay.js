@@ -33,8 +33,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
 
 
-  // === Quality → color map (same palette you used elsewhere) ===
-  QUALITY_COLORS = {
+  // === Rarity → color map ===
+  RARITY_COLORS = {
     common: '#cccccc',
     uncommon: '#33cc33',
     rare: '#3399ff',
@@ -49,8 +49,8 @@ export default class InventoryOverlay extends Phaser.Scene {
     const computed = instance ? getItemComputedData(instance) : null;
     const base = computed || Items[item.id] || Items[item] || {};
     const name = instance?.displayName || computed?.name || base.name || instance?.id || item?.id || 'Unknown';
-    const quality = instance?.quality || computed?.quality || base.quality || 'common';
-    const color = this.QUALITY_COLORS?.[quality] || '#cccccc';
+    const rarity = instance?.rarity || instance?.quality || computed?.rarity || base.rarity || base.quality || 'common';
+    const color = this.RARITY_COLORS?.[rarity] || '#cccccc';
 
     const lines = [];
     if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);
@@ -389,7 +389,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const pContentHeight = Math.max(personalCursorY, 0);
     const pVisibleHeight = pMaskHeight;
-    // anchor the list to the mask origin (don’t move it to 0)
+    // anchor the list to the mask origin (don't move it to 0)
     pList.setPosition(pMaskX, pMaskY);
 
     // define personal area rect for scrolling (no Graphics object needed)
@@ -735,7 +735,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     }
 
     if (this.currentRarity !== 'All') {
-      result = result.filter(it => (it.quality || 'common') === this.currentRarity);
+      result = result.filter(it => (it.rarity || it.quality || 'common') === this.currentRarity);
     }
 
     return result;
