@@ -14,6 +14,7 @@ import MapOverlay from './scenes/overlays/MapOverlay.js';
 import OptionsOverlay from './scenes/overlays/OptionsOverlay.js';
 import JournalOverlay from './scenes/overlays/JournalOverlay.js';
 import QuestOverlay from './scenes/overlays/QuestOverlay.js';
+import StashOverlay from './scenes/overlays/StashOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -35,6 +36,7 @@ const config = {
     OptionsOverlay,
     JournalOverlay,
     QuestOverlay,
+    StashOverlay,
   ],
   physics: {
     default: 'arcade',

@@ -23,9 +23,13 @@ const QUEST_FLAG_POSITIONS = {
   combat_pit:     { x: 824, y: 56  },
   orientation_bonfire: { x: 683, y: 302 },
   orientation_elder:   { x: 857, y: 342 },
-  elder_bonepile:      { x: 857, y: 342 },
-  elder_leveling:      { x: 857, y: 342 },
-  samuel_mourne:       { x: 837, y: 493 },
+  elder_bonepile:           { x: 857, y: 342 },
+  elder_leveling:           { x: 857, y: 342 },
+  samuel_mourne:            { x: 837, y: 493 },
+  elseth_leader_challenge:  { x: 1059, y: 310 },
+  styx_leader_challenge:    { x: 305,  y: 298 },
+  lesse_leader_challenge:   { x: 477,  y: 492 },
+  zafaar_leader_challenge:  { x: 928,  y: 76  },
 };
 
 // Flag IDs for the four lodge "explore before choosing" prompts.
@@ -749,6 +753,9 @@ export default class TownScene extends Phaser.Scene {
    * for every currently-active quest flag.
    */
   _buildQuestFlags() {
+    // Check if the combat pit marker should now appear based on cleared flags
+    ProgressionManager.refreshCombatPitFlag();
+
     if (this._questFlagObjects) {
       this._questFlagObjects.forEach(o => o.destroy());
     }
@@ -1550,6 +1557,40 @@ export default class TownScene extends Phaser.Scene {
       }
     });
 
+    // Stash button — only shown in the player's own lodge
+    if (playerTribe && playerTribe === tribeId) {
+      const PANEL_W = 915, PANEL_H = 685;
+      const panelLeft = 640 - PANEL_W / 2;
+      const panelTop  = 360 - PANEL_H / 2;
+
+      // Chest icon background
+      const stashBg = this.add.rectangle(panelLeft + 52, panelTop + 52, 72, 36, 0x1a1a2e, 1)
+        .setStrokeStyle(1, 0x886644)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(12);
+
+      const stashLabel = this.add.text(panelLeft + 52, panelTop + 52, '🗄 Stash', {
+        fontSize: '14px',
+        color: '#ffddaa',
+        fontFamily: 'Georgia',
+      }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
+
+      const openStash = () => {
+        SoundManager.play('handsClick');
+        if (!this.scene.isActive('StashOverlay')) {
+          this.scene.launch('StashOverlay');
+          this.scene.bringToTop('StashOverlay');
+        }
+      };
+
+      stashBg.on('pointerover',  () => stashBg.setFillStyle(0x2a2a4e, 1));
+      stashBg.on('pointerout',   () => stashBg.setFillStyle(0x1a1a2e, 1));
+      stashBg.on('pointerdown',  openStash);
+      stashLabel.on('pointerdown', openStash);
+
+      group.add([stashBg, stashLabel]);
+    }
+
     // Only cache post-choice layouts — pre-choice content varies by flag state.
     if (playerTribe) {
       this.lodgeGroups[titleText] = group;
@@ -1921,6 +1962,17 @@ export default class TownScene extends Phaser.Scene {
     this._hideExteriorsAndOtherInteriors();
 
     if (!this.leaderGroups) this.leaderGroups = {};
+
+    // Leader-specific challenge flags — bust cache so fresh dialogue shows
+    const elsethChallengeActive  = tribe === 'Elseth'  && ProgressionManager.hasQuestFlag('elseth_leader_challenge');
+    const styxChallengeActive    = tribe === 'Styx'    && ProgressionManager.hasQuestFlag('styx_leader_challenge');
+    const lesseChallengeActive   = tribe === "Le'sse"  && ProgressionManager.hasQuestFlag('lesse_leader_challenge');
+    const zafaarChallengeActive  = tribe === 'Zafaar'  && ProgressionManager.hasQuestFlag('zafaar_leader_challenge');
+    if ((elsethChallengeActive || styxChallengeActive || lesseChallengeActive || zafaarChallengeActive) && this.leaderGroups[tribe]) {
+      this.leaderGroups[tribe].destroy(true);
+      delete this.leaderGroups[tribe];
+    }
+
     if (this.leaderGroups[tribe]) {
       this.leaderGroups[tribe].setVisible(true);
       return;
@@ -1940,9 +1992,22 @@ export default class TownScene extends Phaser.Scene {
       "Le'sse": 'lesse_interior',
     };
 
+    let flavorText;
+    if (elsethChallengeActive) {
+      flavorText = '"I saw you beat those dummies into splinters. Not bad."\n\nShe leans back, fingers tapping the hilt of her blade.\n\n"But what if they fought back?\nI\'ll arm them myself — spears, armor, the works.\nYou can keep whatever they drop."';
+    } else if (styxChallengeActive) {
+      flavorText = '"You handled the basics. Strength is the easy part."\n\nThe hunter does not look up from the map spread across the table.\n\n"Mettle, now — that takes coordination. Moving together,\ncovering flanks, reading what the other is going to do\nbefore they do it. My hunters will test you.\nSee if your party can keep pace."';
+    } else if (lesseChallengeActive) {
+      flavorText = 'Two figures sit motionless near the far wall,\neyes closed, breathing in perfect unison.\n\nThe elder speaks without turning.\n\n"You have shown you can fight. But have you faced\nthose who bend the elements to their will?\nMy students have been waiting for a worthy test.\nThey will not hold back — nor should you."';
+    } else if (zafaarChallengeActive) {
+      flavorText = 'The Zafaar leader stands with his back to the door,\narms crossed, a massive weapon leaning against the wall beside him.\n\n"I heard you put down the Le\'sse duelists.\nGood. Means you\'re worth something."\n\nHe turns, eyes fixed on you.\n\n"I carry the finest blade this camp has seen.\nBeat me, and it\'s yours. I won\'t offer twice."';
+    } else {
+      flavorText = `The ${tribe.toLowerCase()} leader studies your approach.`;
+    }
+
     const group = this._buildInteriorLayout({
-      titleText: `${tribe} Leader Hut`,
-      flavorText: `The ${tribe.toLowerCase()} leader studies your approach.`,
+      titleText: `${tribe} Leader`,
+      flavorText,
       bgColor: colors[tribe] || 0x222222,
       bgImage: interiorImages[tribe] ?? null,
       onExit: () => {
@@ -1950,6 +2015,25 @@ export default class TownScene extends Phaser.Scene {
         this._showExterior();
       }
     });
+
+    // Clear flags once the player has seen the dialogue
+    if (elsethChallengeActive) {
+      ProgressionManager.clearQuestFlag('elseth_leader_challenge');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    } else if (styxChallengeActive) {
+      ProgressionManager.clearQuestFlag('styx_leader_challenge');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    } else if (lesseChallengeActive) {
+      ProgressionManager.clearQuestFlag('lesse_leader_challenge');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    } else if (zafaarChallengeActive) {
+      ProgressionManager.clearQuestFlag('zafaar_leader_challenge');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    }
 
     this.leaderGroups[tribe] = group;
   }

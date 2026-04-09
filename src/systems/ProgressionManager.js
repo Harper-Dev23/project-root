@@ -21,6 +21,26 @@ const UNLOCK_REQUIRES = {
   'training_encounter_6': 'training_encounter_5',
 };
 
+// Quest flags that must ALL be cleared before the next scenario unlocks.
+// Scenarios not listed here have no flag gate (e.g. S1 is always available).
+const SCENARIO_GATE_FLAGS = {
+  'training_encounter_2': ['tribe_choice'],
+  'training_encounter_3': ['elder_bonepile', 'elseth_leader_challenge'],
+  'training_encounter_4': ['elder_leveling', 'styx_leader_challenge'],
+  'training_encounter_5': ['samuel_mourne', 'lesse_leader_challenge'],
+  'training_encounter_6': ['zafaar_leader_challenge'],
+};
+
+// Ordered list used by refreshCombatPitFlag
+const SCENARIO_ORDER = [
+  'training_encounter_1',
+  'training_encounter_2',
+  'training_encounter_3',
+  'training_encounter_4',
+  'training_encounter_5',
+  'training_encounter_6',
+];
+
 // Hunt Tickets awarded on FIRST completion of each scenario.
 // Scenario 6 gives a unique item instead, so it earns 0 tickets here.
 const TICKET_REWARDS = {
@@ -33,11 +53,13 @@ const TICKET_REWARDS = {
 };
 
 // Quest flags auto-set on first clear of each scenario.
+// Values can be a string (single flag) or an array (multiple flags).
 const SCENARIO_FLAGS = {
   'training_encounter_1': 'tribe_choice',
-  'training_encounter_2': 'elder_bonepile',   // Elder explains Bone Pile / gambling
-  'training_encounter_3': 'elder_leveling',   // Elder explains stats & leveling
-  'training_encounter_4': 'samuel_mourne',    // Intro meeting with Samuel Mourne
+  'training_encounter_2': ['elder_bonepile', 'elseth_leader_challenge'],
+  'training_encounter_3': ['elder_leveling', 'styx_leader_challenge'],
+  'training_encounter_4': ['samuel_mourne', 'lesse_leader_challenge'],
+  'training_encounter_5': 'zafaar_leader_challenge',
 };
 
 // Feature gates: which scenario must be completed to unlock a feature.
@@ -127,7 +149,36 @@ const ProgressionManager = {
     const req = UNLOCK_REQUIRES[scenarioId];
     if (req === null) return true;
     if (req === undefined) return false;
-    return this.completedScenarios.includes(req);
+    if (!this.completedScenarios.includes(req)) return false;
+    // All gate flags for this scenario must be cleared before it unlocks
+    const gates = SCENARIO_GATE_FLAGS[scenarioId] || [];
+    return gates.every(f => !this.hasQuestFlag(f));
+  },
+
+  /**
+   * Sets the combat_pit quest flag when the next uncompleted scenario's
+   * gate flags are all cleared. Called from TownScene._buildQuestFlags()
+   * every time the flag UI rebuilds so the marker stays in sync.
+   *
+   * Only acts for scenarios that have defined gate flags — S1 (no gates)
+   * is naturally always available and handled by the orientation flow.
+   */
+  refreshCombatPitFlag() {
+    for (const id of SCENARIO_ORDER) {
+      if (this.completedScenarios.includes(id)) continue; // already done
+
+      const req = UNLOCK_REQUIRES[id];
+      if (req && !this.completedScenarios.includes(req)) break; // prereq not done yet
+
+      const gates = SCENARIO_GATE_FLAGS[id] || [];
+      if (gates.length === 0) break; // no gate flags for this scenario — skip
+
+      const allClear = gates.every(f => !this.hasQuestFlag(f));
+      if (allClear && !this.hasQuestFlag('combat_pit')) {
+        this.setQuestFlag('combat_pit');
+      }
+      break; // only ever check the first pending scenario
+    }
   },
 
   isScenarioCompleted(scenarioId) {
@@ -148,9 +199,13 @@ const ProgressionManager = {
     if (!alreadyDone) {
       this.completedScenarios.push(scenarioId);
 
-      // Auto-set any quest flag tied to this scenario's first completion.
-      const flagId = SCENARIO_FLAGS[scenarioId];
-      if (flagId) this.setQuestFlag(flagId);
+      // Auto-set any quest flag(s) tied to this scenario's first completion.
+      const flagDef = SCENARIO_FLAGS[scenarioId];
+      if (Array.isArray(flagDef)) {
+        flagDef.forEach(f => this.setQuestFlag(f));
+      } else if (flagDef) {
+        this.setQuestFlag(flagDef);
+      }
     }
 
     const ticketsEarned = alreadyDone ? 0 : (TICKET_REWARDS[scenarioId] ?? 0);

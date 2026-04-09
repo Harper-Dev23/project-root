@@ -159,10 +159,34 @@ const GameState = {
   characters: [],
   party: [],
   inventory: [], // GLOBAL inventory shared between characters
+  tribeStash: {}, // keyed by tribe id → ItemInstance[]
 
   currentScene: 'MainMenu',
   quests: [],
   flags: {},
+
+  // ---------- Tribe Stash ----------
+  getStash(tribeId) {
+    if (!this.tribeStash[tribeId]) this.tribeStash[tribeId] = [];
+    return this.tribeStash[tribeId];
+  },
+
+  addToStash(tribeId, item) {
+    if (!this.tribeStash[tribeId]) this.tribeStash[tribeId] = [];
+    if (typeof item === 'string') {
+      const instance = createItemInstance(item);
+      if (instance) this.tribeStash[tribeId].push(instance);
+    } else if (isItemInstance(item)) {
+      this.tribeStash[tribeId].push(item);
+    }
+  },
+
+  removeFromStash(tribeId, instanceId) {
+    if (!this.tribeStash[tribeId]) return;
+    this.tribeStash[tribeId] = this.tribeStash[tribeId].filter(it =>
+      isItemInstance(it) ? it.instanceId !== instanceId : true
+    );
+  },
 
   // inventory management------////
   addToInventory(item) {
@@ -217,6 +241,9 @@ const GameState = {
       characters: (this.characters || []).map(serializeCharacter),
       partyIds: (this.party || []).map(p => p.id),
       inventory: serializeInventory(this.inventory), // global bag
+      tribeStash: Object.fromEntries(
+        Object.entries(this.tribeStash || {}).map(([k, v]) => [k, serializeInventory(v)])
+      ),
 
       currentScene: this.currentScene,
       quests: this.quests,
@@ -255,6 +282,14 @@ const GameState = {
 
     // Global bag / passthrough
     this.inventory = deserializeInventory(data.inventory);
+
+    // Tribe stash
+    this.tribeStash = {};
+    if (data.tribeStash && typeof data.tribeStash === 'object') {
+      for (const [k, v] of Object.entries(data.tribeStash)) {
+        this.tribeStash[k] = deserializeInventory(v);
+      }
+    }
     this.currentScene = data.currentScene || this.currentScene;
     this.quests = data.quests || this.quests || [];
     this.flags = data.flags || this.flags || {};
@@ -296,6 +331,7 @@ const GameState = {
     this.characters = [];
     this.party = [];
     this.inventory = [];
+    this.tribeStash = {};
     this.quests = [];
     this.flags = {};
     this.currentScene = 'MainMenu';
