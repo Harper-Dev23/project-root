@@ -2228,10 +2228,19 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
 
+  // XP granted on FIRST clear of each training scenario. No reward on repeats.
+  static SCENARIO_XP = {
+    'training_encounter_1': 20,
+    'training_encounter_2': 30,
+    'training_encounter_3': 50,  // brings Lv1 → Lv2 (20+30+50 = 100)
+    'training_encounter_4': 60,  // Styx huntsman
+    'training_encounter_5': 60,  // Le'sse duelists
+    'training_encounter_6': 80,  // Zafaar berserker — pushes through Lv3 (60+60+80=200 > 150)
+  };
+
   _onCombatVictory() {
     this.combatEnded = true;
     this._resetAllCooldowns();
-    let xpReward = 0;
     const xpSummary = [];
 
     if (this.isTraining) {
@@ -2241,43 +2250,40 @@ export default class CombatScene extends Phaser.Scene {
         char.currentHP = char.maxHP;
         char.currentMP = char.maxMP;
       });
-      xpReward = 10;
     } else {
       this._log('🎉 Victory! All enemies defeated.');
       this._reviveAlliesAfterVictory?.();
+    }
+
+    // XP: training scenarios only reward on first clear (no farming).
+    // Non-training uses the generic calculation.
+    const alreadyCompleted = ProgressionManager.isScenarioCompleted(this.scenarioId);
+    let xpReward = 0;
+    if (this.isTraining) {
+      xpReward = alreadyCompleted ? 0 : (CombatScene.SCENARIO_XP[this.scenarioId] ?? 0);
+    } else {
       xpReward = this._calculateXPReward();
     }
 
     GameState.party.forEach(char => {
       if (char.status !== 'dead') {
-        char.experience += xpReward;
-        let summary = `${char.name} gains ${xpReward} XP`;
+        if (xpReward > 0) {
+          char.experience += xpReward;
+          let summary = `${char.name} gains ${xpReward} XP`;
 
-        while (char.experience >= getXPNeededForLevel(char.level)) {
-          char.experience -= getXPNeededForLevel(char.level);
-          char.level++;
-          applyLevelUp(char);
-          summary += ` — Level Up! (Lv ${char.level})`;
+          while (char.experience >= getXPNeededForLevel(char.level)) {
+            char.experience -= getXPNeededForLevel(char.level);
+            char.level++;
+            applyLevelUp(char);
+            summary += ` — Level Up! (Lv ${char.level})`;
+          }
+
+          xpSummary.push(summary);
+        } else if (alreadyCompleted && this.isTraining) {
+          xpSummary.push(`${char.name} — already cleared (no XP)`);
         }
-
-        xpSummary.push(summary);
       }
     });
-
-    // Scenario 3 forces the whole party to level 2 as a scripted story beat.
-    if (this.scenarioId === 'training_encounter_3') {
-      GameState.party.forEach(char => {
-        if (char.level < 2) {
-          char.experience = 0;
-          char.level = 2;
-          applyLevelUp(char);
-          // Replace any existing XP line with the level-up message.
-          const idx = xpSummary.findIndex(l => l.startsWith(char.name));
-          const line = `${char.name} — Level Up! (Lv 2)`;
-          if (idx !== -1) xpSummary[idx] = line; else xpSummary.push(line);
-        }
-      });
-    }
 
     const uiScene = this.scene.get('UIScene');
     if (uiScene?.refreshUI) uiScene.refreshUI();

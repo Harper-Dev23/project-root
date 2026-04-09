@@ -1994,7 +1994,7 @@ export default class TownScene extends Phaser.Scene {
 
     let flavorText;
     if (elsethChallengeActive) {
-      flavorText = '"I saw you beat those dummies into splinters. Not bad."\n\nShe leans back, fingers tapping the hilt of her blade.\n\n"But what if they fought back?\nI\'ll arm them myself — spears, armor, the works.\nYou can keep whatever they drop."';
+      flavorText = 'A slight smirk crosses her face as you enter.\nIn the corner, a half-built training dummy flickers with pale green light.\n\n"Those dummies you demolished earlier? That was me.\nI breathe life into them — call it animancy, call it showing off."\n\nShe waves a hand and the dummy\'s arm twitches.\n\n"I\'ve been watching your form. Sloppy, but promising.\nNext time I animate them, they\'ll carry real weapons\nand they\'ll know how to use them.\nWhatever they drop when you put them down — it\'s yours."';
     } else if (styxChallengeActive) {
       flavorText = '"You handled the basics. Strength is the easy part."\n\nThe hunter does not look up from the map spread across the table.\n\n"Mettle, now — that takes coordination. Moving together,\ncovering flanks, reading what the other is going to do\nbefore they do it. My hunters will test you.\nSee if your party can keep pace."';
     } else if (lesseChallengeActive) {
@@ -2043,6 +2043,13 @@ export default class TownScene extends Phaser.Scene {
   // ⚔️ Combat Pit
   // =====================================================
   _enterCombatPit() {
+    // Clear the ! marker — it will reappear via refreshCombatPitFlag()
+    // only after all gate flags for the next scenario are cleared.
+    if (ProgressionManager.hasQuestFlag('combat_pit')) {
+      ProgressionManager.clearQuestFlag('combat_pit');
+      this._buildQuestFlags();
+    }
+
     const scenarioIds = [
       'training_encounter_1',
       'training_encounter_2',
