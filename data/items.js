@@ -234,7 +234,7 @@ export const Items = {
 
   simple_legs_con: {
     id: 'simple_legs_con',
-    name: 'Traveler’s Pants',
+    name: "Traveler's Pants",
     type: 'armor',
     slot: 'legs',
     rarity: 'common',
@@ -252,7 +252,7 @@ export const Items = {
   },
   simple_legs_wis: {
     id: 'simple_legs_wis',
-    name: 'Seer’s Wraps',
+    name: "Seer's Wraps",
     type: 'armor',
     slot: 'legs',
     rarity: 'common',
@@ -295,7 +295,7 @@ export const Items = {
     slot: 'boots',
     rarity: 'common',
     bonuses: { CON: 1 },
-    description: 'Heavy soles protect against the path’s abuse.'
+    description: "Heavy soles protect against the path's abuse."
   },
   simple_boots_dex: {
     id: 'simple_boots_dex',
@@ -314,7 +314,415 @@ export const Items = {
     rarity: 'common',
     bonuses: { WIS: 1 },
     description: 'Open-toed sandals used in meditation rituals.'
-  }
+  },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRIBE JEWELRY — Unique Uncommon pieces sold at each tribe vendor.
+  // Each item has exactly 1 affix (fixedAffix) or a granted skill (grantsSkills).
+  // The fixedAffix rolls a value in [range[0], range[1]] when instanced.
+  // grantsSkills items add those skill ids to the wearer's char.skills list.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── ELSETH AMULETS ────────────────────────────────────────────────────────
+
+  elseth_amulet_phys_to_elem: {
+    id: 'elseth_amulet_phys_to_elem',
+    name: "Converter's Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Conversion',
+      family: 'physToElemPercent',
+      range: [25, 35],
+    },
+    description: 'Converts 25-35% of physical damage dealt to elemental.'
+  },
+
+  elseth_amulet_phys_to_necro: {
+    id: 'elseth_amulet_phys_to_necro',
+    name: "Blighted Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Corruption',
+      family: 'physToNecroPercent',
+      range: [25, 35],
+    },
+    description: 'Converts 25-35% of physical damage dealt to necrotic.'
+  },
+
+  elseth_amulet_elem_to_necro: {
+    id: 'elseth_amulet_elem_to_necro',
+    name: "Void Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of the Void',
+      family: 'elemToNecroPercent',
+      range: [25, 35],
+    },
+    description: 'Converts 25-35% of elemental damage dealt to necrotic.'
+  },
+
+  // ── STYX AMULETS ─────────────────────────────────────────────────────────
+
+  styx_amulet_initiative: {
+    id: 'styx_amulet_initiative',
+    name: "Striker's Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of the First Strike',
+      family: 'initBonusOnBattleStart',
+      range: [15, 25],
+    },
+    description: 'Gain 15-25 bonus initiative at the start of each battle.'
+  },
+
+  styx_amulet_cooldown: {
+    id: 'styx_amulet_cooldown',
+    name: "Quickened Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    grantsSkills: ['hasten'],
+    description: 'Grants Hasten: reduce all cooldowns of an ally by 3 turns. (Bonus action, CD 3)'
+  },
+
+  styx_amulet_shield: {
+    id: 'styx_amulet_shield',
+    name: "Warden's Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of the Ward',
+      family: 'shieldPctOnBattleStart',
+      range: [15, 25],
+    },
+    description: 'Gain a shield equal to 15-25% of max HP at the start of combat. Lasts 3 turns.'
+  },
+
+  // ── ZAFAAR AMULETS ────────────────────────────────────────────────────────
+
+  zafaar_amulet_disorient: {
+    id: 'zafaar_amulet_disorient',
+    name: "Rattling Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Disorientation',
+      family: 'physBuildupOnPhysDmg',
+      buildupTarget: 'disorient',
+      range: [25, 35],
+    },
+    description: 'Physical hits apply 25-35% of their damage as additional Disorient buildup.'
+  },
+
+  zafaar_amulet_lacerate: {
+    id: 'zafaar_amulet_lacerate',
+    name: "Lacerating Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Lacerations',
+      family: 'physBuildupOnPhysDmg',
+      buildupTarget: 'lacerate',
+      range: [25, 35],
+    },
+    description: 'Physical hits apply 25-35% of their damage as additional Lacerate buildup.'
+  },
+
+  zafaar_amulet_expose: {
+    id: 'zafaar_amulet_expose',
+    name: "Exposing Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Exposure',
+      family: 'physBuildupOnPhysDmg',
+      buildupTarget: 'expose',
+      range: [25, 35],
+    },
+    description: 'Physical hits apply 25-35% of their damage as additional Expose buildup.'
+  },
+
+  // ── LE'SSE AMULETS ────────────────────────────────────────────────────────
+
+  lesse_amulet_cold: {
+    id: 'lesse_amulet_cold',
+    name: "Frost Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Frost',
+      family: 'elemBuildupOnElemDmg',
+      buildupTarget: 'cold',
+      range: [25, 35],
+    },
+    description: 'Elemental hits apply 25-35% of their damage as additional Cold buildup.'
+  },
+
+  lesse_amulet_fire: {
+    id: 'lesse_amulet_fire',
+    name: "Ember Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Embers',
+      family: 'elemBuildupOnElemDmg',
+      buildupTarget: 'fire',
+      range: [25, 35],
+    },
+    description: 'Elemental hits apply 25-35% of their damage as additional Fire buildup.'
+  },
+
+  lesse_amulet_lightning: {
+    id: 'lesse_amulet_lightning',
+    name: "Storm Pendant",
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Storms',
+      family: 'elemBuildupOnElemDmg',
+      buildupTarget: 'lightning',
+      range: [25, 35],
+    },
+    description: 'Elemental hits apply 25-35% of their damage as additional Lightning buildup.'
+  },
+
+  // ── ZAFAAR RINGS ──────────────────────────────────────────────────────────
+
+  zafaar_ring_double_damage: {
+    id: 'zafaar_ring_double_damage',
+    name: "Gambler's Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Doubling',
+      family: 'procDoubleDamage',
+      range: [1, 2],
+    },
+    description: '1-2% chance on each hit to deal double damage.'
+  },
+
+  zafaar_ring_half_damage: {
+    id: 'zafaar_ring_half_damage',
+    name: "Bulwark Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Warding',
+      family: 'procHalfDamageTaken',
+      range: [1, 2],
+    },
+    description: '1-2% chance when struck to take only half damage.'
+  },
+
+  zafaar_ring_heal_proc: {
+    id: 'zafaar_ring_heal_proc',
+    name: "Mender's Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'zafaar',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Mending',
+      family: 'procHealOnHeal',
+      range: [1, 2],
+    },
+    description: '1-2% chance when casting a healing spell to heal for an additional 20.'
+  },
+
+  // ── ELSETH RINGS ──────────────────────────────────────────────────────────
+
+  elseth_ring_elem_proc: {
+    id: 'elseth_ring_elem_proc',
+    name: "Elemental Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Elemental Burst',
+      family: 'procElemFlat',
+      range: [1, 2],
+    },
+    description: '1-2% chance on hit to deal 20 additional elemental damage.'
+  },
+
+  elseth_ring_necro_proc: {
+    id: 'elseth_ring_necro_proc',
+    name: "Necrotic Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Necrotic Burst',
+      family: 'procNecroFlat',
+      range: [1, 2],
+    },
+    description: '1-2% chance on hit to deal 20 additional necrotic damage.'
+  },
+
+  elseth_ring_phys_proc: {
+    id: 'elseth_ring_phys_proc',
+    name: "Force Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'elseth',
+    bonuses: {},
+    fixedAffix: {
+      key: 'of Force Burst',
+      family: 'procPhysFlat',
+      range: [1, 2],
+    },
+    description: '1-2% chance on hit to deal 20 additional physical damage.'
+  },
+
+  // ── STYX RINGS ────────────────────────────────────────────────────────────
+
+  styx_ring_triage: {
+    id: 'styx_ring_triage',
+    name: "Triage Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    grantsSkills: ['triage'],
+    description: 'Grants Triage: cleanse all physical buildup from an ally. (Bonus action, CD 2)'
+  },
+
+  styx_ring_remedy: {
+    id: 'styx_ring_remedy',
+    name: "Remedy Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    grantsSkills: ['remedy'],
+    description: 'Grants Remedy: cleanse all necrotic buildup from an ally. (Bonus action, CD 2)'
+  },
+
+  styx_ring_weather: {
+    id: 'styx_ring_weather',
+    name: "Weather Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'styx',
+    bonuses: {},
+    grantsSkills: ['weather'],
+    description: 'Grants Weather: cleanse all elemental buildup from an ally. (Bonus action, CD 2)'
+  },
+
+  // ── LE'SSE RINGS ──────────────────────────────────────────────────────────
+
+  lesse_ring_elemental_overload: {
+    id: 'lesse_ring_elemental_overload',
+    name: "Overload Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    grantsSkills: ['elemental_overload'],
+    description: 'Grants Elemental Overload: all damage becomes elemental for 1 turn. (Bonus action, CD 3)'
+  },
+
+  lesse_ring_raw_force: {
+    id: 'lesse_ring_raw_force',
+    name: "Earthen Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    grantsSkills: ['raw_force'],
+    description: 'Grants Raw Force: all damage becomes physical for 1 turn. (Bonus action, CD 3)'
+  },
+
+  lesse_ring_sever_spirit: {
+    id: 'lesse_ring_sever_spirit',
+    name: "Sever Band",
+    type: 'armor',
+    slot: 'ring',
+    rarity: 'uncommon',
+    unique: true,
+    tribe: 'lesse',
+    bonuses: {},
+    grantsSkills: ['sever_spirit'],
+    description: 'Grants Sever Spirit: all damage becomes necrotic for 1 turn. (Bonus action, CD 3)'
+  }
 
 };

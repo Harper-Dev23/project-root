@@ -4,9 +4,11 @@
 //
 //  devBreakthrough  — zero MP costs, zero stat requirements for player skills
 //  devBuildup       — player skills deal 5× buildup
+//  devAllTribes     — bypass tribe restriction at all tribe vendors (testing)
 
 const KEY_BREAKTHROUGH = 'dev_breakthrough';
 const KEY_BUILDUP      = 'dev_buildup';
+const KEY_ALL_TRIBES   = 'dev_all_tribes';
 
 export const DevFlags = {
   isBreakthroughEnabled() {
@@ -24,6 +26,15 @@ export const DevFlags = {
   toggleBuildup() {
     const next = !this.isBuildupEnabled();
     localStorage.setItem(KEY_BUILDUP, String(next));
+    return next;
+  },
+
+  isAllTribesEnabled() {
+    return localStorage.getItem(KEY_ALL_TRIBES) === 'true';
+  },
+  toggleAllTribes() {
+    const next = !this.isAllTribesEnabled();
+    localStorage.setItem(KEY_ALL_TRIBES, String(next));
     return next;
   },
 };

@@ -167,6 +167,8 @@ export default class SkillsOverlay extends Phaser.Scene {
       () => DevFlags.toggleBreakthrough(), topY);
     makeToggle('devBuildup (5×)',  DevFlags.isBuildupEnabled(),
       () => DevFlags.toggleBuildup(),      topY + lineH);
+    makeToggle('devAllTribes',    DevFlags.isAllTribesEnabled(),
+      () => DevFlags.toggleAllTribes(),    topY + lineH * 2);
   }
 
   // ---------- Header (persistent, no destroy on click) ----------

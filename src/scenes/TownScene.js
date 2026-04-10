@@ -7,6 +7,7 @@ import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.
 import Tooltip from '../ui/Tooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
+import { DevFlags } from '../systems/DevFlags.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -47,10 +48,34 @@ const PRE_CHOICE_LODGE_TEXT = {
 // Items each tribe vendor sells, purchasable with 1 Tribe Ticket each.
 // Add more as content expands — these are starter placeholders.
 const TRIBE_VENDOR_INVENTORY = {
-  styx:   ['crude_dagger',    'healing_potion', 'mana_potion'],
-  zafaar: ['crude_sword_1h',  'healing_potion', 'mana_potion'],
-  elseth: ['crude_spear_1h',  'healing_potion', 'mana_potion'],
-  lesse:  ['crude_dagger',    'healing_potion', 'mana_potion'],
+  styx: [
+    'crude_dagger', 'healing_potion', 'mana_potion',
+    // Amulets
+    'styx_amulet_initiative', 'styx_amulet_cooldown', 'styx_amulet_shield',
+    // Rings
+    'styx_ring_triage', 'styx_ring_remedy', 'styx_ring_weather',
+  ],
+  zafaar: [
+    'crude_sword_1h', 'healing_potion', 'mana_potion',
+    // Amulets
+    'zafaar_amulet_disorient', 'zafaar_amulet_lacerate', 'zafaar_amulet_expose',
+    // Rings
+    'zafaar_ring_double_damage', 'zafaar_ring_half_damage', 'zafaar_ring_heal_proc',
+  ],
+  elseth: [
+    'crude_spear_1h', 'healing_potion', 'mana_potion',
+    // Amulets
+    'elseth_amulet_phys_to_elem', 'elseth_amulet_phys_to_necro', 'elseth_amulet_elem_to_necro',
+    // Rings
+    'elseth_ring_elem_proc', 'elseth_ring_necro_proc', 'elseth_ring_phys_proc',
+  ],
+  lesse: [
+    'crude_dagger', 'healing_potion', 'mana_potion',
+    // Amulets
+    'lesse_amulet_cold', 'lesse_amulet_fire', 'lesse_amulet_lightning',
+    // Rings
+    'lesse_ring_elemental_overload', 'lesse_ring_raw_force', 'lesse_ring_sever_spirit',
+  ],
 };
 
 const TRIBE_DISPLAY_NAMES = {
@@ -96,7 +121,13 @@ function getWeaponIdPool() {
 
 function getArmorIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'armor')
+    .filter(([, it]) => it?.type === 'armor' && it?.slot !== 'ring' && it?.slot !== 'amulet')
+    .map(([id]) => id);
+}
+
+function getJewelryIdPool() {
+  return Object.entries(Items)
+    .filter(([, it]) => it?.type === 'armor' && (it?.slot === 'ring' || it?.slot === 'amulet'))
     .map(([id]) => id);
 }
 
@@ -1225,8 +1256,9 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.lineHeight = LOG_LINE_H;
       this.vendorInventoryContainer.y = 0;
 
-      const createGambleButton = ({ label, y, poolGetter, emptyMessage }) => {
-        const btn = this.add.text(620, y, `[ Gamble ${label} — 1 Hunt Ticket ]`, {
+      const createGambleButton = ({ label, y, cost, poolGetter, emptyMessage }) => {
+        const ticketWord = cost === 1 ? 'Hunt Ticket' : 'Hunt Tickets';
+        const btn = this.add.text(620, y, `[ Gamble ${label} — ${cost} ${ticketWord} ]`, {
           fontSize: '20px',
           color: '#ffddaa'
         })
@@ -1235,12 +1267,11 @@ export default class TownScene extends Phaser.Scene {
           .on('pointerover', function () { this.setColor('#ffffff'); })
           .on('pointerout', function () { this.setColor('#ffddaa'); })
           .on('pointerdown', () => {
-            // Cost: 1 Hunt Ticket per gamble (per demo doc: "1 ticket = 1 gamble").
-            if (ProgressionManager.huntTickets < 1) {
-              this.vendorInventoryText.setText("You need at least 1 Hunt Ticket to gamble here.");
+            if (ProgressionManager.huntTickets < cost) {
+              this.vendorInventoryText.setText(`You need at least ${cost} Hunt Ticket${cost > 1 ? 's' : ''} to gamble here.`);
               return;
             }
-            ProgressionManager.huntTickets -= 1;
+            ProgressionManager.huntTickets -= cost;
             GameState.save('autosave');
             this._updateVendorCurrencyDisplay();
 
@@ -1294,17 +1325,27 @@ export default class TownScene extends Phaser.Scene {
       };
 
       createGambleButton({
+        label: 'Weapons',
+        y: 220,
+        cost: 1,
+        poolGetter: () => getWeaponIdPool(),
+        emptyMessage: 'No weapon IDs found in Items.js.'
+      });
+
+      createGambleButton({
         label: 'Armor',
-        y: 240,
+        y: 250,
+        cost: 1,
         poolGetter: () => getArmorIdPool(),
         emptyMessage: 'No armor IDs found in Items.js.'
       });
 
       createGambleButton({
-        label: 'Weapons',
-        y: 220,
-        poolGetter: () => getWeaponIdPool(),
-        emptyMessage: 'No weapon IDs found in Items.js.'
+        label: 'Jewelry',
+        y: 280,
+        cost: 3,
+        poolGetter: () => getJewelryIdPool(),
+        emptyMessage: 'No jewelry IDs found in Items.js.'
       });
 
       return;
@@ -2151,7 +2192,7 @@ export default class TownScene extends Phaser.Scene {
     }
 
     // --- Wrong tribe vendor ---
-    if (vendorTribe !== playerTribe) {
+    if (vendorTribe !== playerTribe && !DevFlags.isAllTribesEnabled()) {
       const npcName = displayName.split(' —')[0].trim();
       this.vendorBody.setText(
         `${npcName} turns away.\n\n"We trade only with our own. Seek your tribe's vendor."`
@@ -2167,33 +2208,31 @@ export default class TownScene extends Phaser.Scene {
       const baseItem = Items[itemId];
       if (!baseItem) return;
 
-      const rowY = 240 + i * 42;
-      const btn = this.add.text(610, rowY,
-        `• ${baseItem.name}  [ 1 Tribe Ticket ]`,
-        { fontSize: '16px', color: '#cccccc' }
+      const rowY = 240 + i * 36;
+      const rarityColor = RARITY_COLORS[baseItem.rarity] || '#cccccc';
+      const slotLabel = baseItem.slot ? ` [${baseItem.slot}]` : '';
+      const itemLabel = `• ${baseItem.name}${slotLabel}  [ Free ]`;
+      const btn = this.add.text(610, rowY, itemLabel,
+        { fontSize: '15px', color: rarityColor }
       ).setDepth(13)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', () => btn.setColor('#ffffaa'))
-        .on('pointerout',  () => btn.setColor('#cccccc'))
+        .on('pointerout',  () => btn.setColor(rarityColor))
         .on('pointerdown', () => {
-          if (ProgressionManager.tribeTickets < 1) {
-            this.vendorBody.setText('You have no Tribe Tickets to spend.');
-            return;
-          }
-          ProgressionManager.tribeTickets -= 1;
           SoundManager.play('dullClick');
           InventorySystem.addGlobalItem(createItemInstance(itemId));
 
-          // Once the tribe ticket is spent, nudge the player toward the next scenario.
-          if (ProgressionManager.tribeTickets < 1) {
+          // First-time purchase: clear the tribe_vendor quest flag so the
+          // player gets nudged toward the combat pit.
+          if (ProgressionManager.hasQuestFlag('tribe_vendor')) {
             ProgressionManager.clearQuestFlag('tribe_vendor');
             ProgressionManager.setQuestFlag('combat_pit');
           }
 
           GameState.save('autosave');
-          this._updateVendorCurrencyDisplay();
           this._buildQuestFlags();
-          this.vendorBody.setText(`Purchased: ${baseItem.name}`);
+          const slotInfo = baseItem.slot ? ` (${baseItem.slot})` : '';
+          this.vendorBody.setText(`Received: ${baseItem.name}${slotInfo}`);
         });
 
       // Add to the tribe vendor group so it's cleaned up on exit.

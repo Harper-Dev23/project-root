@@ -331,6 +331,8 @@ const WEAPON_SUFFIX_POOL = [
 
 function getAffixPoolsFor(base) {
   if (!base) return null;
+  // Unique items with a fixedAffix skip the random pool entirely
+  if (base.unique && base.fixedAffix) return null;
   if (base.type === 'armor') {
     return { prefixes: ARMOR_PREFIX_POOL, suffixes: ARMOR_SUFFIX_POOL };
   }
@@ -338,6 +340,27 @@ function getAffixPoolsFor(base) {
     return { prefixes: WEAPON_PREFIX_POOL, suffixes: WEAPON_SUFFIX_POOL };
   }
   return null;
+}
+
+/**
+ * Roll the single fixed affix defined on a unique item's base definition.
+ * Returns a rolled affix object in the same shape as pool affixes.
+ */
+function rollFixedAffix(fixedAffix, rng) {
+  const amount = rollInt(fixedAffix.range, rng);
+  return {
+    key: fixedAffix.key,
+    family: fixedAffix.family,
+    buildupTarget: fixedAffix.buildupTarget || null,
+    rolledValue: amount,
+    mods: {
+      misc: {
+        [fixedAffix.family]: fixedAffix.buildupTarget
+          ? { [fixedAffix.buildupTarget]: amount }
+          : amount
+      }
+    }
+  };
 }
 
 
@@ -388,13 +411,31 @@ function buildInstanceModifiers(prefixes, suffixes) {
     damagePercent: { weapon: 0 },
     elementalFlat: {},
     misc: {
+      // Existing
       mpPerTurn: 0,
       skillCostReductionPct: 0,
       globalDamagePercent: 0,
       elementalDamagePercent: 0,
       necroticDamagePercent: 0,
       resilience: 0,
-      buildupPercent: {}
+      buildupPercent: {},
+      // Jewelry: damage conversion (%)
+      physToElemPercent: 0,
+      physToNecroPercent: 0,
+      elemToNecroPercent: 0,
+      // Jewelry: battle-start passives
+      initBonusOnBattleStart: 0,
+      shieldPctOnBattleStart: 0,
+      // Jewelry: buildup-on-hit (keyed by buildup family, value = % of damage)
+      physBuildupOnPhysDmg: {},
+      elemBuildupOnElemDmg: {},
+      // Jewelry: proc chances (%)
+      procDoubleDamage: 0,
+      procHalfDamageTaken: 0,
+      procHealOnHeal: 0,
+      procElemFlat: 0,
+      procNecroFlat: 0,
+      procPhysFlat: 0
     }
   };
 
@@ -448,6 +489,29 @@ function buildInstanceModifiers(prefixes, suffixes) {
           mods.misc.buildupPercent[fam] = (mods.misc.buildupPercent[fam] || 0) + v;
         }
       }
+      // Jewelry misc mods — scalar
+      if (misc.physToElemPercent) mods.misc.physToElemPercent += misc.physToElemPercent;
+      if (misc.physToNecroPercent) mods.misc.physToNecroPercent += misc.physToNecroPercent;
+      if (misc.elemToNecroPercent) mods.misc.elemToNecroPercent += misc.elemToNecroPercent;
+      if (misc.initBonusOnBattleStart) mods.misc.initBonusOnBattleStart += misc.initBonusOnBattleStart;
+      if (misc.shieldPctOnBattleStart) mods.misc.shieldPctOnBattleStart += misc.shieldPctOnBattleStart;
+      if (misc.procDoubleDamage) mods.misc.procDoubleDamage += misc.procDoubleDamage;
+      if (misc.procHalfDamageTaken) mods.misc.procHalfDamageTaken += misc.procHalfDamageTaken;
+      if (misc.procHealOnHeal) mods.misc.procHealOnHeal += misc.procHealOnHeal;
+      if (misc.procElemFlat) mods.misc.procElemFlat += misc.procElemFlat;
+      if (misc.procNecroFlat) mods.misc.procNecroFlat += misc.procNecroFlat;
+      if (misc.procPhysFlat) mods.misc.procPhysFlat += misc.procPhysFlat;
+      // Jewelry misc mods — keyed-by-family objects
+      if (misc.physBuildupOnPhysDmg) {
+        for (const [fam, v] of Object.entries(misc.physBuildupOnPhysDmg)) {
+          mods.misc.physBuildupOnPhysDmg[fam] = (mods.misc.physBuildupOnPhysDmg[fam] || 0) + v;
+        }
+      }
+      if (misc.elemBuildupOnElemDmg) {
+        for (const [fam, v] of Object.entries(misc.elemBuildupOnElemDmg)) {
+          mods.misc.elemBuildupOnElemDmg[fam] = (mods.misc.elemBuildupOnElemDmg[fam] || 0) + v;
+        }
+      }
     }
   };
 
@@ -480,7 +544,12 @@ export function createItemInstance(id, opts = {}) {
   let prefixes = [];
   let suffixes = [];
 
-  if (pools && (opts.rollAffixes ?? (rarity !== 'common'))) {
+  // Unique items with a fixedAffix: roll the single defined affix, skip the pool
+  if (base.unique && base.fixedAffix) {
+    const rolled = rollFixedAffix(base.fixedAffix, rng);
+    // Treat it as a suffix so buildInstanceModifiers processes it
+    suffixes = [rolled];
+  } else if (pools && (opts.rollAffixes ?? (rarity !== 'common'))) {
     const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(rarity, rng);
     prefixes = pickUnique(pools.prefixes, nPre, rng);
     suffixes = pickUnique(pools.suffixes, nSuf, rng);
@@ -495,18 +564,80 @@ export function createItemInstance(id, opts = {}) {
 
     instanceMods: buildInstanceModifiers(prefixes, suffixes),
 
-    displayName: buildAffixedName(base.name, prefixes, suffixes),
+    displayName: buildAffixedName(base.name, prefixes, suffixes, rng),
   };
+
+  // Carry through unique-item metadata so equipped-item logic can read it
+  if (base.unique) instance.unique = true;
+  if (base.tribe) instance.tribe = base.tribe;
+  if (base.grantsSkills) instance.grantsSkills = [...base.grantsSkills];
+
+  // For fixed-affix items, also record the rolled value for tooltip display
+  if (base.fixedAffix && suffixes.length) {
+    instance.fixedAffixKey = base.fixedAffix.key;
+    instance.fixedAffixFamily = base.fixedAffix.family;
+    instance.fixedAffixBuildupTarget = base.fixedAffix.buildupTarget || null;
+    instance.fixedAffixValue = suffixes[0].rolledValue;
+  }
 
   return instance;
 }
 
-function buildAffixedName(baseName, prefixes, suffixes) {
-  const pre = prefixes.map(a => a.key).join(' ');
-  const suf = suffixes.map(a => a.key).join(' ');
+// Pool of divine adjectives used when two tier-1 (prophet) prefixes would collide.
+const DIVINE_ADJECTIVES = [
+  'Divine', 'Immaculate', 'Sacred', 'Hallowed', 'Celestial',
+  'Eternal', 'Exalted', 'Radiant', 'Sovereign', 'Transcendent'
+];
+
+/**
+ * Determine whether a prefix key is a tier-1 "prophet" name.
+ * Prophet names are possessives ending in \u2019s or \u2019 (curly apostrophe).
+ * We detect them by checking the rolled affix's tier field.
+ */
+function isProphetPrefix(affix) {
+  return affix?.tier === 1 && /\u2019/.test(affix?.key || '');
+}
+
+function buildAffixedName(baseName, prefixes, suffixes, rng = Math.random) {
+  // ── Prefixes: prophet names always sort first ────────────────────────────
+  const prophets = prefixes.filter(isProphetPrefix);
+  const others   = prefixes.filter(a => !isProphetPrefix(a));
+
+  let preKeys;
+  if (prophets.length >= 2) {
+    // Two prophet names — keep one, replace the other with a divine adjective
+    const kept    = prophets[Math.floor(rng() * prophets.length)];
+    const divIdx  = Math.floor(rng() * DIVINE_ADJECTIVES.length);
+    const divine  = DIVINE_ADJECTIVES[divIdx];
+    // Prophet name leads; divine adjective and remaining descriptors follow
+    preKeys = [kept.key, divine, ...others.map(a => a.key)];
+  } else {
+    // Zero or one prophet — prophet leads, then other prefixes
+    preKeys = [...prophets.map(a => a.key), ...others.map(a => a.key)];
+  }
+
+  const pre = preKeys.join(' ');
+
+  // ── Suffixes: join multiple "of X" entries as "of X and Y" ───────────────
+  // Strip the leading "of " from every entry except the first, then join.
+  let suf = '';
+  if (suffixes.length === 0) {
+    suf = '';
+  } else if (suffixes.length === 1) {
+    suf = suffixes[0].key;
+  } else {
+    // All suffix keys start with "of " — first keeps it, rest lose the "of "
+    const first = suffixes[0].key;                         // e.g. "of Sparks"
+    const rest  = suffixes.slice(1).map(a => {
+      const k = a.key;
+      return k.startsWith('of ') ? k.slice(3) : k;        // "Thorns", "the Bear"
+    });
+    suf = `${first} and ${rest.join(', ')}`;               // "of Sparks and Thorns"
+  }
+
   if (pre && suf) return `${pre} ${baseName} ${suf}`;
-  if (pre) return `${pre} ${baseName}`;
-  if (suf) return `${baseName} ${suf}`;
+  if (pre)        return `${pre} ${baseName}`;
+  if (suf)        return `${baseName} ${suf}`;
   return baseName;
 }
 
@@ -591,7 +722,36 @@ export function getItemComputedData(itemRef) {
       elementalDamagePercent: misc.elementalDamagePercent || 0,
       necroticDamagePercent: misc.necroticDamagePercent || 0,
       resilience: misc.resilience || 0,
+      // Jewelry
+      physToElemPercent: misc.physToElemPercent || 0,
+      physToNecroPercent: misc.physToNecroPercent || 0,
+      elemToNecroPercent: misc.elemToNecroPercent || 0,
+      initBonusOnBattleStart: misc.initBonusOnBattleStart || 0,
+      shieldPctOnBattleStart: misc.shieldPctOnBattleStart || 0,
+      physBuildupOnPhysDmg: { ...(misc.physBuildupOnPhysDmg || {}) },
+      elemBuildupOnElemDmg: { ...(misc.elemBuildupOnElemDmg || {}) },
+      procDoubleDamage: misc.procDoubleDamage || 0,
+      procHalfDamageTaken: misc.procHalfDamageTaken || 0,
+      procHealOnHeal: misc.procHealOnHeal || 0,
+      procElemFlat: misc.procElemFlat || 0,
+      procNecroFlat: misc.procNecroFlat || 0,
+      procPhysFlat: misc.procPhysFlat || 0,
     };
+  }
+
+  // Pass through unique-item fields from instance
+  if (isItemInstance(itemRef)) {
+    if (itemRef.unique) view.unique = true;
+    if (itemRef.tribe) view.tribe = itemRef.tribe;
+    if (itemRef.grantsSkills) view.grantsSkills = itemRef.grantsSkills;
+    if (itemRef.fixedAffixKey) {
+      view.fixedAffixKey = itemRef.fixedAffixKey;
+      view.fixedAffixFamily = itemRef.fixedAffixFamily;
+      view.fixedAffixBuildupTarget = itemRef.fixedAffixBuildupTarget;
+      view.fixedAffixValue = itemRef.fixedAffixValue;
+    }
+  } else if (base.grantsSkills) {
+    view.grantsSkills = base.grantsSkills;
   }
 
   return view;

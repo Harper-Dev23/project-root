@@ -335,8 +335,25 @@ export function rebuildCharacterStats(character) {
     elementalDamagePercent: 0,
     necroticDamagePercent: 0,
     resilience: 0,
-    weaponBuildupPercent: {}
+    weaponBuildupPercent: {},
+    // Jewelry passives
+    physToElemPercent: 0,
+    physToNecroPercent: 0,
+    elemToNecroPercent: 0,
+    initBonusOnBattleStart: 0,
+    shieldPctOnBattleStart: 0,
+    physBuildupOnPhysDmg: {},
+    elemBuildupOnElemDmg: {},
+    procDoubleDamage: 0,
+    procHalfDamageTaken: 0,
+    procHealOnHeal: 0,
+    procElemFlat: 0,
+    procNecroFlat: 0,
+    procPhysFlat: 0,
   };
+
+  // Track skill grants from equipped jewelry
+  const grantedSkillIds = new Set();
 
   // Equipment bonuses (base + instance affixes; rarity-aware)
   const equipped = character.equipment || {};
@@ -371,6 +388,33 @@ export function rebuildCharacterStats(character) {
           gearEffects.weaponBuildupPercent[fam] = (gearEffects.weaponBuildupPercent[fam] || 0) + amt;
         }
       }
+      // Jewelry misc mods
+      if (misc.physToElemPercent) gearEffects.physToElemPercent += misc.physToElemPercent;
+      if (misc.physToNecroPercent) gearEffects.physToNecroPercent += misc.physToNecroPercent;
+      if (misc.elemToNecroPercent) gearEffects.elemToNecroPercent += misc.elemToNecroPercent;
+      if (misc.initBonusOnBattleStart) gearEffects.initBonusOnBattleStart += misc.initBonusOnBattleStart;
+      if (misc.shieldPctOnBattleStart) gearEffects.shieldPctOnBattleStart += misc.shieldPctOnBattleStart;
+      if (misc.procDoubleDamage) gearEffects.procDoubleDamage += misc.procDoubleDamage;
+      if (misc.procHalfDamageTaken) gearEffects.procHalfDamageTaken += misc.procHalfDamageTaken;
+      if (misc.procHealOnHeal) gearEffects.procHealOnHeal += misc.procHealOnHeal;
+      if (misc.procElemFlat) gearEffects.procElemFlat += misc.procElemFlat;
+      if (misc.procNecroFlat) gearEffects.procNecroFlat += misc.procNecroFlat;
+      if (misc.procPhysFlat) gearEffects.procPhysFlat += misc.procPhysFlat;
+      if (misc.physBuildupOnPhysDmg) {
+        for (const [fam, amt] of Object.entries(misc.physBuildupOnPhysDmg)) {
+          gearEffects.physBuildupOnPhysDmg[fam] = (gearEffects.physBuildupOnPhysDmg[fam] || 0) + amt;
+        }
+      }
+      if (misc.elemBuildupOnElemDmg) {
+        for (const [fam, amt] of Object.entries(misc.elemBuildupOnElemDmg)) {
+          gearEffects.elemBuildupOnElemDmg[fam] = (gearEffects.elemBuildupOnElemDmg[fam] || 0) + amt;
+        }
+      }
+    }
+
+    // Collect granted skills from equipped jewelry
+    if (view?.grantsSkills) {
+      view.grantsSkills.forEach(skillId => grantedSkillIds.add(skillId));
     }
   }
 
@@ -418,10 +462,33 @@ export function rebuildCharacterStats(character) {
     elementalDamagePercent: gearEffects.elementalDamagePercent,
     necroticDamagePercent: gearEffects.necroticDamagePercent,
     resilience: gearEffects.resilience,
-    weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent }
+    weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent },
+    // Jewelry passives — read by CombatScene for battle-start effects and proc rolls
+    physToElemPercent: gearEffects.physToElemPercent,
+    physToNecroPercent: gearEffects.physToNecroPercent,
+    elemToNecroPercent: gearEffects.elemToNecroPercent,
+    initBonusOnBattleStart: gearEffects.initBonusOnBattleStart,
+    shieldPctOnBattleStart: gearEffects.shieldPctOnBattleStart,
+    physBuildupOnPhysDmg: { ...gearEffects.physBuildupOnPhysDmg },
+    elemBuildupOnElemDmg: { ...gearEffects.elemBuildupOnElemDmg },
+    procDoubleDamage: gearEffects.procDoubleDamage,
+    procHalfDamageTaken: gearEffects.procHalfDamageTaken,
+    procHealOnHeal: gearEffects.procHealOnHeal,
+    procElemFlat: gearEffects.procElemFlat,
+    procNecroFlat: gearEffects.procNecroFlat,
+    procPhysFlat: gearEffects.procPhysFlat,
   };
   character.resilience = gearEffects.resilience || 0;
 
+  // Sync equipment-granted skills into char.skills.
+  // Strip any previously granted item skills, then re-add from current gear.
+  const baseSkills = (character.skills || []).filter(s => !s._fromItem);
+  const itemSkillEntries = Array.from(grantedSkillIds).map(id => ({
+    id,
+    type: 'special',
+    _fromItem: true,
+  }));
+  character.skills = [...baseSkills, ...itemSkillEntries];
 
   // Runtime-only modifiers (do NOT persist; reset each combat)
   if (!character.combatMods) character.combatMods = {

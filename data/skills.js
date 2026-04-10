@@ -433,6 +433,151 @@ const RAW_SKILLS = {
       scene._log?.(`${user.name} rushes to a new position.`);
       return {};
     }
+  },
+
+  // ── STYX Ring-Granted Skills ──────────────────────────────────────────────
+  // Cleanse physical buildup families from an ally
+  'triage': {
+    id: 'triage',
+    name: 'Triage',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    tags: ['heal', 'support'],
+    apply(user, target, scene) {
+      if (!target?.weakness?.meters) return {};
+      const families = ['lacerate', 'expose', 'disorient'];
+      families.forEach(fam => { target.weakness.meters[fam] = 0; });
+      scene?._log?.(`${user.name} triages ${target.name} — physical trauma cleansed.`);
+      return {};
+    },
+    description: 'Bonus action. Cleanse all physical buildup (Lacerate, Expose, Disorient) from an ally. CD 2.'
+  },
+
+  // Cleanse necrotic buildup families from an ally
+  'remedy': {
+    id: 'remedy',
+    name: 'Remedy',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    tags: ['heal', 'support'],
+    apply(user, target, scene) {
+      if (!target?.weakness?.meters) return {};
+      const families = ['disease', 'curse', 'toxic'];
+      families.forEach(fam => { target.weakness.meters[fam] = 0; });
+      scene?._log?.(`${user.name} remedies ${target.name} — necrotic corruption purged.`);
+      return {};
+    },
+    description: 'Bonus action. Cleanse all necrotic buildup (Disease, Curse, Toxic) from an ally. CD 2.'
+  },
+
+  // Cleanse elemental buildup families from an ally
+  'weather': {
+    id: 'weather',
+    name: 'Weather',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    tags: ['heal', 'support'],
+    apply(user, target, scene) {
+      if (!target?.weakness?.meters) return {};
+      const families = ['fire', 'cold', 'lightning'];
+      families.forEach(fam => { target.weakness.meters[fam] = 0; });
+      scene?._log?.(`${user.name} steadies ${target.name} — elemental buildup dispelled.`);
+      return {};
+    },
+    description: 'Bonus action. Cleanse all elemental buildup (Fire, Cold, Lightning) from an ally. CD 2.'
+  },
+
+  // ── STYX Amulet-Granted Skill ────────────────────────────────────────────
+  // Reduce all cooldowns of an ally by 3
+  'hasten': {
+    id: 'hasten',
+    name: 'Hasten',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 3,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    tags: ['support'],
+    apply(user, target, scene) {
+      if (!target?.cooldowns) return {};
+      for (const key of Object.keys(target.cooldowns)) {
+        target.cooldowns[key] = Math.max(0, (target.cooldowns[key] || 0) - 3);
+      }
+      scene?._log?.(`${user.name} hastens ${target.name} — cooldowns reduced by 3.`);
+      return {};
+    },
+    description: 'Bonus action. Reduce all cooldowns of an ally by 3 turns. CD 3.'
+  },
+
+  // ── LE\'SSE Ring-Granted Skills ───────────────────────────────────────────
+  // Convert all damage to elemental for this turn
+  'elemental_overload': {
+    id: 'elemental_overload',
+    name: 'Elemental Overload',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 3,
+    requiresTarget: false,
+    tags: [],
+    apply(user, _target, scene) {
+      user.combatMods = user.combatMods || {};
+      user.combatMods._damageConvertToElem = true;
+      scene?._log?.(`${user.name} channels Elemental Overload — all damage becomes elemental this turn.`);
+      return {};
+    },
+    description: 'Bonus action. All damage dealt becomes elemental this turn. CD 3.'
+  },
+
+  // Convert all damage to physical for this turn
+  'raw_force': {
+    id: 'raw_force',
+    name: 'Raw Force',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 3,
+    requiresTarget: false,
+    tags: [],
+    apply(user, _target, scene) {
+      user.combatMods = user.combatMods || {};
+      user.combatMods._damageConvertToPhys = true;
+      scene?._log?.(`${user.name} grounds their power — all damage becomes physical this turn.`);
+      return {};
+    },
+    description: 'Bonus action. All damage dealt becomes physical this turn. CD 3.'
+  },
+
+  // Convert all damage to necrotic for this turn
+  'sever_spirit': {
+    id: 'sever_spirit',
+    name: 'Sever Spirit',
+    type: 'special',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 3,
+    requiresTarget: false,
+    tags: [],
+    apply(user, _target, scene) {
+      user.combatMods = user.combatMods || {};
+      user.combatMods._damageConvertToNecro = true;
+      scene?._log?.(`${user.name} severs the spirit — all damage becomes necrotic this turn.`);
+      return {};
+    },
+    description: 'Bonus action. All damage dealt becomes necrotic this turn. CD 3.'
   }
 };
 

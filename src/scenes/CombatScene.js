@@ -141,11 +141,11 @@ const RARITY_COLORS = {
   legendary: '#ff9933',
 };
 
+// Training encounters use this — no common drops so every piece is worth picking up.
 function rollEnemyDropRarity() {
   const r = Math.random();
-  if (r < 0.45) return 'common';
-  if (r < 0.75) return 'uncommon';
-  if (r < 0.92) return 'rare';
+  if (r < 0.55) return 'uncommon';
+  if (r < 0.88) return 'rare';
   if (r < 0.99) return 'epic';
   return 'legendary';
 }
@@ -810,13 +810,8 @@ export default class CombatScene extends Phaser.Scene {
     this.allySlots = allyPositions.map((pos, index) => {
       const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
-      // Centre‑anchored 64×64 hit‑area — Rectangle origin matches visual center at (0,0)
-      container.setInteractive(
-        new Phaser.Geom.Rectangle(-32, -32, 64, 64),
-        Phaser.Geom.Rectangle.Contains
-      );
+      container.setInteractive();
 
-      // Border (also centre‑anchored, so (0,0) is the slot centre)
       const rect = this.add.rectangle(0, 0, 64, 64, 0x000000, 0.2)
         .setOrigin(0.5)
         .setStrokeStyle(2, 0xffffff);
@@ -834,10 +829,7 @@ export default class CombatScene extends Phaser.Scene {
     this.enemySlots = enemyPositions.map((pos, index) => {
       const container = this.add.container(pos.x, pos.y).setSize(64, 64).setDepth(2);
 
-      container.setInteractive(
-        new Phaser.Geom.Rectangle(-32, -32, 64, 64),
-        Phaser.Geom.Rectangle.Contains
-      );
+      container.setInteractive();
 
       const rect = this.add.rectangle(0, 0, 64, 64, 0x330000, 0.2)
         .setOrigin(0.5)
@@ -1010,7 +1002,8 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _assignCharToSlot(char, slot) {
-    const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64).setInteractive();
+    // Sprite is purely visual — the slot CONTAINER handles all clicks.
+    const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64);
     const classColor = CLASS_COLORS?.[char.baseClass] || '#ffffff';
     const nameText = this.add.text(0, 32, char.name, { fontSize: '14px', color: classColor }).setOrigin(0.5, 0);
 
@@ -1020,7 +1013,8 @@ export default class CombatScene extends Phaser.Scene {
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
 
-    sprite.on('pointerdown', () => this._showCharacterInfo(char));
+    slot.removeAllListeners();
+    slot.on('pointerdown', () => this._showCharacterInfo(char));
 
     slot.add([sprite, nameText, hpBar, mpBar]);
     slot.occupied = true;
@@ -1432,20 +1426,18 @@ export default class CombatScene extends Phaser.Scene {
       const inst = isItemInstance(equipped) ? equipped : null;
       const rarity = inst?.rarity || inst?.quality || null;
       const rarityColor = (rarity && RARITY_COLORS[rarity]) || '#cccccc';
+      const base = inst ? Items[inst.id] : null;
 
       let label;
       if (!inst) {
-        // Empty slot — show neutral gray
         label = `${labelMap[slot]}: —`;
       } else if (char.isEnemy) {
-        // Enemy gear: reveal rarity but not the item name (player can earn the info on victory)
         const rarityLabel = rarity ? rarity.charAt(0).toUpperCase() + rarity.slice(1) : '?';
         label = `${labelMap[slot]}: [${rarityLabel}]`;
       } else {
-        // Allied gear: show full name in rarity color
-        const data = getEquippedItemData(equipped);
-        const name = inst.displayName || data?.name || inst.id;
-        label = `${labelMap[slot]}: ${name}`;
+        // Allied gear: show base item name only (affixes revealed in tooltip on hover)
+        const baseName = base?.name || inst.id;
+        label = `${labelMap[slot]}: ${baseName}`;
       }
 
       const t = this.add.text(rightX, startY + i * 18, label, {
@@ -1454,10 +1446,63 @@ export default class CombatScene extends Phaser.Scene {
         align: 'right'
       }).setOrigin(1, 0);
 
+      // Wire hover tooltip for equipped items
+      if (inst) {
+        t.setInteractive({ useHandCursor: false });
+        t.on('pointerover', (pointer) => {
+          const tipData = this._buildItemTooltipData(inst, char.isEnemy);
+          if (tipData) this.tooltip?.show(pointer.worldX, pointer.worldY, tipData);
+        });
+        t.on('pointerout', () => this.tooltip?.hide());
+      }
+
       this.characterInfoPanel.add(t);
       this._charInfoBodyGroup.push(t);
       i++;
     });
+  }
+
+  /**
+   * Build tooltip data for an equipped item.
+   * Allies: full stat/affix reveal.
+   * Enemies: obfuscated — rarity and affix count visible, names hidden.
+   */
+  _buildItemTooltipData(inst, isEnemy) {
+    const base = Items[inst?.id];
+    if (!base || !inst) return null;
+
+    const rarity = inst.rarity || inst.quality || 'common';
+    const color = RARITY_COLORS[rarity] || '#cccccc';
+    const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
+    const slotLabel = base.slot ? (base.slot.charAt(0).toUpperCase() + base.slot.slice(1)) : '';
+    const typeLabel = base.type === 'armor' ? 'Armor' : base.type === 'weapon' ? 'Weapon' : 'Item';
+
+    if (isEnemy) {
+      const affixCount = (inst.prefixes?.length || 0) + (inst.suffixes?.length || 0);
+      const lines = [`${rarityLabel} ${slotLabel} ${typeLabel} — unrevealed`, ''];
+      for (let a = 0; a < affixCount; a++) lines.push('?? ??');
+      if (affixCount) lines.push('');
+      lines.push('Defeat this enemy to loot this item.');
+      return { title: `?? [${rarityLabel}]`, titleColor: color, lines };
+    }
+
+    // Allied — full reveal
+    const view = getItemComputedData(inst);
+    const lines = [`${rarityLabel} · ${slotLabel} ${typeLabel}`];
+
+    const bonuses = view?.bonuses || {};
+    const bonusStr = Object.entries(bonuses)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k} +${v}`)
+      .join('  ');
+    if (bonusStr) { lines.push(''); lines.push(bonusStr); }
+
+    const affixNames = [...(inst.prefixes || []), ...(inst.suffixes || [])];
+    if (affixNames.length) { lines.push(''); lines.push(affixNames.join(', ')); }
+
+    if (base.description) { lines.push(''); lines.push(base.description); }
+
+    return { title: base.name, titleColor: color, lines };
   }
 
   /** Entry point for (re)building the body based on active tab */
@@ -2228,13 +2273,7 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
-      /* ---- 1️⃣  Flush any old listeners on the sprite ---- */
-      if (slot.char.icon) {
-        slot.char.icon.removeAllListeners();
-        slot.char.icon.disableInteractive();
-      }
-
-      /* ---- 2️⃣  Make the entire container clickable ---- */
+      /* ---- 1️⃣  Make the container clickable for this ability ---- */
       slot.removeAllListeners();          // safety
       slot.once('pointerdown', () => {
         this._applyAbilityToTarget(this._currentChar(), slot.char, ability);
@@ -4464,7 +4503,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Highlight + click to select
     reachable.forEach(slot => {
-      slot.setInteractive({ useHandCursor: true });
+      slot.setInteractive();
       slot.rect.setStrokeStyle(3, 0x88ff88);
 
       slot.once('pointerdown', () => {
@@ -4482,7 +4521,9 @@ export default class CombatScene extends Phaser.Scene {
     if (this._posTargets) {
       this._posTargets.forEach(slot => {
         slot.removeAllListeners('pointerdown');
-        slot.disableInteractive();
+        // Do NOT call disableInteractive() — it destroys the centered geometry set
+        // at creation and leaves slots permanently dead for future targeting.
+        // removeAllListeners already prevents the movement handler from re-firing.
         this._resetSlotStroke(slot);
       });
       this._posTargets = null;
@@ -4513,18 +4554,11 @@ export default class CombatScene extends Phaser.Scene {
     // Hard reset borders so nothing stays highlighted
     [...this.allySlots, ...this.enemySlots].forEach(slot => this._resetSlotStroke(slot));
 
-    // Restore info-click handlers for occupied slots.
-    // Do NOT call slot.setInteractive() here — it would overwrite the centered
-    // Rectangle(-32,-32,64,64) geometry set at slot creation with an arbitrary default.
-    // The slot container is still interactive (clearSlotListeners only removes listeners).
-    // The icon WAS disabled in _enterTargetingMode, so it needs re-enabling.
+    // Restore info-click on the slot container (sprites are never interactive).
+    // The container keeps its default Rectangle(0,0,64,64) geometry from _createBattleSlots.
     [...this.allySlots, ...this.enemySlots].forEach(slot => {
       const char = slot.char;
-      if (!char || !char.icon || !char.icon.active) return;
-
-      char.icon.setInteractive({ useHandCursor: true });
-      char.icon.on('pointerdown', () => this._showCharacterInfo(char));
-
+      if (!char || !char.icon?.active) return;
       slot.on('pointerdown', () => this._showCharacterInfo(char));
     });
   }
@@ -4610,18 +4644,13 @@ export default class CombatScene extends Phaser.Scene {
 
   _clearSlotListeners() {
     this.unitSlots.forEach(slot => {
-      /* container – keep interactive, just remove listeners */
+      /* container – keep interactive (preserves Rectangle geometry), just flush listeners */
       slot.removeAllListeners();
 
-      /* border rectangle – not interactive, so keep it disabled */
+      /* border rectangle – purely visual, keep non-interactive */
       slot.rect.removeAllListeners();
       slot.rect.disableInteractive();
-
-      /* sprite / circle – disable completely each time */
-      if (slot.char?.icon) {
-        slot.char.icon.removeAllListeners();
-        slot.char.icon.disableInteractive();
-      }
+      // Sprites inside containers are never interactive; no icon cleanup needed.
     });
   }
 
@@ -5218,20 +5247,11 @@ export default class CombatScene extends Phaser.Scene {
 
     slot.rect.setStrokeStyle(2, 0xffffff); // Reset outline
 
-    // 🔁 Remove old listeners and create fresh interactive portrait sprite
-    const sprite = this.add.image(0, 0, char.skin)
-      .setDisplaySize(64, 64)
-      .setInteractive(); // ✅ click-enabled
+    // Sprite is purely visual — the slot CONTAINER handles all clicks.
+    const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64);
 
-    sprite.removeAllListeners();  // ✅ ensure no duplicate listeners
-    sprite.on('pointerdown', () => {
-      this._showCharacterInfo(char);
-    });
-
-    // Clear listeners and restore info-click.
-    // Do NOT call slot.setInteractive() — it would destroy the centered
-    // Rectangle(-32,-32,64,64) geometry set at creation. The slot stays
-    // interactive from _createBattleSlots; just swap the listener.
+    // The slot container keeps its Rectangle(-32,-32,64,64) geometry from _createBattleSlots.
+    // Just swap the listener so clicking shows character info.
     slot.removeAllListeners();
     slot.on('pointerdown', () => {
       this._showCharacterInfo(char);
