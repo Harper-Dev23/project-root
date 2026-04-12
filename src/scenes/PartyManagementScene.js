@@ -123,6 +123,8 @@ export default class PartyManagementScene extends Phaser.Scene {
 
     SoundManager.init(this);
 
+    this.input.keyboard?.once('keydown-ESC', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
+
     const panelW = 920;
     const panelH = 692;
     const panelX = (width - panelW) / 2;

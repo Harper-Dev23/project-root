@@ -5,6 +5,7 @@ import { createPanel } from '../ui/GamePanel.js';
 import { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { JournalState } from '../systems/JournalState.js';
+import { registerHotkeys } from '../systems/HotkeyManager.js';
 
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
@@ -25,22 +26,61 @@ export default class UIScene extends Phaser.Scene {
     this.refreshUI();
     this.events.on('wake', this.refreshUI, this);
 
-        this._journalBindingsCleaned = false;
-    this._journalKeyHandler = () => this.openOverlay('JournalOverlay');
-    this.input.keyboard?.on('keydown-J', this._journalKeyHandler, this);
+        // ── Hotkeys ────────────────────────────────────────────────────────
+    // All overlay scene keys — used to guard against stacking overlays via hotkeys.
+    const MENU_OVERLAY_KEYS = [
+      'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
+      'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+      'PartyManagementScene',
+    ];
+    // Returns true if any overlay is currently running.
+    const _anyOverlayOpen = () => MENU_OVERLAY_KEYS.some(k => this.scene.isActive(k));
+
+    this._cleanupHotkeys = registerHotkeys(this, {
+      menu_character: () => {
+        if (_anyOverlayOpen()) return;
+        SoundManager.play('select');
+        this.scene.launch('CharacterListOverlay');
+        this.scene.bringToTop('CharacterListOverlay');
+      },
+      menu_party: () => {
+        if (_anyOverlayOpen()) return;
+        SoundManager.play('select');
+        this.scene.launch('PartyManagementScene');
+        this.scene.bringToTop('PartyManagementScene');
+      },
+      menu_inventory: () => {
+        if (_anyOverlayOpen()) return;
+        SoundManager.play('select');
+        this.scene.launch('InventoryOverlay');
+        this.scene.bringToTop('InventoryOverlay');
+      },
+      menu_skills: () => {
+        if (_anyOverlayOpen()) return;
+        SoundManager.play('select');
+        this.scene.launch('SkillsOverlay');
+        this.scene.bringToTop('SkillsOverlay');
+      },
+      menu_map:     () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('MapOverlay'); } },
+      menu_quest:   () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('QuestOverlay'); } },
+      menu_journal: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('JournalOverlay'); } },
+      menu_options: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('OptionsOverlay'); } },
+    });
+
     this.journalToastOff = JournalState.on('journal:toast', ({ message } = {}) => {
       this.showToast(message || 'New Journal entry');
     });
 
-    this._cleanupJournalBindings = () => {
-      if (this._journalBindingsCleaned) return;
-      this._journalBindingsCleaned = true;
-      this.input.keyboard?.off('keydown-J', this._journalKeyHandler, this);
+    this.events.once('shutdown', () => {
+      this._cleanupHotkeys?.();
       this.journalToastOff?.();
       this.journalToastOff = null;
-    };
-    this.events.once('shutdown', this._cleanupJournalBindings, this);
-    this.events.once('destroy', this._cleanupJournalBindings, this);
+    }, this);
+    this.events.once('destroy', () => {
+      this._cleanupHotkeys?.();
+      this.journalToastOff?.();
+      this.journalToastOff = null;
+    }, this);
 
 
     // Listen once for entering Samuel's tent
@@ -300,13 +340,18 @@ export default class UIScene extends Phaser.Scene {
         this.toggleButton.setText(this.rightPanelVisible ? '◀' : '▶');
       });
 
-    // ESC toggles the right panel — but only when no overlay scene is open
+    // ESC: close save/load popup first, then defer to overlays, then toggle panel
     const OVERLAY_KEYS = [
       'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
       'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
       'PartyManagementScene'
     ];
     this.input.keyboard?.on('keydown-ESC', () => {
+      // Priority 1: dismiss save/load/exit popup if one is open
+      if (this.modalPanelGroup || this.modalBlockerGroup) {
+        this.cleanupPopup?.();
+        return;
+      }
       const anyOpen = OVERLAY_KEYS.some(k => this.scene.isActive(k));
       if (anyOpen) return; // let the overlay's own ESC handler fire
       SoundManager.play('select');
@@ -396,7 +441,7 @@ export default class UIScene extends Phaser.Scene {
       fontSize: '18px',
       color: '#ffffff'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(1001)
-      .on('pointerdown', action)
+      .on('pointerdown', () => { SoundManager.play('select'); action(); })
       .on('pointerover', () => btn.setStyle({ color: '#ffffaa' }))
       .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
     return btn;

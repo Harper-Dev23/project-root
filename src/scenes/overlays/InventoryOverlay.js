@@ -6,6 +6,7 @@ import InventorySystem from '../../systems/InventorySystem.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
+import { CLASS_COLORS } from '../../ui/styles.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -185,11 +186,30 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     frame.dimmer.setAlpha(0.65);
 
-    // CHARACTER SELECTOR
+    // CHARACTER SELECTOR — tinted by class color
+    const _dimHex = (hex) => {
+      // Halve each channel for unselected dimming
+      const c = hex.replace('#', '');
+      const r = Math.floor(parseInt(c.substring(0,2),16) * 0.5).toString(16).padStart(2,'0');
+      const g = Math.floor(parseInt(c.substring(2,4),16) * 0.5).toString(16).padStart(2,'0');
+      const b = Math.floor(parseInt(c.substring(4,6),16) * 0.5).toString(16).padStart(2,'0');
+      return `#${r}${g}${b}`;
+    };
     GameState.party.forEach((char, i) => {
-      this.add.text(200 + i * 120, 100, char.name, {
+      const isSelected = (i === this.selectedCharIndex);
+      const classColor = CLASS_COLORS[char.baseClass] || '#cccccc';
+      const textColor = isSelected ? classColor : _dimHex(classColor);
+      const tabX = 200 + i * 120;
+      // Underline bar for selected tab
+      if (isSelected) {
+        const hexNum = parseInt(classColor.replace('#',''), 16);
+        this.add.rectangle(tabX + 36, 116, 64, 3, hexNum)
+          .setOrigin(0.5, 0).setDepth(contentDepth);
+      }
+      this.add.text(tabX, 100, char.name, {
         fontSize: '18px',
-        color: (i === this.selectedCharIndex) ? '#ffff88' : '#cccccc'
+        color: textColor,
+        fontStyle: isSelected ? 'bold' : 'normal',
       }).setInteractive({ useHandCursor: true })
         .on('pointerdown', () => { SoundManager.play('select'); this.selectedCharIndex = i; this.scene.restart(); })
         .setDepth(contentDepth);
@@ -260,6 +280,11 @@ export default class InventoryOverlay extends Phaser.Scene {
       equipY += Math.max(nameTxt.height, 16) + 4;
     });
 
+    // Outline box around the Equipped section
+    const equipBoxGfx = this.add.graphics().setDepth(contentDepth - 1);
+    equipBoxGfx.lineStyle(2, 0xa08060, 0.9);
+    equipBoxGfx.strokeRect(190, 134, 218, equipY - 128);
+
     // --- PERSONAL INVENTORY HEADER ---
     equipY += 10;
     this.add.text(200, equipY, 'Personal Inventory:', { fontSize: '16px', color: '#ffffff' }).setDepth(contentDepth);
@@ -289,9 +314,9 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     // --- PERSONAL MASK + LIST (OFF-DISPLAY GEO, NO DISPLAY-LIST GRAPHICS) ---
 
-    const pMaskX = 200;
+    const pMaskX = 192;
     const pMaskY = equipY;
-    const pMaskWidth = globalListLeft - pMaskX;
+    const pMaskWidth = globalListLeft - pMaskX - 15;
     const pMaskHeight = Math.max(150, (safeHeight - 60) - pMaskY);
 
     // geometry for mask (not added to display list)
@@ -493,6 +518,11 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const listContainer = this.add.container(newX, listStartY).setMask(maskShape).setDepth(contentDepth);
 
+    // Outline box around the entire global inventory section (tabs + list)
+    const gBoxGfx = this.add.graphics().setDepth(contentDepth - 1);
+    gBoxGfx.lineStyle(2, 0xa08060, 0.9);
+    gBoxGfx.strokeRect(newX - 4, gToggleY - 10, newWidth + 8, (listStartY - gToggleY) + safeHeightAdj + 14);
+
     const gArea = { x: newX, y: listStartY, w: newWidth, h: safeHeightAdj };
 
     const spacing = 10;
@@ -616,6 +646,25 @@ export default class InventoryOverlay extends Phaser.Scene {
     // remove any old wheel listener before adding new
     if (this._onWheel) this.input.off('wheel', this._onWheel, this);
 
+    // Helper: disable interaction on list children that are outside their mask window.
+    // Geometry masks clip rendering but NOT pointer events — this prevents scrolled-off
+    // invisible items from stealing clicks meant for UI above/below the list.
+    const _syncInteractivity = (container, maskTopY, maskBotY) => {
+      container.list.forEach(child => {
+        if (!child || !child.input) return; // never made interactive — skip
+        const isContainer = child.type === 'Container';
+        const h = child.height || 16;
+        const worldTop = container.y + child.y - (isContainer ? h / 2 : 0);
+        const worldBot = worldTop + h;
+        const inView = worldBot > maskTopY && worldTop < maskBotY;
+        if (inView) {
+          child.setInteractive({ useHandCursor: true });
+        } else {
+          child.disableInteractive();
+        }
+      });
+    };
+
     this._onWheel = (pointer, gameObjects, deltaX, deltaY) => {
       const mx = pointer.worldX;
       const my = pointer.worldY;
@@ -628,9 +677,9 @@ export default class InventoryOverlay extends Phaser.Scene {
           const next = listContainer.y - deltaY * 0.25;
           listContainer.y = Phaser.Math.Clamp(next, baseYg - maxScroll, baseYg);
         } else {
-          listContainer.y = gToggleY + 20;
+          listContainer.y = listStartY;
         }
-
+        _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
       }
 
       // PERSONAL scroll/clamp
@@ -643,7 +692,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         } else {
           pList.y = pMaskY;
         }
-
+        _syncInteractivity(pList, pMaskY, pMaskY + pMaskHeight);
       }
 
     };

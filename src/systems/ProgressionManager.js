@@ -85,6 +85,12 @@ const ProgressionManager = {
   // e.g. ['tribe_choice'] means the Elder's Tower has something for the player.
   questFlags: [],
 
+  // Permanently completed quest step IDs.
+  // Most current steps derive completion from existing data (completedScenarios,
+  // tribe, flags), but this array is the scalable hook for future quests whose
+  // completion can't be inferred without explicit bookkeeping.
+  completedQuestSteps: [],
+
   // Tribe allegiance — SAVE-SLOT WIDE.
   // One tribe per save file; all characters in that slot belong to the same tribe.
   // Valid values: 'styx' | 'zafaar' | 'elseth' | 'lesse' | null (not yet chosen)
@@ -114,6 +120,16 @@ const ProgressionManager = {
 
   clearQuestFlag(id) {
     this.questFlags = this.questFlags.filter(f => f !== id);
+  },
+
+  // ----- Quest step completion (explicit, persisted) -----------------------
+
+  markStepDone(id) {
+    if (!this.completedQuestSteps.includes(id)) this.completedQuestSteps.push(id);
+  },
+
+  isStepDone(id) {
+    return this.completedQuestSteps.includes(id);
   },
 
   // ----- Tribe vendor stock ------------------------------------------------
@@ -232,33 +248,36 @@ const ProgressionManager = {
 
   serialize() {
     return {
-      completedScenarios: [...this.completedScenarios],
-      huntTickets:  this.huntTickets,
-      tribeTickets: this.tribeTickets,
-      questFlags:   [...this.questFlags],
-      tribe:        this.tribe,
-      tribeVendorStock: { ...this.tribeVendorStock },
+      completedScenarios:  [...this.completedScenarios],
+      huntTickets:         this.huntTickets,
+      tribeTickets:        this.tribeTickets,
+      questFlags:          [...this.questFlags],
+      tribe:               this.tribe,
+      tribeVendorStock:    { ...this.tribeVendorStock },
+      completedQuestSteps: [...this.completedQuestSteps],
     };
   },
 
   deserialize(data) {
     if (!data) return;
-    this.completedScenarios = Array.isArray(data.completedScenarios) ? [...data.completedScenarios] : [];
-    this.huntTickets  = typeof data.huntTickets  === 'number' ? data.huntTickets  : 0;
-    this.tribeTickets = typeof data.tribeTickets === 'number' ? data.tribeTickets : 0;
-    this.questFlags   = Array.isArray(data.questFlags) ? [...data.questFlags] : [];
-    this.tribe        = data.tribe || null;
-    this.tribeVendorStock = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
+    this.completedScenarios  = Array.isArray(data.completedScenarios)  ? [...data.completedScenarios]  : [];
+    this.huntTickets         = typeof data.huntTickets  === 'number'    ? data.huntTickets              : 0;
+    this.tribeTickets        = typeof data.tribeTickets === 'number'    ? data.tribeTickets             : 0;
+    this.questFlags          = Array.isArray(data.questFlags)           ? [...data.questFlags]          : [];
+    this.tribe               = data.tribe || null;
+    this.tribeVendorStock    = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
       ? { ...data.tribeVendorStock } : {};
+    this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
   },
 
   reset() {
-    this.completedScenarios = [];
-    this.huntTickets  = 0;
-    this.tribeTickets = 0;
-    this.questFlags   = [];
-    this.tribe        = null;
-    this.tribeVendorStock = {};
+    this.completedScenarios  = [];
+    this.huntTickets         = 0;
+    this.tribeTickets        = 0;
+    this.questFlags          = [];
+    this.tribe               = null;
+    this.tribeVendorStock    = {};
+    this.completedQuestSteps = [];
   },
 };
 

@@ -39,7 +39,7 @@ import {
 import {
   rollToHit, computeHitChance, getLastDamageBreakdown,
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
-  getEffectivePDR, getEffectiveMDR, getHealingReceivedMult, applyExposePreDamage,
+  getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction,
 } from '../systems/CombatLogic.js';
 
@@ -141,13 +141,12 @@ const RARITY_COLORS = {
   legendary: '#ff9933',
 };
 
-// Training encounters use this — no common drops so every piece is worth picking up.
+// Training encounters use this — caps at epic since legendary isn't implemented yet.
 function rollEnemyDropRarity() {
   const r = Math.random();
   if (r < 0.55) return 'uncommon';
   if (r < 0.88) return 'rare';
-  if (r < 0.99) return 'epic';
-  return 'legendary';
+  return 'epic';
 }
 
 // Returns all item IDs of a given type/slot from the Items catalogue.
@@ -1228,7 +1227,8 @@ export default class CombatScene extends Phaser.Scene {
 
     // Middle column values
     const pdr = getEffectivePDR?.(char) ?? 0;
-    const mdr = getEffectiveMDR?.(char) ?? 0;
+    const edr = getEffectiveEDR?.(char) ?? 0;
+    const ndr = getEffectiveNDR?.(char) ?? 0;
     const healPct = getHealingReceivedMult?.(char) ?? 100;
     const costMult = this._getDisorientCostMult(char);
     const effMaxHP = Math.max(1, Math.floor((char.maxHP | 0) * (1 - (char._weaknessDerived?.maxHPDown || 0))));
@@ -1263,7 +1263,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'HP:', value: `${dispHP}/${effMaxHP}` },
       { label: 'MP:', value: `${char.currentMP}/${char.maxMP}` },
       { label: 'PDR:', value: `${pdr}%` },
-      { label: 'MDR:', value: `${mdr}%` },
+      { label: 'EDR/NDR:', value: `${edr}% / ${ndr}%` },
       { label: 'Healing Recv:', value: `${healPct}%` },
       { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
@@ -1822,9 +1822,12 @@ export default class CombatScene extends Phaser.Scene {
     this.actionMenuList = this.add.container(0, 0);
     this.actionMenu.add(this.actionMenuList);
 
-    const maskGfx = this.make.graphics({ add: false });
+    // Use add.graphics() (in-scene) so the geometry mask transforms correctly in WebGL.
+    const maskGfx = this.add.graphics();
     maskGfx.fillStyle(0xffffff);
-    maskGfx.fillRect(x + viewportX, y + viewportY, viewportWidth, viewportHeight);
+    maskGfx.fillRect(0, 0, viewportWidth, viewportHeight);
+    maskGfx.setPosition(x + viewportX, y + viewportY);
+    maskGfx.setVisible(false);
     this.actionMenuMask = maskGfx.createGeometryMask();
     this.actionMenuList.setMask(this.actionMenuMask);
 
@@ -4313,6 +4316,35 @@ export default class CombatScene extends Phaser.Scene {
     if (this.actionMenuList) {
       this.actionMenuList.y = -this.actionMenuScrollY;
     }
+    this._refreshActionMenuInteractivity();
+  }
+
+  /**
+   * Enables interaction only on action menu children currently inside the viewport Y range.
+   * This prevents scrolled-off invisible buttons from stealing pointer events (e.g. during targeting).
+   * Items that scroll back into view are re-enabled, preserving click-to-cancel-targeting.
+   */
+  _refreshActionMenuInteractivity() {
+    if (!this.actionMenuList || !this.actionMenuViewport) return;
+    const { y: viewY, height: viewH } = this.actionMenuViewport;
+    const scrollY = this.actionMenuScrollY || 0;
+    // Visible Y range in list-local coordinates
+    const visTop = viewY + scrollY;
+    const visBot = visTop + viewH;
+
+    this.actionMenuList.list.forEach(child => {
+      if (!child || !child.input) return; // never made interactive — skip
+      const isContainer = child.type === 'Container';
+      const h = child.height || 40;
+      const itemTop = isContainer ? child.y - h / 2 : child.y;
+      const itemBot = isContainer ? child.y + h / 2 : child.y + h;
+      const inView = itemBot > visTop && itemTop < visBot;
+      if (inView) {
+        child.setInteractive({ useHandCursor: true });
+      } else {
+        child.disableInteractive();
+      }
+    });
   }
 
   _setActionMenuScroll(value) {
@@ -4331,7 +4363,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _finalizeActionMenuLayout() {
     this._updateActionMenuScrollBounds();
-    this._applyActionMenuScroll();
+    this._applyActionMenuScroll(); // also calls _refreshActionMenuInteractivity
   }
 
   _isPointerOverActionMenu(pointer) {

@@ -211,6 +211,14 @@ export function getEffectiveMDR(target) {
   return Math.round(getDamageReductionFraction(target, { isMagic: true }) * 100);
 }
 
+export function getEffectiveEDR(char) {
+  return Math.round(getDamageReductionFraction(char, { damageType: 'elemental' }) * 100);
+}
+
+export function getEffectiveNDR(char) {
+  return Math.round(getDamageReductionFraction(char, { damageType: 'necrotic' }) * 100);
+}
+
 // === Expose pre-damage shaping (additive PDR model) ===
 export function applyExposePreDamage({ user, target, resultMutable, intent, isWeaponSource, missed }) {
   if (missed) return;
