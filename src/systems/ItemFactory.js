@@ -347,19 +347,23 @@ function getAffixPoolsFor(base) {
  * Returns a rolled affix object in the same shape as pool affixes.
  */
 function rollFixedAffix(fixedAffix, rng) {
-  const amount = rollInt(fixedAffix.range, rng);
+  // Naming-only affixes have no range/family — they exist solely to append
+  // a suffix to the display name (e.g. grantsSkills rings).
+  const amount = fixedAffix.range ? rollInt(fixedAffix.range, rng) : null;
   return {
     key: fixedAffix.key,
-    family: fixedAffix.family,
+    family: fixedAffix.family || null,
     buildupTarget: fixedAffix.buildupTarget || null,
     rolledValue: amount,
-    mods: {
-      misc: {
-        [fixedAffix.family]: fixedAffix.buildupTarget
-          ? { [fixedAffix.buildupTarget]: amount }
-          : amount
-      }
-    }
+    mods: fixedAffix.family
+      ? {
+          misc: {
+            [fixedAffix.family]: fixedAffix.buildupTarget
+              ? { [fixedAffix.buildupTarget]: amount }
+              : amount
+          }
+        }
+      : { misc: {} }
   };
 }
 
@@ -583,10 +587,11 @@ export function createItemInstance(id, opts = {}) {
   return instance;
 }
 
-// Pool of divine adjectives used when two tier-1 (prophet) prefixes would collide.
-const DIVINE_ADJECTIVES = [
-  'Divine', 'Immaculate', 'Sacred', 'Hallowed', 'Celestial',
-  'Eternal', 'Exalted', 'Radiant', 'Sovereign', 'Transcendent'
+// Honorific titles prepended to a prophet name when two tier-1 prefixes collide.
+// Placed BEFORE the name ("Grand Solomon's") so the possessive reads naturally.
+const GRAND_TITLES = [
+  'Great', 'Grand', 'High', 'Elder', 'Mighty',
+  'Noble', 'Venerable', 'Illustrious', 'Supreme', 'Hallowed'
 ];
 
 /**
@@ -605,12 +610,12 @@ function buildAffixedName(baseName, prefixes, suffixes, rng = Math.random) {
 
   let preKeys;
   if (prophets.length >= 2) {
-    // Two prophet names — keep one, replace the other with a divine adjective
-    const kept    = prophets[Math.floor(rng() * prophets.length)];
-    const divIdx  = Math.floor(rng() * DIVINE_ADJECTIVES.length);
-    const divine  = DIVINE_ADJECTIVES[divIdx];
-    // Prophet name leads; divine adjective and remaining descriptors follow
-    preKeys = [kept.key, divine, ...others.map(a => a.key)];
+    // Two prophet names — keep one, prefix it with an honorific title.
+    // "Grand Solomon's Wraps" reads far better than "Solomon's Divine Wraps"
+    // because the title modifies the person, not the item.
+    const kept  = prophets[Math.floor(rng() * prophets.length)];
+    const title = GRAND_TITLES[Math.floor(rng() * GRAND_TITLES.length)];
+    preKeys = [title, kept.key, ...others.map(a => a.key)];
   } else {
     // Zero or one prophet — prophet leads, then other prefixes
     preKeys = [...prophets.map(a => a.key), ...others.map(a => a.key)];

@@ -79,6 +79,7 @@ const ProgressionManager = {
   completedScenarios: [],   // e.g. ['training_encounter_1', 'training_encounter_2']
   huntTickets:  0,
   tribeTickets: 0,
+  tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
 
   // Quest flags: IDs of events that are currently "pending" (show a ! marker).
   // e.g. ['tribe_choice'] means the Elder's Tower has something for the player.
@@ -113,6 +114,15 @@ const ProgressionManager = {
 
   clearQuestFlag(id) {
     this.questFlags = this.questFlags.filter(f => f !== id);
+  },
+
+  // ----- Tribe vendor stock ------------------------------------------------
+
+  getTribeVendorStock(itemId) {
+    return (itemId in this.tribeVendorStock) ? this.tribeVendorStock[itemId] : 3;
+  },
+  decrementTribeVendorStock(itemId) {
+    this.tribeVendorStock[itemId] = Math.max(0, this.getTribeVendorStock(itemId) - 1);
   },
 
   // ----- Tribe allegiance (save-slot wide) ---------------------------------
@@ -227,6 +237,7 @@ const ProgressionManager = {
       tribeTickets: this.tribeTickets,
       questFlags:   [...this.questFlags],
       tribe:        this.tribe,
+      tribeVendorStock: { ...this.tribeVendorStock },
     };
   },
 
@@ -237,6 +248,8 @@ const ProgressionManager = {
     this.tribeTickets = typeof data.tribeTickets === 'number' ? data.tribeTickets : 0;
     this.questFlags   = Array.isArray(data.questFlags) ? [...data.questFlags] : [];
     this.tribe        = data.tribe || null;
+    this.tribeVendorStock = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
+      ? { ...data.tribeVendorStock } : {};
   },
 
   reset() {
@@ -245,6 +258,7 @@ const ProgressionManager = {
     this.tribeTickets = 0;
     this.questFlags   = [];
     this.tribe        = null;
+    this.tribeVendorStock = {};
   },
 };
 

@@ -99,18 +99,41 @@ export default class InventoryOverlay extends Phaser.Scene {
     if (misc.resilience) lines.push(`Resilience: +${misc.resilience}`);
 
     const buildup = misc.buildupPercent || {};
-    const buildupKeys = Object.keys(buildup);
-    if (buildupKeys.length) {
-      lines.push('Buildup Bonus:');
-      buildupKeys.forEach(k => lines.push(`  • ${k.toUpperCase()} +${buildup[k]}%`));
+    Object.entries(buildup).forEach(([k, v]) => { if (v) lines.push(`+${v}% ${k} Buildup`); });
+
+    // Jewelry: damage conversion
+    if (misc.physToElemPercent) lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
+    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
+    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
+    // Jewelry: battle-start passives
+    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
+    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
+    // Jewelry: buildup-on-hit
+    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Phys Dmg → ${fam} Buildup`);
+    });
+    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Elem Dmg → ${fam} Buildup`);
+    });
+    // Jewelry: procs
+    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
+    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
+    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
+    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
+    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
+    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
+
+    // Granted skills
+    if (instance?.grantsSkills?.length) {
+      const skillNames = instance.grantsSkills.map(id =>
+        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      );
+      lines.push(`Grants: ${skillNames.join(', ')}`);
     }
 
-    if (instance?.prefixes?.length || instance?.suffixes?.length) {
-      if (instance.prefixes?.length) lines.push(`Prefixes: ${instance.prefixes.join(', ')}`);
-      if (instance.suffixes?.length) lines.push(`Suffixes: ${instance.suffixes.join(', ')}`);
+    if (base.description && !instance?.fixedAffixValue && !instance?.grantsSkills?.length) {
+      lines.push('', base.description);
     }
-
-    if (base.description) lines.push('', base.description);
 
     return { title: name, titleColor: color, lines, name, color };
   }

@@ -303,7 +303,9 @@ export default class TownScene extends Phaser.Scene {
     if (!view) return null;
 
     const lines = [];
-    if (view.description) lines.push(view.description);
+    // Skip the static description for fixed-affix instances (rolled value shown via
+    // misc mods below) and grantsSkills items (skill shown via Grants line below).
+    if (view.description && !view.fixedAffixValue && !view.grantsSkills?.length) lines.push(view.description);
 
     if (view.type === 'weapon') {
       if (view.weaponType) lines.push(`Type: ${formatLabel(view.weaponType)}`);
@@ -368,6 +370,36 @@ export default class TownScene extends Phaser.Scene {
       if (!amount) return;
       lines.push(`${formatSigned(amount, '%')} ${formatLabel(family)} Buildup`);
     });
+
+    // Jewelry: damage conversion
+    if (misc.physToElemPercent) lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
+    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
+    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
+    // Jewelry: battle-start passives
+    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
+    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
+    // Jewelry: buildup-on-hit
+    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Phys Dmg → ${formatLabel(fam)} Buildup`);
+    });
+    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Elem Dmg → ${formatLabel(fam)} Buildup`);
+    });
+    // Jewelry: proc effects
+    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
+    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
+    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
+    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
+    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
+    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
+
+    // Granted skills
+    if (view.grantsSkills?.length) {
+      const names = view.grantsSkills.map(id =>
+        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      );
+      lines.push(`Grants: ${names.join(', ')}`);
+    }
 
     if (!lines.length) lines.push('No additional properties.');
 
@@ -2200,45 +2232,125 @@ export default class TownScene extends Phaser.Scene {
       return;
     }
 
-    // --- Player's own tribe vendor — show inventory ---
+    // --- Tribe vendor inventory ---
     this.vendorBody.setText('');
-    const itemIds = TRIBE_VENDOR_INVENTORY[playerTribe] || [];
+    // Make vendorBody hoverable for post-purchase tooltip
+    if (!this.vendorBody._tribeTooltipWired) {
+      this.vendorBody.setInteractive({ useHandCursor: false });
+      this.vendorBody._tribeTooltipWired = true;
+    }
+
+    // Build a pre-purchase tooltip from a base item's fixedAffix definition.
+    // Shows the roll range (or granted skill) since no instance exists yet.
+    const buildPrePurchaseTip = (base) => {
+      const affix = base.fixedAffix;
+      const slotLine = base.slot ? base.slot.charAt(0).toUpperCase() + base.slot.slice(1) : '';
+      const tipLines = slotLine ? [slotLine] : [];
+      if (affix?.family && affix?.range) {
+        const [lo, hi] = affix.range;
+        const bt = affix.buildupTarget;
+        const MAP = {
+          physToElemPercent:    `${lo}–${hi}% Physical → Elemental Conversion`,
+          physToNecroPercent:   `${lo}–${hi}% Physical → Necrotic Conversion`,
+          elemToNecroPercent:   `${lo}–${hi}% Elemental → Necrotic Conversion`,
+          initBonusOnBattleStart: `+${lo}–${hi} Initiative at Battle Start`,
+          shieldPctOnBattleStart: `+${lo}–${hi}% Shield at Battle Start`,
+          physBuildupOnPhysDmg: `${lo}–${hi}% Phys Dmg → ${bt} Buildup`,
+          elemBuildupOnElemDmg: `${lo}–${hi}% Elem Dmg → ${bt} Buildup`,
+          procDoubleDamage:     `${lo}–${hi}% Chance: Double Damage`,
+          procHalfDamageTaken:  `${lo}–${hi}% Chance: Halve Damage Taken`,
+          procHealOnHeal:       `${lo}–${hi}% Chance: Double Heal`,
+          procPhysFlat:         `${lo}–${hi}% Chance: +20 Physical Damage`,
+          procElemFlat:         `${lo}–${hi}% Chance: +20 Elemental Damage`,
+          procNecroFlat:        `${lo}–${hi}% Chance: +20 Necrotic Damage`,
+        };
+        if (MAP[affix.family]) tipLines.push(MAP[affix.family]);
+      }
+      if (base.grantsSkills?.length) {
+        const names = base.grantsSkills.map(id =>
+          id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        );
+        tipLines.push(`Grants: ${names.join(', ')}`);
+      }
+      const dispName = `${base.name}${affix?.key ? ' ' + affix.key : ''}`;
+      return { title: dispName, titleColor: RARITY_COLORS[base.rarity] || '#cccccc', lines: tipLines };
+    };
+
+    const itemIds = TRIBE_VENDOR_INVENTORY[vendorTribe] || [];
 
     itemIds.forEach((itemId, i) => {
       const baseItem = Items[itemId];
       if (!baseItem) return;
 
+      const stock = ProgressionManager.getTribeVendorStock(itemId);
+      const soldOut = stock <= 0;
+
       const rowY = 240 + i * 36;
-      const rarityColor = RARITY_COLORS[baseItem.rarity] || '#cccccc';
+      const rarityColor = soldOut ? '#555555' : (RARITY_COLORS[baseItem.rarity] || '#cccccc');
       const slotLabel = baseItem.slot ? ` [${baseItem.slot}]` : '';
-      const itemLabel = `• ${baseItem.name}${slotLabel}  [ Free ]`;
+      const stockTag = soldOut ? '  [ Sold Out ]' : `  [ Free — ${stock} left ]`;
+      const itemLabel = `• ${baseItem.name}${slotLabel}${stockTag}`;
+
       const btn = this.add.text(610, rowY, itemLabel,
         { fontSize: '15px', color: rarityColor }
-      ).setDepth(13)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => btn.setColor('#ffffaa'))
-        .on('pointerout',  () => btn.setColor(rarityColor))
-        .on('pointerdown', () => {
-          SoundManager.play('dullClick');
-          InventorySystem.addGlobalItem(createItemInstance(itemId));
+      ).setDepth(13);
 
-          // First-time purchase: clear the tribe_vendor quest flag so the
-          // player gets nudged toward the combat pit.
-          if (ProgressionManager.hasQuestFlag('tribe_vendor')) {
-            ProgressionManager.clearQuestFlag('tribe_vendor');
-            ProgressionManager.setQuestFlag('combat_pit');
-          }
+      if (!soldOut) {
+        btn.setInteractive({ useHandCursor: true })
+          .on('pointerover', (pointer) => {
+            btn.setColor('#ffffaa');
+            const tip = buildPrePurchaseTip(baseItem);
+            if (tip && this.tooltip) this.tooltip.show(pointer.worldX, pointer.worldY, tip);
+          })
+          .on('pointermove', (pointer) => {
+            const tip = buildPrePurchaseTip(baseItem);
+            if (tip && this.tooltip) this.tooltip.show(pointer.worldX, pointer.worldY, tip);
+          })
+          .on('pointerout', () => {
+            btn.setColor(rarityColor);
+            this.tooltip?.hide();
+          })
+          .on('pointerdown', () => {
+            SoundManager.play('dullClick');
+            const inst = createItemInstance(itemId);
+            InventorySystem.addGlobalItem(inst);
+            ProgressionManager.decrementTribeVendorStock(itemId);
 
-          GameState.save('autosave');
-          this._buildQuestFlags();
-          const slotInfo = baseItem.slot ? ` (${baseItem.slot})` : '';
-          this.vendorBody.setText(`Received: ${baseItem.name}${slotInfo}`);
-        });
+            // First-time purchase: nudge toward combat pit
+            if (ProgressionManager.hasQuestFlag('tribe_vendor')) {
+              ProgressionManager.clearQuestFlag('tribe_vendor');
+              ProgressionManager.setQuestFlag('combat_pit');
+            }
+
+            GameState.save('autosave');
+            this._buildQuestFlags();
+            this.tooltip?.hide();
+
+            // Rebuild button list so stock counts update immediately.
+            // Must happen BEFORE setting vendorBody text — the rebuild resets it to ''.
+            this._lastTribePurchase = inst;
+            this._openTribeVendor(vendorKey, displayName);
+            this.vendorBody.setText(`Received: ${inst.displayName}`);
+          });
+      }
 
       // Add to the tribe vendor group so it's cleaned up on exit.
       this.tribeVendorGroup.add(btn);
       this._tribeVendorItemButtons.push(btn);
     });
+
+    // Wire vendorBody to show the last purchased item's tooltip on hover
+    this.vendorBody.off('pointerover').on('pointerover', (p) => {
+      if (!this._lastTribePurchase) return;
+      const tip = this._buildItemTooltipData(this._lastTribePurchase);
+      if (tip && this.tooltip) this.tooltip.show(p.worldX, p.worldY, tip);
+    });
+    this.vendorBody.off('pointermove').on('pointermove', (p) => {
+      if (!this._lastTribePurchase) return;
+      const tip = this._buildItemTooltipData(this._lastTribePurchase);
+      if (tip && this.tooltip) this.tooltip.show(p.worldX, p.worldY, tip);
+    });
+    this.vendorBody.off('pointerout').on('pointerout', () => this.tooltip?.hide());
   }
 
   _enterTribeVendorRow() {

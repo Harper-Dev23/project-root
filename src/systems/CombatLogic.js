@@ -164,9 +164,14 @@ export function estimateDRPercent(target, opts = {}) {
 export function getDamageReductionFraction(target, opts = {}) {
   if (!target) return 0;
 
-
   const eff = getEffectiveDerived(target) || {};
-  const isMagic = !!opts.isMagic;
+
+  // Accept damageType:'physical'|'elemental'|'necrotic' as shorthand.
+  // Necrotic uses ElementalResist for now (no dedicated stat yet).
+  const damageType = opts.damageType;
+  const isMagic = opts.isMagic != null
+    ? !!opts.isMagic
+    : (damageType === 'elemental' || damageType === 'necrotic');
 
   let dr = 0;
   if (isMagic) {
@@ -238,15 +243,28 @@ export function applyExposePreDamage({ user, target, resultMutable, intent, isWe
     const dChance = Math.max(0, WeaknessV3?.families?.expose?.t2?.critChanceBonus ?? 0) * I; // 0..1
     const dCrit = Math.max(0, WeaknessV3?.families?.expose?.t2?.critDamageBonus ?? 0);     // 0..1
 
+    // Helper: scale typed splits + amount together
+    const _scaleTyped = (scale) => {
+      const hasTyped = resultMutable.physical != null || resultMutable.elemental != null || resultMutable.necrotic != null;
+      if (hasTyped) {
+        if (resultMutable.physical != null) resultMutable.physical = Math.floor(resultMutable.physical * scale);
+        if (resultMutable.elemental != null) resultMutable.elemental = Math.floor(resultMutable.elemental * scale);
+        if (resultMutable.necrotic != null) resultMutable.necrotic = Math.floor(resultMutable.necrotic * scale);
+        resultMutable.amount = (resultMutable.physical || 0) + (resultMutable.elemental || 0) + (resultMutable.necrotic || 0);
+      } else {
+        resultMutable.amount = Math.floor((resultMutable.amount | 0) * scale);
+      }
+    };
+
     if (!resultMutable.isCrit) {
       if (Math.random() < dChance) {
         resultMutable.isCrit = true;
         const baseCritMult = 1.5; // keep in sync with engine baseline
-        resultMutable.amount = Math.floor((resultMutable.amount | 0) * baseCritMult * (1 + dCrit));
+        _scaleTyped(baseCritMult * (1 + dCrit));
         dbg.critForced = true;
       }
     } else {
-      resultMutable.amount = Math.floor((resultMutable.amount | 0) * (1 + dCrit));
+      _scaleTyped(1 + dCrit);
       dbg.critAmpOnly = true;
     }
 
@@ -282,75 +300,57 @@ export function getHealingReceivedMult(char) {
 }
 
 // --------------------------------------------------
-// Weakness riders applied on hit (Lightning, Expose(T1 DR), Cold T2 dmg-out)
+// Weakness riders applied on hit (Cold T2 dmg-out, Lightning jolts → elemental bucket)
+// Expose T1 DR penalty is a delta on resultMutable.damageReduction via applyExposePreDamage.
+// Signature: (physical, elemental, attacker, target, ability) → { physical, elemental }
 // --------------------------------------------------
-function applyWeaknessDamagePipeline(base, attacker, target, ability) {
-  let amount = base;
-  // Magic-only flat damage we will add AFTER physical-only modifiers (e.g., PDR/Expose)
-  let pendingMagicAdd = 0;
-
-  const w = target?.weakness;
-  if (!w) return amount;
-
-  // Attacker under Cold T2 → deals less damage (overflow-scaled, capped)
+function applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability) {
+  // Attacker under Cold T2 → deals less physical AND elemental damage (overflow-scaled, capped)
   {
     const wa = attacker?.weakness;
     if (wa && ((wa.tiers?.cold | 0) >= 2)) {
       const m = wa.meters?.cold | 0;
       const I = familyIntensityMult('cold', m);
-      const base = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
-      const cap = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
-
-      const pen = Math.min(base * I, cap);       // fraction 0..cap
-      const prev = amount;
-      amount = Math.max(0, Math.floor(amount * (1 - pen)));
-      try { _pushBreakdown?.({ label: 'Cold T2 damage-out', mult: (1 - pen), from: prev, to: amount }); } catch { }
+      const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
+      const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
+      const pen = Math.min(basePen * I, capPen);
+      const prevTotal = physical + elemental;
+      physical = Math.max(0, Math.floor(physical * (1 - pen)));
+      elemental = Math.max(0, Math.floor(elemental * (1 - pen)));
+      try { _pushBreakdown?.({ label: 'Cold T2 damage-out', mult: (1 - pen), from: prevTotal, to: physical + elemental }); } catch { }
     }
   }
 
-  // Expose T1: physical vulnerability (reduce DR → we just amp final dmg a bit)
-  if ((w.tiers[famKey(w, 'expose')] | 0) >= 1 && (ability?.isPhysical || ability?.tags?.includes('physical'))) {
-    const pen = WeaknessV3.families.expose.t1.physDRPen;
-    const prev_amt2 = amount; amount = Math.floor(amount * (1 + pen));
-    try { _pushBreakdown({ label: 'Expose T1 phys vuln', mult: (1 + pen), from: prev_amt2, to: amount }); } catch { }
-  }
+  const w = target?.weakness;
+  if (!w) return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
 
-  // Lightning: Zapped baseline dX jolt(s). Shocked may multi-proc jolts.
-  // IMPORTANT: Do NOT add to `amount` here; stash into `pendingMagicAdd` so PDR/Expose won't touch it.
+  // Lightning jolts: magic-typed, added to elemental bucket (bypasses PhysicalResist)
   if ((w.tiers[famKey(w, 'lightning')] | 0) >= 1) {
     const key = famKey(w, 'lightning');
     const t = w.tiers[key] | 0;
     const m = w.meters[key] | 0;
 
-    const I = weaknessIntensityMult(m); // overflow intensity
+    const I = weaknessIntensityMult(m);
     const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
     const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
 
-    let repeats = 1;               // T1 baseline: at least 1 jolt
+    let repeats = 1;
     let joltTotal = 0;
 
-    // T2: extra jolts — chance scales with overflow intensity
     if (t >= 2) {
       const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
       const flatPI = WeaknessV3.families.lightning.t2.joltFlatChancePerIntensity ?? 0;
-      const cap = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
+      const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
       const extraMax = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
-
-      // Effective per-extra roll probability:
-      //   p = min(cap, baseP * I + flatPerIntensity * max(0, I - 1))
-      const p = Math.min(cap, (baseP * I) + (flatPI * Math.max(0, I - 1)));
-
+      const p = Math.min(capP, (baseP * I) + (flatPI * Math.max(0, I - 1)));
       let extra = 0;
       for (let i = 0; i < extraMax; i++) {
         if (Math.random() < p) extra++;
       }
       repeats += extra;
-
-      // Log the chance used for visibility
       try { _pushBreakdown({ label: 'Lightning extra-proc chance', value: Math.round(p * 100) }); } catch { }
     }
 
-    // Roll the actual jolt damage per repeat (dX or flat fallback)
     for (let r = 0; r < repeats; r++) {
       let j = 0;
       if (dieMax && dieMax > 0) {
@@ -361,32 +361,20 @@ function applyWeaknessDamagePipeline(base, attacker, target, ability) {
       joltTotal += j;
     }
 
-    // Stash for later as MAGIC; don't add to amount here
-    pendingMagicAdd += joltTotal;
-
-    // Optional: pre-add breakdown line showing raw jolts count/total (we'll still push a final applied line too)
-    try { if (joltTotal > 0) _pushBreakdown({ label: `Lightning Jolt (raw) x${repeats}`, flat: joltTotal }); } catch { }
+    elemental += joltTotal;
+    try { if (joltTotal > 0) _pushBreakdown({ label: `Lightning Jolt x${repeats}`, flat: joltTotal }); } catch { }
   }
 
-  // === Add MAGIC-TYPED pending damage now (bypasses PDR/Expose physical) ===
-  if (pendingMagicAdd > 0) {
-    let magicAdd = pendingMagicAdd;
-    // If you want Curse (magic vuln) / elemental res to apply, run through modifiers as magic
-    try {
-      if (typeof applyDamageModifiers === 'function') {
-        magicAdd = applyDamageModifiers(magicAdd, attacker, target, { element: 'lightning', isMagic: true });
-      }
-    } catch { }
-    amount += magicAdd;
-    try { _pushBreakdown({ label: 'Lightning Jolt (magic)', flat: magicAdd }); } catch { }
-  }
-
-  return amount;
+  return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
 }
 
 
 // --------------------------------------------------
-// Existing damage calcs (kept for compatibility)
+// Typed damage calculation — returns { physical, elemental, necrotic, amount, isCrit }
+// physical   = weapon swing + STR scaling (gets PhysicalResist DR in CombatScene)
+// elemental  = weapon elemental flats + lightning jolts (gets ElementalResist DR)
+// necrotic   = converted from physical/elemental via jewelry (gets ElementalResist DR for now)
+// amount     = physical + elemental + necrotic (may be further scaled by skill amps in skills.js)
 // --------------------------------------------------
 export function calculateDamage(attacker, target, ability = null) {
   try { _resetDamageBreakdown(); } catch { }
@@ -395,12 +383,12 @@ export function calculateDamage(attacker, target, ability = null) {
   if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
   const weaponMods = weaponData?._weaponMods || {};
   const localDamageMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
-  // STR scaling (your rule)
+  // STR scaling
   const strengthMod = Math.floor((attacker.totalStats?.STR || 0) / 5);
   let baseDamage = Phaser.Math.Between(min, max) + strengthMod;
   try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
 
-  // Crit chance from attacker + weapon; CritMult from derived (NOT hardcoded)
+  // Crit chance from attacker + weapon; CritMult from derived
   const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
   const baseCritChance = (attacker.derived?.CritChance || 0) + weaponCrit;
   const baseCritMult = attacker?.derived?.CritMult ?? 1.5;
@@ -422,7 +410,12 @@ export function calculateDamage(attacker, target, ability = null) {
     try { _pushBreakdown({ label: 'gear damage', from: prev, mult: gearMult, to: baseDamage }); } catch { }
   }
 
-  let extraMagic = 0;
+  // physical = weapon swing; elemental = weapon elemental flats; necrotic = from conversions
+  let physical = baseDamage;
+  let elemental = 0;
+  let necrotic = 0;
+
+  // Weapon elemental flat adds (Flay/Curse amps via applyDamageModifiers; no DR here)
   for (const [element, range] of Object.entries(weaponMods.elementalFlat || {})) {
     if (!range) continue;
     const minFlat = range.min || 0;
@@ -441,6 +434,7 @@ export function calculateDamage(attacker, target, ability = null) {
       scaled = Math.max(0, Math.floor(scaled * elementMult));
     }
 
+    // Apply Flay/Curse amps — DR is handled per-type at CombatScene apply step
     let applied = applyDamageModifiers(scaled, attacker, target, {
       element,
       isMagic: true,
@@ -449,62 +443,92 @@ export function calculateDamage(attacker, target, ability = null) {
     });
 
     if (applied > 0) {
-      extraMagic += applied;
+      elemental += applied;
       try { _pushBreakdown({ label: `${element} flat`, flat: applied }); } catch { }
     }
   }
 
-  const final = applyWeaknessDamagePipeline(baseDamage, attacker, target, ability);
+  // Jewelry damage conversions (from attacker's gearEffects — set by CharacterBuilder)
+  const ge = attacker?.gearEffects || {};
+  if (ge.physToElemPercent) {
+    const conv = Math.floor(physical * ge.physToElemPercent / 100);
+    physical -= conv;
+    elemental += conv;
+  }
+  if (ge.physToNecroPercent) {
+    const conv = Math.floor(physical * ge.physToNecroPercent / 100);
+    physical -= conv;
+    necrotic += conv;
+  }
+  if (ge.elemToNecroPercent) {
+    const conv = Math.floor(elemental * ge.elemToNecroPercent / 100);
+    elemental -= conv;
+    necrotic += conv;
+  }
+
+  // Weakness pipeline: Cold T2 penalty + Lightning jolts (modifies physical & elemental)
+  const pipeResult = applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability);
+  physical = pipeResult.physical;
+  elemental = pipeResult.elemental;
+  necrotic = Math.max(0, necrotic);
+
   if (attacker) attacker.__gearAppliedForLastDamage = true;
-  return { amount: final + extraMagic, isCrit };
+
+  const amount = physical + elemental + necrotic;
+  return { physical, elemental, necrotic, amount, isCrit };
 }
 
 
 export function calculateDualWieldDamage(attacker, target) {
-  // Optional: clear then add a simple summary to the breakdown for the combat log
   try { _resetDamageBreakdown(); } catch { }
 
-  let totalAmount = 0;
+  let totalPhysical = 0, totalElemental = 0, totalNecrotic = 0;
   let isCrit = false;
 
   const mainWeaponData = getEquippedWeaponData(attacker, 'weaponMain');
   const offWeaponData = getEquippedWeaponData(attacker, 'weaponOff');
   const mainIsTwoHand = mainWeaponData?.hands === 2;
-
-  // Offhand counts only if it exists, isn't a shield, and main isn't 2H
   const offUsable = !!(offWeaponData && offWeaponData.weaponType !== 'shield' && !mainIsTwoHand);
 
   // --- Main hand swing ---
   const mainResult = calculateDamage(attacker, target);
-  const mainSwing = offUsable ? Math.floor(mainResult.amount * 0.75) : mainResult.amount;
-  totalAmount += mainSwing;
+  const mainScale = offUsable ? 0.75 : 1.0;
+  const mainP = Math.floor((mainResult.physical || 0) * mainScale);
+  const mainE = Math.floor((mainResult.elemental || 0) * mainScale);
+  const mainN = Math.floor((mainResult.necrotic || 0) * mainScale);
+  totalPhysical += mainP;
+  totalElemental += mainE;
+  totalNecrotic += mainN;
   if (mainResult.isCrit) isCrit = true;
 
   // --- Offhand swing (if valid) ---
   if (offUsable) {
     const originalMain = attacker.equipment.weaponMain;
-    attacker.equipment.weaponMain = attacker.equipment.weaponOff; // temporarily treat offhand as main
+    attacker.equipment.weaponMain = attacker.equipment.weaponOff;
     const offResult = calculateDamage(attacker, target);
     attacker.equipment.weaponMain = originalMain;
 
-    const offSwing = Math.floor(offResult.amount * 0.75);
-    totalAmount += offSwing;
+    const offP = Math.floor((offResult.physical || 0) * 0.75);
+    const offE = Math.floor((offResult.elemental || 0) * 0.75);
+    const offN = Math.floor((offResult.necrotic || 0) * 0.75);
+    totalPhysical += offP;
+    totalElemental += offE;
+    totalNecrotic += offN;
     if (offResult.isCrit) isCrit = true;
 
-    // Optional: breakdown entries so the log shows the two contributions
     try {
-      _pushBreakdown({ label: 'Dual Main', flat: mainSwing });
-      _pushBreakdown({ label: 'Dual Off', flat: offSwing });
+      _pushBreakdown({ label: 'Dual Main', flat: mainP + mainE + mainN });
+      _pushBreakdown({ label: 'Dual Off', flat: offP + offE + offN });
     } catch { }
   } else {
-    // Optional: still show main contribution if no offhand swing
-    try { _pushBreakdown({ label: 'Dual Main', flat: mainSwing }); } catch { }
+    try { _pushBreakdown({ label: 'Dual Main', flat: mainP + mainE + mainN }); } catch { }
   }
 
-  return { amount: totalAmount, isCrit };
+  const amount = totalPhysical + totalElemental + totalNecrotic;
+  return { physical: totalPhysical, elemental: totalElemental, necrotic: totalNecrotic, amount, isCrit };
 }
 
-// Fire spell (kept)
+// Fire spell — pure elemental; returns typed split
 export function calculateFireballDamage(attacker, target) {
   try { _resetDamageBreakdown(); } catch { }
   const intMod = attacker.totalStats?.INT || 0;
@@ -519,7 +543,7 @@ export function calculateFireballDamage(attacker, target) {
     _pushBreakdown({ label: 'base', value: base });
     if (isCrit) _pushBreakdown({ label: 'crit', from: base, mult: cm, to: amount });
   } catch { }
-  return { amount, isCrit, isMagic: true };
+  return { physical: 0, elemental: amount, necrotic: 0, amount, isCrit, isMagic: true };
 }
 
 
@@ -597,12 +621,11 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
 // NEW: One-call attack resolver (hit → crit → riders)
 // --------------------------------------------------
 export function resolveAttack(attacker, target, ability = null) {
-  // 1) Roll to hit (uses Cold T2 evasion penalty internally)
   const { hit, chance } = rollToHit(attacker, target, ability);
   if (!hit) {
-    return { hit: false, chance, amount: 0, isCrit: false };
+    return { hit: false, chance, physical: 0, elemental: 0, necrotic: 0, amount: 0, isCrit: false };
   }
 
   const result = calculateDamage(attacker, target, ability);
-  return { hit: true, chance, amount: result.amount, isCrit: result.isCrit };
+  return { hit: true, chance, ...result };
 }

@@ -1500,7 +1500,40 @@ export default class CombatScene extends Phaser.Scene {
     const affixNames = [...(inst.prefixes || []), ...(inst.suffixes || [])];
     if (affixNames.length) { lines.push(''); lines.push(affixNames.join(', ')); }
 
-    if (base.description) { lines.push(''); lines.push(base.description); }
+    // Show static description only for items without a rolled fixed affix or
+    // granted skills (those show concrete values/names via the blocks below).
+    if (base.description && !inst.fixedAffixValue && !view?.grantsSkills?.length) {
+      lines.push(''); lines.push(base.description);
+    }
+
+    // Misc mods (includes jewelry fixed-affix rolled values)
+    const misc = view?._miscMods || {};
+    if (misc.physToElemPercent)  lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
+    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
+    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
+    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
+    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
+    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Phys Dmg → ${fam} Buildup`);
+    });
+    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
+      if (pct) lines.push(`${pct}% Elem Dmg → ${fam} Buildup`);
+    });
+    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
+    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
+    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
+    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
+    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
+    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
+
+    // Granted skills
+    if (view?.grantsSkills?.length) {
+      const names = view.grantsSkills.map(id =>
+        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      );
+      if (lines.length) lines.push('');
+      lines.push(`Grants: ${names.join(', ')}`);
+    }
 
     return { title: base.name, titleColor: color, lines };
   }
@@ -2778,7 +2811,11 @@ export default class CombatScene extends Phaser.Scene {
     const rawDamage = Math.max(0, Number(resultMutable.amount || 0));
     const willDealDamage = !isMovement && !isHealResult && (rawDamage > 0 || ability.dealsDamage === true);
 
-    if (!missed && willDealDamage && !resultMutable.ignoreDR) {
+    // For typed damage hits (physical/elemental/necrotic), DR is applied per-type at the
+    // damage step below — skip this pre-DR block to avoid double-applying base DR.
+    // The damageReduction field is still used as a physical DR DELTA (expose T1 writes to it).
+    const _hasTypedDamage = resultMutable.physical != null || resultMutable.elemental != null || resultMutable.necrotic != null;
+    if (!missed && willDealDamage && !resultMutable.ignoreDR && !_hasTypedDamage) {
       const isMagicHit = !!(resultMutable.isMagic || ability?.isMagic || ability?.tags?.includes?.('magic'));
       const baseDR = getDamageReductionFraction(target, { isMagic: isMagicHit, applyExpose: false });
       if (baseDR) {
@@ -2912,10 +2949,47 @@ export default class CombatScene extends Phaser.Scene {
         const dealsDamage = !!ability.dealsDamage;
         const raw = Math.max(0, (amount | 0));
         const ignoreDR = !!result?.ignoreDR;
-        const dr = ignoreDR ? 0 : Phaser.Math.Clamp(result?.damageReduction || 0, -0.95, 0.95);
 
-        const dmg = Math.max(0, Math.floor(raw * (1 - dr)));
-        const blocked = raw - dmg;
+        // Typed path: physical/elemental/necrotic each use their own resist stat.
+        // Re-normalize splits to the final `raw` (which may include skill amps like Flay/Curse
+        // applied in skills.js after calculateDamage was called).
+        const _hasTyped = result.physical != null || result.elemental != null || result.necrotic != null;
+        let dr, dmg, blocked;
+
+        if (_hasTyped && !ignoreDR) {
+          const rP = result.physical || 0;
+          const rE = result.elemental || 0;
+          const rN = result.necrotic || 0;
+          const typedSum = rP + rE + rN;
+
+          // Re-normalize proportionally if skill amps changed the total
+          let p = rP, e = rE, n = rN;
+          if (typedSum > 0 && typedSum !== raw) {
+            const scale = raw / typedSum;
+            p = Math.round(rP * scale);
+            e = Math.round(rE * scale);
+            n = raw - p - e; // ensure exact sum
+          }
+
+          // Expose T1 stores a physical DR delta in result.damageReduction (starts at 0 for typed path)
+          const physDRDelta = result.damageReduction || 0;
+          const physDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'physical', applyExpose: false }) + physDRDelta, -0.95, 0.95);
+          const elemDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }), -0.95, 0.95);
+          const necrDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'necrotic', applyExpose: false }), -0.95, 0.95);
+
+          const physDmg = Math.max(0, Math.floor(p * (1 - physDR)));
+          const elemDmg = Math.max(0, Math.floor(e * (1 - elemDR)));
+          const necrDmg = Math.max(0, Math.floor(n * (1 - necrDR)));
+          dmg = physDmg + elemDmg + necrDmg;
+          blocked = raw - dmg;
+          // Effective combined DR for tooltip display
+          dr = raw > 0 ? Math.max(0, 1 - (dmg / raw)) : 0;
+        } else {
+          // Legacy path: single isMagic DR (used by abilities not returning typed splits)
+          dr = ignoreDR ? 0 : Phaser.Math.Clamp(result?.damageReduction || 0, -0.95, 0.95);
+          dmg = Math.max(0, Math.floor(raw * (1 - dr)));
+          blocked = raw - dmg;
+        }
 
         if (dealsDamage || dmg > 0) {
           target.currentHP = Math.max(0, target.currentHP - dmg);

@@ -9234,7 +9234,7 @@ Object.assign(RAW_SKILLS, {
       element: "physical",
       tickPctMaxHP: 0.0,
       turns: 3,
-      buildupFamilies: { disorient: 1000 },
+      buildupFamilies: { disorient: 50 },
     },
     apply: (attacker, target) => {
       const ability = SKILLS?.quake_mark;
@@ -9275,22 +9275,27 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient"],
     cooldown: 2,
-    buildupHint: { disorient: 100 },
+    buildupHint: { disorient: 60 },
+    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { physVulnPct: 15, turns: 2 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.ringing_blow;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
+      // +20% if target has T1+ lacerate
+      const lacerateTier = target?.weakness?.tiers?.lacerate || 0;
+      if (lacerateTier >= 1) amount = Math.floor(amount * 1.2);
       return {
         ...roll,
         amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 100 },
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 60 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A concussive strike that jars the foe's senses, building Disorient."
+    description: "A concussive strike that jars the foe's senses, building Disorient. Hits 20% harder against Lacerated targets; crossing a Disorient tier leaves them physically vulnerable."
   },
 
   'bedrock_guard': {
@@ -9330,7 +9335,7 @@ Object.assign(RAW_SKILLS, {
 
   'faultline': {
     id: "faultline",
-    name: "Faultline",
+    name: "Frost Faultline",
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.21",
@@ -9345,8 +9350,10 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     aoe: { shape: "column", scale: 1 },
-    buildupHint: { cold: 100 },
-    slotEffect: { id: "faultline_crack", element: "cold", buildup: 80, tickPctMaxHP: 0.0, turns: 2 },
+    requiresWeakness: { family: "cold", tierAtLeast: 1 },
+    buildupHint: { cold: 80 },
+    // immobilizes: true and elemVulnPct stubs — require future CombatScene support
+    slotEffect: { id: "faultline_crack", element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.faultline;
       const roll = calculateDamage(attacker, target, ability);
@@ -9358,8 +9365,8 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
       amount = Math.max(1, Math.floor(amount * 0.95));
-      const baseBuildup = ability?.buildupHint?.cold ?? 100;
-      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect, buildup: Math.max(baseBuildup, ability.slotEffect.buildup || 0) } : undefined;
+      const baseBuildup = ability?.buildupHint?.cold ?? 80;
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
@@ -9394,7 +9401,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Open a creeping crack that chills the line, leaving icy hazard patches behind."
+    description: "Requires Cold T1. Smash a frost crack through the line, leaving a chilling hazard zone for 2 turns. Enemies in the zone suffer Cold buildup and may be immobilized."
   },
 
   'iron_chant': {
@@ -9413,12 +9420,13 @@ Object.assign(RAW_SKILLS, {
     tags: ["support", "stance", "disease"],
     cooldown: 3,
     buildupHint: { disease: 100 },
-    teamBuff: { scope: "column", effect: { id: "iron_chant", turns: 1, guardPct: 8, retaliateBuildup: { disease: 100 } } },
+    // guardHits: 2 and guardDiseaseCond: true are stubs — require future CombatScene support
+    teamBuff: { scope: "column", effect: { id: "iron_chant", turns: 1, guardPct: 25, guardHits: 2, guardDiseaseCond: true, retaliateBuildup: { disease: 80 } } },
     apply: () => {
       const ability = SKILLS?.iron_chant;
       const effect = ability?.teamBuff?.effect ? {
         ...ability.teamBuff.effect,
-        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 100 }
+        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 80 }
       } : undefined;
       return {
         amount: 0,
@@ -9444,8 +9452,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     emitTagsOnUse: ["swing"],
     cooldown: 2,
-    buildupHint: { disorient: 100 },
-    rewardIfWeak: { family: "disorient", tierAtLeast: 1, buff: { damagePct: 12 } },
+    buildupHint: { disorient: 70 },
     apply: (attacker, target) => {
       const ability = SKILLS?.staggering_clout;
       const roll = calculateDamage(attacker, target, ability);
@@ -9454,19 +9461,17 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
+      // +15% at T1, +30% at T2 (flat per tier, not multiplicative stacking)
       const disorientTier = target?.weakness?.tiers?.disorient || 0;
-      if (disorientTier >= 1) {
-        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 12;
-        amount = Math.floor(amount * (1 + (bonus / 100) * disorientTier));
-      }
+      if (disorientTier >= 2) amount = Math.floor(amount * 1.30);
+      else if (disorientTier >= 1) amount = Math.floor(amount * 1.15);
       return {
         ...roll,
         amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 100 },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 70 },
       };
     },
-    description: "A sideways blow that rattles already-dazed foes, hitting harder as Disorient rises."
+    description: "A sideways blow that rattles already-dazed foes. Deals 15% more damage per Disorient tier (+15% at T1, +30% at T2)."
   },
 
   // -------- Payoff --------
@@ -9483,14 +9488,11 @@ Object.assign(RAW_SKILLS, {
     mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher", "consume"],
+    tags: ["melee", "attack", "finisher"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    consumeWeakness: ["disorient"],
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { stunned: true, turns: 1 } }],
-    statusEffects: [{ id: "stunned", turns: 1 }],
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.gravity_slam;
       const roll = calculateDamage(attacker, target, ability);
       let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
@@ -9500,25 +9502,34 @@ Object.assign(RAW_SKILLS, {
       }));
       const meter = target?.weakness?.meters?.disorient || 0;
       const tier = target?.weakness?.tiers?.disorient || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier >= 1) {
-        amount = Math.floor(amount * (1 + 0.16 * tier));
+      const intensity = weaknessIntensityMult(meter) || 1;
+      // 130% at T1, 160% at T2
+      if (tier >= 2) amount = Math.floor(amount * 1.6);
+      else if (tier >= 1) amount = Math.floor(amount * 1.3);
+      // Overflow bonus
+      if (intensity > 1) amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
+      // Extend all active quake zones by 1 turn
+      if (scene?.slotEffects) {
+        Object.values(scene.slotEffects).forEach(zoneList => {
+          if (!Array.isArray(zoneList)) return;
+          zoneList.forEach(eff => {
+            if (eff?.id === "quake_mark_zone" && eff.turns > 0) eff.turns += 1;
+          });
+        });
       }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.18));
+      // Drain 20% of target's current MP
+      let manaDrained = 0;
+      if (target && (target.currentMP || 0) > 0) {
+        manaDrained = Math.floor(target.currentMP * 0.2);
+        target.currentMP = Math.max(0, target.currentMP - manaDrained);
       }
-      const statusEffects = tier >= 1
-        ? (Array.isArray(ability?.statusEffects) ? ability.statusEffects.map(effect => ({ ...effect })) : undefined)
-        : undefined;
       return {
         ...roll,
         amount,
-        statusEffects,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+        manaDrained: manaDrained > 0 ? manaDrained : undefined,
       };
     },
-    description: "Bring the mace down with unstoppable force; Disoriented foes are stunned as their balance shatters."
+    description: "Bring the mace down with crushing force on a Disoriented foe. 130% damage at T1, 160% at T2, with an overflow bonus. Drains 20% of target MP and extends all active Quake zones by 1 turn."
   },
 
   'miasma_crush': {
@@ -9534,11 +9545,10 @@ Object.assign(RAW_SKILLS, {
     mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "disease", "consume", "proliferate"],
+    tags: ["melee", "attack", "disease", "proliferate"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     requiresWeakness: { family: "disease", tierAtLeast: 2 },
-    consumeWeakness: ["disease"],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.miasma_crush;
       const roll = calculateDamage(attacker, target, ability);
@@ -9549,9 +9559,11 @@ Object.assign(RAW_SKILLS, {
       }));
       const meter = target?.weakness?.meters?.disease || 0;
       const tier = target?.weakness?.tiers?.disease || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      amount = Math.floor(amount * (1 + 0.12 * tier + Math.max(0, intensity - 1) * 0.15));
+      const intensity = weaknessIntensityMult(meter) || 1;
+      // Disease overflow amplifies the hit; base 15% per tier, plus intensity overflow
+      amount = Math.floor(amount * (1 + 0.15 * tier + Math.max(0, intensity - 1) * 0.15));
 
+      // Spread 50% of disease meter to up to 2 column neighbors
       const spreadMeta = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
@@ -9560,7 +9572,7 @@ Object.assign(RAW_SKILLS, {
           const neighbors = sideSlots
             ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
             .map(slot => slot.char) || [];
-          const transfer = meter > 0 ? Math.max(20, Math.floor(meter * 0.45)) : 0;
+          const transfer = meter > 0 ? Math.max(20, Math.floor(meter * 0.5)) : 0;
           neighbors.slice(0, 2).forEach(char => {
             if (!char) return;
             char.weakness = char.weakness || { meters: {}, tiers: {} };
@@ -9573,19 +9585,24 @@ Object.assign(RAW_SKILLS, {
         }
       }
 
+      // Clear disease on the target
       if (target?.weakness?.meters) {
         target.weakness.meters.disease = 0;
         if (target.weakness.tiers) target.weakness.tiers.disease = weaknessTierFromMeter(0);
       }
 
+      // Force necrotic damage typing
+      const finalAmount = Math.max(1, amount);
       return {
         ...roll,
-        amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
+        physical: 0,
+        elemental: 0,
+        necrotic: finalAmount,
+        amount: finalAmount,
         proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
       };
     },
-    description: "Burst the infection out of a diseased foe, spreading sickness to nearby enemies before the rot clears."
+    description: "Requires Disease T2. Crushes a rotting foe with necrotic force, spreading 50% of their Disease meter to nearby column enemies before clearing it."
   },
 
   'fault_collapse': {
@@ -9614,10 +9631,38 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      const zones = attacker?.statuses?.mace_quake_zones || 0;
-      if (zones > 0) {
-        amount = Math.floor(amount * (1 + Math.min(0.4, zones * 0.12)));
+
+      // Count total remaining zone-turns across all active quake/faultline zones
+      let totalZoneTurns = 0;
+      if (scene?.slotEffects) {
+        Object.values(scene.slotEffects).forEach(zoneList => {
+          if (!Array.isArray(zoneList)) return;
+          zoneList.forEach(eff => {
+            if ((eff?.id === "quake_mark_zone" || eff?.id === "faultline_crack") && (eff.turns || 0) > 0) {
+              totalZoneTurns += eff.turns;
+            }
+          });
+        });
       }
+      // +25% per zone-turn remaining
+      if (totalZoneTurns > 0) {
+        amount = Math.floor(amount * (1 + 0.25 * totalZoneTurns));
+      }
+
+      // Collapse (clear) all zones
+      if (scene?.slotEffects) {
+        Object.values(scene.slotEffects).forEach(zoneList => {
+          if (!Array.isArray(zoneList)) return;
+          zoneList.forEach(eff => {
+            if (eff?.id === "quake_mark_zone" || eff?.id === "faultline_crack") {
+              eff.turns = 0;
+            }
+          });
+        });
+      }
+      // Also clear the bucket counter
+      const bucket = ensureStatusBucket(attacker);
+      if (bucket) bucket.mace_quake_zones = 0;
 
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
@@ -9627,7 +9672,7 @@ Object.assign(RAW_SKILLS, {
           const others = sideSlots
             ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
             .map(slot => slot.char) || [];
-          const splashAmount = Math.max(1, Math.floor(amount * 0.85));
+          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
           others.slice(0, 2).forEach(char => {
             splash.push({
               target: char,
@@ -9638,17 +9683,14 @@ Object.assign(RAW_SKILLS, {
         }
       }
 
-      const bucket = ensureStatusBucket(attacker);
-      if (bucket) bucket.mace_quake_zones = 0;
-
       return {
         ...roll,
         amount,
         splash: splash.length ? splash : undefined,
-        removedZones: zones || undefined,
+        removedZones: totalZoneTurns > 0 ? totalZoneTurns : undefined,
       };
     },
-    description: "Collapse all fault and quake zones you created, crushing foes caught along the line."
+    description: "Collapse all active Quake and Frost Faultline zones at once, dealing +25% damage per zone-turn remaining. Deals 75% to column targets."
   },
 
   'bell_ringer': {
@@ -9664,13 +9706,13 @@ Object.assign(RAW_SKILLS, {
     mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "consume"],
+    tags: ["melee", "attack"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    requiresWeakness: { family: "disorient", tierAtLeast: 2 },
-    consumeWeakness: ["disorient"],
-    rewardIfTierCross: [{ family: "disorient", tier: 2, debuff: { speedDownPct: 12, turns: 1 } }],
-    statusEffects: [{ id: "bell_ringer_concuss", turns: 1, mods: { Initiative: -15, speedDownPct: 12 } }],
+    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
+    // Also requires T1 Expose — validated in apply; conditionHint for UI tooltip
+    conditionHint: { requiresDisorient: 1, requiresExpose: 1 },
+    statusEffects: [{ id: "bell_ringer_concuss", turns: 2, mods: { Initiative: -15, speedDownPct: 12 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.bell_ringer;
       const roll = calculateDamage(attacker, target, ability);
@@ -9679,16 +9721,19 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      amount = Math.floor(amount * 1.2);
-      const tier = target?.weakness?.tiers?.disorient || 0;
+      amount = Math.floor(amount * 1.25);  // 125% base
+      const disorientTier = target?.weakness?.tiers?.disorient || 0;
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
       const meter = target?.weakness?.meters?.disorient || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier > 0) {
-        amount = Math.floor(amount * (1 + 0.15 * tier));
+      const intensity = weaknessIntensityMult(meter) || 1;
+      // Condition bonus when both T1 disorient and T1 expose are met
+      if (disorientTier >= 1 && exposeTier >= 1) {
+        amount = Math.floor(amount * (1 + 0.12 * disorientTier));
       }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
-      }
+      // Overflow bonus
+      if (intensity > 1) amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.15));
+      // Extra 50% final multiplier on crit
+      if (roll.isCrit) amount = Math.floor(amount * 1.5);
       const statusEffects = Array.isArray(ability?.statusEffects)
         ? ability.statusEffects.map(effect => ({ ...effect }))
         : undefined;
@@ -9696,11 +9741,9 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         amount,
         statusEffects,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A ringing concussion that drains initiative from heavily dazed foes, clearing their Disorient."
+    description: "Requires T1 Disorient and T1 Expose. A ringing concussion dealing 125% damage, scaling with overflow. Crits deal an additional 50% on top. Applies an Initiative penalty debuff."
   },
 
   'boulder_toss': {
@@ -9712,13 +9755,14 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 16,
-    actionCost: "major",
-    mpCost: 5,
+    // actionCost: "both" — costs major + bonus action (stub; engine support pending)
+    actionCost: "both",
+    mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["attack", "aoe", "blunt"],
     emitTagsOnUse: ["throw"],
-    cooldown: 2,
+    cooldown: 3,
     aoe: { shape: "column", scale: 1 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.boulder_toss;
@@ -9728,11 +9772,22 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      const disorientTier = target?.weakness?.tiers?.disorient || 0;
-      const coldTier = target?.weakness?.tiers?.cold || 0;
-      const bonusTier = Math.max(disorientTier, coldTier);
-      if (bonusTier > 0) {
-        amount = Math.floor(amount * (1 + 0.1 * bonusTier));
+      amount = Math.floor(amount * 1.25);  // 125% base
+      // +15% per elemental tier (cold, lightning, fire)
+      const elemTier = Math.max(
+        target?.weakness?.tiers?.cold || 0,
+        target?.weakness?.tiers?.lightning || 0,
+        target?.weakness?.tiers?.fire || 0,
+      );
+      if (elemTier > 0) amount = Math.floor(amount * (1 + 0.15 * elemTier));
+      // Extend all active quake zones by 1 turn
+      if (scene?.slotEffects) {
+        Object.values(scene.slotEffects).forEach(zoneList => {
+          if (!Array.isArray(zoneList)) return;
+          zoneList.forEach(eff => {
+            if (eff?.id === "quake_mark_zone" && eff.turns > 0) eff.turns += 1;
+          });
+        });
       }
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
@@ -9744,8 +9799,12 @@ Object.assign(RAW_SKILLS, {
             .map(slot => slot.char) || [];
           others.slice(0, 2).forEach(char => {
             let splashAmount = Math.max(1, Math.floor(amount * 0.8));
-            const tier = Math.max(char?.weakness?.tiers?.disorient || 0, char?.weakness?.tiers?.cold || 0);
-            if (tier > 0) splashAmount = Math.floor(splashAmount * (1 + 0.08 * tier));
+            const charElemTier = Math.max(
+              char?.weakness?.tiers?.cold || 0,
+              char?.weakness?.tiers?.lightning || 0,
+              char?.weakness?.tiers?.fire || 0,
+            );
+            if (charElemTier > 0) splashAmount = Math.floor(splashAmount * (1 + 0.15 * charElemTier));
             splash.push({
               target: char,
               amount: splashAmount,
@@ -9760,7 +9819,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Hurl a chunk of stone to batter a foe and nearby targets; harder on Disoriented or Chilled enemies."
+    description: "Costs both actions. Hurl a boulder for 125% damage to a column. Deals +15% per elemental weakness tier on each target. Also extends active Quake zones by 1 turn."
   },
 
   'sacred_shockwave': {
@@ -9780,38 +9839,43 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 4,
     aoe: { shape: "column", scale: 1 },
-    conditionHint: { requiresMultipleDisorient: true },
-    healPerStack: 2,
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { cleared: true } }],
+    healHPPerStack: 3,
+    healMPPerStack: 2,
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.sacred_shockwave;
       const roll = calculateDamage(attacker, target, ability);
       const baseAmount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
         tags: ability?.tags,
-        isMagic: true,
         skipGearMultiplier: true,
       }));
       let totalStacksConsumed = 0;
 
-      const hitOne = (victim) => {
+      // Clear disorient, toxic, and disease from one enemy; returns hit amount
+      const hitAndClear = (victim) => {
         if (!victim) return { amount: 0 };
         let amt = baseAmount;
         const tier = victim?.weakness?.tiers?.disorient || 0;
         const meter = victim?.weakness?.meters?.disorient || 0;
-        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+        const intensity = weaknessIntensityMult(meter) || 1;
         if (tier > 0) amt = Math.floor(amt * (1 + 0.1 * tier));
         if (intensity > 1) amt = Math.floor(amt * (1 + Math.max(0, intensity - 1) * 0.12));
-        const stacks = tier > 0 ? tier : 0;
-        totalStacksConsumed += stacks;
+        totalStacksConsumed += tier;
+        // Clear disorient, toxic, disease
         if (victim?.weakness?.meters) {
           victim.weakness.meters.disorient = 0;
-          if (victim.weakness.tiers) victim.weakness.tiers.disorient = weaknessTierFromMeter(0);
+          victim.weakness.meters.toxic = 0;
+          victim.weakness.meters.disease = 0;
+          if (victim.weakness.tiers) {
+            victim.weakness.tiers.disorient = weaknessTierFromMeter(0);
+            victim.weakness.tiers.toxic = weaknessTierFromMeter(0);
+            victim.weakness.tiers.disease = weaknessTierFromMeter(0);
+          }
         }
         return { amount: Math.max(1, amt) };
       };
 
-      const main = hitOne(target);
+      const main = hitAndClear(target);
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
@@ -9821,43 +9885,40 @@ Object.assign(RAW_SKILLS, {
             ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
             .map(slot => slot.char) || [];
           others.forEach(char => {
-            const res = hitOne(char);
-            splash.push({
-              target: char,
-              amount: res.amount,
-              isMagic: true,
-              tags: ability?.tags,
-            });
+            const res = hitAndClear(char);
+            splash.push({ target: char, amount: res.amount, tags: ability?.tags });
           });
         }
       }
 
+      // Heal allies: HP and MP per Disorient stack consumed
       let healedAllies;
-      const healPerStack = ability?.healPerStack ?? 2;
+      const healHP = ability?.healHPPerStack ?? 3;
+      const healMP = ability?.healMPPerStack ?? 2;
       if (attacker?.team && totalStacksConsumed > 0) {
         healedAllies = [];
         attacker.team.forEach(ally => {
           if (!ally) return;
           const maxHP = ally.maxHP ?? ally.derivedStats?.maxHP ?? 0;
-          if (maxHP <= 0) return;
-          const heal = totalStacksConsumed * healPerStack;
-          const before = ally.currentHP ?? 0;
-          const after = Math.min(maxHP, before + heal);
-          ally.currentHP = after;
-          healedAllies.push({ id: ally.id || ally.name, healed: after - before });
+          const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
+          const hpBefore = ally.currentHP ?? 0;
+          const mpBefore = ally.currentMP ?? 0;
+          const hpAfter = maxHP > 0 ? Math.min(maxHP, hpBefore + totalStacksConsumed * healHP) : hpBefore;
+          const mpAfter = maxMP > 0 ? Math.min(maxMP, mpBefore + totalStacksConsumed * healMP) : mpBefore;
+          ally.currentHP = hpAfter;
+          ally.currentMP = mpAfter;
+          healedAllies.push({ id: ally.id || ally.name, healedHP: hpAfter - hpBefore, healedMP: mpAfter - mpBefore });
         });
       }
 
       return {
         ...roll,
         amount: main.amount,
-        isMagic: true,
         splash: splash.length ? splash : undefined,
         healedAllies: healedAllies && healedAllies.length ? healedAllies : undefined,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Slam a sanctified wave through the ranks; Disorient is cleared while allies are healed per stack consumed."
+    description: "Slam a sanctified wave through an enemy column, clearing Disorient, Toxic, and Disease. Allies heal HP and MP for each Disorient stack consumed."
   },
 
   'earthen_tempest': {
@@ -9876,10 +9937,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["attack", "aoe", "proliferate", "disorient"],
     emitTagsOnUse: ["swing"],
     cooldown: 3,
-    aoe: { shape: "column", scale: 1 },
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    proliferateWeakness: { families: ["disorient"], to: "column", ratio: 1.0, maxTargets: 3 },
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { cleared: true } }],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.earthen_tempest;
       const roll = calculateDamage(attacker, target, ability);
@@ -9891,40 +9949,55 @@ Object.assign(RAW_SKILLS, {
       amount = Math.max(1, Math.floor(amount * 0.95));
 
       const sourceMeter = target?.weakness?.meters?.disorient || 0;
+      const sourceTier = target?.weakness?.tiers?.disorient || 0;
       const spreadMeta = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 3;
-          others.slice(0, maxTargets).forEach(char => {
-            if (!char) return;
-            char.weakness = char.weakness || { meters: {}, tiers: {} };
-            char.weakness.meters = char.weakness.meters || {};
-            char.weakness.tiers = char.weakness.tiers || {};
-            char.weakness.meters.disorient = (char.weakness.meters.disorient || 0) + sourceMeter;
-            char.weakness.tiers.disorient = weaknessTierFromMeter(char.weakness.meters.disorient);
-            spreadMeta.push({ targetId: char.id || char.name, family: "disorient", amount: sourceMeter });
+
+      // Gather all eligible enemies (excluding the main target)
+      const allEnemies = [];
+      if (scene) {
+        const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+        if (sideSlots) {
+          sideSlots.forEach(slot => {
+            if (slot?.char && slot.char !== target && slot.char.status !== "incapacitated") {
+              allEnemies.push(slot.char);
+            }
           });
         }
       }
 
-      if (target?.weakness?.meters) {
-        target.weakness.meters.disorient = 0;
-        if (target.weakness.tiers) target.weakness.tiers.disorient = weaknessTierFromMeter(0);
-      }
+      // Randomly select up to 3 enemies to receive the Disorient spread
+      const shuffled = allEnemies.sort(() => Math.random() - 0.5);
+      shuffled.slice(0, 3).forEach(char => {
+        if (!char) return;
+        char.weakness = char.weakness || { meters: {}, tiers: {} };
+        char.weakness.meters = char.weakness.meters || {};
+        char.weakness.tiers = char.weakness.tiers || {};
+        // Copy disorient meter
+        char.weakness.meters.disorient = (char.weakness.meters.disorient || 0) + sourceMeter;
+        char.weakness.tiers.disorient = weaknessTierFromMeter(char.weakness.meters.disorient);
+        spreadMeta.push({ targetId: char.id || char.name, family: "disorient", amount: sourceMeter });
+        // T2 disorient on source: also spread elemental weaknesses (cold, lightning, fire)
+        if (sourceTier >= 2) {
+          for (const fam of ["cold", "lightning", "fire"]) {
+            const elemMeter = target?.weakness?.meters?.[fam] || 0;
+            if (elemMeter > 0) {
+              char.weakness.meters[fam] = (char.weakness.meters[fam] || 0) + elemMeter;
+              char.weakness.tiers[fam] = weaknessTierFromMeter(char.weakness.meters[fam]);
+              spreadMeta.push({ targetId: char.id || char.name, family: fam, amount: elemMeter });
+            }
+          }
+        }
+      });
+
+      // Do NOT clear the main target's disorient — the gale copies, not transfers
 
       return {
         ...roll,
         amount,
         proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Whip up an earthen gale, copying Disorient from one target to the rest of the line before clearing the original."
+    description: "Requires Disorient T1. Strike the target and whip up an earthen gale, copying their Disorient meter to 3 random enemies. At T2, also copies elemental weaknesses. Does not clear the source."
   },
 
   'bonecrusher': {
