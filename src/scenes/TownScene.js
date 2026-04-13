@@ -28,11 +28,17 @@ const QUEST_FLAG_POSITIONS = {
   elder_bonepile:           { x: 857, y: 342 },
   elder_leveling:           { x: 857, y: 342 },
   samuel_mourne:            { x: 837, y: 493 },
+  // Brief markers — orange !, set before the encounter so the player visits for a briefing
+  elseth_leader_brief:      { x: 1059, y: 310 },
+  styx_leader_brief:        { x: 305,  y: 298 },
+  lesse_leader_brief:       { x: 477,  y: 492 },
+  zafaar_leader_brief:      { x: 928,  y: 76  },
+  // Challenge markers — set after the encounter; cleared on entry, transitions to handin
   elseth_leader_challenge:  { x: 1059, y: 310 },
   styx_leader_challenge:    { x: 305,  y: 298 },
   lesse_leader_challenge:   { x: 477,  y: 492 },
   zafaar_leader_challenge:  { x: 928,  y: 76  },
-  // Hand-in markers — same positions, rendered gold with ★ to signal "quest ready"
+  // Hand-in markers — gold ★, cleared when player clicks "Complete Quest"
   elseth_leader_handin:     { x: 1059, y: 310 },
   styx_leader_handin:       { x: 305,  y: 298 },
   lesse_leader_handin:      { x: 477,  y: 492 },
@@ -82,6 +88,19 @@ const TRIBE_VENDOR_INVENTORY = {
     // Rings
     'lesse_ring_elemental_overload', 'lesse_ring_raw_force', 'lesse_ring_sever_spirit',
   ],
+};
+
+// Jewelry (amulets + rings) from each tribe's vendor pool — used as leader quest rewards.
+// 3 random pieces are chosen from this pool when the player completes a leader hand-in.
+const TRIBE_JEWELRY_POOL = {
+  elseth: ['elseth_amulet_phys_to_elem', 'elseth_amulet_phys_to_necro', 'elseth_amulet_elem_to_necro',
+           'elseth_ring_elem_proc', 'elseth_ring_necro_proc', 'elseth_ring_phys_proc'],
+  styx:   ['styx_amulet_initiative', 'styx_amulet_cooldown', 'styx_amulet_shield',
+           'styx_ring_triage', 'styx_ring_remedy', 'styx_ring_weather'],
+  lesse:  ['lesse_amulet_cold', 'lesse_amulet_fire', 'lesse_amulet_lightning',
+           'lesse_ring_elemental_overload', 'lesse_ring_raw_force', 'lesse_ring_sever_spirit'],
+  zafaar: ['zafaar_amulet_disorient', 'zafaar_amulet_lacerate', 'zafaar_amulet_expose',
+           'zafaar_ring_double_damage', 'zafaar_ring_half_damage', 'zafaar_ring_heal_proc'],
 };
 
 const TRIBE_DISPLAY_NAMES = {
@@ -1673,7 +1692,34 @@ export default class TownScene extends Phaser.Scene {
       stashBg.on('pointerdown',  openStash);
       stashLabel.on('pointerdown', openStash);
 
-      group.add([stashBg, stashLabel]);
+      // Tribe HQ button — placeholder for the tribe management panel
+      const hqBg = this.add.rectangle(panelLeft + 140, panelTop + 52, 84, 36, 0x1a2a1a, 1)
+        .setStrokeStyle(1, 0x886644)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(12);
+
+      const hqLabel = this.add.text(panelLeft + 140, panelTop + 52, '⚔ Tribe HQ', {
+        fontSize: '13px',
+        color: '#aaffaa',
+        fontFamily: 'Georgia',
+      }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
+
+      const openHQ = () => {
+        SoundManager.play('handsClick');
+        this.scene.get('UIScene')?.showDialogue(
+          '[ Tribe Headquarters ]\n\n' +
+          'Monitor your tribe\'s hunting parties, view active objectives,\n' +
+          'and respond to tribe events here.\n\n' +
+          '— Coming Soon —'
+        );
+      };
+
+      hqBg.on('pointerover',  () => hqBg.setFillStyle(0x2a3a2a, 1));
+      hqBg.on('pointerout',   () => hqBg.setFillStyle(0x1a2a1a, 1));
+      hqBg.on('pointerdown',  openHQ);
+      hqLabel.on('pointerdown', openHQ);
+
+      group.add([stashBg, stashLabel, hqBg, hqLabel]);
     }
 
     // Only cache post-choice layouts — pre-choice content varies by flag state.
@@ -1973,6 +2019,9 @@ export default class TownScene extends Phaser.Scene {
     // Rebuild quest flag markers on the map.
     this._buildQuestFlags();
 
+    // Rebuild the right-panel menu so the Tribes button appears immediately.
+    this.scene.get('UIScene')?.refreshUI?.();
+
     // Return to exterior and show confirmation.
     this._hideExteriorsAndOtherInteriors();
     this._showExterior();
@@ -2051,14 +2100,16 @@ export default class TownScene extends Phaser.Scene {
     // Map display name → internal ID
     const TRIBE_KEY = { Elseth: 'elseth', Styx: 'styx', "Le'sse": 'lesse', Zafaar: 'zafaar' };
     const tribeId       = TRIBE_KEY[tribe] ?? tribe.toLowerCase();
+    const briefFlag     = `${tribeId}_leader_brief`;
     const challengeFlag = `${tribeId}_leader_challenge`;
     const handinFlag    = `${tribeId}_leader_handin`;
 
+    const briefActive     = ProgressionManager.hasQuestFlag(briefFlag);
     const challengeActive = ProgressionManager.hasQuestFlag(challengeFlag);
     const handinActive    = ProgressionManager.hasQuestFlag(handinFlag);
 
-    // Always bust cache when a challenge or handin is live so fresh dialogue shows
-    if ((challengeActive || handinActive) && this.leaderGroups[tribe]) {
+    // Bust cache whenever any quest flag is live so fresh dialogue always shows
+    if ((briefActive || challengeActive || handinActive) && this.leaderGroups[tribe]) {
       this.leaderGroups[tribe].destroy(true);
       delete this.leaderGroups[tribe];
     }
@@ -2069,9 +2120,9 @@ export default class TownScene extends Phaser.Scene {
     }
 
     const colors = {
-      Styx:    0x221b24,
-      Zafaar:  0x24221b,
-      Elseth:  0x1b241c,
+      Styx:     0x221b24,
+      Zafaar:   0x24221b,
+      Elseth:   0x1b241c,
       "Le'sse": 0x1c1f24,
     };
     const interiorImages = {
@@ -2081,9 +2132,16 @@ export default class TownScene extends Phaser.Scene {
       "Le'sse": 'lesse_interior',
     };
 
-    // ── Phase 1: challenge flag active → transition to handin on entry ────────
-    // The player first sees the briefing text. The orange ! becomes a gold ★
-    // so they know to come back after the encounter and hand in.
+    // ── Phase 1: BRIEF — player visits before the encounter ──────────────────
+    // Clear the brief flag on entry (one-time read). No Complete button.
+    if (briefActive) {
+      ProgressionManager.clearQuestFlag(briefFlag);
+      GameState.save('autosave');
+      this._buildQuestFlags();
+    }
+
+    // ── Phase 2: CHALLENGE → HANDIN transition ────────────────────────────────
+    // The encounter is done. First entry converts the orange ! to a gold ★.
     if (challengeActive) {
       ProgressionManager.clearQuestFlag(challengeFlag);
       ProgressionManager.setQuestFlag(handinFlag);
@@ -2091,18 +2149,16 @@ export default class TownScene extends Phaser.Scene {
       this._buildQuestFlags();
     }
 
-    // ── Flavor text — same for both challenge-entry and handin revisit ────────
-    const CHALLENGE_TEXT = {
+    // ── Flavor text per phase ─────────────────────────────────────────────────
+    const BRIEF_TEXT = {
       elseth:
         'A slight smirk crosses her face as you enter.\n' +
-        'In the corner, a half-built training dummy flickers with pale green light.\n\n' +
-        '"Those dummies you demolished earlier? That was me.\n' +
-        'I breathe life into them — call it animancy, call it showing off."\n\n' +
-        'She waves a hand and the dummy\'s arm twitches.\n\n' +
-        '"I\'ve been watching your form. Sloppy, but promising.\n' +
-        'Next time I animate them, they\'ll carry real weapons\n' +
-        'and they\'ll know how to use them.\n' +
-        'Whatever they drop when you put them down — it\'s yours."',
+        'In the corner, a training dummy flickers with pale green light.\n\n' +
+        '"I animate those constructs in the pit. Call it a hobby — or a warning."\n\n' +
+        'She waves a hand and the dummy\'s arm jerks upright.\n\n' +
+        '"I\'ve been watching your form. Sloppy, but there\'s something there.\n' +
+        'Next time I send them out, they\'ll fight back properly.\n' +
+        'Real weapons. Real coordination. We\'ll see what you\'re made of."',
       styx:
         '"You handled the basics. Strength is the easy part."\n\n' +
         'The hunter does not look up from the map spread across the table.\n\n' +
@@ -2119,35 +2175,65 @@ export default class TownScene extends Phaser.Scene {
         'My students have been waiting for a worthy test.\n' +
         'They will not hold back — nor should you."',
       zafaar:
-        'The Zafaar leader stands with his back to the door,\n' +
+        'The Zafaar champion stands with his back to the door,\n' +
         'arms crossed, a massive weapon leaning against the wall beside him.\n\n' +
         '"I heard you put down the Le\'sse duelists.\n' +
         'Good. Means you\'re worth something."\n\n' +
         'He turns, eyes fixed on you.\n\n' +
-        '"I carry the finest blade this camp has seen.\n' +
-        'Beat me, and it\'s yours. I won\'t offer twice."',
+        '"My fighters will be waiting for you in the pit.\n' +
+        'Give them a real fight."',
+    };
+
+    const HANDIN_TEXT = {
+      elseth:
+        'She looks up from the flickering dummy. A slight nod.\n\n' +
+        '"Better than expected. You followed them into a corner\n' +
+        'and kept the pressure. That\'s what I was watching for."\n\n' +
+        'She gestures toward a small chest near the door.\n\n' +
+        '"Take what\'s in there. You earned it."',
+      styx:
+        'The hunter looks up from her map for the first time.\n\n' +
+        '"Your flanks held. You moved together." She taps the map.\n\n' +
+        '"I\'ve seen trained hunters fall apart under that kind of pressure."\n\n' +
+        'She stands.\n\n' +
+        '"Consider this a debt repaid."',
+      lesse:
+        'The two figures open their eyes in unison.\n\n' +
+        'The elder turns slowly.\n\n' +
+        '"You moved with the current, not against it.\n' +
+        'There is wisdom in how you resisted."\n\n' +
+        'A wrapped bundle rests near the door.\n\n' +
+        '"The elements leave nothing without reason."',
+      zafaar:
+        'The champion doesn\'t turn for a long moment.\n\n' +
+        '"I heard the outcome."\n\n' +
+        'A pause.\n\n' +
+        '"Decent."\n\n' +
+        'He nods toward a pouch on the floor beside his weapon.\n\n' +
+        '"There. Don\'t make me say it again."',
     };
 
     const flavorText = (challengeActive || handinActive)
-      ? (CHALLENGE_TEXT[tribeId] ?? `The ${tribe} leader studies your approach.`)
-      : `The ${tribe} leader studies your approach.`;
+      ? (HANDIN_TEXT[tribeId]  ?? `The ${tribe} leader acknowledges your effort.`)
+      : briefActive
+        ? (BRIEF_TEXT[tribeId] ?? `The ${tribe} leader studies your approach.`)
+        : `The ${tribe} leader studies your approach.`;
 
     const group = this._buildInteriorLayout({
       titleText: `${tribe} Leader`,
       flavorText,
       bgColor: colors[tribe] || 0x222222,
-      bgImage: interiorImages[tribe] ?? null,
+      bgImage:  interiorImages[tribe] ?? null,
       onExit: () => {
         this.leaderGroups[tribe].setVisible(false);
         this._showExterior();
       },
     });
 
-    // ── Phase 2: handin button — shown whenever the handin flag is active ─────
-    // This includes the same visit where challenge → handin transition just happened.
+    // ── Phase 3: COMPLETE button — shown only during hand-in ─────────────────
     if (challengeActive || handinActive) {
       const completeBtn = this.add.text(640, 520,
-        '[ Complete Quest ]',
+        '[ Collect Reward ]',
         {
           fontSize: '20px',
           color: '#111100',
@@ -2157,16 +2243,40 @@ export default class TownScene extends Phaser.Scene {
         }
       ).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-      completeBtn.on('pointerover',  () => completeBtn.setBackgroundColor('#ffe866'));
-      completeBtn.on('pointerout',   () => completeBtn.setBackgroundColor('#ffdd44'));
+      completeBtn.on('pointerover', () => completeBtn.setBackgroundColor('#ffe866'));
+      completeBtn.on('pointerout',  () => completeBtn.setBackgroundColor('#ffdd44'));
 
       completeBtn.on('pointerdown', () => {
         SoundManager.play('reward');
+
+        // Grant rep
         ProgressionManager.clearQuestFlag(handinFlag);
         ProgressionManager.addTribeRep(tribeId, LEADER_QUEST_REP_GAIN);
+
+        // Award 3 random jewelry items from this tribe's pool
+        const pool = [...(TRIBE_JEWELRY_POOL[tribeId] ?? [])];
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const rewardNames = [];
+        pool.slice(0, 3).forEach(itemId => {
+          const inst = createItemInstance(itemId, { rarity: 'uncommon' });
+          if (inst) {
+            InventorySystem.addGlobalItem(inst);
+            rewardNames.push(inst.displayName ?? itemId);
+          }
+        });
+
+        // Show a brief toast so the player knows what they received
+        if (rewardNames.length > 0) {
+          this.scene.get('UIScene')?.showToast(`Reward: ${rewardNames.join(', ')}`);
+        }
+
         GameState.save('autosave');
         this._buildQuestFlags();
-        // Bust cache so the next visit shows normal (non-challenge) dialogue
+
+        // Bust cache so the next visit shows normal dialogue
         if (this.leaderGroups[tribe]) {
           this.leaderGroups[tribe].destroy(true);
           delete this.leaderGroups[tribe];

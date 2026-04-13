@@ -55,6 +55,11 @@ function _tabHasNew(categoryId) {
   return _liveQuestIds(categoryId).some(id => !_seenQuestIds.has(id));
 }
 
+/** Exported: true if ANY tab has unseen quests (used by UIScene alert dot). */
+export function anyQuestTabHasNew() {
+  return QUEST_CATEGORIES.some(({ id }) => _tabHasNew(id));
+}
+
 // ── Scene ─────────────────────────────────────────────────────────────────────
 
 export default class QuestOverlay extends Phaser.Scene {

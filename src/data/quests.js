@@ -197,45 +197,57 @@ export const QUEST_LINES = [
         isActive:   (pm) => pm.tribe !== null && pm.hasQuestFlag('tribe_vendor'),
         isComplete: (pm) => pm.tribe !== null && !pm.hasQuestFlag('tribe_vendor'),
       },
-      // ── Leader encounters — two-phase hand-in quest.
-      //    Phase 1: challenge flag active   → visit the lodge (orange ! on map)
-      //    Phase 2: handin flag active      → return to hand in (gold ★ on map)
-      //    Complete: both flags cleared after clicking "Complete Quest" in the hut.
+      // ── Leader encounters — three-phase quest.
+      //    Brief flag    (orange !)  → visit the lodge for a pre-encounter briefing
+      //    Challenge flag(orange !)  → encounter done; visit to transition to hand-in
+      //    Handin flag   (gold ★)   → return to collect reward (Complete button)
       {
         id:          'bas_elseth_leader',
         label:       'Answer the Elseth Animancer\'s Call',
-        description: (pm) => pm.hasQuestFlag('elseth_leader_handin')
-          ? 'Return to the Elseth lodge and complete the quest.'
-          : 'The Elseth leader — a practitioner of animancy — has taken notice of your party. Visit the Elseth lodge.',
-        isActive:   (pm) => pm.hasQuestFlag('elseth_leader_challenge') || pm.hasQuestFlag('elseth_leader_handin'),
-        isComplete: (pm) => !pm.hasQuestFlag('elseth_leader_challenge') && !pm.hasQuestFlag('elseth_leader_handin') && sc(pm, 'training_encounter_2'),
+        description: (pm) =>
+          pm.hasQuestFlag('elseth_leader_handin')
+            ? 'Return to the Elseth lodge to collect your reward.'
+            : pm.hasQuestFlag('elseth_leader_challenge')
+              ? 'The Animancer is waiting. Return to the Elseth lodge.'
+              : 'The Elseth leader has taken notice of your party. Visit the Elseth lodge before the next trial.',
+        isActive:   (pm) => pm.hasQuestFlag('elseth_leader_brief') || pm.hasQuestFlag('elseth_leader_challenge') || pm.hasQuestFlag('elseth_leader_handin'),
+        isComplete: (pm) => !pm.hasQuestFlag('elseth_leader_brief') && !pm.hasQuestFlag('elseth_leader_challenge') && !pm.hasQuestFlag('elseth_leader_handin') && sc(pm, 'training_encounter_3'),
       },
       {
         id:          'bas_styx_leader',
         label:       'Meet the Styx Tactician',
-        description: (pm) => pm.hasQuestFlag('styx_leader_handin')
-          ? 'Return to the Styx lodge and complete the quest.'
-          : 'The Styx leader is a careful hunter who studies opponents before striking. She has something to say before the next trial.',
-        isActive:   (pm) => pm.hasQuestFlag('styx_leader_challenge') || pm.hasQuestFlag('styx_leader_handin'),
-        isComplete: (pm) => !pm.hasQuestFlag('styx_leader_challenge') && !pm.hasQuestFlag('styx_leader_handin') && sc(pm, 'training_encounter_3'),
+        description: (pm) =>
+          pm.hasQuestFlag('styx_leader_handin')
+            ? 'Return to the Styx lodge to collect your reward.'
+            : pm.hasQuestFlag('styx_leader_challenge')
+              ? 'The Tactician is waiting. Return to the Styx lodge.'
+              : 'The Styx leader wants to size up your party. Visit the Styx lodge before the next trial.',
+        isActive:   (pm) => pm.hasQuestFlag('styx_leader_brief') || pm.hasQuestFlag('styx_leader_challenge') || pm.hasQuestFlag('styx_leader_handin'),
+        isComplete: (pm) => !pm.hasQuestFlag('styx_leader_brief') && !pm.hasQuestFlag('styx_leader_challenge') && !pm.hasQuestFlag('styx_leader_handin') && sc(pm, 'training_encounter_4'),
       },
       {
         id:          'bas_lesse_leader',
         label:       "Heed Le'sse's Mystics",
-        description: (pm) => pm.hasQuestFlag('lesse_leader_handin')
-          ? "Return to the Le'sse lodge and complete the quest."
-          : "Le'sse's elders move in silence and bend the elements to their will. They have opened their doors — do not ignore it.",
-        isActive:   (pm) => pm.hasQuestFlag('lesse_leader_challenge') || pm.hasQuestFlag('lesse_leader_handin'),
-        isComplete: (pm) => !pm.hasQuestFlag('lesse_leader_challenge') && !pm.hasQuestFlag('lesse_leader_handin') && sc(pm, 'training_encounter_4'),
+        description: (pm) =>
+          pm.hasQuestFlag('lesse_leader_handin')
+            ? "Return to the Le'sse lodge to collect your reward."
+            : pm.hasQuestFlag('lesse_leader_challenge')
+              ? "The elders are waiting. Return to the Le'sse lodge."
+              : "Le'sse's elders have opened their doors. Visit before the next trial.",
+        isActive:   (pm) => pm.hasQuestFlag('lesse_leader_brief') || pm.hasQuestFlag('lesse_leader_challenge') || pm.hasQuestFlag('lesse_leader_handin'),
+        isComplete: (pm) => !pm.hasQuestFlag('lesse_leader_brief') && !pm.hasQuestFlag('lesse_leader_challenge') && !pm.hasQuestFlag('lesse_leader_handin') && sc(pm, 'training_encounter_5'),
       },
       {
         id:          'bas_zafaar_leader',
         label:       'The Zafaar Champion Awaits',
-        description: (pm) => pm.hasQuestFlag('zafaar_leader_handin')
-          ? 'Return to the Zafaar lodge and complete the quest.'
-          : 'The most formidable warrior in the Zafaar lodge has acknowledged your progress. Do not keep him waiting.',
-        isActive:   (pm) => pm.hasQuestFlag('zafaar_leader_challenge') || pm.hasQuestFlag('zafaar_leader_handin'),
-        isComplete: (pm) => !pm.hasQuestFlag('zafaar_leader_challenge') && !pm.hasQuestFlag('zafaar_leader_handin') && sc(pm, 'training_encounter_5'),
+        description: (pm) =>
+          pm.hasQuestFlag('zafaar_leader_handin')
+            ? 'Return to the Zafaar lodge to collect your reward.'
+            : pm.hasQuestFlag('zafaar_leader_challenge')
+              ? 'The champion is waiting. Return to the Zafaar lodge.'
+              : 'The most formidable warrior in the Zafaar lodge has acknowledged your progress. Visit before the next trial.',
+        isActive:   (pm) => pm.hasQuestFlag('zafaar_leader_brief') || pm.hasQuestFlag('zafaar_leader_challenge') || pm.hasQuestFlag('zafaar_leader_handin'),
+        isComplete: (pm) => !pm.hasQuestFlag('zafaar_leader_brief') && !pm.hasQuestFlag('zafaar_leader_challenge') && !pm.hasQuestFlag('zafaar_leader_handin') && sc(pm, 'training_encounter_6'),
       },
     ],
   },

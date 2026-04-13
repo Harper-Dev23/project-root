@@ -26,13 +26,16 @@ const UNLOCK_REQUIRES = {
 // Quest flags that must ALL be cleared before the next scenario unlocks.
 // Scenarios not listed here have no flag gate (e.g. S1 is always available).
 const SCENARIO_GATE_FLAGS = {
+  // Must choose tribe before S2
   'training_encounter_2': ['tribe_choice'],
-  // Challenge flag is cleared on first hut entry; handin flag must also be cleared
-  // (by clicking "Complete Quest") before the next scenario unlocks.
-  'training_encounter_3': ['elder_bonepile', 'elseth_leader_challenge', 'elseth_leader_handin'],
-  'training_encounter_4': ['elder_leveling', 'styx_leader_challenge', 'styx_leader_handin'],
-  'training_encounter_5': ['samuel_mourne', 'lesse_leader_challenge', 'lesse_leader_handin'],
-  'training_encounter_6': ['zafaar_leader_challenge', 'zafaar_leader_handin'],
+  // Must visit elder (bonepile talk) AND get Elseth briefing before S3
+  'training_encounter_3': ['elder_bonepile', 'elseth_leader_brief'],
+  // Must visit elder (leveling talk), complete Elseth hand-in, AND get Styx briefing before S4
+  'training_encounter_4': ['elder_leveling', 'elseth_leader_challenge', 'elseth_leader_handin', 'styx_leader_brief'],
+  // Must meet Samuel Mourne, complete Styx hand-in, AND get Le'sse briefing before S5
+  'training_encounter_5': ['samuel_mourne', 'styx_leader_challenge', 'styx_leader_handin', 'lesse_leader_brief'],
+  // Must complete Le'sse hand-in AND get Zafaar briefing before S6
+  'training_encounter_6': ['lesse_leader_challenge', 'lesse_leader_handin', 'zafaar_leader_brief'],
 };
 
 // Ordered list used by refreshCombatPitFlag
@@ -59,11 +62,18 @@ const TICKET_REWARDS = {
 // Quest flags auto-set on first clear of each scenario.
 // Values can be a string (single flag) or an array (multiple flags).
 const SCENARIO_FLAGS = {
+  // S1 → tribe choice prompt
   'training_encounter_1': 'tribe_choice',
-  'training_encounter_2': ['elder_bonepile', 'elseth_leader_challenge'],
-  'training_encounter_3': ['elder_leveling', 'styx_leader_challenge'],
-  'training_encounter_4': ['samuel_mourne', 'lesse_leader_challenge'],
-  'training_encounter_5': 'zafaar_leader_challenge',
+  // S2 → elder bonepile talk + Elseth leader brief (animated dummies are S3)
+  'training_encounter_2': ['elder_bonepile', 'elseth_leader_brief'],
+  // S3 (animated dummies) → elder leveling + Elseth hand-in + Styx leader brief
+  'training_encounter_3': ['elder_leveling', 'elseth_leader_challenge', 'styx_leader_brief'],
+  // S4 → Samuel Mourne + Styx hand-in + Le'sse leader brief
+  'training_encounter_4': ['samuel_mourne', 'styx_leader_challenge', 'lesse_leader_brief'],
+  // S5 → Le'sse hand-in + Zafaar leader brief
+  'training_encounter_5': ['lesse_leader_challenge', 'zafaar_leader_brief'],
+  // S6 → Zafaar hand-in (end of demo — no next scenario to gate)
+  'training_encounter_6': 'zafaar_leader_challenge',
 };
 
 // Feature gates: which scenario must be completed to unlock a feature.

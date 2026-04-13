@@ -7,6 +7,7 @@ import { SoundManager } from '../systems/SoundManager.js';
 import { JournalState } from '../systems/JournalState.js';
 import { registerHotkeys } from '../systems/HotkeyManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { anyQuestTabHasNew } from './overlays/QuestOverlay.js';
 
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
@@ -64,6 +65,11 @@ export default class UIScene extends Phaser.Scene {
       },
       menu_map:     () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('MapOverlay'); } },
       menu_quest:   () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('QuestOverlay'); } },
+      menu_tribes:  () => {
+        if (_anyOverlayOpen() || !ProgressionManager.tribe) return;
+        SoundManager.play('select');
+        this.openOverlay('TribeRelationsOverlay');
+      },
       menu_journal: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('JournalOverlay'); } },
       menu_options: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('OptionsOverlay'); } },
     });
@@ -208,6 +214,7 @@ export default class UIScene extends Phaser.Scene {
     const menuItems = [
       {
         label: '🧍 Character',
+        alertDot: GameState.party?.some(c => (c.unspentStatPoints || 0) > 0),
         action: () => {
           if (!this.scene.isActive('CharacterListOverlay')) {
             this.scene.launch('CharacterListOverlay');
@@ -243,7 +250,7 @@ export default class UIScene extends Phaser.Scene {
         }
       },
       { label: '🗺️ Map', action: () => this.openOverlay('MapOverlay') },
-      { label: '📜 Quest', action: () => this.openOverlay('QuestOverlay') },
+      { label: '📜 Quest', action: () => this.openOverlay('QuestOverlay'), alertDot: anyQuestTabHasNew() },
       ...(ProgressionManager.tribe ? [{
         label: '🛡 Tribes',
         action: () => {
@@ -269,6 +276,17 @@ export default class UIScene extends Phaser.Scene {
       const y = menuStartY + index * spacing;
       const btn = this.createSidebarButton(item.label, item.action, 0, y);
       this.rightPanel.add(btn);
+
+      if (item.alertDot) {
+        // Small pulsing dot in the top-right corner of the button
+        const dot = this.add.circle(76, y - 8, 5, 0xffdd44)
+          .setDepth(1002).setScrollFactor(0);
+        this.tweens.add({
+          targets: dot, alpha: 0.3, duration: 700,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        this.rightPanel.add(dot);
+      }
     });
 
     // === DIALOGUE BAR (fixed 180px margins) ===
@@ -351,19 +369,14 @@ export default class UIScene extends Phaser.Scene {
       });
 
     // ESC: close save/load popup first, then defer to overlays, then toggle panel
-    const OVERLAY_KEYS = [
-      'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
-      'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-      'PartyManagementScene'
-    ];
+    // Uses _anyOverlayOpen() so the full overlay list is always current.
     this.input.keyboard?.on('keydown-ESC', () => {
       // Priority 1: dismiss save/load/exit popup if one is open
       if (this.modalPanelGroup || this.modalBlockerGroup) {
         this.cleanupPopup?.();
         return;
       }
-      const anyOpen = OVERLAY_KEYS.some(k => this.scene.isActive(k));
-      if (anyOpen) return; // let the overlay's own ESC handler fire
+      if (_anyOverlayOpen()) return; // let the overlay's own ESC handler fire
       SoundManager.play('select');
       this.toggleRightPanel();
       this.toggleButton?.setText(this.rightPanelVisible ? '◀' : '▶');

@@ -4697,7 +4697,7 @@ export default class CombatScene extends Phaser.Scene {
       color,
       stroke: '#000000',
       strokeThickness: 3
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(UI_DEPTH.overlay + 10);
 
     this.tweens.add({
       targets: floatText,

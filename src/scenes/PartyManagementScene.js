@@ -559,6 +559,7 @@ export default class PartyManagementScene extends Phaser.Scene {
   }
 
   _commitPartyOrder() {
+    SoundManager.play('select');
     const defs = getCombatStyleSlotDefs();
     const party = GameState.party || [];
     const idToChar = new Map(party.map(c => [c.instanceId, c]));

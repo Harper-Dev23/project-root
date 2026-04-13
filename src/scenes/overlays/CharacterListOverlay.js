@@ -365,22 +365,39 @@ export default class CharacterListOverlay extends Phaser.Scene {
       .setDepth(this.contentDepth);
     this.detailStaticContainer.add(levelText);
 
+    // Helper — stops any running LevelUpOverlay before re-launching (prevents stale scene state)
+    const _openLevelUp = (initialTab = 'Stat Points') => {
+      if (this.scene.isActive('LevelUpOverlay')) this.scene.stop('LevelUpOverlay');
+      this.scene.launch('LevelUpOverlay', { characterId: character.instanceId, initialTab });
+      this.scene.bringToTop('LevelUpOverlay');
+    };
+
+    // Talents button — always visible below level text
+    const talentsBtn = this.add.text(
+      portraitWidth / 2,
+      portraitBoxSize + nameText.height + levelText.height + 28,
+      '[ Talents ]',
+      { fontSize: '13px', color: '#9988cc', align: 'center' }
+    ).setOrigin(0.5, 0).setDepth(this.contentDepth)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerover', () => talentsBtn.setStyle({ color: '#bbaaee' }))
+      .on('pointerout',  () => talentsBtn.setStyle({ color: '#9988cc' }))
+      .on('pointerdown', () => _openLevelUp('Talents'));
+    this.detailStaticContainer.add(talentsBtn);
+
     // Level-up allocation button — shown when character has unspent stat points
     const unspent = character.unspentStatPoints || 0;
     if (unspent > 0) {
       const allocBtn = this.add.text(
         portraitWidth / 2,
-        portraitBoxSize + nameText.height + levelText.height + 30,
+        portraitBoxSize + nameText.height + levelText.height + 52,
         `[ Allocate Stats (${unspent} pt${unspent !== 1 ? 's' : ''}) ]`,
         { fontSize: '14px', color: '#ffdd44', fontStyle: 'bold', align: 'center' }
       ).setOrigin(0.5, 0).setDepth(this.contentDepth)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', () => allocBtn.setStyle({ color: '#ffee88' }))
         .on('pointerout',  () => allocBtn.setStyle({ color: '#ffdd44' }))
-        .on('pointerdown', () => {
-          this.scene.launch('LevelUpOverlay', { characterId: character.instanceId });
-          this.scene.bringToTop('LevelUpOverlay');
-        });
+        .on('pointerdown', () => _openLevelUp('Stat Points'));
       this.detailStaticContainer.add(allocBtn);
     }
 

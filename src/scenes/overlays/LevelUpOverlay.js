@@ -71,6 +71,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
   init(data) {
     this._characterId = data?.characterId ?? null;
+    this._initialTab  = data?.initialTab ?? 'Stat Points';
   }
 
   create() {
@@ -97,7 +98,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
     this._buildCharStrip();
     this._buildTabRow();
-    this._showTab('Stat Points');
+    this._showTab(this._initialTab || 'Stat Points');
   }
 
   // ── Character identity strip ──────────────────────────────────────────────────

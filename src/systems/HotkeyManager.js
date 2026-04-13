@@ -22,6 +22,7 @@ export const HOTKEYS = [
   { id: 'menu_skills',    key: 'K', label: 'Skills',     category: 'Menus' },
   { id: 'menu_map',       key: 'M', label: 'Map',        category: 'Menus' },
   { id: 'menu_quest',     key: 'U', label: 'Quest',      category: 'Menus' },
+  { id: 'menu_tribes',    key: 'T', label: 'Tribes',     category: 'Menus' },
   { id: 'menu_journal',   key: 'J', label: 'Journal',    category: 'Menus' },
   { id: 'menu_options',   key: 'O', label: 'Options',    category: 'Menus' },
 ];
