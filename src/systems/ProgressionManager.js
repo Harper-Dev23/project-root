@@ -8,6 +8,8 @@
 // The DEV BYPASS toggle is stored separately in localStorage so it never
 // touches save data and persists between page reloads.
 
+import { DEFAULT_TRIBE_REP, clampRepScore } from './TribeRelations.js';
+
 // ---------------------------------------------------------------------------
 // Config: which scenario must be completed before the next one opens up.
 // null  →  always available (no prerequisite)
@@ -25,10 +27,12 @@ const UNLOCK_REQUIRES = {
 // Scenarios not listed here have no flag gate (e.g. S1 is always available).
 const SCENARIO_GATE_FLAGS = {
   'training_encounter_2': ['tribe_choice'],
-  'training_encounter_3': ['elder_bonepile', 'elseth_leader_challenge'],
-  'training_encounter_4': ['elder_leveling', 'styx_leader_challenge'],
-  'training_encounter_5': ['samuel_mourne', 'lesse_leader_challenge'],
-  'training_encounter_6': ['zafaar_leader_challenge'],
+  // Challenge flag is cleared on first hut entry; handin flag must also be cleared
+  // (by clicking "Complete Quest") before the next scenario unlocks.
+  'training_encounter_3': ['elder_bonepile', 'elseth_leader_challenge', 'elseth_leader_handin'],
+  'training_encounter_4': ['elder_leveling', 'styx_leader_challenge', 'styx_leader_handin'],
+  'training_encounter_5': ['samuel_mourne', 'lesse_leader_challenge', 'lesse_leader_handin'],
+  'training_encounter_6': ['zafaar_leader_challenge', 'zafaar_leader_handin'],
 };
 
 // Ordered list used by refreshCombatPitFlag
@@ -96,6 +100,10 @@ const ProgressionManager = {
   // Valid values: 'styx' | 'zafaar' | 'elseth' | 'lesse' | null (not yet chosen)
   tribe: null,
 
+  // Tribe reputation scores — one number per tribe.
+  // Derives to a level via TribeRelations.getRepIndex(score).
+  tribeRep: { ...DEFAULT_TRIBE_REP },
+
   // ----- Dev bypass --------------------------------------------------------
 
   isBypassEnabled() {
@@ -144,6 +152,18 @@ const ProgressionManager = {
   // ----- Tribe allegiance (save-slot wide) ---------------------------------
 
   getTribe() { return this.tribe; },
+
+  // ----- Tribe reputation --------------------------------------------------
+
+  getTribeRep(tribeId) {
+    return this.tribeRep?.[tribeId] ?? DEFAULT_TRIBE_REP[tribeId] ?? 0;
+  },
+
+  addTribeRep(tribeId, amount) {
+    const isOwn  = this.tribe === tribeId;
+    const current = this.getTribeRep(tribeId);
+    this.tribeRep[tribeId] = clampRepScore(current + amount, isOwn);
+  },
 
   /**
    * Pledges allegiance to a tribe for this entire save slot.
@@ -255,6 +275,7 @@ const ProgressionManager = {
       tribe:               this.tribe,
       tribeVendorStock:    { ...this.tribeVendorStock },
       completedQuestSteps: [...this.completedQuestSteps],
+      tribeRep:            { ...this.tribeRep },
     };
   },
 
@@ -268,6 +289,8 @@ const ProgressionManager = {
     this.tribeVendorStock    = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
       ? { ...data.tribeVendorStock } : {};
     this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
+    this.tribeRep            = (data.tribeRep && typeof data.tribeRep === 'object')
+      ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
   },
 
   reset() {
@@ -278,6 +301,7 @@ const ProgressionManager = {
     this.tribe               = null;
     this.tribeVendorStock    = {};
     this.completedQuestSteps = [];
+    this.tribeRep            = { ...DEFAULT_TRIBE_REP };
   },
 };
 

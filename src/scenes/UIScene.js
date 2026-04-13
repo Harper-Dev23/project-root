@@ -6,6 +6,7 @@ import { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { JournalState } from '../systems/JournalState.js';
 import { registerHotkeys } from '../systems/HotkeyManager.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
@@ -31,7 +32,7 @@ export default class UIScene extends Phaser.Scene {
     const MENU_OVERLAY_KEYS = [
       'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
       'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-      'PartyManagementScene',
+      'TribeRelationsOverlay', 'PartyManagementScene',
     ];
     // Returns true if any overlay is currently running.
     const _anyOverlayOpen = () => MENU_OVERLAY_KEYS.some(k => this.scene.isActive(k));
@@ -243,6 +244,15 @@ export default class UIScene extends Phaser.Scene {
       },
       { label: '🗺️ Map', action: () => this.openOverlay('MapOverlay') },
       { label: '📜 Quest', action: () => this.openOverlay('QuestOverlay') },
+      ...(ProgressionManager.tribe ? [{
+        label: '🛡 Tribes',
+        action: () => {
+          if (!this.scene.isActive('TribeRelationsOverlay')) {
+            this.scene.launch('TribeRelationsOverlay');
+            this.scene.bringToTop('TribeRelationsOverlay');
+          }
+        },
+      }] : []),
       { label: '📖 Journal', action: () => this.openOverlay('JournalOverlay') },
       { label: '⚙️ Options', action: () => this.openOverlay('OptionsOverlay') },
       { label: '💾 Save', action: () => this.createSaveSlotPopup() },

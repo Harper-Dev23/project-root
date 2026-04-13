@@ -1,5 +1,6 @@
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { LEADER_QUEST_REP_GAIN } from '../systems/TribeRelations.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import { Items } from '../../data/items.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
@@ -31,6 +32,11 @@ const QUEST_FLAG_POSITIONS = {
   styx_leader_challenge:    { x: 305,  y: 298 },
   lesse_leader_challenge:   { x: 477,  y: 492 },
   zafaar_leader_challenge:  { x: 928,  y: 76  },
+  // Hand-in markers — same positions, rendered gold with ★ to signal "quest ready"
+  elseth_leader_handin:     { x: 1059, y: 310 },
+  styx_leader_handin:       { x: 305,  y: 298 },
+  lesse_leader_handin:      { x: 477,  y: 492 },
+  zafaar_leader_handin:     { x: 928,  y: 76  },
 };
 
 // Flag IDs for the four lodge "explore before choosing" prompts.
@@ -827,9 +833,14 @@ export default class TownScene extends Phaser.Scene {
     for (const [flagId, cfg] of Object.entries(QUEST_FLAG_POSITIONS)) {
       if (!ProgressionManager.hasQuestFlag(flagId)) continue;
 
-      const circle = this.add.circle(cfg.x, cfg.y, 11, 0xffaa00).setDepth(5);
-      const label  = this.add.text(cfg.x, cfg.y, '!', {
-        fontSize: '15px', color: '#ffffff', fontStyle: 'bold'
+      // Hand-in flags render as a gold ★ to distinguish from the orange ! (quest available)
+      const isHandin = flagId.endsWith('_handin');
+      const color    = isHandin ? 0xffdd44 : 0xffaa00;
+      const symbol   = isHandin ? '★' : '!';
+
+      const circle = this.add.circle(cfg.x, cfg.y, 11, color).setDepth(5);
+      const label  = this.add.text(cfg.x, cfg.y, symbol, {
+        fontSize: '13px', color: '#000000', fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(6);
 
       this.tweens.add({
@@ -2037,12 +2048,17 @@ export default class TownScene extends Phaser.Scene {
 
     if (!this.leaderGroups) this.leaderGroups = {};
 
-    // Leader-specific challenge flags — bust cache so fresh dialogue shows
-    const elsethChallengeActive  = tribe === 'Elseth'  && ProgressionManager.hasQuestFlag('elseth_leader_challenge');
-    const styxChallengeActive    = tribe === 'Styx'    && ProgressionManager.hasQuestFlag('styx_leader_challenge');
-    const lesseChallengeActive   = tribe === "Le'sse"  && ProgressionManager.hasQuestFlag('lesse_leader_challenge');
-    const zafaarChallengeActive  = tribe === 'Zafaar'  && ProgressionManager.hasQuestFlag('zafaar_leader_challenge');
-    if ((elsethChallengeActive || styxChallengeActive || lesseChallengeActive || zafaarChallengeActive) && this.leaderGroups[tribe]) {
+    // Map display name → internal ID
+    const TRIBE_KEY = { Elseth: 'elseth', Styx: 'styx', "Le'sse": 'lesse', Zafaar: 'zafaar' };
+    const tribeId       = TRIBE_KEY[tribe] ?? tribe.toLowerCase();
+    const challengeFlag = `${tribeId}_leader_challenge`;
+    const handinFlag    = `${tribeId}_leader_handin`;
+
+    const challengeActive = ProgressionManager.hasQuestFlag(challengeFlag);
+    const handinActive    = ProgressionManager.hasQuestFlag(handinFlag);
+
+    // Always bust cache when a challenge or handin is live so fresh dialogue shows
+    if ((challengeActive || handinActive) && this.leaderGroups[tribe]) {
       this.leaderGroups[tribe].destroy(true);
       delete this.leaderGroups[tribe];
     }
@@ -2053,31 +2069,68 @@ export default class TownScene extends Phaser.Scene {
     }
 
     const colors = {
-      Styx: 0x221b24,
-      Zafaar: 0x24221b,
-      Elseth: 0x1b241c,
-      "Le'sse": 0x1c1f24
+      Styx:    0x221b24,
+      Zafaar:  0x24221b,
+      Elseth:  0x1b241c,
+      "Le'sse": 0x1c1f24,
     };
-
     const interiorImages = {
-      Zafaar:  'zafaar_interior',
-      Styx:    'styx_interior',
-      Elseth:  'elseth_interior',
+      Zafaar:   'zafaar_interior',
+      Styx:     'styx_interior',
+      Elseth:   'elseth_interior',
       "Le'sse": 'lesse_interior',
     };
 
-    let flavorText;
-    if (elsethChallengeActive) {
-      flavorText = 'A slight smirk crosses her face as you enter.\nIn the corner, a half-built training dummy flickers with pale green light.\n\n"Those dummies you demolished earlier? That was me.\nI breathe life into them — call it animancy, call it showing off."\n\nShe waves a hand and the dummy\'s arm twitches.\n\n"I\'ve been watching your form. Sloppy, but promising.\nNext time I animate them, they\'ll carry real weapons\nand they\'ll know how to use them.\nWhatever they drop when you put them down — it\'s yours."';
-    } else if (styxChallengeActive) {
-      flavorText = '"You handled the basics. Strength is the easy part."\n\nThe hunter does not look up from the map spread across the table.\n\n"Mettle, now — that takes coordination. Moving together,\ncovering flanks, reading what the other is going to do\nbefore they do it. My hunters will test you.\nSee if your party can keep pace."';
-    } else if (lesseChallengeActive) {
-      flavorText = 'Two figures sit motionless near the far wall,\neyes closed, breathing in perfect unison.\n\nThe elder speaks without turning.\n\n"You have shown you can fight. But have you faced\nthose who bend the elements to their will?\nMy students have been waiting for a worthy test.\nThey will not hold back — nor should you."';
-    } else if (zafaarChallengeActive) {
-      flavorText = 'The Zafaar leader stands with his back to the door,\narms crossed, a massive weapon leaning against the wall beside him.\n\n"I heard you put down the Le\'sse duelists.\nGood. Means you\'re worth something."\n\nHe turns, eyes fixed on you.\n\n"I carry the finest blade this camp has seen.\nBeat me, and it\'s yours. I won\'t offer twice."';
-    } else {
-      flavorText = `The ${tribe.toLowerCase()} leader studies your approach.`;
+    // ── Phase 1: challenge flag active → transition to handin on entry ────────
+    // The player first sees the briefing text. The orange ! becomes a gold ★
+    // so they know to come back after the encounter and hand in.
+    if (challengeActive) {
+      ProgressionManager.clearQuestFlag(challengeFlag);
+      ProgressionManager.setQuestFlag(handinFlag);
+      GameState.save('autosave');
+      this._buildQuestFlags();
     }
+
+    // ── Flavor text — same for both challenge-entry and handin revisit ────────
+    const CHALLENGE_TEXT = {
+      elseth:
+        'A slight smirk crosses her face as you enter.\n' +
+        'In the corner, a half-built training dummy flickers with pale green light.\n\n' +
+        '"Those dummies you demolished earlier? That was me.\n' +
+        'I breathe life into them — call it animancy, call it showing off."\n\n' +
+        'She waves a hand and the dummy\'s arm twitches.\n\n' +
+        '"I\'ve been watching your form. Sloppy, but promising.\n' +
+        'Next time I animate them, they\'ll carry real weapons\n' +
+        'and they\'ll know how to use them.\n' +
+        'Whatever they drop when you put them down — it\'s yours."',
+      styx:
+        '"You handled the basics. Strength is the easy part."\n\n' +
+        'The hunter does not look up from the map spread across the table.\n\n' +
+        '"Mettle, now — that takes coordination. Moving together,\n' +
+        'covering flanks, reading what the other is going to do\n' +
+        'before they do it. My hunters will test you.\n' +
+        'See if your party can keep pace."',
+      lesse:
+        'Two figures sit motionless near the far wall,\n' +
+        'eyes closed, breathing in perfect unison.\n\n' +
+        'The elder speaks without turning.\n\n' +
+        '"You have shown you can fight. But have you faced\n' +
+        'those who bend the elements to their will?\n' +
+        'My students have been waiting for a worthy test.\n' +
+        'They will not hold back — nor should you."',
+      zafaar:
+        'The Zafaar leader stands with his back to the door,\n' +
+        'arms crossed, a massive weapon leaning against the wall beside him.\n\n' +
+        '"I heard you put down the Le\'sse duelists.\n' +
+        'Good. Means you\'re worth something."\n\n' +
+        'He turns, eyes fixed on you.\n\n' +
+        '"I carry the finest blade this camp has seen.\n' +
+        'Beat me, and it\'s yours. I won\'t offer twice."',
+    };
+
+    const flavorText = (challengeActive || handinActive)
+      ? (CHALLENGE_TEXT[tribeId] ?? `The ${tribe} leader studies your approach.`)
+      : `The ${tribe} leader studies your approach.`;
 
     const group = this._buildInteriorLayout({
       titleText: `${tribe} Leader`,
@@ -2087,26 +2140,41 @@ export default class TownScene extends Phaser.Scene {
       onExit: () => {
         this.leaderGroups[tribe].setVisible(false);
         this._showExterior();
-      }
+      },
     });
 
-    // Clear flags once the player has seen the dialogue
-    if (elsethChallengeActive) {
-      ProgressionManager.clearQuestFlag('elseth_leader_challenge');
-      GameState.save('autosave');
-      this._buildQuestFlags();
-    } else if (styxChallengeActive) {
-      ProgressionManager.clearQuestFlag('styx_leader_challenge');
-      GameState.save('autosave');
-      this._buildQuestFlags();
-    } else if (lesseChallengeActive) {
-      ProgressionManager.clearQuestFlag('lesse_leader_challenge');
-      GameState.save('autosave');
-      this._buildQuestFlags();
-    } else if (zafaarChallengeActive) {
-      ProgressionManager.clearQuestFlag('zafaar_leader_challenge');
-      GameState.save('autosave');
-      this._buildQuestFlags();
+    // ── Phase 2: handin button — shown whenever the handin flag is active ─────
+    // This includes the same visit where challenge → handin transition just happened.
+    if (challengeActive || handinActive) {
+      const completeBtn = this.add.text(640, 520,
+        '[ Complete Quest ]',
+        {
+          fontSize: '20px',
+          color: '#111100',
+          fontStyle: 'bold',
+          backgroundColor: '#ffdd44',
+          padding: { x: 14, y: 7 },
+        }
+      ).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      completeBtn.on('pointerover',  () => completeBtn.setBackgroundColor('#ffe866'));
+      completeBtn.on('pointerout',   () => completeBtn.setBackgroundColor('#ffdd44'));
+
+      completeBtn.on('pointerdown', () => {
+        SoundManager.play('reward');
+        ProgressionManager.clearQuestFlag(handinFlag);
+        ProgressionManager.addTribeRep(tribeId, LEADER_QUEST_REP_GAIN);
+        GameState.save('autosave');
+        this._buildQuestFlags();
+        // Bust cache so the next visit shows normal (non-challenge) dialogue
+        if (this.leaderGroups[tribe]) {
+          this.leaderGroups[tribe].destroy(true);
+          delete this.leaderGroups[tribe];
+        }
+        this._showExterior();
+      });
+
+      group.add(completeBtn);
     }
 
     this.leaderGroups[tribe] = group;

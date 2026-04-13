@@ -321,7 +321,8 @@ export default class QuestOverlay extends Phaser.Scene {
 
     // Show description only for the active step (gives the player direction)
     if (state === 'active') {
-      const descTxt = this.add.text(60, relY, step.description, {
+      const desc = typeof step.description === 'function' ? step.description(pm) : step.description;
+      const descTxt = this.add.text(60, relY, desc, {
         fontSize: '12px', color: '#777777', wordWrap: { width: wrapW - 30 },
       }).setDepth(depth);
       container.add(descTxt);
