@@ -1024,6 +1024,7 @@ export default class TownScene extends Phaser.Scene {
 
     if (this.vendorRowGroup) {
       this.vendorRowGroup.setVisible(true);
+      this._updateVendorCurrencyDisplay();
       this._resetVendorRowState();
       return;
     }

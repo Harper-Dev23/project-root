@@ -207,6 +207,19 @@ export default class CharacterListOverlay extends Phaser.Scene {
       bg.on('pointerdown', () => this.inspectCharacter(char));
 
       this.listEntries.push(bg, nameText, xpText);
+
+      // Level-up badge — shown when the character has unspent stat points
+      if ((char.unspentStatPoints || 0) > 0) {
+        const badge = this.add.text(listLeft + listWidth - 8, y + 8,
+          '★ LEVEL UP', {
+          fontSize: '12px',
+          color: '#ffdd44',
+          fontStyle: 'bold',
+          backgroundColor: '#221a00',
+          padding: { x: 4, y: 2 }
+        }).setOrigin(1, 0).setDepth(this.contentDepth);
+        this.listEntries.push(badge);
+      }
     });
   }
 
@@ -351,6 +364,25 @@ export default class CharacterListOverlay extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(this.contentDepth);
     this.detailStaticContainer.add(levelText);
+
+    // Level-up allocation button — shown when character has unspent stat points
+    const unspent = character.unspentStatPoints || 0;
+    if (unspent > 0) {
+      const allocBtn = this.add.text(
+        portraitWidth / 2,
+        portraitBoxSize + nameText.height + levelText.height + 30,
+        `[ Allocate Stats (${unspent} pt${unspent !== 1 ? 's' : ''}) ]`,
+        { fontSize: '14px', color: '#ffdd44', fontStyle: 'bold', align: 'center' }
+      ).setOrigin(0.5, 0).setDepth(this.contentDepth)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => allocBtn.setStyle({ color: '#ffee88' }))
+        .on('pointerout',  () => allocBtn.setStyle({ color: '#ffdd44' }))
+        .on('pointerdown', () => {
+          this.scene.launch('LevelUpOverlay', { characterId: character.instanceId });
+          this.scene.bringToTop('LevelUpOverlay');
+        });
+      this.detailStaticContainer.add(allocBtn);
+    }
 
     const overview = [
       `Race: ${character.race}`,

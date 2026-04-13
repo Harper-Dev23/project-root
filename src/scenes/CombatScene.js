@@ -2406,6 +2406,7 @@ export default class CombatScene extends Phaser.Scene {
       xpReward = this._calculateXPReward();
     }
 
+    const leveledUpNames = [];
     GameState.party.forEach(char => {
       if (char.status !== 'dead') {
         if (xpReward > 0) {
@@ -2417,6 +2418,7 @@ export default class CombatScene extends Phaser.Scene {
             char.level++;
             applyLevelUp(char);
             summary += ` — Level Up! (Lv ${char.level})`;
+            leveledUpNames.push(char.name);
           }
 
           xpSummary.push(summary);
@@ -2450,7 +2452,7 @@ export default class CombatScene extends Phaser.Scene {
     GameState.save('autosave');
 
     // Pass summary to victory screen
-    this._showVictoryScreen('Victory!', xpSummary, progressReward, loot);
+    this._showVictoryScreen('Victory!', xpSummary, progressReward, loot, leveledUpNames);
   }
 
 
@@ -5206,7 +5208,7 @@ export default class CombatScene extends Phaser.Scene {
     unit.mpBar = mpBar;
   }
 
-  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null, loot = []) {
+  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null, loot = [], leveledUpNames = []) {
     const { width, height } = this.sys.game.canvas;
 
     // Dark overlay

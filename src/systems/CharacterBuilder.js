@@ -202,7 +202,11 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
     inventory: [],
 
     location: { x: 0, y: 0 },
-    status: "alive"
+    status: "alive",
+
+    // Accumulated stat points waiting to be spent in the Level Up screen.
+    // Incremented by applyLevelUp(), decremented when the player confirms allocation.
+    unspentStatPoints: 0,
   };
 }
 
@@ -311,11 +315,10 @@ export function resetCombatMods(character) {
 }
 
 export function applyLevelUp(char) {
-  // Example growth formula — tweak as needed
-  char.maxHP += 5;
-  char.maxMP += 2;
-  char.currentHP = char.maxHP;
-  char.currentMP = char.maxMP;
+  // Grant 5 stat points for the player to allocate in the Level Up screen.
+  // HP/MP restoration happens when the player confirms their allocation
+  // (rebuildCharacterStats is called there, followed by a full restore).
+  char.unspentStatPoints = (char.unspentStatPoints || 0) + 5;
 }
 
 export function rebuildCharacterStats(character) {

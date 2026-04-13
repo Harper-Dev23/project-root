@@ -22,22 +22,6 @@
 
 const sc = (pm, id) => pm.completedScenarios.includes(id);
 
-const TRIBE_LEADER_FLAGS = {
-  elseth: 'elseth_leader_challenge',
-  styx:   'styx_leader_challenge',
-  lesse:  'lesse_leader_challenge',
-  zafaar: 'zafaar_leader_challenge',
-};
-const TRIBE_LEADER_SCENARIOS = {
-  elseth: 'training_encounter_2',
-  styx:   'training_encounter_3',
-  lesse:  'training_encounter_4',
-  zafaar: 'training_encounter_5',
-};
-
-const tribeLeaderFlag     = (pm) => pm.tribe ? TRIBE_LEADER_FLAGS[pm.tribe]     : null;
-const tribeLeaderScenario = (pm) => pm.tribe ? TRIBE_LEADER_SCENARIOS[pm.tribe] : null;
-
 const anyLodgeFlag = (pm) =>
   pm.hasQuestFlag('lodge_styx') || pm.hasQuestFlag('lodge_zafaar') ||
   pm.hasQuestFlag('lodge_elseth') || pm.hasQuestFlag('lodge_lesse');
@@ -58,12 +42,17 @@ export const QUEST_LINES = [
     isAvailable: (_pm) => true,
     steps: [
       {
+        id:          'prologue_create_character',
+        label:       'Create a Character',
+        description: 'Visit the bonfire at the heart of camp. A hunter must have hunters.',
+        isActive:   (pm) => pm.hasQuestFlag('orientation_bonfire'),
+        isComplete: (pm) => !pm.hasQuestFlag('orientation_bonfire'),
+      },
+      {
         id:          'prologue_elder',
         label:       'Speak with the Elder',
         description: 'A wise elder waits in the tower at the heart of camp. Heed their counsel before venturing further.',
         isActive:   (pm) => pm.hasQuestFlag('orientation_elder'),
-        // Complete if the flag is gone and the game has moved on (vendor_row or
-        // later flags confirm the elder visit happened).
         isComplete: (pm) =>
           !pm.hasQuestFlag('orientation_elder') && (
             pm.hasQuestFlag('vendor_row')  ||
@@ -73,10 +62,20 @@ export const QUEST_LINES = [
           ),
       },
       {
+        id:          'prologue_equip',
+        label:       'Equip Yourself',
+        description: 'Visit the vendor row and prepare your party for the trials ahead.',
+        isActive:   (pm) => pm.hasQuestFlag('vendor_row'),
+        isComplete: (pm) =>
+          !pm.hasQuestFlag('vendor_row') &&
+          !pm.hasQuestFlag('orientation_elder') &&
+          !pm.hasQuestFlag('orientation_bonfire'),
+      },
+      {
         id:          'prologue_first_trial',
         label:       'Enter the Combat Pit',
         description: 'Prove your party\'s mettle in the Combat Pit. The elder expects results.',
-        isActive:   (pm) => !sc(pm, 'training_encounter_1') && !pm.hasQuestFlag('orientation_elder'),
+        isActive:   (pm) => !sc(pm, 'training_encounter_1') && !pm.hasQuestFlag('vendor_row') && !pm.hasQuestFlag('orientation_elder'),
         isComplete: (pm) => sc(pm, 'training_encounter_1'),
       },
     ],
@@ -181,37 +180,53 @@ export const QUEST_LINES = [
     id:          'blood_and_soil',
     category:    'tribe',
     title:       'Blood and Soil',
-    description: 'Every recruit must choose their tribe. Explore the lodges before pledging your allegiance — this decision is permanent.',
+    description: 'Every recruit must choose their tribe. But pledging allegiance is only the beginning — the four lodges will test you on your way up.',
     isAvailable: (pm) => sc(pm, 'training_encounter_1'),
     steps: [
       {
         id:          'bas_choose_tribe',
         label:       'Choose Your Tribe',
-        description: 'Visit the four lodges — Styx, Zafaar, Elseth, and Le\'sse — then return to the Elder\'s Tower to pledge.',
+        description: 'Visit the four lodges — Styx, Zafaar, Elseth, and Le\'sse — then return to the Elder\'s Tower to pledge your allegiance.',
         isActive:   (pm) => pm.hasQuestFlag('tribe_choice') || anyLodgeFlag(pm),
         isComplete: (pm) => pm.tribe !== null,
       },
       {
         id:          'bas_tribe_vendor',
         label:       'Visit the Tribe Vendor',
-        description: 'Your tribe grants access to exclusive wares. Spend your Tribe Ticket at the tribe vendor row.',
+        description: 'Your new allegiance grants access to exclusive wares. Spend your Tribe Ticket at your tribe\'s vendor.',
         isActive:   (pm) => pm.tribe !== null && pm.hasQuestFlag('tribe_vendor'),
         isComplete: (pm) => pm.tribe !== null && !pm.hasQuestFlag('tribe_vendor'),
       },
+      // ── Leader encounters — each activates when SCENARIO_FLAGS sets the flag
+      //    and completes once the player has visited (flag cleared) and S+1 is
+      //    confirmed. All four happen in sequence for every player.
       {
-        id:          'bas_leader_challenge',
-        label:       'Answer Your Leader\'s Call',
-        description: 'Your tribe\'s leader has taken notice of your efforts. Seek them out and prove your worth.',
-        isActive:   (pm) => {
-          const flag = tribeLeaderFlag(pm);
-          return flag ? pm.hasQuestFlag(flag) : false;
-        },
-        isComplete: (pm) => {
-          const flag = tribeLeaderFlag(pm);
-          const req  = tribeLeaderScenario(pm);
-          if (!flag || !req) return false;
-          return sc(pm, req) && !pm.hasQuestFlag(flag);
-        },
+        id:          'bas_elseth_leader',
+        label:       'Answer the Elseth Animancer\'s Call',
+        description: 'The Elseth leader — a practitioner of animancy — has taken notice of your party. Visit the Elseth lodge.',
+        isActive:   (pm) => pm.hasQuestFlag('elseth_leader_challenge'),
+        isComplete: (pm) => !pm.hasQuestFlag('elseth_leader_challenge') && sc(pm, 'training_encounter_2'),
+      },
+      {
+        id:          'bas_styx_leader',
+        label:       'Meet the Styx Tactician',
+        description: 'The Styx leader is a careful hunter who studies opponents before striking. She has something to say before the next trial.',
+        isActive:   (pm) => pm.hasQuestFlag('styx_leader_challenge'),
+        isComplete: (pm) => !pm.hasQuestFlag('styx_leader_challenge') && sc(pm, 'training_encounter_3'),
+      },
+      {
+        id:          'bas_lesse_leader',
+        label:       "Heed Le'sse's Mystics",
+        description: "Le'sse's elders move in silence and bend the elements to their will. They have opened their doors — do not ignore it.",
+        isActive:   (pm) => pm.hasQuestFlag('lesse_leader_challenge'),
+        isComplete: (pm) => !pm.hasQuestFlag('lesse_leader_challenge') && sc(pm, 'training_encounter_4'),
+      },
+      {
+        id:          'bas_zafaar_leader',
+        label:       'The Zafaar Champion Awaits',
+        description: 'The most formidable warrior in the Zafaar lodge has acknowledged your progress. Do not keep him waiting.',
+        isActive:   (pm) => pm.hasQuestFlag('zafaar_leader_challenge'),
+        isComplete: (pm) => !pm.hasQuestFlag('zafaar_leader_challenge') && sc(pm, 'training_encounter_5'),
       },
     ],
   },

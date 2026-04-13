@@ -15,6 +15,7 @@ import OptionsOverlay from './scenes/overlays/OptionsOverlay.js';
 import JournalOverlay from './scenes/overlays/JournalOverlay.js';
 import QuestOverlay from './scenes/overlays/QuestOverlay.js';
 import StashOverlay from './scenes/overlays/StashOverlay.js';
+import LevelUpOverlay from './scenes/overlays/LevelUpOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -37,6 +38,7 @@ const config = {
     JournalOverlay,
     QuestOverlay,
     StashOverlay,
+    LevelUpOverlay,
   ],
   physics: {
     default: 'arcade',

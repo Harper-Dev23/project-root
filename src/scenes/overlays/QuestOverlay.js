@@ -12,7 +12,6 @@ const C = {
   questPlaceholder:'#7777aa',
   stepActive:      '#ffdd44',
   stepCompleted:   '#555555',
-  stepUpcoming:    '#888888',
   desc:            '#999999',
   tabActive:       '#ffdd88',
   tabInactive:     '#888888',
@@ -23,6 +22,40 @@ const C = {
 const TAB_W = 120;
 const TAB_H = 26;
 const ROW_H = 22;
+
+// ── Module-level persistent state ─────────────────────────────────────────────
+// These survive the overlay being stopped and relaunched within the same session.
+
+// Default: Active section open, Available and Completed collapsed.
+const _collapsedSections = new Set(['Available', 'Completed']);
+
+// Which quests the player has expanded (click arrow to see steps).
+const _expandedQuests = new Set();
+
+// Quest IDs that have been "seen" while active or available — used to clear
+// the notification dot on a tab once the player opens it.
+const _seenQuestIds = new Set();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Returns all active/available quest IDs for a given tab category. */
+function _liveQuestIds(categoryId) {
+  const pm = ProgressionManager;
+  const ids = [];
+  for (const q of QUEST_LINES) {
+    if (q.category !== categoryId) continue;
+    const s = getQuestState(q, pm);
+    if (s === 'active' || s === 'available') ids.push(q.id);
+  }
+  return ids;
+}
+
+/** True if the tab has quests the player hasn't acknowledged yet. */
+function _tabHasNew(categoryId) {
+  return _liveQuestIds(categoryId).some(id => !_seenQuestIds.has(id));
+}
+
+// ── Scene ─────────────────────────────────────────────────────────────────────
 
 export default class QuestOverlay extends Phaser.Scene {
   constructor() {
@@ -49,14 +82,10 @@ export default class QuestOverlay extends Phaser.Scene {
     this._contentTop    = bounds.y + 116;           // below title + tabs
     this._contentVisH   = bounds.bottom - this._contentTop - 12;
 
-    // Scroll state
+    // Scroll state (resets per open, not persisted)
     this._scrollY = 0;
 
-    // Toggle state — persists across re-renders within the same session
-    this._collapsedSections = new Set();  // 'Active' | 'Available' | 'Completed'
-    this._expandedQuests    = new Set();  // quest id strings
-
-    // Mask for the scrollable content area (use add.graphics so WebGL transform is correct)
+    // Mask for the scrollable content area
     this._maskGfx = this.add.graphics().setVisible(false).setDepth(depth - 1);
     this._maskGfx.fillStyle(0xffffff);
     this._maskGfx.fillRect(bounds.x, this._contentTop, bounds.width, this._contentVisH);
@@ -82,6 +111,7 @@ export default class QuestOverlay extends Phaser.Scene {
     const tabY    = y + 76;
 
     this._tabBtns = {};
+    this._notifDots = {};
 
     QUEST_CATEGORIES.forEach(({ id, label }, i) => {
       const cx = startX + i * TAB_W + TAB_W / 2;
@@ -101,7 +131,15 @@ export default class QuestOverlay extends Phaser.Scene {
       const underline = this.add.rectangle(cx, tabY + TAB_H / 2 + 1, TAB_W - 4, 2, 0xffdd88)
         .setOrigin(0.5, 0).setDepth(depth + 1).setVisible(false);
 
-      this._tabBtns[id] = { bg, lbl, underline };
+      // Notification dot — gold circle in top-right corner of tab button
+      const dotX = cx + TAB_W / 2 - 8;
+      const dotY = tabY - TAB_H / 2 + 6;
+      const dot  = this.add.circle(dotX, dotY, 5, 0xffdd44)
+        .setDepth(depth + 2)
+        .setVisible(_tabHasNew(id));
+
+      this._tabBtns[id]   = { bg, lbl, underline };
+      this._notifDots[id] = dot;
     });
 
     // Divider below tabs
@@ -125,7 +163,12 @@ export default class QuestOverlay extends Phaser.Scene {
 
     this._activeTab = id;
     this._scrollY   = 0;
-    this._expandedQuests.clear();   // reset expansions when switching tabs
+
+    // Mark all quests on this tab as seen, hide the dot
+    for (const qid of _liveQuestIds(id)) {
+      _seenQuestIds.add(qid);
+    }
+    if (this._notifDots[id]) this._notifDots[id].setVisible(false);
 
     this._renderContent();
   }
@@ -171,7 +214,7 @@ export default class QuestOverlay extends Phaser.Scene {
   }
 
   _renderSection(container, title, quests, relY, wrapW, pm) {
-    const collapsed = this._collapsedSections.has(title);
+    const collapsed = _collapsedSections.has(title);
     const arrow     = collapsed ? '▶' : '▼';
     const depth     = this._depth;
 
@@ -179,8 +222,8 @@ export default class QuestOverlay extends Phaser.Scene {
     const header = this.add.text(0, relY, `${arrow}  ${title}`, {
       fontSize: '16px', color: C.sectionHeader, fontStyle: 'bold',
     }).setDepth(depth).setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-      if (collapsed) this._collapsedSections.delete(title);
-      else           this._collapsedSections.add(title);
+      if (collapsed) _collapsedSections.delete(title);
+      else           _collapsedSections.add(title);
       this._renderContent();
     });
     container.add(header);
@@ -206,7 +249,7 @@ export default class QuestOverlay extends Phaser.Scene {
 
   _renderQuest(container, quest, relY, wrapW, pm) {
     const state    = getQuestState(quest, pm);
-    const expanded = this._expandedQuests.has(quest.id);
+    const expanded = _expandedQuests.has(quest.id);
     const depth    = this._depth;
     const hasSteps = quest.steps.length > 0;
 
@@ -226,8 +269,8 @@ export default class QuestOverlay extends Phaser.Scene {
 
     if (hasSteps) {
       titleTxt.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        if (expanded) this._expandedQuests.delete(quest.id);
-        else          this._expandedQuests.add(quest.id);
+        if (expanded) _expandedQuests.delete(quest.id);
+        else          _expandedQuests.add(quest.id);
         this._renderContent();
       });
     }
@@ -235,7 +278,7 @@ export default class QuestOverlay extends Phaser.Scene {
     relY += ROW_H + 2;
 
     // ── Quest description ──
-    // Show description when available (not yet started), or when expanded
+    // Show when available (not yet started), when placeholder, or when expanded
     const showDesc = state === 'available' || state === 'placeholder' || expanded;
     if (showDesc) {
       const prefix = state === 'placeholder' ? '[Coming Soon]  ' : '';
@@ -249,8 +292,11 @@ export default class QuestOverlay extends Phaser.Scene {
     }
 
     // ── Steps (only when expanded and non-placeholder) ──
+    // Upcoming steps are hidden entirely — no spoilers.
     if (expanded && hasSteps) {
       for (const step of quest.steps) {
+        const stepState = getStepState(step, pm);
+        if (stepState === 'upcoming') continue; // hide future objectives
         relY = this._renderStep(container, step, relY, wrapW, pm);
       }
       relY += 4;
@@ -264,11 +310,8 @@ export default class QuestOverlay extends Phaser.Scene {
     const state = getStepState(step, pm);
     const depth = this._depth;
 
-    const prefix = state === 'completed' ? '✓' : state === 'active' ? '►' : '·';
-    const color  =
-      state === 'completed' ? C.stepCompleted :
-      state === 'active'    ? C.stepActive    :
-      C.stepUpcoming;
+    const prefix = state === 'completed' ? '✓' : '►';
+    const color  = state === 'completed' ? C.stepCompleted : C.stepActive;
 
     const stepTxt = this.add.text(46, relY, `${prefix}  ${step.label}`, {
       fontSize: '13px', color,
@@ -304,7 +347,6 @@ export default class QuestOverlay extends Phaser.Scene {
 
   // Disable pointer events for items scrolled outside the visible mask region.
   // Without this, invisible-but-interactive items still receive clicks.
-  // Only touches objects that have an input handler — static text is unaffected.
   _syncInteractivity(container) {
     const maskTop = this._contentTop;
     const maskBot = this._contentTop + this._contentVisH;

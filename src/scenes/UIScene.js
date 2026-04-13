@@ -614,7 +614,9 @@ export default class UIScene extends Phaser.Scene {
       // ensure overwrite uses fresh payload
       localStorage.removeItem(`bmSave_${slotName}`);
       GameState.save(slotName);
-      this.overwriteConfirmGroup?.destroy(true);
+      // Don't call destroy() on overwriteConfirmGroup directly — it's a child of
+      // modalPanelGroup and loses its scene.sys reference when nested. cleanupPopup()
+      // destroys modalPanelGroup (and all children) safely.
       this.overwriteConfirmGroup = null;
       this.cleanupPopup();
       this.refreshUI?.();
@@ -623,11 +625,15 @@ export default class UIScene extends Phaser.Scene {
 
     const showOverwriteConfirm = (slotName) => {
       if (this.overwriteConfirmGroup) {
-        this.overwriteConfirmGroup.destroy(true);
+        // Clear previous children safely — don't destroy the container itself
+        // (it's nested in modalPanelGroup and destroy() would crash on sys ref).
+        this.overwriteConfirmGroup.removeAll(true);
+      } else {
+        this.overwriteConfirmGroup = this.add.container(0, 0)
+          .setScrollFactor(0)
+          .setDepth(DEPTH.MODAL_PANEL + 10);
+        this.modalPanelGroup.add(this.overwriteConfirmGroup);
       }
-      this.overwriteConfirmGroup = this.add.container(0, 0)
-        .setScrollFactor(0)
-        .setDepth(DEPTH.MODAL_PANEL + 10);
 
       const dim = this.add.rectangle(w / 2, h / 2, panelW + 40, panelH + 20, 0x000000, 0.55)
         .setOrigin(0.5)
@@ -657,14 +663,14 @@ export default class UIScene extends Phaser.Scene {
       }).setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          this.overwriteConfirmGroup?.destroy(true);
+          // Clear contents safely — same reason as above
+          this.overwriteConfirmGroup?.removeAll(true);
           this.overwriteConfirmGroup = null;
         })
         .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
         .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
 
       this.overwriteConfirmGroup.add([dim, confirmPanel, prompt, yesBtn, noBtn]);
-      this.modalPanelGroup.add(this.overwriteConfirmGroup);
     };
 
     // Buttons
