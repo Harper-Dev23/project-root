@@ -17,6 +17,7 @@ import QuestOverlay from './scenes/overlays/QuestOverlay.js';
 import StashOverlay from './scenes/overlays/StashOverlay.js';
 import LevelUpOverlay from './scenes/overlays/LevelUpOverlay.js';
 import TribeRelationsOverlay from './scenes/overlays/TribeRelationsOverlay.js';
+import WaystoneShardOverlay from './scenes/overlays/WaystoneShardOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -41,6 +42,7 @@ const config = {
     StashOverlay,
     LevelUpOverlay,
     TribeRelationsOverlay,
+    WaystoneShardOverlay,
   ],
   physics: {
     default: 'arcade',

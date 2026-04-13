@@ -32,8 +32,8 @@ const SCENARIO_GATE_FLAGS = {
   'training_encounter_3': ['elder_bonepile', 'elseth_leader_brief'],
   // Must visit elder (leveling talk), complete Elseth hand-in, AND get Styx briefing before S4
   'training_encounter_4': ['elder_leveling', 'elseth_leader_challenge', 'elseth_leader_handin', 'styx_leader_brief'],
-  // Must meet Samuel Mourne, complete Styx hand-in, AND get Le'sse briefing before S5
-  'training_encounter_5': ['samuel_mourne', 'styx_leader_challenge', 'styx_leader_handin', 'lesse_leader_brief'],
+  // Must meet Samuel, complete waystone chain, complete Styx hand-in, AND get Le'sse briefing before S5
+  'training_encounter_5': ['samuel_mourne', 'waystone_visit', 'samuel_waystone_return', 'styx_leader_challenge', 'styx_leader_handin', 'lesse_leader_brief'],
   // Must complete Le'sse hand-in AND get Zafaar briefing before S6
   'training_encounter_6': ['lesse_leader_challenge', 'lesse_leader_handin', 'zafaar_leader_brief'],
 };

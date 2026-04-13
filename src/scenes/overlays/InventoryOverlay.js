@@ -136,6 +136,8 @@ export default class InventoryOverlay extends Phaser.Scene {
       lines.push('', base.description);
     }
 
+    if (base.locked) lines.push('', '[ Locked — Cannot be transferred ]');
+
     return { title: name, titleColor: color, lines, name, color };
   }
 
@@ -568,62 +570,84 @@ export default class InventoryOverlay extends Phaser.Scene {
       listContainer.add(rowG);
 
 
-      const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', (p) => {
-          if (!this._isPointerWithinArea(p, gArea)) return;
-          SoundManager.play('dullClick');
-          InventorySystem.removeGlobalItem(item);
-          const updatedChar = InventorySystem.addItemToCharacter(char, item);
-          this._commitChar(updatedChar);
-          this.scene.restart();
-        });
-
-      if (baseItem.type === 'weapon') {
-        const mBtn = this.add.text(420, y, '[Main]', { fontSize: '14px', color: '#88ff88' })
+      if (baseItem.locked) {
+        // Locked items cannot be moved or transferred — show lock badge and optional Use button.
+        const lockLabel = this.add.text(270, y, '[Locked]', { fontSize: '13px', color: '#555577' });
+        if (baseItem.onUse === 'waystone_shard_menu') {
+          const useBtn = this.add.text(360, y, '[Use]', { fontSize: '14px', color: '#aaccff' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => useBtn.setStyle({ color: '#ccddff' }))
+            .on('pointerout',  () => useBtn.setStyle({ color: '#aaccff' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('select');
+              if (!this.scene.isActive('WaystoneShardOverlay')) {
+                this.scene.launch('WaystoneShardOverlay');
+              }
+              this.scene.bringToTop('WaystoneShardOverlay');
+            });
+          listContainer.add([lockLabel, useBtn]);
+        } else {
+          listContainer.add(lockLabel);
+        }
+      } else {
+        const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
             if (!this._isPointerWithinArea(p, gArea)) return;
             SoundManager.play('dullClick');
             InventorySystem.removeGlobalItem(item);
-            let updatedChar = InventorySystem.addItemToCharacter(char, item);
-            updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponMain');
+            const updatedChar = InventorySystem.addItemToCharacter(char, item);
             this._commitChar(updatedChar);
             this.scene.restart();
           });
 
-        const offColor = (baseItem.hands === 2 || mainHandIsTwoHand) ? '#555555' : '#88ff88';
-        const oBtn = this.add.text(500, y, '[Off]', { fontSize: '14px', color: offColor });
-        if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
-          oBtn.setInteractive({ useHandCursor: true })
+        if (baseItem.type === 'weapon') {
+          const mBtn = this.add.text(420, y, '[Main]', { fontSize: '14px', color: '#88ff88' })
+            .setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, gArea)) return;
               SoundManager.play('dullClick');
               InventorySystem.removeGlobalItem(item);
               let updatedChar = InventorySystem.addItemToCharacter(char, item);
-              updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponOff');
+              updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponMain');
               this._commitChar(updatedChar);
               this.scene.restart();
             });
-        }
-        listContainer.add([transferBtn, mBtn, oBtn]);
-      } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
-        const eqBtn = this.add.text(420, y, '[Eq]', { fontSize: '14px', color: '#88ff88' })
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', (p) => {
-            if (!this._isPointerWithinArea(p, gArea)) return;
-            SoundManager.play('dullClick');
-            InventorySystem.removeGlobalItem(item);
-            let updatedChar = InventorySystem.addItemToCharacter(char, item);
-            updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, baseItem.slot);
-            this._commitChar(updatedChar);
-            this.scene.restart();
-          });
 
-        listContainer.add([transferBtn, eqBtn]);
-      } else {
-        const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
-        listContainer.add([transferBtn, useBtn]);
+          const offColor = (baseItem.hands === 2 || mainHandIsTwoHand) ? '#555555' : '#88ff88';
+          const oBtn = this.add.text(500, y, '[Off]', { fontSize: '14px', color: offColor });
+          if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
+            oBtn.setInteractive({ useHandCursor: true })
+              .on('pointerdown', (p) => {
+                if (!this._isPointerWithinArea(p, gArea)) return;
+                SoundManager.play('dullClick');
+                InventorySystem.removeGlobalItem(item);
+                let updatedChar = InventorySystem.addItemToCharacter(char, item);
+                updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponOff');
+                this._commitChar(updatedChar);
+                this.scene.restart();
+              });
+          }
+          listContainer.add([transferBtn, mBtn, oBtn]);
+        } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
+          const eqBtn = this.add.text(420, y, '[Eq]', { fontSize: '14px', color: '#88ff88' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              InventorySystem.removeGlobalItem(item);
+              let updatedChar = InventorySystem.addItemToCharacter(char, item);
+              updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, baseItem.slot);
+              this._commitChar(updatedChar);
+              this.scene.restart();
+            });
+
+          listContainer.add([transferBtn, eqBtn]);
+        } else {
+          const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
+          listContainer.add([transferBtn, useBtn]);
+        }
       }
 
       globalCursorY += rowG.height + spacing;

@@ -28,6 +28,8 @@ const QUEST_FLAG_POSITIONS = {
   elder_bonepile:           { x: 857, y: 342 },
   elder_leveling:           { x: 857, y: 342 },
   samuel_mourne:            { x: 837, y: 493 },
+  waystone_visit:           { x: 953, y: 404 },
+  samuel_waystone_return:   { x: 837, y: 493 },
   // Brief markers — orange !, set before the encounter so the player visits for a briefing
   elseth_leader_brief:      { x: 1059, y: 310 },
   styx_leader_brief:        { x: 305,  y: 298 },
@@ -950,10 +952,12 @@ export default class TownScene extends Phaser.Scene {
   enterSamuelTent() {
     if (this.campMap) this.campMap.setVisible(false);
 
-    const hasIntroFlag = ProgressionManager.hasQuestFlag('samuel_mourne');
+    const hasIntroFlag   = ProgressionManager.hasQuestFlag('samuel_mourne');
+    const hasReturnFlag  = ProgressionManager.hasQuestFlag('samuel_waystone_return');
+    const anyFlag        = hasIntroFlag || hasReturnFlag;
 
-    // If the intro flag is pending, always rebuild so the introductory text shows.
-    if (hasIntroFlag && this.samuelInteriorGroup) {
+    // Rebuild whenever a flag is pending so the right dialogue shows.
+    if (anyFlag && this.samuelInteriorGroup) {
       this.samuelInteriorGroup.destroy(true);
       this.samuelInteriorGroup = null;
     }
@@ -964,8 +968,10 @@ export default class TownScene extends Phaser.Scene {
     }
 
     if (hasIntroFlag) {
-      // First meeting after S4 — play intro, clear the flag.
+      // Phase 1 — First meeting after S4.
+      // Samuel introduces the spiritual dimension of the hunt and sends the player to the waystone.
       ProgressionManager.clearQuestFlag('samuel_mourne');
+      ProgressionManager.setQuestFlag('waystone_visit');
       GameState.save('autosave');
       this._buildQuestFlags();
 
@@ -975,21 +981,67 @@ export default class TownScene extends Phaser.Scene {
         onExit: () => this.leaveSamuelTent()
       });
 
-      const introText = this.add.text(640, 310,
+      const introText = this.add.text(640, 255,
         '"You have done well to reach this point.\n\n' +
-        'I am Samuel Mourne. I have been watching your progress\n' +
-        'through the training grounds — most do not make it this far.\n\n' +
-        'There is more to the Sacred Hunt than these exercises suggest.\n' +
-        'We will speak again when the time is right."',
+        'I am Samuel Mourne. I have watched your progress through the training grounds.\n\n' +
+        'There are things about this island that the tribes do not speak of openly.\n' +
+        'The Sacred Hunt is more than sport. Each prophet is a divine being that takes\n' +
+        'the form of a great beast — ancient, aware, and not what the tribes call them.\n' +
+        'They are not gods. They are something older. Something that was here first.\n\n' +
+        'The waystones carry their resonance. Visit the one to the east — near the\n' +
+        'edge of the encampment. It will know you are coming.\n' +
+        'Return to me after."',
         {
-          fontSize: '14px', color: '#ccddcc', fontStyle: 'italic',
-          align: 'center', wordWrap: { width: 520 }
+          fontSize: '13px', color: '#ccddcc', fontStyle: 'italic',
+          align: 'center', wordWrap: { width: 560 }
         }
       ).setOrigin(0.5, 0).setDepth(12);
 
       layout.add(introText);
       this.samuelInteriorGroup = layout;
+
+    } else if (hasReturnFlag) {
+      // Phase 2 — Player has attuned to the waystone. Give the shard, explain Favor.
+      ProgressionManager.clearQuestFlag('samuel_waystone_return');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+
+      // Award the waystone shard (rare, locked, global inventory)
+      const shard = createItemInstance('waystone_shard', { rarity: 'rare' });
+      if (shard) {
+        InventorySystem.addGlobalItem(shard);
+        GameState.save('autosave');
+        SoundManager.play('reward');
+        this.scene.get('UIScene')?.showToast?.('Received: Waystone Shard');
+      }
+
+      const layout = this._buildInteriorLayout({
+        titleText: 'Samuel Mourne',
+        flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
+        onExit: () => this.leaveSamuelTent()
+      });
+
+      const returnText = this.add.text(640, 255,
+        '"The waystone accepted you. Good.\n\n' +
+        'Take this shard. It is a fragment broken from the stone\'s outer shell — still\n' +
+        'attuned to the same network. In time it will show you the state of the hunt\n' +
+        'from wherever you carry it: prophet movements, waystone locations, the shape\n' +
+        'of things to come.\n\n' +
+        'There is also the matter of Favor. Each prophet is aware of those who hunt here.\n' +
+        'Act in accordance with their nature and they notice. Act against it and they\n' +
+        'notice that too. Your shard will reflect this standing — eventually.\n\n' +
+        'More on that when it becomes relevant."',
+        {
+          fontSize: '13px', color: '#ccddcc', fontStyle: 'italic',
+          align: 'center', wordWrap: { width: 560 }
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      layout.add(returnText);
+      this.samuelInteriorGroup = layout;
+
     } else {
+      // Idle — no pending flags, Samuel is available but has nothing new.
       this.samuelInteriorGroup = this._buildInteriorLayout({
         titleText: 'Samuel Mourne',
         flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
@@ -1751,30 +1803,116 @@ export default class TownScene extends Phaser.Scene {
   _enterWaystone() {
     this._hideExteriorsAndOtherInteriors();
 
+    const hasVisitFlag = ProgressionManager.hasQuestFlag('waystone_visit');
+    const isAttuned    = ProgressionManager.hasQuestFlag('waystone_attuned');
+
+    // Rebuild when the visit flag is pending (transitioning to attune state).
+    if (hasVisitFlag && this.waystoneGroup) {
+      this.waystoneGroup.destroy(true);
+      this.waystoneGroup = null;
+    }
+
     if (this.waystoneGroup) {
       this.waystoneGroup.setVisible(true);
       return;
     }
 
-    const layout = this._buildInteriorLayout({
-      titleText: "The Waystone",
-      flavorText: "A towering monolith humming with sacred energy.\nGlyphs shift to display hunt progress.",
-      bgColor: 0x1a1f26,
-      onExit: () => {
-        this.waystoneGroup.setVisible(false);
-        this._showExterior();
-      }
-    });
+    if (isAttuned) {
+      // Post-attunement: show full hunt progress and waystone network.
+      const layout = this._buildInteriorLayout({
+        titleText: "The Waystone",
+        flavorText: "The stone pulses in recognition as you approach.\nGlyphs illuminate across its surface.",
+        bgColor: 0x0f1a2a,
+        onExit: () => {
+          this.waystoneGroup.setVisible(false);
+          this._showExterior();
+        }
+      });
 
-    // Add dynamic hunt info text
-    this.waystoneInfo = this.add.text(640, 300,
-      "[Hunt progress will appear here]",
-      { fontSize: '16px', color: '#ffffff', align: 'center' }
-    ).setOrigin(0.5);
+      const huntText = this.add.text(640, 275,
+        '— Hunt Progress —\n\n' +
+        '[ Prophet tracking coming soon ]\n\n\n' +
+        '— Waystone Network —\n\n' +
+        '· Elder Grove  ·  Camp Nehemiah  [ Attuned ]\n' +
+        '· Northern Passage  [ Locked ]\n' +
+        '· The Maw  [ Locked ]\n' +
+        '· Ashfield  [ Locked ]',
+        {
+          fontSize: '15px', color: '#88aacc', align: 'center',
+          lineSpacing: 4, wordWrap: { width: 500 }
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
 
-    layout.add(this.waystoneInfo);
-    layout.setDepth(11);
-    this.waystoneGroup = layout;
+      layout.add(huntText);
+      layout.setDepth(11);
+      this.waystoneGroup = layout;
+
+    } else if (hasVisitFlag) {
+      // Waystone visit flag active — player has been sent here by Samuel. Show attune prompt.
+      const layout = this._buildInteriorLayout({
+        titleText: "The Waystone",
+        flavorText: "A deep resonance stirs as you draw near.\nAs if something vast is becoming aware of you.",
+        bgColor: 0x0f1a2a,
+        onExit: () => {
+          this.waystoneGroup.setVisible(false);
+          this._showExterior();
+        }
+      });
+
+      const attuneDesc = this.add.text(640, 290,
+        '"Glyphs shift and fade across the surface.\nThe hum grows louder — low, patient, waiting."',
+        {
+          fontSize: '14px', color: '#8899bb', fontStyle: 'italic',
+          align: 'center', wordWrap: { width: 480 }
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      const attuneBtn = this.add.text(640, 390, '[ Attune to the Waystone ]', {
+        fontSize: '18px', color: '#aaccff', fontStyle: 'bold'
+      }).setOrigin(0.5).setDepth(12)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => attuneBtn.setStyle({ color: '#ccddff' }))
+        .on('pointerout',  () => attuneBtn.setStyle({ color: '#aaccff' }))
+        .on('pointerdown', () => {
+          ProgressionManager.clearQuestFlag('waystone_visit');
+          ProgressionManager.setQuestFlag('waystone_attuned');
+          ProgressionManager.setQuestFlag('samuel_waystone_return');
+          GameState.save('autosave');
+          SoundManager.play('reward');
+          this.waystoneGroup.destroy(true);
+          this.waystoneGroup = null;
+          this._buildQuestFlags();
+          this._enterWaystone(); // rebuild showing attuned state
+        });
+
+      layout.add([attuneDesc, attuneBtn]);
+      layout.setDepth(11);
+      this.waystoneGroup = layout;
+
+    } else {
+      // Pre-attunement, not yet directed here — faint hum only.
+      const layout = this._buildInteriorLayout({
+        titleText: "The Waystone",
+        flavorText: "A towering monolith of dark stone.\nA faint hum resonates from somewhere deep within.",
+        bgColor: 0x121520,
+        onExit: () => {
+          this.waystoneGroup.setVisible(false);
+          this._showExterior();
+        }
+      });
+
+      const humText = this.add.text(640, 310,
+        '"The stone does not respond to your touch.\nThe hum continues — low, patient, indifferent."',
+        {
+          fontSize: '14px', color: '#445566', fontStyle: 'italic',
+          align: 'center', wordWrap: { width: 480 }
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      layout.add(humText);
+      layout.setDepth(11);
+      this.waystoneGroup = layout;
+    }
   }
 
 

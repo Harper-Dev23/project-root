@@ -19,6 +19,17 @@ export const Items = {
     description: 'Restores a small amount of mana.'
   },
 
+  // === Sacred Relics ===
+  waystone_shard: {
+    id: 'waystone_shard',
+    name: 'Waystone Shard',
+    type: 'relic',
+    rarity: 'rare',
+    locked: true,           // cannot be transferred, moved, or sold
+    onUse: 'waystone_shard_menu',
+    description: 'A fragment of the island\'s sacred waystone network, attuned to your presence. It tracks hunt progress and prophet favor.',
+  },
+
   // === Crude Weapons (Common Rarity) ===
   crude_dagger: {
     id: 'crude_dagger',
