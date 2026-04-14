@@ -30,6 +30,8 @@ const QUEST_FLAG_POSITIONS = {
   samuel_mourne:            { x: 837, y: 493 },
   waystone_visit:           { x: 953, y: 404 },
   samuel_waystone_return:   { x: 837, y: 493 },
+  samuel_awakening:         { x: 837, y: 493 },
+  seers_awakening:          { x: 1182, y: 119 },
   // Brief markers — orange !, set before the encounter so the player visits for a briefing
   elseth_leader_brief:      { x: 1059, y: 310 },
   styx_leader_brief:        { x: 305,  y: 298 },
@@ -853,6 +855,16 @@ export default class TownScene extends Phaser.Scene {
       }
     });
 
+    // Auto-set samuel_awakening when all training encounters are complete.
+    if (
+      ProgressionManager.isScenarioCompleted('training_encounter_6') &&
+      !ProgressionManager.hasQuestFlag('samuel_awakening') &&
+      !ProgressionManager.hasQuestFlag('seers_awakening') &&
+      !ProgressionManager.hasQuestFlag('awakening_complete')
+    ) {
+      ProgressionManager.setQuestFlag('samuel_awakening');
+    }
+
     // Check if the combat pit marker should now appear based on cleared flags
     ProgressionManager.refreshCombatPitFlag();
 
@@ -962,9 +974,10 @@ export default class TownScene extends Phaser.Scene {
   enterSamuelTent() {
     if (this.campMap) this.campMap.setVisible(false);
 
-    const hasIntroFlag   = ProgressionManager.hasQuestFlag('samuel_mourne');
-    const hasReturnFlag  = ProgressionManager.hasQuestFlag('samuel_waystone_return');
-    const anyFlag        = hasIntroFlag || hasReturnFlag;
+    const hasIntroFlag      = ProgressionManager.hasQuestFlag('samuel_mourne');
+    const hasReturnFlag     = ProgressionManager.hasQuestFlag('samuel_waystone_return');
+    const hasAwakeningFlag  = ProgressionManager.hasQuestFlag('samuel_awakening');
+    const anyFlag           = hasIntroFlag || hasReturnFlag || hasAwakeningFlag;
 
     // Rebuild whenever a flag is pending so the right dialogue shows.
     if (anyFlag && this.samuelInteriorGroup) {
@@ -1067,6 +1080,38 @@ export default class TownScene extends Phaser.Scene {
       });
 
       layout.add([returnText, collectBtn]);
+      this.samuelInteriorGroup = layout;
+
+    } else if (hasAwakeningFlag) {
+      // Phase 3 — All encounters complete. Samuel speaks of Awakening, sends player to the Seers.
+      ProgressionManager.clearQuestFlag('samuel_awakening');
+      ProgressionManager.setQuestFlag('seers_awakening');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+
+      const layout = this._buildInteriorLayout({
+        titleText: 'Samuel Mourne',
+        flavorText: "The interior seems strangely familiar.\nSamuel studies you quietly.",
+        onExit: () => this.leaveSamuelTent()
+      });
+
+      const awakeningText = this.add.text(640, 255,
+        '"You have done what few ever do. The six great hunts — completed.\n\n' +
+        'There is a word for what happens next. The tribes call it different things, but\n' +
+        'the oldest word is Awakening. A moment when the hunt ceases to be a test and\n' +
+        'becomes something else entirely. A recognition.\n\n' +
+        'The Seers have watched you since you arrived. They do not speak — not in words.\n' +
+        'But they will show you what is waiting on the other side of this threshold.\n\n' +
+        'Go to their tent. Let them look at you. You will understand."',
+        {
+          fontSize: '15px',
+          color: '#dddddd',
+          wordWrap: { width: 760 },
+          lineSpacing: 4,
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      layout.add(awakeningText);
       this.samuelInteriorGroup = layout;
 
     } else {
@@ -1837,20 +1882,85 @@ export default class TownScene extends Phaser.Scene {
   _enterSeersTent() {
     this._hideExteriorsAndOtherInteriors();
 
+    const hasAwakeningVisit = ProgressionManager.hasQuestFlag('seers_awakening');
+
+    // Rebuild when the awakening flag is pending so the vision scene is shown.
+    if (hasAwakeningVisit && this.seersGroup) {
+      this.seersGroup.destroy(true);
+      this.seersGroup = null;
+    }
+
     if (this.seersGroup) {
       this.seersGroup.setVisible(true);
       return;
     }
 
-    this.seersGroup = this._buildInteriorLayout({
-      titleText: "Seers' Tent",
-      flavorText: "Six veiled figures sit motionless.\nTheir gazes pierce reality itself.",
-      bgColor: 0x201e29,
-      onExit: () => {
-        this.seersGroup.setVisible(false);
-        this._showExterior();
-      }
-    });
+    if (hasAwakeningVisit) {
+      // Awakening vision — triggered after all encounters complete.
+      ProgressionManager.clearQuestFlag('seers_awakening');
+      ProgressionManager.setQuestFlag('awakening_complete');
+      GameState.save('autosave');
+      this._buildQuestFlags();
+
+      const layout = this._buildInteriorLayout({
+        titleText: "Seers' Tent",
+        flavorText: "Six veiled figures sit motionless.\nTheir gazes pierce reality itself.",
+        bgColor: 0x100c1a,
+        onExit: () => {
+          this.seersGroup.setVisible(false);
+          this._showExterior();
+        }
+      });
+
+      const visionText = this.add.text(640, 230,
+        'No words are spoken. The air thickens.\n\n' +
+        'You see shadows — figures locked in ancient combat on shorelines you do not\n' +
+        'recognise. Their movements are familiar. The weight of the spear. The angle\n' +
+        'of the dodge. You have made those same choices.\n\n' +
+        'The shadows turn. Some of their faces are almost yours.\n\n' +
+        'They have hunted here before. They have stood in this same place before.\n' +
+        'The hunt does not begin with you, and it will not end here.\n\n' +
+        'One of the Seers extends a hand, palm upward. Waiting.',
+        {
+          fontSize: '15px',
+          color: '#ccccdd',
+          wordWrap: { width: 760 },
+          lineSpacing: 4,
+          align: 'center',
+        }
+      ).setOrigin(0.5, 0).setDepth(12);
+
+      const awakenBtn = this.add.text(640, 560, '[ Awaken ]', {
+        fontSize: '22px',
+        color: '#aabbff',
+        backgroundColor: '#1a1a2e',
+        padding: { x: 18, y: 8 },
+        fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(12)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => awakenBtn.setStyle({ color: '#ffffff' }))
+        .on('pointerout',  () => awakenBtn.setStyle({ color: '#aabbff' }))
+        .on('pointerdown', () => {
+          // End of demo — no further action.
+          awakenBtn.setStyle({ color: '#555555' }).disableInteractive();
+          awakenBtn.setText('[ ... ]');
+        });
+
+      layout.add([visionText, awakenBtn]);
+      this.seersGroup = layout;
+
+    } else {
+      // Default idle — Seers present but nothing to show.
+      this.seersGroup = this._buildInteriorLayout({
+        titleText: "Seers' Tent",
+        flavorText: "Six veiled figures sit motionless.\nTheir gazes pierce reality itself.",
+        bgColor: 0x201e29,
+        onExit: () => {
+          this.seersGroup.setVisible(false);
+          this._showExterior();
+        }
+      });
+    }
   }
 
   _enterWaystone() {
@@ -2501,13 +2611,13 @@ export default class TownScene extends Phaser.Scene {
       const unlocked  = ProgressionManager.isScenarioUnlocked(id);
       const completed = ProgressionManager.isScenarioCompleted(id);
 
-      // Label shows a checkmark for already-beaten scenarios.
-      const label = completed ? `${scenario.name}  ✓` : scenario.name;
+      // Label shows a checkmark for already-beaten scenarios; hide name if locked.
+      const label = !unlocked ? '???' : (completed ? `${scenario.name}  ✓` : scenario.name);
 
       return {
         label,
-        description:     unlocked ? scenario.description : 'Complete the previous scenario to unlock.',
-        longDescription: unlocked ? (scenario.longDescription || scenario.description) : 'Finish the previous scenario first to unlock this challenge.',
+        description:     unlocked ? scenario.description : '???',
+        longDescription: unlocked ? (scenario.longDescription || scenario.description) : '???',
         portraitKey:     scenario.portraitKey || null,
         locked:          !unlocked,
         onSelect:        unlocked ? () => this._startTraining(id) : null,

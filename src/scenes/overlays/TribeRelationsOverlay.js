@@ -193,6 +193,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
     this.scene.resume('UIScene');
+    this.scene.get('UIScene')?.refreshUI?.();
     this.scene.stop();
   }
 }

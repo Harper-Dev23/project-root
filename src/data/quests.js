@@ -298,6 +298,43 @@ export const QUEST_LINES = [
   },
 
   {
+    id:          'the_awakening',
+    category:    'divine',
+    title:       'The Awakening',
+    description: 'Samuel Mourne believes you stand at the threshold of something ancient. The Seers watch — and wait.',
+    isAvailable: (pm) =>
+      sc(pm, 'training_encounter_6') ||
+      pm.hasQuestFlag('samuel_awakening') ||
+      pm.hasQuestFlag('seers_awakening') ||
+      pm.hasQuestFlag('awakening_complete'),
+    steps: [
+      {
+        id:         'samuel_awakening_step',
+        label:      'Speak with Samuel Mourne',
+        description: 'Return to Samuel\'s tent. He has spoken of an "Awakening."',
+        isActive:   (pm) => pm.hasQuestFlag('samuel_awakening'),
+        isComplete: (pm) =>
+          pm.hasQuestFlag('seers_awakening') || pm.hasQuestFlag('awakening_complete'),
+      },
+      {
+        id:         'seers_awakening_step',
+        label:      'Visit the Seers\' Tent',
+        description: 'The Seers do not speak. But they will show you something.',
+        isActive:   (pm) => pm.hasQuestFlag('seers_awakening'),
+        isComplete: (pm) => pm.hasQuestFlag('awakening_complete'),
+      },
+      {
+        id:         'awaken',
+        label:      'Awaken',
+        description: 'Accept what is waiting on the other side of the threshold.',
+        isActive:   (pm) =>
+          pm.hasQuestFlag('seers_awakening') || pm.hasQuestFlag('awakening_complete'),
+        isComplete: (pm) => pm.hasQuestFlag('awakening_complete'),
+      },
+    ],
+  },
+
+  {
     id:           'divine_placeholder',
     category:     'divine',
     title:        'Voices of the Ancients',

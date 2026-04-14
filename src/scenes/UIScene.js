@@ -66,9 +66,13 @@ export default class UIScene extends Phaser.Scene {
       menu_map:     () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('MapOverlay'); } },
       menu_quest:   () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('QuestOverlay'); } },
       menu_tribes:  () => {
-        if (_anyOverlayOpen() || !ProgressionManager.tribe) return;
+        if (_anyOverlayOpen()) return;
+        if (!ProgressionManager.tribe) return;
         SoundManager.play('select');
-        this.openOverlay('TribeRelationsOverlay');
+        if (!this.scene.isActive('TribeRelationsOverlay')) {
+          this.scene.launch('TribeRelationsOverlay');
+        }
+        this.scene.bringToTop('TribeRelationsOverlay');
       },
       menu_journal: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('JournalOverlay'); } },
       menu_options: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('OptionsOverlay'); } },
@@ -266,7 +270,9 @@ export default class UIScene extends Phaser.Scene {
       { label: '📜 Quest', action: () => this.openOverlay('QuestOverlay'), alertDot: anyQuestTabHasNew() },
       ...(ProgressionManager.tribe ? [{
         label: '🛡 Tribes',
+        alertDot: !ProgressionManager.hasQuestFlag('tribes_button_seen'),
         action: () => {
+          ProgressionManager.setQuestFlag('tribes_button_seen');
           if (!this.scene.isActive('TribeRelationsOverlay')) {
             this.scene.launch('TribeRelationsOverlay');
             this.scene.bringToTop('TribeRelationsOverlay');
