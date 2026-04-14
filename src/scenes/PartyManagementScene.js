@@ -238,36 +238,12 @@ export default class PartyManagementScene extends Phaser.Scene {
     this.memberTexts.forEach(t => t.destroy());
     this.memberTexts = [];
 
-    const characters = GameState.characters || [];
     const party = GameState.party || [];
     const startY = 100;
     const pad = 30;
 
-    // Available Hunters
-    this.memberTexts.push(
-      this.add.text(LEFT_MARGIN, startY - 40, 'Available Hunters:', { fontSize: '20px', color: '#fff' })
-        .setDepth(1001)
-    );
-
-    characters.forEach((char, i) => {
-      const t = this.add.text(
-        LEFT_MARGIN, startY + i * pad,
-        `${char.name} (Lv${char.level}) - ${char.race} ${char.baseClass} | HP: ${char.derived?.maxHP ?? char.maxHP ?? '?'} | MP: ${char.derived?.maxMP ?? char.maxMP ?? '?'}`,
-        { fontSize: '18px', color: '#fff' }
-      )
-        .setDepth(1001)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          if (!party.includes(char) && party.length < 6) {
-            party.push(char);
-            this.refreshListsAndPortraits();
-          }
-        });
-      this.memberTexts.push(t);
-    });
-
     // Current Party header
-    const partyY = startY + characters.length * pad + 40;
+    const partyY = startY;
     this.memberTexts.push(
       this.add.text(LEFT_MARGIN, partyY, 'Current Party (drag portraits into positions):', { fontSize: '20px', color: '#fff' })
         .setDepth(1001)

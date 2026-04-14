@@ -188,7 +188,24 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     frame.dimmer.setAlpha(0.65);
 
+    // Clamp selectedCharIndex in case party shrank
+    if (this.selectedCharIndex >= GameState.party.length) this.selectedCharIndex = 0;
+
+    // Pre-declare variables used both inside the party guard and in later sections
+    let char = null, mainHandIsTwoHand = false;
+    let pArea = null, pList = null, pMaskY = 0, pMaskHeight = 0, pContentHeight = 0, pVisibleHeight = 0;
+
     // CHARACTER SELECTOR — tinted by class color
+    if (GameState.party.length === 0) {
+      // No active party — show placeholder, skip all character-dependent UI
+      this.add.text(
+        frame.bounds.x + (frame.bounds.width * 0.25),
+        frame.bounds.y + frame.bounds.height * 0.5 - 20,
+        'No active party members.\nAdd hunters via the Camp roster in your tribe lodge.',
+        { fontSize: '15px', color: '#666666', align: 'center', wordWrap: { width: 260 } }
+      ).setOrigin(0.5).setDepth(contentDepth);
+    } else {
+
     const _dimHex = (hex) => {
       // Halve each channel for unselected dimming
       const c = hex.replace('#', '');
@@ -217,9 +234,9 @@ export default class InventoryOverlay extends Phaser.Scene {
         .setDepth(contentDepth);
     });
 
-    const char = GameState.party[this.selectedCharIndex];
+    char = GameState.party[this.selectedCharIndex];
     const mainHandItem = char.equipment.weaponMain;
-    const mainHandIsTwoHand = mainHandItem && Items[isItemInstance(mainHandItem) ? mainHandItem.id : mainHandItem]?.hands === 2;
+    mainHandIsTwoHand = mainHandItem && Items[isItemInstance(mainHandItem) ? mainHandItem.id : mainHandItem]?.hands === 2;
 
     // EQUIPPED GEAR
     let equipY = 140;
@@ -317,9 +334,9 @@ export default class InventoryOverlay extends Phaser.Scene {
     // --- PERSONAL MASK + LIST (OFF-DISPLAY GEO, NO DISPLAY-LIST GRAPHICS) ---
 
     const pMaskX = 192;
-    const pMaskY = equipY;
+    pMaskY = equipY;
     const pMaskWidth = globalListLeft - pMaskX - 15;
-    const pMaskHeight = Math.max(150, (safeHeight - 60) - pMaskY);
+    pMaskHeight = Math.max(150, (safeHeight - 60) - pMaskY);
 
     // geometry for mask (not added to display list)
     const pMaskGfx = this.make.graphics({ x: pMaskX, y: pMaskY, add: false });
@@ -328,7 +345,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     const pMaskShape = new Phaser.Display.Masks.GeometryMask(this, pMaskGfx);
 
     // list container, positioned exactly at mask origin
-    const pList = this.add.container(pMaskX, pMaskY).setDepth(contentDepth).setMask(pMaskShape);
+    pList = this.add.container(pMaskX, pMaskY).setDepth(contentDepth).setMask(pMaskShape);
 
     // --- PERSONAL ROWS ---
     const PERSONAL_TEXT_WIDTH = 140;
@@ -437,14 +454,15 @@ export default class InventoryOverlay extends Phaser.Scene {
       personalCursorY = empty.height;
     }
 
-    const pContentHeight = Math.max(personalCursorY, 0);
-    const pVisibleHeight = pMaskHeight;
+    pContentHeight = Math.max(personalCursorY, 0);
+    pVisibleHeight = pMaskHeight;
     // anchor the list to the mask origin (don't move it to 0)
     pList.setPosition(pMaskX, pMaskY);
 
     // define personal area rect for scrolling (no Graphics object needed)
-    const pArea = { x: pMaskX, y: pMaskY, w: pMaskWidth, h: pVisibleHeight };
+    pArea = { x: pMaskX, y: pMaskY, w: pMaskWidth, h: pVisibleHeight };
 
+    } // end party.length > 0 guard
 
     // GLOBAL INVENTORY
     const gToggleY = 160;
@@ -590,7 +608,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         } else {
           listContainer.add(lockLabel);
         }
-      } else {
+      } else if (char) {
         const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
@@ -706,8 +724,8 @@ export default class InventoryOverlay extends Phaser.Scene {
         _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
       }
 
-      // PERSONAL scroll/clamp
-      if (mx >= pArea.x && mx <= pArea.x + pArea.w && my >= pArea.y && my <= pArea.y + pArea.h) {
+      // PERSONAL scroll/clamp (only when a party member is selected)
+      if (pArea && pList && mx >= pArea.x && mx <= pArea.x + pArea.w && my >= pArea.y && my <= pArea.y + pArea.h) {
         if (pContentHeight > pVisibleHeight) {
           const baseY = pMaskY;
           const maxScroll = pContentHeight - pVisibleHeight;

@@ -96,6 +96,11 @@ export default class LevelUpOverlay extends Phaser.Scene {
     this._statCards   = {};
     this._previewTxts = {};
 
+    // Must null these each create() — they're instance props that survive stop/launch,
+    // so without this _showTab() would skip rebuilding against destroyed game objects.
+    this._statItems   = null;
+    this._talentItems = null;
+
     this._buildCharStrip();
     this._buildTabRow();
     this._showTab(this._initialTab || 'Stat Points');

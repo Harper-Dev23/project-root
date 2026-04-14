@@ -33,7 +33,7 @@ export default class UIScene extends Phaser.Scene {
     const MENU_OVERLAY_KEYS = [
       'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
       'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-      'TribeRelationsOverlay', 'PartyManagementScene',
+      'TribeRelationsOverlay', 'PartyManagementScene', 'CampRosterOverlay',
     ];
     // Returns true if any overlay is currently running.
     const _anyOverlayOpen = () => MENU_OVERLAY_KEYS.some(k => this.scene.isActive(k));
@@ -213,7 +213,7 @@ export default class UIScene extends Phaser.Scene {
 
     const menuItems = [
       {
-        label: '🧍 Character',
+        label: '🧍 Party',
         alertDot: GameState.party?.some(c => (c.unspentStatPoints || 0) > 0),
         action: () => {
           if (!this.scene.isActive('CharacterListOverlay')) {

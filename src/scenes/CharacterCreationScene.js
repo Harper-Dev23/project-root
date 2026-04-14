@@ -212,6 +212,7 @@ export default class CharacterCreationScene extends Phaser.Scene {
       });
 
       GameState.addCharacter(newChar);
+      if (GameState.party.length < 6) GameState.addToParty(newChar);
 
       if (ProgressionManager.hasQuestFlag('orientation_bonfire')) {
         ProgressionManager.clearQuestFlag('orientation_bonfire');

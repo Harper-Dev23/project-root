@@ -32,30 +32,38 @@ const _collapsedSections = new Set(['Available', 'Completed']);
 // Which quests the player has expanded (click arrow to see steps).
 const _expandedQuests = new Set();
 
-// Quest IDs that have been "seen" while active or available — used to clear
-// the notification dot on a tab once the player opens it.
+// State keys that have been "seen" by the player. Format:
+//   - "questId:stepId"  — quest is active with a specific step active
+//   - "questId"         — quest is available but no step is active yet
+// Using step ID means a new objective triggers the dot even for a previously-seen quest.
 const _seenQuestIds = new Set();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Returns all active/available quest IDs for a given tab category. */
-function _liveQuestIds(categoryId) {
+/** Returns the unique state key for a quest in its current state. */
+function _questStateKey(q, pm) {
+  const activeStep = q.steps.find(s => getStepState(s, pm) === 'active');
+  return activeStep ? `${q.id}:${activeStep.id}` : q.id;
+}
+
+/** Returns state keys for all active/available quests in a given tab. */
+function _liveQuestStateKeys(categoryId) {
   const pm = ProgressionManager;
-  const ids = [];
+  const keys = [];
   for (const q of QUEST_LINES) {
     if (q.category !== categoryId) continue;
     const s = getQuestState(q, pm);
-    if (s === 'active' || s === 'available') ids.push(q.id);
+    if (s === 'active' || s === 'available') keys.push(_questStateKey(q, pm));
   }
-  return ids;
+  return keys;
 }
 
-/** True if the tab has quests the player hasn't acknowledged yet. */
+/** True if the tab has quests (or objectives) the player hasn't acknowledged yet. */
 function _tabHasNew(categoryId) {
-  return _liveQuestIds(categoryId).some(id => !_seenQuestIds.has(id));
+  return _liveQuestStateKeys(categoryId).some(k => !_seenQuestIds.has(k));
 }
 
-/** Exported: true if ANY tab has unseen quests (used by UIScene alert dot). */
+/** Exported: true if ANY tab has unseen quests/objectives (used by UIScene alert dot). */
 export function anyQuestTabHasNew() {
   return QUEST_CATEGORIES.some(({ id }) => _tabHasNew(id));
 }
@@ -169,9 +177,9 @@ export default class QuestOverlay extends Phaser.Scene {
     this._activeTab = id;
     this._scrollY   = 0;
 
-    // Mark all quests on this tab as seen, hide the dot
-    for (const qid of _liveQuestIds(id)) {
-      _seenQuestIds.add(qid);
+    // Mark all quests/objectives on this tab as seen, hide the dot
+    for (const key of _liveQuestStateKeys(id)) {
+      _seenQuestIds.add(key);
     }
     if (this._notifDots[id]) this._notifDots[id].setVisible(false);
 
@@ -372,6 +380,8 @@ export default class QuestOverlay extends Phaser.Scene {
   _close() {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
+    // Refresh the UIScene panel so the alert dot state is recalculated.
+    this.scene.get('UIScene')?.refreshUI?.();
     this.scene.resume('UIScene');
     this.scene.stop();
   }

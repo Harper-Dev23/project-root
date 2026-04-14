@@ -21,7 +21,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {
-      title: 'Camp Nehemiah - Character Roster',
+      title: 'Current Party',
       onClose: () => this._close(),
       bgImage: 'menu_parchment_background'
     });
@@ -95,8 +95,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
     const spacing = 160;
 
     const tabs = [
-      { key: 'alive', label: 'Alive' },
-      { key: 'slain', label: 'Slain' }
+      { key: 'alive', label: 'Party Members' },
     ];
 
     this.tabButtons = tabs.map((tab, index) => {
@@ -153,14 +152,10 @@ export default class CharacterListOverlay extends Phaser.Scene {
     const startY = bounds.y + 130 + listPaddingTop;
     const spacing = 44;
 
-    const roster = this.activeTab === 'alive'
-      ? (GameState.party || [])
-      : (GameState.slain || []);
+    const roster = GameState.party || [];
 
     if (!roster.length) {
-      const message = this.activeTab === 'alive'
-        ? 'No adventurers are currently assembled.'
-        : 'No fallen heroes recorded yet.';
+      const message = 'No adventurers are currently in the party.';
       const placeholder = this.add.text(listLeft, startY, message, {
         fontSize: '16px',
         color: '#bbbbbb'

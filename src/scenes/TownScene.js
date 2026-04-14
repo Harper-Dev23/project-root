@@ -1001,19 +1001,11 @@ export default class TownScene extends Phaser.Scene {
       this.samuelInteriorGroup = layout;
 
     } else if (hasReturnFlag) {
-      // Phase 2 — Player has attuned to the waystone. Give the shard, explain Favor.
+      // Phase 2 — Player has attuned to the waystone. Show dialogue + Collect button.
+      // Clear flag on entry so the ★ marker disappears immediately.
       ProgressionManager.clearQuestFlag('samuel_waystone_return');
       GameState.save('autosave');
       this._buildQuestFlags();
-
-      // Award the waystone shard (rare, locked, global inventory)
-      const shard = createItemInstance('waystone_shard', { rarity: 'rare' });
-      if (shard) {
-        InventorySystem.addGlobalItem(shard);
-        GameState.save('autosave');
-        SoundManager.play('reward');
-        this.scene.get('UIScene')?.showToast?.('Received: Waystone Shard');
-      }
 
       const layout = this._buildInteriorLayout({
         titleText: 'Samuel Mourne',
@@ -1021,7 +1013,7 @@ export default class TownScene extends Phaser.Scene {
         onExit: () => this.leaveSamuelTent()
       });
 
-      const returnText = this.add.text(640, 255,
+      const returnText = this.add.text(640, 240,
         '"The waystone accepted you. Good.\n\n' +
         'Take this shard. It is a fragment broken from the stone\'s outer shell — still\n' +
         'attuned to the same network. In time it will show you the state of the hunt\n' +
@@ -1037,7 +1029,32 @@ export default class TownScene extends Phaser.Scene {
         }
       ).setOrigin(0.5, 0).setDepth(12);
 
-      layout.add(returnText);
+      const collectBtn = this.add.text(640, 520, '[ Collect Reward ]', {
+        fontSize: '20px', color: '#111100', fontStyle: 'bold',
+        backgroundColor: '#ffdd44', padding: { x: 14, y: 7 },
+      }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
+
+      collectBtn.on('pointerover', () => collectBtn.setBackgroundColor('#ffe866'));
+      collectBtn.on('pointerout',  () => collectBtn.setBackgroundColor('#ffdd44'));
+      collectBtn.on('pointerdown', () => {
+        SoundManager.play('reward');
+
+        const shard = createItemInstance('waystone_shard', { rarity: 'rare' });
+        if (shard) {
+          InventorySystem.addGlobalItem(shard);
+          GameState.save('autosave');
+          this.scene.get('UIScene')?.showToast?.('Received: Waystone Shard');
+        }
+
+        // Bust cache so next visit shows idle dialogue
+        if (this.samuelInteriorGroup) {
+          this.samuelInteriorGroup.destroy(true);
+          this.samuelInteriorGroup = null;
+        }
+        this._showExterior();
+      });
+
+      layout.add([returnText, collectBtn]);
       this.samuelInteriorGroup = layout;
 
     } else {
@@ -1771,7 +1788,31 @@ export default class TownScene extends Phaser.Scene {
       hqBg.on('pointerdown',  openHQ);
       hqLabel.on('pointerdown', openHQ);
 
-      group.add([stashBg, stashLabel, hqBg, hqLabel]);
+      // Camp button — opens the full Camp Nehemiah character roster
+      const campBg = this.add.rectangle(panelLeft + 240, panelTop + 52, 80, 36, 0x1a1e2e, 1)
+        .setStrokeStyle(1, 0x886644)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(12);
+
+      const campLabel = this.add.text(panelLeft + 240, panelTop + 52, '⛺ Camp', {
+        fontSize: '14px',
+        color: '#aaccff',
+      }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
+
+      const openCamp = () => {
+        SoundManager.play('handsClick');
+        if (!this.scene.isActive('CampRosterOverlay')) {
+          this.scene.launch('CampRosterOverlay');
+          this.scene.bringToTop('CampRosterOverlay');
+        }
+      };
+
+      campBg.on('pointerover',  () => campBg.setFillStyle(0x2a2e4e, 1));
+      campBg.on('pointerout',   () => campBg.setFillStyle(0x1a1e2e, 1));
+      campBg.on('pointerdown',  openCamp);
+      campLabel.on('pointerdown', openCamp);
+
+      group.add([stashBg, stashLabel, hqBg, hqLabel, campBg, campLabel]);
     }
 
     // Only cache post-choice layouts — pre-choice content varies by flag state.
