@@ -176,9 +176,9 @@ export default class CampRosterOverlay extends Phaser.Scene {
             .on('pointerdown', () => {
               GameState.removeFromParty(char);
               this.refreshList();
-              // Re-render detail if still selected
               const reChar = this._roster().find(c => c.id === this.selectedCharId) || null;
               this._renderDetail(reChar);
+              this.scene.get('UIScene')?.refreshUI?.();
             });
         } else if (GameState.party.length < 6) {
           transferBtn = this.add.text(listLeft + listWidth - 10, y + 12, '[ → Party ]', {
@@ -190,6 +190,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
               this.refreshList();
               const reChar = this._roster().find(c => c.id === this.selectedCharId) || null;
               this._renderDetail(reChar);
+              this.scene.get('UIScene')?.refreshUI?.();
             });
         } else {
           // Party full — greyed out label
@@ -334,6 +335,8 @@ export default class CampRosterOverlay extends Phaser.Scene {
         const name = base.name || (isItemInstance(item) ? item.id : item) || '?';
         return `${this._fmtSlot(slot)}: ${name}`;
       });
+      const itemCount = (character.inventory || []).length;
+      eqLines.push(`Items in bag: ${itemCount}`);
       curY = this._writeSection(curY, 'Equipment', eqLines, scrollW);
     }
 
@@ -368,6 +371,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
   _close() {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
+    this.scene.get('UIScene')?.refreshUI?.();
     this.scene.stop();
   }
 }

@@ -253,8 +253,49 @@ export const QUEST_LINES = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  DIVINE  (placeholder)
+  //  DIVINE
   // ═══════════════════════════════════════════════════════════════════════════
+
+  {
+    id:          'prophets_fragment',
+    category:    'divine',
+    title:       "The Prophet's Fragment",
+    description: 'A wandering figure named Samuel Mourne has drawn your attention. He speaks of prophets — ancient beings who walk the island in the form of great beasts — and of a waystone network attuned to those who hunt here.',
+    isAvailable: (pm) =>
+      sc(pm, 'training_encounter_4') ||
+      pm.hasQuestFlag('samuel_mourne') ||
+      pm.hasQuestFlag('waystone_visit') ||
+      pm.hasQuestFlag('samuel_waystone_return') ||
+      pm.hasQuestFlag('waystone_attuned') ||
+      pm.hasQuestFlag('waystone_shard_collected'),
+    steps: [
+      {
+        id:          'meet_samuel_mourne',
+        label:       'Seek Out Samuel Mourne',
+        description: 'A solitary figure lingers near the camp. Seek him out and hear what he has to say.',
+        isActive:   (pm) => pm.hasQuestFlag('samuel_mourne'),
+        isComplete: (pm) => !pm.hasQuestFlag('samuel_mourne') &&
+          (pm.hasQuestFlag('waystone_visit') || pm.hasQuestFlag('samuel_waystone_return') ||
+           pm.hasQuestFlag('waystone_attuned') || pm.hasQuestFlag('waystone_shard_collected')),
+      },
+      {
+        id:          'attune_waystone',
+        label:       'Attune to the Waystone',
+        description: 'Samuel has directed you to the waystone at the edge of camp. Approach it and allow it to attune to your presence.',
+        isActive:   (pm) => pm.hasQuestFlag('waystone_visit'),
+        isComplete: (pm) => pm.hasQuestFlag('waystone_attuned'),
+      },
+      {
+        id:          'collect_waystone_shard',
+        label:       'Collect the Waystone Shard',
+        description: (pm) => pm.hasQuestFlag('samuel_waystone_return')
+          ? 'Return to Samuel Mourne and collect your reward — a personal shard of the waystone network.'
+          : 'The waystone has attuned to you. Return to Samuel Mourne and receive your reward.',
+        isActive:   (pm) => pm.hasQuestFlag('waystone_attuned') && !pm.hasQuestFlag('waystone_shard_collected'),
+        isComplete: (pm) => pm.hasQuestFlag('waystone_shard_collected'),
+      },
+    ],
+  },
 
   {
     id:           'divine_placeholder',

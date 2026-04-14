@@ -296,9 +296,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
 
     if (!character) {
-      const placeholderText = this.activeTab === 'slain'
-        ? 'Fallen heroes will appear here once recorded.'
-        : 'Select a character to review their vitals.';
+      const placeholderText = 'Select a character to review their vitals.';
       const placeholder = this.add.text(0, 0, placeholderText, {
         fontSize: '16px',
         color: '#cccccc',

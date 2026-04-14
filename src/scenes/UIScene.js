@@ -74,6 +74,19 @@ export default class UIScene extends Phaser.Scene {
       menu_options: () => { if (!_anyOverlayOpen()) { SoundManager.play('select'); this.openOverlay('OptionsOverlay'); } },
     });
 
+    // ESC: registered once here so _anyOverlayOpen is in scope and handler never stacks.
+    // Priority 1 → dismiss popup. Priority 2 → let overlay's own ESC close it. Priority 3 → toggle panel.
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.modalPanelGroup || this.modalBlockerGroup) {
+        this.cleanupPopup?.();
+        return;
+      }
+      if (_anyOverlayOpen()) return; // each overlay's OverlayFrame registers its own ESC handler
+      SoundManager.play('select');
+      this.toggleRightPanel();
+      this.toggleButton?.setText(this.rightPanelVisible ? '◀' : '▶');
+    });
+
     this.journalToastOff = JournalState.on('journal:toast', ({ message } = {}) => {
       this.showToast(message || 'New Journal entry');
     });
@@ -213,7 +226,7 @@ export default class UIScene extends Phaser.Scene {
 
     const menuItems = [
       {
-        label: '🧍 Party',
+        label: '🧍 Character',
         alertDot: GameState.party?.some(c => (c.unspentStatPoints || 0) > 0),
         action: () => {
           if (!this.scene.isActive('CharacterListOverlay')) {
@@ -368,19 +381,7 @@ export default class UIScene extends Phaser.Scene {
         this.toggleButton.setText(this.rightPanelVisible ? '◀' : '▶');
       });
 
-    // ESC: close save/load popup first, then defer to overlays, then toggle panel
-    // Uses _anyOverlayOpen() so the full overlay list is always current.
-    this.input.keyboard?.on('keydown-ESC', () => {
-      // Priority 1: dismiss save/load/exit popup if one is open
-      if (this.modalPanelGroup || this.modalBlockerGroup) {
-        this.cleanupPopup?.();
-        return;
-      }
-      if (_anyOverlayOpen()) return; // let the overlay's own ESC handler fire
-      SoundManager.play('select');
-      this.toggleRightPanel();
-      this.toggleButton?.setText(this.rightPanelVisible ? '◀' : '▶');
-    });
+    // ESC handler registered once in create() — see below
 
 
 

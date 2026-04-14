@@ -843,6 +843,16 @@ export default class TownScene extends Phaser.Scene {
    * for every currently-active quest flag.
    */
   _buildQuestFlags() {
+    // Auto-transition challenge → handin for all tribe leaders.
+    // This runs every time flags are refreshed (e.g. on wake from combat), so the ★
+    // appears on the exterior map the moment the player returns — no lodge entry required.
+    ['elseth', 'styx', 'lesse', 'zafaar'].forEach(tribe => {
+      if (ProgressionManager.hasQuestFlag(`${tribe}_leader_challenge`)) {
+        ProgressionManager.clearQuestFlag(`${tribe}_leader_challenge`);
+        ProgressionManager.setQuestFlag(`${tribe}_leader_handin`);
+      }
+    });
+
     // Check if the combat pit marker should now appear based on cleared flags
     ProgressionManager.refreshCombatPitFlag();
 
@@ -1042,7 +1052,9 @@ export default class TownScene extends Phaser.Scene {
         const shard = createItemInstance('waystone_shard', { rarity: 'rare' });
         if (shard) {
           InventorySystem.addGlobalItem(shard);
+          ProgressionManager.setQuestFlag('waystone_shard_collected');
           GameState.save('autosave');
+          this._buildQuestFlags();
           this.scene.get('UIScene')?.showToast?.('Received: Waystone Shard');
         }
 
@@ -2319,14 +2331,8 @@ export default class TownScene extends Phaser.Scene {
       this._buildQuestFlags();
     }
 
-    // ── Phase 2: CHALLENGE → HANDIN transition ────────────────────────────────
-    // The encounter is done. First entry converts the orange ! to a gold ★.
-    if (challengeActive) {
-      ProgressionManager.clearQuestFlag(challengeFlag);
-      ProgressionManager.setQuestFlag(handinFlag);
-      GameState.save('autosave');
-      this._buildQuestFlags();
-    }
+    // Challenge → handin transition is handled in _buildQuestFlags(), which fires on
+    // every scene wake. By the time the player enters here, handinFlag is already set.
 
     // ── Flavor text per phase ─────────────────────────────────────────────────
     const BRIEF_TEXT = {

@@ -580,6 +580,8 @@ export default class LevelUpOverlay extends Phaser.Scene {
       charList?.refreshCharacterList?.();
       if (char) charList?.inspectCharacter?.(char);
     }
+    // Refresh UIScene so the alert dot reflects the updated unspent point count
+    this.scene.get('UIScene')?.refreshUI?.();
     this.scene.stop();
   }
 }
