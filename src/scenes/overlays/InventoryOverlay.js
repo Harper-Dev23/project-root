@@ -40,7 +40,8 @@ export default class InventoryOverlay extends Phaser.Scene {
     uncommon: '#33cc33',
     rare: '#3399ff',
     epic: '#cc33cc',
-    legendary: '#ff9933'
+    legendary: '#ff9933',
+    historic: '#d4a017',   // D2 gold — historic items
   };
 
   // Build a display object: name, color, and tooltip lines
@@ -137,6 +138,17 @@ export default class InventoryOverlay extends Phaser.Scene {
     }
 
     if (base.locked) lines.push('', '[ Locked — Cannot be transferred ]');
+
+    // Historic / renown properties
+    if (instance?.historic) {
+      if (base.lifeStealPct) lines.push(`✦ ${Math.round(base.lifeStealPct * 100)}% Lifesteal`);
+      if (instance.soulbound) lines.push('✦ Soulbound — cannot be lost on party wipe');
+      lines.push('', '[ ✦ HISTORIC ITEM — press [Inspect] to read its history ]');
+    } else if (instance?.renownState === 'gaining') {
+      const pct = Math.round(((instance.renown || 0) / (instance.renownMax || 1000)) * 100);
+      lines.push('', `◆ Gaining Renown: ${instance.renown || 0} / ${instance.renownMax || 1000}  (${pct}%)`);
+      lines.push('[ Use this item in combat to build Renown ]');
+    }
 
     return { title: name, titleColor: color, lines, name, color };
   }
@@ -591,7 +603,19 @@ export default class InventoryOverlay extends Phaser.Scene {
       if (baseItem.locked) {
         // Locked items cannot be moved or transferred — show lock badge and optional Use button.
         const lockLabel = this.add.text(270, y, '[Locked]', { fontSize: '13px', color: '#555577' });
-        if (baseItem.onUse === 'waystone_shard_menu') {
+        if (item.historic || item.renownState === 'gaining') {
+          // Historic / gaining-renown items get an [✦ Inspect] button.
+          const inspectBtn = this.add.text(350, y, '[✦ Inspect]', { fontSize: '13px', color: '#d4a017' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => inspectBtn.setStyle({ color: '#ffe066' }))
+            .on('pointerout',  () => inspectBtn.setStyle({ color: '#d4a017' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('select');
+              this._openInspectModal(item);
+            });
+          listContainer.add([lockLabel, inspectBtn]);
+        } else if (baseItem.onUse === 'waystone_shard_menu') {
           const useBtn = this.add.text(360, y, '[Use]', { fontSize: '14px', color: '#aaccff' })
             .setInteractive({ useHandCursor: true })
             .on('pointerover', () => useBtn.setStyle({ color: '#ccddff' }))
@@ -865,5 +889,168 @@ export default class InventoryOverlay extends Phaser.Scene {
         !['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(Items[it.id]?.slot));
     }
     return items;
+  }
+
+  _openInspectModal(item) {
+    if (this._inspectModal) {
+      this._inspectModal.destroy(true);
+      this._inspectModal = null;
+    }
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const pw = 460;
+    const ph = 320;
+    const px = (W - pw) / 2;
+    const py = (H - ph) / 2;
+    const depth = 200;
+
+    const container = this.add.container(0, 0).setDepth(depth);
+    this._inspectModal = container;
+
+    // Dim background
+    const dim = this.add.rectangle(0, 0, W, H, 0x000000, 0.65).setOrigin(0, 0);
+    container.add(dim);
+
+    // Panel background
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0d0d0d, 0.97);
+    panel.fillRoundedRect(px, py, pw, ph, 8);
+    panel.lineStyle(2, 0xd4a017, 1);
+    panel.strokeRoundedRect(px, py, pw, ph, 8);
+    container.add(panel);
+
+    const base = Items[item.id] || {};
+    const isHistoric = item.historic || base.historic;
+    const isGaining = item.renownState === 'gaining';
+    const explained = ProgressionManager.hasQuestFlag('bloodthirster_elder_explained');
+
+    const titleColor = isHistoric ? '#d4a017' : '#ccaa44';
+    const title = this.add.text(px + pw / 2, py + 18, `✦ ${base.name || item.id}`, {
+      fontSize: '16px', color: titleColor, fontStyle: 'bold'
+    }).setOrigin(0.5, 0);
+    container.add(title);
+
+    // Divider
+    const divGfx = this.add.graphics();
+    divGfx.lineStyle(1, 0x5a4a3a, 0.8);
+    divGfx.lineBetween(px + 16, py + 44, px + pw - 16, py + 44);
+    container.add(divGfx);
+
+    let bodyLines = [];
+
+    if (isHistoric && !explained) {
+      // Pre-explanation: blurred flavor text
+      bodyLines = [
+        'You hold the blade steady, but something resists',
+        'your understanding of it.',
+        '',
+        'There is a weight in the metal that goes beyond',
+        'its size — a memory it will not yet share.',
+        '',
+        'Perhaps someone who studies such things',
+        'could shed light on what this weapon holds.',
+        '',
+        '— Visit the Elders\' Tower —',
+      ];
+
+      // Set the elder visit flag and trigger quest flag rebuild
+      if (!ProgressionManager.hasQuestFlag('bloodthirster_elder_visit')) {
+        ProgressionManager.setQuestFlag('bloodthirster_elder_visit');
+        const town = this.scene.get('TownScene');
+        town?._buildQuestFlags?.();
+        this.scene.get('UIScene')?.refreshUI?.();
+      }
+
+    } else if (isHistoric && explained) {
+      // Post-explanation: full history
+      const kills = item.history?.kills ?? 0;
+      const dmg = item.history?.damageDealt ?? 0;
+      const battles = item.history?.battlesCarried ?? 0;
+      const droppedFrom = item.history?.droppedFrom ?? 'Unknown';
+      const droppedScenario = item.history?.droppedScenario ?? 'Unknown';
+
+      const droppedLabel = droppedFrom === 'berserker_boss'
+        ? 'Zafaar Berserker (Boss)'
+        : droppedFrom;
+      const scenarioLabel = droppedScenario === 'training_encounter_6'
+        ? 'Combat Pit — Encounter VI'
+        : droppedScenario;
+
+      bodyLines = [
+        `Origin:       ${droppedLabel}`,
+        `Encounter:    ${scenarioLabel}`,
+        '',
+        `Kills:        ${kills}`,
+        `Damage Dealt: ${dmg.toLocaleString()}`,
+        `Battles:      ${battles}`,
+        '',
+        item.soulbound ? '✦ Soulbound — will not be lost on party wipe' : '',
+        item.lifeStealPct ? `✦ ${Math.round((item.lifeStealPct || base.lifeStealPct || 0) * 100)}% Lifesteal` : '',
+      ].filter(l => l !== undefined);
+
+      if (!ProgressionManager.hasQuestFlag('bloodthirster_inspect_2')) {
+        ProgressionManager.setQuestFlag('bloodthirster_inspect_2');
+        const town = this.scene.get('TownScene');
+        town?._buildQuestFlags?.();
+        this.scene.get('UIScene')?.refreshUI?.();
+      }
+
+    } else if (isGaining) {
+      // Renown-gaining item
+      const renown = item.renown || 0;
+      const renownMax = item.renownMax || 1000;
+      const pct = Math.round((renown / renownMax) * 100);
+      const kills = item.history?.kills ?? 0;
+      const dmg = item.history?.damageDealt ?? 0;
+
+      bodyLines = [
+        '◆ Potentially Historic',
+        '',
+        `Renown: ${renown} / ${renownMax}  (${pct}%)`,
+        '',
+        `Kills recorded:  ${kills}`,
+        `Damage recorded: ${dmg.toLocaleString()}`,
+        '',
+        'Use this item in combat to build Renown.',
+        'Something may awaken within it in time.',
+      ];
+    }
+
+    const bodyY = py + 56;
+    bodyLines.forEach((line, i) => {
+      const lineColor = line.startsWith('✦') ? '#d4a017'
+        : line.startsWith('◆') ? '#ccaa44'
+        : line.startsWith('—') ? '#aaaaaa'
+        : '#dddddd';
+      const txt = this.add.text(px + 20, bodyY + i * 20, line, {
+        fontSize: '13px', color: lineColor
+      });
+      container.add(txt);
+    });
+
+    // Close button
+    const closeY = py + ph - 36;
+    const closeBtn = this.add.text(px + pw / 2, closeY, '[ Close ]', {
+      fontSize: '14px', color: '#aaaaaa'
+    }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout', () => closeBtn.setColor('#aaaaaa'));
+    closeBtn.on('pointerdown', () => {
+      SoundManager.play('select');
+      container.destroy(true);
+      this._inspectModal = null;
+    });
+
+    container.add(closeBtn);
+
+    // Also close on dim click
+    dim.setInteractive();
+    dim.on('pointerdown', () => {
+      SoundManager.play('select');
+      container.destroy(true);
+      this._inspectModal = null;
+    });
   }
 }

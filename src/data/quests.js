@@ -345,8 +345,77 @@ export const QUEST_LINES = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  WEAPON  (placeholder)
+  //  WEAPON
   // ═══════════════════════════════════════════════════════════════════════════
+
+  {
+    id:          'bloodthirster_intro',
+    category:    'weapon',
+    title:       'Bloodthirster — Introduction',
+    description: 'You have come into possession of a weapon unlike any you have held before. Something stirs within it — and demands to be understood.',
+    isAvailable: (pm) => pm.hasQuestFlag('bloodthirster_quest'),
+    steps: [
+      {
+        id:          'bt_intro_inspect',
+        label:       'Inspect the Bloodthirster',
+        description: 'Open your inventory and press [✦ Inspect] on the Bloodthirster. You cannot yet read what it holds.',
+        isActive:   (pm) =>
+          pm.hasQuestFlag('bloodthirster_quest') &&
+          !pm.hasQuestFlag('bloodthirster_elder_visit') &&
+          !pm.hasQuestFlag('bloodthirster_elder_explained'),
+        isComplete: (pm) =>
+          pm.hasQuestFlag('bloodthirster_elder_visit') || pm.hasQuestFlag('bloodthirster_elder_explained'),
+      },
+      {
+        id:          'bt_intro_elder',
+        label:       "Visit the Elders' Tower — Floor 2",
+        description: 'The Elders study relics of power. Bring the blade to the second floor and see what they make of it.',
+        isActive:   (pm) => pm.hasQuestFlag('bloodthirster_elder_visit'),
+        isComplete: (pm) => pm.hasQuestFlag('bloodthirster_elder_explained'),
+      },
+      {
+        id:          'bt_intro_reinspect',
+        label:       'Re-inspect the Bloodthirster',
+        description: 'Now that the Elders have explained what you hold — inspect the blade again. Read its history.',
+        isActive:   (pm) =>
+          pm.hasQuestFlag('bloodthirster_elder_explained') &&
+          !pm.hasQuestFlag('bloodthirster_inspect_2'),
+        isComplete: (pm) => pm.hasQuestFlag('bloodthirster_inspect_2'),
+      },
+    ],
+  },
+
+  {
+    id:           'bloodthirster',
+    category:     'weapon',
+    title:        'Bloodthirster',
+    description:  'The blade\'s legend is not written yet. But it is listening.',
+    isAvailable:  (pm) => pm.hasQuestFlag('bloodthirster_inspect_2'),
+    isPlaceholder: true,
+    steps: [
+      {
+        id:          'bt_lacerate',
+        label:       'Cause Lacerate Buildup  (0 / 5,000)',
+        description: 'Let the blade drink deep. Drive Lacerate into your enemies until it leaves its mark.',
+        isActive:   (_pm) => false,
+        isComplete: (_pm) => false,
+      },
+      {
+        id:          'bt_innocent',
+        label:       'Drink Innocent Blood  (0 / 100)',
+        description: 'The Bloodthirster hungers beyond the battlefield. Feed it.',
+        isActive:   (_pm) => false,
+        isComplete: (_pm) => false,
+      },
+      {
+        id:          'bt_hunt',
+        label:       'Complete a Hunt  (0 / 1)',
+        description: 'A true hunt — not a trial. Seek a worthy prey beyond the Pit.',
+        isActive:   (_pm) => false,
+        isComplete: (_pm) => false,
+      },
+    ],
+  },
 
   {
     id:           'weapon_placeholder',

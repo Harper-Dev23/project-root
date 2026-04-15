@@ -169,5 +169,6 @@ export const ENEMY_TYPES = {
     aiProfile: 'berserker_boss',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+    lifeStealPct: 0.10,   // wields the Bloodthirster — 10% lifesteal on all damage dealt
   }
 };

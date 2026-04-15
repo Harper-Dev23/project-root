@@ -2996,8 +2996,19 @@ export default class CombatScene extends Phaser.Scene {
           blocked = raw - dmg;
         }
 
+        // devSuperSaiyan: 10× damage multiplier for player units only
+        if (DevFlags.isSuperSaiyanEnabled() && user && !user.isEnemy) dmg *= 10;
+
         if (dealsDamage || dmg > 0) {
           target.currentHP = Math.max(0, target.currentHP - dmg);
+
+          // Lifesteal: heal attacker for % of actual damage dealt
+          const lifeStealPct = user?.gearEffects?.lifeStealPct || user?.lifeStealPct || 0;
+          if (lifeStealPct > 0 && dmg > 0 && user?.currentHP != null && user?.maxHP != null) {
+            const healed = Math.max(1, Math.ceil(dmg * lifeStealPct));
+            user.currentHP = Math.min(user.maxHP, user.currentHP + healed);
+            this._showFloatingNumber?.(healed, user, true);
+          }
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';

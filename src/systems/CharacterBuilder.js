@@ -339,6 +339,7 @@ export function rebuildCharacterStats(character) {
     necroticDamagePercent: 0,
     resilience: 0,
     weaponBuildupPercent: {},
+    lifeStealPct: 0,
     // Jewelry passives
     physToElemPercent: 0,
     physToNecroPercent: 0,
@@ -377,6 +378,9 @@ export function rebuildCharacterStats(character) {
         gearDerived[k] = (gearDerived[k] || 0) + v;
       }
     }
+
+    // Historic item base properties (not affix-based)
+    if (view?.lifeStealPct) gearEffects.lifeStealPct += view.lifeStealPct;
 
     if (view?._miscMods) {
       const misc = view._miscMods;
@@ -466,6 +470,7 @@ export function rebuildCharacterStats(character) {
     necroticDamagePercent: gearEffects.necroticDamagePercent,
     resilience: gearEffects.resilience,
     weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent },
+    lifeStealPct: gearEffects.lifeStealPct,
     // Jewelry passives — read by CombatScene for battle-start effects and proc rolls
     physToElemPercent: gearEffects.physToElemPercent,
     physToNecroPercent: gearEffects.physToNecroPercent,

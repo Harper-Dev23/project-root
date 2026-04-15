@@ -523,6 +523,27 @@ export const Items = {
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
     fixedAffix: { key: 'of Spirit Severing' },   // naming-only
     grantsSkills: ['sever_spirit'],
-  }
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // === Historic Weapons ===
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  bloodthirster: {
+    id: 'bloodthirster',
+    name: 'Bloodthirster',
+    type: 'weapon',
+    weaponType: 'sword_2h',
+    rarity: 'historic',
+    historic: true,
+    soulbound: true,  // cannot be lost on party wipe
+    unique: true,
+    hands: 2,
+    damage: { min: 20, max: 32 },
+    bonuses: { Strength: 5, Vitality: 4 },
+    lifeStealPct: 0.10,  // heals wielder for 10% of damage dealt
+    locked: true,
+    description: 'A two-handed blade of impossible sharpness. It drinks deep of whatever it cuts. The edge never dulls.\n\n[10% Lifesteal]  [Soulbound]',
+  },
 
 };

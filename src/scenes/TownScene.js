@@ -32,6 +32,7 @@ const QUEST_FLAG_POSITIONS = {
   samuel_waystone_return:   { x: 837, y: 493 },
   samuel_awakening:         { x: 837, y: 493 },
   seers_awakening:          { x: 1182, y: 119 },
+  bloodthirster_elder_visit: { x: 857, y: 342 },  // ! at Elder Tower after first inspect
   // Brief markers — orange !, set before the encounter so the player visits for a briefing
   elseth_leader_brief:      { x: 1059, y: 310 },
   styx_leader_brief:        { x: 305,  y: 298 },
@@ -828,6 +829,12 @@ export default class TownScene extends Phaser.Scene {
       }
     }
 
+    // Elder Tower F2 must rebuild when the bloodthirster historic explanation is pending.
+    if (ProgressionManager.hasQuestFlag('bloodthirster_elder_visit') && this.eldersTowerGroups?.[2]) {
+      this.eldersTowerGroups[2].destroy(true);
+      this.eldersTowerGroups[2] = null;
+    }
+
     // Samuel interior must rebuild when the intro flag is pending.
     if (ProgressionManager.hasQuestFlag('samuel_mourne') && this.samuelInteriorGroup) {
       this.samuelInteriorGroup.destroy(true);
@@ -1476,6 +1483,15 @@ export default class TownScene extends Phaser.Scene {
             if (!inst) {
               this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
               return;
+            }
+
+            // Epic-rarity gamble rolls may become "potentially historic" — gaining renown.
+            // The 4-modifier (epic) item has the right conditions to one day transcend.
+            if (q === 'epic') {
+              inst.renownState = 'gaining';
+              inst.renown = 0;
+              inst.renownMax = 1000; // placeholder threshold; tunable later
+              inst.history = { droppedFrom: 'bonepile', droppedScenario: null, kills: 0, damageDealt: 0, battlesCarried: 0 };
             }
 
             SoundManager.play(q === 'epic' ? 'gambleEpic' : 'gamble');
@@ -2176,6 +2192,44 @@ export default class TownScene extends Phaser.Scene {
         // If no flag and no tribe: choice hasn't unlocked yet — just floor flavour.
       }
 
+      // ── Floor 2 content ────────────────────────────────────────────────────
+      if (floor === 2) {
+        const hasElderVisit = ProgressionManager.hasQuestFlag('bloodthirster_elder_visit');
+        const alreadyExplained = ProgressionManager.hasQuestFlag('bloodthirster_elder_explained');
+
+        if (hasElderVisit && !alreadyExplained) {
+          // First visit with the Bloodthirster — explain the historic/renown system.
+          ProgressionManager.clearQuestFlag('bloodthirster_elder_visit');
+          ProgressionManager.setQuestFlag('bloodthirster_elder_explained');
+          GameState.save('autosave');
+          this._buildQuestFlags();
+
+          const historicText = this.add.text(640, 235,
+            '"Ah. You carry it.\n\n' +
+            'That blade is not simply a weapon. It is a record. Every cut it has made,\n' +
+            'every hand that has held it — all of it is written in the metal, in a language\n' +
+            'older than the tribes themselves. We call items like this Historic.\n\n' +
+            'Historic weapons are alive with memory. They grow with the hunter who carries\n' +
+            'them — not in the way of experience, but in the way of a bond. Use it. Let it\n' +
+            'witness your hunts. In time it will reveal what it truly is, and what it can become.\n\n' +
+            'Inspect it again. You will be able to read it now."',
+            {
+              fontSize: '14px', color: '#ddccaa', align: 'center',
+              fontStyle: 'italic', wordWrap: { width: 680 }, lineSpacing: 4,
+            }
+          ).setOrigin(0.5, 0).setDepth(12);
+          layout.add(historicText);
+
+        } else if (alreadyExplained) {
+          const reminderText = this.add.text(640, 350,
+            '"The Bloodthirster grows with use. Keep hunting. Keep reading it."',
+            { fontSize: '15px', color: '#aabbaa', align: 'center', fontStyle: 'italic', wordWrap: { width: 600 } }
+          ).setOrigin(0.5).setDepth(12);
+          layout.add(reminderText);
+        }
+        // If neither flag: just the generic floor 2 flavour.
+      }
+
       layout.setDepth(11);
       this.eldersTowerGroups[floor] = layout;
     }
@@ -2548,28 +2602,40 @@ export default class TownScene extends Phaser.Scene {
         ProgressionManager.clearQuestFlag(handinFlag);
         ProgressionManager.addTribeRep(tribeId, LEADER_QUEST_REP_GAIN);
 
-        // Award 3 random jewelry items from this tribe's pool
-        const pool = [...(TRIBE_JEWELRY_POOL[tribeId] ?? [])];
-        for (let i = pool.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [pool[i], pool[j]] = [pool[j], pool[i]];
-        }
-        const rewardNames = [];
-        pool.slice(0, 3).forEach(itemId => {
-          const inst = createItemInstance(itemId, { rarity: 'uncommon' });
-          if (inst) {
-            InventorySystem.addGlobalItem(inst);
-            rewardNames.push(inst.displayName ?? itemId);
+        // Zafaar's leader quest rewards the Bloodthirster instead of jewelry.
+        // All other tribe leaders give 3 random jewelry pieces.
+        if (tribeId === 'zafaar') {
+          const bt = createItemInstance('bloodthirster', { rarity: 'historic', rollAffixes: false });
+          if (bt) {
+            // Stamp the history: dropped from the berserker boss in encounter 6
+            bt.history = { droppedFrom: 'berserker_boss', droppedScenario: 'training_encounter_6', kills: 0, damageDealt: 0, battlesCarried: 0 };
+            InventorySystem.addGlobalItem(bt);
+            ProgressionManager.setQuestFlag('bloodthirster_quest');
+            GameState.save('autosave');
+            this._buildQuestFlags();
+            this.scene.get('UIScene')?.showToast('Received: Bloodthirster  ✦ Historic Weapon');
           }
-        });
-
-        // Show a brief toast so the player knows what they received
-        if (rewardNames.length > 0) {
-          this.scene.get('UIScene')?.showToast(`Reward: ${rewardNames.join(', ')}`);
+        } else {
+          // Award 3 random jewelry items from this tribe's pool
+          const pool = [...(TRIBE_JEWELRY_POOL[tribeId] ?? [])];
+          for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+          }
+          const rewardNames = [];
+          pool.slice(0, 3).forEach(itemId => {
+            const inst = createItemInstance(itemId, { rarity: 'uncommon' });
+            if (inst) {
+              InventorySystem.addGlobalItem(inst);
+              rewardNames.push(inst.displayName ?? itemId);
+            }
+          });
+          if (rewardNames.length > 0) {
+            this.scene.get('UIScene')?.showToast(`Reward: ${rewardNames.join(', ')}`);
+          }
+          GameState.save('autosave');
+          this._buildQuestFlags();
         }
-
-        GameState.save('autosave');
-        this._buildQuestFlags();
 
         // Bust cache so the next visit shows normal dialogue
         if (this.leaderGroups[tribe]) {

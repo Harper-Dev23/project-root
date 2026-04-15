@@ -576,6 +576,15 @@ export function createItemInstance(id, opts = {}) {
   if (base.tribe) instance.tribe = base.tribe;
   if (base.grantsSkills) instance.grantsSkills = [...base.grantsSkills];
 
+  // Carry through historic item flags
+  if (base.historic) {
+    instance.historic = true;
+    instance.soulbound = !!base.soulbound;
+    instance.renownState = 'historic';
+    instance.history = { droppedFrom: null, droppedScenario: null, kills: 0, damageDealt: 0, battlesCarried: 0 };
+    instance.questProgress = { lacerateBuildupDealt: 0, innocentBloodDrunk: 0, huntsCompleted: 0 };
+  }
+
   // For fixed-affix items, also record the rolled value for tooltip display
   if (base.fixedAffix && suffixes.length) {
     instance.fixedAffixKey = base.fixedAffix.key;

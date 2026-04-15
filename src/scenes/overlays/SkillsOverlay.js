@@ -163,12 +163,14 @@ export default class SkillsOverlay extends Phaser.Scene {
       this.root.add([box, lbl]);
     };
 
-    makeToggle('devBreakthrough', DevFlags.isBreakthroughEnabled(),
+    makeToggle('devBreakthrough',    DevFlags.isBreakthroughEnabled(),
       () => DevFlags.toggleBreakthrough(), topY);
-    makeToggle('devBuildup (5×)',  DevFlags.isBuildupEnabled(),
+    makeToggle('devBuildup (5×)',     DevFlags.isBuildupEnabled(),
       () => DevFlags.toggleBuildup(),      topY + lineH);
-    makeToggle('devAllTribes',    DevFlags.isAllTribesEnabled(),
+    makeToggle('devAllTribes',       DevFlags.isAllTribesEnabled(),
       () => DevFlags.toggleAllTribes(),    topY + lineH * 2);
+    makeToggle('devSuperSaiyan (10×dmg)', DevFlags.isSuperSaiyanEnabled(),
+      () => DevFlags.toggleSuperSaiyan(),  topY + lineH * 3);
   }
 
   // ---------- Header (persistent, no destroy on click) ----------
