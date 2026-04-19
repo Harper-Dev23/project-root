@@ -386,38 +386,6 @@ export const QUEST_LINES = [
   },
 
   {
-    id:           'bloodthirster',
-    category:     'weapon',
-    title:        'Bloodthirster',
-    description:  'The blade\'s legend is not written yet. But it is listening.',
-    isAvailable:  (pm) => pm.hasQuestFlag('bloodthirster_inspect_2'),
-    isPlaceholder: true,
-    steps: [
-      {
-        id:          'bt_lacerate',
-        label:       'Cause Lacerate Buildup  (0 / 5,000)',
-        description: 'Let the blade drink deep. Drive Lacerate into your enemies until it leaves its mark.',
-        isActive:   (_pm) => false,
-        isComplete: (_pm) => false,
-      },
-      {
-        id:          'bt_innocent',
-        label:       'Drink Innocent Blood  (0 / 100)',
-        description: 'The Bloodthirster hungers beyond the battlefield. Feed it.',
-        isActive:   (_pm) => false,
-        isComplete: (_pm) => false,
-      },
-      {
-        id:          'bt_hunt',
-        label:       'Complete a Hunt  (0 / 1)',
-        description: 'A true hunt — not a trial. Seek a worthy prey beyond the Pit.',
-        isActive:   (_pm) => false,
-        isComplete: (_pm) => false,
-      },
-    ],
-  },
-
-  {
     id:           'weapon_placeholder',
     category:     'weapon',
     title:        'A Blade Unnamed',

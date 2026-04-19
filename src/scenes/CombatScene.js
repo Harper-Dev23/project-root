@@ -97,6 +97,7 @@ function calculateEffectiveResourceCost(user, baseCost, resource, opts = {}) {
   return result;
 }
 // === Grid helper =========================================
+// Kept for any legacy references (visual positioning, etc.)
 const SLOT_COORDS = {
   8: { col: 0, row: 0 },
   7: { col: 0, row: 1 },
@@ -108,12 +109,46 @@ const SLOT_COORDS = {
   1: { col: 2, row: 2 }
 };
 
-/** Chebyshev distance (max row/col diff) between two ally slots */
+/**
+ * Adjacency map for the brick-offset grid.
+ * Middle column (4, 5) is offset down half a row, bridging back and front.
+ */
+const ADJACENCY_MAP = {
+  8: [7, 4],
+  7: [8, 6, 4, 5],
+  6: [7, 5],
+  4: [8, 7, 5, 2, 3],
+  5: [7, 6, 4, 2, 1],
+  3: [4, 2],
+  2: [4, 5, 3, 1],
+  1: [5, 2]
+};
+
+/**
+ * Pre-computed shortest-path movement costs between all slots.
+ * Replaces Chebyshev distance — accounts for the brick-offset layout
+ * where middle-column slots (4, 5) bridge back and front.
+ */
+const MOVEMENT_COSTS = {
+  8: { 8:0, 7:1, 6:2, 4:1, 5:2, 3:2, 2:3, 1:4 },
+  7: { 8:1, 7:0, 6:1, 4:1, 5:1, 3:2, 2:2, 1:3 },
+  6: { 8:2, 7:1, 6:0, 4:2, 5:1, 3:3, 2:2, 1:2 },
+  4: { 8:1, 7:1, 6:2, 4:0, 5:1, 3:1, 2:1, 1:2 },
+  5: { 8:2, 7:1, 6:1, 4:1, 5:0, 3:2, 2:1, 1:1 },
+  3: { 8:2, 7:2, 6:3, 4:1, 5:2, 3:0, 2:1, 1:2 },
+  2: { 8:3, 7:2, 6:2, 4:1, 5:1, 3:1, 2:0, 1:1 },
+  1: { 8:4, 7:3, 6:2, 4:2, 5:1, 3:2, 2:1, 1:0 }
+};
+
+/** Movement cost between two slots using the brick-offset grid. */
 function moveCost(fromId, toId) {
-  const a = SLOT_COORDS[fromId];
-  const b = SLOT_COORDS[toId];
-  if (!a || !b) return Infinity;       // enemy‑side slots → unreachable
-  return Math.max(Math.abs(a.col - b.col), Math.abs(a.row - b.row));
+  if (fromId == null || toId == null) return Infinity;
+  return MOVEMENT_COSTS[fromId]?.[toId] ?? Infinity;
+}
+
+/** All slots adjacent (range 1) to a given slot. */
+function getAdjacentSlots(slotId) {
+  return ADJACENCY_MAP[slotId] || [];
 }
 // =========================================================
 
@@ -869,6 +904,16 @@ export default class CombatScene extends Phaser.Scene {
     const isAllyDest = this.allySlots?.includes(newSlot);
     if (unit.isEnemy && !isEnemyDest) return false;
     if (!unit.isEnemy && !isAllyDest) return false;
+
+    // Zone immobilization: block movement if unit's current tile has an active immobilizing zone
+    const currentSid = this._charSlotKey(unit);
+    if (currentSid) {
+      const activeZones = this.slotEffects?.[currentSid] || [];
+      if (activeZones.some(z => z.immobilizes && (z.turns || 0) > 0)) {
+        this._log?.(`${unit?.name ?? 'Unit'} is immobilized and cannot move.`);
+        return false;
+      }
+    }
 
     // --- clear old slot ties ---
     const old = unit._slot;
@@ -1834,6 +1879,9 @@ export default class CombatScene extends Phaser.Scene {
     this.actionMenuScrollY = 0;
     this.actionMenuScrollMax = 0;
 
+    // Skill filter pill state — persists across submenu switches
+    this._activeFilterTags = new Set();
+    this._createSkillFilterPills(x, y);
 
     // Safe to build now because _buildActionMenuRoot() will hide if not the player's turn
     this._buildActionMenuRoot();
@@ -1846,9 +1894,161 @@ export default class CombatScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(UI_DEPTH.overlay);
   }
 
+  // ─── Skill Filter Pills ───────────────────────────────────────────────────
+
+  _createSkillFilterPills(menuX, menuY) {
+    const PILL_DEFS = [
+      { tag: 'lacerate',  label: 'Lacer.',   color: 0xcc4444 },
+      { tag: 'expose',    label: 'Expose',   color: 0xcc8844 },
+      { tag: 'disorient', label: 'Disor.',   color: 0x9944cc },
+      { tag: 'disease',   label: 'Disease',  color: 0x447744 },
+      { tag: 'curse',     label: 'Curse',    color: 0x6633aa },
+      { tag: 'toxic',     label: 'Toxic',    color: 0x44aa44 },
+      { tag: 'fire',      label: 'Fire',     color: 0xdd5500 },
+      { tag: 'cold',      label: 'Cold',     color: 0x4477cc },
+      { tag: 'lightning', label: 'Lightn.',  color: 0xcccc22 },
+      { tag: '_major',    label: 'Major',    color: 0xddaa22 },
+      { tag: '_bonus',    label: 'Bonus',    color: 0x22aacc },
+    ];
+
+    const PILL_W = 50;
+    const PILL_H = 17;
+    const GAP    = 3;
+
+    // Position pill column so its left edge is just past the old right edge, then 10px further left
+    const vp = this.actionMenuViewport;
+    const vpLeft = menuX + vp.x;
+    const vpTop  = menuY + vp.y;
+    const colLeft  = vpLeft - 6 - 3; // nudged 3px closer to panel
+
+    const container = this.add.container(0, 0).setDepth(UI_DEPTH.overlay);
+    this._skillFilterPillsContainer = container;
+    this._skillFilterPillData = [];
+
+    PILL_DEFS.forEach((def, i) => {
+      const py = vpTop + i * (PILL_H + GAP);
+      const cx = colLeft + PILL_W / 2;
+      const cy = py + PILL_H / 2;
+
+      const bg = this.add.graphics();
+      const hexStr = '#' + def.color.toString(16).padStart(6, '0');
+
+      const drawPill = (active) => {
+        bg.clear();
+        if (active) {
+          bg.fillStyle(def.color, 0.25);
+          bg.fillRoundedRect(colLeft, py, PILL_W, PILL_H, 4);
+          bg.lineStyle(1.5, def.color, 1);
+          bg.strokeRoundedRect(colLeft, py, PILL_W, PILL_H, 4);
+        } else {
+          bg.fillStyle(0x111111, 0.85);
+          bg.fillRoundedRect(colLeft, py, PILL_W, PILL_H, 4);
+          bg.lineStyle(1, 0x444444, 0.7);
+          bg.strokeRoundedRect(colLeft, py, PILL_W, PILL_H, 4);
+        }
+      };
+
+      drawPill(false);
+
+      const lbl = this.add.text(cx, cy, def.label, {
+        fontSize: '10px', color: '#888888'
+      }).setOrigin(0.5);
+
+      const zone = this.add.zone(cx, cy, PILL_W, PILL_H)
+        .setInteractive({ useHandCursor: true });
+
+      zone.on('pointerover', () => {
+        if (!this._activeFilterTags.has(def.tag)) lbl.setColor('#cccccc');
+      });
+      zone.on('pointerout', () => {
+        if (!this._activeFilterTags.has(def.tag)) lbl.setColor('#888888');
+      });
+      zone.on('pointerdown', () => {
+        SoundManager.play('select');
+        const isActive = this._activeFilterTags.has(def.tag);
+        if (isActive) {
+          this._activeFilterTags.delete(def.tag);
+          drawPill(false);
+          lbl.setColor('#888888');
+        } else {
+          this._activeFilterTags.add(def.tag);
+          drawPill(true);
+          lbl.setColor(hexStr);
+        }
+        this._refreshFilterHighlights();
+      });
+
+      container.add([bg, lbl, zone]);
+      this._skillFilterPillData.push({ def, drawPill, lbl, hexStr });
+    });
+
+    container.setVisible(false);
+  }
+
+  _showSkillFilterPills() {
+    if (this._skillFilterPillsContainer) {
+      this._skillFilterPillsContainer.setVisible(true);
+      // Sync pill visual state with any active tags
+      this._skillFilterPillData?.forEach(({ def, drawPill, lbl, hexStr }) => {
+        const active = this._activeFilterTags.has(def.tag);
+        drawPill(active);
+        lbl.setColor(active ? hexStr : '#888888');
+      });
+    }
+  }
+
+  _hideSkillFilterPills() {
+    this._skillFilterPillsContainer?.setVisible(false);
+  }
+
+  _refreshFilterHighlights() {
+    const active = this._activeFilterTags;
+    if (!this.actionMenuList) return;
+
+    const tagColors = {};
+    this._skillFilterPillData?.forEach(({ def }) => { tagColors[def.tag] = def.color; });
+
+    const WEAKNESS_TAGS = new Set(['lacerate','expose','disorient','disease','curse','toxic','fire','cold','lightning']);
+
+    // Separate active pills into two independent groups
+    const activeWeakness = [...active].filter(t => WEAKNESS_TAGS.has(t));
+    const activeAction   = [...active].filter(t => t === '_major' || t === '_bonus');
+
+    this.actionMenuList.list.forEach(obj => {
+      if (!obj?._filterAbility) {
+        obj?.setFilterHighlight?.(null);
+        obj?.setFilterHighlightInner?.(null);
+        return;
+      }
+
+      const ab   = obj._filterAbility;
+      const tags = Array.isArray(ab.tags) ? ab.tags : [];
+      const cost = ab.actionCost || 'major';
+
+      // Outer border — weakness tag match
+      let outerColor = null;
+      for (const tag of activeWeakness) {
+        if (tags.includes(tag)) { outerColor = tagColors[tag]; break; }
+      }
+
+      // Inner border — action type (major/bonus) always occupies inner space
+      let innerColor = null;
+      for (const tag of activeAction) {
+        if (tag === '_major' && cost === 'major') { innerColor = tagColors['_major']; break; }
+        if (tag === '_bonus' && cost === 'bonus') { innerColor = tagColors['_bonus']; break; }
+      }
+
+      obj.setFilterHighlight?.(outerColor);
+      obj.setFilterHighlightInner?.(innerColor);
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+
   _buildActionMenuRoot() {
     this._exitTargetingMode?.();
     this._clearActionMenuContent();
+    this._hideSkillFilterPills?.();
     const curr = this._currentChar?.();
     const isPlayerTurn = !!curr && !curr.isEnemy;
 
@@ -2165,6 +2365,9 @@ export default class CombatScene extends Phaser.Scene {
         this._useAbility(full, btn);
       });
 
+      // Store ability reference for filter pill highlighting
+      btn._filterAbility = full;
+
       // Make sure tooltip uses the hydrated object
       this._wireAbilityTooltip?.(btn, full, actor);
 
@@ -2179,6 +2382,10 @@ export default class CombatScene extends Phaser.Scene {
     );
 
     this._finalizeActionMenuLayout();
+
+    // Show filter pills for skill submenus; apply any active filters
+    this._showSkillFilterPills?.();
+    this._refreshFilterHighlights?.();
   }
 
 
@@ -2235,7 +2442,10 @@ export default class CombatScene extends Phaser.Scene {
 
   _useAbility(ability, sourceBtn = null) {
     const type = ability.actionCost || 'major';
-    if (!this._canUseActionType(type)) return;
+    // actionCost may be an array (e.g. ["major","bonus"]) — all listed types must be available
+    if (Array.isArray(type)) {
+      if (type.some(t => !this._canUseActionType(t))) return;
+    } else if (!this._canUseActionType(type)) return;
 
     const actor = this._currentChar?.();
     if (!actor) return;
@@ -2584,6 +2794,8 @@ export default class CombatScene extends Phaser.Scene {
   _onUnitKnockedOut(unit) {
     this._log(`${unit.name} has been knocked out!`);
     unit.status = 'incapacitated';
+    // Track enemy kills for skills like trophy_cry that require a kill this turn
+    if (unit.isEnemy) this.enemyDiedThisTurn = true;
 
     // Destroy lodge arrow sprites for this unit
     const _lodgeKey = unit.name || unit.id || 'unknown';
@@ -2999,6 +3211,18 @@ export default class CombatScene extends Phaser.Scene {
         // devSuperSaiyan: 10× damage multiplier for player units only
         if (DevFlags.isSuperSaiyanEnabled() && user && !user.isEnemy) dmg *= 10;
 
+        // Status guard effects (guardPct on statusEffects, e.g. iron_chant, bedrock_guard).
+        // Must run before damage is applied. Also fires retaliate buildup and consumes guardHits.
+        if (!missed && !ignoreDR && dmg > 0) {
+          const statusGuardFrac = this._processGuardStatusEffects(target, user);
+          if (statusGuardFrac > 0) {
+            const reduction = Math.floor(dmg * statusGuardFrac);
+            dmg = Math.max(0, dmg - reduction);
+            blocked += reduction;
+            this._log(`${target?.name ?? 'Target'}'s guard absorbs ${reduction} damage.`);
+          }
+        }
+
         if (dealsDamage || dmg > 0) {
           target.currentHP = Math.max(0, target.currentHP - dmg);
 
@@ -3009,6 +3233,9 @@ export default class CombatScene extends Phaser.Scene {
             user.currentHP = Math.min(user.maxHP, user.currentHP + healed);
             this._showFloatingNumber?.(healed, user, true);
           }
+
+          // Next-hit one-shot effects (e.g. bedrock_guard cold retaliation on attacker)
+          if (dmg > 0) this._processNextHitStatusEffects(target, user);
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';
@@ -3234,6 +3461,13 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // (7) Direct MP gain returned by skill (e.g. tremor_echo quake-zone bonus)
+    if (!missed && (result?.mpGain || 0) > 0) {
+      const gain = result.mpGain;
+      user.currentMP = Math.min(user.maxMP || 99, (user.currentMP || 0) + gain);
+      this._log(`${user.name} recovers ${gain} MP (${ability?.name ?? 'skill'}).`);
+    }
+
     // ---- Costs & cooldowns ----
     const payNow = !(result?.armReaction && result?.consumeOn === 'trigger');
     if (payNow && mpCost > 0) {
@@ -3263,8 +3497,15 @@ export default class CombatScene extends Phaser.Scene {
       const isCounter = intent?.isReaction === true;
       if (!isCounter) {
         const pool = user.actionsLeft || (user.actionsLeft = {});
-        const cur = Number.isFinite(pool[ability.actionCost]) ? pool[ability.actionCost] : 0;
-        pool[ability.actionCost] = Math.max(0, cur - 1);
+        if (Array.isArray(ability.actionCost)) {
+          // Array means the skill costs multiple action types (e.g. ["major","bonus"])
+          for (const t of ability.actionCost) {
+            pool[t] = Math.max(0, (pool[t] || 0) - 1);
+          }
+        } else {
+          const cur = Number.isFinite(pool[ability.actionCost]) ? pool[ability.actionCost] : 0;
+          pool[ability.actionCost] = Math.max(0, cur - 1);
+        }
       }
     }
 
@@ -3420,6 +3661,80 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     return { died, skip };
+  }
+
+  /**
+   * _processGuardStatusEffects(target, attacker)
+   *
+   * Called BEFORE damage is applied to `target`. Scans target's statusEffects for
+   * entries with a `guardPct` field and:
+   *   – Checks any conditions (e.g. guardDiseaseCond: attacker must have disease weakness).
+   *   – Fires `retaliateBuildup` on the attacker when guard triggers.
+   *   – Decrements `guardHitsLeft`; removes the effect when exhausted.
+   *
+   * Returns a guard fraction (0–0.95) to reduce the incoming hit by.
+   * Only call this on a non-missed, damage-dealing hit.
+   */
+  _processGuardStatusEffects(target, attacker) {
+    const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
+    let totalGuard = 0;
+    const toRemove = [];
+
+    for (let i = 0; i < list.length; i++) {
+      const se = list[i];
+      if (!Number.isFinite(se.guardPct) || se.guardPct <= 0) continue;
+
+      // Conditional guard: only triggers if attacker has the required weakness tier
+      if (se.guardDiseaseCond && (attacker?.weakness?.tiers?.disease || 0) < 1) continue;
+
+      totalGuard += se.guardPct / 100;
+
+      // Retaliate: apply buildup to the attacker when this guard fires
+      if (se.retaliateBuildup && attacker?.weakness) {
+        this._applyWeaknessBuildup(attacker, se.retaliateBuildup, { user: target });
+        this._log(`${target?.name ?? 'Ally'}'s guard retaliates: ${JSON.stringify(se.retaliateBuildup)} buildup on ${attacker?.name}.`);
+      }
+
+      // Consume guardHits counter; schedule removal when exhausted
+      if (Number.isFinite(se.guardHits)) {
+        if (!Number.isFinite(se.guardHitsLeft)) se.guardHitsLeft = se.guardHits;
+        se.guardHitsLeft -= 1;
+        if (se.guardHitsLeft <= 0) toRemove.push(i);
+      }
+    }
+
+    // Remove exhausted guard effects (reverse order keeps indices stable)
+    for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
+
+    return Math.min(0.95, totalGuard);
+  }
+
+  /**
+   * _processNextHitStatusEffects(target, attacker)
+   *
+   * Called AFTER damage lands on `target`. Handles one-shot "next hit" triggers:
+   *   – `nextHitBuildup`: immediately applies buildup to the attacker.
+   *   – If the effect also has `nextHitOnly: true`, the effect is consumed after firing.
+   *
+   * Example: bedrock_guard { nextHitBuildup: { cold: 100 }, nextHitOnly: true }
+   */
+  _processNextHitStatusEffects(target, attacker) {
+    const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
+    const toRemove = [];
+
+    for (let i = 0; i < list.length; i++) {
+      const se = list[i];
+      if (!se.nextHitBuildup) continue;
+
+      if (attacker?.weakness) {
+        this._applyWeaknessBuildup(attacker, se.nextHitBuildup, { user: target });
+        this._log(`${target?.name ?? 'Target'}'s ${se.id ?? 'effect'} retaliates with buildup on ${attacker?.name}.`);
+      }
+
+      if (se.nextHitOnly) toRemove.push(i);
+    }
+
+    for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
   }
 
   _applyGearStartOfTurn(char) {
@@ -4540,36 +4855,19 @@ export default class CombatScene extends Phaser.Scene {
 
   // === Position helpers ====================================================
 
-  // Map slotId -> (column,row) for Chebyshev distance.
-  // Columns: front=0, mid=1, back=2
-  // Rows: top=0, mid=1, bottom=2
-  _slotToCoord(id) {
-    // front row: 3 (top), 2 (mid), 1 (bottom)
-    const front = { 3: 0, 2: 1, 1: 2 };
-    // mid row: 4 (mid), 5 (bottom)  [choose 4=1 so 1→4 is cost 1]
-    const mid = { 4: 1, 5: 2 };
-    // back row: 8 (top), 7 (mid), 6 (bottom)
-    const back = { 8: 0, 7: 1, 6: 2 };
-
-    if (front[id] !== undefined) return { c: 0, r: front[id] };
-    if (mid[id] !== undefined) return { c: 1, r: mid[id] };
-    if (back[id] !== undefined) return { c: 2, r: back[id] };
-    return null;
+  // Movement cost using pre-computed brick-offset grid distances.
+  _moveCost(fromId, toId) {
+    return moveCost(fromId, toId);
   }
 
-  // Movement budget cost:
-  // - if columns differ, cost = column difference (ignore rows)
-  // - if same column, cost = row difference
-  _moveCost(fromId, toId) {
-    const a = this._slotToCoord(fromId);
-    const b = this._slotToCoord(toId);
-    if (!a || !b) return Infinity;
+  // True if the two slots are directly adjacent (range 1) in the brick grid.
+  _areAdjacent(slotId1, slotId2) {
+    return getAdjacentSlots(slotId1).includes(slotId2);
+  }
 
-    const colDiff = Math.abs(a.c - b.c);
-    const rowDiff = Math.abs(a.r - b.r);
-
-    if (colDiff > 0) return colDiff;   // columns trump rows
-    return rowDiff;                     // same column: pay rows
+  // Returns all slot IDs adjacent to the given slot (used by aoeResolver "adjacent" shape).
+  _getAdjacentSlots(slotId) {
+    return getAdjacentSlots(slotId);
   }
 
   // All open slots on THIS unit's side (no enemy territory)
@@ -4958,6 +5256,9 @@ export default class CombatScene extends Phaser.Scene {
     if (typeof char.isEnemy !== 'boolean') {
       char.isEnemy = !!this.enemies?.includes(char);
     }
+
+    // Clear per-turn kill flag at the start of each new actor's turn
+    this.enemyDiedThisTurn = false;
 
     // 3) Apply START-OF-TURN ongoings (DOT/skip-turn/penalties)
     this._applySlotEffectsTick(char);   // ground zone ticks for the current actor's tile

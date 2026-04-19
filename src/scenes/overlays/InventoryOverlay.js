@@ -900,10 +900,10 @@ export default class InventoryOverlay extends Phaser.Scene {
     const W = this.scale.width;
     const H = this.scale.height;
     const pw = 460;
-    const ph = 320;
+    const ph = 390;
     const px = (W - pw) / 2;
     const py = (H - ph) / 2;
-    const depth = 200;
+    const depth = 2150; // above overlay frame (MENU=2000, MODAL_PANEL=2100) but below tooltip (2200)
 
     const container = this.add.container(0, 0).setDepth(depth);
     this._inspectModal = container;
@@ -977,6 +977,10 @@ export default class InventoryOverlay extends Phaser.Scene {
         ? 'Combat Pit — Encounter VI'
         : droppedScenario;
 
+      const lacerate  = item.questProgress?.lacerateBuildupDealt ?? 0;
+      const innocent  = item.questProgress?.innocentBloodDrunk   ?? 0;
+      const hunts     = item.questProgress?.huntsCompleted        ?? 0;
+
       bodyLines = [
         `Origin:       ${droppedLabel}`,
         `Encounter:    ${scenarioLabel}`,
@@ -985,9 +989,14 @@ export default class InventoryOverlay extends Phaser.Scene {
         `Damage Dealt: ${dmg.toLocaleString()}`,
         `Battles:      ${battles}`,
         '',
-        item.soulbound ? '✦ Soulbound — will not be lost on party wipe' : '',
-        item.lifeStealPct ? `✦ ${Math.round((item.lifeStealPct || base.lifeStealPct || 0) * 100)}% Lifesteal` : '',
-      ].filter(l => l !== undefined);
+        item.soulbound ? '✦ Soulbound — will not be lost on party wipe' : null,
+        item.lifeStealPct ? `✦ ${Math.round((item.lifeStealPct || base.lifeStealPct || 0) * 100)}% Lifesteal` : null,
+        '',
+        '— Weapon Quest —',
+        `Lacerate Buildup:   ${lacerate.toLocaleString()} / 5,000`,
+        `Innocent Blood:     ${innocent} / 100`,
+        `Complete a Hunt:    ${hunts} / 1`,
+      ].filter(l => l !== null);
 
       if (!ProgressionManager.hasQuestFlag('bloodthirster_inspect_2')) {
         ProgressionManager.setQuestFlag('bloodthirster_inspect_2');

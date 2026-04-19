@@ -135,7 +135,7 @@ export default class SkillsOverlay extends Phaser.Scene {
   // ---------- Dev toggles (bottom-right corner of panel) ----------
   _initDevToggles(panelX, panelY, panelW, depth) {
     const rightX  = panelX + panelW - 20;
-    const topY    = panelY + 12;
+    const topY    = panelY + 1;
     const lineH   = 22;
 
     const makeToggle = (label, isOn, onToggle, y) => {

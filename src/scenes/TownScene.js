@@ -31,7 +31,7 @@ const QUEST_FLAG_POSITIONS = {
   waystone_visit:           { x: 953, y: 404 },
   samuel_waystone_return:   { x: 837, y: 493 },
   samuel_awakening:         { x: 837, y: 493 },
-  seers_awakening:          { x: 1182, y: 119 },
+  seers_awakening:          { x: 1036, y: 419 },
   bloodthirster_elder_visit: { x: 857, y: 342 },  // ! at Elder Tower after first inspect
   // Brief markers — orange !, set before the encounter so the player visits for a briefing
   elseth_leader_brief:      { x: 1059, y: 310 },
@@ -142,22 +142,22 @@ function randomRarityForGamble() {
   return 'epic';
 }
 
-// Get all weapon IDs from Items.js
+// Get all weapon IDs from Items.js — exclude locked/unique items (e.g. Bloodthirster)
 function getWeaponIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'weapon')
+    .filter(([, it]) => it?.type === 'weapon' && !it?.locked && !it?.unique)
     .map(([id]) => id);
 }
 
 function getArmorIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'armor' && it?.slot !== 'ring' && it?.slot !== 'amulet')
+    .filter(([, it]) => it?.type === 'armor' && it?.slot !== 'ring' && it?.slot !== 'amulet' && !it?.locked && !it?.unique)
     .map(([id]) => id);
 }
 
 function getJewelryIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'armor' && (it?.slot === 'ring' || it?.slot === 'amulet'))
+    .filter(([, it]) => it?.type === 'armor' && (it?.slot === 'ring' || it?.slot === 'amulet') && !it?.locked && !it?.unique)
     .map(([id]) => id);
 }
 

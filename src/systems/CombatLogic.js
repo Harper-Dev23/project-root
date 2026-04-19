@@ -23,10 +23,11 @@ export function getLastDamageBreakdown() { return _lastBreakdown ? [..._lastBrea
 // === Effective = baseline derived + runtime mods + (optionally) status mods ===
 export function _sumStatusEffectMods(char) {
   // If your status effects don’t carry numeric mods, this returns zeros.
-  // If they do, each effect can have: { mods: { Accuracy:+5, Evasion:-10, ... } }
+  // Each effect can have: { mods: { Accuracy:+5, Evasion:-10, AttackPower:+15, ... } }
   const out = {
     Accuracy: 0, Evasion: 0, Initiative: 0, CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, CritAvoid: 0
+    ElementalResist: 0, PhysicalResist: 0, CritAvoid: 0,
+    AttackPower: 0, // % bonus to all outgoing damage (e.g. war_cry_buff)
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
   for (const se of list) {
@@ -49,6 +50,7 @@ export function getEffectiveDerived(char) {
     ElementalResist: (d.ElementalResist | 0) + (b.ElementalResist | 0) + s.ElementalResist,
     PhysicalResist: (d.PhysicalResist | 0) + (b.PhysicalResist | 0) + s.PhysicalResist,
     CritAvoid: (d.CritAvoid | 0) + (b.CritAvoid | 0) + s.CritAvoid,
+    AttackPower: (d.AttackPower | 0) + (b.AttackPower | 0) + s.AttackPower,
   };
 }
 
@@ -587,6 +589,14 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
     }
   }
 
+  // AttackPower from status effect mods (e.g. war_cry_buff +15%) — always applies
+  const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
+  if (atkPowerPct !== 0) {
+    const prev = out;
+    const mult = 1 + atkPowerPct / 100;
+    out = Math.max(0, Math.floor(out * mult));
+    try { _pushBreakdown({ label: 'AttackPower buff', mult, from: prev, to: out }); } catch { }
+  }
 
   // ---- (Legacy) Flay universal amp (keep until you fully migrate) ----
   const flayTier = target?.weakness?.tiers?.flay || 0;

@@ -6,6 +6,7 @@ import { Items } from './items.js';
 import { applyDamageModifiers } from '../src/systems/CombatLogic.js';
 import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
+import { resolveAOESplash } from '../src/systems/aoeResolver.js';
 
 
 const cloneBuffStruct = (buff) => (buff ? { ...buff } : undefined);
@@ -8440,16 +8441,16 @@ Object.assign(RAW_SKILLS, {
     description: "Bolster allies in your column, raising attack and accuracy."
   },
 
-  // --- Axe (2h) ---
+  // --- Axe (2h) --- v3.22
   'rending_hew': {
     id: "rending_hew",
     name: "Rending Hew",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 15,
+    requiredValue: 10,
     actionCost: "major",
     mpCost: 4,
     requiresTarget: true,
@@ -8457,22 +8458,24 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "lacerate"],
     emitTagsOnUse: ["slash"],
     cooldown: 2,
-    buildupHint: { lacerate: 100 },
+    buildupHint: { lacerate: 80 },
     apply: (attacker, target) => {
       const ability = SKILLS?.rending_hew;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
+      const tier = target?.weakness?.tiers?.lacerate || 0;
+      if (tier >= 1) amount = Math.floor(amount * 1.2);
       return {
         ...roll,
         amount,
-        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
+        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 80 },
       };
     },
-    description: "A savage swing that opens a bleeding wound."
+    description: "A savage swing that opens a bleeding wound; heavier when the foe is already bleeding."
   },
 
   'trophy_cry': {
@@ -8480,7 +8483,7 @@ Object.assign(RAW_SKILLS, {
     name: "Trophy Cry",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CON",
     requiredValue: 14,
@@ -8488,19 +8491,35 @@ Object.assign(RAW_SKILLS, {
     mpCost: 3,
     requiresTarget: false,
     targetRequirement: "self",
-    tags: ["support", "stance", "hp"],
+    tags: ["support", "hp", "party"],
     cooldown: 3,
-    statusEffects: [{ id: "trophy_cry", turns: 2, tempHP: 8 }],
-    apply: (attacker) => {
-      const ability = SKILLS?.trophy_cry;
-      const con = attacker?.totalStats?.CON ?? attacker?.CON ?? 0;
-      const bonus = 8 + Math.floor(con / 3);
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect, tempHP: bonus }))
-        : undefined;
-      return { amount: 0, statusEffects };
+    conditionHint: { requiresKillThisTurn: true },
+    apply: (attacker, _target, scene) => {
+      if (!scene?.enemyDiedThisTurn) {
+        return { amount: 0, log: `${attacker?.name || "The axeman"} finds no trophy to cry for yet.` };
+      }
+      const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
+      const healAmt = Math.floor(maxHP * 0.1);
+      if (healAmt > 0 && attacker) {
+        attacker.currentHP = Math.min(maxHP, (attacker.currentHP ?? 0) + healAmt);
+      }
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        const meters = ally?.weakness?.meters;
+        if (!meters) return;
+        Object.keys(meters).forEach(fam => {
+          meters[fam] = Math.max(0, (meters[fam] || 0) - 50);
+          if (ally.weakness.tiers) ally.weakness.tiers[fam] = weaknessTierFromMeter(meters[fam]);
+        });
+      });
+      return {
+        amount: 0,
+        log: `${attacker?.name || "The axeman"} roars over the fallen, healing ${healAmt} HP and rallying the party.`,
+      };
     },
-    description: "Roar in triumph, gaining a small temporary HP buffer."
+    description: "After a kill this turn, roar in triumph to heal 10% HP and reduce all ally status buildups by 50."
   },
 
   'wound_opener': {
@@ -8508,20 +8527,19 @@ Object.assign(RAW_SKILLS, {
     name: "Wound Opener",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
     emitTagsOnUse: ["twist"],
-    cooldown: 2,
+    cooldown: 3,
     requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
     buildupHint: { lacerate: 100 },
-    rewardIfTierCross: [{ family: "lacerate", tier: 1, debuff: { bleedTakenPct: 20, turns: 2 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.wound_opener;
       const roll = calculateDamage(attacker, target, ability);
@@ -8530,18 +8548,16 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      const tier = target?.weakness?.tiers?.lacerate || 0;
-      if (tier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * tier));
-      }
+      const toxicTier = target?.weakness?.tiers?.toxic || 0;
+      const diseaseTier = target?.weakness?.tiers?.disease || 0;
+      if (toxicTier >= 1 || diseaseTier >= 1) amount = Math.floor(amount * 1.25);
       return {
         ...roll,
         amount,
         buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Twist the axe to widen existing wounds; heavier damage and bleed intensifies when tiers rise."
+    description: "Twist the axe into existing wounds; deals 25% bonus damage if the target is also poisoned or diseased."
   },
 
   'butchers_march': {
@@ -8549,33 +8565,29 @@ Object.assign(RAW_SKILLS, {
     name: "Butcher's March",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CON",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "position",
-    isMovement: true,
-    moveRange: 2,
-    tags: ["movement", "support"],
-    cooldown: 2,
-    apply(user, destSlot, scene) {
-      if (!destSlot || destSlot.occupied) return {};
-      const beforeSlot = scene?._getSlotByChar?.(user);
-      scene?.moveToPosition?.(user, destSlot);
-      const moved = true;
-      let log;
-      if (moved) {
-        const beforeGauge = user?.initiativeGauge || 0;
-        user.initiativeGauge = Math.max(0, beforeGauge - 12);
-        const gained = Math.max(0, beforeGauge - user.initiativeGauge);
-        log = gained ? `${user.name || "The reaper"} builds momentum, gaining initiative.` : undefined;
-      }
-      return { amount: 0, moved, log };
+    mpCost: 5,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "stance", "self-buff"],
+    cooldown: 5,
+    statusEffects: [{ id: "butchers_march_buff", turns: 3, onCritRestore: { hpPct: 5, initiativeGain: 5 } }],
+    apply: (attacker) => {
+      const ability = SKILLS?.butchers_march;
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(e => ({ ...e }))
+        : undefined;
+      return {
+        amount: 0,
+        statusEffects,
+        log: `${attacker?.name || "The axeman"} enters a relentless march — crits restore HP and initiative.`,
+      };
     },
-    description: "Advance relentlessly; each march quickens your next swing."
+    description: "Enter a bloodthirsty stance for 3 turns; critical strikes restore 5% HP and gain 5 initiative."
   },
 
   'bone_notch': {
@@ -8583,17 +8595,17 @@ Object.assign(RAW_SKILLS, {
     name: "Bone Notch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 3,
+    mpCost: 10,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
     emitTagsOnUse: ["slash"],
-    cooldown: 3,
+    cooldown: 4,
     buildupHint: { lacerate: 100 },
     conditionHint: { requiresCrit: true },
     apply: (attacker, target) => {
@@ -8605,17 +8617,18 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
       const isCrit = !!roll?.crit;
-      if (isCrit) {
-        amount = Math.floor(amount * 1.1);
-      }
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      const expTier = target?.weakness?.tiers?.expose || 0;
+      const fullHit = isCrit && (lacTier >= 1 || expTier >= 1);
+      if (fullHit) amount = Math.floor(amount * 1.5);
       return {
         ...roll,
         amount,
-        buildup: isCrit ? { lacerate: ability?.buildupHint?.lacerate ?? 100 } : undefined,
-        log: isCrit ? undefined : `${attacker?.name || "The axeman"} fails to notch the bone without a clean crit.`,
+        buildup: fullHit ? { lacerate: ability?.buildupHint?.lacerate ?? 100 } : {},
+        log: !fullHit ? `${attacker?.name || "The axeman"} swings but fails to notch the bone cleanly.` : undefined,
       };
     },
-    description: "On a critical blow, clip the bone to add fresh bleeding."
+    description: "On a crit vs a bleeding or exposed foe, deal 150% damage and deepen the wound."
   },
 
   'war_cry': {
@@ -8623,51 +8636,105 @@ Object.assign(RAW_SKILLS, {
     name: "War Cry",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CHA",
     requiredValue: 14,
-    actionCost: "major",
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["support", "shout", "expose", "aoe"],
     emitTagsOnUse: ["shout"],
     cooldown: 3,
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 100 },
+    buildupHint: { expose: 80 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.war_cry;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = 0; // utility shout; no direct damage
-      const baseBuildup = ability?.buildupHint?.expose ?? 100;
+      // Amplified if target already has expose T1+
+      const expTier = target?.weakness?.tiers?.expose || 0;
+      const amplified = expTier >= 1;
+      const initiativeSpend = amplified ? 30 : 10;
+      const exposeBuildup = amplified ? 130 : 80;
+      if (attacker) attacker.initiativeGauge = (attacker.initiativeGauge || 0) + initiativeSpend;
+
+      // Expose enemy column
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
         if (column) {
           const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.forEach(char => {
-            splash.push({
-              target: char,
-              amount: 0,
-              buildup: { expose: baseBuildup },
-              tags: ability?.tags,
+          (sideSlots || [])
+            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char)
+            .forEach(char => splash.push({ target: char, amount: 0, buildup: { expose: exposeBuildup }, tags: ability?.tags }));
+        }
+        // AttackPower +15% to ally column for 2 turns
+        const atkBuff = { id: "war_cry_atk_buff", turns: 2, AttackPower: 15 };
+        const attackerCol = scene._getUnitColumn?.(attacker);
+        const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+        if (attackerCol) {
+          (allySlots || [])
+            .filter(slot => slot?.char && slot.char !== attacker && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === attackerCol)
+            .forEach(slot => {
+              slot.char.statusEffects = slot.char.statusEffects || [];
+              slot.char.statusEffects.push({ ...atkBuff });
             });
-          });
+        }
+        if (attacker) {
+          attacker.statusEffects = attacker.statusEffects || [];
+          attacker.statusEffects.push({ ...atkBuff });
         }
       }
+
+      return {
+        amount: 0,
+        buildup: { expose: exposeBuildup },
+        splash: splash.length ? splash : undefined,
+        log: `${attacker?.name || "The axeman"} bellows a war cry${amplified ? " with full fury" : ""}, exposing foes and bolstering allies.`,
+      };
+    },
+    description: "A bonus-action shout that exposes an enemy column and grants allies +15% AttackPower. Amplifies if the target is already exposed."
+  },
+
+  'scarlet_rush': {
+    id: "scarlet_rush",
+    name: "Scarlet Rush",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 3,
+    buildupHint: { lacerate: 100 },
+    rewardIfTierCross: [
+      { family: "lacerate", tier: 1, healMP: 3 },
+      { family: "lacerate", tier: 2, healMP: 6 },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.scarlet_rush;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, Math.floor(
+        applyDamageModifiers(roll.amount, attacker, target, {
+          ability,
+          tags: ability?.tags,
+          skipGearMultiplier: true,
+        }) * 0.95
+      ));
       return {
         ...roll,
         amount,
-        buildup: { expose: baseBuildup },
-        splash: splash.length ? splash : undefined,
-        log: `${attacker?.name || "The axeman"} bellows a war cry, revealing weak spots.`,
+        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A fearsome shout that exposes enemies in range."
+    description: "A swift raking strike that builds lacerate; restores MP when a tier is crossed."
   },
 
   // -------- Payoff --------
@@ -8676,21 +8743,18 @@ Object.assign(RAW_SKILLS, {
     name: "Hemorrhage Strike",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 8,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "finisher", "consume"],
     emitTagsOnUse: ["slash"],
-    cooldown: 3,
+    cooldown: 5,
     requiresWeakness: { family: "lacerate", tierAtLeast: 2 },
-    consumeWeakness: ["lacerate"],
-    transformWeakness: { from: "lacerate", to: "bleed_dot", ratio: 1.0 },
-    statusEffects: [{ id: "hemorrhage_bleed", turns: 3, tickPctMaxHP: 0.06 }],
     apply: (attacker, target) => {
       const ability = SKILLS?.hemorrhage_strike;
       const roll = calculateDamage(attacker, target, ability);
@@ -8699,19 +8763,24 @@ Object.assign(RAW_SKILLS, {
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      amount = Math.floor(amount * 1.3);
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
+      amount = Math.floor(amount * 1.2);
+      const currentMeter = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(600, currentMeter);
+      if (consumed > 0 && target?.weakness?.meters) {
+        const remaining = Math.max(0, currentMeter - consumed);
+        target.weakness.meters.lacerate = remaining;
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(remaining);
+      }
+      const tickDamage = consumed > 0 ? Math.floor(consumed / 10) : 0;
+      const statusEffects = tickDamage > 0 ? [{ id: "hemorrhage_dot", turns: 3, tickDamage }] : undefined;
       return {
         ...roll,
         amount,
         statusEffects,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        transformWeakness: ability?.transformWeakness ? { ...ability.transformWeakness } : undefined,
+        log: consumed > 0 ? `${attacker?.name || "The axeman"} opens a hemorrhage — ${tickDamage} bleed damage per turn for 3 turns.` : undefined,
       };
     },
-    description: "A brutal finisher that converts bleeding stacks into a lethal hemorrhage and clears the wound."
+    description: "A brutal finisher that consumes up to 600 lacerate and converts it into a hemorrhage DOT."
   },
 
   'blood_surge': {
@@ -8719,64 +8788,309 @@ Object.assign(RAW_SKILLS, {
     name: "Blood Surge",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CON",
     requiredValue: 16,
-    actionCost: "major",
+    actionCost: "bonus",
     mpCost: 5,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "heal", "aoe"],
+    emitTagsOnUse: ["roar"],
+    cooldown: 4,
+    conditionHint: { requiresAnyLacerate: true },
+    apply: (attacker, _target, scene) => {
+      const ability = SKILLS?.blood_surge;
+      const splash = [];
+      let healAmt = 0;
+      (scene?.enemySlots || []).forEach(s => {
+        const victim = s?.char;
+        if (!victim || victim.status === 'incapacitated') return;
+        const lacTier = victim?.weakness?.tiers?.lacerate || 0;
+        if (lacTier < 1) return;
+        const baseRoll = calculateDamage(attacker, victim, ability);
+        const splashAmt = Math.max(1, Math.floor(
+          applyDamageModifiers(baseRoll.amount, attacker, victim, {
+            ability,
+            tags: ability?.tags,
+            skipGearMultiplier: true,
+          }) * 0.5
+        ));
+        splash.push({ target: victim, amount: splashAmt, tags: ability?.tags });
+        if (lacTier >= 2 && attacker) {
+          const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
+          healAmt += Math.floor(maxHP * 0.05);
+        }
+      });
+      if (healAmt > 0 && attacker) {
+        const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
+        attacker.currentHP = Math.min(maxHP, (attacker.currentHP ?? 0) + healAmt);
+      }
+      return {
+        amount: 0,
+        splash: splash.length ? splash : undefined,
+        log: healAmt > 0
+          ? `${attacker?.name || "The axeman"} surges on blood, striking bleeders and healing ${healAmt} HP.`
+          : `${attacker?.name || "The axeman"} surges on blood, striking bleeders.`,
+      };
+    },
+    description: "Strike all lacerate T1+ enemies for 50% damage; heal 5% HP per enemy in hemorrhage tier."
+  },
+
+  'inferno_arc': {
+    id: "inferno_arc",
+    name: "Inferno Arc",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 8,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["support", "consume"],
-    emitTagsOnUse: ["roar"],
-    cooldown: 3,
-    conditionHint: { requiresAnyLacerate: true },
+    tags: ["melee", "attack", "fire", "consume"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 5,
+    requiresWeakness: { family: "lacerate", tierAtLeast: 2 },
+    buildupHint: { fire: 80 },
     apply: (attacker, target, scene) => {
-      const ability = SKILLS?.blood_surge;
+      const ability = SKILLS?.inferno_arc;
       const roll = calculateDamage(attacker, target, ability);
-      const slots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
-      const allSlots = scene ? [...(scene.enemySlots || []), ...(scene.allySlots || [])] : [];
-      const enemies = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
-      const foes = scene ? (target?.isEnemy ? scene.enemySlots : scene.enemySlots) : [];
-      const scanSlots = scene ? (target?.isEnemy ? scene.enemySlots : scene.enemySlots) : [];
-      const pool = scene ? scene.enemySlots : [];
-      const totalTiers = (scene?.enemySlots || []).reduce((sum, s) => {
-        const tiers = s?.char?.weakness?.tiers?.lacerate || 0;
-        return sum + tiers;
-      }, 0);
-      let heal = 0;
-      if (attacker) {
-        const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
-        const currentHP = attacker?.currentHP ?? 0;
-        heal = totalTiers * 4;
-        if (heal > 0 && maxHP > 0) {
-          attacker.currentHP = Math.min(maxHP, currentHP + heal);
-        }
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "fire",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.1);
+      const currentLac = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(400, currentLac);
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.lacerate = Math.max(0, currentLac - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
       }
-      if (scene && target) {
-        (scene.enemySlots || []).forEach(s => {
-          const victim = s?.char;
-          if (!victim?.weakness?.meters) return;
-          const meter = victim.weakness.meters.lacerate || 0;
-          if (meter > 0) {
-            const newMeter = Math.max(0, meter - 100);
-            victim.weakness.meters.lacerate = newMeter;
-            if (victim.weakness.tiers) {
-              victim.weakness.tiers.lacerate = weaknessTierFromMeter(newMeter);
-            }
-          }
-        });
+      const fireBuildup = (ability?.buildupHint?.fire ?? 80) + Math.floor(consumed / 5);
+      const splash = [];
+      const necTier = target?.weakness?.tiers?.necrotic || 0;
+      if (necTier >= 2 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          (sideSlots || [])
+            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char)
+            .forEach(char => splash.push({
+              target: char,
+              amount: Math.max(1, Math.floor(amount * 0.7)),
+              isMagic: true,
+              element: "fire",
+              buildup: { fire: Math.floor(fireBuildup * 0.6) },
+              tags: ability?.tags,
+            }));
+        }
       }
       return {
         ...roll,
-        amount: 0,
-        isHeal: false,
-        log: heal > 0 ? `${attacker?.name || "The axeman"} draws strength from blood, healing ${heal} HP.` : undefined,
+        amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: fireBuildup },
+        splash: splash.length ? splash : undefined,
       };
     },
-    description: "Feed on bleeding foes, healing based on total Lacerate tiers and trimming one stack from each enemy."
+    description: "Ignite an open wound — converts up to 400 lacerate into fire buildup; scorches the column if the foe is necrotic."
   },
 
+  'artery_sever': {
+    id: "artery_sever",
+    name: "Artery Sever",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 17,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate", "finisher", "consume"],
+    emitTagsOnUse: ["thrust"],
+    cooldown: 4,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.artery_sever;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.15);
+      const currentMeter = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(400, currentMeter);
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.lacerate = Math.max(0, currentMeter - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
+      }
+      const bonusPct = Math.floor(consumed / 100) * 0.125;
+      if (bonusPct > 0) amount = Math.floor(amount * (1 + bonusPct));
+      const statusEffects = consumed >= 200
+        ? [{ id: "artery_necrotic_vuln", turns: 3, necroticVulnPct: 25 }]
+        : undefined;
+      return {
+        ...roll,
+        amount,
+        statusEffects,
+        log: consumed >= 200 ? `${attacker?.name || "The axeman"} severs the artery — the target becomes vulnerable to necrotic damage.` : undefined,
+      };
+    },
+    description: "Consume up to 400 lacerate for bonus damage (+12.5% per 100); 200+ consumed applies necrotic vulnerability."
+  },
+
+  'harvest_momentum': {
+    id: "harvest_momentum",
+    name: "Harvest Momentum",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "initiative"],
+    cooldown: 5,
+    apply: (attacker, _target, scene) => {
+      let totalLacMeter = 0;
+      (scene?.enemySlots || []).forEach(s => { totalLacMeter += s?.char?.weakness?.meters?.lacerate || 0; });
+      const initiativeGain = Math.min(20, Math.floor(totalLacMeter / 50));
+      if (initiativeGain > 0 && attacker) {
+        attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
+      }
+      return {
+        amount: 0,
+        log: initiativeGain > 0
+          ? `${attacker?.name || "The axeman"} harvests momentum from ${totalLacMeter} lacerate — gains ${initiativeGain} initiative.`
+          : `${attacker?.name || "The axeman"} finds no momentum to harvest yet.`,
+      };
+    },
+    description: "Convert all enemy lacerate meters into initiative (1 per 50 meters, cap 20)."
+  },
+
+  'bloodletting_cleave': {
+    id: "bloodletting_cleave",
+    name: "Bloodletting Cleave",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 9,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate", "aoe"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 6,
+    buildupHint: { lacerate: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.bloodletting_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.1);
+      const baseBuildup = ability?.buildupHint?.lacerate ?? 60;
+      const necTier = target?.weakness?.tiers?.necrotic || 0;
+      const splash = [];
+      resolveAOESplash(scene, target, { shape: "column" }).forEach(char => {
+        const splashBuildup = { lacerate: baseBuildup };
+        if (necTier >= 2) splashBuildup.necrotic = 80;
+        splash.push({
+          target: char,
+          amount: Math.max(1, Math.floor(amount * 0.75)),
+          buildup: splashBuildup,
+          tags: ability?.tags,
+        });
+      });
+      return {
+        ...roll,
+        amount,
+        buildup: { lacerate: baseBuildup },
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "A heavy column sweep at 110%/75%; spreads necrotic buildup to splash targets if the primary is decaying."
+  },
+
+  'death_blow': {
+    id: "death_blow",
+    name: "Death Blow",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 18,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "execute", "consume"],
+    emitTagsOnUse: ["slash"],
+    cooldown: 8,
+    conditionHint: { requiresLowHP: true },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.death_blow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      const hp = target?.currentHP ?? 9999;
+      const maxHP = target?.maxHP ?? target?.derivedStats?.maxHP ?? 0;
+      const threshold = maxHP ? Math.floor(maxHP * 0.4) : 0;
+      if (maxHP > 0 && hp > threshold) {
+        return {
+          ...roll,
+          amount: Math.floor(amount * 0.5),
+          log: `${attacker?.name || "The axeman"} swings wide — the target is not yet broken.`,
+        };
+      }
+      amount = Math.floor(amount * 2.0);
+      const lacMeter = target?.weakness?.meters?.lacerate || 0;
+      const expMeter = target?.weakness?.meters?.expose || 0;
+      const totalConsumed = lacMeter + expMeter;
+      const bonusPct = Math.floor(totalConsumed / 100) * 0.05;
+      if (bonusPct > 0) amount = Math.floor(amount * (1 + bonusPct));
+      if (target?.weakness?.meters) {
+        target.weakness.meters.lacerate = 0;
+        target.weakness.meters.expose = 0;
+        if (target.weakness.tiers) {
+          target.weakness.tiers.lacerate = weaknessTierFromMeter(0);
+          target.weakness.tiers.expose = weaknessTierFromMeter(0);
+        }
+      }
+      return {
+        ...roll,
+        amount,
+        log: `${attacker?.name || "The headsman"} delivers the Death Blow — ${totalConsumed} buildup consumed.`,
+      };
+    },
+    description: "Execute a target below 40% HP at 200% base damage (+5% per 100 lacerate/expose consumed)."
+  },
+
+  // -------- To Be Reworked --------
   'decapitating_arc': {
     id: "decapitating_arc",
     name: "Decapitating Arc",
@@ -8803,259 +9117,20 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
       const splash = [];
-      const applyOne = (victim, scale = 1) => {
-        if (!victim) return null;
-        let val = Math.max(1, Math.floor(amount * scale));
-        const tier = victim?.weakness?.tiers?.lacerate || 0;
-        if (tier > 0) {
-          val = Math.floor(val * (1 + 0.1 * tier));
-          if (victim.weakness?.meters) {
-            const meter = victim.weakness.meters.lacerate || 0;
-            const newMeter = Math.max(0, meter - 100);
-            victim.weakness.meters.lacerate = newMeter;
-            if (victim.weakness.tiers) victim.weakness.tiers.lacerate = weaknessTierFromMeter(newMeter);
-          }
-        }
-        return val;
-      };
-
-      const mainAmount = applyOne(target, 1) ?? amount;
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
         if (column) {
           const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.slice(0, 2).forEach(char => {
-            const val = applyOne(char, 0.85);
-            splash.push({
-              target: char,
-              amount: val,
-              tags: ability?.tags,
-            });
-          });
+          (sideSlots || [])
+            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char)
+            .slice(0, 2)
+            .forEach(char => splash.push({ target: char, amount: Math.max(1, Math.floor(amount * 0.85)), tags: ability?.tags }));
         }
       }
-
-      return {
-        ...roll,
-        amount: mainAmount,
-        splash: splash.length ? splash : undefined,
-      };
+      return { ...roll, amount, splash: splash.length ? splash : undefined };
     },
-    description: "A sweeping chop that bites harder into bleeding foes, shaving a Lacerate stack."
-  },
-
-  'artery_sever': {
-    id: "artery_sever",
-    name: "Artery Sever",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "finisher"],
-    emitTagsOnUse: ["thrust"],
-    cooldown: 3,
-    buildupHint: { lacerate: 100 },
-    rewardIfTierCross: [{ family: "lacerate", tier: 1, debuff: { bleedTakenPct: 25, turns: 2 } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.artery_sever;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const current = target?.weakness?.meters?.lacerate || 0;
-      const projected = current + (ability?.buildupHint?.lacerate ?? 100);
-      const crossesTier = weaknessTierFromMeter(projected) > weaknessTierFromMeter(current);
-      if (crossesTier) {
-        amount = Math.floor(amount * 1.2);
-      }
-      return {
-        ...roll,
-        amount,
-        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A precise cut aimed at a major artery; if it pushes Bleed over a tier, damage spikes and bleeding worsens."
-  },
-
-  'harvest_momentum': {
-    id: "harvest_momentum",
-    name: "Harvest Momentum",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "WIS",
-    requiredValue: 15,
-    actionCost: "bonus",
-    mpCost: 3,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["support", "mp", "stance"],
-    cooldown: 3,
-    apply: (attacker, _target, scene) => {
-      const ability = SKILLS?.harvest_momentum;
-      let bleedingEnemies = 0;
-      if (scene) {
-        (scene.enemySlots || []).forEach(s => {
-          const tier = s?.char?.weakness?.tiers?.lacerate || 0;
-          if (tier > 0) bleedingEnemies += 1;
-        });
-      }
-      if (attacker && bleedingEnemies > 0) {
-        const before = attacker.initiativeGauge || 0;
-        attacker.initiativeGauge = Math.max(0, before - bleedingEnemies * 8);
-      }
-      return {
-        amount: 0,
-        log: bleedingEnemies > 0 ? `${attacker?.name || "The axeman"} rides the bloodshed, quickening their stance.` : undefined,
-      };
-    },
-    description: "Harness the chaos of bleeding foes to quicken yourself; gain initiative per bleeding enemy."
-  },
-
-  'bloodletting_cleave': {
-    id: "bloodletting_cleave",
-    name: "Bloodletting Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "proliferate", "aoe"],
-    emitTagsOnUse: ["slash"],
-    cooldown: 3,
-    buildupHint: { lacerate: 80 },
-    proliferateWeakness: { families: ["lacerate"], to: "adjacent", ratio: 1.0, maxTargets: 2 },
-    rewardIfTierCross: [{ family: "lacerate", tier: 1, debuff: { cleared: true } }],
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.bloodletting_cleave;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const splash = [];
-      const spreadMeta = [];
-      const baseBuildup = ability?.buildupHint?.lacerate ?? 80;
-      const sourceMeter = (target?.weakness?.meters?.lacerate || 0) + baseBuildup;
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const neighbors = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
-          neighbors.slice(0, maxTargets).forEach(char => {
-            const splashAmount = Math.max(1, Math.floor(amount * 0.75));
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              tags: ability?.tags,
-            });
-            const transfer = ability?.proliferateWeakness?.ratio ? Math.floor(sourceMeter * ability.proliferateWeakness.ratio) : sourceMeter;
-            if (transfer > 0) {
-              char.weakness = char.weakness || { meters: {}, tiers: {} };
-              char.weakness.meters = char.weakness.meters || {};
-              char.weakness.tiers = char.weakness.tiers || {};
-              char.weakness.meters.lacerate = (char.weakness.meters.lacerate || 0) + transfer;
-              char.weakness.tiers.lacerate = weaknessTierFromMeter(char.weakness.meters.lacerate);
-              spreadMeta.push({ targetId: char.id || char.name, family: "lacerate", amount: transfer });
-            }
-          });
-        }
-      }
-      if (target?.weakness?.meters) {
-        target.weakness.meters.lacerate = Math.max(0, (target.weakness.meters.lacerate || 0) + baseBuildup - 100);
-        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
-      }
-      return {
-        ...roll,
-        amount,
-        buildup: { lacerate: baseBuildup },
-        splash: splash.length ? splash : undefined,
-        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A heavy sweep that flings blood, spreading Bleed to nearby foes and trimming the primary stack."
-  },
-
-  'death_blow': {
-    id: "death_blow",
-    name: "Death Blow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute", "consume"],
-    emitTagsOnUse: ["slash"],
-    cooldown: 4,
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    consumeWeakness: ["lacerate", "expose"],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.death_blow;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const hp = target?.currentHP ?? 9999;
-      const maxHP = target?.maxHP ?? target?.derivedStats?.maxHP ?? 0;
-      const threshold = maxHP ? Math.floor(maxHP * 0.35) : 0;
-      const qualifiesHP = maxHP > 0 ? hp <= threshold : false;
-      const hasWeak = (target?.weakness?.meters?.lacerate || 0) > 0 || (target?.weakness?.meters?.expose || 0) > 0;
-      if (qualifiesHP && hasWeak) {
-        amount = Math.floor(amount * 1.4);
-      } else {
-        amount = Math.floor(amount * 0.75);
-      }
-      let tempHPGain = 0;
-      if (qualifiesHP && hasWeak && attacker) {
-        tempHPGain = 12;
-        attacker.tempHP = Math.max(attacker.tempHP || 0, tempHPGain);
-      }
-      if (target?.weakness?.meters) {
-        target.weakness.meters.lacerate = 0;
-        target.weakness.meters.expose = 0;
-        if (target.weakness.tiers) {
-          target.weakness.tiers.lacerate = weaknessTierFromMeter(0);
-          target.weakness.tiers.expose = weaknessTierFromMeter(0);
-        }
-      }
-      return {
-        ...roll,
-        amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        log: tempHPGain ? `${attacker?.name || "The headsman"} drinks in victory, gaining ${tempHPGain} temporary HP.` : undefined,
-      };
-    },
-    description: "A ruthless finisher for the gravely wounded; clears Bleed/Expose and grants a surge of temp HP on a true execution."
+    description: "A sweeping arc that hits the primary target and up to 2 column-mates at 85%."
   },
 
   'overhead_hew': {
@@ -9103,7 +9178,6 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "fire", "aoe"],
     cooldown: 2,
     buildupHint: { fire: 60 },
-    cleave: { adjacentFactor: 0.5 },
     apply: (attacker, target) => {
       const ability = SKILLS?.ember_cleave;
       const roll = calculateDamage(attacker, target, ability);
@@ -9116,20 +9190,10 @@ Object.assign(RAW_SKILLS, {
       }));
       const coldTier = target?.weakness?.tiers?.cold || 0;
       let fireBuildup = ability?.buildupHint?.fire ?? 60;
-      if (coldTier >= 1) {
-        amount = Math.floor(amount * 1.15);
-        fireBuildup += 20;
-      }
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "fire",
-        buildup: { fire: fireBuildup },
-        cleave: ability?.cleave ? { ...ability.cleave } : undefined,
-      };
+      if (coldTier >= 1) { amount = Math.floor(amount * 1.15); fireBuildup += 20; }
+      return { ...roll, amount, isMagic: true, element: "fire", buildup: { fire: fireBuildup } };
     },
-    description: "Fiery chop that singes a neighbor; stronger vs Chilled/Frozen."
+    description: "Fiery chop; stronger vs Chilled/Frozen."
   },
 
   'rime_chop': {
@@ -9160,13 +9224,7 @@ Object.assign(RAW_SKILLS, {
       }));
       const coldTier = target?.weakness?.tiers?.cold || 0;
       if (coldTier === 2) amount = Math.floor(amount * 1.5);
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
-      };
+      return { ...roll, amount, isMagic: true, element: "cold", buildup: { cold: ability?.buildupHint?.cold ?? 60 } };
     },
     description: "Cold-laden chop; devastates Frozen foes."
   },
@@ -9199,13 +9257,7 @@ Object.assign(RAW_SKILLS, {
       }));
       const coldTier = target?.weakness?.tiers?.cold || 0;
       if (coldTier >= 1) amount = Math.floor(amount * 1.25);
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "lightning",
-        buildup: { lightning: ability?.buildupHint?.lightning ?? 70 },
-      };
+      return { ...roll, amount, isMagic: true, element: "lightning", buildup: { lightning: ability?.buildupHint?.lightning ?? 70 } };
     },
     description: "Thunderous cleave that builds Lightning; bonus vs Chilled/Frozen."
   },
@@ -9333,12 +9385,12 @@ Object.assign(RAW_SKILLS, {
     description: "Hunker down behind the mace, gaining guard; the next attacker is chilled."
   },
 
-  'faultline': {
-    id: "faultline",
-    name: "Frost Faultline",
+  'frozen_quake': {
+    id: "frozen_quake",
+    name: "Frozen Quake",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["mace_2h"],
     requiredStat: "WIS",
     requiredValue: 15,
@@ -9352,10 +9404,10 @@ Object.assign(RAW_SKILLS, {
     aoe: { shape: "column", scale: 1 },
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     buildupHint: { cold: 80 },
-    // immobilizes: true and elemVulnPct stubs — require future CombatScene support
-    slotEffect: { id: "faultline_crack", element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
+    // immobilizes: true — stub, requires CombatScene support to enforce
+    slotEffect: { id: "frozen_quake_zone", element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
     apply: (attacker, target, scene) => {
-      const ability = SKILLS?.faultline;
+      const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
       let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
@@ -9632,13 +9684,13 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
 
-      // Count total remaining zone-turns across all active quake/faultline zones
+      // Count total remaining zone-turns across all active Quake Mark and Frozen Quake zones
       let totalZoneTurns = 0;
       if (scene?.slotEffects) {
         Object.values(scene.slotEffects).forEach(zoneList => {
           if (!Array.isArray(zoneList)) return;
           zoneList.forEach(eff => {
-            if ((eff?.id === "quake_mark_zone" || eff?.id === "faultline_crack") && (eff.turns || 0) > 0) {
+            if ((eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") && (eff.turns || 0) > 0) {
               totalZoneTurns += eff.turns;
             }
           });
@@ -9654,7 +9706,7 @@ Object.assign(RAW_SKILLS, {
         Object.values(scene.slotEffects).forEach(zoneList => {
           if (!Array.isArray(zoneList)) return;
           zoneList.forEach(eff => {
-            if (eff?.id === "quake_mark_zone" || eff?.id === "faultline_crack") {
+            if (eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") {
               eff.turns = 0;
             }
           });
@@ -9690,7 +9742,7 @@ Object.assign(RAW_SKILLS, {
         removedZones: totalZoneTurns > 0 ? totalZoneTurns : undefined,
       };
     },
-    description: "Collapse all active Quake and Frost Faultline zones at once, dealing +25% damage per zone-turn remaining. Deals 75% to column targets."
+    description: "Collapse all active Quake Mark and Frozen Quake zones at once, dealing +25% damage per zone-turn remaining. Deals 75% to column targets."
   },
 
   'bell_ringer': {
@@ -9755,8 +9807,7 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 16,
-    // actionCost: "both" — costs major + bonus action (stub; engine support pending)
-    actionCost: "both",
+    actionCost: ["major", "bonus"],
     mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -9827,7 +9878,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sacred Shockwave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["mace_2h"],
     requiredStat: "CHA",
     requiredValue: 17,
@@ -9838,7 +9889,8 @@ Object.assign(RAW_SKILLS, {
     tags: ["attack", "holy", "aoe", "support"],
     emitTagsOnUse: ["smash"],
     cooldown: 4,
-    aoe: { shape: "column", scale: 1 },
+    // Diamond: fixed slots {2,4,5,7} — the four centre positions. Cannot be moved.
+    aoe: { shape: "diamond" },
     healHPPerStack: 3,
     healMPPerStack: 2,
     apply: (attacker, target, scene) => {
@@ -9851,7 +9903,7 @@ Object.assign(RAW_SKILLS, {
       }));
       let totalStacksConsumed = 0;
 
-      // Clear disorient, toxic, and disease from one enemy; returns hit amount
+      // Hit an enemy: scale by disorient tier/intensity, clear disorient/toxic/disease
       const hitAndClear = (victim) => {
         if (!victim) return { amount: 0 };
         let amt = baseAmount;
@@ -9861,7 +9913,6 @@ Object.assign(RAW_SKILLS, {
         if (tier > 0) amt = Math.floor(amt * (1 + 0.1 * tier));
         if (intensity > 1) amt = Math.floor(amt * (1 + Math.max(0, intensity - 1) * 0.12));
         totalStacksConsumed += tier;
-        // Clear disorient, toxic, disease
         if (victim?.weakness?.meters) {
           victim.weakness.meters.disorient = 0;
           victim.weakness.meters.toxic = 0;
@@ -9876,22 +9927,15 @@ Object.assign(RAW_SKILLS, {
       };
 
       const main = hitAndClear(target);
-      const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.forEach(char => {
-            const res = hitAndClear(char);
-            splash.push({ target: char, amount: res.amount, tags: ability?.tags });
-          });
-        }
-      }
 
-      // Heal allies: HP and MP per Disorient stack consumed
+      // Diamond AOE: fixed slots {2,4,5,7} via aoeResolver
+      const splashChars = resolveAOESplash(scene, target, ability?.aoe);
+      const splash = splashChars.map(char => {
+        const res = hitAndClear(char);
+        return { target: char, amount: res.amount, tags: ability?.tags };
+      });
+
+      // Heal allies: HP and MP per Disorient stack consumed across all hits
       let healedAllies;
       const healHP = ability?.healHPPerStack ?? 3;
       const healMP = ability?.healMPPerStack ?? 2;
@@ -9918,7 +9962,7 @@ Object.assign(RAW_SKILLS, {
         healedAllies: healedAllies && healedAllies.length ? healedAllies : undefined,
       };
     },
-    description: "Slam a sanctified wave through an enemy column, clearing Disorient, Toxic, and Disease. Allies heal HP and MP for each Disorient stack consumed."
+    description: "Slam a sanctified wave through the formation's diamond (slots 2,4,5,7), clearing Disorient, Toxic, and Disease from each target hit. Allies heal HP and MP for each Disorient stack consumed."
   },
 
   'earthen_tempest': {
@@ -10146,6 +10190,100 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Blessed impact dealing extra damage to a zapped foe. If the target has Lightning weakness (t1+), consecrates the tile for 2 turns — attackers hitting enemies on it gain 2 MP per strike."
+  },
+
+  'tremor_echo': {
+    id: "tremor_echo",
+    name: "Tremor Echo",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disorient"],
+    emitTagsOnUse: ["smash"],
+    cooldown: 2,
+    buildupHint: { disorient: 60 },
+    // MP gain when hitting an enemy standing in a quake zone — zone occupant check runs inline
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.tremor_echo;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.max(1, Math.floor(amount * 0.75));
+
+      // Check if target is currently standing in a quake zone
+      let mpGain = 0;
+      if (scene?.slotEffects) {
+        // Find the target's slot key
+        const targetSlot = (target?.isEnemy ? scene.enemySlots : scene.allySlots)
+          ?.find(s => s?.char === target);
+        if (targetSlot) {
+          const sid = scene._charSlotKey ? scene._charSlotKey(target) : targetSlot.slotId;
+          const zones = sid != null ? (scene.slotEffects[sid] || []) : [];
+          const inQuakeZone = zones.some(eff =>
+            (eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") && (eff.turns || 0) > 0
+          );
+          if (inQuakeZone) mpGain = 3;
+        }
+      }
+
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 60 },
+        mpGain,
+      };
+    },
+    description: "A quick follow-up smash that rattles a foe standing in a Quake zone, returning 3 MP to the attacker. Builds Disorient at 75% weapon strength."
+  },
+
+  'concussive_drain': {
+    id: "concussive_drain",
+    name: "Concussive Drain",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disorient"],
+    emitTagsOnUse: ["smash"],
+    cooldown: 2,
+    buildupHint: { disorient: 80 },
+    // Restores MP on crossing Disorient tier thresholds — healMP handled by rewardIfTierCross pipeline
+    rewardIfTierCross: [
+      { family: "disorient", tier: 1, healMP: 2 },
+      { family: "disorient", tier: 2, healMP: 4 },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.concussive_drain;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 80 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A crushing blow that saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2."
   },
 
   // --- Spear (1h) ---

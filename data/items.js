@@ -536,8 +536,7 @@ export const Items = {
     weaponType: 'sword_2h',
     rarity: 'historic',
     historic: true,
-    soulbound: true,  // cannot be lost on party wipe
-    unique: true,
+    unique: true,  // soulbound is earned — granted on quest completion, not by default
     hands: 2,
     damage: { min: 20, max: 32 },
     bonuses: { Strength: 5, Vitality: 4 },

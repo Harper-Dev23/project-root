@@ -329,14 +329,14 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
     // ── Equipment ──
     if (character.equipment) {
-      const eqLines = Object.entries(character.equipment).map(([slot, item]) => {
-        if (!item) return `${this._fmtSlot(slot)}: —`;
+      const itemCount = (character.inventory || []).length;
+      const eqLines = [`Items in bag: ${itemCount}`];
+      Object.entries(character.equipment).forEach(([slot, item]) => {
+        if (!item) { eqLines.push(`${this._fmtSlot(slot)}: —`); return; }
         const base = isItemInstance(item) ? (Items[item.id] || {}) : (Items[item] || {});
         const name = base.name || (isItemInstance(item) ? item.id : item) || '?';
-        return `${this._fmtSlot(slot)}: ${name}`;
+        eqLines.push(`${this._fmtSlot(slot)}: ${name}`);
       });
-      const itemCount = (character.inventory || []).length;
-      eqLines.push(`Items in bag: ${itemCount}`);
       curY = this._writeSection(curY, 'Equipment', eqLines, scrollW);
     }
 
