@@ -1,5 +1,6 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { HOTKEYS } from '../../systems/HotkeyManager.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 const TAB_NAMES = ['Audio', 'Graphics', 'Gameplay', 'Hotkeys'];
 
@@ -10,6 +11,7 @@ export default class OptionsOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

@@ -13,6 +13,7 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import GameState from '../../systems/GameState.js';
 import { rebuildCharacterStats, calculateDerivedStats } from '../../systems/CharacterBuilder.js';
 import { SoundManager } from '../../systems/SoundManager.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
   create() {
     this._char = GameState.party.find(c => c.instanceId === this._characterId);
+    setupSceneCursor(this);
     if (!this._char) {
       console.warn('LevelUpOverlay: character not found:', this._characterId);
       this.scene.stop();

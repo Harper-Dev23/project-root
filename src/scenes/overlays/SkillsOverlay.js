@@ -5,6 +5,7 @@ import { SKILLS } from '../../../data/skills.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { DevFlags } from '../../systems/DevFlags.js';
 import { buildSkillTooltipLines } from '../../ui/skillTooltip.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -31,6 +32,7 @@ export default class SkillsOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

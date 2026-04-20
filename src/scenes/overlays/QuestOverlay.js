@@ -1,6 +1,7 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { QUEST_LINES, QUEST_CATEGORIES, getStepState, getQuestState } from '../../data/quests.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 // ── Visual constants ──────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export default class QuestOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

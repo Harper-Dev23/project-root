@@ -8,6 +8,7 @@ import { JournalState } from '../systems/JournalState.js';
 import { registerHotkeys } from '../systems/HotkeyManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { anyQuestTabHasNew } from './overlays/QuestOverlay.js';
+import { setupSceneCursor } from '../ui/cursor.js';
 
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
@@ -23,6 +24,7 @@ export default class UIScene extends Phaser.Scene {
   }
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
     this.bottomMode = 'default'; // 'dialogue', 'combat', etc.
     this.currentEnterAction = null; // holds a function when a confirmation dialogue is open
     this.refreshUI();
@@ -117,6 +119,7 @@ export default class UIScene extends Phaser.Scene {
         console.warn('TownScene.enterSamuelTent() not found.');
       }
     });
+
   }
 
   // ---------------- Dialogue / Confirmation UI ----------------

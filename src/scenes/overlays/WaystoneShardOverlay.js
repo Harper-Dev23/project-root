@@ -7,6 +7,7 @@
 
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 export default class WaystoneShardOverlay extends Phaser.Scene {
   constructor() {
@@ -14,6 +15,7 @@ export default class WaystoneShardOverlay extends Phaser.Scene {
   }
 
   create() {
+    setupSceneCursor(this);
     const frame = createOverlayFrame(this, {
       title: 'Waystone Shard',
       onClose: () => this._close(),

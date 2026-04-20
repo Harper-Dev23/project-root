@@ -1,6 +1,7 @@
 import GameState from '../../systems/GameState.js';
 import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 export default class CharacterListOverlay extends Phaser.Scene {
   constructor() {
@@ -18,6 +19,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

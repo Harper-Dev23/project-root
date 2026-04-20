@@ -12,6 +12,7 @@ import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { Items } from '../../../data/items.js';
 import { isItemInstance } from '../../systems/ItemFactory.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 export default class CampRosterOverlay extends Phaser.Scene {
   constructor() {
@@ -32,6 +33,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

@@ -9,6 +9,7 @@ import Tooltip from '../ui/Tooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
+import { setupSceneCursor } from '../ui/cursor.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -474,6 +475,7 @@ export default class TownScene extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
     SoundManager.wireEmptyClick(this, 'dullClick');
     const centerX = 640;
     const centerY = 360;

@@ -1,4 +1,5 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 
 export default class MapOverlay extends Phaser.Scene {
@@ -15,6 +16,7 @@ export default class MapOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

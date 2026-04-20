@@ -8,6 +8,7 @@ import UIButton, { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 import { buildSkillTooltipLines } from '../ui/skillTooltip.js';
+import { setupSceneCursor, setCursor } from '../ui/cursor.js';
 
 // Data
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
@@ -233,6 +234,7 @@ export default class CombatScene extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
     SoundManager.wireEmptyClick(this, 'dirtClick');
     this.add.image(640, 360, 'combat_pit_bg').setDisplaySize(1280, 720).setDepth(-1);
     this.scene.sleep('TownScene');
@@ -927,6 +929,10 @@ export default class CombatScene extends Phaser.Scene {
     newSlot.char = unit;
     newSlot.occupied = true;
     unit._slot = newSlot;
+
+    // Track movement for momentum_strike and similar skills
+    const actor = this._currentChar?.();
+    if (actor && actor === unit) this.currentActorMovedThisTurn = true;
 
     // --- rebuild visuals at destination ---
     // Use your existing portrait builder (works for both allies and enemies)
@@ -2442,10 +2448,12 @@ export default class CombatScene extends Phaser.Scene {
 
   _useAbility(ability, sourceBtn = null) {
     const type = ability.actionCost || 'major';
-    // actionCost may be an array (e.g. ["major","bonus"]) — all listed types must be available
-    if (Array.isArray(type)) {
-      if (type.some(t => !this._canUseActionType(t))) return;
-    } else if (!this._canUseActionType(type)) return;
+    // "free" actions bypass the action point gate entirely
+    if (type !== 'free') {
+      if (Array.isArray(type)) {
+        if (type.some(t => !this._canUseActionType(t))) return;
+      } else if (!this._canUseActionType(type)) return;
+    }
 
     const actor = this._currentChar?.();
     if (!actor) return;
@@ -2794,8 +2802,12 @@ export default class CombatScene extends Phaser.Scene {
   _onUnitKnockedOut(unit) {
     this._log(`${unit.name} has been knocked out!`);
     unit.status = 'incapacitated';
-    // Track enemy kills for skills like trophy_cry that require a kill this turn
-    if (unit.isEnemy) this.enemyDiedThisTurn = true;
+    // Track enemy kills for skills like trophy_cry / blood_frenzy that require a kill this turn
+    if (unit.isEnemy) {
+      this.enemyDiedThisTurn = true;
+      const lacTier = unit?.weakness?.tiers?.lacerate || 0;
+      this.killedEnemyLacerateTier = Math.max(this.killedEnemyLacerateTier || 0, lacTier);
+    }
 
     // Destroy lodge arrow sprites for this unit
     const _lodgeKey = unit.name || unit.id || 'unknown';
@@ -2970,6 +2982,19 @@ export default class CombatScene extends Phaser.Scene {
 
     if (options.logUsage !== false) {
       this._logAbilityUseEntry(user, ability, target);
+    }
+
+    // Snipe Pose: consumed on first attack — amplify amount and inject expose buildup
+    if ((result?.amount || 0) > 0 && !isMovement) {
+      const snipeIdx = (user?.statusEffects || []).findIndex(se => se?.id === 'snipe_pose' && (se.turns || 0) > 0);
+      if (snipeIdx !== -1) {
+        const sp = user.statusEffects[snipeIdx];
+        result.amount = Math.floor(result.amount * (1 + (sp.bonusDmgPct ?? 50) / 100));
+        result.buildup = result.buildup || {};
+        result.buildup.expose = (result.buildup.expose || 0) + (sp.exposeBuildup ?? 80);
+        user.statusEffects.splice(snipeIdx, 1);
+        this._log(`${user?.name ?? 'Attacker'} channels their Snipe Pose!`);
+      }
     }
 
     // ===== Establish intent & tags BEFORE reactions / hit checks =====
@@ -3223,6 +3248,55 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
+        // read_and_react: if target has the buff, attacker is exposed, and the hit is melee
+        if (!missed && dmg > 0) {
+          const rarIdx = (target?.statusEffects || []).findIndex(
+            se => se?.id === 'read_and_react' && (se.turns || 0) > 0
+          );
+          if (rarIdx !== -1) {
+            const attackerExposed = (user?.weakness?.tiers?.expose || 0) >= 1;
+            const hitTags = intent?.tags || result?.tags || [];
+            const isMeleeHit = Array.isArray(hitTags) && hitTags.includes('melee');
+            if (attackerExposed && isMeleeHit) {
+              const rarCfg = target.statusEffects[rarIdx]?.onMeleeHitByExposed || {};
+              const rarFrac = (rarCfg.damageReduction ?? 25) / 100;
+              const rarReduce = Math.floor(dmg * rarFrac);
+              dmg = Math.max(0, dmg - rarReduce);
+              blocked += rarReduce;
+              const mpRestore = rarCfg.manaRestore ?? 3;
+              if (target.currentMP != null) {
+                const maxMP = target.maxMP ?? target.derivedStats?.maxMP ?? 0;
+                target.currentMP = Math.min(maxMP, (target.currentMP || 0) + mpRestore);
+              }
+              target.statusEffects.splice(rarIdx, 1);
+              this._log(`${target?.name ?? 'Target'} reads the attack — ${rarReduce} damage absorbed, ${mpRestore} MP restored!`);
+            }
+          }
+        }
+
+        // Curse of Needles: permanent rider — flat bonus damage when target has curse T1+
+        if (dmg > 0) {
+          const needles = (target?.statusEffects || []).find(se => se?.id === 'curse_of_needles' && se.permanent === true);
+          if (needles && (target?.weakness?.tiers?.curse || 0) >= 1) {
+            dmg += needles.onHit?.flatDamage ?? 5;
+          }
+        }
+
+        // Pressure Point Ignition: bonus fire damage on next hit, then consumed
+        if (dmg > 0) {
+          const ignIdx = (target?.statusEffects || []).findIndex(
+            se => se?.id === 'pressure_point_ignition' && (se.turns || 0) > 0
+          );
+          if (ignIdx !== -1) {
+            const ign = target.statusEffects[ignIdx].onNextDamageTaken || {};
+            const fireBonus = Math.floor(dmg * (ign.bonusDamagePercent ?? 30) / 100);
+            dmg += fireBonus;
+            target.statusEffects.splice(ignIdx, 1);
+            if ((ign.buildup?.fire ?? 0) > 0) this._applyWeaknessBuildup(target, { fire: ign.buildup.fire }, { user });
+            this._log(`Pressure Point ignites — +${fireBonus} fire damage!`);
+          }
+        }
+
         if (dealsDamage || dmg > 0) {
           target.currentHP = Math.max(0, target.currentHP - dmg);
 
@@ -3236,6 +3310,7 @@ export default class CombatScene extends Phaser.Scene {
 
           // Next-hit one-shot effects (e.g. bedrock_guard cold retaliation on attacker)
           if (dmg > 0) this._processNextHitStatusEffects(target, user);
+          if (dmg > 0) this._processOnHitProcs(user, target);
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';
@@ -3468,6 +3543,27 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} recovers ${gain} MP (${ability?.name ?? 'skill'}).`);
     }
 
+    // (8) Initiative bonus from crit (e.g. silent_order)
+    if (!missed && (result?.initiativeGained || 0) > 0) {
+      const initGain = result.initiativeGained;
+      user.initiative = (user.initiative || 0) + initGain;
+      this._log(`${user?.name ?? 'Attacker'} gains ${initGain} initiative!`);
+    }
+
+    // (9) Poison tick bursts (e.g. venom_bloom)
+    if (!missed && result?.poisonTicks?.count > 0) {
+      const { count, damageEach } = result.poisonTicks;
+      for (let i = 0; i < count; i++) {
+        this.time.delayedCall(400 * (i + 1), () => {
+          if (this.combatEnded || !target || target.status === 'incapacitated') return;
+          target.currentHP = Math.max(0, (target.currentHP || 0) - damageEach);
+          this._showFloatingNumber?.(damageEach, target, false);
+          this._log(`Venom Bloom tick ${i + 1}: ${target?.name ?? 'target'} takes ${damageEach} poison damage.`);
+          this._refreshUI?.();
+        });
+      }
+    }
+
     // ---- Costs & cooldowns ----
     const payNow = !(result?.armReaction && result?.consumeOn === 'trigger');
     if (payNow && mpCost > 0) {
@@ -3492,8 +3588,8 @@ export default class CombatScene extends Phaser.Scene {
       user.cooldowns[ability.id] = Math.max(0, ability.cooldown || 0);
     }
 
-    // Spend action pool for any non-reaction skill
-    if (ability.actionCost) {
+    // Spend action pool for any non-reaction skill ("free" costs nothing)
+    if (ability.actionCost && ability.actionCost !== 'free') {
       const isCounter = intent?.isReaction === true;
       if (!isCounter) {
         const pool = user.actionsLeft || (user.actionsLeft = {});
@@ -3506,6 +3602,55 @@ export default class CombatScene extends Phaser.Scene {
           const cur = Number.isFinite(pool[ability.actionCost]) ? pool[ability.actionCost] : 0;
           pool[ability.actionCost] = Math.max(0, cur - 1);
         }
+      }
+    }
+
+    // ---- Volley reaction: allies with volley_armed echo this ranged skill ----
+    // Scalable: any skill with the 'ranged' tag triggers this. The volley copy fires
+    // _applyDirectResult directly (bypasses gates/costs/cooldowns) at reduced effectiveness.
+    if (!missed && !options?.isVolleyCopy && (ability.tags || []).includes('ranged')) {
+      const mySlots = user.isEnemy ? this.enemySlots : this.allySlots;
+      for (const slot of (mySlots || [])) {
+        const ally = slot?.char;
+        if (!ally || ally === user || ally.status === 'incapacitated') continue;
+        const vIdx = (ally.statusEffects || []).findIndex(se => se?.id === 'volley_armed' && (se.turns || 0) > 0);
+        if (vIdx === -1) continue;
+        const vollCfg = ally.statusEffects[vIdx].onAllyProjectile || {};
+        const copies  = vollCfg.copyCount      ?? 2;
+        const eff     = vollCfg.effectiveness  ?? 0.35;
+        ally.statusEffects.splice(vIdx, 1); // consume
+        this._log(`${ally.name} volleys with ${user.name}'s ${ability.name}!`);
+        for (let i = 0; i < copies; i++) {
+          this.time.delayedCall(280 * (i + 1), () => {
+            if (this.combatEnded || !target || target.status === 'incapacitated') return;
+            this._applyDirectResult(ally, target, {
+              amount: Math.floor((result?.amount || 0) * eff),
+              buildup: result?.buildup
+                ? Object.fromEntries(Object.entries(result.buildup).map(([k, v]) => [k, Math.floor(v * eff)]))
+                : undefined,
+              element: result?.element,
+              isMagic: result?.isMagic,
+            }, { ability, isVolleyCopy: true });
+          });
+        }
+      }
+    }
+
+    // ---- Repeat mechanic: scalable for any skill returning result.repeatChance ----
+    // Repeats fire _applyDirectResult directly (same damage/buildup, no costs/cooldown).
+    // Pass isRepeat: true so the copy cannot itself repeat (no infinite chains).
+    if (!missed && !options?.isRepeat && (result?.repeatChance || 0) > 0) {
+      if (Math.random() < result.repeatChance) {
+        this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
+        this.time.delayedCall(380, () => {
+          if (this.combatEnded || !target || target.status === 'incapacitated') return;
+          this._applyDirectResult(user, target, {
+            amount: result.amount || 0,
+            buildup: result.buildup ? { ...result.buildup } : undefined,
+            element: result.element,
+            isMagic: result.isMagic,
+          }, { ability, isRepeat: true });
+        });
       }
     }
 
@@ -3522,13 +3667,35 @@ export default class CombatScene extends Phaser.Scene {
     if (!target || !payload) return;
 
     // Damage / heal
-    const amt = payload.amount | 0;
+    const rawAmt = payload.amount | 0;
     const isHeal = !!payload.isHeal;
+    const isSplashOrAoe = !!(opts?.isSplash || opts?.isVolleyCopy);
 
-    if (amt !== 0) {
+    // Apply DR to all non-heal hits (splash, repeats, volley copies all respect armor/resist)
+    let amt = rawAmt;
+    if (!isHeal && amt > 0) {
+      const dr = Phaser.Math.Clamp(
+        getDamageReductionFraction(target, { isMagic: !!payload.isMagic, applyExpose: false }),
+        -0.95, 0.95
+      );
+      amt = Math.max(0, Math.floor(amt * (1 - dr)));
+
+      // Guard status effects apply on direct hits only (not splash/aoe — guards are triggered
+      // reactions and shouldn't fire multiple times per action or on background aoe)
+      if (!isSplashOrAoe) {
+        const guardFrac = this._processGuardStatusEffects(target, user);
+        if (guardFrac > 0) {
+          const reduction = Math.floor(amt * guardFrac);
+          amt = Math.max(0, amt - reduction);
+          this._log(`${target?.name ?? 'Target'}'s guard absorbs ${reduction} damage.`);
+        }
+      }
+    }
+
+    if (amt !== 0 || isHeal) {
       if (isHeal) {
         const before = target.currentHP | 0;
-        const after = Math.min((target.maxHP | 0) || before, before + Math.max(0, amt));
+        const after = Math.min((target.maxHP | 0) || before, before + Math.max(0, rawAmt));
         const healed = after - before;
         target.currentHP = after;
         if (healed > 0) {
@@ -3557,9 +3724,9 @@ export default class CombatScene extends Phaser.Scene {
           target,
           ability: opts?.ability || null,
           amount: dealt,
-          raw: amt,
-          blocked: 0,
-          dr: 0,
+          raw: rawAmt,
+          blocked: rawAmt - dealt,
+          dr: rawAmt > 0 ? Math.max(0, 1 - (dealt / rawAmt)) : 0,
           critPct: null,
           isCrit: false,
           hitChance: null,
@@ -3737,6 +3904,36 @@ export default class CombatScene extends Phaser.Scene {
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
   }
 
+  /**
+   * _processOnHitProcs(user, target)
+   *
+   * Called after damage lands. Checks `user`'s status effects for `onHit` objects and fires them.
+   * Supported onHit fields:
+   *   fireDamage   – flat fire damage dealt to target
+   *   fireBuildup  – fire buildup applied to target's weakness meter
+   *   (extend with coldDamage, buildup: { family: N }, etc. as new procs are added)
+   */
+  _processOnHitProcs(user, target) {
+    if (!user || !target) return;
+    const effects = Array.isArray(user.statusEffects) ? user.statusEffects : [];
+    for (const se of effects) {
+      const proc = se?.onHit;
+      if (!proc) continue;
+      if ((se.turns || 0) <= 0) continue;
+
+      if (proc.fireDamage > 0) {
+        const fd = proc.fireDamage | 0;
+        target.currentHP = Math.max(0, (target.currentHP || 0) - fd);
+        this._showFloatingNumber?.(fd, target, false);
+        this._log(`${user?.name ?? 'Ally'}'s blazing fervor burns ${target?.name ?? 'the target'} for ${fd} fire damage.`);
+      }
+
+      if (proc.fireBuildup > 0 && target?.weakness) {
+        this._applyWeaknessBuildup(target, { fire: proc.fireBuildup }, { user });
+      }
+    }
+  }
+
   _applyGearStartOfTurn(char) {
     const regen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
     if (!regen) return;
@@ -3816,6 +4013,13 @@ export default class CombatScene extends Phaser.Scene {
             this._log(`${userName}'s weapon empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
           }
         }
+      }
+
+      // Hunter's Mark: +BuildupReceived% to all incoming buildup
+      {
+        const mark = (target?.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
+        const bonusPct = mark?.mods?.BuildupReceived || 0;
+        if (bonusPct > 0) amt = Math.floor(amt * (1 + bonusPct / 100));
       }
 
       // FIRE T1+: incoming fire buildup increased while Singed
@@ -5109,7 +5313,17 @@ export default class CombatScene extends Phaser.Scene {
       const ability = SKILLS[skillId];
       if (!ability) return null;
       if (!ability.requiresTarget) return null; // movement / self skills usually false
-      // default: first alive party member
+
+      // Taunted: force target to whoever taunted this NPC
+      const tauntEffect = (npc?.statusEffects || []).find(se => se?.id === 'taunted' && (se.turns || 0) > 0);
+      if (tauntEffect?.tauntTarget) {
+        const tauntSlots = npc.isEnemy ? (this.allySlots || []) : (this.enemySlots || []);
+        const tt = tauntEffect.tauntTarget;
+        const tauntChar = tauntSlots.map(s => s?.char).find(c => c && (c === tt || c.id === tt || c.name === tt) && c.status !== 'incapacitated');
+        if (tauntChar) return tauntChar;
+      }
+
+      // default: first alive opposing party member
       return givenTarget || GameState.party.find(p => !p.isEnemy && p.status !== 'incapacitated') || null;
     };
 
@@ -5257,8 +5471,11 @@ export default class CombatScene extends Phaser.Scene {
       char.isEnemy = !!this.enemies?.includes(char);
     }
 
-    // Clear per-turn kill flag at the start of each new actor's turn
+    // Clear per-turn kill flags at the start of each new actor's turn
     this.enemyDiedThisTurn = false;
+    this.killedEnemyLacerateTier = 0;
+    this.currentActorMovedThisTurn = false;
+    this.lodgesDislodgedThisTurn = 0;
 
     // 3) Apply START-OF-TURN ongoings (DOT/skip-turn/penalties)
     this._applySlotEffectsTick(char);   // ground zone ticks for the current actor's tile
@@ -5360,6 +5577,7 @@ export default class CombatScene extends Phaser.Scene {
     if (Array.isArray(char?.statusEffects)) {
       for (let i = char.statusEffects.length - 1; i >= 0; i--) {
         const st = char.statusEffects[i];
+        if (st?.permanent) continue; // Permanent riders (curse_of_needles etc.) never expire
         if (st && typeof st.turns === 'number') {
           st.turns -= 1;
           if (st.turns <= 0) {

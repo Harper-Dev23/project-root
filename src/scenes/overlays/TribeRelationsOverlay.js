@@ -5,6 +5,7 @@ import {
   getTribeRepLevel, getNextThreshold,
 } from '../../systems/TribeRelations.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 // ── Visual constants ──────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
 
   create() {
     const town = this.scene.get('TownScene');
+    setupSceneCursor(this);
     if (town?.input) town.input.enabled = false;
 
     const frame = createOverlayFrame(this, {

@@ -22,6 +22,56 @@ const cloneRewardList = (list) => (Array.isArray(list) ? list.map(rule => ({
 })) : undefined);
 const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
 
+/**
+ * Adds one rhythm_stack statusEffect to char (max 3), and refreshes ALL existing
+ * rhythm stacks to 2 turns so they don't expire mid-combo.
+ * Each stack carries mods: { AttackPower: 5 } which flows through _sumStatusEffectMods automatically.
+ */
+function applyRhythmStack(char) {
+  if (!char) return;
+  char.statusEffects = char.statusEffects || [];
+  const existing = char.statusEffects.filter(se => se?.id === 'rhythm_stack');
+  existing.forEach(se => { se.turns = 2; }); // always refresh duration on all stacks
+  if (existing.length < 3) {
+    char.statusEffects.push({ id: 'rhythm_stack', turns: 2, mods: { AttackPower: 5 } });
+  }
+}
+
+/**
+ * dislodgeLodges(target, scene, count?)
+ * Removes up to `count` lodged arrows from target.statusEffects and returns damage/effects.
+ * Each lodge has an optional scalingBonus (e.g. 0.10 = +10% per additional lodge on target).
+ * Only the lodge with that field benefits from it — other lodges deal flat baseDamage.
+ * Hunter's Mark on target amplifies all lodge damage by +25%.
+ */
+function dislodgeLodges(target, scene, count = Infinity) {
+  if (!target) return { totalDamage: 0, lacerateBuildup: 0, dislodged: 0 };
+  const allLodges = (target.statusEffects || []).filter(se => se?.id === 'lodged');
+  const toRemove = isFinite(count) ? allLodges.slice(0, count) : allLodges;
+  if (toRemove.length === 0) return { totalDamage: 0, lacerateBuildup: 0, dislodged: 0 };
+
+  const totalLodges = allLodges.length;
+  const huntersMark = (target.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
+  const markBonus = huntersMark ? 1.25 : 1.0;
+
+  let totalDamage = 0;
+  let lacerateBuildup = 0;
+  for (const lodge of toRemove) {
+    const additionalLodges = totalLodges - 1;
+    const scale = lodge.scalingBonus ? (1 + lodge.scalingBonus * additionalLodges) : 1;
+    totalDamage += Math.floor((lodge.baseDamage || 0) * scale * markBonus);
+    if (lodge.lacerateOnDislodge) lacerateBuildup += lodge.lacerateOnDislodge;
+  }
+
+  const removeSet = new Set(toRemove);
+  target.statusEffects = (target.statusEffects || []).filter(se => !removeSet.has(se));
+  if (scene) {
+    scene.lodgesDislodgedThisTurn = (scene.lodgesDislodgedThisTurn || 0) + toRemove.length;
+    scene._refreshLodgeSprites?.(target);
+  }
+  return { totalDamage, lacerateBuildup, dislodged: toRemove.length };
+}
+
 const SWORD_CHAIN_STATUS_KEY = 'sword_rhythm_window';
 const SWORD_RECENT_HIT_KEY = 'sword_recent_hit';
 const WHIP_CHAIN_STATUS_KEY = 'whip_chain_state';
@@ -2164,608 +2214,8 @@ Object.assign(RAW_SKILLS, {
     description: "Transforms Bleed into Poison and strikes; adds bonus Poison if the target is also Exposed."
   },
 
-  // v3.21 1h sword skills - reactions pending 
+  // (1h sword v3.22 skills are in the --- Sword (1h) --- section below)
 
-
-  'marked_cut': {
-    id: "marked_cut",
-    name: "Marked Cut",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["slash"],
-    buildupHint: { expose: 60 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.marked_cut;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 60 },
-      };
-    },
-    description: "A quick slice that exposes a weakness for later exploitation."
-  },
-
-  'guarded_slash': {
-    id: "guarded_slash",
-    name: "Guarded Slash",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "STR",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
-    buildupHint: { cold: 60 },
-    rewardIfWeak: { family: "cold", tierAtLeast: 1, buff: { guardPct: 10, turns: 1 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.guarded_slash;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'cold',
-        skipGearMultiplier: true,
-      }));
-      const coldTier = target?.weakness?.tiers?.cold || 0;
-      if (coldTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.08 * coldTier));
-      }
-      const buildupVal = ability?.buildupHint?.cold ?? 60;
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        element: 'cold',
-        buildup: { cold: buildupVal },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "A guarded swing that chills the foe while raising your guard."
-  },
-
-  'rhythm_blow': {
-    id: "rhythm_blow",
-    name: "Rhythm Blow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "CHA",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack"],
-    comboHint: { lastTurnWeapon: "sword_1h" },
-    mpRestoreOnChain: 2,
-    apply: (attacker, target) => {
-      const ability = SKILLS?.rhythm_blow;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      amount = Math.max(1, Math.floor(amount * 0.9));
-      const chainReady = hasSword1hChainReady(attacker);
-      let mpRestored = 0;
-      if (chainReady && ability?.mpRestoreOnChain) {
-        const gain = ability.mpRestoreOnChain;
-        const maxMP = attacker?.maxMP ?? attacker?.derived?.maxMP ?? 0;
-        const before = attacker?.currentMP ?? 0;
-        const after = maxMP > 0 ? Math.min(maxMP, before + gain) : before + gain;
-        mpRestored = Math.max(0, after - before);
-        attacker.currentMP = after;
-      }
-      const log = mpRestored > 0
-        ? `${attacker?.name || 'The swordsman'} keeps tempo and regains ${mpRestored} MP.`
-        : undefined;
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        log,
-      };
-    },
-    description: "A tempo-setter; keep the beat with a follow-up strike that restores MP when chained."
-  },
-
-  'soft_spot_exposed': {
-    id: "soft_spot_exposed",
-    name: "Soft Spot Exposed",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    buildupHint: { expose: 600 }, //testing
-    rewardIfTierCross: [{ family: "expose", tier: 2, debuff: { physicalVulnPct: 10, turns: 2 } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.soft_spot_exposed;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 600 }, //testing
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A strike that makes the target more vulnerable to physical damage."
-  },
-
-  'sword_flourish': {
-    id: "sword_flourish",
-    name: "Sword Flourish",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    aoe: { shape: "cone", scale: 1 },
-    proliferateWeakness: { families: ["expose"], to: "adjacent", ratio: 1.0, maxTargets: 1 },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.sword_flourish;
-      const roll = calculateDamage(attacker, target, ability);
-      const baseBuildup = ability?.buildupHint?.expose ?? 50;
-      const ratio = ability?.proliferateWeakness?.ratio ?? 1;
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const splash = [];
-      const spreadMeta = [];
-      const predictedExpose = (target?.weakness?.meters?.expose || 0) + baseBuildup;
-      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const neighbors = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 1;
-          neighbors.slice(0, maxTargets).forEach(char => {
-            const splashAmount = Math.max(1, Math.floor(amount * 0.7));
-            const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.75));
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              buildup: { expose: splashBuildup },
-              tags: ability?.tags,
-            });
-            if (char?.weakness && predictedExpose > 0) {
-              const transfer = Math.max(0, Math.floor(predictedExpose * ratio));
-              if (transfer > 0) {
-                char.weakness.meters = char.weakness.meters || {};
-                char.weakness.tiers = char.weakness.tiers || {};
-                char.weakness.meters.expose = (char.weakness.meters.expose || 0) + transfer;
-                char.weakness.tiers.expose = weaknessTierFromMeter(char.weakness.meters.expose);
-                spreadMeta.push({ targetId: char.id || char.name, family: 'expose', amount: transfer });
-              }
-            }
-            markSword1hHit(char, attacker, ability?.id);
-          });
-        }
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: baseBuildup },
-        splash: splash.length ? splash : undefined,
-        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
-      };
-    },
-    description: "A sweeping flourish that hits two adjacent foes."
-  },
-
-  'read_and_react': {
-    id: "read_and_react",
-    name: "Read and React",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support"],
-    statusEffects: [{ id: "read_and_react", turns: 1, nextVsExposeDamagePct: 20 }],
-    apply: (attacker) => {
-      const ability = SKILLS?.read_and_react;
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : [];
-      markSword1hUse(attacker, ability?.id);
-      return {
-        amount: 0,
-        statusEffects,
-      };
-    },
-    description: "Study an opponent's movements and prepare; later attacks against exposed enemies are empowered."
-  },
-
-  'power_riposte': {
-    id: "power_riposte",
-    name: "Power Riposte",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    scaleWithTier: { family: "expose", perTierDamagePct: 15 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.power_riposte;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const perTier = ability?.scaleWithTier?.perTierDamagePct ?? 15;
-      if (exposeTier > 0) {
-        amount = Math.floor(amount * (1 + (perTier * exposeTier) / 100));
-      }
-      const meter = target?.weakness?.meters?.expose || 0;
-      if (meter > 0) {
-        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.12));
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-      };
-    },
-    description: "A heavy counter that punishes exposed foes; scales with Expose tier."
-  },
-
-  'glacial_parry': {
-    id: "glacial_parry",
-    name: "Glacial Parry",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "WIS",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold", "consume"],
-    requiresWeakness: { family: "cold", tierAtLeast: 2 },
-    consumeWeakness: ["cold"],
-    statusEffects: [{ id: "immobilized", turns: 1 }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.glacial_parry;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'cold',
-        skipGearMultiplier: true,
-      }));
-      const coldMeter = target?.weakness?.meters?.cold || 0;
-      if (coldMeter > 0) {
-        const intensity = Math.max(1, weaknessIntensityMult(coldMeter) || 1);
-        amount = Math.floor(amount * (1 + Math.max(0.15, intensity * 0.15)));
-      }
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        element: 'cold',
-        statusEffects,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-      };
-    },
-    description: "Convert Cold stacks into a freezing slash, immobilizing the target."
-  },
-
-  'taunting_slash': {
-    id: "taunting_slash",
-    name: "Taunting Slash",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "CHA",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "taunt"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    statusEffects: [{ id: "taunted", turns: 1 }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.taunting_slash;
-      const roll = calculateDamage(attacker, target, ability);
-      const chaBonus = Math.floor((attacker?.totalStats?.CHA || 0) / 4);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount + chaBonus, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const turns = ability?.statusEffects?.[0]?.turns ?? 1;
-      const statusEffects = [{
-        id: 'taunted',
-        turns,
-        data: { forcedTarget: attacker?.id || attacker?.name || null },
-      }];
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        statusEffects,
-      };
-    },
-    description: "A provoking blow that draws aggro from exposed enemies."
-  },
-
-  'crescent_cleave': {
-    id: "crescent_cleave",
-    name: "Crescent Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose", "aoe"],
-    aoe: { shape: "column", scale: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { damagePct: 15 } },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.crescent_cleave;
-      const roll = calculateDamage(attacker, target, ability);
-      const baseBuildup = ability?.buildupHint?.expose ?? 40;
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.forEach(char => {
-            const splashAmount = Math.max(1, Math.floor(amount * 0.75));
-            const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              buildup: { expose: splashBuildup },
-              tags: ability?.tags,
-            });
-            markSword1hHit(char, attacker, ability?.id);
-          });
-        }
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: baseBuildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        splash: splash.length ? splash : undefined,
-      };
-    },
-    description: "A broad arc that cleaves through multiple foes; deals bonus to enemies with Expose."
-  },
-
-  'momentum_strike': {
-    id: "momentum_strike",
-    name: "Momentum Strike",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "bonus",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "multi"],
-    conditionHint: { targetWasHitBy: "sword_1h", withinTurns: 1 },
-    onTrigger: { grantExtraHitPct: 100 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.momentum_strike;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const chained = targetRecentlyHitBySword1h(target, attacker);
-      let extraHitAmount = 0;
-      if (chained) {
-        extraHitAmount = Math.max(1, Math.floor(amount * 0.65));
-        amount += extraHitAmount;
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        extraHits: chained ? [{ amount: extraHitAmount, tags: ability?.tags }] : undefined,
-      };
-    },
-    description: "A quick follow-up that flows from a recent set-up."
-  },
-
-  'balancing_blow': {
-    id: "balancing_blow",
-    name: "Balancing Blow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "CON",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "leech"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    healSelfPctMissingHpPerTier: 6,
-    apply: (attacker, target) => {
-      const ability = SKILLS?.balancing_blow;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      let heal = 0;
-      if (attacker) {
-        const maxHP = attacker?.maxHP ?? attacker?.derived?.maxHP ?? 0;
-        const currentHP = attacker?.currentHP ?? 0;
-        const missing = Math.max(0, maxHP - currentHP);
-        const exposeTier = target?.weakness?.tiers?.expose || 0;
-        const pctPerTier = ability?.healSelfPctMissingHpPerTier || 0;
-        const healPct = pctPerTier * exposeTier;
-        if (missing > 0 && healPct > 0) {
-          heal = Math.max(0, Math.floor(missing * (healPct / 100)));
-          const newHP = maxHP > 0 ? Math.min(maxHP, currentHP + heal) : currentHP + heal;
-          attacker.currentHP = newHP;
-        }
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        log: heal > 0 ? `${attacker?.name || 'The swordsman'} siphons ${heal} HP.` : undefined,
-      };
-    },
-    description: "A measured strike that siphons life from the exposed."
-  },
-
-  'shattering_cut': {
-    id: "shattering_cut",
-    name: "Shattering Cut",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute", "consume"],
-    requiresWeakness: { family: "expose", tierAtLeast: 2 },
-    consumeWeakness: ["expose"],
-    debuffOnHit: { armorDownPct: 20, turns: 2 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.shattering_cut;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const meter = target?.weakness?.meters?.expose || 0;
-      const tierBonus = exposeTier > 0 ? 0.3 * exposeTier : 0;
-      const intensity = meter > 0 ? Math.max(1, weaknessIntensityMult(meter) || 1) : 1;
-      const overflowBonus = Math.max(0, intensity - 1) * 0.4;
-      amount = Math.floor(amount * (1 + tierBonus + overflowBonus));
-      const debuff = ability?.debuffOnHit;
-      const statusEffects = debuff ? [{
-        id: 'shattering_cut_sundered',
-        turns: debuff.turns ?? 2,
-        mods: { PhysicalResist: -Math.abs(debuff.armorDownPct || 20) },
-      }] : undefined;
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        statusEffects,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-      };
-    },
-    description: "A finishing blow that wrecks defenses; clears all Expose and reduces armor briefly."
-  },
 
   // ===============================
   // v3.21 - Sword (2h) (13)
@@ -8036,262 +7486,1097 @@ Object.assign(RAW_SKILLS, {
 
 Object.assign(RAW_SKILLS, {
 
-  // --- Dagger (1h) ---
-  'feinting_jab': {
-    id: "feinting_jab",
-    name: "Feinting Jab",
+  // --- Dagger (1h) --- v3.22
+  // -------- Generation --------
+  'needle_feint': {
+    id: "needle_feint",
+    name: "Needle Feint",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 10,
-    actionCost: "bonus",
-    mpCost: 3,
+    actionCost: "major",
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack"],
-    cooldown: 1,
+    tags: ["melee", "attack", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 70 },
     apply: (attacker, target) => {
-      const ability = SKILLS?.feinting_jab;
+      const ability = SKILLS?.needle_feint;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      return { ...roll, amount };
+      const exposeBuildup = ability?.buildupHint?.expose ?? 70;
+      const currentMeter = target?.weakness?.meters?.expose || 0;
+      const currentTier = weaknessTierFromMeter(currentMeter);
+      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
+      if (newTier > currentTier) {
+        attacker.statusEffects = attacker.statusEffects || [];
+        attacker.statusEffects.push({ id: "needle_feint_crit", turns: 1, mods: { CritChance: 15 } });
+      }
+      return { ...roll, amount, buildup: { expose: exposeBuildup } };
     },
-    description: "A deceptive jab that keeps pressure on the foe."
+    description: "A quick deceptive jab (100% + 70 expose). Crossing an expose tier grants +15% crit chance for 1 turn."
   },
 
-  'hailspike_stab': {
-    id: "hailspike_stab",
-    name: "Hailspike Stab",
+  'needle_venom': {
+    id: "needle_venom",
+    name: "Needle Venom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "toxic", "necrotic"],
+    cooldown: 2,
+    buildupHint: { toxic: 90 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.needle_venom;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      let toxicBuildup = ability?.buildupHint?.toxic ?? 90;
+      if (exposeTier >= 1) toxicBuildup += 30;
+      if (exposeTier >= 2) amount = Math.floor(amount * 1.25);
+      return { ...roll, amount, buildup: { toxic: toxicBuildup } };
+    },
+    description: "Venomous strike (100% + 90 toxic). Expose T1: +30 toxic buildup. Expose T2: +25% damage."
+  },
+
+  'pressure_point': {
+    id: "pressure_point",
+    name: "Pressure Point",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 0,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
-    cooldown: 1,
-    buildupHint: { cold: 50 },
+    tags: ["melee", "attack", "expose", "fire"],
+    cooldown: 3,
+    buildupHint: { expose: 100 },
     apply: (attacker, target) => {
-      const ability = SKILLS?.hailspike_stab;
+      const ability = SKILLS?.pressure_point;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "cold",
-        isMagic: true,
-        skipGearMultiplier: true,
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const exposeBuildup = ability?.buildupHint?.expose ?? 100;
+      const currentMeter = target?.weakness?.meters?.expose || 0;
+      const currentTier = weaknessTierFromMeter(currentMeter);
+      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
+      const statusEffects = [];
+      if (newTier > currentTier && newTier >= 2) {
+        target.statusEffects = target.statusEffects || [];
+        target.statusEffects.push({
+          id: "pressure_point_ignition",
+          turns: 1,
+          onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } },
+        });
+      }
+      return { ...roll, amount, buildup: { expose: exposeBuildup } };
+    },
+    description: "Precision strike (110% + 100 expose). Crossing expose T2 leaves an ignition point: the next hit deals +30% fire damage."
+  },
+
+  'ghoststep': {
+    id: "ghoststep",
+    name: "Ghoststep",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse"],
+    cooldown: 2,
+    buildupHint: { curse: 90 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ghoststep;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const disOrientTier = target?.weakness?.tiers?.disorient || 0;
+      const curseBuildup = disOrientTier >= 1 ? 130 : (ability?.buildupHint?.curse ?? 90);
+      return { ...roll, amount, buildup: { curse: curseBuildup } };
+    },
+    description: "Unsettling strike (100% + 90 curse). Disorient T1: total curse buildup rises to 130."
+  },
+
+  // -------- Escalation --------
+  'hex_stitch': {
+    id: "hex_stitch",
+    name: "Hex Stitch",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 3,
+    buildupHint: { curse: 80 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.hex_stitch;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const primaryCurse = ability?.buildupHint?.curse ?? 80;
+      const splashCurse = Math.floor(primaryCurse * 0.50);
+      const toxicMeter = attacker?.weakness?.meters?.toxic || attacker?.currentStats?.toxic || 0;
+      const repeatChance = Math.min(0.50, toxicMeter / 1000);
+      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => ({
+        target: tgt, amount: 0, tags: ability?.tags, buildup: { curse: splashCurse },
       }));
       return {
         ...roll,
         amount,
-        isMagic: true,
-        element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 50 },
+        buildup: { curse: primaryCurse },
+        splash: splash.length ? splash : undefined,
+        repeatChance,
       };
     },
-    description: "Quick cold-infused puncture."
+    description: "Curse-laced strike (100% + 80 curse). Splashes 50% curse buildup to same-column enemies. Chance to repeat equal to toxic meter ÷ 1000 (max 50%)."
   },
 
-  'arterial_feint': {
-    id: "arterial_feint",
-    name: "Arterial Feint",
+  'static_prick': {
+    id: "static_prick",
+    name: "Static Prick",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning"],
+    cooldown: 2,
+    buildupHint: { lightning: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.static_prick;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const fireTier = target?.weakness?.tiers?.fire || 0;
+      if (fireTier >= 2) amount = Math.floor(amount * 1.25);
+      const lightningMeter = attacker?.weakness?.meters?.lightning || attacker?.currentStats?.lightning || 0;
+      const repeatChance = Math.min(0.40, lightningMeter / 1000);
+      return {
+        ...roll,
+        amount,
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+        repeatChance,
+      };
+    },
+    description: "Lightning jab (95% + 60 lightning). Fire T2 on target: +25% damage. Chance to repeat equal to lightning meter ÷ 1000 (max 40%)."
+  },
+
+  'street_panacea': {
+    id: "street_panacea",
+    name: "Street Panacea",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
+    requiredValue: 11,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["utility", "support", "mana"],
+    cooldown: 3,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.street_panacea;
+      const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
+      let totalDisease = 0;
+      (enemySlots || []).forEach(s => {
+        const char = s?.char;
+        if (!char || char.status === 'incapacitated') return;
+        totalDisease += char?.weakness?.meters?.disease || 0;
+      });
+      const mpGain = Math.max(2, Math.min(8, Math.floor(totalDisease / 100)));
+      // Cleanse 400 self disease
+      if (attacker?.weakness?.meters?.disease != null) {
+        attacker.weakness.meters.disease = Math.max(0, attacker.weakness.meters.disease - 400);
+        attacker.weakness.tiers.disease = weaknessTierFromMeter(attacker.weakness.meters.disease);
+      }
+      return {
+        amount: 0,
+        mpGain,
+        log: `${attacker?.name || "The rogue"} extracts enemy disease — gains ${mpGain} MP and purges 400 disease.`,
+      };
+    },
+    description: "Bonus action, 0 MP. Reads enemy disease totals: restores 2–8 MP. Cleanses 400 disease from self."
+  },
+
+  'poison_extraction': {
+    id: "poison_extraction",
+    name: "Poison Extraction",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "bonus",
     mpCost: 0,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack"],
-    cooldown: 2,
-    rewardIfWeak: { family: "fire", tierAtLeast: 1, healHPpct: 0.03 },
+    tags: ["utility", "mana", "toxic"],
+    cooldown: 3,
     apply: (attacker, target) => {
-      const ability = SKILLS?.arterial_feint;
+      const ability = SKILLS?.poison_extraction;
+      const toxicMeter = target?.weakness?.meters?.toxic || 0;
+      const toxicTier = target?.weakness?.tiers?.toxic || 0;
+      // Consume 50 per tier (T0→50, T1→100, T2→150, T3→200)
+      const consumed = Math.min(toxicMeter, (toxicTier + 1) * 50);
+      if (target?.weakness?.meters?.toxic != null) {
+        target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
+        target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
+      }
+      const mpTable = [2, 4, 7, 10];
+      const mpGain = mpTable[Math.min(toxicTier, 3)];
+      return {
+        amount: 0,
+        mpGain,
+        log: `${attacker?.name || "The rogue"} extracts ${consumed} toxic — gains ${mpGain} MP.`,
+      };
+    },
+    description: "Bonus action, 0 MP. Consumes 50–200 toxic from target based on tier; restores 2/4/7/10 MP."
+  },
+
+  // -------- Payoff --------
+  'heartpiercer': {
+    id: "heartpiercer",
+    name: "Heartpiercer",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: ["major", "bonus"],
+    mpCost: 8,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose", "lacerate"],
+    cooldown: 4,
+    requiresWeakness: { family: "expose", tierAtLeast: 1 },
+    buildupHint: { expose: 60 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.heartpiercer;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.60);
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 2) {
+        roll.critMultiplier = (roll.critMultiplier || 2.0) + 0.50;
+      }
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      if (lacTier >= 2) amount = Math.floor(amount * 1.30);
+      return { ...roll, amount, buildup: { expose: ability?.buildupHint?.expose ?? 60 } };
+    },
+    description: "Heavy two-action strike (160%, req expose T1). Expose T2: +50% crit multiplier. Lacerate T2: +30% damage."
+  },
+
+  'venom_bloom': {
+    id: "venom_bloom",
+    name: "Venom Bloom",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "toxic", "necrotic"],
+    cooldown: 4,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.venom_bloom;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
+      const toxicMeter = target?.weakness?.meters?.toxic || 0;
+      const isDiseasedT1 = (target?.weakness?.tiers?.disease || 0) >= 1;
+      const costPerTick = isDiseasedT1 ? 75 : 100;
+      const maxTicks = Math.min(4, Math.floor(toxicMeter / costPerTick));
+      const consumed = maxTicks * costPerTick;
+      if (target?.weakness?.meters?.toxic != null) {
+        target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
+        target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
+      }
+      const damageEach = maxTicks > 0 ? Math.floor(amount * 0.30) : 0;
       return {
         ...roll,
         amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        poisonTicks: maxTicks > 0 ? { count: maxTicks, damageEach } : undefined,
       };
     },
-    description: "Deceptive cut; siphons HP from burning foes."
+    description: "Venomous bloom (100%). Consumes 100 toxic per tick (75 if target diseased T1) for up to 4 delayed ticks of 30% damage."
   },
 
-  // --- Sword (1h) ---
-  'flaying_strike': {
-    id: "flaying_strike",
-    name: "Flaying Strike",
+  'silent_order': {
+    id: "silent_order",
+    name: "Silent Order",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose"],
+    cooldown: 3,
+    buildupHint: { expose: 50 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.silent_order;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.15);
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      if (exposeTier >= 1) amount = Math.floor(amount * 1.20);
+      const isCrit = roll.isCrit || false;
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 50 },
+        initiativeGained: isCrit ? 8 : 0,
+      };
+    },
+    description: "Precise dagger thrust (115% + 50 expose). Expose T1: +20% damage. Crit: grants +8 initiative."
+  },
+
+  'curse_of_needles': {
+    id: "curse_of_needles",
+    name: "Curse of Needles",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.curse_of_needles;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      target.statusEffects = target.statusEffects || [];
+      const alreadyCursed = target.statusEffects.some(se => se?.id === 'curse_of_needles');
+      if (!alreadyCursed) {
+        target.statusEffects.push({ id: "curse_of_needles", permanent: true, onHit: { flatDamage: 5 } });
+      }
+      return { ...roll, amount: Math.floor(amount * 1.10) };
+    },
+    description: "Curse strike (110%, req curse T1). Applies permanent Curse of Needles rider: each hit deals +5 flat damage while target is curse T1+."
+  },
+
+  'flash_overload': {
+    id: "flash_overload",
+    name: "Flash Overload",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 8,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning"],
+    cooldown: 4,
+    requiresWeakness: { family: "lightning", tierAtLeast: 1 },
+    buildupHint: { disorient: 40 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.flash_overload;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const repeatChance = lightningTier >= 2 ? 1.0 : 0;
+      // Apply 40 disorient buildup to all other enemies via pipeline (respects BuildupReceived, Hunter's Mark, etc.)
+      const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
+      (enemySlots || []).forEach(s => {
+        const enemy = s?.char;
+        if (!enemy || enemy === target || enemy.status === 'incapacitated') return;
+        scene?._applyWeaknessBuildup?.(enemy, { disorient: 40 }, { user: attacker });
+      });
+      return {
+        ...roll,
+        amount: Math.floor(amount * 1.25),
+        repeatChance,
+        repeatDamageFraction: 0.60,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 40 },
+      };
+    },
+    description: "Lightning overload (125%, req lightning T1). Lightning T2: guaranteed repeat at 60% damage. Applies 40 disorient to all other enemies."
+  },
+
+  'vein_tap': {
+    id: "vein_tap",
+    name: "Vein Tap",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate", "toxic", "necrotic"],
+    cooldown: 3,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.vein_tap;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const lacMeter = target?.weakness?.meters?.lacerate || 0;
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const conversionRate = exposeTier >= 1 ? 1.20 : 1.0;
+      const toxicGenerated = Math.floor(lacMeter * conversionRate);
+      // Consume all lacerate
+      if (target?.weakness?.meters?.lacerate != null) {
+        target.weakness.meters.lacerate = 0;
+        target.weakness.tiers.lacerate = 0;
+      }
+      if (lacTier >= 2) amount = Math.floor(amount * 1.30);
+      return {
+        ...roll,
+        amount,
+        buildup: { toxic: toxicGenerated },
+      };
+    },
+    description: "Draining strike (100%). Consumes all lacerate, converting to toxic (120% if expose T1). Lacerate T2: +30% damage."
+  },
+
+  // --- Sword (1h) --- v3.22
+  // -------- Generation --------
+  'marked_cut': {
+    id: "marked_cut",
+    name: "Marked Cut",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 10,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 80 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.marked_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const exposeBuildup = ability?.buildupHint?.expose ?? 80;
+      const currentMeter = target?.weakness?.meters?.expose || 0;
+      const currentTier = weaknessTierFromMeter(currentMeter);
+      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
+      const buildup = { expose: exposeBuildup };
+      if (newTier > currentTier) {
+        buildup.lacerate = newTier >= 2 ? 120 : 60;
+      }
+      return { ...roll, amount, buildup };
+    },
+    description: "A quick slice that exposes weakness; crossing a tier also opens a bleeding wound."
+  },
+
+  'guarded_slash': {
+    id: "guarded_slash",
+    name: "Guarded Slash",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "STR",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "cold", "defensive"],
+    cooldown: 3,
+    buildupHint: { cold: 70 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.guarded_slash;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const coldBuildup = ability?.buildupHint?.cold ?? 70;
+      const currentTier = weaknessTierFromMeter(target?.weakness?.meters?.cold || 0);
+      const newTier = weaknessTierFromMeter((target?.weakness?.meters?.cold || 0) + coldBuildup);
+      // If cold crosses T1: grant self 15% PhysicalResist for 1 turn
+      const statusEffects = newTier > currentTier && newTier >= 1
+        ? [{ id: "guarded_stance", turns: 1, mods: { PhysicalResist: 15 } }]
+        : undefined;
+      return { ...roll, amount, buildup: { cold: coldBuildup }, statusEffects };
+    },
+    description: "A guarded swing that chills the foe; crossing cold T1 grants 15% physical damage reduction for 1 turn."
+  },
+
+  'rally_blow': {
+    id: "rally_blow",
+    name: "Rally Blow",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "mana", "support"],
+    cooldown: 2,
+    requiresWeakness: { family: "expose", tierAtLeast: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.rally_blow;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const hasDisorient = (target?.weakness?.tiers?.disorient || 0) >= 1;
+      const statusEffects = [];
+      if (hasDisorient) {
+        amount = Math.floor(amount * 1.1);
+        statusEffects.push({ id: "rallied_vulnerability", turns: 1, mods: { PhysicalResist: -10 } });
+      }
+      // Restore 3 MP to all allies
+      const mpRestored = 3;
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
+        ally.currentMP = Math.min(maxMP, (ally.currentMP || 0) + mpRestored);
+      });
+      applyRhythmStack(attacker);
+      return {
+        ...roll, amount,
+        statusEffects: statusEffects.length ? statusEffects : undefined,
+        log: `${attacker?.name || "The swordsman"} rallies the party, restoring ${mpRestored} MP to all allies.`,
+      };
+    },
+    description: "Follow-up vs expose T2 foe: 100% damage, +10% vs disoriented, restores 3 MP to all allies, and builds rhythm."
+  },
+
+  'soft_spot_exposed': {
+    id: "soft_spot_exposed",
+    name: "Soft Spot Exposed",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 0,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    cooldown: 1,
-    buildupHint: { expose: 600 },
+    tags: ["melee", "attack", "expose", "necrotic"],
+    cooldown: 3,
+    buildupHint: { expose: 90 },
     apply: (attacker, target) => {
-      const ability = SKILLS?.flaying_strike;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 600 },
-      };
-    },
-    description: "Hard strip-and-slash that exposes defenses."
-  },
-
-  'chilling_slice': {
-    id: "chilling_slice",
-    name: "Chilling Slice",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 0,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
-    cooldown: 2,
-    buildupHint: { cold: 600 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.chilling_slice;
+      const ability = SKILLS?.soft_spot_exposed;
       const roll = calculateDamage(attacker, target, ability);
       let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "cold",
-        isMagic: true,
-        skipGearMultiplier: true,
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const fireTier = target?.weakness?.tiers?.fire || 0;
-      if (fireTier >= 1) {
-        amount = Math.floor(amount * 1.15);
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 600 },
-      };
+      const hasNecrotic = (target?.weakness?.tiers?.toxic || 0) >= 1
+        || (target?.weakness?.tiers?.disease || 0) >= 1
+        || (target?.weakness?.tiers?.curse || 0) >= 1;
+      if (hasNecrotic) amount += Math.floor(amount * 0.25);
+      return { ...roll, amount, buildup: { expose: ability?.buildupHint?.expose ?? 90 } };
     },
-    description: "Quick cut that chills the target; extra bite vs burning foes."
+    description: "Aimed strike that exposes (90 buildup); deals +25% necrotic bonus damage if target has any necrotic weakness."
   },
 
-  'runic_spark': {
-    id: "runic_spark",
-    name: "Runic Spark",
+  'sword_flourish': {
+    id: "sword_flourish",
+    name: "Sword Flourish",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["sword_1h"],
-    requiredStat: "INT",
-    requiredValue: 10,
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disorient", "aoe"],
+    cooldown: 4,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.sword_flourish;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      // Spread 100% of primary's disorient meter to column-mates
+      const spreadAmt = target?.weakness?.meters?.disorient || 0;
+      const splash = [];
+      resolveAOESplash(scene, target, { shape: "column" }).forEach(char => {
+        const prevTier = char?.weakness?.tiers?.disorient || 0;
+        const splashEffect = { target: char, amount: 0, buildup: { disorient: spreadAmt }, tags: ability?.tags };
+        // Check if this spread would cross a tier → immobilize
+        if (spreadAmt > 0) {
+          const newMeter = (char?.weakness?.meters?.disorient || 0) + spreadAmt;
+          if (weaknessTierFromMeter(newMeter) > prevTier) {
+            splashEffect.statusEffects = [{ id: "flourish_immobilize", turns: 1, immobilized: true }];
+          }
+        }
+        splash.push(splashEffect);
+      });
+      // Grant rhythm stack (refreshes all existing, adds if under cap)
+      applyRhythmStack(attacker);
+      return { ...roll, amount, splash: splash.length ? splash : undefined };
+    },
+    description: "A sweeping flourish: 100% damage to primary, spreads their full disorient meter to the column. Tier cross on spread = 1-turn immobilize. Grants rhythm."
+  },
+
+  'read_and_react': {
+    id: "read_and_react",
+    name: "Read and React",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "WIS",
+    requiredValue: 12,
     actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "defensive", "mana"],
+    cooldown: 3,
+    apply: (attacker) => {
+      attacker.statusEffects = attacker.statusEffects || [];
+      attacker.statusEffects.push({
+        id: "read_and_react",
+        turns: 1,
+        onMeleeHitByExposed: { damageReduction: 25, manaRestore: 3 },
+      });
+      return {
+        amount: 0,
+        log: `${attacker?.name || "The swordsman"} reads the field — next exposed melee hit reduced and countered.`,
+      };
+    },
+    description: "Bonus action: until your next turn, the next melee hit from an exposed enemy is reduced by 25% and restores 3 MP."
+  },
+
+  'blazing_fervor': {
+    id: "blazing_fervor",
+    name: "Blazing Fervor",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 6,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff", "fire"],
+    cooldown: 6,
+    apply: (attacker, _target, scene) => {
+      // Spend initiative — amplified if 20+ available
+      const gauge = attacker?.initiativeGauge || 0;
+      // Lower gauge = acts sooner; spending initiative = increase gauge
+      const spend = gauge <= 20 ? 10 : 20;
+      attacker.initiativeGauge = (attacker.initiativeGauge || 0) + spend;
+      const amplified = spend >= 20;
+      const fireDmgOnHit = amplified ? 10 : 5;
+      const fireBuildupOnHit = amplified ? 40 : 20;
+      // Apply buff to all allies including self
+      const buff = { id: "blazing_fervor_buff", turns: 2, onHit: { fireDamage: fireDmgOnHit, fireBuildup: fireBuildupOnHit } };
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        ally.statusEffects = ally.statusEffects || [];
+        ally.statusEffects.push({ ...buff });
+      });
+      return {
+        amount: 0,
+        log: `${attacker?.name || "The swordsman"} blazes with fervor${amplified ? " (amplified)" : ""} — allies deal +${fireDmgOnHit} fire damage and +${fireBuildupOnHit} fire buildup on hit for 2 turns.`,
+      };
+    },
+    description: "Spend initiative to rally allies with fire: each ally's attacks deal bonus fire damage and buildup for 2 turns. Amplified when spending 20+ initiative."
+  },
+
+  // -------- Payoff --------
+  'power_stab': {
+    id: "power_stab",
+    name: "Power Stab",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "STR",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 7,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "consume", "expose"],
+    cooldown: 4,
+    requiresWeakness: { family: "expose", tierAtLeast: 1 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.power_stab;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.2);
+      const currentExpose = target?.weakness?.meters?.expose || 0;
+      const consumed = Math.min(400, currentExpose);
+      const bonusPct = Math.floor(consumed / 100) * 0.10;
+      if (bonusPct > 0) amount = Math.floor(amount * (1 + bonusPct));
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.expose = Math.max(0, currentExpose - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.expose = weaknessTierFromMeter(target.weakness.meters.expose);
+      }
+      const buildup = roll.crit ? { expose: 50 } : undefined;
+      return { ...roll, amount, buildup };
+    },
+    description: "Heavy thrust at 120% base; consumes up to 400 expose for +10% per 100. Crits reapply 50 expose."
+  },
+
+  'glacial_strike': {
+    id: "glacial_strike",
+    name: "Glacial Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 9,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "consume", "cold", "control"],
+    cooldown: 6,
+    requiresWeakness: { family: "cold", tierAtLeast: 2 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.glacial_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.3);
+      // Consume all cold → immobilize
+      const consumedCold = target?.weakness?.meters?.cold || 0;
+      if (target?.weakness?.meters) {
+        target.weakness.meters.cold = 0;
+        if (target.weakness.tiers) target.weakness.tiers.cold = 0;
+      }
+      const statusEffects = [{ id: "glacial_freeze", turns: 1, immobilized: true }];
+      // If fire T2+: consume up to 400 fire → bonus damage + cold buildup
+      const buildup = {};
+      const hasFireT2 = (target?.weakness?.tiers?.fire || 0) >= 2;
+      if (hasFireT2) {
+        const currentFire = target?.weakness?.meters?.fire || 0;
+        const consumedFire = Math.min(400, currentFire);
+        amount += Math.floor(consumedFire / 10);
+        buildup.cold = Math.floor(consumedFire * 0.5);
+        if (target?.weakness?.meters) {
+          target.weakness.meters.fire = Math.max(0, currentFire - consumedFire);
+          if (target.weakness.tiers) target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
+        }
+      }
+      return {
+        ...roll, amount, statusEffects,
+        buildup: Object.keys(buildup).length ? buildup : undefined,
+        log: `${attacker?.name || "The swordsman"} freezes the target solid!${hasFireT2 ? " Fire converts to cold buildup." : ""}`,
+      };
+    },
+    description: "Consumes all cold to immobilize for 1 turn at 130% damage. If fire T2+: convert up to 400 fire to bonus damage + cold buildup."
+  },
+
+  'taunting_cry': {
+    id: "taunting_cry",
+    name: "Taunting Cry",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 13,
+    actionCost: "bonus",
+    mpCost: 5,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "taunt", "control"],
+    cooldown: 5,
+    apply: (attacker, _target, scene) => {
+      const initiativeSpend = 15;
+      attacker.initiativeGauge = (attacker.initiativeGauge || 0) + initiativeSpend;
+      // Apply taunt to all disoriented enemies for 1 turn
+      let taunted = 0;
+      const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
+      (enemySlots || []).forEach(s => {
+        const enemy = s?.char;
+        if (!enemy || enemy.status === 'incapacitated') return;
+        if ((enemy?.weakness?.tiers?.disorient || 0) < 1) return;
+        enemy.statusEffects = enemy.statusEffects || [];
+        enemy.statusEffects.push({ id: "taunted", turns: 1, tauntTarget: attacker });
+        taunted++;
+      });
+      return {
+        amount: 0,
+        log: taunted > 0
+          ? `${attacker?.name || "The swordsman"} taunts ${taunted} disoriented foe${taunted > 1 ? "s" : ""}, drawing their ire!`
+          : `${attacker?.name || "The swordsman"} cries out but no disoriented foes respond.`,
+      };
+    },
+    description: "Spend 15 initiative: all disoriented enemies target you for 1 turn."
+  },
+
+  'crescent_cleave': {
+    id: "crescent_cleave",
+    name: "Crescent Cleave",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "STR",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 8,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "aoe", "expose"],
+    cooldown: 5,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.crescent_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.1);
+      const hasExpose = (target?.weakness?.tiers?.expose || 0) >= 1;
+      if (hasExpose) amount = Math.floor(amount * 1.2);
+      // Arc targeting: top (8,4,3) or bottom (6,5,1) based on primary target's slot
+      const TOP_ARC = new Set([8, 4, 3]);
+      const BOT_ARC = new Set([6, 5, 1]);
+      const primarySlotId = target?._slot?.slotId ?? target?.slotId;
+      const arcSlots = TOP_ARC.has(primarySlotId) ? TOP_ARC : BOT_ARC.has(primarySlotId) ? BOT_ARC : TOP_ARC;
+      const sideSlots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const splash = [];
+      let healAmt = 0;
+      (sideSlots || []).forEach(s => {
+        if (!s?.char || s.char === target || s.char.status === 'incapacitated') return;
+        if (!arcSlots.has(s.slotId)) return;
+        const prevTier = s.char?.weakness?.tiers?.expose || 0;
+        const splashEntry = { target: s.char, amount: Math.max(1, Math.floor(amount * 0.85)), tags: ability?.tags };
+        // Heal per enemy that crosses expose tier (splash doesn't add expose buildup here, just damage)
+        // But checking if they already have expose that might cross is meaningful, so note as forward-looking
+        splash.push(splashEntry);
+      });
+      // Self-heal based on how many enemies in arc have expose T1+
+      const arcEnemiesWithExpose = (sideSlots || []).filter(s =>
+        s?.char && arcSlots.has(s.slotId) && (s.char?.weakness?.tiers?.expose || 0) >= 1
+      ).length;
+      if (arcEnemiesWithExpose > 0) {
+        const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
+        healAmt = Math.floor(maxHP * 0.05 * arcEnemiesWithExpose);
+        if (attacker && healAmt > 0) {
+          attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
+        }
+      }
+      return {
+        ...roll, amount, splash: splash.length ? splash : undefined,
+        log: healAmt > 0 ? `${attacker?.name || "The swordsman"} cleaves the arc and heals ${healAmt} HP from exposed foes!` : undefined,
+      };
+    },
+    description: "Arc cleave at 110% (+20% vs exposed): auto-selects top (8,4,3) or bottom (6,5,1) arc by target position. Heals 5% HP per exposed enemy in the arc."
+  },
+
+  'momentum_strike': {
+    id: "momentum_strike",
+    name: "Momentum Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "free",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning"],
-    cooldown: 1,
-    buildupHint: { lightning: 60 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.runic_spark;
+    tags: ["melee", "attack", "movement", "initiative"],
+    cooldown: 3,
+    conditionHint: { requiresMovedThisTurn: true },
+    apply: (attacker, target, scene) => {
+      if (!scene?.currentActorMovedThisTurn) {
+        return { amount: 0, log: `${attacker?.name || "The swordsman"} hasn't moved yet this turn.` };
+      }
+      const ability = SKILLS?.momentum_strike;
       const roll = calculateDamage(attacker, target, ability);
       let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "lightning",
-        isMagic: true,
-        skipGearMultiplier: true,
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const coldTier = target?.weakness?.tiers?.cold || 0;
-      let consumeWeakness;
-      if (coldTier === 2) {
-        amount = Math.floor(amount * 1.3);
-        consumeWeakness = ["cold"];
-      }
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "lightning",
-        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
-        consumeWeakness,
-      };
+      // +25% in front rank (ally slots 1,2,3 = front column)
+      const slotId = attacker?._slot?.slotId ?? attacker?.slotId;
+      if ([1, 2, 3].includes(slotId)) amount = Math.floor(amount * 1.25);
+      // Gain initiative based on current rhythm stacks (including new one)
+      applyRhythmStack(attacker);
+      const totalStacks = Math.min(3, (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length);
+      const initiativeGain = totalStacks * 5;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
+      return { ...roll, amount };
     },
-    description: "Arc-charged slash that builds Lightning; heavily punishes Frozen foes."
+    description: "FREE action after moving: 100% damage (+25% in front rank), builds rhythm and gains 5 initiative per rhythm stack."
   },
 
-  'goading_pommel': {
-    id: "goading_pommel",
-    name: "Goading Pommel",
+  'balancing_blow': {
+    id: "balancing_blow",
+    name: "Balancing Blow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["sword_1h"],
-    requiredStat: "CHA",
-    requiredValue: 12,
+    requiredStat: "CON",
+    requiredValue: 14,
     actionCost: "major",
-    mpCost: 0,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "control"],
-    cooldown: 2,
-    statusEffects: [{ id: "dazed", turns: 1 }],
+    tags: ["melee", "attack", "heal", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { anyOf: [{ family: "toxic", tierAtLeast: 1 }, { family: "disease", tierAtLeast: 1 }, { family: "curse", tierAtLeast: 1 }] },
     apply: (attacker, target) => {
-      const ability = SKILLS?.goading_pommel;
+      const ability = SKILLS?.balancing_blow;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
-      if (target) markSword1hHit(target, attacker, ability?.id);
-      markSword1hUse(attacker, ability?.id);
-      return { ...roll, amount, statusEffects };
+      amount = Math.floor(amount * 1.1);
+      const totalNecrotic = (target?.weakness?.meters?.toxic || 0)
+        + (target?.weakness?.meters?.disease || 0)
+        + (target?.weakness?.meters?.curse || 0);
+      const healAmt = Math.floor(totalNecrotic / 20);
+      if (healAmt > 0 && attacker) {
+        const maxHP = attacker.maxHP ?? attacker.derivedStats?.maxHP ?? 0;
+        attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
+      }
+      return {
+        ...roll, amount,
+        log: healAmt > 0 ? `${attacker?.name || "The swordsman"} siphons life — heals ${healAmt} HP from ${totalNecrotic} necrotic buildup.` : undefined,
+      };
     },
-    description: "Blunt strike to rattle the foe."
+    description: "110% damage vs necrotically afflicted; heals 1 HP per 20 total necrotic buildup (toxic + disease + curse)."
+  },
+
+  'shattering_cut': {
+    id: "shattering_cut",
+    name: "Shattering Cut",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 9,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "consume", "lacerate"],
+    cooldown: 6,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.shattering_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.25);
+      const currentLacerate = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(400, currentLacerate);
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.lacerate = Math.max(0, currentLacerate - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
+      }
+      const pdrReduction = Math.floor(consumed / 100) * 10;
+      const statusEffects = [];
+      if (pdrReduction > 0) {
+        statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction } });
+      }
+      if (consumed >= 200) {
+        statusEffects.push({ id: "torn_defenses", turns: 2, mods: { PhysicalResist: -5 } }); // lacerate vulnerability (additional penalty)
+      }
+      return {
+        ...roll, amount,
+        statusEffects: statusEffects.length ? statusEffects : undefined,
+        log: consumed > 0
+          ? `${attacker?.name || "The swordsman"} shatters armor — -${pdrReduction}% PDR${consumed >= 200 ? " + lacerate vulnerability" : ""}.`
+          : undefined,
+      };
+    },
+    description: "125% damage; consume up to 400 lacerate for -10% PDR per 100 for 3 turns. 200+ consumed adds lacerate vulnerability."
   },
 
   // --- Sword (1h) Reactions ---
@@ -9090,76 +9375,38 @@ Object.assign(RAW_SKILLS, {
     description: "Execute a target below 40% HP at 200% base damage (+5% per 100 lacerate/expose consumed)."
   },
 
-  // -------- To Be Reworked --------
+  // -------- Generation (elemental / utility) --------
   'decapitating_arc': {
     id: "decapitating_arc",
     name: "Decapitating Arc",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe"],
-    emitTagsOnUse: ["slash"],
-    cooldown: 3,
-    aoe: { shape: "column", scale: 1 },
+    emitTagsOnUse: ["chop"],
+    cooldown: 4,
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.decapitating_arc;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          (sideSlots || [])
-            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char)
-            .slice(0, 2)
-            .forEach(char => splash.push({ target: char, amount: Math.max(1, Math.floor(amount * 0.85)), tags: ability?.tags }));
-        }
-      }
-      return { ...roll, amount, splash: splash.length ? splash : undefined };
-    },
-    description: "A sweeping arc that hits the primary target and up to 2 column-mates at 85%."
-  },
-
-  'overhead_hew': {
-    id: "overhead_hew",
-    name: "Overhead Hew",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack"],
-    cooldown: 4,
-    armorDebuff: 0.10,
-    apply: (attacker, target) => {
-      const ability = SKILLS?.overhead_hew;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability,
         tags: ability?.tags,
         skipGearMultiplier: true,
       }));
-      return { ...roll, amount, armorDebuff: ability?.armorDebuff };
+      const splash = [];
+      resolveAOESplash(scene, target, { shape: "column" }).slice(0, 2).forEach(char => {
+        splash.push({ target: char, amount: Math.max(1, Math.floor(amount * 0.85)), tags: ability?.tags });
+      });
+      return { ...roll, amount, splash: splash.length ? splash : undefined };
     },
-    description: "A cleaving blow that reduces armor for the next round."
+    description: "A sweeping arc that cleaves through a column — 100% primary, 85% to up to 2 column-mates."
   },
 
   'ember_cleave': {
@@ -9167,15 +9414,16 @@ Object.assign(RAW_SKILLS, {
     name: "Ember Cleave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 3,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "fire", "aoe"],
+    tags: ["melee", "attack", "fire", "elemental", "buildup"],
+    emitTagsOnUse: ["chop"],
     cooldown: 2,
     buildupHint: { fire: 60 },
     apply: (attacker, target) => {
@@ -9188,12 +9436,12 @@ Object.assign(RAW_SKILLS, {
         isMagic: true,
         skipGearMultiplier: true,
       }));
-      const coldTier = target?.weakness?.tiers?.cold || 0;
       let fireBuildup = ability?.buildupHint?.fire ?? 60;
+      const coldTier = target?.weakness?.tiers?.cold || 0;
       if (coldTier >= 1) { amount = Math.floor(amount * 1.15); fireBuildup += 20; }
       return { ...roll, amount, isMagic: true, element: "fire", buildup: { fire: fireBuildup } };
     },
-    description: "Fiery chop; stronger vs Chilled/Frozen."
+    description: "Fiery chop with 60 fire buildup; deals 15% more and gains +20 buildup vs chilled/frostbitten foes."
   },
 
   'rime_chop': {
@@ -9201,7 +9449,7 @@ Object.assign(RAW_SKILLS, {
     name: "Rime Chop",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CON",
     requiredValue: 12,
@@ -9209,7 +9457,8 @@ Object.assign(RAW_SKILLS, {
     mpCost: 0,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold"],
+    tags: ["melee", "attack", "cold", "elemental", "buildup", "necrotic"],
+    emitTagsOnUse: ["chop"],
     cooldown: 3,
     buildupHint: { cold: 60 },
     apply: (attacker, target) => {
@@ -9223,10 +9472,20 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
       const coldTier = target?.weakness?.tiers?.cold || 0;
-      if (coldTier === 2) amount = Math.floor(amount * 1.5);
-      return { ...roll, amount, isMagic: true, element: "cold", buildup: { cold: ability?.buildupHint?.cold ?? 60 } };
+      const buildup = { cold: ability?.buildupHint?.cold ?? 60 };
+      if (coldTier >= 2) {
+        amount += Math.floor(amount * 0.30);
+        const toxicMeter  = target?.weakness?.meters?.toxic   || 0;
+        const diseaseMeter = target?.weakness?.meters?.disease || 0;
+        const curseMeter  = target?.weakness?.meters?.curse   || 0;
+        const necFamilies = (toxicMeter > 0 ? 1 : 0) + (diseaseMeter > 0 ? 1 : 0) + (curseMeter > 0 ? 1 : 0);
+        if (necFamilies >= 1) buildup.toxic   = 80;
+        if (necFamilies >= 2) buildup.disease = 80;
+        if (necFamilies >= 3) buildup.curse   = 80;
+      }
+      return { ...roll, amount, isMagic: true, element: "cold", buildup };
     },
-    description: "Cold-laden chop; devastates Frozen foes."
+    description: "Cold chop with 60 cold buildup; vs Frostbitten (T2) deals +30% necrotic damage and spreads necrotic buildups."
   },
 
   'storm_splitter': {
@@ -9234,7 +9493,7 @@ Object.assign(RAW_SKILLS, {
     name: "Storm Splitter",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -9242,7 +9501,8 @@ Object.assign(RAW_SKILLS, {
     mpCost: 0,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning"],
+    tags: ["melee", "attack", "lightning", "elemental", "buildup", "initiative"],
+    emitTagsOnUse: ["chop"],
     cooldown: 3,
     buildupHint: { lightning: 70 },
     apply: (attacker, target) => {
@@ -9257,9 +9517,81 @@ Object.assign(RAW_SKILLS, {
       }));
       const coldTier = target?.weakness?.tiers?.cold || 0;
       if (coldTier >= 1) amount = Math.floor(amount * 1.25);
-      return { ...roll, amount, isMagic: true, element: "lightning", buildup: { lightning: ability?.buildupHint?.lightning ?? 70 } };
+      const lightningBuildup = ability?.buildupHint?.lightning ?? 70;
+      if (coldTier >= 2 && attacker) {
+        const initiativeGain = Math.floor(lightningBuildup / 10);
+        attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
+      }
+      return { ...roll, amount, isMagic: true, element: "lightning", buildup: { lightning: lightningBuildup } };
     },
-    description: "Thunderous cleave that builds Lightning; bonus vs Chilled/Frozen."
+    description: "Lightning chop with 70 buildup; +25% vs chilled foes, gains 7 initiative vs Frostbitten (T2)."
+  },
+
+  'blood_frenzy': {
+    id: "blood_frenzy",
+    name: "Blood Frenzy",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "CON",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 0,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "mana"],
+    cooldown: 3,
+    conditionHint: { requiresKillThisTurn: true, requiresLacerate: true },
+    apply: (attacker, _target, scene) => {
+      const lacTier = scene?.killedEnemyLacerateTier || 0;
+      if (!scene?.enemyDiedThisTurn || lacTier < 1) {
+        return { amount: 0, log: `${attacker?.name || "The axeman"} has not fed on bleeding prey yet.` };
+      }
+      const mpRestored = lacTier >= 2 ? 7 : 4;
+      if (attacker) {
+        const maxMP = attacker?.maxMP ?? attacker?.derivedStats?.maxMP ?? 0;
+        attacker.currentMP = Math.min(maxMP, (attacker.currentMP ?? 0) + mpRestored);
+      }
+      return {
+        amount: 0,
+        mpGain: mpRestored,
+        log: `${attacker?.name || "The axeman"} feeds on the carnage, restoring ${mpRestored} MP.`,
+      };
+    },
+    description: "After killing a lacerate T1 enemy: restore 4 MP. T2 enemy: restore 7 MP."
+  },
+
+  // -------- Payoff (armor shred) --------
+  'overhead_hew': {
+    id: "overhead_hew",
+    name: "Overhead Hew",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "debuff"],
+    emitTagsOnUse: ["chop"],
+    cooldown: 4,
+    apply: (attacker, target) => {
+      const ability = SKILLS?.overhead_hew;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.15);
+      const statusEffects = [{ id: "shattered_armor", turns: 3, mods: { PhysicalResist: -10 } }];
+      return { ...roll, amount, statusEffects };
+    },
+    description: "A 115% cleaving blow that shatters armor, reducing the target's physical damage reduction by 10% for 3 turns."
   },
 
   // --- Mace (2h) ---
@@ -10526,115 +10858,530 @@ Object.assign(RAW_SKILLS, {
     description: "Charged shot that arcs to a second target; bites harder on Ablaze foes."
   },
 
-  // --- Bow (2h) ---
-  'venom_shot': {
-    id: "venom_shot",
-    name: "Venom Shot",
+  // --- Bow (2h) --- v3.22
+  // -------- Generation --------
+
+  'lodge_arrow': {
+    id: "lodge_arrow",
+    name: "Lodge Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
-    requiredValue: 12,
+    requiredValue: 10,
     actionCost: "major",
-    mpCost: 0,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "toxic"],
+    mpCost: 3,
     cooldown: 1,
-    buildupHint: { toxic: 600 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.venom_shot;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-      return {
-        ...roll,
-        amount,
-        buildup: { toxic: ability?.buildupHint?.toxic ?? 600 },
-      };
-    },
-    description: "Poisoned arrow for testing TOXIC buildup."
-  },
-
-  'soothing_arrow': {
-    id: "soothing_arrow",
-    name: "Soothing Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 0,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["projectile", "attack", "cold"],
-    cooldown: 2,
-    buildupHint: { cold: 40 },
-    rewardIfWeak: { family: "cold", tierAtLeast: 1, healHPpct: 0.04 },
+    tags: ["ranged", "attack", "lodge"],
     apply: (attacker, target) => {
-      const ability = SKILLS?.soothing_arrow;
+      const ability = SKILLS?.lodge_arrow;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "cold",
-        isMagic: true,
-        skipGearMultiplier: true,
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
+      amount = Math.floor(amount * 0.75);
+      const baseDamage = Math.max(1, roll.amount);
+      target.statusEffects = target.statusEffects || [];
+      target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10 });
+      const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
       return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 40 },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
+        ...roll, amount,
+        log: `${attacker?.name ?? 'Archer'} lodges an arrow in ${target?.name ?? 'the target'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
       };
     },
-    description: "A calming shot; heals you when striking a chilled foe."
+    description: "75% damage — lodges a scaling arrow (+10% per additional lodge on dislodge)."
   },
 
-  'hail_volley': {
-    id: "hail_volley",
-    name: "Hail Volley",
+  'frost_pin': {
+    id: "frost_pin",
+    name: "Frost Pin",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.22",
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 2,
+    mpCost: 5,
+    cooldown: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["projectile", "attack", "cold", "aoe"],
-    cooldown: 3,
-    buildupHint: { cold: 60 },
+    tags: ["ranged", "attack", "cold", "buildup"],
+    buildupHint: { family: "cold", amount: 80 },
     apply: (attacker, target) => {
-      const ability = SKILLS?.hail_volley;
+      const ability = SKILLS?.frost_pin;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "cold",
-        isMagic: true,
-        skipGearMultiplier: true,
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, element: "cold", skipGearMultiplier: true,
       }));
+      const coldBuildup = 80;
+      const prevTier = target?.weakness?.tiers?.cold || 0;
+      const newTier = weaknessTierFromMeter((target?.weakness?.meters?.cold || 0) + coldBuildup);
+      if (newTier > prevTier) {
+        if (newTier >= 1) amount = Math.floor(amount * 1.25);
+        if (newTier >= 2) amount = Math.floor(amount * 1.50);
+      }
+      // Lightning T2 10% repeat chance — repeat mechanic not yet implemented, noted as TODO
+      return { ...roll, amount, element: "cold", buildup: { cold: coldBuildup } };
+    },
+    description: "100% cold + 80 cold buildup. Tier cross: T1 +25%, T2 additional +50%. (Lightning T2 10% repeat: TODO)"
+  },
+
+  'volley': {
+    id: "volley",
+    name: "Volley",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 8,
+    cooldown: 5,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "reaction"],
+    apply: (attacker) => {
+      attacker.statusEffects = attacker.statusEffects || [];
+      attacker.statusEffects.push({ id: 'volley_armed', turns: 1, onAllyProjectile: { copyCount: 2, effectiveness: 0.35 } });
       return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
-        splashTargets: 1,
+        amount: 0,
+        log: `${attacker?.name ?? 'Archer'} readies Volley — will echo the next ally projectile twice at 35%. (Echo trigger: TODO)`,
       };
     },
-    description: "Cold-tipped volley that can catch a nearby foe."
+    description: "Bonus: arm Volley — next ally bow/sling/gun skill copied twice at 35%. (Ally-projectile event hookup: TODO)"
+  },
+
+  'hunters_mark': {
+    id: "hunters_mark",
+    name: "Hunter's Mark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "WIS",
+    requiredValue: 13,
+    actionCost: "bonus",
+    mpCost: 5,
+    cooldown: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["support", "mark"],
+    apply: (attacker, target) => {
+      target.statusEffects = target.statusEffects || [];
+      target.statusEffects = target.statusEffects.filter(se => se?.id !== 'hunters_mark');
+      target.statusEffects.push({ id: 'hunters_mark', turns: 2, mods: { BuildupReceived: 50, LodgeDamage: 25 } });
+      return {
+        amount: 0,
+        log: `${attacker?.name ?? 'Archer'} marks ${target?.name ?? 'the target'} — +50% buildup received, +25% lodge damage.`,
+      };
+    },
+    description: "Bonus: Hunter's Mark 2 turns — +25% lodge damage (wired in dislodgeLodges) + +50% buildup received (BuildupReceived: TODO)."
+  },
+
+  'barbed_shaft': {
+    id: "barbed_shaft",
+    name: "Barbed Shaft",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 4,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "lodge", "lacerate"],
+    apply: (attacker, target) => {
+      const hasLodge = (target?.statusEffects || []).some(se => se?.id === 'lodged');
+      if (!hasLodge) {
+        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: barbed shaft requires a lodge already in target.` };
+      }
+      const ability = SKILLS?.barbed_shaft;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 0.75);
+      const baseDamage = Math.max(1, Math.floor(roll.amount * 0.25));
+      target.statusEffects.push({ id: 'lodged', baseDamage, lacerateOnDislodge: 100 });
+      const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
+      return {
+        ...roll, amount,
+        log: `${attacker?.name ?? 'Archer'} drives a barbed shaft in (${lodgeCount} lodges — applies 100 lacerate on dislodge).`,
+      };
+    },
+    description: "Req 1+ lodge. 75% damage. Adds barbed lodge (25% damage + 100 lacerate on dislodge — no scalingBonus)."
+  },
+
+  'snipe_pose': {
+    id: "snipe_pose",
+    name: "Snipe Pose",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "INT",
+    requiredValue: 13,
+    actionCost: "bonus",
+    mpCost: 4,
+    cooldown: 3,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff", "expose"],
+    apply: (attacker) => {
+      attacker.statusEffects = attacker.statusEffects || [];
+      attacker.statusEffects = attacker.statusEffects.filter(se => se?.id !== 'snipe_pose');
+      attacker.statusEffects.push({ id: 'snipe_pose', turns: 1, bonusDmgPct: 50, exposeBuildup: 80 });
+      return {
+        amount: 0,
+        log: `${attacker?.name ?? 'Archer'} takes careful aim — next attack +50% damage and +80 expose.`,
+      };
+    },
+    description: "Bonus: next attack +50% damage +80 expose buildup (consumed on hit via CombatScene Snipe Pose hook)."
+  },
+
+  'scavenge_arrows': {
+    id: "scavenge_arrows",
+    name: "Scavenge Arrows",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "free",
+    mpCost: 0,
+    cooldown: 3,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "mana"],
+    apply: (attacker, _target, scene) => {
+      const count = scene?.lodgesDislodgedThisTurn || 0;
+      if (count === 0) {
+        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: no lodges dislodged this turn.` };
+      }
+      const mpGain = count * 2;
+      return {
+        amount: 0, mpGain,
+        log: `${attacker?.name ?? 'Archer'} scavenges ${count} arrow${count !== 1 ? 's' : ''}, restoring ${mpGain} MP.`,
+      };
+    },
+    description: "FREE: restore 2 MP per lodge dislodged this turn (reads scene.lodgesDislodgedThisTurn)."
+  },
+
+  // -------- Payoff --------
+
+  'piercing_release': {
+    id: "piercing_release",
+    name: "Piercing Release",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 7,
+    cooldown: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "dislodge"],
+    apply: (attacker, target, scene) => {
+      const lodgeCount = (target?.statusEffects || []).filter(se => se?.id === 'lodged').length;
+      if (lodgeCount === 0) return { amount: 0, log: `${target?.name ?? 'Target'} has no lodges.` };
+      const ability = SKILLS?.piercing_release;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const { totalDamage, lacerateBuildup, dislodged } = dislodgeLodges(target, scene);
+      amount += totalDamage;
+      const exposeGain = dislodged * 35;
+      const lacerateGain = (lacerateBuildup || 0) + dislodged * 35;
+      return {
+        ...roll, amount,
+        buildup: { expose: exposeGain, lacerate: lacerateGain },
+        log: `${attacker?.name ?? 'Archer'} releases all — ${dislodged} arrow${dislodged !== 1 ? 's' : ''} dislodged for ${totalDamage} bonus damage!`,
+      };
+    },
+    description: "100% + dislodge ALL lodges (each lodge uses its own scalingBonus). 35 expose + 35 lacerate per lodge dislodged."
+  },
+
+  'frost_shatter': {
+    id: "frost_shatter",
+    name: "Frost Shatter",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 9,
+    cooldown: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "consume", "cold", "expose"],
+    apply: (attacker, target) => {
+      if ((target?.weakness?.tiers?.cold || 0) < 2) {
+        return { amount: 0, log: `${target?.name ?? 'Target'} needs cold T2 (Frostbitten).` };
+      }
+      const ability = SKILLS?.frost_shatter;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, element: "cold", skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.20);
+      const consumedCold = target?.weakness?.meters?.cold || 0;
+      amount += Math.floor(consumedCold / 10);
+      const exposeBuildup = Math.floor(consumedCold * 0.50);
+      if (target?.weakness?.meters) {
+        target.weakness.meters.cold = 0;
+        if (target.weakness.tiers) target.weakness.tiers.cold = 0;
+      }
+      return {
+        ...roll, amount, element: "cold",
+        buildup: { expose: exposeBuildup },
+        log: `${attacker?.name ?? 'Archer'} shatters ${consumedCold} cold — +${Math.floor(consumedCold / 10)} damage, ${exposeBuildup} expose!`,
+      };
+    },
+    description: "Req cold T2. 120% cold + consume all cold (+1 dmg/10). Converts 50% cold into expose buildup."
+  },
+
+  'hail_of_arrows': {
+    id: "hail_of_arrows",
+    name: "Hail of Arrows",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 8,
+    cooldown: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "aoe"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.hail_of_arrows;
+      const roll = calculateDamage(attacker, target, ability);
+      const calcAmount = (tgt) => {
+        let a = Math.max(1, applyDamageModifiers(roll.amount, attacker, tgt, {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+        }));
+        a = Math.floor(a * 0.90);
+        let mul = 1.0;
+        const t = tgt?.weakness?.tiers || {};
+        if ((t.expose || 0) >= 2 || (t.lacerate || 0) >= 2) mul += 0.20;
+        if ((t.fire || 0) >= 2 || (t.cold || 0) >= 2 || (t.lightning || 0) >= 2) mul += 0.20;
+        if ((t.toxic || 0) >= 2 || (t.disease || 0) >= 2 || (t.curse || 0) >= 2) mul += 0.20;
+        return Math.floor(a * mul);
+      };
+      const amount = calcAmount(target);
+      const splash = resolveAOESplash(scene, target, { shape: "adjacent" }).map(tgt => ({
+        target: tgt, amount: calcAmount(tgt), tags: ability?.tags,
+      }));
+      return { ...roll, amount, splash: splash.length ? splash : undefined };
+    },
+    description: "90% to primary + adjacent. +20% per family with T2 weakness (physical/elemental/necrotic). Max +60% at all three T2."
+  },
+
+  'barbed_bloom': {
+    id: "barbed_bloom",
+    name: "Barbed Bloom",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 7,
+    cooldown: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "aoe", "lacerate", "necrotic"],
+    apply: (attacker, target, scene) => {
+      if ((target?.weakness?.tiers?.lacerate || 0) < 1) {
+        return { amount: 0, log: `${target?.name ?? 'Target'} has no lacerate buildup.` };
+      }
+      const ability = SKILLS?.barbed_bloom;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const lacMeter = target?.weakness?.meters?.lacerate || 0;
+      const aoeBonus = Math.floor(lacMeter / 100) * 10;
+      const aoeDmg = Math.floor(amount * 0.70 * (1 + aoeBonus / 100));
+      const necroSpread = {
+        toxic:   Math.floor((target?.weakness?.meters?.toxic   || 0) * 0.25),
+        disease: Math.floor((target?.weakness?.meters?.disease || 0) * 0.25),
+        curse:   Math.floor((target?.weakness?.meters?.curse   || 0) * 0.25),
+      };
+      const hasNecro = Object.values(necroSpread).some(v => v > 0);
+      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => ({
+        target: tgt, amount: aoeDmg, tags: ability?.tags,
+        buildup: hasNecro ? { ...necroSpread } : undefined,
+      }));
+      return { ...roll, amount, splash: splash.length ? splash : undefined };
+    },
+    description: "Req lacerate T1. 100% primary + column AOE (70% + 10% per 100 lacerate). Spreads 75% of primary's necrotic buildups."
+  },
+
+  'hunters_finish': {
+    id: "hunters_finish",
+    name: "Hunter's Finish",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "WIS",
+    requiredValue: 16,
+    actionCost: ["major", "bonus"],
+    mpCost: 10,
+    cooldown: 8,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "consume", "finisher"],
+    apply: (attacker, target, scene) => {
+      const hasMark  = (target?.statusEffects || []).some(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
+      const hasLodge = (target?.statusEffects || []).some(se => se?.id === 'lodged');
+      if (!hasMark || !hasLodge) {
+        return { amount: 0, log: `Hunter's Finish requires both Hunter's Mark and at least 1 lodge on target.` };
+      }
+      const ability = SKILLS?.hunters_finish;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.50);
+      const fireMeter  = target?.weakness?.meters?.fire      || 0;
+      const coldMeter  = target?.weakness?.meters?.cold      || 0;
+      const lightMeter = target?.weakness?.meters?.lightning || 0;
+      const elemBonus  = Math.floor(fireMeter / 10) + Math.floor(coldMeter / 10) + Math.floor(lightMeter / 10);
+      amount += elemBonus;
+      if (target?.weakness?.meters) {
+        target.weakness.meters.fire = 0; target.weakness.meters.cold = 0; target.weakness.meters.lightning = 0;
+        if (target.weakness.tiers) {
+          target.weakness.tiers.fire = 0; target.weakness.tiers.cold = 0; target.weakness.tiers.lightning = 0;
+        }
+      }
+      const { dislodged } = dislodgeLodges(target, scene);
+      target.statusEffects = (target.statusEffects || []).filter(se => se?.id !== 'hunters_mark');
+      return {
+        ...roll, amount,
+        log: `Hunter's Finish — ${dislodged} lodges, ${fireMeter + coldMeter + lightMeter} elemental consumed (+${elemBonus} damage)!`,
+      };
+    },
+    description: "Req Hunter's Mark + 1 lodge + costs major+bonus. 150% + consume all elemental. Clears lodges and mark."
+  },
+
+  'farsight_volley': {
+    id: "farsight_volley",
+    name: "Farsight Volley",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "CHA",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 8,
+    cooldown: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "aoe", "mana"],
+    apply: (attacker, target, scene) => {
+      // Gate: player must target a backline enemy (slots 6, 7, 8 = 'back' column)
+      const targetCol = scene?._getColumnBySlotId?.(target?._slot?.slotId);
+      if (targetCol !== 'back') {
+        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: Farsight Volley only targets the back rank.` };
+      }
+      const ability = SKILLS?.farsight_volley;
+      const roll = calculateDamage(attacker, target, ability);
+      const calcAmt = (tgt) => Math.max(1, Math.floor(applyDamageModifiers(roll.amount, attacker, tgt, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }) * 0.85));
+      // Hit all enemies in the same rank (same column = same depth) as the target
+      const others = resolveAOESplash(scene, target, { shape: "column" });
+      let totalMpGain = 0;
+      for (const tgt of [target, ...others]) {
+        const disorient = tgt?.weakness?.meters?.disorient || 0;
+        const drained = Math.floor(disorient / 50);
+        if (drained > 0) {
+          totalMpGain += drained;
+          if (tgt.currentMP != null) tgt.currentMP = Math.max(0, tgt.currentMP - drained);
+          if (tgt?.weakness?.meters) {
+            tgt.weakness.meters.disorient = 0;
+            if (tgt.weakness.tiers) tgt.weakness.tiers.disorient = 0;
+          }
+        }
+      }
+      const amount = calcAmt(target);
+      const splash = others.map(tgt => ({ target: tgt, amount: calcAmt(tgt), tags: ability?.tags }));
+      return {
+        ...roll, amount,
+        splash: splash.length ? splash : undefined,
+        mpGain: totalMpGain || undefined,
+        log: totalMpGain > 0 ? `${attacker?.name ?? 'Archer'} volleys the back rank — drains ${totalMpGain} MP from disoriented foes!` : undefined,
+      };
+    },
+    description: "Target a back-rank enemy — 85% to all back-rank enemies. Drains 1 MP per 50 disorient from each and restores to you."
+  },
+
+  'quivering_burst': {
+    id: "quivering_burst",
+    name: "Quivering Burst",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.22",
+    requiredWeapon: ["bow"],
+    requiredStat: "INT",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 9,
+    cooldown: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "aoe", "lightning", "dislodge"],
+    buildupHint: { family: "toxic", amount: 40 },
+    apply: (attacker, target, scene) => {
+      const lodgeCount = (target?.statusEffects || []).filter(se => se?.id === 'lodged').length;
+      if (lodgeCount < 2 || (target?.weakness?.tiers?.lightning || 0) < 2) {
+        return { amount: 0, log: `Quivering Burst requires 2+ lodges and lightning T2 on target.` };
+      }
+      const ability = SKILLS?.quivering_burst;
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, element: "lightning", skipGearMultiplier: true,
+      }));
+      amount = Math.floor(amount * 1.10);
+      const { totalDamage, dislodged } = dislodgeLodges(target, scene);
+      amount += totalDamage;
+      const toxicBuildup = ability?.buildupHint?.amount ?? 40;
+      const lightMeter   = target?.weakness?.meters?.lightning || 0;
+      const repeatChance = Math.min(0.60, lightMeter / 1000);
+      const aoeDmg = Math.floor(amount * 0.65);
+      const splash = resolveAOESplash(scene, target, { shape: "adjacent" }).map(tgt => ({
+        target: tgt, amount: aoeDmg, tags: ability?.tags,
+        buildup: { toxic: toxicBuildup },
+      }));
+      return {
+        ...roll, amount, element: "lightning",
+        buildup: { toxic: toxicBuildup },
+        splash: splash.length ? splash : undefined,
+        log: `${attacker?.name ?? 'Archer'} electrifies ${dislodged} lodges! ${aoeDmg} AOE, ${Math.round(repeatChance * 100)}% repeat. (Repeat trigger: TODO)`,
+      };
+    },
+    description: "Req 2+ lodges + lightning T2. 110% lightning + dislodge all + 65% adjacent AOE + 40 toxic. Repeat chance = lightning/1000 capped at 60% (TODO)."
   },
 
   // --- Gun (2h) ---

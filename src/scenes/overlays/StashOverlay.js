@@ -7,6 +7,7 @@ import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { DEPTH } from '../../ui/styles.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 const TRIBE_DISPLAY_NAMES = {
   styx:   'Styx',
@@ -35,6 +36,7 @@ export default class StashOverlay extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
 
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = false;

@@ -4,6 +4,7 @@ import ProgressionManager from '../systems/ProgressionManager.js';
 import { createButton } from '../ui/Button.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager, AUDIO_MANIFEST } from '../systems/SoundManager.js';
+import { setupSceneCursor } from '../ui/cursor.js';
 
 export default class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -19,6 +20,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
     const { width, height } = this.sys.game.canvas;
 
     // Background

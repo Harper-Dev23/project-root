@@ -7,6 +7,7 @@ import { JournalIndex } from '../../systems/JournalIndex.js';
 import { JournalState } from '../../systems/JournalState.js';
 import { readAllMarkdown } from '../../systems/MarkdownLoader.js';
 import { FONTS } from '../../ui/styles.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 const LEFT_WIDTH = 280;
 const TOP_BAR_HEIGHT = 70;
@@ -817,6 +818,7 @@ export default class JournalOverlay extends Phaser.Scene {
     }
 
     create(data) {
+        setupSceneCursor(this);
         const town = this.scene.get('TownScene');
         if (town?.input) town.input.enabled = false;
 

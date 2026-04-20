@@ -7,6 +7,7 @@ import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { CLASS_COLORS } from '../../ui/styles.js';
+import { setupSceneCursor } from '../../ui/cursor.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -156,6 +157,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
   create() {
     SoundManager.init(this);
+    setupSceneCursor(this);
 
     // Disable TownScene input so its hover/click zones don't fire through this overlay
     const town = this.scene.get('TownScene');
