@@ -943,6 +943,15 @@ export default class CombatScene extends Phaser.Scene {
     // Reposition lodge arrows to the new slot
     this._refreshLodgeSprites(unit);
 
+    // Runic zone dissolves when the caster moves
+    if (Array.isArray(unit.statusEffects)) {
+      const zoneIdx = unit.statusEffects.findIndex(se => se?.id === 'runic_zone');
+      if (zoneIdx !== -1) {
+        unit.statusEffects.splice(zoneIdx, 1);
+        this._log?.(`${unit?.name ?? 'Mage'}'s runic zone dissolves as they move.`);
+      }
+    }
+
     return true;
   }
 
@@ -2964,6 +2973,16 @@ export default class CombatScene extends Phaser.Scene {
     const attacker = user;
     const isMovement = !!(ability?.isMovement || ability?.targetRequirement === 'position');
 
+    // Rune Channel: caster takes 1 lightning damage on every skill use while zone mod is active
+    {
+      const rZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
+      if (rZone?.mods?.runeChannel) {
+        user.currentHP = Math.max(0, (user.currentHP || 0) - 1);
+        this._showFloatingNumber?.(1, user, false);
+        this._log(`${user?.name ?? 'Mage'} is shocked by the runes for 1 lightning damage.`);
+      }
+    }
+
     // Snapshot weakness tiers BEFORE any new buildup
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
 
@@ -2982,6 +3001,18 @@ export default class CombatScene extends Phaser.Scene {
 
     if (options.logUsage !== false) {
       this._logAbilityUseEntry(user, ability, target);
+    }
+
+    // Kindling Rite zone mod: +10% elemental (fire/cold/lightning) damage while zone active
+    if ((result?.amount || 0) > 0 && !isMovement) {
+      const kindZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
+      if (kindZone?.mods?.kindlingRite) {
+        const abilityTags = ability?.tags || [];
+        const isElemental = ['fire', 'cold', 'lightning'].some(t => abilityTags.includes(t));
+        if (isElemental) {
+          result.amount = Math.floor(result.amount * 1.10);
+        }
+      }
     }
 
     // Snipe Pose: consumed on first attack — amplify amount and inject expose buildup
@@ -3308,6 +3339,22 @@ export default class CombatScene extends Phaser.Scene {
             this._showFloatingNumber?.(healed, user, true);
           }
 
+          // onMeleeHitBy: heal the attacker when a melee hit lands on a target with this debuff
+          if (dmg > 0) {
+            const hitTags = intent?.tags || result?.tags || [];
+            const isMeleeHit = Array.isArray(hitTags) && hitTags.includes('melee');
+            if (isMeleeHit) {
+              for (const se of (target?.statusEffects || [])) {
+                const healAmt = se?.onMeleeHitBy?.healAttacker || 0;
+                if (healAmt > 0 && user?.currentHP != null && user?.maxHP != null) {
+                  user.currentHP = Math.min(user.maxHP, user.currentHP + healAmt);
+                  this._showFloatingNumber?.(healAmt, user, true);
+                  this._log(`${user?.name ?? 'Attacker'} is healed for ${healAmt} HP by ${target?.name ?? 'target'}'s toxic bloom aura.`);
+                }
+              }
+            }
+          }
+
           // Next-hit one-shot effects (e.g. bedrock_guard cold retaliation on attacker)
           if (dmg > 0) this._processNextHitStatusEffects(target, user);
           if (dmg > 0) this._processOnHitProcs(user, target);
@@ -3331,6 +3378,33 @@ export default class CombatScene extends Phaser.Scene {
 
             this._onUnitKnockedOut(target);
             if (this.combatEnded) return; // battle ended; stop here
+
+            // onKill: effects that fire when this hit kills the target
+            if (result?.onKill) {
+              const ok = result.onKill;
+
+              // disorientAll: apply N disorient buildup to every remaining living enemy
+              if ((ok.disorientAll || 0) > 0) {
+                const side = target.isEnemy ? this.enemySlots : this.allySlots;
+                const living = (side || []).filter(s => s?.char && s.char.status !== 'incapacitated' && s.char !== target);
+                living.forEach(s => {
+                  this._applyWeaknessBuildup(s.char, { disorient: ok.disorientAll }, { user });
+                });
+                if (living.length > 0) this._log(`Sandstorm — ${ok.disorientAll} disorient sweeps the remaining enemies!`);
+              }
+
+              // initiativeGained: add to attacker's initiative gauge
+              if ((ok.initiativeGained || 0) > 0) {
+                user.initiative = (user.initiative || 0) + ok.initiativeGained;
+                this._log(`${user?.name ?? 'The slinger'} reads the opening — +${ok.initiativeGained} initiative!`);
+              }
+
+              // resetBonusAction: restore the attacker's bonus action point
+              if (ok.resetBonusAction && user?.actionsLeft) {
+                user.actionsLeft.bonus = 1;
+                this._log(`${user?.name ?? 'The slinger'}'s bonus action resets!`);
+              }
+            }
           }
 
           this._showFloatingNumber?.(dmg, target, false, isCrit);
@@ -3654,6 +3728,23 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // ---- runeChannel: 25% chance to repeat the spell at 60% damage ----
+    if (!missed && !options?.isRepeat && (ability?.tags || []).includes('spell')) {
+      const rcZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.runeChannel);
+      if (rcZone && Math.random() < 0.25) {
+        this._log(`${user?.name ?? 'Mage'}'s rune channel echoes the spell!`);
+        this.time.delayedCall(480, () => {
+          if (this.combatEnded || !target || target.status === 'incapacitated') return;
+          this._applyDirectResult(user, target, {
+            amount: Math.floor((result.amount || 0) * 0.60),
+            buildup: result.buildup ? { ...result.buildup } : undefined,
+            element: result.element,
+            isMagic: result.isMagic,
+          }, { ability, isRepeat: true });
+        });
+      }
+    }
+
     // ---- UI refresh ----
     this._updateHealthBars?.();
     this._updateHPMPBars?.();
@@ -3825,6 +3916,36 @@ export default class CombatScene extends Phaser.Scene {
 
       // turn skip (e.g., stunned)
       if (se.blocksAction) skip = true;
+
+      // Lodge tick buildup — applies per-turn buildup fields to the lodged character
+      if (se?.id === 'lodged' && se.tickBuildup && !died) {
+        this._applyWeaknessBuildup(char, se.tickBuildup, { user: char });
+      }
+
+      // runic zone per-turn effects
+      if (se.id === 'runic_zone' && (se.turns || 0) > 0) {
+        const maxMP = char.maxMP ?? char.derivedStats?.maxMP ?? 0;
+
+        if (se.mods?.wardWeave) {
+          // wardWeave: drain 3 initiative gauge instead of restoring MP
+          char.initiativeGauge = Math.max(0, (char.initiativeGauge || 0) - 3);
+          this._log(`${char.name}'s ward weave sustains — 3 initiative drained.`);
+        } else if ((se.mpPerTurn || 0) > 0 && maxMP > 0) {
+          const mpGain = se.mpPerTurn;
+          char.currentMP = Math.min(maxMP, (char.currentMP || 0) + mpGain);
+          this._log(`${char.name}'s runic zone restores ${mpGain} MP.`);
+        }
+
+        if (se.mods?.kindlingRite) {
+          this._applyWeaknessBuildup(char, { fire: 80 }, { user: char });
+          this._log(`${char.name}'s kindling rite pulses — 80 fire buildup.`);
+        }
+
+        if (se.mods?.runeChannel) {
+          this._applyWeaknessBuildup(char, { lightning: 80 }, { user: char });
+          this._log(`${char.name}'s rune channel pulses — 80 lightning buildup.`);
+        }
+      }
     }
 
     return { died, skip };
@@ -3872,6 +3993,10 @@ export default class CombatScene extends Phaser.Scene {
 
     // Remove exhausted guard effects (reverse order keeps indices stable)
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
+
+    // wardWeave: runic zone mod grants a flat 10% damage reduction as guard
+    const wardZone = list.find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.wardWeave);
+    if (wardZone) totalGuard += 0.10;
 
     return Math.min(0.95, totalGuard);
   }
