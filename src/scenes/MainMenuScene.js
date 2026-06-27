@@ -3,7 +3,7 @@ import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { createButton } from '../ui/Button.js';
 import { createPanel } from '../ui/GamePanel.js';
-import { SoundManager, AUDIO_MANIFEST } from '../systems/SoundManager.js';
+import { SoundManager, AUDIO_MANIFEST, MUSIC_MANIFEST } from '../systems/SoundManager.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 
 export default class MainMenuScene extends Phaser.Scene {
@@ -16,10 +16,16 @@ export default class MainMenuScene extends Phaser.Scene {
     AUDIO_MANIFEST.forEach(s => {
       this.load.audio(`sfx_${s.id}`, `assets/audio/${s.file}`);
     });
+    const startScreenTrack = MUSIC_MANIFEST.find(m => m.id === 'behelithStartScreen');
+    this.load.audio(`music_${startScreenTrack.id}`, [
+      `assets/audio/music/${startScreenTrack.file}.ogg`,
+      `assets/audio/music/${startScreenTrack.file}.mp3`,
+    ]);
   }
 
   create() {
     SoundManager.init(this);
+    SoundManager.playMusic('behelithStartScreen');
     setupSceneCursor(this);
     const { width, height } = this.sys.game.canvas;
 
@@ -38,6 +44,7 @@ export default class MainMenuScene extends Phaser.Scene {
     this.sceneManager = new SceneManager(this);
 
     this.createMenuButton('▶ Start New Game', width / 2, height / 2 - 20, () => {
+      SoundManager.stopMusic();
       // Reset all in-memory state for a clean new game.
       GameState.reset();
       ProgressionManager.reset();
@@ -161,6 +168,7 @@ export default class MainMenuScene extends Phaser.Scene {
 
         const btnY = listTop + 20 + i * slotSpacing;
         const btn = createButton(this, 0, btnY, `Slot ${slot}`, () => {
+          SoundManager.stopMusic();
           GameState.load(slot);
           this.loadPopup.destroy(true);
           blocker.destroy();

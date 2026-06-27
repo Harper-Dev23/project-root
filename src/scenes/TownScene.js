@@ -981,6 +981,7 @@ export default class TownScene extends Phaser.Scene {
   // 🏕 Transition into Samuel's Tent Interior
   // =====================================================
   enterSamuelTent() {
+    SoundManager.playMusic('mourneTheme');
     if (this.campMap) this.campMap.setVisible(false);
 
     const hasIntroFlag      = ProgressionManager.hasQuestFlag('samuel_mourne');
@@ -1137,6 +1138,7 @@ export default class TownScene extends Phaser.Scene {
   // 🔙 Return to Exterior (Samuel)
   // =====================================================
   leaveSamuelTent() {
+    SoundManager.stopMusic();
     if (this.samuelInteriorGroup) this.samuelInteriorGroup.setVisible(false);
     if (this.campMap) this.campMap.setVisible(true);
   }
@@ -1765,6 +1767,8 @@ export default class TownScene extends Phaser.Scene {
   _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null, lodgeFlagId = null, bgImage = null) {
     this._hideExteriorsAndOtherInteriors();
 
+    if (tribeId === 'elseth') SoundManager.playMusic('fairySong');
+
     if (!this.lodgeGroups) this.lodgeGroups = {};
 
     const playerTribe    = ProgressionManager.getTribe();
@@ -1800,6 +1804,7 @@ export default class TownScene extends Phaser.Scene {
       bgColor,
       bgImage,
       onExit: () => {
+        if (tribeId === 'elseth') SoundManager.stopMusic();
         group.setVisible(false);
         this._showExterior();
       }
@@ -2400,6 +2405,7 @@ export default class TownScene extends Phaser.Scene {
   // Utility helpers
   // =====================================================
   _hideExteriorsAndOtherInteriors() {
+    SoundManager.stopMusic();
     if (this.campMap) this.campMap.setVisible(false);
     if (this.samuelInteriorGroup) this.samuelInteriorGroup.setVisible(false);
     if (this.vendorRowGroup) this.vendorRowGroup.setVisible(false);
@@ -2457,6 +2463,9 @@ export default class TownScene extends Phaser.Scene {
     // Map display name → internal ID
     const TRIBE_KEY = { Elseth: 'elseth', Styx: 'styx', "Le'sse": 'lesse', Zafaar: 'zafaar' };
     const tribeId       = TRIBE_KEY[tribe] ?? tribe.toLowerCase();
+
+    if (tribeId === 'elseth') SoundManager.playMusic('fairySong');
+
     const briefFlag     = `${tribeId}_leader_brief`;
     const challengeFlag = `${tribeId}_leader_challenge`;
     const handinFlag    = `${tribeId}_leader_handin`;
@@ -2576,6 +2585,7 @@ export default class TownScene extends Phaser.Scene {
       bgColor: colors[tribe] || 0x222222,
       bgImage:  interiorImages[tribe] ?? null,
       onExit: () => {
+        if (tribeId === 'elseth') SoundManager.stopMusic();
         this.leaderGroups[tribe].setVisible(false);
         this._showExterior();
       },

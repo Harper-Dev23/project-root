@@ -1,6 +1,8 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { HOTKEYS } from '../../systems/HotkeyManager.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { AudioSettings } from '../../systems/AudioSettings.js';
+import { SoundManager } from '../../systems/SoundManager.js';
 
 const TAB_NAMES = ['Audio', 'Graphics', 'Gameplay', 'Hotkeys'];
 
@@ -128,10 +130,10 @@ export default class OptionsOverlay extends Phaser.Scene {
 
     if (name === 'Audio') {
       let cy = contentY;
-      addText(left, cy, 'Audio', sectionStyle); cy += 32;
-      addText(left + 20, cy, '• Master Volume  [placeholder slider]', itemStyle); cy += 26;
-      addText(left + 20, cy, '• Music Volume   [placeholder slider]', itemStyle); cy += 26;
-      addText(left + 20, cy, '• Effects Volume [placeholder slider]', itemStyle);
+      addText(left, cy, 'Audio', sectionStyle); cy += 40;
+      this._buildVolumeSlider(group, left + 20, cy, 'Master Volume', 'master', depth);  cy += 50;
+      this._buildVolumeSlider(group, left + 20, cy, 'Music Volume',  'music',  depth);   cy += 50;
+      this._buildVolumeSlider(group, left + 20, cy, 'Effects Volume', 'sfx',   depth);
 
     } else if (name === 'Graphics') {
       let cy = contentY;
@@ -152,7 +154,7 @@ export default class OptionsOverlay extends Phaser.Scene {
     }
 
     // Note at bottom for placeholder tabs
-    if (name !== 'Hotkeys') {
+    if (name !== 'Hotkeys' && name !== 'Audio') {
       const note = this.add.text(
         left,
         this._bounds.bottom - 80,
@@ -163,6 +165,69 @@ export default class OptionsOverlay extends Phaser.Scene {
     }
 
     this._tabContent[name] = group;
+  }
+
+  // ── Audio sliders ───────────────────────────────────────────────────────
+
+  /**
+   * Builds one labeled, draggable volume slider bound to AudioSettings[settingKey].
+   * Dragging or clicking the track updates the setting live (SoundManager
+   * picks up music volume changes immediately via AudioSettings.onChange).
+   */
+  _buildVolumeSlider(group, x, y, label, settingKey, depth) {
+    const trackW = 260;
+    const trackH = 6;
+    const trackX = x + 150;
+
+    const labelText = this.add.text(x, y, label, {
+      fontSize: '15px',
+      color: '#d0d0d0'
+    }).setOrigin(0, 0.5).setDepth(depth);
+    group.add(labelText);
+
+    const track = this.add.rectangle(trackX, y, trackW, trackH, 0x3a3a3a)
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
+    group.add(track);
+
+    const value = AudioSettings[settingKey];
+    const fill = this.add.rectangle(trackX, y, trackW * value, trackH, 0xffdd88)
+      .setOrigin(0, 0.5)
+      .setDepth(depth + 1);
+    group.add(fill);
+
+    const handle = this.add.circle(trackX + trackW * value, y, 8, 0xffffff)
+      .setDepth(depth + 2)
+      .setInteractive({ useHandCursor: true, draggable: true });
+    group.add(handle);
+
+    const pctText = this.add.text(trackX + trackW + 16, y, `${Math.round(value * 100)}%`, {
+      fontSize: '14px',
+      color: '#999999'
+    }).setOrigin(0, 0.5).setDepth(depth);
+    group.add(pctText);
+
+    const applyValue = (rawX) => {
+      const clamped = Phaser.Math.Clamp(rawX, trackX, trackX + trackW);
+      const ratio = (clamped - trackX) / trackW;
+      handle.x = clamped;
+      fill.width = trackW * ratio;
+      pctText.setText(`${Math.round(ratio * 100)}%`);
+      AudioSettings.set(settingKey, ratio);
+      return ratio;
+    };
+
+    this.input.setDraggable(handle);
+    handle.on('drag', (pointer) => applyValue(pointer.x));
+    handle.on('dragend', () => {
+      if (settingKey !== 'music') SoundManager.play('select');
+    });
+
+    track.setInteractive({ useHandCursor: true })
+      .on('pointerdown', (pointer) => {
+        applyValue(pointer.x);
+        if (settingKey !== 'music') SoundManager.play('select');
+      });
   }
 
   _buildHotkeysTab(group, left, startY, panelWidth, sectionStyle, itemStyle, noteStyle, depth) {

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"exit:$?\")",
+      "Bash(node --check src/scenes/TownScene.js)",
+      "Bash(awk 'NR>=202750 && NR<=202900' phaser.js)",
+      "Read(//c/Users/eddie/**)",
+      "Bash(find \"/c/Users/eddie/Desktop/Behel'ith Vault\" -iname \"*2d*\" -o -iname \"*exploration*\" 2>/dev/null | grep -v \".obsidian\")",
+      "Read(//c/Users/eddie/Desktop/Behel'ith Vault/**)",
+      "Bash(ls -la \"/c/Users/eddie/Desktop/Behel'ith Vault/2d_Game_Plan/Exploration System\")",
+      "Read(//c/Users/eddie/Desktop/Behel'ith Vault/2d_Game_Plan/Exploration System/**)",
+      "Bash(grep -rl \"Hunt Point\" \"/c/Users/eddie/Desktop/Behel'ith Vault\" 2>/dev/null)",
+      "Bash(grep -n -i -B2 -A8 \"hunt point\" \"/c/Users/eddie/Desktop/Behel'ith Vault/Player_Handbook_ONLY/Welcome_to_Behelith.md\" \"/c/Users/eddie/Desktop/Behel'ith Vault/Items/Waystone.md\")",
+      "Read(//c/Users/eddie/Desktop/Behel'ith Vault/Player_Handbook_ONLY/**)",
+      "Bash(grep -n -i -B2 -A5 \"hunt point\" \"/c/Users/eddie/Desktop/Behel'ith Vault/Converted notes/Encounters.md\" \"/c/Users/eddie/Desktop/Behel'ith Vault/Converted notes/Sacred_Marks_and_Tiers.md\")",
+      "Read(//c/Users/eddie/Desktop/Behel'ith Vault/Converted notes/**)"
+    ]
+  }
+}

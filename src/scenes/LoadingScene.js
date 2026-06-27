@@ -1,4 +1,4 @@
-import { AUDIO_MANIFEST } from '../systems/SoundManager.js';
+import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../systems/SoundManager.js';
 
 export default class LoadingScene extends Phaser.Scene {
   constructor() {
@@ -56,6 +56,14 @@ export default class LoadingScene extends Phaser.Scene {
     // Sound effects — driven by SoundManager manifest so this list never drifts
     AUDIO_MANIFEST.forEach(s => {
       this.load.audio(`sfx_${s.id}`, `assets/audio/${s.file}`);
+    });
+
+    // Background music tracks — ogg first, mp3 fallback
+    MUSIC_MANIFEST.forEach(m => {
+      this.load.audio(`music_${m.id}`, [
+        `assets/audio/music/${m.file}.ogg`,
+        `assets/audio/music/${m.file}.mp3`,
+      ]);
     });
 
     // Combat pit background
