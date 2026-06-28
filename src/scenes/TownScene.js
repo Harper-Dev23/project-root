@@ -2744,14 +2744,11 @@ export default class TownScene extends Phaser.Scene {
   // 🚪 Hunt Gate (transition placeholder)
   // =====================================================
   _enterHuntGate() {
-    // Don't hide the exterior — this is a placeholder dialogue only.
-    // Hiding without a guaranteed restore path causes the screen to stay dark.
-    this.scene.get('UIScene')?.showConfirmationDialogue(
-      "Are you ready to depart for the Sacred Hunt?\n(Feature coming soon)",
-      () => {
-        console.log("TODO: switch to Exploration / Hunt scene.");
-      }
-    );
+    // Launched WITHOUT bringing it above UIScene — the sidebar/right panel/
+    // toggle button stay visible and clickable above the hunt screen so the
+    // player can check inventory/HP mid-hunt.
+    this.scene.launch('HuntHubOverlay');
+    this.scene.bringToTop('UIScene');
   }
   ////////////Vendors///////////////////////////
 

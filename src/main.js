@@ -19,6 +19,9 @@ import LevelUpOverlay from './scenes/overlays/LevelUpOverlay.js';
 import TribeRelationsOverlay from './scenes/overlays/TribeRelationsOverlay.js';
 import WaystoneShardOverlay from './scenes/overlays/WaystoneShardOverlay.js';
 import CampRosterOverlay from './scenes/overlays/CampRosterOverlay.js';
+import HuntMapOverlay from './scenes/overlays/HuntMapOverlay.js';
+import HuntHubOverlay from './scenes/overlays/HuntHubOverlay.js';
+import HuntEncounterOverlay from './scenes/overlays/HuntEncounterOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -45,6 +48,9 @@ const config = {
     TribeRelationsOverlay,
     WaystoneShardOverlay,
     CampRosterOverlay,
+    HuntMapOverlay,
+    HuntHubOverlay,
+    HuntEncounterOverlay,
   ],
   physics: {
     default: 'arcade',

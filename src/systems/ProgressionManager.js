@@ -93,6 +93,7 @@ const ProgressionManager = {
   completedScenarios: [],   // e.g. ['training_encounter_1', 'training_encounter_2']
   huntTickets:  0,
   tribeTickets: 0,
+  huntPoints:   0,          // player-wide score from the Hunt loop — tracked via the Waystone
   tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
 
   // Quest flags: IDs of events that are currently "pending" (show a ! marker).
@@ -157,6 +158,13 @@ const ProgressionManager = {
   },
   decrementTribeVendorStock(itemId) {
     this.tribeVendorStock[itemId] = Math.max(0, this.getTribeVendorStock(itemId) - 1);
+  },
+
+  // ----- Hunt Points (player-wide, earned during Hunts) --------------------
+
+  addHuntPoints(amount) {
+    this.huntPoints = Math.max(0, this.huntPoints + amount);
+    return this.huntPoints;
   },
 
   // ----- Tribe allegiance (save-slot wide) ---------------------------------
@@ -281,6 +289,7 @@ const ProgressionManager = {
       completedScenarios:  [...this.completedScenarios],
       huntTickets:         this.huntTickets,
       tribeTickets:        this.tribeTickets,
+      huntPoints:          this.huntPoints,
       questFlags:          [...this.questFlags],
       tribe:               this.tribe,
       tribeVendorStock:    { ...this.tribeVendorStock },
@@ -294,6 +303,7 @@ const ProgressionManager = {
     this.completedScenarios  = Array.isArray(data.completedScenarios)  ? [...data.completedScenarios]  : [];
     this.huntTickets         = typeof data.huntTickets  === 'number'    ? data.huntTickets              : 0;
     this.tribeTickets        = typeof data.tribeTickets === 'number'    ? data.tribeTickets             : 0;
+    this.huntPoints          = typeof data.huntPoints   === 'number'    ? data.huntPoints               : 0;
     this.questFlags          = Array.isArray(data.questFlags)           ? [...data.questFlags]          : [];
     this.tribe               = data.tribe || null;
     this.tribeVendorStock    = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
@@ -307,6 +317,7 @@ const ProgressionManager = {
     this.completedScenarios  = [];
     this.huntTickets         = 0;
     this.tribeTickets        = 0;
+    this.huntPoints          = 0;
     this.questFlags          = [];
     this.tribe               = null;
     this.tribeVendorStock    = {};

@@ -1,4 +1,5 @@
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../systems/SoundManager.js';
+import { HuntManager } from '../systems/HuntManager.js';
 
 export default class LoadingScene extends Phaser.Scene {
   constructor() {
@@ -129,12 +130,17 @@ export default class LoadingScene extends Phaser.Scene {
     if (!this.targetScene) return;
 
     if (this.targetScene === 'TownScene') {
+      // Discard any in-progress hunt — entering Town fresh (new game, load
+      // game) should never carry over stale session-only hunt state.
+      HuntManager.end();
+
       // Stop any overlay/parallel scenes that may be lingering from a previous
       // session before we (re)start TownScene + UIScene from scratch.
       const CLEANUP = [
         'UIScene', 'CombatScene', 'CharacterCreationScene', 'PartyManagementScene',
         'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
         'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+        'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay',
       ];
       CLEANUP.forEach(key => {
         if (this.scene.isActive(key) || this.scene.isPaused(key)) {

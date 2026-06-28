@@ -1,3 +1,5 @@
+import { HuntManager } from './HuntManager.js';
+
 export default class SceneManager {
   constructor(game) {
     this.game = game;
@@ -33,11 +35,14 @@ export default class SceneManager {
 
   // ⛔ Return to Main Menu — stop every scene that could be active
   returnToMainMenu() {
+    HuntManager.end();
+
     const ALL_SCENES = [
       'TownScene', 'UIScene', 'CombatScene',
       'CharacterCreationScene', 'PartyManagementScene',
       'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
       'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+      'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay',
     ];
     ALL_SCENES.forEach(key => {
       if (this.scene.isActive(key) || this.scene.isPaused(key)) {
