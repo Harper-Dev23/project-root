@@ -238,6 +238,23 @@ const ARMOR_SUFFIX_POOL = [
   makeStatSuffix({ key: 'of the Lion', stat: 'CHA' })
 ];
 
+// --- Hunt Plan pools ---------------------------------------------------------
+// makeMiscArmorPrefix is generic over any `misc` field name despite the name —
+// reused here rather than writing a near-duplicate factory. lootQualityPercent
+// shifts Cultist fight drop rarity toward rare — see CombatScene.js's
+// rollHuntDropRarity().
+const HUNTPLAN_PREFIX_POOL = [
+  makeMiscArmorPrefix({ key: 'Keen-Eyed', tier: 2, prop: 'beastChanceWeight', range: [1, 3] }),
+  makeMiscArmorPrefix({ key: 'Bold', tier: 2, prop: 'encounterChancePercent', range: [5, 15] }),
+  makeMiscArmorPrefix({ key: 'Studious', tier: 3, prop: 'xpPercent', range: [10, 25] }),
+];
+
+const HUNTPLAN_SUFFIX_POOL = [
+  makeMiscArmorPrefix({ key: 'of Swift Travel', tier: 2, prop: 'supplyEfficiencyPercent', range: [5, 20] }),
+  makeMiscArmorPrefix({ key: 'of the Hunt', tier: 1, prop: 'huntPointsPercent', range: [5, 20] }),
+  makeMiscArmorPrefix({ key: 'of Plenty', tier: 3, prop: 'lootQualityPercent', range: [10, 25] }),
+];
+
 // --- Weapon pools -----------------------------------------------------------
 const WEAPON_PREFIX_POOL = [
   // Flat min damage
@@ -338,6 +355,9 @@ function getAffixPoolsFor(base) {
   }
   if (base.type === 'weapon') {
     return { prefixes: WEAPON_PREFIX_POOL, suffixes: WEAPON_SUFFIX_POOL };
+  }
+  if (base.type === 'huntPlan') {
+    return { prefixes: HUNTPLAN_PREFIX_POOL, suffixes: HUNTPLAN_SUFFIX_POOL };
   }
   return null;
 }
@@ -505,6 +525,13 @@ function buildInstanceModifiers(prefixes, suffixes) {
       if (misc.procElemFlat) mods.misc.procElemFlat += misc.procElemFlat;
       if (misc.procNecroFlat) mods.misc.procNecroFlat += misc.procNecroFlat;
       if (misc.procPhysFlat) mods.misc.procPhysFlat += misc.procPhysFlat;
+      // Hunt Plan mods (src/systems/HuntModifiers.js shared schema)
+      if (misc.encounterChancePercent) mods.misc.encounterChancePercent = (mods.misc.encounterChancePercent || 0) + misc.encounterChancePercent;
+      if (misc.beastChanceWeight) mods.misc.beastChanceWeight = (mods.misc.beastChanceWeight || 0) + misc.beastChanceWeight;
+      if (misc.supplyEfficiencyPercent) mods.misc.supplyEfficiencyPercent = (mods.misc.supplyEfficiencyPercent || 0) + misc.supplyEfficiencyPercent;
+      if (misc.huntPointsPercent) mods.misc.huntPointsPercent = (mods.misc.huntPointsPercent || 0) + misc.huntPointsPercent;
+      if (misc.xpPercent) mods.misc.xpPercent = (mods.misc.xpPercent || 0) + misc.xpPercent;
+      if (misc.lootQualityPercent) mods.misc.lootQualityPercent = (mods.misc.lootQualityPercent || 0) + misc.lootQualityPercent;
       // Jewelry misc mods — keyed-by-family objects
       if (misc.physBuildupOnPhysDmg) {
         for (const [fam, v] of Object.entries(misc.physBuildupOnPhysDmg)) {
@@ -750,6 +777,13 @@ export function getItemComputedData(itemRef) {
       procElemFlat: misc.procElemFlat || 0,
       procNecroFlat: misc.procNecroFlat || 0,
       procPhysFlat: misc.procPhysFlat || 0,
+      // Hunt Plan mods (src/systems/HuntModifiers.js shared schema)
+      encounterChancePercent: misc.encounterChancePercent || 0,
+      beastChanceWeight: misc.beastChanceWeight || 0,
+      supplyEfficiencyPercent: misc.supplyEfficiencyPercent || 0,
+      huntPointsPercent: misc.huntPointsPercent || 0,
+      xpPercent: misc.xpPercent || 0,
+      lootQualityPercent: misc.lootQualityPercent || 0,
     };
   }
 

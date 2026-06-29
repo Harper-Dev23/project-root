@@ -200,6 +200,22 @@ export default class UIScene extends Phaser.Scene {
 
   }
 
+  /**
+   * Keeps the left party panel's HP/MP bars synced to live character data
+   * every frame, instead of relying solely on a full refreshUI() rebuild
+   * (which only fires on specific events and can silently fall out of sync
+   * if one of those events doesn't fire when expected). Name/level/XP/favor
+   * text still only updates on a full rebuild — those change far less often.
+   */
+  update() {
+    if (!this._partyStatusBars) return;
+    this._partyStatusBars.forEach(({ char, hpBar, mpBar }) => {
+      if (!char) return;
+      hpBar?.updateCurrent(char.currentHP);
+      mpBar?.updateCurrent(char.currentMP);
+    });
+  }
+
   buildUI(width, height) {
     this.children.removeAll(true);
     const leftPanelWidth = 180;
@@ -407,6 +423,11 @@ export default class UIScene extends Phaser.Scene {
     // 📦 Create a container for party UI elements
     this.leftPartyPanel = this.add.container(leftPanelX, 0).setDepth(DEPTH.UI_OVERLAY);
 
+    // Tracked so update() can sync these bars to live character data every
+    // frame, independent of whatever triggered the last full rebuild —
+    // see UIScene#update().
+    this._partyStatusBars = [];
+
     GameState.party.forEach((char, i) => {
       const panelY = startY + i * spacingY;
       const centerX = leftPanelWidth / 2;
@@ -442,6 +463,8 @@ export default class UIScene extends Phaser.Scene {
         this, panelCenterX, panelY + 42, barWidth, 4,
         char.experience, getXPNeededForLevel(char.level), 0xffff66, 0x222222
       );
+
+      this._partyStatusBars.push({ char, hpBar, mpBar });
 
       // Favor
       const favorText = this.add.text(centerX, panelY + 50, `Favor: ${char.favor}`, {

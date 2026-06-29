@@ -14,10 +14,16 @@ export const ZONES = {
     terrain: 'wetland',
     divineAlignment: 'jeremiah',
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
+    // Thick reeds and standing water make for slow, beast-rich going.
+    modifiers: { encounterChancePercent: 6, supplyEfficiencyPercent: -5 },
     encounterTable: {
       beasts: [
         { id: 'reeds_marsh_stalker',   label: 'A marsh stalker slips through the reeds.' },
         { id: 'reeds_wading_heron',    label: 'A wading heron watches you pass, unbothered.' },
+      ],
+      cultists: [
+        { id: 'reeds_hooded_figures',  label: 'Hooded figures murmur over something half-buried in the mud.' },
+        { id: 'reeds_cult_scouts',     label: 'A pair of scouts in ash-grey robes freeze at the sight of you.' },
       ],
       environmental: [
         { id: 'reeds_sinking_mud',     label: 'The ground gives way to sucking mud underfoot.' },
@@ -29,10 +35,6 @@ export const ZONES = {
         { id: 'reeds_distant_weeping', label: 'A faint, distant weeping carries over the water.' },
       ],
     },
-    lootTable: [
-      { id: 'reeds_reed_bundle', label: 'Reed Bundle' },
-      { id: 'reeds_marsh_root',  label: 'Marsh Root' },
-    ],
   },
 
   bay_of_solace: {
@@ -42,10 +44,16 @@ export const ZONES = {
     terrain: 'coastal',
     divineAlignment: null,
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',
+    // Open, flat coastline — easy travel, but little cover means fewer encounters too.
+    modifiers: { encounterChancePercent: -4, supplyEfficiencyPercent: 8 },
     encounterTable: {
       beasts: [
         { id: 'bay_tide_crab',       label: 'An oversized tide crab scuttles out of a rockpool.' },
         { id: 'bay_gull_flock',      label: 'A flock of gulls scatters noisily ahead of you.' },
+      ],
+      cultists: [
+        { id: 'bay_beach_cultists',  label: 'A small camp of robed figures has staked out the dunes ahead.' },
+        { id: 'bay_tide_watchers',   label: 'Figures stand motionless at the waterline, watching the horizon.' },
       ],
       environmental: [
         { id: 'bay_rising_tide',     label: 'The tide rises faster than expected, cutting off a path.' },
@@ -57,10 +65,6 @@ export const ZONES = {
         { id: 'bay_driftwood_idol',  label: 'Someone has stacked driftwood into a crude idol shape.' },
       ],
     },
-    lootTable: [
-      { id: 'bay_sea_glass',  label: 'Sea Glass' },
-      { id: 'bay_dried_kelp', label: 'Dried Kelp' },
-    ],
   },
 };
 

@@ -161,6 +161,7 @@ function normalizeAfterLoad(c) {
 const GameState = {
   characters: [],
   party: [],
+  slain: [], // characters lost to a full party wipe — shown in CampRosterOverlay's Slain tab
   inventory: [], // GLOBAL inventory shared between characters
   tribeStash: {}, // keyed by tribe id → ItemInstance[]
 
@@ -234,6 +235,23 @@ const GameState = {
     this.party = this.party.filter(c => c !== charObj);
   },
 
+  /** Full HP/MP restore for the whole party — used when returning to Camp Nehemiah from a Hunt. */
+  restorePartyToFull() {
+    this.party.forEach(char => {
+      if (char.status === 'dead') return;
+      char.status = 'alive';
+      char.currentHP = char.maxHP;
+      char.currentMP = char.maxMP ?? char.currentMP;
+    });
+  },
+
+  /** Moves a character (already status === 'dead') out of characters/party and into Slain. */
+  moveToSlain(charObj) {
+    this.characters = this.characters.filter(c => c !== charObj);
+    this.party = this.party.filter(c => c !== charObj);
+    if (!this.slain.includes(charObj)) this.slain.push(charObj);
+  },
+
 
   /* --------------------- Save / Load ---------------------- */
   save(slot) {
@@ -242,6 +260,7 @@ const GameState = {
     const payload = {
       version: 3,
       characters: (this.characters || []).map(serializeCharacter),
+      slain: (this.slain || []).map(serializeCharacter),
       partyIds: (this.party || []).map(p => p.id),
       inventory: serializeInventory(this.inventory), // global bag
       tribeStash: Object.fromEntries(
@@ -277,6 +296,10 @@ const GameState = {
 
     // Characters
     this.characters = (data.characters || [])
+      .map(c => normalizeAfterLoad(deserializeCharacter(c)));
+
+    // Slain — same deserialization as living characters, just a separate roster
+    this.slain = (data.slain || [])
       .map(c => normalizeAfterLoad(deserializeCharacter(c)));
 
     // Party: re-link by id
@@ -333,6 +356,7 @@ const GameState = {
   reset() {
     this.characters = [];
     this.party = [];
+    this.slain = [];
     this.inventory = [];
     this.tribeStash = {};
     this.quests = [];

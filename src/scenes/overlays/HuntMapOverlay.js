@@ -37,7 +37,7 @@ export default class HuntMapOverlay extends Phaser.Scene {
 
     const zones = listZones();
     const cardW = (width - 100) / zones.length;
-    const cardH = 280;
+    const cardH = 320;
     const cardY = y + 110;
 
     zones.forEach((zone, i) => {
@@ -70,6 +70,30 @@ export default class HuntMapOverlay extends Phaser.Scene {
       color: '#d0d0d0',
       wordWrap: { width: w - 32 },
     }).setDepth(depth + 1);
+
+    // Weather and Divine Influence are real per-hunt/per-zone factors, but
+    // their effects aren't decipherable to the player yet — shown as known
+    // categories with an unknown effect until some future knowledge system
+    // lets the player read them.
+    this.add.text(cx + 16, cy + h - 56, '🌦 Weather', {
+      fontSize: '13px',
+      color: '#88ccff',
+      fontStyle: 'bold',
+    }).setDepth(depth + 1);
+    this.add.text(cx + w - 16, cy + h - 56, 'Unknown', {
+      fontSize: '13px',
+      color: '#88ccff',
+    }).setOrigin(1, 0).setDepth(depth + 1);
+
+    this.add.text(cx + 16, cy + h - 32, '✨ Divine Influence', {
+      fontSize: '13px',
+      color: '#cc99ff',
+      fontStyle: 'bold',
+    }).setDepth(depth + 1);
+    this.add.text(cx + w - 16, cy + h - 32, 'Unknown', {
+      fontSize: '13px',
+      color: '#cc99ff',
+    }).setOrigin(1, 0).setDepth(depth + 1);
 
     const hitZone = this.add.zone(cx + w / 2, cy + h / 2, w, h)
       .setOrigin(0.5)

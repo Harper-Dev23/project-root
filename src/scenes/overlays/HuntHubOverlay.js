@@ -19,10 +19,14 @@ import { createButton } from '../../ui/Button.js';
 import { createPanel } from '../../ui/GamePanel.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { HuntManager } from '../../systems/HuntManager.js';
+import { combineModifiers, describeModifiers } from '../../systems/HuntModifiers.js';
+import { getItemComputedData } from '../../systems/ItemFactory.js';
+import { RARITY_COLORS } from '../../ui/styles.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
+import GameState from '../../systems/GameState.js';
 import { getZone } from '../../../data/zones.js';
 
-const BASE_SUPPLIES          = 40;
+const BASE_SUPPLIES          = 60; // ~2.5 day/night cycles at the default drain rate (see HuntManager.js)
 const SUPPLIES_PER_TICKET    = 10;
 const MAX_TICKETS_SPENDABLE  = 10;
 const LOG_LINES_SHOWN        = 10;
@@ -35,6 +39,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
   init() {
     this.zoneId = null;
     this.ticketsToSpend = 0;
+    this.huntPlanInstance = null;
   }
 
   create() {
@@ -57,6 +62,11 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
   setZone(zoneId) {
     this.zoneId = zoneId;
+    this._render();
+  }
+
+  setHuntPlan(instanceOrNull) {
+    this.huntPlanInstance = instanceOrNull;
     this._render();
   }
 
@@ -133,18 +143,30 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._button(left + 280, suppliesY + 32, '−', () => this._adjustTickets(-1));
     this._button(left + 330, suppliesY + 32, '+', () => this._adjustTickets(1));
 
-    // ── Hunt Plan + modifiers (stub) ─────────────────────────────────────
+    // ── Hunt Plan ────────────────────────────────────────────────────────
     const planY = suppliesY + 110;
     this._text(left, planY, 'Hunt Plan', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
-    this._text(left, planY + 30, 'None — no Hunt Plan items yet.', { fontSize: '14px', color: '#999999' });
 
+    const planView = this.huntPlanInstance ? getItemComputedData(this.huntPlanInstance) : null;
+    const planColor = this.huntPlanInstance ? (RARITY_COLORS[this.huntPlanInstance.rarity] || RARITY_COLORS.common) : '#999999';
+    this._text(left, planY + 30, planView ? planView.name : 'None selected.', {
+      fontSize: '14px', color: planColor,
+    });
+    this._button(left + 280, planY + 18, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
+
+    // ── Active Modifiers (region + Hunt Plan — weather stays unknown until you depart) ──
     const modY = planY + 64;
     const modPanel = createPanel(this, left, modY, width - 80, 90, 'slot');
     this._content.add(modPanel);
-    this._text(left + 16, modY + 10, 'Active Modifiers', { fontSize: '14px', color: '#ffdd88', fontStyle: 'bold' });
-    this._text(left + 16, modY + 36,
-      'Zone: none  ·  Hunt Plan: none  ·  Items: none',
-      { fontSize: '13px', color: '#999999' }
+    this._text(left + 16, modY + 10, 'Active Modifiers (region + Hunt Plan — weather unknown until you depart)', {
+      fontSize: '13px', color: '#ffdd88', fontStyle: 'bold', wordWrap: { width: width - 112 },
+    });
+
+    const previewMods = combineModifiers(zone.modifiers, this.huntPlanInstance?.instanceMods?.misc);
+    const previewLines = describeModifiers(previewMods);
+    this._text(left + 16, modY + 34,
+      previewLines.length ? previewLines.join('   ·   ') : 'No active modifiers.',
+      { fontSize: '13px', color: '#cccccc', wordWrap: { width: width - 112 } }
     );
 
     this._button(x + width / 2, bottom - 50, 'Depart', () => this._depart(), 'confirm');
@@ -161,7 +183,15 @@ export default class HuntHubOverlay extends Phaser.Scene {
     SoundManager.play('select');
     const supplies = BASE_SUPPLIES + this.ticketsToSpend * SUPPLIES_PER_TICKET;
     ProgressionManager.huntTickets -= this.ticketsToSpend;
-    HuntManager.start(this.zoneId, { supplies });
+    const huntPlanModifiers = this.huntPlanInstance?.instanceMods?.misc || null;
+    HuntManager.start(this.zoneId, { supplies, huntPlanModifiers });
+
+    // The chosen Hunt Plan is consumed on departure, not just "equipped".
+    if (this.huntPlanInstance) {
+      GameState.removeFromInventory(this.huntPlanInstance.instanceId);
+      this.huntPlanInstance = null;
+    }
+
     this._render();
   }
 
@@ -188,8 +218,16 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._text(left, barY + 18, `Day ${state.day} — ${state.isNight ? 'Night' : 'Day'}  ·  Depth ${state.depth}`, { fontSize: '15px', color: '#ffffaa' });
     this._text(left, barY + 42, `Hunt Points this trip: ${state.sessionHuntPoints}  ·  Total: ${ProgressionManager.huntPoints}`, { fontSize: '13px', color: '#88ddff' });
 
+    this._text(left, barY + 64, `Weather: ${state.weather.name} — ${state.weather.flavor}`, {
+      fontSize: '12px', color: '#aaccff', wordWrap: { width: width },
+    });
+    const modLines = describeModifiers(state.combinedModifiers);
+    this._text(left, barY + 84, modLines.length ? `Modifiers: ${modLines.join('   ·   ')}` : 'Modifiers: none active.', {
+      fontSize: '12px', color: '#999999', wordWrap: { width: width },
+    });
+
     // ── Log ──────────────────────────────────────────────────────────────
-    const logY = barY + 76;
+    const logY = barY + 116;
     const logH = bottom - logY - 70;
     const logPanel = createPanel(this, left, logY, width - 80, logH, 'default');
     this._content.add(logPanel);
@@ -209,7 +247,10 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const advanceBtn = this._button(x + width / 2 - 90, bottom - 30, 'Advance', () => this._advance(), canAdvance ? 'primary' : 'danger');
     if (!canAdvance) advanceBtn.disableInteractive().setAlpha(0.4);
 
-    const canReturn = !state.pendingEncounter;
+    // Return to Camp is only enabled once the hunt is actually over (supplies
+    // depleted) — no abandoning a hunt early yet. Revisit once a real
+    // "hunt complete" condition beyond running out of supplies exists.
+    const canReturn = !state.pendingEncounter && state.supplies <= 0;
     const returnBtn = this._button(x + width / 2 + 90, bottom - 30, 'Return to Camp', () => this._returnToCamp(), 'danger');
     if (!canReturn) returnBtn.disableInteractive().setAlpha(0.4);
   }
@@ -236,9 +277,13 @@ export default class HuntHubOverlay extends Phaser.Scene {
     SoundManager.play('select');
     const summary = HuntManager.getState();
     HuntManager.end();
+    GameState.restorePartyToFull();
     this.zoneId = null;
     this.ticketsToSpend = 0;
-    this.scene.get('UIScene')?.showDialogue(
+    this.huntPlanInstance = null;
+    const uiScene = this.scene.get('UIScene');
+    uiScene?.refreshUI();
+    uiScene?.showDialogue(
       `You return to Camp Nehemiah.\nHunt Points earned this trip: ${summary.sessionHuntPoints}`
     );
     this._close();
@@ -252,7 +297,20 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this.scene.bringToTop('HuntMapOverlay');
   }
 
+  _openHuntPlanPicker() {
+    this.scene.pause();
+    this.scene.launch('HuntPlanPickerOverlay');
+    this.scene.bringToTop('HuntPlanPickerOverlay');
+  }
+
+  /**
+   * Closing (the X button, clicking outside the panel, or ESC — all route
+   * through OverlayFrame's onClose) is refused while a hunt is active. The
+   * only way out mid-hunt is finishing it — _returnToCamp() already calls
+   * HuntManager.end() before calling this, so that path still works.
+   */
   _close() {
+    if (HuntManager.isActive()) return;
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
     this.scene.stop();

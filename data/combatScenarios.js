@@ -72,5 +72,24 @@ export const COMBAT_SCENARIOS = {
     enemies: [
       { type: 'berserker_boss', slotId: 2 }
     ]
+  },
+
+  // === Hunt encounters (placeholder — no real enemy roster yet) ===
+  hunt_beast_solo: {
+    name: 'Beast Encounter',
+    description: 'A lone beast blocks the path.',
+    portraitKey: 'beast_portrait',
+    enemies: [
+      { type: 'hunt_beast_lesser', slotId: 2 }
+    ]
+  },
+
+  hunt_cultist_solo: {
+    name: 'Cultist Ambush',
+    description: 'A lone cultist springs from cover.',
+    portraitKey: 'soldier_portrait',
+    enemies: [
+      { type: 'hunt_cultist_lesser', slotId: 2, drops: [{ equip: 'chest', droppable: true }] }
+    ]
   }
 };

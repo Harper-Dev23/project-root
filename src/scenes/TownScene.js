@@ -9,6 +9,7 @@ import Tooltip from '../ui/Tooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
+import { describeModifiers } from '../systems/HuntModifiers.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 
 // ---------------------------------------------------------------------------
@@ -395,6 +396,8 @@ export default class TownScene extends Phaser.Scene {
     if (misc.necroticDamagePercent) lines.push(`${formatSigned(misc.necroticDamagePercent, '%')} Necrotic Damage`);
     if (misc.mpPerTurn) lines.push(`${formatSigned(misc.mpPerTurn)} MP per Turn`);
     if (misc.skillCostReductionPct) lines.push(`${formatSigned(misc.skillCostReductionPct, '%')} Skill Cost Reduction`);
+
+    if (view.type === 'huntPlan') lines.push(...describeModifiers(misc));
 
     const miscBuildup = misc.buildupPercent || {};
     Object.entries(miscBuildup).forEach(([family, amount]) => {
@@ -1606,9 +1609,14 @@ export default class TownScene extends Phaser.Scene {
       })
       .forEach(entry => {
         if (!entry.base) return;
-        const color = RARITY_COLORS[entry.base.rarity || entry.base.quality] || '#cccccc';
+        // entry.rarity (set by stock generation, e.g. _rollHuntPlanStock) overrides the
+        // base item's static rarity — keeps the displayed color in sync with what you'll
+        // actually receive, since that's the exact rarity passed to createItemInstance below.
+        const rowRarity = entry.rarity || entry.base.rarity || entry.base.quality;
+        const color = RARITY_COLORS[rowRarity] || '#cccccc';
+        const rarityTag = entry.rarity ? ` (${formatLabel(entry.rarity)})` : '';
 
-        const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name} — ${entry.cost}g`, {
+        const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name}${rarityTag} — ${entry.cost}g`, {
           fontSize: '18px',
           color
         })
@@ -1621,7 +1629,7 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
 
-            const instance = createItemInstance(itemId);
+            const instance = createItemInstance(itemId, entry.rarity ? { rarity: entry.rarity } : undefined);
             if (!instance) {
               console.warn(`Failed to create item instance for ID: ${itemId}`);
               return;
@@ -1658,6 +1666,13 @@ export default class TownScene extends Phaser.Scene {
   // ===============================
   // 📦 Vendor Data
   // ===============================
+  /** Picks ~3 random Hunt Plan item ids, all free — re-rolled on every render (no stock tracking needed). */
+  /** 3 free Hunt Plan stock slots, each its own rolled rarity — locked in here so the
+   *  displayed color and the item actually received always match (re-rolled every visit). */
+  _rollHuntPlanStock() {
+    return Array.from({ length: 3 }, () => ({ id: 'hunt_plan', cost: 0, rarity: randomRarityForGamble() }));
+  }
+
   getVendorDefinitions() {
     return {
       ironbinder: {
@@ -1740,6 +1755,14 @@ export default class TownScene extends Phaser.Scene {
           { id: "quiet_hood", cost: 110, desc: "Stealth / evasion boost." },
           { id: "muffled_wrap", cost: 65, desc: "Reduces noise (future stealth system)." }
         ]
+      },
+
+      wayfinder: {
+        displayName: "Wayfinder's Cache",
+        flavor: `"A weathered cartographer spreads a handful of dog-eared
+        plans across a crate. 'Take your pick — won't cost you a thing.
+        Just don't blame me for what you walk into.'"`,
+        inventory: this._rollHuntPlanStock()
       }
     };
   }
@@ -1855,12 +1878,10 @@ export default class TownScene extends Phaser.Scene {
 
       const openHQ = () => {
         SoundManager.play('handsClick');
-        this.scene.get('UIScene')?.showDialogue(
-          '[ Tribe Headquarters ]\n\n' +
-          'Monitor your tribe\'s hunting parties, view active objectives,\n' +
-          'and respond to tribe events here.\n\n' +
-          '— Coming Soon —'
-        );
+        if (!this.scene.isActive('TribeHQOverlay')) {
+          this.scene.launch('TribeHQOverlay');
+          this.scene.bringToTop('TribeHQOverlay');
+        }
       };
 
       hqBg.on('pointerover',  () => hqBg.setFillStyle(0x2a3a2a, 1));

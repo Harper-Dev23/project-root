@@ -8,7 +8,9 @@
 // The DEV BYPASS toggle is stored separately in localStorage so it never
 // touches save data and persists between page reloads.
 
-import { DEFAULT_TRIBE_REP, clampRepScore } from './TribeRelations.js';
+import { DEFAULT_TRIBE_REP, clampRepScore, TRIBE_IDS } from './TribeRelations.js';
+
+const DEFAULT_TRIBE_HUNT_POINTS = Object.fromEntries(TRIBE_IDS.map(id => [id, 0]));
 
 // ---------------------------------------------------------------------------
 // Config: which scenario must be completed before the next one opens up.
@@ -115,6 +117,16 @@ const ProgressionManager = {
   // Derives to a level via TribeRelations.getRepIndex(score).
   tribeRep: { ...DEFAULT_TRIBE_REP },
 
+  // Tribe-wide Hunt Point grand totals — one number per tribe, all four
+  // tracked regardless of player allegiance so a future cross-tribe
+  // leaderboard needs no data migration.
+  tribeHuntPoints: { ...DEFAULT_TRIBE_HUNT_POINTS },
+
+  // Per-tribe NPC hunting party progress: tribeId → { partyId: points }.
+  // Roster (name/tier) lives in data/tribeHuntingParties.js — only the
+  // mutable point totals are persisted here.
+  tribeHuntingParties: { styx: {}, zafaar: {}, elseth: {}, lesse: {} },
+
   // ----- Dev bypass --------------------------------------------------------
 
   isBypassEnabled() {
@@ -165,6 +177,30 @@ const ProgressionManager = {
   addHuntPoints(amount) {
     this.huntPoints = Math.max(0, this.huntPoints + amount);
     return this.huntPoints;
+  },
+
+  // ----- Tribe-wide Hunt Points (all four tribes, player + NPC parties) ----
+
+  getTribeHuntPoints(tribeId) {
+    return this.tribeHuntPoints?.[tribeId] ?? 0;
+  },
+
+  addTribeHuntPoints(tribeId, amount) {
+    if (!tribeId) return;
+    const current = this.getTribeHuntPoints(tribeId);
+    this.tribeHuntPoints[tribeId] = Math.max(0, current + amount);
+  },
+
+  getPartyPoints(tribeId, partyId) {
+    return this.tribeHuntingParties?.[tribeId]?.[partyId] ?? 0;
+  },
+
+  /** Adds points to one NPC hunting party AND folds the same amount into that tribe's grand total. */
+  addPartyPoints(tribeId, partyId, amount) {
+    if (!this.tribeHuntingParties[tribeId]) this.tribeHuntingParties[tribeId] = {};
+    const current = this.getPartyPoints(tribeId, partyId);
+    this.tribeHuntingParties[tribeId][partyId] = Math.max(0, current + amount);
+    this.addTribeHuntPoints(tribeId, amount);
   },
 
   // ----- Tribe allegiance (save-slot wide) ---------------------------------
@@ -295,6 +331,10 @@ const ProgressionManager = {
       tribeVendorStock:    { ...this.tribeVendorStock },
       completedQuestSteps: [...this.completedQuestSteps],
       tribeRep:            { ...this.tribeRep },
+      tribeHuntPoints:     { ...this.tribeHuntPoints },
+      tribeHuntingParties: Object.fromEntries(
+        Object.entries(this.tribeHuntingParties).map(([k, v]) => [k, { ...v }])
+      ),
     };
   },
 
@@ -311,6 +351,14 @@ const ProgressionManager = {
     this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
     this.tribeRep            = (data.tribeRep && typeof data.tribeRep === 'object')
       ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
+    this.tribeHuntPoints     = (data.tribeHuntPoints && typeof data.tribeHuntPoints === 'object')
+      ? { ...DEFAULT_TRIBE_HUNT_POINTS, ...data.tribeHuntPoints } : { ...DEFAULT_TRIBE_HUNT_POINTS };
+    this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
+    if (data.tribeHuntingParties && typeof data.tribeHuntingParties === 'object') {
+      for (const tribeId of TRIBE_IDS) {
+        if (data.tribeHuntingParties[tribeId]) this.tribeHuntingParties[tribeId] = { ...data.tribeHuntingParties[tribeId] };
+      }
+    }
   },
 
   reset() {
@@ -323,6 +371,8 @@ const ProgressionManager = {
     this.tribeVendorStock    = {};
     this.completedQuestSteps = [];
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
+    this.tribeHuntPoints     = { ...DEFAULT_TRIBE_HUNT_POINTS };
+    this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
   },
 };
 

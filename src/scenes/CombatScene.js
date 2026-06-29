@@ -19,6 +19,7 @@ import { getXPNeededForLevel } from '../../data/xpTable.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { applyLevelUp, rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
@@ -185,6 +186,23 @@ function rollEnemyDropRarity() {
   return 'epic';
 }
 
+// Hunt-mode drops (Cultist fights) use the same uncommon/rare/epic spread as
+// rollEnemyDropRarity(), but lootQualityPercent (from the Hunt Plan/zone/
+// weather modifier pipeline — see HuntModifiers.js) shifts weight out of
+// uncommon and into rare/epic — never guaranteed, just biased.
+function rollHuntDropRarity(lootQualityPercent = 0) {
+  let uncommon = 55, rare = 33, epic = 12;
+  const shift = Math.min(uncommon - 5, Math.max(0, lootQualityPercent) * 0.6);
+  uncommon -= shift;
+  rare += shift * 0.6;
+  epic += shift * 0.4;
+
+  const r = Math.random() * 100;
+  if (r < uncommon) return 'uncommon';
+  if (r < uncommon + rare) return 'rare';
+  return 'epic';
+}
+
 // Returns all item IDs of a given type/slot from the Items catalogue.
 function getItemIdsByTypeSlot(type, slot) {
   return Object.entries(Items)
@@ -211,6 +229,8 @@ export default class CombatScene extends Phaser.Scene {
     this.partyData = data.party || [];
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
+    this.isHunt = (this.combatType === 'hunt');
+    this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
     this.scenarioId = data.scenarioId || 'training_encounter_1';
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
 
@@ -1178,7 +1198,15 @@ export default class CombatScene extends Phaser.Scene {
       itemId = pool[Math.floor(Math.random() * pool.length)];
     }
 
-    const rarity = dropCfg.rarity || rollEnemyDropRarity();
+    let rarity = dropCfg.rarity;
+    if (!rarity) {
+      if (this.isHunt) {
+        const lootQualityPercent = HuntManager.getState()?.combinedModifiers?.lootQualityPercent || 0;
+        rarity = rollHuntDropRarity(lootQualityPercent);
+      } else {
+        rarity = rollEnemyDropRarity();
+      }
+    }
     const inst = createItemInstance(itemId, { rarity, rollAffixes: rarity !== 'common' });
     if (!inst) return;
 
@@ -2674,8 +2702,19 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`Collected ${loot.length} item${loot.length > 1 ? 's' : ''} from defeated enemies.`);
     }
 
-    // Record progression and collect ticket reward for the victory screen.
-    const progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
+    let progressReward = null;
+    if (this.isHunt) {
+      // Hunt fights aren't training-progression scenarios — award Hunt Points
+      // (Beast only; Cultist's reward is the loot just collected above) and
+      // let the Hunt Hub pick the resolved encounter back up on return.
+      const resolved = HuntManager.resolveCombatEncounter({ won: true, type: this.huntContext?.type });
+      if (resolved?.huntPoints > 0) {
+        this._log(`+${resolved.huntPoints} Hunt Points.`);
+      }
+    } else {
+      // Record progression and collect ticket reward for the victory screen.
+      progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
+    }
     GameState.save('autosave');
 
     // Pass summary to victory screen
@@ -2685,6 +2724,10 @@ export default class CombatScene extends Phaser.Scene {
 
   _calculateXPReward() {
     // Temporary — can be scenario-based later
+    if (this.isHunt) {
+      const xpPercent = HuntManager.getState()?.combinedModifiers?.xpPercent || 0;
+      return Math.round(20 * (1 + xpPercent / 100));
+    }
     return 25;
   }
 
@@ -2702,7 +2745,16 @@ export default class CombatScene extends Phaser.Scene {
       GameState.party.forEach(char => {
         if (char.status === 'incapacitated') char.status = 'dead';
       });
-      this._showDefeatScreen('Defeat', 'Return to town.');
+
+      if (this.isHunt) {
+        // A wipe ends the hunt itself — the dead go to the Slain roster,
+        // there's no continuing back to the Hunt Hub with a dead party.
+        GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c));
+        HuntManager.end();
+        this._showDefeatScreen('Defeat', 'Your party has fallen. The hunt is over.');
+      } else {
+        this._showDefeatScreen('Defeat', 'Return to town.');
+      }
     }
   }
 
@@ -5927,6 +5979,18 @@ export default class CombatScene extends Phaser.Scene {
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
+      // Belt-and-suspenders: UIScene's own 'wake' listener already calls
+      // this, but force it explicitly too so the left party panel's HP/MP/XP
+      // bars are guaranteed to reflect this fight's damage immediately.
+      this.scene.get('UIScene')?.refreshUI();
+      // HuntHubOverlay was stopped (not slept) before combat — see
+      // HuntEncounterOverlay._engage() — so it's relaunched fresh here
+      // rather than woken. Its render reads live state from HuntManager,
+      // so a fresh launch picks the hunt back up correctly.
+      if (this.isHunt) {
+        this.scene.launch('HuntHubOverlay');
+        this.scene.bringToTop('UIScene'); // keep the persistent banners/panel above the Hub
+      }
     }, 'primary', { fontSize: '24px' }).setDepth(2001);
   }
 
@@ -5975,8 +6039,14 @@ export default class CombatScene extends Phaser.Scene {
     if (showExit) buttons.push(makeBtn('[ Exit ]', width / 2 + (showRetry ? spacing / 2 : 0), () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
+      if (this.isHunt) {
+        // The hunt already ended in _onCombatDefeat() — close the Hub
+        // properly (re-enables Town input) instead of waking it.
+        this.scene.get('HuntHubOverlay')?._close();
+      }
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
+      this.scene.get('UIScene')?.refreshUI(); // drop the now-Slain party members from the panel immediately
     }));
 
     // If something else tries to rebuild UI, hide it now

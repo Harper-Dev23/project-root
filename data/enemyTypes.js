@@ -121,6 +121,30 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // Placeholder Hunt-zone enemies — single-skill, low HP, just enough to be
+  // a real (short, low-stakes) fight while no real Hunt enemy roster exists yet.
+  hunt_beast_lesser: {
+    skin: 'beast_portrait',
+    maxHP: 70,
+    maxMP: 20,
+    skills: ['oskar_rending_bite'],
+    aiProfile: 'oskar_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  hunt_cultist_lesser: {
+    skin: 'soldier_portrait',
+    maxHP: 80,
+    maxMP: 30,
+    skills: ['fighter_heavy_slash'],
+    aiProfile: 'fighter_dummy',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
   beast_kiro: {
     skin: 'beast_portrait',
     maxHP: 220,

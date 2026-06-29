@@ -545,4 +545,18 @@ export const Items = {
     description: 'A two-handed blade of impossible sharpness. It drinks deep of whatever it cuts. The edge never dulls.\n\n[10% Lifesteal]  [Soulbound]',
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // === Hunt Plans ===
+  // Generic loadout items chosen before departing on a Hunt (see HuntHubOverlay).
+  // Static modifiers, no affix rolling — same pattern as consumables/relics above.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  hunt_plan: {
+    id: 'hunt_plan',
+    name: 'Hunt Plan',
+    type: 'huntPlan',
+    rarity: 'common',
+    description: 'A loadout plan chosen before departing on a Hunt. Its modifiers come from rolled affixes — higher rarity means more of them.',
+  },
+
 };

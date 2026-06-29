@@ -21,6 +21,11 @@ export default class StatusBar extends Phaser.GameObjects.Container {
 
     this.add([this.bg, this.fill]);    // ✅ ADD here instead of `.addToContainer(this)`
     scene.add.existing(this);
+
+    // Apply the initial value immediately — without this the fill rectangle
+    // stays at its full constructed width until the first updateCurrent()
+    // call, so every bar looks full at creation regardless of starting HP/MP.
+    this.updateCurrent(this.val);
   }
 
   updateCurrent(newValue) {
