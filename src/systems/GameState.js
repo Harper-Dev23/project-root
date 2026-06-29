@@ -1,6 +1,7 @@
 import { SKILLS } from '../../data/skills.js'; // adjust path if needed
+import { getXPNeededForLevel } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
-import { rebuildCharacterStats } from './CharacterBuilder.js'; // ← make sure this exists
+import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
 
 const defaultEquipment = {
@@ -233,6 +234,37 @@ const GameState = {
 
   removeFromParty(charObj) {
     this.party = this.party.filter(c => c !== charObj);
+  },
+
+  /**
+   * Awards XP to every living party member and processes any resulting
+   * level-ups — the shared path for both combat victories and Hunt events,
+   * so leveling logic only lives in one place.
+   * Returns { leveledUpNames, summaries } for callers that want to display it.
+   */
+  awardPartyXP(amount) {
+    const leveledUpNames = [];
+    const summaries = [];
+    if (amount <= 0) return { leveledUpNames, summaries };
+
+    this.party.forEach(char => {
+      if (char.status === 'dead') return;
+
+      char.experience += amount;
+      let summary = `${char.name} gains ${amount} XP`;
+
+      while (char.experience >= getXPNeededForLevel(char.level)) {
+        char.experience -= getXPNeededForLevel(char.level);
+        char.level++;
+        applyLevelUp(char);
+        summary += ` — Level Up! (Lv ${char.level})`;
+        leveledUpNames.push(char.name);
+      }
+
+      summaries.push(summary);
+    });
+
+    return { leveledUpNames, summaries };
   },
 
   /** Full HP/MP restore for the whole party — used when returning to Camp Nehemiah from a Hunt. */

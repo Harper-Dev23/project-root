@@ -22,6 +22,7 @@ import CampRosterOverlay from './scenes/overlays/CampRosterOverlay.js';
 import HuntMapOverlay from './scenes/overlays/HuntMapOverlay.js';
 import HuntHubOverlay from './scenes/overlays/HuntHubOverlay.js';
 import HuntEncounterOverlay from './scenes/overlays/HuntEncounterOverlay.js';
+import HuntEventOverlay from './scenes/overlays/HuntEventOverlay.js';
 import TribeHQOverlay from './scenes/overlays/TribeHQOverlay.js';
 import HuntPlanPickerOverlay from './scenes/overlays/HuntPlanPickerOverlay.js';
 
@@ -53,6 +54,7 @@ const config = {
     HuntMapOverlay,
     HuntHubOverlay,
     HuntEncounterOverlay,
+    HuntEventOverlay,
     TribeHQOverlay,
     HuntPlanPickerOverlay,
   ],

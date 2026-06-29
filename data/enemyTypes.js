@@ -145,6 +145,31 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // A second roll of variety for each Hunt fight type — same placeholder
+  // tier as the "lesser" variants above (low HP, one borrowed skill), just
+  // a different look/feel so fights aren't always the same two enemies.
+  hunt_beast_marked: {
+    skin: 'beast_portrait',
+    maxHP: 90,
+    maxMP: 30,
+    skills: ['kiro_toxic_spit'],
+    aiProfile: 'kiro_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  hunt_cultist_acolyte: {
+    skin: 'rogue_portrait',
+    maxHP: 70,
+    maxMP: 40,
+    skills: ['rogue_poisoned_knife'],
+    aiProfile: 'rogue_dummy',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
   beast_kiro: {
     skin: 'beast_portrait',
     maxHP: 220,

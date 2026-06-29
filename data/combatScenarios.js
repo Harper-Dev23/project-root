@@ -91,5 +91,23 @@ export const COMBAT_SCENARIOS = {
     enemies: [
       { type: 'hunt_cultist_lesser', slotId: 2, drops: [{ equip: 'chest', droppable: true }] }
     ]
+  },
+
+  hunt_beast_marked: {
+    name: 'Marked Beast',
+    description: 'A beast bearing a faint sacred mark blocks the path.',
+    portraitKey: 'beast_portrait',
+    enemies: [
+      { type: 'hunt_beast_marked', slotId: 2 }
+    ]
+  },
+
+  hunt_cultist_acolyte: {
+    name: 'Cultist Acolyte',
+    description: 'A lone acolyte strikes from the shadows.',
+    portraitKey: 'rogue_portrait',
+    enemies: [
+      { type: 'hunt_cultist_acolyte', slotId: 2, drops: [{ equip: 'chest', droppable: true }] }
+    ]
   }
 };

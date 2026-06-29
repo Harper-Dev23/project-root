@@ -41,6 +41,12 @@ export default class CharacterCreationScene extends Phaser.Scene {
   create() {
     const { width, height } = this.sys.game.canvas;
 
+    // UIScene stays running underneath (TownScene does too — see the Cancel
+    // button below), but its frame/side panels render on top and crowd the
+    // bonfire scene's own buttons/aesthetic. Sleep it here, wake it on every
+    // exit path, same convention CombatScene uses.
+    this.scene.sleep('UIScene');
+
     SoundManager.init(this);
 
     // Looping ambient fire sound — stopped on scene shutdown
@@ -219,16 +225,25 @@ export default class CharacterCreationScene extends Phaser.Scene {
         ProgressionManager.setQuestFlag('orientation_elder');
       }
 
+      this.scene.wake('UIScene');
       this.scene.stop();
       this.scene.start('PartyManagementScene');
     }, 'confirm', { fontSize: '20px' });
 
     createButton(this, width / 2 + 100, bottomY, 'Cancel', () => {
-      // TownScene + UIScene are still active in the background — just stop this
-      // scene and they resume normally. Starting MainMenuScene here would layer
-      // it on top of the still-running TownScene, causing overlap/input chaos.
+      // TownScene is still active in the background — just stop this scene
+      // and it resumes normally. Starting MainMenuScene here would layer it
+      // on top of the still-running TownScene, causing overlap/input chaos.
+      // UIScene was slept on entry (see create()) and needs waking back up.
+      this.scene.wake('UIScene');
       this.scene.stop();
     }, 'danger', { fontSize: '20px' });
+  }
+
+  /** Defensive — guarantees UIScene wakes even if this scene is stopped some
+   * other way (e.g. "return to main menu") instead of via Confirm/Cancel. */
+  shutdown() {
+    this.scene.wake('UIScene');
   }
 
   /* ---------------------------------------------------------

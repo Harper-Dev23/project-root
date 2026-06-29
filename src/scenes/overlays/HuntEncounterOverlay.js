@@ -1,15 +1,14 @@
 // src/scenes/overlays/HuntEncounterOverlay.js
-// Opened from HuntHubOverlay when a turn rolls a pending encounter. The
-// encounter's real nature is hidden until resolved.
+// The brief "something's out there" preview shown when a turn rolls a pending
+// FIGHT (kind: 'encounter'). Deliberately small and low-key — flavor line +
+// "Engage" — since you haven't committed to anything yet, closing it just
+// leaves the encounter pending (HuntHubOverlay will show Investigate again).
 //
-// Two flows, branched on `encounter.kind`:
-//   'event'     — non-fight, stub Investigate/Resolve flow (flavor text only).
-//   'encounter' — a real fight. Shows pre-fight flavor + "Engage", which
-//                 sleeps HuntHubOverlay and launches CombatScene in 'hunt'
-//                 mode. CombatScene reports the outcome back to HuntManager
-//                 directly and wakes HuntHubOverlay on return — see
-//                 CombatScene.js's hunt-mode branches and HuntHubOverlay's
-//                 'wake' listener.
+// Once you click Engage there's no backing out — it stops HuntHubOverlay and
+// launches CombatScene in 'hunt' mode, which can't be fled mid-fight.
+//
+// Pending EVENTS (non-fight) skip this screen entirely and go straight to
+// HuntEventOverlay — see HuntHubOverlay._investigate().
 //
 // Launched with: scene.launch('HuntEncounterOverlay', { encounter })
 
@@ -30,12 +29,13 @@ export default class HuntEncounterOverlay extends Phaser.Scene {
 
   create() {
     setupSceneCursor(this);
-    const isFight = this.encounter?.kind === 'encounter';
 
+    // No bgImage — the plain dark/gold default panel (same as Options,
+    // Inventory, etc.) reads cleanly with this screen's light text colors,
+    // no textured background needed for a screen this brief.
     const frame = createOverlayFrame(this, {
-      title: isFight ? 'Something Approaches' : 'Investigate',
-      onClose: () => (isFight ? this._closeWithoutResolving() : this._resolveEvent()),
-      bgImage: 'menu_stony_background',
+      title: 'Something Approaches',
+      onClose: () => this._closeWithoutResolving(),
       width: 600,
       height: 360,
     });
@@ -44,38 +44,16 @@ export default class HuntEncounterOverlay extends Phaser.Scene {
     const { x, y, width } = frame.bounds;
     const centerX = x + width / 2;
 
-    if (isFight) {
-      this.add.text(centerX, y + 80, this.encounter?.label || 'Something stirs nearby.', {
-        fontSize: '16px', color: '#ffaa88', align: 'center', wordWrap: { width: width - 80 },
-      }).setOrigin(0.5).setDepth(depth);
+    this.add.text(centerX, y + 90, this.encounter?.label || 'Something stirs nearby.', {
+      fontSize: '16px', color: '#ffaa88', align: 'center', wordWrap: { width: width - 80 },
+    }).setOrigin(0.5).setDepth(depth);
 
-      this.add.text(centerX, y + 150,
-        'There is no avoiding this — once you engage, you cannot flee mid-fight.',
-        { fontSize: '13px', color: '#888888', align: 'center', wordWrap: { width: width - 80 } }
-      ).setOrigin(0.5).setDepth(depth);
+    this.add.text(centerX, y + 160,
+      'There is no avoiding this — once you engage, you cannot flee mid-fight.',
+      { fontSize: '13px', color: '#999999', align: 'center', wordWrap: { width: width - 80 } }
+    ).setOrigin(0.5).setDepth(depth);
 
-      createButton(this, centerX, y + 240, 'Engage', () => this._engage(), 'danger').setDepth(depth);
-    } else {
-      this.add.text(centerX, y + 80,
-        'You move carefully toward whatever stirred ahead…',
-        { fontSize: '16px', color: '#cccccc', align: 'center', wordWrap: { width: width - 80 } }
-      ).setOrigin(0.5).setDepth(depth);
-
-      this.add.text(centerX, y + 150,
-        '(No mechanical effect yet — this is where the actual event\nwill eventually play out.)',
-        { fontSize: '13px', color: '#888888', align: 'center', wordWrap: { width: width - 80 } }
-      ).setOrigin(0.5).setDepth(depth);
-
-      createButton(this, centerX, y + 240, 'Resolve', () => this._resolveEvent(), 'confirm').setDepth(depth);
-    }
-  }
-
-  _resolveEvent() {
-    SoundManager.play('reward');
-    const hub = this.scene.get('HuntHubOverlay');
-    hub?.onEncounterResolved();
-    this.scene.stop();
-    this.scene.resume('HuntHubOverlay');
+    createButton(this, centerX, y + 250, 'Engage', () => this._engage(), 'danger').setDepth(depth);
   }
 
   _engage() {

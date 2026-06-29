@@ -25,6 +25,7 @@ import { combineModifiers } from './HuntModifiers.js';
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
 import ProgressionManager from './ProgressionManager.js';
+import GameState from './GameState.js';
 
 // Tuned so a base-loadout hunt (no extra Hunt Tickets spent on supplies)
 // guarantees at least one full day+night cycle (12 advances) and typically
@@ -119,7 +120,7 @@ export const HuntManager = {
     );
 
     if (Math.random() < chance) {
-      _pendingEncounter = EncounterRoller.roll(_zoneId, _depth, _combinedModifiers.beastChanceWeight);
+      _pendingEncounter = EncounterRoller.roll(_zoneId, _depth, _combinedModifiers.beastChanceWeight, _isNight);
     }
 
     return {
@@ -129,24 +130,44 @@ export const HuntManager = {
   },
 
   /**
-   * Resolves a pending 'event' (non-fight) encounter: awards its Hunt Points
-   * (scaled by the Hunt Points modifier), appends it to the permanent log,
-   * and clears the pending flag so advance() unblocks. 'encounter' (fight)
-   * pending entries are resolved by resolveCombatEncounter() instead, once
-   * CombatScene reports back who won. Returns the resolved entry (or null
-   * if nothing was pending, or what was pending was a fight).
+   * Resolves a pending 'event' (non-fight) encounter once HuntEncounterOverlay
+   * has worked out an `outcome` via EventResolver (a choice's outcome, a
+   * check's success/failure branch, or a puzzle's success/failure branch):
+   * `{ text, huntPoints, xp?, hpDelta? }`. Hunt Points are scaled by the Hunt
+   * Points modifier same as combat; XP goes through the shared leveling path;
+   * hpDelta (rare, modest) lands on one random living party member and is
+   * clamped so events can never be lethal — that's what combat is for.
+   * 'encounter' (fight) pending entries are resolved by resolveCombatEncounter()
+   * instead. Returns the resolved log entry, or null if nothing was pending.
    */
-  resolveEncounter() {
-    if (!_pendingEncounter || _pendingEncounter.kind !== 'event') return null;
+  resolveEncounter(outcome) {
+    if (!_pendingEncounter || _pendingEncounter.kind !== 'event' || !outcome) return null;
+
+    const pending = _pendingEncounter;
+    _pendingEncounter = null;
+
+    const huntPoints = Math.round((outcome.huntPoints || 0) * (1 + _combinedModifiers.huntPointsPercent / 100));
+
+    if (outcome.xp > 0) GameState.awardPartyXP(outcome.xp);
+    if (outcome.hpDelta) this._applyHpDelta(outcome.hpDelta);
 
     const resolved = {
-      ..._pendingEncounter,
-      huntPoints: Math.round(_pendingEncounter.huntPoints * (1 + _combinedModifiers.huntPointsPercent / 100)),
+      kind: 'event',
+      type: pending.type,
+      label: outcome.text ? `${pending.label} ${outcome.text}` : pending.label,
+      huntPoints,
     };
-    _pendingEncounter = null;
 
     this._awardAndLog(resolved);
     return resolved;
+  },
+
+  /** Applies a (clamped, never-lethal) HP change to one random living party member. */
+  _applyHpDelta(amount) {
+    const living = GameState.party.filter(c => c.status !== 'dead' && c.status !== 'incapacitated');
+    if (living.length === 0) return;
+    const target = living[Math.floor(Math.random() * living.length)];
+    target.currentHP = Phaser.Math.Clamp(target.currentHP + amount, 1, target.maxHP);
   },
 
   /**

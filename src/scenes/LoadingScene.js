@@ -140,7 +140,7 @@ export default class LoadingScene extends Phaser.Scene {
         'UIScene', 'CombatScene', 'CharacterCreationScene', 'PartyManagementScene',
         'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
         'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-        'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay', 'TribeHQOverlay', 'HuntPlanPickerOverlay',
+        'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay', 'HuntEventOverlay', 'TribeHQOverlay', 'HuntPlanPickerOverlay',
       ];
       CLEANUP.forEach(key => {
         if (this.scene.isActive(key) || this.scene.isPaused(key)) {

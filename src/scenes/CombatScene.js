@@ -15,13 +15,12 @@ import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items } from '../../data/items.js';
 import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor } from '../../data/skills.js';
-import { getXPNeededForLevel } from '../../data/xpTable.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
-import { applyLevelUp, rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
+import { rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
@@ -2661,27 +2660,16 @@ export default class CombatScene extends Phaser.Scene {
       xpReward = this._calculateXPReward();
     }
 
-    const leveledUpNames = [];
-    GameState.party.forEach(char => {
-      if (char.status !== 'dead') {
-        if (xpReward > 0) {
-          char.experience += xpReward;
-          let summary = `${char.name} gains ${xpReward} XP`;
-
-          while (char.experience >= getXPNeededForLevel(char.level)) {
-            char.experience -= getXPNeededForLevel(char.level);
-            char.level++;
-            applyLevelUp(char);
-            summary += ` — Level Up! (Lv ${char.level})`;
-            leveledUpNames.push(char.name);
-          }
-
-          xpSummary.push(summary);
-        } else if (alreadyCompleted && this.isTraining) {
-          xpSummary.push(`${char.name} — already cleared (no XP)`);
-        }
-      }
-    });
+    let leveledUpNames = [];
+    if (xpReward > 0) {
+      const result = GameState.awardPartyXP(xpReward);
+      leveledUpNames = result.leveledUpNames;
+      xpSummary.push(...result.summaries);
+    } else if (alreadyCompleted && this.isTraining) {
+      GameState.party.forEach(char => {
+        if (char.status !== 'dead') xpSummary.push(`${char.name} — already cleared (no XP)`);
+      });
+    }
 
     const uiScene = this.scene.get('UIScene');
     if (uiScene?.refreshUI) uiScene.refreshUI();
