@@ -2,12 +2,14 @@ export const JOURNAL_CATEGORIES = [
   { id: 'lore',      label: 'Lore',      order: 1 },
   { id: 'systems',   label: 'Systems',   order: 2 },
   { id: 'hunt',      label: 'Hunt',      order: 3 },
-  { id: 'people',    label: 'People',    order: 4 },
-  { id: 'places',    label: 'Places',    order: 5 },
-  { id: 'factions',  label: 'Factions',  order: 6 },
-  { id: 'buildings', label: 'Buildings', order: 7 },
-  { id: 'personal',  label: 'Personal',  order: 8 },
-  { id: 'index',     label: 'Index',     order: 9 }
+  { id: 'items',     label: 'Items',     order: 4 },
+  { id: 'people',    label: 'People',    order: 5 },
+  { id: 'places',    label: 'Places',    order: 6 },
+  { id: 'factions',  label: 'Factions',  order: 7 },
+  { id: 'divinity',  label: 'Divinity',  order: 8 },
+  { id: 'buildings', label: 'Buildings', order: 9 },
+  { id: 'personal',  label: 'Personal',  order: 10 },
+  { id: 'index',     label: 'Index',     order: 11 }
 ];
 
 /** @typedef {Object} JournalEntry

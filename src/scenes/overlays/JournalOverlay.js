@@ -14,14 +14,6 @@ const TOP_BAR_HEIGHT = 70;
 const BOTTOM_BAR_HEIGHT = 56;
 const TAB_HEIGHT = 28;
 
-function wrap(value, min, max) {
-    const range = max - min;
-    if (range <= 0) return min;
-    const mod = (value - min) % range;
-    const normalized = mod < 0 ? mod + range : mod;
-    return normalized + min;
-}
-
 function readDarkMode() {
     try {
         if (typeof localStorage === 'undefined') return true;
@@ -122,12 +114,15 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
     _buildUI(bounds) {
         const { scene } = this;
 
+        // Not interactive — it has no click handlers, and TownScene's own
+        // input is already disabled separately (see create() below), so
+        // there's nothing behind it that needs blocking. It was previously
+        // interactive with a deprioritized priorityID as a defensive
+        // click-catcher, but a full-panel interactive zone with no actual
+        // purpose is just a needless candidate for hit-test interference
+        // with the tabs/tree above it.
         this.background = scene.add.rectangle(0, 0, bounds.width, bounds.height, this.darkMode ? 0x171717 : 0xf3ede0, 0.92)
-            .setOrigin(0)
-            .setInteractive({ useHandCursor: false });
-        if (this.background.input) {
-            this.background.input.priorityID = -1;
-        }
+            .setOrigin(0);
 
         // Top bar
         this.topBar = scene.add.rectangle(0, 0, bounds.width, TOP_BAR_HEIGHT, this.darkMode ? 0x1a1a1a : 0xeeeeee, 0.9)
@@ -218,7 +213,6 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.bottomText.setText('Select an entry to browse.');
         this.prevButton = this._createBottomButton(bounds.width - 220, bounds.height - BOTTOM_BAR_HEIGHT / 2, '◀ Prev', () => this._stepEntry(-1));
         this.nextButton = this._createBottomButton(bounds.width - 120, bounds.height - BOTTOM_BAR_HEIGHT / 2, 'Next ▶', () => this._stepEntry(1));
-        this.pinButton = this._createBottomButton(bounds.width - 320, bounds.height - BOTTOM_BAR_HEIGHT / 2, '⭐ Pin', () => this._togglePin());
 
         this.add([
             this.background,
@@ -230,11 +224,24 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.bottomBar,
             this.bottomText,
             this.prevButton,
-            this.nextButton,
-            this.pinButton
+            this.nextButton
         ]);
 
         this._syncDomAnchors();
+    }
+
+    /** A stored subtab is only valid if some entry in this category actually
+     * uses it — clears the stale persisted value otherwise. Shared by
+     * _restoreLastViewed and _refreshTree so they can't disagree. */
+    _validSubtabFor(category, subtab, baseEntries) {
+        if (!subtab) return null;
+        const entries = baseEntries || this._getCategoryEntries(category);
+        const valid = entries.some(entry => normaliseSubtab(entry.subtab) === subtab);
+        if (!valid) {
+            JournalState.setLastSubtab(category, null);
+            return null;
+        }
+        return subtab;
     }
 
     _restoreLastViewed() {
@@ -242,11 +249,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.currentCategory = category;
         const baseEntries = this._getCategoryEntries(category);
         const storedSubtab = JournalState.getLastSubtab?.(category) || null;
-        const hasStoredSubtab = storedSubtab && baseEntries.some(entry => normaliseSubtab(entry.subtab) === storedSubtab);
-        this.currentSubtab = hasStoredSubtab ? storedSubtab : null;
-        if (storedSubtab && !hasStoredSubtab) {
-            JournalState.setLastSubtab(category, null);
-        }
+        this.currentSubtab = this._validSubtabFor(category, storedSubtab, baseEntries);
         this._highlightTabs();
         this._refreshTree();
         const storedSlug = JournalState.getLastSlug?.(category);
@@ -319,6 +322,17 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.tabButtons.set(tab.id, { label, bg });
             cursorX += width + 12;
         }
+
+        // Shrink the whole row to fit before the search box if there are
+        // enough categories to overflow it. The search box is a real DOM
+        // <input> (see _buildUI) — DOM elements always render above the
+        // canvas regardless of Phaser depth, so a tab rendered underneath
+        // it would be unclickable rather than just visually cramped.
+        this.tabContainer.setScale(1);
+        const maxTabRowWidth = Math.max(200, this.width - 240 - 20 - 10);
+        if (cursorX > maxTabRowWidth) {
+            this.tabContainer.setScale(maxTabRowWidth / cursorX);
+        }
     }
 
     _computeUnseenSet() {
@@ -345,19 +359,15 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         });
     }
 
+    // Only Esc/B close the Journal — Q/E category-cycling and the
+    // all-four-arrow-keys "step entry" scheme were dropped. They never
+    // covered subtab navigation anyway, and every other overlay in this
+    // game is mouse/click-only, so this just matches that convention
+    // instead of maintaining a second, partial keyboard scheme.
     _bindInput() {
         const keyboard = this.scene.input?.keyboard;
         if (!keyboard) return;
 
-        const skipIfTyping = (fn) => () => {
-            if (this._isSearchFocused()) return;
-            fn();
-        };
-
-        const onPrevTab = skipIfTyping(() => this._cycleCategory(-1));
-        const onNextTab = skipIfTyping(() => this._cycleCategory(1));
-        const onPrevEntry = skipIfTyping(() => this._stepEntry(-1));
-        const onNextEntry = skipIfTyping(() => this._stepEntry(1));
         const onClose = () => {
             if (this._isSearchFocused()) {
                 this.searchDom?.node?.blur?.();
@@ -365,22 +375,10 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             this.close();
         };
 
-        keyboard.on('keydown-Q', onPrevTab, this);
-        keyboard.on('keydown-E', onNextTab, this);
-        keyboard.on('keydown-LEFT', onPrevEntry, this);
-        keyboard.on('keydown-RIGHT', onNextEntry, this);
-        keyboard.on('keydown-UP', onPrevEntry, this);
-        keyboard.on('keydown-DOWN', onNextEntry, this);
         keyboard.on('keydown-ESC', onClose, this);
         keyboard.on('keydown-B', onClose, this);
 
         this.inputCleanup = () => {
-            keyboard.off('keydown-Q', onPrevTab, this);
-            keyboard.off('keydown-E', onNextTab, this);
-            keyboard.off('keydown-LEFT', onPrevEntry, this);
-            keyboard.off('keydown-RIGHT', onNextEntry, this);
-            keyboard.off('keydown-UP', onPrevEntry, this);
-            keyboard.off('keydown-DOWN', onNextEntry, this);
             keyboard.off('keydown-ESC', onClose, this);
             keyboard.off('keydown-B', onClose, this);
         };
@@ -502,9 +500,12 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
     showCategory(categoryId, { preserveEntry = false } = {}) {
         if (!this._dataReady) {
-            this.currentCategory = categoryId === 'index' ? 'index' : this._resolveCategory(categoryId);
-            this.currentSubtab = this.currentCategory === 'index' ? null : this.currentSubtab;
-            this._highlightTabs();
+            // Same queuing mechanism open()/openEntry() use — previously this
+            // mutated currentCategory directly instead, so a tab clicked
+            // before the markdown finished loading was silently discarded
+            // once _bootJournalData() finished and fell back to whatever
+            // category was last persisted, ignoring the click entirely.
+            this._pendingOpenRequest = { category: categoryId };
             return;
         }
         if (categoryId === 'index') {
@@ -568,15 +569,6 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.breadcrumbText.setText(`Journal › ${breadcrumb}`);
     }
 
-    _cycleCategory(direction) {
-        const tabs = [...this.categories, this.virtualIndexCategory].filter(Boolean);
-        if (!tabs.length) return;
-        let index = tabs.findIndex(tab => tab.id === this.currentCategory);
-        if (index === -1) index = 0;
-        const next = wrap(index + direction, 0, tabs.length);
-        this.showCategory(tabs[next].id);
-    }
-
     openEntry(entryId) {
         if (!entryId) return;
         if (!this._dataReady) {
@@ -638,18 +630,34 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             return [];
         }
         if (!query) {
+            this.indexEntries = [];
+            // Clearing the search restores whichever category/subtab was
+            // active before the search started, instead of leaving the
+            // player stranded on the empty synthetic 'index' tab.
             if (this.currentCategory === 'index') {
-                this._renderIndexCategory([]);
+                if (this._preSearchCategory) {
+                    this.currentCategory = this._preSearchCategory;
+                    this.currentSubtab = this._preSearchSubtab;
+                    this._preSearchCategory = null;
+                    this._preSearchSubtab = null;
+                    this._highlightTabs();
+                    this._refreshTree();
+                } else {
+                    // No prior tab on record (shouldn't normally happen —
+                    // search always records one before switching to index)
+                    this._renderIndexCategory([]);
+                }
             } else {
                 this._refreshTree();
             }
-            this.indexEntries = [];
             return [];
         }
-        const results = this.index.search(query);
         if (this.currentCategory !== 'index') {
+            this._preSearchCategory = this.currentCategory;
+            this._preSearchSubtab = this.currentSubtab;
             this.showCategory('index');
         }
+        const results = this.index.search(query);
         this._renderIndexCategory(results);
         return results;
     }
@@ -737,15 +745,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const categories = [...this.categories];
         const baseEntries = this._getCategoryEntries(this.currentCategory).sort((a, b) => this._sortEntries(a, b));
 
-        let activeSubtab = this.currentSubtab;
-        if (activeSubtab) {
-            const hasSubtab = baseEntries.some(entry => normaliseSubtab(entry.subtab) === activeSubtab);
-            if (!hasSubtab) {
-                activeSubtab = null;
-                this.currentSubtab = null;
-                JournalState.setLastSubtab(this.currentCategory, null);
-            }
-        }
+        const activeSubtab = this._validSubtabFor(this.currentCategory, this.currentSubtab, baseEntries);
+        this.currentSubtab = activeSubtab;
 
         this.tree.setData({
             categories,
@@ -806,10 +807,6 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         if (target) this.openEntry(target.id);
     }
 
-    _togglePin() {
-        // Placeholder hook for future pinning support
-        this.bottomText.setText(`${this.bottomText.text} • Pinning coming soon`);
-    }
 }
 
 export default class JournalOverlay extends Phaser.Scene {

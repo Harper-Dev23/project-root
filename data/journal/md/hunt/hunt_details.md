@@ -16,10 +16,12 @@ updatedAt: 2025-10-04
 ---
 # The Sacred Hunt
 
-A divine ritual of survival and revelation. Hunt marked beasts, collect trophies, and follow tribe quests.
+**Loadout.** Hunt Tickets buy extra supplies before departure (10 supplies per Ticket, up to 10 spent at once). A Hunt Plan, if you have one, is consumed on departure and applies rolled modifiers to the trip — things like supply efficiency or encounter odds.
 
-**Waystone** - tracks shrines, quests, and Hunt Points.  
-**Recall** - you may recall once per Hunt to your last camp (not back to Nehemiah).  
-**Camp Nehemiah** - the neutral ground where preparations begin.
+**While hunting.** Day/night and the trip's weather combine with your zone and Hunt Plan into the modifiers shown on the Hunt screen. Each Advance is roughly a coin-flip between a fight and an Event. You can't advance again with an encounter still pending — Investigate it first.
 
-Additional details live in the Player Handbook and Hunt rules.
+**No backing out.** Once you engage a fight, you cannot flee mid-combat. Once an Event opens, there's no closing it early either — you're locked in until it resolves, the same as combat.
+
+**End of the trip.** The Hunt ends when supplies hit zero. Returning to Camp restores your party to full and banks whatever Hunt Points you earned.
+
+**The Waystone Shard** tracks your Hunt Points and (still in development) standing with the island's prophets — see *The Waystone* under Buildings.

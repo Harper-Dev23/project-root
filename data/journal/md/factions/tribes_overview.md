@@ -26,5 +26,5 @@ Values instinct and memory. They favor furs, carved bone totems, and long vigils
 **Zafaar - The Tribe of Ash and Fang**  
 Values strength and honor. Charred armor and fire-scored tattoos mark the bold and unbroken.
 
-**Le'tsse - The Tribe of Bloom and Veil**  
+**Le'sse - The Tribe of Bloom and Veil**  
 Values grace and sacred growth. Woven bark garments and living sigils fuel their ritual craft.

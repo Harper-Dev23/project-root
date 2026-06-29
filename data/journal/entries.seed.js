@@ -1,25 +1,8 @@
+// Real journal content lives in data/journal/md/**/*.md, loaded at runtime
+// by MarkdownLoader. This file used to ship two placeholder test entries
+// ("Content to be provided later") that merged into every real entry list —
+// kept empty now so JournalOverlay's `[...SEEDS, ...mdEntries]` merge has
+// nothing stale to add.
+
 /** @type {import('./manifest').JournalEntry[]} */
-export const JOURNAL_ENTRIES = [
-    {
-        id: 'systems/_welcome',
-        category: 'systems',
-        tags: ['journal'],
-        title: 'Journal System',
-        excerpt: 'How this journal is structured.',
-        content: 'This is a placeholder entry used to test UI rendering.',
-        links: { related: [] },
-        requires: [],
-        sort: 1, icon: 'icon-journal', version: 1, updatedAt: new Date().toISOString()
-    },
-    {
-        id: 'lore/_welcome',
-        category: 'lore',
-        tags: ['journal'],
-        title: 'Lore Section',
-        excerpt: 'Placeholder for lore pages.',
-        content: 'Content to be provided later.',
-        links: { related: [] },
-        requires: [],
-        sort: 1, icon: 'icon-scroll', version: 1, updatedAt: new Date().toISOString()
-    }
-];
+export const JOURNAL_ENTRIES = [];
