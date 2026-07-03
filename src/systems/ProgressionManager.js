@@ -86,6 +86,23 @@ const FEATURE_UNLOCKS = {
 // localStorage key for the dev bypass — outside any save slot.
 const DEV_BYPASS_KEY = 'dev_progressionBypass';
 
+// Deep-clone the partyGear nested structure for serialize/deserialize.
+// Kept here (not in PartyGearManager) to avoid a circular import.
+function _deepClonePartyGear(raw) {
+  if (!raw || typeof raw !== 'object') return {};
+  const out = {};
+  for (const [tribeId, parties] of Object.entries(raw)) {
+    out[tribeId] = {};
+    for (const [partyId, data] of Object.entries(parties)) {
+      out[tribeId][partyId] = {
+        equipment: (data.equipment && typeof data.equipment === 'object') ? { ...data.equipment } : {},
+        stash:     Array.isArray(data.stash) ? [...data.stash] : [],
+      };
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // ProgressionManager
 // ---------------------------------------------------------------------------
@@ -126,6 +143,10 @@ const ProgressionManager = {
   // Roster (name/tier) lives in data/tribeHuntingParties.js — only the
   // mutable point totals are persisted here.
   tribeHuntingParties: { styx: {}, zafaar: {}, elseth: {}, lesse: {} },
+
+  // Per-party gear + stash: tribeId → { partyId → { equipment: {slot: ItemInstance}, stash: ItemInstance[] } }
+  // Managed entirely via PartyGearManager helpers.
+  partyGear: {},
 
   // ----- Dev bypass --------------------------------------------------------
 
@@ -335,6 +356,7 @@ const ProgressionManager = {
       tribeHuntingParties: Object.fromEntries(
         Object.entries(this.tribeHuntingParties).map(([k, v]) => [k, { ...v }])
       ),
+      partyGear: _deepClonePartyGear(this.partyGear),
     };
   },
 
@@ -359,6 +381,7 @@ const ProgressionManager = {
         if (data.tribeHuntingParties[tribeId]) this.tribeHuntingParties[tribeId] = { ...data.tribeHuntingParties[tribeId] };
       }
     }
+    this.partyGear = _deepClonePartyGear(data.partyGear);
   },
 
   reset() {
@@ -373,6 +396,7 @@ const ProgressionManager = {
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
     this.tribeHuntPoints     = { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
+    this.partyGear           = {};
   },
 };
 

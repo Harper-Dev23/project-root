@@ -3,7 +3,7 @@
 import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
-import { applyDamageModifiers } from '../src/systems/CombatLogic.js';
+import { applyDamageModifiers, applyTypedDamageModifiers, scaleTypedDamage, _pushBreakdown } from '../src/systems/CombatLogic.js';
 import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
@@ -20,6 +20,11 @@ const cloneRewardList = (list) => (Array.isArray(list) ? list.map(rule => ({
   buff: cloneBuffStruct(rule.buff),
   debuff: cloneBuffStruct(rule.debuff)
 })) : undefined);
+// rewardIfWeak accepts either a single rule or an array of per-tier rules
+// (e.g. a weaker T1 case and a stronger T2 case for the same family).
+const cloneRewardOrList = (reward) => (
+  Array.isArray(reward) ? cloneRewardList(reward) : cloneRewardStruct(reward)
+);
 const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
 
 /**
@@ -148,7 +153,7 @@ function normalizeSkillEntry(id, skill = {}) {
     buildupHint: skill.buildupHint ? { ...skill.buildupHint } : undefined,
     aoe: skill.aoe ? { ...skill.aoe } : undefined,
     move: skill.move ? { ...skill.move } : undefined,
-    rewardIfWeak: cloneRewardStruct(skill.rewardIfWeak),
+    rewardIfWeak: cloneRewardOrList(skill.rewardIfWeak),
     rewardIfTargetHas: cloneRewardStruct(skill.rewardIfTargetHas),
     rewardIfSelfHas: cloneRewardStruct(skill.rewardIfSelfHas),
     rewards: cloneRewardList(skill.rewards),
@@ -1553,97 +1558,14 @@ Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
 Object.assign(RAW_SKILLS, {
 
   // -------- Generation (7) --------
-  'needle_feint': {                               
-    id: "needle_feint",
-    name: "Needle Feint",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 2,
-    hpCost: 0,
-    positionRequirement: ["front", "mid"],
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    targetColumns: ["front", "mid"],
-    cooldown: 1,
-    tags: ["melee", "attack", "expose"],
-    emitTagsOnUse: ["feint"],
-    // tooltip
-    buildupHint: { expose: 1110 },
-    // reward on tier cross
-    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 10, turns: 1, statusId: 'reward_needle_feint_crit' } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.needle_feint;
-      const roll = calculateDamage(attacker, target);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const reward = Array.isArray(ability?.rewardIfTierCross)
-        ? ability.rewardIfTierCross.map(rule => ({
-          ...rule,
-          buff: rule.buff ? { ...rule.buff } : undefined,
-          debuff: rule.debuff ? { ...rule.debuff } : undefined,
-        }))
-        : undefined;
-
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: 1110 },
-        rewardIfTierCross: reward,
-      };
-    },
-    description: "Quick stab that exposes a weakness; crossing T1 grants brief crit."
-  },
-
-  'needle_venom': {
-    id: "needle_venom",
-    name: "Needle Venom",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "toxic"],
-    buildupHint: { toxic: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.needle_venom;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let toxicBuildup = 70;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * 1.15);
-        toxicBuildup += 30;
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { toxic: toxicBuildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "Reliable poison builder; stronger if the target is Exposed."
-  },
+  // NOTE: needle_feint and needle_venom used to be defined here (v3.21). That
+  // copy was dead — a later "v3.22" copy further down in this file (search for
+  // "Dagger (1h) --- v3.22") redefines the same IDs and wins via Object.assign
+  // last-write-wins, since RAW_SKILLS is finalized at the very end of the file.
+  // Deleted the dead copy here; the typed-damage-pipeline / tiered-reward work
+  // that used to live in this spot has been ported onto the real v3.22 entries.
+  // pressure_point below is ALSO duplicated further down (same v3.22 section) —
+  // still dead-code-shadowed as of this note, not yet reconciled.
 
   'pressure_point': {
     id: "pressure_point",
@@ -9245,13 +9167,16 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 10,
-    actionCost: "major",
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
     cooldown: 2,
     buildupHint: { expose: 70 },
+    // Declarative so the tooltip can show it and apply() can read the same
+    // numbers instead of duplicating them inline.
+    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_feint;
       const roll = calculateDamage(attacker, target, ability);
@@ -9263,12 +9188,15 @@ Object.assign(RAW_SKILLS, {
       const currentTier = weaknessTierFromMeter(currentMeter);
       const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
       if (newTier > currentTier) {
+        const rule = ability?.rewardIfTierCross?.[0];
+        const critBuff = rule?.buff?.critChanceBonusPct ?? 15;
+        const critTurns = rule?.buff?.turns ?? 1;
         attacker.statusEffects = attacker.statusEffects || [];
-        attacker.statusEffects.push({ id: "needle_feint_crit", turns: 1, mods: { CritChance: 15 } });
+        attacker.statusEffects.push({ id: "needle_feint_crit", turns: critTurns, mods: { CritChance: critBuff } });
       }
       return { ...roll, amount, buildup: { expose: exposeBuildup } };
     },
-    description: "A quick deceptive jab (100% + 70 expose). Crossing an expose tier grants +15% crit chance for 1 turn."
+    description: "Deals 100% weapon damage."
   },
 
   'needle_venom': {
@@ -9277,6 +9205,10 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    // Marks this skill as migrated to the typed (physical/elemental/necrotic)
+    // damage pipeline — the bar for "demo ready." Skills without this flag still
+    // use the old scalar applyDamageModifiers() path.
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 11,
@@ -9287,19 +9219,69 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "toxic", "necrotic"],
     cooldown: 2,
     buildupHint: { toxic: 90 },
+    // Tiered: Exposed (T1) only adds bonus Toxic buildup, no damage. Flayed (T2)
+    // is the only tier that adds damage. apply() reads these values directly so
+    // the tooltip and the real effect can never drift out of sync.
+    rewardIfWeak: [
+      { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
+      { family: "expose", tierAtLeast: 2, buff: { damagePct: 20, addBuildup: { toxic: 30 } } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_venom;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+
+      // Typed pipeline: universal gear/buff % and Curse's necrotic-only amp are
+      // applied here — see applyTypedDamageModifiers. Expose/Flay has no universal
+      // damage bonus of its own (T1 is a PDR/buildup effect, T2 is crit-only, both
+      // handled elsewhere); any Expose-triggered damage bonus below is specific to
+      // this skill, not part of the weakness system itself.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
       const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const rules = Array.isArray(ability?.rewardIfWeak)
+        ? ability.rewardIfWeak
+        : (ability?.rewardIfWeak ? [ability.rewardIfWeak] : []);
+      // Use the highest tier the target currently qualifies for (not all of them stacked).
+      const activeRule = rules
+        .filter(r => exposeTier >= (r.tierAtLeast ?? 1))
+        .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
+
       let toxicBuildup = ability?.buildupHint?.toxic ?? 90;
-      if (exposeTier >= 1) toxicBuildup += 30;
-      if (exposeTier >= 2) amount = Math.floor(amount * 1.25);
-      return { ...roll, amount, buildup: { toxic: toxicBuildup } };
+      if (activeRule) {
+        const dmgPct = activeRule.buff?.damagePct || 0;
+        // This is a Category A "this skill hits harder" reward that Needle Venom
+        // itself grants when the target is Exposed enough — NOT an effect of the
+        // weakness system. It scales the FULL weapon hit (physical + elemental +
+        // necrotic) uniformly, same as the skill's base weapon-damage%. The label
+        // is generic so the same pattern can be reused by other skills.
+        if (dmgPct) {
+          const prevSum = physical + elemental + necrotic;
+          const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + dmgPct / 100);
+          physical = scaled.physical;
+          elemental = scaled.elemental;
+          necrotic = scaled.necrotic;
+          try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage bonus`, mult: 1 + dmgPct / 100, from: prevSum, to: scaled.amount }); } catch { }
+        }
+        toxicBuildup += activeRule.buff?.addBuildup?.toxic || 0;
+      }
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return {
+        ...roll,
+        physical,
+        elemental,
+        necrotic,
+        amount,
+        buildup: { toxic: toxicBuildup },
+        rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
+      };
     },
-    description: "Venomous strike (100% + 90 toxic). Expose T1: +30 toxic buildup. Expose T2: +25% damage."
+    description: "Deals 100% weapon damage. Stronger if the target is Raw or Flayed (see below)."
   },
 
   'pressure_point': {

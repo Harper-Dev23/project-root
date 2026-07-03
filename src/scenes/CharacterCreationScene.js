@@ -46,6 +46,7 @@ export default class CharacterCreationScene extends Phaser.Scene {
     // bonfire scene's own buttons/aesthetic. Sleep it here, wake it on every
     // exit path, same convention CombatScene uses.
     this.scene.sleep('UIScene');
+    this.scene.sleep('TownScene');
 
     SoundManager.init(this);
 
@@ -56,15 +57,17 @@ export default class CharacterCreationScene extends Phaser.Scene {
       this.events.once('shutdown', () => this._bonfireSound?.stop());
     }
 
-    // Dark tint behind everything — blocks TownScene from showing through
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.85)
-      .setScrollFactor(0).setDepth(-1);
+    // Static backdrop
+    if (this.textures.exists('char_creation_backscene')) {
+      this.add.image(width / 2, height / 2, 'char_creation_backscene')
+        .setDisplaySize(width, height)
+        .setDepth(0);
+    }
 
-    // Animated background
+    // Animated smoke overlay on top of the backdrop
     if (this.textures.exists('char_creation_bg')) {
       const animKey = 'char_creation_bg_anim';
       if (!this.anims.exists(animKey)) {
-        // Frame names from TexturePacker match the exported filenames: frame0000, frame0001, etc.
         const frames = Array.from({ length: 24 }, (_, i) =>
           ({ key: 'char_creation_bg', frame: `frame${String(i).padStart(4, '0')}.png` })
         );
@@ -74,9 +77,6 @@ export default class CharacterCreationScene extends Phaser.Scene {
         .setDisplaySize(width, height)
         .setDepth(0)
         .play(animKey);
-    } else {
-      this.add.rectangle(width / 2, height / 2, width, height, 0x111111, 0.95)
-        .setScrollFactor(0).setDepth(0);
     }
 
     // Invisible click blocker — same depth as buttons (0), added first so buttons
@@ -226,6 +226,7 @@ export default class CharacterCreationScene extends Phaser.Scene {
       }
 
       this.scene.wake('UIScene');
+      this.scene.wake('TownScene');
       this.scene.stop();
       this.scene.start('PartyManagementScene');
     }, 'confirm', { fontSize: '20px' });
@@ -236,6 +237,7 @@ export default class CharacterCreationScene extends Phaser.Scene {
       // on top of the still-running TownScene, causing overlap/input chaos.
       // UIScene was slept on entry (see create()) and needs waking back up.
       this.scene.wake('UIScene');
+      this.scene.wake('TownScene');
       this.scene.stop();
     }, 'danger', { fontSize: '20px' });
   }
@@ -244,6 +246,7 @@ export default class CharacterCreationScene extends Phaser.Scene {
    * other way (e.g. "return to main menu") instead of via Confirm/Cancel. */
   shutdown() {
     this.scene.wake('UIScene');
+    this.scene.wake('TownScene');
   }
 
   /* ---------------------------------------------------------

@@ -224,9 +224,12 @@ const ARMOR_PREFIX_POOL = [
   makeMiscArmorPrefix({ key: 'Amos\u2019', tier: 1, prop: 'globalDamagePercent', range: [4, 5] }),
 
   // Resilience (Buildup resistance)
-  makeMiscArmorPrefix({ key: 'Stalwart', tier: 3, prop: 'resilience', range: [1, 2] }),
-  makeMiscArmorPrefix({ key: 'Unyielding', tier: 2, prop: 'resilience', range: [3, 5] }),
-  makeMiscArmorPrefix({ key: 'Job\u2019s', tier: 1, prop: 'resilience', range: [6, 9] })
+  // v3.3: buffed alongside the weakness decay rebalance \u2014 decay got weaker, so
+  // resilience (flat reduction to incoming buildup, CombatScene.js _applyWeakness)
+  // needs to carry more of the "resisting weakness" weight than before.
+  makeMiscArmorPrefix({ key: 'Stalwart', tier: 3, prop: 'resilience', range: [3, 6] }),
+  makeMiscArmorPrefix({ key: 'Unyielding', tier: 2, prop: 'resilience', range: [8, 14] }),
+  makeMiscArmorPrefix({ key: 'Job\u2019s', tier: 1, prop: 'resilience', range: [18, 25] })
 ];
 
 const ARMOR_SUFFIX_POOL = [

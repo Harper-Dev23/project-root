@@ -84,7 +84,8 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('menu_parchment_background', 'assets/UIinterface/menu_parchment_background.png');
     this.load.image('menu_stony_background',     'assets/UIinterface/menu_stony_background.png');
 
-    // Character creation animated background
+    // Character creation — static backdrop + animated smoke overlay
+    this.load.image('char_creation_backscene', 'assets/sprites/char_creation_backscene.png');
     this.load.atlas(
       'char_creation_bg',
       'assets/sprites/char_creation_bg.png',

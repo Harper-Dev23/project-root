@@ -1355,9 +1355,9 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
       { label: 'Resilience:', value: `${resilience}` },
-      { label: 'Accuracy:', value: `${derived.Accuracy ?? 0}` },
+      { label: 'Accuracy:', value: `${eff.Accuracy ?? 0}` },
       { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true },
-      { label: 'Crit Chance:', value: `${derived.CritChance ?? 0}` },
+      { label: 'Crit Chance:', value: `${eff.CritChance ?? 0}` },
       { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}` },
     ];
 
@@ -1816,19 +1816,28 @@ export default class CombatScene extends Phaser.Scene {
   _createTurnOrderUI() {
     this.turnOrderVisible = true;
 
+    // Panel width trimmed 25% (was 180); right edge stays anchored at x=1260
+    // (20px from the 1280-wide canvas edge), so only the container x moves.
+    const PANEL_WIDTH = 135;
+    const PANEL_X = 1260 - PANEL_WIDTH;
+    const MAX_NAME_CHARS = 10;
+    const truncateName = (name) => (
+      name && name.length > MAX_NAME_CHARS ? `${name.slice(0, MAX_NAME_CHARS - 1)}…` : (name || '')
+    );
+
     // UI container (excluding the toggle)
-    this.turnOrderUI = this.add.container(1080, 20).setDepth(UI_DEPTH.overlay);
+    this.turnOrderUI = this.add.container(PANEL_X, 20).setDepth(UI_DEPTH.overlay);
 
     // Background + unit list
     this.turnOrderContent = this.add.container(0, 0);
-    const bg = createPanel(this, 0, 0, 180, 300, 'default');
+    const bg = createPanel(this, 0, 0, PANEL_WIDTH, 300, 'default');
     this.turnOrderContent.add(bg);
 
     this.turnOrderEntries = [];
 
     const allUnits = this.turnOrder;
     allUnits.forEach((unit, i) => {
-      const icon = this.add.text(10, 10 + i * 24, `${i + 1}. ${unit.name}`, {
+      const icon = this.add.text(10, 10 + i * 24, `${i + 1}. ${truncateName(unit.name)}`, {
         fontSize: '14px',
         color: '#ffffff'
       });
@@ -3193,7 +3202,9 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Debug log: show what Expose actually did this hit
+    // Debug log: show what Expose actually did this hit (T1 PDR reduction only —
+    // T2 crit vulnerability is a pre-roll bonus inside calculateDamage, logged
+    // there via the normal 'critChance'/'crit' breakdown entries instead).
     (() => {
       const ex = resultMutable._expose;
       if (!ex) return;
@@ -3201,11 +3212,6 @@ export default class CombatScene extends Phaser.Scene {
 
       if (ex.pdrBefore !== undefined && ex.pdrAfter !== undefined) {
         this._log(`Expose: PDR ${pct(ex.pdrBefore)}→${pct(ex.pdrAfter)} (−${pct(ex.pdrSub || 0)})`);
-      }
-      if (ex.critForced) {
-        this._log(`Expose: forced crit (+${pct(ex.critChanceBonus || 0)} chance, +${pct(ex.critDmgBonus || 0)} crit dmg)`);
-      } else if (ex.critAmpOnly) {
-        this._log(`Expose: crit dmg +${pct(ex.critDmgBonus || 0)}`);
       }
     })();
 

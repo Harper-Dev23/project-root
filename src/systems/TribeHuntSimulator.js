@@ -12,6 +12,7 @@
 import { TRIBE_IDS } from './TribeRelations.js';
 import { getPartiesForTribe } from '../../data/tribeHuntingParties.js';
 import ProgressionManager from './ProgressionManager.js';
+import { getHuntPointMultiplier, tryPartyItemFind } from './PartyGearManager.js';
 
 // Only ~2-3 ticks happen across a whole hunt (once per in-game day), versus
 // the player rolling an encounter chance on every single advance — so each
@@ -35,8 +36,10 @@ export const TribeHuntSimulator = {
       for (const party of getPartiesForTribe(tribeId)) {
         if (tribeId === playerTribe && party.isPlayerSlot) continue; // player drives this one directly
 
-        const amount = randInt(PARTY_ROLL_MIN, PARTY_ROLL_MAX) * party.tier;
+        const base = randInt(PARTY_ROLL_MIN, PARTY_ROLL_MAX) * party.tier;
+        const amount = Math.round(base * getHuntPointMultiplier(tribeId, party.id));
         ProgressionManager.addPartyPoints(tribeId, party.id, amount);
+        tryPartyItemFind(tribeId, party.id);
       }
     }
   },

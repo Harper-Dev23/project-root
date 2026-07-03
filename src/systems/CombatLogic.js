@@ -222,6 +222,12 @@ export function getEffectiveNDR(char) {
 }
 
 // === Expose pre-damage shaping (additive PDR model) ===
+// T1 (Raw) only: subtracts additive PDR points from the target's physical DR.
+// T2 (Flayed) crit vulnerability is NOT handled here — it's a flat bonus to crit
+// chance/mult added before the single crit roll in calculateDamage() via
+// applyExposeCritBonuses(). An earlier version of this function also rolled a
+// SEPARATE post-hoc chance to force/amplify a crit here, which double-counted
+// on top of that pre-roll bonus (was test-only scaffolding, removed).
 export function applyExposePreDamage({ user, target, resultMutable, intent, isWeaponSource, missed }) {
   if (missed) return;
 
@@ -245,42 +251,6 @@ export function applyExposePreDamage({ user, target, resultMutable, intent, isWe
     dbg.pdrBefore = dr0;
     dbg.pdrAfter = resultMutable.damageReduction;
     dbg.pdrSub = sub; // decimal
-  }
-
-  // T2 Expose: crit chance + crit damage
-  if ((tiers.expose | 0) >= 2) {
-    const I = familyIntensityMult('expose', meters.expose | 0);
-    const dChance = Math.max(0, WeaknessV3?.families?.expose?.t2?.critChanceBonus ?? 0) * I; // 0..1
-    const dCrit = Math.max(0, WeaknessV3?.families?.expose?.t2?.critDamageBonus ?? 0);     // 0..1
-
-    // Helper: scale typed splits + amount together
-    const _scaleTyped = (scale) => {
-      const hasTyped = resultMutable.physical != null || resultMutable.elemental != null || resultMutable.necrotic != null;
-      if (hasTyped) {
-        if (resultMutable.physical != null) resultMutable.physical = Math.floor(resultMutable.physical * scale);
-        if (resultMutable.elemental != null) resultMutable.elemental = Math.floor(resultMutable.elemental * scale);
-        if (resultMutable.necrotic != null) resultMutable.necrotic = Math.floor(resultMutable.necrotic * scale);
-        resultMutable.amount = (resultMutable.physical || 0) + (resultMutable.elemental || 0) + (resultMutable.necrotic || 0);
-      } else {
-        resultMutable.amount = Math.floor((resultMutable.amount | 0) * scale);
-      }
-    };
-
-    if (!resultMutable.isCrit) {
-      if (Math.random() < dChance) {
-        resultMutable.isCrit = true;
-        const baseCritMult = 1.5; // keep in sync with engine baseline
-        _scaleTyped(baseCritMult * (1 + dCrit));
-        dbg.critForced = true;
-      }
-    } else {
-      _scaleTyped(1 + dCrit);
-      dbg.critAmpOnly = true;
-    }
-
-    // annotate crit bonuses for log
-    dbg.critChanceBonus = dChance; // decimal
-    dbg.critDmgBonus = dCrit;   // decimal
   }
 }
 
@@ -398,20 +368,26 @@ export function calculateDamage(attacker, target, ability = null) {
   let baseDamage = Phaser.Math.Between(min, max) + strengthMod;
   try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
 
-  // Crit chance from attacker + weapon; CritMult from derived
+  // Crit chance/mult resolved now (Expose T2 can boost both via applyExposeCritBonuses),
+  // but the multiply itself is deferred to the very end of this function so it scales
+  // the WHOLE hit (physical + elemental + necrotic) uniformly — a crit is "the swing
+  // lands harder," not a physical-only effect. Previously it multiplied baseDamage here,
+  // before the physical/elemental split, so a weapon's flat elemental/necrotic bonus
+  // never benefited from a crit at all.
+  // getEffectiveDerived (not attacker.derived directly) so status-effect mods —
+  // e.g. Needle Feint's +15% CritChance buff on crossing an Expose tier — are
+  // actually read. Using attacker.derived here would silently ignore them: the
+  // buff would still get applied and expire on schedule, it just never affected
+  // any crit roll.
   const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
-  const baseCritChance = (attacker.derived?.CritChance || 0) + weaponCrit;
-  const baseCritMult = attacker?.derived?.CritMult ?? 1.5;
+  const effDerived = getEffectiveDerived(attacker) || {};
+  const baseCritChance = (effDerived.CritChance || 0) + weaponCrit;
+  const baseCritMult = effDerived.CritMult || 1.5;
   const critBundle = applyExposeCritBonuses(attacker, target, baseCritChance, baseCritMult);
   try { _pushBreakdown({ label: 'critChance', value: Math.round(critBundle.critChance) }); } catch { }
 
   const critRoll = Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : (Math.floor(Math.random() * 100) + 1);
   const isCrit = critRoll <= critBundle.critChance;
-  if (isCrit) {
-    const prev = baseDamage;
-    baseDamage = Math.floor(baseDamage * critBundle.critMult);
-    try { _pushBreakdown({ label: 'crit', from: prev, mult: critBundle.critMult, to: baseDamage }); } catch { }
-  }
 
   const gearMult = getAttackerDamageMultiplier(attacker);
   if (gearMult !== 1) {
@@ -425,7 +401,12 @@ export function calculateDamage(attacker, target, ability = null) {
   let elemental = 0;
   let necrotic = 0;
 
-  // Weapon elemental flat adds (Flay/Curse amps via applyDamageModifiers; no DR here)
+  // Weapon elemental flat adds. Flay/Curse/AttackPower amps are NOT applied here —
+  // they're applied once by the calling skill's own applyDamageModifiers() pass
+  // over the full returned amount (physical+elemental+necrotic combined). Doing it
+  // here too used to double-apply Flay T2 (and Curse T2/AttackPower) on top of the
+  // elemental portion — it silently didn't matter while the Flay tier check was
+  // reading a dead key, but became a real double-count once that key was fixed.
   for (const [element, range] of Object.entries(weaponMods.elementalFlat || {})) {
     if (!range) continue;
     const minFlat = range.min || 0;
@@ -444,17 +425,9 @@ export function calculateDamage(attacker, target, ability = null) {
       scaled = Math.max(0, Math.floor(scaled * elementMult));
     }
 
-    // Apply Flay/Curse amps — DR is handled per-type at CombatScene apply step
-    let applied = applyDamageModifiers(scaled, attacker, target, {
-      element,
-      isMagic: true,
-      ability,
-      skipGearMultiplier: true
-    });
-
-    if (applied > 0) {
-      elemental += applied;
-      try { _pushBreakdown({ label: `${element} flat`, flat: applied }); } catch { }
+    if (scaled > 0) {
+      elemental += scaled;
+      try { _pushBreakdown({ label: `${element} flat`, flat: scaled }); } catch { }
     }
   }
 
@@ -481,6 +454,15 @@ export function calculateDamage(attacker, target, ability = null) {
   physical = pipeResult.physical;
   elemental = pipeResult.elemental;
   necrotic = Math.max(0, necrotic);
+
+  // Crit — last step before returning, whole hit, uniform across all three types.
+  if (isCrit) {
+    const prevSum = physical + elemental + necrotic;
+    physical = Math.floor(physical * critBundle.critMult);
+    elemental = Math.floor(elemental * critBundle.critMult);
+    necrotic = Math.floor(necrotic * critBundle.critMult);
+    try { _pushBreakdown({ label: 'crit', from: prevSum, mult: critBundle.critMult, to: physical + elemental + necrotic }); } catch { }
+  }
 
   if (attacker) attacker.__gearAppliedForLastDamage = true;
 
@@ -598,15 +580,14 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
     try { _pushBreakdown({ label: 'AttackPower buff', mult, from: prev, to: out }); } catch { }
   }
 
-  // ---- (Legacy) Flay universal amp (keep until you fully migrate) ----
-  const flayTier = target?.weakness?.tiers?.flay || 0;
-  if (flayTier === 1) {
-    const prev = out; out = Math.floor(out * 1.10);
-    try { _pushBreakdown({ label: 'Flay T1 amp', mult: 1.10, from: prev, to: out }); } catch { }
-  } else if (flayTier === 2) {
-    const prev = out; out = Math.floor(out * 1.20);
-    try { _pushBreakdown({ label: 'Flay T2 amp', mult: 1.20, from: prev, to: out }); } catch { }
-  }
+  // NOTE: there used to be a "Flay/Expose universal damage amp" here (+10%/+20%
+  // flat damage vs an Exposed/Flayed target). Removed — per the actual weakness
+  // design, Expose does NOT grant a flat damage bonus at either tier. T1 (Raw) is
+  // a physical DR reduction (applyExposePreDamage) and increased physical-family
+  // buildup taken; T2 (Flayed) is crit chance/damage only (applyExposeCritBonuses).
+  // A skill can still reward hitting an Exposed/Flayed target on its own (that's a
+  // Category A "this skill hits harder" bonus, not a universal weakness effect —
+  // see applyTypedDamageModifiers below and Needle Venom for an example).
 
   // ---- Curse T2 amplifies CURSE-tagged abilities (damage path) ----
   const curseTagged = !!(tagFlags.curse || (Array.isArray(tagsList) && tagsList.includes('curse')));
@@ -632,6 +613,109 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
   }
 
   return out;
+}
+
+
+// --------------------------------------------------
+// Typed damage modifiers — physical/elemental/necrotic scale independently.
+//
+// Every "+X% damage" modifier in the game falls into one of two categories, and
+// they must NOT be handled the same way:
+//
+//   Category A — "weapon/skill damage %": the skill's own damage-effectiveness
+//   (e.g. a skill dealing 100%/115%/95% weapon damage) and any skill-specific
+//   reward that means "this skill hits harder" (e.g. Needle Venom's own Flayed-
+//   tier reward — a property of THAT SKILL, not of the weakness system itself).
+//   These represent more of the weapon's total kit coming through, so they scale
+//   physical + elemental + necrotic UNIFORMLY — a flat elemental/necrotic roll on
+//   the weapon is part of "weapon damage" too. Universal gear/buff "+damage%"
+//   (globalDamagePercent, AttackPower) are also Category A. Use scaleTypedDamage()
+//   below for these.
+//
+//   Category B — "target vulnerability": a weakness-family-specific amp that
+//   represents the DEFENDER's type-based weakness being exploited, scoped to only
+//   the matching component — Curse (necrotic family) below is the current example.
+//   Expose/Flay does NOT have one of these: per the actual design, Expose's T1
+//   (Raw) effect is a physical DR reduction + increased physical-family buildup
+//   taken (both handled elsewhere, see applyExposePreDamage / CombatScene buildup
+//   application), and its T2 (Flayed) effect is crit chance/damage only (handled
+//   in calculateDamage via applyExposeCritBonuses) — no flat damage% at either
+//   tier. An earlier version of this file had a "Flay universal amp" here; it
+//   didn't match the intended design and has been removed.
+//
+// applyDamageModifiers() above collapses everything into one scalar, which is
+// exactly why Category B bonuses used to bleed into elemental/necrotic damage
+// they had no business touching. This variant takes the same
+// {physical, elemental, necrotic} breakdown calculateDamage() already returns
+// and keeps Category B modifiers scoped — CombatScene's per-type DR step
+// (physical/elemental/necrotic resist) then mitigates each component correctly
+// downstream, using whatever split comes out the other end of this function.
+//
+// Not wired into the ~150 existing skills yet (they still use the scalar version
+// above) — migrate a skill to this one deliberately, the same way Needle Venom was.
+// --------------------------------------------------
+
+// Category A helper — scales every damage type on the hit by the same multiplier.
+// Use this for a skill's own damage-effectiveness and any "this skill hits harder"
+// reward. Do NOT use this for target-vulnerability amps (see Category B above).
+export function scaleTypedDamage(breakdown, mult) {
+  const physical = Math.floor((breakdown?.physical | 0) * mult);
+  const elemental = Math.floor((breakdown?.elemental | 0) * mult);
+  const necrotic = Math.floor((breakdown?.necrotic | 0) * mult);
+  return { physical, elemental, necrotic, amount: physical + elemental + necrotic };
+}
+export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}) {
+  const ability = opts?.ability ?? null;
+  const tagsList = opts?.tags ?? ability?.tags ?? null;
+  const tagFlags = (opts && typeof opts === 'object' && !Array.isArray(opts)) ? opts : {};
+
+  let physical = breakdown?.physical | 0;
+  let elemental = breakdown?.elemental | 0;
+  let necrotic = breakdown?.necrotic | 0;
+
+  // Gear % damage and AttackPower buffs are universal "more damage" modifiers —
+  // apply equally to every component, same as the scalar path.
+  const autoSkip = attacker && attacker.__gearAppliedForLastDamage;
+  if (autoSkip) attacker.__gearAppliedForLastDamage = false;
+  if (!opts?.skipGearMultiplier && !autoSkip && attacker) {
+    const mult = getAttackerDamageMultiplier(attacker);
+    if (mult !== 1) {
+      const prev = physical + elemental + necrotic;
+      physical = Math.floor(physical * mult);
+      elemental = Math.floor(elemental * mult);
+      necrotic = Math.floor(necrotic * mult);
+      try { _pushBreakdown({ label: 'gear damage', mult, from: prev, to: physical + elemental + necrotic }); } catch { }
+    }
+  }
+  const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
+  if (atkPowerPct !== 0) {
+    const mult = 1 + atkPowerPct / 100;
+    const prev = physical + elemental + necrotic;
+    physical = Math.floor(physical * mult);
+    elemental = Math.floor(elemental * mult);
+    necrotic = Math.floor(necrotic * mult);
+    try { _pushBreakdown({ label: 'AttackPower buff', mult, from: prev, to: physical + elemental + necrotic }); } catch { }
+  }
+
+  // (No Expose/Flay entry here — see the Category B note above. Its T1/T2 effects
+  // are handled elsewhere, not as a flat damage% on the hit.)
+
+  // Curse T2 is a NECROTIC-family weakness — only amplifies the necrotic component,
+  // and only for curse-tagged abilities (unchanged gating from the scalar path).
+  const curseTagged = !!(tagFlags.curse || (Array.isArray(tagsList) && tagsList.includes('curse')));
+  const curseT = target?.weakness?.tiers?.curse | 0;
+  if (curseTagged && curseT >= 2) {
+    const m = target?.weakness?.meters?.curse | 0;
+    const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
+    const I = (typeof weaknessIntensityMult === 'function') ? weaknessIntensityMult(m) : 1;
+    const mult = Math.max(1, baseAmp * (I > 0 ? I : 1));
+    const prev = necrotic;
+    necrotic = Math.floor(necrotic * mult);
+    try { _pushBreakdown({ label: 'Curse T2 amp (necro only)', mult, from: prev, to: necrotic }); } catch { }
+  }
+
+  const amount = physical + elemental + necrotic;
+  return { physical, elemental, necrotic, amount };
 }
 
 

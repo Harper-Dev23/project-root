@@ -13,8 +13,7 @@
  * Returns { lines: string[], tags: string[] }
  */
 
-import { Items } from '../../data/items.js';
-import { isItemInstance } from '../systems/ItemFactory.js';
+import { getItemComputedData } from '../systems/ItemFactory.js';
 
 const COST_LABEL = {
   major: 'Major Action',
@@ -22,6 +21,48 @@ const COST_LABEL = {
   class: 'Class Action',
   reaction: 'Reaction',
 };
+
+// T1/T2 flavor names — keep in sync with CombatScene._onWeaknessTierChanged's `names` map.
+const TIER_NAMES = {
+  lightning: ['Zapped', 'Shocked'],
+  cold: ['Chilled', 'Frostbitten'],
+  fire: ['Singed', 'Ablaze'],
+  disorient: ['Dazed', 'Concussed'],
+  lacerate: ['Bleeding', 'Hemorrhaging'],
+  expose: ['Raw', 'Flayed'],
+  disease: ['Sickened', 'Plagued'],
+  curse: ['Hexed', 'Afflicted'],
+  toxic: ['Poisoned', 'Envenomed'],
+};
+const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+function tierLabel(family, tierAtLeast) {
+  const idx = Math.max(1, tierAtLeast || 1) - 1;
+  return TIER_NAMES[family]?.[idx] || `${capitalize(family)} (Tier ${tierAtLeast || 1}+)`;
+}
+
+// For a list of per-tier rewardIfWeak rules, higher tiers often just add one
+// new thing on top of what the lower tier already grants (e.g. Flayed adds a
+// damage% bonus but keeps the same buildup bonus Raw already gives). Repeating
+// the unchanged parts at every tier reads as confusing/redundant, so this
+// returns only the keys that are new or changed vs. the previous tier's buff.
+function buffDelta(prevBuff, buff) {
+  if (!prevBuff) return buff;
+  const delta = {};
+  for (const key of Object.keys(buff || {})) {
+    if (key === 'addBuildup') {
+      const prevAB = prevBuff.addBuildup || {};
+      const ab = buff.addBuildup || {};
+      const changed = {};
+      for (const k of Object.keys(ab)) {
+        if (ab[k] !== prevAB[k]) changed[k] = ab[k];
+      }
+      if (Object.keys(changed).length) delta.addBuildup = changed;
+      continue;
+    }
+    if (buff[key] !== prevBuff[key]) delta[key] = buff[key];
+  }
+  return delta;
+}
 
 function buffToText(buff) {
   if (!buff) return '—';
@@ -36,8 +77,8 @@ function buffToText(buff) {
   if (buff.repeatStrikeOnce)    parts.push(`repeat strike (${buff.repeatPowerPct ?? 60}%)`);
   if (buff.extraRapidTicks)     parts.push(`+${buff.extraRapidTicks} tick`);
   if (buff.addBuildup) {
-    const b = Object.entries(buff.addBuildup).map(([k, v]) => `${k} +${v}`);
-    parts.push(`add ${b.join(', ')}`);
+    const b = Object.entries(buff.addBuildup).map(([k, v]) => `+${v} bonus ${capitalize(k)} buildup`);
+    parts.push(b.join(', '));
   }
   if (buff.physicalVulnPct)     parts.push(`-${buff.physicalVulnPct}% phys resist`);
   if (buff.bleedTakenPct)       parts.push(`+${buff.bleedTakenPct}% bleed taken`);
@@ -105,25 +146,39 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   if (hasWeaponReq) {
     lines.push('');
     if (actor) {
-      // Live mode: show actual numbers for this character
+      // Live mode: real numbers for this character, including rolled weapon
+      // affixes (flat/% weapon damage) and gear-wide % damage bonuses — both are
+      // attacker-only, so they're safe to bake into the headline number.
+      // Target-dependent bonuses (e.g. vs an Exposed foe) can't be known yet
+      // since no target is selected at tooltip time — those show below instead.
       const weaponInst = actor.equipment?.weaponMain;
-      const weaponBase = weaponInst
-        ? (isItemInstance(weaponInst) ? Items[weaponInst.id] : Items[weaponInst])
-        : null;
-      const wMin = weaponBase?.damage?.min ?? 1;
-      const wMax = weaponBase?.damage?.max ?? 2;
+      const weaponView = weaponInst ? getItemComputedData(weaponInst) : null;
+      const wMin = weaponView?.damage?.min ?? 1;
+      const wMax = weaponView?.damage?.max ?? 2;
       const str = actor.totalStats?.STR ?? 0;
       const strMod = Math.floor(str / 5);
-      const weapName = weaponBase?.name ?? 'Unarmed';
+      const weapName = weaponView?.name ?? 'Unarmed';
 
-      lines.push(`Damage: ${wMin + strMod}–${wMax + strMod}`);
-      lines.push(`  ${weapName} (${wMin}–${wMax}) + STR/5 (+${strMod})`);
+      const preGearMin = wMin + strMod;
+      const preGearMax = wMax + strMod;
+      const gearPct = actor.gearEffects?.globalDamagePercent || 0;
+      const gearMult = 1 + gearPct / 100;
+      const finalMin = Math.max(1, Math.floor(preGearMin * gearMult));
+      const finalMax = Math.max(1, Math.floor(preGearMax * gearMult));
+
+      lines.push(`Damage: ${finalMin}–${finalMax}`);
+      lines.push(`  ${weapName} (${wMin}–${wMax}) + STR/5 (+${strMod}) = ${preGearMin}–${preGearMax}`);
+      if (gearPct) lines.push(`  × Gear Damage +${gearPct}% = ${finalMin}–${finalMax}`);
       if (sk.hitCount > 1) {
-        lines.push(`  × ${sk.hitCount} hits = ${(wMin + strMod) * sk.hitCount}–${(wMax + strMod) * sk.hitCount} total`);
+        lines.push(`  × ${sk.hitCount} hits = ${finalMin * sk.hitCount}–${finalMax * sk.hitCount} total`);
       }
+
+      const critChance = Math.round((actor.derived?.CritChance || 0) + (weaponView?._derivedMods?.CritChance || 0));
+      const critMult = actor.derived?.CritMult ?? 1.5;
+      if (critChance > 0) lines.push(`  Crit: ${critChance}% chance for ×${critMult}`);
     } else {
-      // Generic mode: formula only, no numbers
-      lines.push('Damage: weapon damage + STR/5');
+      // Generic mode: formula only, no numbers (no character context to compute from)
+      lines.push('Damage: weapon damage + STR/5 (+ gear % bonuses)');
       if (sk.hitCount > 1) lines.push(`  × ${sk.hitCount} hits`);
     }
     if (sk.damageType) lines.push(`  Type: ${sk.damageType}`);
@@ -134,7 +189,7 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
 
   // Buildup hints
   if (sk.buildupHint && typeof sk.buildupHint === 'object') {
-    const parts = Object.entries(sk.buildupHint).map(([fam, amt]) => `${fam} +${amt}`);
+    const parts = Object.entries(sk.buildupHint).map(([fam, amt]) => `+${amt} ${capitalize(fam)} buildup`);
     if (parts.length) { lines.push(''); lines.push(`Applies: ${parts.join(', ')}`); }
   }
 
@@ -149,18 +204,37 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     lines.push(`Converts: ${tw.from} → ${tw.to} (×${tw.ratio ?? 1})`);
   }
 
-  // Reward if weak
+  // Reward if weak (target is currently at/above a weakness tier).
+  // Supports either a single rule or a list of rules (e.g. a weaker T1 case and
+  // a stronger T2 case for the same family). Rules are shown lowest tier first;
+  // a higher tier only lists what's NEW compared to the tier below it, so an
+  // unchanged buildup bonus isn't repeated at every tier — see buffDelta().
   if (sk.rewardIfWeak) {
-    const rw = sk.rewardIfWeak;
-    const buffStr = buffToText(rw.buff);
-    lines.push(`If ${rw.family} tier ≥${rw.tierAtLeast}: ${buffStr}`);
+    const rules = (Array.isArray(sk.rewardIfWeak) ? sk.rewardIfWeak : [sk.rewardIfWeak])
+      .filter(Boolean)
+      .sort((a, b) => (a.tierAtLeast ?? 1) - (b.tierAtLeast ?? 1));
+    let prevBuff = null;
+    rules.forEach((rw, idx) => {
+      const label = tierLabel(rw.family, rw.tierAtLeast);
+      if (idx === 0) {
+        lines.push(`If target is ${label}: ${buffToText(rw.buff)}`);
+      } else {
+        const delta = buffDelta(prevBuff, rw.buff);
+        if (delta && Object.keys(delta).length) {
+          lines.push(`If target is ${label}, it also grants: ${buffToText(delta)}`);
+        } else {
+          lines.push(`If target is ${label}: ${buffToText(rw.buff)}`);
+        }
+      }
+      prevBuff = rw.buff;
+    });
   }
 
   // Reward if tier cross
   if (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length) {
     lines.push('');
     sk.rewardIfTierCross.forEach(rule => {
-      lines.push(`On ${rule.family} tier ${rule.tier}: ${buffToText(rule.buff ?? rule.debuff)}`);
+      lines.push(`On reaching ${tierLabel(rule.family, rule.tier)}: ${buffToText(rule.buff ?? rule.debuff)}`);
     });
   }
 

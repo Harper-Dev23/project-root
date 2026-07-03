@@ -104,18 +104,21 @@ export const WeaknessV3 = {
 
     // Decay curve shaping (applies to all families, scaled by each family's baseDecay)
     //  - 0-100: light chip decay, capped low so buildup can stick
-    //  - 100-200: ramps toward the "20ish" band
-    //  - 200+: jumps to ~50, then ramps into the 200s at extreme overflow
+    //  - 100-200: ramps toward the "12ish" band
+    //  - 200+: jumps to ~28, then ramps into the 100s at extreme overflow
+    // v3.3 rebalance: decay was overpowering buildup investment (weakness fell off
+    // almost as fast as it was applied). All bands cut ~40-45% vs v3.2; resilience
+    // (gear stat) picked up the slack as the intended counter to buildup instead.
     DECAY_BASELINE: 35,      // reference baseDecay used to derive thematic weights
-    DECAY_LOW_BASE: 4,       // tuned so most land ~3-5 decay below T1
-    DECAY_LOW_FLOOR: 2,
-    DECAY_LOW_CAP: 5,
-    DECAY_MID_START: 14,     // decay around 14 at 100 (pre-scaling)
-    DECAY_MID_END: 22,       // decay approaches ~20 near T2 (pre-scaling)
-    DECAY_MID_CAP: 24,
-    DECAY_HIGH_BASE: 50,     // baseline decay once T2 is reached
-    DECAY_HIGH_PER_100: 35,  // additional decay per 100 overflow (before scaling)
-    DECAY_HIGH_CAP: 240,     // soft cap so even extreme overflow stays sane
+    DECAY_LOW_BASE: 2,       // tuned so most land ~2-3 decay below T1
+    DECAY_LOW_FLOOR: 1,
+    DECAY_LOW_CAP: 3,
+    DECAY_MID_START: 8,      // decay around 8 at 100 (pre-scaling)
+    DECAY_MID_END: 12,       // decay approaches ~12 near T2 (pre-scaling)
+    DECAY_MID_CAP: 14,
+    DECAY_HIGH_BASE: 28,     // baseline decay once T2 is reached
+    DECAY_HIGH_PER_100: 20,  // additional decay per 100 overflow (before scaling)
+    DECAY_HIGH_CAP: 140,     // soft cap so even extreme overflow stays sane
   },
 
   families: {
