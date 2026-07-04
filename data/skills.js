@@ -3,7 +3,10 @@
 import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
-import { applyDamageModifiers, applyTypedDamageModifiers, scaleTypedDamage, _pushBreakdown } from '../src/systems/CombatLogic.js';
+import {
+  applyDamageModifiers, applyTypedDamageModifiers, scaleTypedDamage, _pushBreakdown,
+  findRewardIfWeakRule, applyDamagePctBonus,
+} from '../src/systems/CombatLogic.js';
 import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
@@ -9175,8 +9178,14 @@ Object.assign(RAW_SKILLS, {
     cooldown: 2,
     buildupHint: { expose: 70 },
     // Declarative so the tooltip can show it and apply() can read the same
-    // numbers instead of duplicating them inline.
-    rewardIfTierCross: [{ family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1 } }],
+    // numbers instead of duplicating them inline. Fires on crossing EITHER
+    // threshold (Raw or Flayed) — apply() checks "did the tier go up at all",
+    // not "did it reach tier 1 specifically" — so both tiers are listed here
+    // to match what actually happens, not just the first one.
+    rewardIfTierCross: [
+      { family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1 } },
+      { family: "expose", tier: 2, buff: { critChanceBonusPct: 15, turns: 1 } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_feint;
       const roll = calculateDamage(attacker, target, ability);
@@ -9188,7 +9197,8 @@ Object.assign(RAW_SKILLS, {
       const currentTier = weaknessTierFromMeter(currentMeter);
       const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
       if (newTier > currentTier) {
-        const rule = ability?.rewardIfTierCross?.[0];
+        const rules = Array.isArray(ability?.rewardIfTierCross) ? ability.rewardIfTierCross : [];
+        const rule = rules.find(r => r.tier === newTier) || rules[0];
         const critBuff = rule?.buff?.critChanceBonusPct ?? 15;
         const critTurns = rule?.buff?.turns ?? 1;
         attacker.statusEffects = attacker.statusEffects || [];
@@ -9242,13 +9252,7 @@ Object.assign(RAW_SKILLS, {
       );
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const rules = Array.isArray(ability?.rewardIfWeak)
-        ? ability.rewardIfWeak
-        : (ability?.rewardIfWeak ? [ability.rewardIfWeak] : []);
-      // Use the highest tier the target currently qualifies for (not all of them stacked).
-      const activeRule = rules
-        .filter(r => exposeTier >= (r.tierAtLeast ?? 1))
-        .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
+      const activeRule = findRewardIfWeakRule(ability, exposeTier);
 
       let toxicBuildup = ability?.buildupHint?.toxic ?? 90;
       if (activeRule) {
@@ -9281,7 +9285,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Deals 100% weapon damage. Stronger if the target is Raw or Flayed (see below)."
+    description: "Deals 100% weapon damage. Stronger if the target is Raw or Flayed."
   },
 
   'pressure_point': {
@@ -9300,6 +9304,9 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose", "fire"],
     cooldown: 3,
     buildupHint: { expose: 100 },
+    // Declarative so the tooltip can show it and apply() reads the same numbers
+    // instead of duplicating them inline.
+    rewardIfTierCross: [{ family: "expose", tier: 2, buff: { onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } } } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.pressure_point;
       const roll = calculateDamage(attacker, target, ability);
@@ -9310,18 +9317,21 @@ Object.assign(RAW_SKILLS, {
       const currentMeter = target?.weakness?.meters?.expose || 0;
       const currentTier = weaknessTierFromMeter(currentMeter);
       const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
-      const statusEffects = [];
       if (newTier > currentTier && newTier >= 2) {
+        const rule = ability?.rewardIfTierCross?.find(r => r.tier === 2);
+        const ignite = rule?.buff?.onNextDamageTaken ?? { bonusDamagePercent: 30, buildup: { fire: 80 } };
         target.statusEffects = target.statusEffects || [];
+        // permanent, not turns-based — it should last until the next hit
+        // consumes it (however many turns that takes), not expire on a timer.
         target.statusEffects.push({
           id: "pressure_point_ignition",
-          turns: 1,
-          onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } },
+          permanent: true,
+          onNextDamageTaken: ignite,
         });
       }
       return { ...roll, amount, buildup: { expose: exposeBuildup } };
     },
-    description: "Precision strike (110% + 100 expose). Crossing expose T2 leaves an ignition point: the next hit deals +30% fire damage."
+    description: "Deals 100% weapon damage."
   },
 
   'ghoststep': {
@@ -9340,17 +9350,24 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "curse"],
     cooldown: 2,
     buildupHint: { curse: 90 },
+    // Current-tier check, not a tier-cross — fires whenever the target is
+    // already Dazed or worse, no crossing required.
+    rewardIfWeak: [
+      { family: "disorient", tierAtLeast: 1, buff: { addBuildup: { curse: 40 } } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.ghoststep;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const disOrientTier = target?.weakness?.tiers?.disorient || 0;
-      const curseBuildup = disOrientTier >= 1 ? 130 : (ability?.buildupHint?.curse ?? 90);
+      const disorientTier = target?.weakness?.tiers?.disorient || 0;
+      const rule = findRewardIfWeakRule(ability, disorientTier);
+      let curseBuildup = ability?.buildupHint?.curse ?? 90;
+      if (rule) curseBuildup += rule.buff?.addBuildup?.curse || 0;
       return { ...roll, amount, buildup: { curse: curseBuildup } };
     },
-    description: "Unsettling strike (100% + 90 curse). Disorient T1: total curse buildup rises to 130."
+    description: "Deals 100% weapon damage."
   },
 
   // -------- Escalation --------
@@ -9369,16 +9386,16 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
     cooldown: 3,
-    buildupHint: { curse: 80 },
+    buildupHint: { curse: 60 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.hex_stitch;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const primaryCurse = ability?.buildupHint?.curse ?? 80;
+      const primaryCurse = ability?.buildupHint?.curse ?? 60;
       const splashCurse = Math.floor(primaryCurse * 0.50);
-      const toxicMeter = attacker?.weakness?.meters?.toxic || attacker?.currentStats?.toxic || 0;
+      const toxicMeter = target?.weakness?.meters?.toxic || target?.currentStats?.toxic || 0;
       const repeatChance = Math.min(0.50, toxicMeter / 1000);
       const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => ({
         target: tgt, amount: 0, tags: ability?.tags, buildup: { curse: splashCurse },
@@ -9391,7 +9408,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Curse-laced strike (100% + 80 curse). Splashes 50% curse buildup to same-column enemies. Chance to repeat equal to toxic meter ÷ 1000 (max 50%)."
+    description: "Deals 100% weapon damage. Splashes 50% of the Curse buildup to same-column enemies (no damage to them). Chance to repeat the hit for free, scaling with the target's Toxic meter (max 50%)."
   },
 
   'static_prick': {
@@ -9410,6 +9427,11 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "lightning"],
     cooldown: 2,
     buildupHint: { lightning: 60 },
+    // Declarative so the tooltip can show it and apply() reads the same
+    // numbers instead of duplicating them inline.
+    rewardIfWeak: [
+      { family: "fire", tierAtLeast: 2, buff: { damagePct: 25 } },
+    ],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.static_prick;
       const roll = calculateDamage(attacker, target, ability);
@@ -9417,8 +9439,11 @@ Object.assign(RAW_SKILLS, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       const fireTier = target?.weakness?.tiers?.fire || 0;
-      if (fireTier >= 2) amount = Math.floor(amount * 1.25);
-      const lightningMeter = attacker?.weakness?.meters?.lightning || attacker?.currentStats?.lightning || 0;
+      const rule = findRewardIfWeakRule(ability, fireTier);
+      if (rule) {
+        amount = applyDamagePctBonus(amount, rule.buff?.damagePct || 0, `${ability?.name || 'Skill'} weapon damage bonus`);
+      }
+      const lightningMeter = target?.weakness?.meters?.lightning || target?.currentStats?.lightning || 0;
       const repeatChance = Math.min(0.40, lightningMeter / 1000);
       return {
         ...roll,
@@ -9427,7 +9452,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Lightning jab (95% + 60 lightning). Fire T2 on target: +25% damage. Chance to repeat equal to lightning meter ÷ 1000 (max 40%)."
+    description: "Deals 100% weapon damage. Chance to repeat the hit for free, scaling with the target's Lightning meter (max 40%)."
   },
 
   'street_panacea': {
@@ -9454,19 +9479,33 @@ Object.assign(RAW_SKILLS, {
         if (!char || char.status === 'incapacitated') return;
         totalDisease += char?.weakness?.meters?.disease || 0;
       });
+      // mpGain scales 1 MP per 100 total enemy Disease, floored at 2 and capped
+      // at 8 (so it takes 800+ combined enemy Disease to hit the ceiling).
       const mpGain = Math.max(2, Math.min(8, Math.floor(totalDisease / 100)));
-      // Cleanse 400 self disease
+      // Self-cleanse scales WITH mpGain (not a flat amount) — 50 self-Disease
+      // purged per MP gained, so it rides the same 2-8 range: 100 at minimum,
+      // up to 400 at the mpGain=8 ceiling.
+      const cleanseAmount = mpGain * 50;
       if (attacker?.weakness?.meters?.disease != null) {
-        attacker.weakness.meters.disease = Math.max(0, attacker.weakness.meters.disease - 400);
+        attacker.weakness.meters.disease = Math.max(0, attacker.weakness.meters.disease - cleanseAmount);
         attacker.weakness.tiers.disease = weaknessTierFromMeter(attacker.weakness.meters.disease);
       }
-      return {
-        amount: 0,
-        mpGain,
-        log: `${attacker?.name || "The rogue"} extracts enemy disease — gains ${mpGain} MP and purges 400 disease.`,
-      };
+
+      // Applied directly here (not via result.mpGain) so we can log a message
+      // that mentions the disease consumed alongside the MP gained, and so it
+      // shows even when the caster is already at full MP.
+      if (attacker) {
+        const maxMP = attacker.maxMP || attacker.derived?.maxMP || 0;
+        const before = attacker.currentMP || 0;
+        attacker.currentMP = Math.min(maxMP || 99, before + mpGain);
+        const actualGain = attacker.currentMP - before;
+        const gainText = actualGain > 0 ? `gains ${actualGain} MP` : 'is already at full MP';
+        scene?._log?.(`${attacker.name || "The rogue"} extracts enemy disease — ${gainText} and purges ${cleanseAmount} disease.`);
+      }
+
+      return { amount: 0 };
     },
-    description: "Bonus action, 0 MP. Reads enemy disease totals: restores 2–8 MP. Cleanses 400 disease from self."
+    description: "Reads total Disease across all living enemies: 100 Disease = 1 MP restored (minimum 2, maximum 8). Purges your own Disease at 50 per MP gained (minimum 100, maximum 400)."
   },
 
   'poison_extraction': {
@@ -9484,25 +9523,47 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["utility", "mana", "toxic"],
     cooldown: 3,
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.poison_extraction;
       const toxicMeter = target?.weakness?.meters?.toxic || 0;
-      const toxicTier = target?.weakness?.tiers?.toxic || 0;
-      // Consume 50 per tier (T0→50, T1→100, T2→150, T3→200)
-      const consumed = Math.min(toxicMeter, (toxicTier + 1) * 50);
+      // 4 bands keyed off the raw METER, not tier — Toxic only ever reaches
+      // tier 2, so gating this on toxicTier could never reach the 4th (200)
+      // band. Banding by meter directly makes all 4 steps reachable.
+      const band = Math.min(3, Math.floor(toxicMeter / 50));
+      const consumeCap = (band + 1) * 50; // 50, 100, 150, 200
+      const consumed = Math.min(toxicMeter, consumeCap);
       if (target?.weakness?.meters?.toxic != null) {
         target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
         target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
       }
-      const mpTable = [2, 4, 7, 10];
-      const mpGain = mpTable[Math.min(toxicTier, 3)];
-      return {
-        amount: 0,
-        mpGain,
-        log: `${attacker?.name || "The rogue"} extracts ${consumed} toxic — gains ${mpGain} MP.`,
-      };
+      const mpTable = [2, 4, 7, 8];
+      const mpGain = mpTable[band];
+
+      // Party-wide: every living character on the attacker's own side gets
+      // mpGain (not just the caster) — applied directly here rather than via
+      // the generic single-target result.mpGain path, so don't also return
+      // mpGain below or the caster would get it twice.
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const party = (allySlots || [])
+        .map(slot => slot?.char)
+        .filter(char => char && char.status !== 'incapacitated');
+
+      scene?._log?.(`${attacker?.name || "The rogue"} extracts ${consumed} toxic from ${target?.name || "the target"}.`);
+      party.forEach(char => {
+        const maxMP = char.maxMP || char.derived?.maxMP || 0;
+        const before = char.currentMP || 0;
+        char.currentMP = Math.min(maxMP || 99, before + mpGain);
+        const actualGain = char.currentMP - before;
+        if (actualGain > 0) {
+          scene?._log?.(`${char.name} recovers ${actualGain} MP.`);
+        } else {
+          scene?._log?.(`${char.name} is already at full MP.`);
+        }
+      });
+
+      return { amount: 0 };
     },
-    description: "Bonus action, 0 MP. Consumes 50–200 toxic from target based on tier; restores 2/4/7/10 MP."
+    description: "Consumes up to 200 Toxic buildup from the target, in 50-point steps based on their current meter. Restores 2/4/7/8 MP to your entire party, scaling with how much was consumed."
   },
 
   // -------- Payoff --------
@@ -14429,28 +14490,3 @@ Object.assign(RAW_SKILLS, {
 });
 
 Object.assign(SKILLS, buildSkillRegistry(RAW_SKILLS));
-// ======== Global Skill Test Mode (opt-in) - works on SKILLS object ========
-const DEV_SKILL_TEST = {
-  ENABLE: false,             // now controlled by DevFlags UI in SkillsOverlay
-  zeroMpCost: true,
-  zeroCooldown: true,
-  ignoreStatReqs: true,       // sets requiredValue to 0
-  ignoreWeaknessGates: false, // if true, bypass requiresWeakness checks in your gate
-  // amplifyDamagePct: 0,     // optional future knob
-};
-
-function applyTestOverridesToAll(skillsObj, cfg = DEV_SKILL_TEST) {
-  if (!cfg.ENABLE || !skillsObj) return;
-  for (const s of Object.values(skillsObj)) {
-    if (!s || s.type !== "weapon") continue;   // only weapon skills
-    s._testOverrides = true;
-    if (cfg.zeroMpCost && typeof s.mpCost === "number") s.mpCost = 0;
-    if (cfg.zeroCooldown && typeof s.cooldown === "number") s.cooldown = 0;
-    if (cfg.ignoreStatReqs && typeof s.requiredValue === "number") s.requiredValue = 0;
-    if (cfg.ignoreWeaknessGates) s._skipWeaknessGates = true; // honor in canUseSkill gate
-    // if (cfg.amplifyDamagePct) s._tempDamageAmpPct = cfg.amplifyDamagePct;
-  }
-}
-
-// Call once after all skills (old + new) are in SKILLS:
-applyTestOverridesToAll(SKILLS);

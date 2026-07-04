@@ -30,7 +30,7 @@ import ReactionSystem from '../systems/ReactionSystem.js';
 // Status / Weakness framework
 import {
   makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult,
-  WeaknessFamilies, StatusEffects, WeaknessV3,
+  WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
   WeaknessAliases, familyIntensityMult, familyStartConsume,
   hasCurseCinders, hasCurseTier1Plus, curseOverflowFactor,
   tickDownCurseCinders,
@@ -1694,49 +1694,56 @@ export default class CombatScene extends Phaser.Scene {
 
   _weaknessTooltipData(fam) {
     const title = this._title(fam);
+    const tierNames = WeaknessTierNames[fam] || [];
     const lines = [];
-    const add = (label, text) => lines.push(`${label}: ${text}`);
+    // label is the tier number (1 or 2); resolves to the actual tier name
+    // (e.g. "Dazed") instead of a bare "T1" so it reads the same as the combat
+    // log and skill tooltips, which already use these names.
+    const add = (tier, text) => {
+      const name = tierNames[tier - 1] || `T${tier}`;
+      lines.push(`${name} (T${tier}): ${text}`);
+    };
 
     switch (fam) {
       case 'fire':
-        add('T1', 'Takes burn when acting; fire hits harder.');
-        add('T2', 'Start-of-turn burn tick scales with overflow; can consume meter.');
+        add(1, 'Takes burn when acting; fire hits harder.');
+        add(2, 'Start-of-turn burn tick scales with overflow; can consume meter.');
         break;
       case 'cold':
-        add('T1', 'Initiative gain is slowed.');
-        add('T2', 'Gauge drains at turn start; damage dealt and evasion drop.');
+        add(1, 'Initiative gain is slowed.');
+        add(2, 'Gauge drains at turn start; damage dealt and evasion drop.');
         break;
       case 'lightning':
-        add('T1', 'Takes random jolts (1-4) of shock damage.');
-        add('T2', 'Chance for multiple extra jolts based on overflow.');
+        add(1, 'Takes random jolts (1-4) of shock damage.');
+        add(2, 'Chance for multiple extra jolts based on overflow.');
         break;
       case 'disorient':
-        add('T1', 'MP costs rise (scales with overflow).');
-        add('T2', 'Loses MP at the start of turn.');
+        add(1, 'MP costs rise (scales with overflow).');
+        add(2, 'Loses MP at the start of turn.');
         break;
       case 'lacerate':
-        add('T1', 'Acting adds lacerate buildup (bleed threat).');
-        add('T2', 'Higher tiers would inflict heavier bleed if reached.');
+        add(1, 'Acting adds lacerate buildup (bleed threat).');
+        add(2, 'Higher tiers would inflict heavier bleed if reached.');
         break;
       case 'expose':
-        add('T1', 'Physical DR is pierced; takes extra physical buildup.');
-        add('T2', 'Bonus crit chance and crit damage against the target.');
+        add(1, 'Physical DR is pierced; takes extra physical buildup.');
+        add(2, 'Bonus crit chance and crit damage against the target.');
         break;
       case 'toxic':
-        add('T1', 'Sometimes skips decay, letting poison linger.');
-        add('T2', 'Flat poison tick at start of turn.');
+        add(1, 'Sometimes skips decay, letting poison linger.');
+        add(2, 'Flat poison tick at start of turn.');
         break;
       case 'disease':
-        add('T1', 'Incoming healing reduced.');
-        add('T2', 'Max HP temporarily reduced.');
+        add(1, 'Incoming healing reduced.');
+        add(2, 'Max HP temporarily reduced.');
         break;
       case 'curse':
-        add('T1', 'Curse meter decays slower.');
-        add('T2', 'Decay slows further; curse-tagged effects amplify.');
+        add(1, 'Curse meter decays slower.');
+        add(2, 'Decay slows further; curse-tagged effects amplify.');
         break;
       default:
-        add('T1', 'Weakness effect not yet described.');
-        add('T2', 'Weakness effect not yet described.');
+        add(1, 'Weakness effect not yet described.');
+        add(2, 'Weakness effect not yet described.');
     }
 
     return { title: `${title} Weakness`, lines };
@@ -2398,13 +2405,13 @@ export default class CombatScene extends Phaser.Scene {
       const full = (SKILLS[a?.id] || a);
 
       const cdRaw = actor.cooldowns?.[full.id] || 0;
-      const onCD = cdRaw > 0 && !DevFlags.isBreakthroughEnabled();
+      const onCD = cdRaw > 0 && !DevFlags.isCooldownBypassed();
       const noAction = full.actionCost && !this._canUseActionType(full.actionCost);
 
       const baseLabel = (this._displayNameForSkill
         ? this._displayNameForSkill(actor, full)
         : (full.name || a.name || 'Unnamed'));
-      const label = (cdRaw > 0 && !DevFlags.isBreakthroughEnabled()) ? `${baseLabel} (CD${cdRaw})` : baseLabel;
+      const label = (cdRaw > 0 && !DevFlags.isCooldownBypassed()) ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
       const btn = new UIButton(this, baseX, i * 50, label, () => {
         if (onCD || noAction) return;
@@ -2505,13 +2512,13 @@ export default class CombatScene extends Phaser.Scene {
 
     // Cooldown gate BEFORE entering targeting mode
     const cdRemaining = actor.cooldowns?.[ability.id] || 0;
-    if (cdRemaining > 0 && !DevFlags.isBreakthroughEnabled()) {
+    if (cdRemaining > 0 && !DevFlags.isCooldownBypassed()) {
       this._log(`${ability.name} is on cooldown (${cdRemaining} turn${cdRemaining > 1 ? 's' : ''} left).`);
       return;
     }
 
     // Enforce attacker positionRequirement if present
-    if (ability.positionRequirement?.length) {
+    if (ability.positionRequirement?.length && !DevFlags.isNoRangeEnabled()) {
       const col = this._getUnitColumn(actor);
       if (!ability.positionRequirement.includes(col)) {
         this._log(`${actor.name} cannot use ${ability.name} from ${col}.`);
@@ -2558,7 +2565,7 @@ export default class CombatScene extends Phaser.Scene {
     const slots = ability.targetRequirement === 'enemy' ? this.enemySlots : this.allySlots;
     // Optional per-column target filter
     let filtered = slots;
-    if (ability.targetColumns?.length) {
+    if (ability.targetColumns?.length && !DevFlags.isNoRangeEnabled()) {
       filtered = slots.filter(s => {
         const col = this._getColumnBySlotId(s.slotId);
         return ability.targetColumns.includes(col);
@@ -2828,7 +2835,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
-    const _mpCost = DevFlags.isBreakthroughEnabled() ? 0 : calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost;
+    const _mpCost = DevFlags.isManaCostBypassed() ? 0 : calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost;
     if (user.currentMP < _mpCost) {
       this._log(`${user.name} lacks the MP to use ${skill.name}.`);
       return { ok: false };
@@ -2837,7 +2844,7 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} has no ${skill.actionCost} actions left.`);
       return { ok: false };
     }
-    if (!DevFlags.isBreakthroughEnabled() && this._isSkillOnCooldown(user, skill.id)) {
+    if (!DevFlags.isCooldownBypassed() && this._isSkillOnCooldown(user, skill.id)) {
       const remain = user.cooldowns?.[skill.id] || 0;
       this._log(`${skill.name} is on cooldown (${remain} turn${remain === 1 ? '' : 's'} remaining).`);
       return { ok: false };
@@ -2929,7 +2936,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
-    const baseMpCost = DevFlags.isBreakthroughEnabled() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
+    const baseMpCost = DevFlags.isManaCostBypassed() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
     const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
     const mpCost = mpInfo?.cost ?? baseMpCost;
 
@@ -3034,6 +3041,15 @@ export default class CombatScene extends Phaser.Scene {
 
     // Snapshot weakness tiers BEFORE any new buildup
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
+
+    // Snapshot pressure_point_ignition presence BEFORE this ability runs — if this
+    // very hit is the one that applies it (e.g. Pressure Point itself crossing
+    // Flayed), it must NOT also be the hit that consumes it. Without this, the
+    // ignition status gets pushed and immediately eaten by the same strike that
+    // created it, instead of carrying over to a later hit as intended.
+    const hadPressurePointIgnitionBefore = (target?.statusEffects || []).some(
+      se => se?.id === 'pressure_point_ignition'
+    );
 
     // Execute ability to get its payload
     let result = {};
@@ -3359,14 +3375,27 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
-        // Pressure Point Ignition: bonus fire damage on next hit, then consumed
-        if (dmg > 0) {
+        // Pressure Point Ignition: bonus fire damage on next hit, then consumed.
+        // Gated on hadPressurePointIgnitionBefore so the hit that APPLIES this
+        // status (crossing Flayed) can't also be the hit that CONSUMES it.
+        // Computed off `raw` (the pre-mitigation hit) rather than the already-
+        // mitigated `dmg`, then run through the SAME ElementalResist DR helper
+        // Needle Venom's typed path uses — this is genuinely fire damage, so it
+        // gets reduced/increased by the target's elemental resistance (and any
+        // other elemental-type modifier that helper accounts for) like any other
+        // fire damage would, instead of being a flat unresisted bonus.
+        if (raw > 0 && hadPressurePointIgnitionBefore) {
           const ignIdx = (target?.statusEffects || []).findIndex(
-            se => se?.id === 'pressure_point_ignition' && (se.turns || 0) > 0
+            se => se?.id === 'pressure_point_ignition'
           );
           if (ignIdx !== -1) {
             const ign = target.statusEffects[ignIdx].onNextDamageTaken || {};
-            const fireBonus = Math.floor(dmg * (ign.bonusDamagePercent ?? 30) / 100);
+            const fireBonusRaw = Math.floor(raw * (ign.bonusDamagePercent ?? 30) / 100);
+            const elemDR = ignoreDR ? 0 : Phaser.Math.Clamp(
+              getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }),
+              -0.95, 0.95
+            );
+            const fireBonus = Math.max(0, Math.floor(fireBonusRaw * (1 - elemDR)));
             dmg += fireBonus;
             target.statusEffects.splice(ignIdx, 1);
             if ((ign.buildup?.fire ?? 0) > 0) this._applyWeaknessBuildup(target, { fire: ign.buildup.fire }, { user });
@@ -4276,20 +4305,8 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _onWeaknessTierChanged(target, family, newTier, oldTier, ctx) {
-    const names = {
-      lightning: ['Zapped', 'Shocked'],
-      cold: ['Chilled', 'Frostbitten'],
-      fire: ['Singed', 'Ablaze'],
-      disorient: ['Dazed', 'Concussed'],
-      lacerate: ['Bleeding', 'Hemorrhaging'],
-      expose: ['Raw', 'Flayed'],
-      disease: ['Sickened', 'Plagued'],
-      curse: ['Hexed', 'Afflicted'],
-      toxic: ['Poisoned', 'Envenomed'],
-    };
-
     if (newTier > oldTier) {
-      const label = (names[family]?.[newTier - 1]) || `T${newTier} ${family}`;
+      const label = (WeaknessTierNames[family]?.[newTier - 1]) || `T${newTier} ${family}`;
       this._log(`${target.name} is now ${label}.`);
     } else {
       this._log(`${target.name} weakens: ${family} dropped to T${newTier}.`);

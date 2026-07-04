@@ -94,6 +94,24 @@ export const WeaknessIDs = [
 export const WEAKNESS_T1 = 100;
 export const WEAKNESS_T2 = 200;
 
+/**
+ * T1/T2 flavor names, single source of truth — CombatScene (combat log flavor
+ * + weakness panel tooltips) and skillTooltip.js (skill reward lines) both
+ * read from this instead of keeping their own copies, so a rename here can't
+ * drift out of sync with what players see elsewhere.
+ */
+export const WeaknessTierNames = {
+  lightning: ['Zapped', 'Shocked'],
+  cold: ['Chilled', 'Frostbitten'],
+  fire: ['Singed', 'Ablaze'],
+  disorient: ['Dazed', 'Concussed'],
+  lacerate: ['Bleeding', 'Hemorrhaging'],
+  expose: ['Raw', 'Flayed'],
+  disease: ['Sickened', 'Plagued'],
+  curse: ['Hexed', 'Afflicted'],
+  toxic: ['Poisoned', 'Envenomed'],
+};
+
 /** v3 tuning (all numbers are easy-to-tune knobs; nothing hard-locked) */
 /** v3 tuning aligned to Final Draft v1 (tweak freely) */
 export const WeaknessV3 = {

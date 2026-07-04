@@ -3,8 +3,9 @@ import { HOTKEYS } from '../../systems/HotkeyManager.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { AudioSettings } from '../../systems/AudioSettings.js';
 import { SoundManager } from '../../systems/SoundManager.js';
+import { DevFlags } from '../../systems/DevFlags.js';
 
-const TAB_NAMES = ['Audio', 'Graphics', 'Gameplay', 'Hotkeys'];
+const TAB_NAMES = ['Audio', 'Graphics', 'Gameplay', 'Hotkeys', 'Cheats'];
 
 export default class OptionsOverlay extends Phaser.Scene {
   constructor() {
@@ -151,10 +152,13 @@ export default class OptionsOverlay extends Phaser.Scene {
 
     } else if (name === 'Hotkeys') {
       this._buildHotkeysTab(group, left, contentY, width, sectionStyle, itemStyle, noteStyle, depth);
+
+    } else if (name === 'Cheats') {
+      this._buildCheatsTab(group, left, contentY, sectionStyle, noteStyle, depth);
     }
 
     // Note at bottom for placeholder tabs
-    if (name !== 'Hotkeys' && name !== 'Audio') {
+    if (name !== 'Hotkeys' && name !== 'Audio' && name !== 'Cheats') {
       const note = this.add.text(
         left,
         this._bounds.bottom - 80,
@@ -272,6 +276,55 @@ export default class OptionsOverlay extends Phaser.Scene {
       'Hotkeys are not yet configurable — this list is for reference only.',
       noteStyle
     );
+  }
+
+  // ── Cheats (moved here from the in-combat Skills overlay corner buttons) ──
+
+  _buildCheatsTab(group, left, startY, sectionStyle, noteStyle, depth) {
+    const addT = (tx, ty, str, style) => {
+      const t = this.add.text(tx, ty, str, style).setDepth(depth);
+      group.add(t);
+      return t;
+    };
+
+    addT(left, startY, 'Cheats', sectionStyle);
+
+    const rowH = 28;
+    let cy = startY + 40;
+
+    const makeToggle = (label, isOn, onToggle) => {
+      const box = this.add.text(left, cy, isOn ? '[✓]' : '[ ]', {
+        fontSize: '15px', color: isOn ? '#88ff88' : '#888888', fontFamily: 'Georgia'
+      }).setDepth(depth).setInteractive({ useHandCursor: true });
+      group.add(box);
+
+      const lbl = this.add.text(left + 34, cy, label, {
+        fontSize: '15px', color: isOn ? '#88ff88' : '#888888'
+      }).setDepth(depth).setInteractive({ useHandCursor: true });
+      group.add(lbl);
+
+      const refresh = () => {
+        const on = onToggle();
+        box.setText(on ? '[✓]' : '[ ]');
+        box.setColor(on ? '#88ff88' : '#888888');
+        lbl.setColor(on ? '#88ff88' : '#888888');
+      };
+      box.on('pointerdown', refresh);
+      lbl.on('pointerdown', refresh);
+
+      cy += rowH;
+    };
+
+    makeToggle('Free Mana (0 MP cost)', DevFlags.isFreeManaEnabled(), () => DevFlags.toggleFreeMana());
+    makeToggle('No Cooldowns', DevFlags.isNoCooldownEnabled(), () => DevFlags.toggleNoCooldown());
+    makeToggle('No Range Restrictions', DevFlags.isNoRangeEnabled(), () => DevFlags.toggleNoRange());
+    makeToggle('Breakthrough (free MP + zero stat reqs, bundles the above two)', DevFlags.isBreakthroughEnabled(), () => DevFlags.toggleBreakthrough());
+    makeToggle('Buildup ×5', DevFlags.isBuildupEnabled(), () => DevFlags.toggleBuildup());
+    makeToggle('Super Saiyan (×10 damage)', DevFlags.isSuperSaiyanEnabled(), () => DevFlags.toggleSuperSaiyan());
+    makeToggle('All Tribes (bypass vendor tribe lock)', DevFlags.isAllTribesEnabled(), () => DevFlags.toggleAllTribes());
+
+    cy += 10;
+    addT(left, cy, 'Persist across sessions (stored locally) — never touch save-slot data.', noteStyle);
   }
 
   // ── Close ────────────────────────────────────────────────────────────────

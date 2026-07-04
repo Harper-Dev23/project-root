@@ -14,6 +14,7 @@
  */
 
 import { getItemComputedData } from '../systems/ItemFactory.js';
+import { WeaknessTierNames } from '../systems/StatusEffects.js';
 
 const COST_LABEL = {
   major: 'Major Action',
@@ -22,22 +23,10 @@ const COST_LABEL = {
   reaction: 'Reaction',
 };
 
-// T1/T2 flavor names — keep in sync with CombatScene._onWeaknessTierChanged's `names` map.
-const TIER_NAMES = {
-  lightning: ['Zapped', 'Shocked'],
-  cold: ['Chilled', 'Frostbitten'],
-  fire: ['Singed', 'Ablaze'],
-  disorient: ['Dazed', 'Concussed'],
-  lacerate: ['Bleeding', 'Hemorrhaging'],
-  expose: ['Raw', 'Flayed'],
-  disease: ['Sickened', 'Plagued'],
-  curse: ['Hexed', 'Afflicted'],
-  toxic: ['Poisoned', 'Envenomed'],
-};
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 function tierLabel(family, tierAtLeast) {
   const idx = Math.max(1, tierAtLeast || 1) - 1;
-  return TIER_NAMES[family]?.[idx] || `${capitalize(family)} (Tier ${tierAtLeast || 1}+)`;
+  return WeaknessTierNames[family]?.[idx] || `${capitalize(family)} (Tier ${tierAtLeast || 1}+)`;
 }
 
 // For a list of per-tier rewardIfWeak rules, higher tiers often just add one
@@ -83,6 +72,16 @@ function buffToText(buff) {
   if (buff.physicalVulnPct)     parts.push(`-${buff.physicalVulnPct}% phys resist`);
   if (buff.bleedTakenPct)       parts.push(`+${buff.bleedTakenPct}% bleed taken`);
   if (buff.speedDownPct)        parts.push(`-${buff.speedDownPct}% speed`);
+  if (buff.onNextDamageTaken) {
+    const n = buff.onNextDamageTaken;
+    const nParts = [];
+    if (n.bonusDamagePercent) nParts.push(`next hit taken: +${n.bonusDamagePercent}% fire damage`);
+    if (n.buildup) {
+      const b = Object.entries(n.buildup).map(([k, v]) => `+${v} ${capitalize(k)} buildup`);
+      if (b.length) nParts.push(b.join(', '));
+    }
+    parts.push(nParts.join(', '));
+  }
   if (buff.turns)               parts.push(`(${buff.turns}t)`);
   return parts.length ? parts.join(', ') : JSON.stringify(buff);
 }
@@ -96,6 +95,68 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   // Description
   if (sk.description || sk.desc) {
     lines.push(sk.description || sk.desc);
+    lines.push('');
+  }
+
+  // Buildup hints — directly under the description, above cost/damage.
+  if (sk.buildupHint && typeof sk.buildupHint === 'object') {
+    const buildupParts = Object.entries(sk.buildupHint).map(([fam, amt]) => `+${amt} ${capitalize(fam)} buildup`);
+    if (buildupParts.length) lines.push(`Applies: ${buildupParts.join(', ')}`);
+  }
+
+  // Reward if weak (target is currently at/above a weakness tier) — grouped with
+  // Applies near the top since both describe what the skill DOES, before the
+  // cost/cooldown/damage mechanics below. Supports either a single rule or a
+  // list of rules (e.g. a weaker T1 case and a stronger T2 case for the same
+  // family). Rules are shown lowest tier first; a higher tier only lists what's
+  // NEW compared to the tier below it, so an unchanged buildup bonus isn't
+  // repeated at every tier — see buffDelta().
+  if (sk.rewardIfWeak) {
+    const rules = (Array.isArray(sk.rewardIfWeak) ? sk.rewardIfWeak : [sk.rewardIfWeak])
+      .filter(Boolean)
+      .sort((a, b) => (a.tierAtLeast ?? 1) - (b.tierAtLeast ?? 1));
+    let prevBuff = null;
+    rules.forEach((rw, idx) => {
+      const label = tierLabel(rw.family, rw.tierAtLeast);
+      // "at least" because tierAtLeast is a floor, not an exact match — a T1
+      // rule with no higher tier defined still applies at T2 and beyond, so
+      // saying just "If target is Dazed" would wrongly imply it stops applying
+      // once they're Concussed instead.
+      if (idx === 0) {
+        lines.push(`If target is at least ${label}: ${buffToText(rw.buff)}`);
+      } else {
+        const delta = buffDelta(prevBuff, rw.buff);
+        if (delta && Object.keys(delta).length) {
+          lines.push(`If target is at least ${label}, it also grants: ${buffToText(delta)}`);
+        } else {
+          lines.push(`If target is at least ${label}: ${buffToText(rw.buff)}`);
+        }
+      }
+      prevBuff = rw.buff;
+    });
+  }
+
+  // Reward if tier cross — same grouping rationale as above. When consecutive
+  // rules grant the exact same buff (e.g. "fires on crossing either Raw or
+  // Flayed, same bonus either way"), merge them into one line instead of
+  // repeating an identical line per tier.
+  if (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length) {
+    const grouped = [];
+    sk.rewardIfTierCross.forEach(rule => {
+      const buffStr = buffToText(rule.buff ?? rule.debuff);
+      const last = grouped[grouped.length - 1];
+      if (last && last.buffStr === buffStr && last.family === rule.family) {
+        last.labels.push(tierLabel(rule.family, rule.tier));
+      } else {
+        grouped.push({ family: rule.family, buffStr, labels: [tierLabel(rule.family, rule.tier)] });
+      }
+    });
+    grouped.forEach(g => {
+      lines.push(`On reaching ${g.labels.join(' or ')}: ${g.buffStr}`);
+    });
+  }
+
+  if (sk.buildupHint || sk.rewardIfWeak || (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length)) {
     lines.push('');
   }
 
@@ -187,12 +248,6 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     lines.push(`Damage type: ${sk.damageType}`);
   }
 
-  // Buildup hints
-  if (sk.buildupHint && typeof sk.buildupHint === 'object') {
-    const parts = Object.entries(sk.buildupHint).map(([fam, amt]) => `+${amt} ${capitalize(fam)} buildup`);
-    if (parts.length) { lines.push(''); lines.push(`Applies: ${parts.join(', ')}`); }
-  }
-
   // Weakness consumption
   if (Array.isArray(sk.consumeWeakness) && sk.consumeWeakness.length) {
     lines.push(`Consumes: ${sk.consumeWeakness.join(', ')} weakness`);
@@ -202,40 +257,6 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   if (sk.transformWeakness) {
     const tw = sk.transformWeakness;
     lines.push(`Converts: ${tw.from} → ${tw.to} (×${tw.ratio ?? 1})`);
-  }
-
-  // Reward if weak (target is currently at/above a weakness tier).
-  // Supports either a single rule or a list of rules (e.g. a weaker T1 case and
-  // a stronger T2 case for the same family). Rules are shown lowest tier first;
-  // a higher tier only lists what's NEW compared to the tier below it, so an
-  // unchanged buildup bonus isn't repeated at every tier — see buffDelta().
-  if (sk.rewardIfWeak) {
-    const rules = (Array.isArray(sk.rewardIfWeak) ? sk.rewardIfWeak : [sk.rewardIfWeak])
-      .filter(Boolean)
-      .sort((a, b) => (a.tierAtLeast ?? 1) - (b.tierAtLeast ?? 1));
-    let prevBuff = null;
-    rules.forEach((rw, idx) => {
-      const label = tierLabel(rw.family, rw.tierAtLeast);
-      if (idx === 0) {
-        lines.push(`If target is ${label}: ${buffToText(rw.buff)}`);
-      } else {
-        const delta = buffDelta(prevBuff, rw.buff);
-        if (delta && Object.keys(delta).length) {
-          lines.push(`If target is ${label}, it also grants: ${buffToText(delta)}`);
-        } else {
-          lines.push(`If target is ${label}: ${buffToText(rw.buff)}`);
-        }
-      }
-      prevBuff = rw.buff;
-    });
-  }
-
-  // Reward if tier cross
-  if (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length) {
-    lines.push('');
-    sk.rewardIfTierCross.forEach(rule => {
-      lines.push(`On reaching ${tierLabel(rule.family, rule.tier)}: ${buffToText(rule.buff ?? rule.debuff)}`);
-    });
   }
 
   // Requirements

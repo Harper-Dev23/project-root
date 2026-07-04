@@ -664,6 +664,45 @@ export function scaleTypedDamage(breakdown, mult) {
   const necrotic = Math.floor((breakdown?.necrotic | 0) * mult);
   return { physical, elemental, necrotic, amount: physical + elemental + necrotic };
 }
+
+// --------------------------------------------------
+// rewardIfWeak helpers — shared by every skill using the "if target is at
+// least tier X, grant this bonus" pattern (Needle Venom, Static Prick, and any
+// future skill). Two small pieces, used together:
+//
+//   1. findRewardIfWeakRule(ability, currentTier) — picks the highest tier the
+//      target currently qualifies for (matches the tooltip's own logic, so a
+//      skill's damage math and its tooltip can never read different rules).
+//
+//   2. applyDamagePctBonus(amount, dmgPct, label) — applies a flat %-of-amount
+//      bonus AND logs it to the breakdown in one call. Missing this second
+//      step is exactly why Static Prick's +25% wasn't showing up: the bonus
+//      was being applied correctly, just never pushed to _pushBreakdown, so
+//      the log/tooltip had nothing to show even though the number was right.
+//
+// Only the scalar (legacy applyDamageModifiers) path is covered here — for a
+// skill already migrated to the typed pipeline, scaleTypedDamage() + your own
+// _pushBreakdown call (see Needle Venom) is still the right tool, since a
+// typed skill needs to log a from/to on the combined {physical,elemental,
+// necrotic} sum, not a single scalar.
+// --------------------------------------------------
+export function findRewardIfWeakRule(ability, currentTier) {
+  const rules = Array.isArray(ability?.rewardIfWeak)
+    ? ability.rewardIfWeak
+    : (ability?.rewardIfWeak ? [ability.rewardIfWeak] : []);
+  return rules
+    .filter(r => currentTier >= (r.tierAtLeast ?? 1))
+    .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
+}
+
+export function applyDamagePctBonus(amount, dmgPct, label) {
+  if (!dmgPct) return amount;
+  const mult = 1 + dmgPct / 100;
+  const next = Math.floor(amount * mult);
+  try { _pushBreakdown({ label, mult, from: amount, to: next }); } catch { }
+  return next;
+}
+
 export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}) {
   const ability = opts?.ability ?? null;
   const tagsList = opts?.tags ?? ability?.tags ?? null;
