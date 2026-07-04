@@ -2,14 +2,16 @@
 // Runtime dev toggles — stored in localStorage so they survive page reloads
 // but never touch save-slot data.
 //
-//  devBreakthrough  — zero MP costs, zero stat requirements for player skills
-//                     (bundles the same effect as devFreeMana, plus stat reqs)
+// Each flag does exactly ONE thing — none of them overlap or bundle another
+// flag's effect. If you want several at once, turn on several toggles.
+//
+//  devBreakthrough  — zero stat requirements for player skills (nothing else)
+//  devFreeMana      — zero MP costs
+//  devNoCooldown    — skip cooldown gating
+//  devNoRange       — bypass positionRequirement/targetColumns range restrictions
 //  devBuildup       — player skills deal 5× buildup
 //  devAllTribes     — bypass tribe restriction at all tribe vendors (testing)
 //  devSuperSaiyan   — player units deal 10× damage
-//  devFreeMana      — zero MP costs on their own, independent of devBreakthrough
-//  devNoCooldown    — skip cooldown gating on their own, independent of devBreakthrough
-//  devNoRange       — bypass positionRequirement/targetColumns range restrictions
 
 const KEY_BREAKTHROUGH  = 'dev_breakthrough';
 const KEY_BUILDUP       = 'dev_buildup';
@@ -81,14 +83,5 @@ export const DevFlags = {
     const next = !this.isNoRangeEnabled();
     localStorage.setItem(KEY_NO_RANGE, String(next));
     return next;
-  },
-
-  // Combinators — devBreakthrough already implies these individually, so call
-  // sites should check the combinator rather than either flag on its own.
-  isManaCostBypassed() {
-    return this.isBreakthroughEnabled() || this.isFreeManaEnabled();
-  },
-  isCooldownBypassed() {
-    return this.isBreakthroughEnabled() || this.isNoCooldownEnabled();
   },
 };

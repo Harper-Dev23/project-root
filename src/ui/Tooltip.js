@@ -30,19 +30,19 @@ export default class Tooltip {
     const pills = scene.add.container(this.padding, this.padding)
       .setDepth(topDepth);
 
-    // Body
-    const body = scene.add.text(this.padding, this.padding, '', {
-      ...FONTS.muted,
-      color: '#dddddd',       // force CSS string at creation
-      wordWrap: { width: 320 }
-    }).setOrigin(0, 0).setDepth(topDepth);
+    // Body — a stack of individual Text objects (one per line) rather than a
+    // single multi-line Text, so each line can carry its own color (e.g. a
+    // weakness tooltip's "Currently: ..." stats dim vs highlighted per line).
+    // Plain strings still work exactly as before, just each becomes its own object.
+    const bodyContainer = scene.add.container(this.padding, this.padding)
+      .setDepth(topDepth);
 
     // Background drawn via Graphics so clear()+redraw every show() guarantees correct size
     const bg = scene.add.graphics().setDepth(topDepth);
     this._bgW = 0;
     this._bgH = 0;
 
-    this.container = scene.add.container(0, 0, [bg, title, pills, body])
+    this.container = scene.add.container(0, 0, [bg, title, pills, bodyContainer])
       .setDepth(topDepth)
       .setVisible(false);
 
@@ -51,12 +51,12 @@ export default class Tooltip {
     this.bg = bg;
     this.title = title;
     this.pills = pills;
-    this.body = body;
+    this.bodyContainer = bodyContainer;
 
     // Disable interactivity for title, pills, and body text (to ensure it doesn't block clicks)
     this.title.disableInteractive?.();
     this.pills.disableInteractive?.();
-    this.body.disableInteractive?.();
+    this.bodyContainer.disableInteractive?.();
 
     // Set up input events to hide the tooltip when clicking outside or on 'gameout'
     scene.input?.on?.('gameout', () => this.hide());
@@ -76,6 +76,34 @@ export default class Tooltip {
   // Clear existing pills (tags) when rendering new ones
   _clearPills() {
     this.pills.removeAll(true);
+  }
+
+  // Clear existing body lines when rendering new ones
+  _clearBodyLines() {
+    this.bodyContainer.removeAll(true);
+  }
+
+  // Render body lines as stacked Text objects. Each entry may be a plain
+  // string (uses the default muted color) or { text, color } for a per-line
+  // override. Returns the total content width/height for background sizing.
+  _renderBodyLines(lines = []) {
+    this._clearBodyLines();
+    let y = 0;
+    let maxW = 0;
+    for (const entry of lines) {
+      const isObj = entry && typeof entry === 'object';
+      const text = isObj ? (entry.text ?? '') : String(entry ?? '');
+      const color = isObj && entry.color != null ? entry.color : (FONTS.muted?.color || '#dddddd');
+      const txt = this.scene.add.text(0, y, text, {
+        ...FONTS.muted,
+        color: this._toCss(color),
+        wordWrap: { width: 320 }
+      }).setOrigin(0, 0).setDepth(this.topDepth);
+      this.bodyContainer.add(txt);
+      y += txt.height;
+      maxW = Math.max(maxW, txt.width);
+    }
+    return { width: maxW, height: y };
   }
 
   // Color mapping for tags (pill colors)
@@ -188,17 +216,13 @@ _renderPills(tags = []) {
       ? (pillTop + pillH + this.gapPillsBody)
       : (this.padding + (titleBounds.height ? titleBounds.height + this.gapTitleBody : 0));
 
-    this.body.setPosition(this.padding, bodyTop);
-    this.body
-      .setText(bodyLines.join('\n'))
-      .setColor(this._toCss(FONTS.muted?.color || '#dddddd'));
+    this.bodyContainer.setPosition(this.padding, bodyTop);
+    const { width: bw, height: bh } = this._renderBodyLines(bodyLines);
 
     // Use .width/.height directly — reliably set synchronously after setText(),
     // unlike getBounds() which can return NaN before the first render cycle.
     const tw = this.title.width || 0;
     const th = this.title.height || 0;
-    const bw = this.body.width || 0;
-    const bh = this.body.height || 0;
     const pw = this.pills.getBounds().width || 0;
     const contentWidth = Math.max(tw, bw, pw);
     const contentHeight =

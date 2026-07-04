@@ -310,7 +310,9 @@ function applyWeaknessDamagePipeline(physical, elemental, attacker, target, abil
     const t = w.tiers[key] | 0;
     const m = w.meters[key] | 0;
 
-    const I = weaknessIntensityMult(m);
+    // Intensity only scales the CHANCE of extra jolts (below); the base
+    // per-jolt die roll stays a flat, unscaled 1..dieMax regardless of overflow.
+    const I = familyIntensityMult('lightning', m);
     const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
     const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
 
@@ -319,10 +321,12 @@ function applyWeaknessDamagePipeline(physical, elemental, attacker, target, abil
 
     if (t >= 2) {
       const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
-      const flatPI = WeaknessV3.families.lightning.t2.joltFlatChancePerIntensity ?? 0;
       const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
       const extraMax = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
-      const p = Math.min(capP, (baseP * I) + (flatPI * Math.max(0, I - 1)));
+      // Was also adding a second, redundant additive term on top of baseP*I
+      // (double-counting the same overflow) — simplified to the same
+      // min(base*I, cap) pattern every other family's scaled fields use.
+      const p = Math.min(capP, baseP * I);
       let extra = 0;
       for (let i = 0; i < extraMax; i++) {
         if (Math.random() < p) extra++;

@@ -15,6 +15,20 @@ export const StatusEffects = {
     name: 'Feint Advantage',
     icon: '✦'
   },
+  heartpierced: {
+    id: 'heartpierced',
+    name: 'Heartpierced',
+    isDebuff: true,
+    icon: '♥'
+  },
+  pressure_point_ignition: {
+    id: 'pressure_point_ignition',
+    name: 'Ignited',
+    isDebuff: true,
+    permanent: true,
+    description: 'The next hit taken deals bonus fire damage and inflicts fire buildup.',
+    icon: '🔥'
+  },
   shattering_cut_sundered: {
     id: 'shattering_cut_sundered',
     name: 'Shattered Guard',
@@ -150,8 +164,7 @@ export const WeaknessV3 = {
       },
       t2: {
         // Bump chance so you can actually see extra procs while testing
-        multiJoltChance: 0.40,             // base chance per extra jolt (was ~0.25)
-        joltFlatChancePerIntensity: 0.15,  // +15% per +1.0 overflow intensity (flat add)
+        multiJoltChance: 0.40,             // base chance per extra jolt; scales with intensity (min(base*I, cap))
         multiJoltChanceCap: 0.95,          // never exceed 95% per extra roll
         extraJoltsMax: 4,                  // up to 4 extra jolts (so total 1..5)
       },
@@ -194,7 +207,11 @@ export const WeaknessV3 = {
 
       t1: {
         onActLoss: 10,         // was 3; stronger on-act burn loss
-        incomingFireBonus: 0.25
+        // Was flat regardless of how far into Fire overflow the target was —
+        // now scales with Fire's own intensity curve (up to 8.0x, so the cap
+        // matters a lot more here than most families' 2.5x global cap).
+        incomingFireBonus: 0.25,
+        incomingFireBonusCap: 1.0,
       },
       t2: {
         // Start-of-turn base burn before multiplier (we'll multiply by the intensity curve above)
@@ -250,7 +267,9 @@ export const WeaknessV3 = {
     // === Necrotic ================================================================
     disease: {
       baseDecay: 35,
-      t1: { healRecvPenalty: 0.25 }, // incoming healing reduced
+      // healRecvPenalty now scales with intensity (was a flat 25% regardless
+      // of overflow) — matches maxHPDown below, which was already scaled.
+      t1: { healRecvPenalty: 0.25, healRecvPenaltyCap: 0.60 }, // incoming healing reduced
       t2: { maxHPDown: 0.10 },       // temporary max HP reduction
     },
 
@@ -259,11 +278,15 @@ export const WeaknessV3 = {
       decay: { base: 35, overflow: 0.40 },   // optional; if you keep families.*.decay elsewhere, you can remove this line
       t1: {
         name: 'Hexed',
-        decayReduction: 0.25                  // slows CURSE meter decay
+        // Was a flat 25% regardless of overflow — now scales with intensity,
+        // same pattern as curseAmpMult below.
+        decayReduction: 0.25,                 // slows CURSE meter decay
+        decayReductionCap: 0.60,
       },
       t2: {
         name: 'Afflicted',
         decayReduction: 0.50,                 // even slower
+        decayReductionCap: 0.85,
         curseAmpMult: 1.25                    // amplifies CURSE-tagged abilities (damage/buildup hooks)
       },
       cinders: { baseCritChance: 0.10, critDamageBonus: 0.50 }
@@ -272,7 +295,11 @@ export const WeaknessV3 = {
 
     toxic: {
       baseDecay: 30,
-      t1: { decayBypassChance: 0.30 }, // this turn’s decay can be skipped
+      // decayBypassChance scales with intensity (same pattern as Disorient's
+      // costMultiplier, Cold's gaugeRegenPenalty, etc. below) — a heavily
+      // overflowing Toxic meter should be MORE likely to dodge its decay
+      // tick, not a flat chance regardless of how far past T2 it is.
+      t1: { decayBypassChance: 0.30, decayBypassChanceCap: 0.75 },
       t2: { startTickBase: 5 },        // lighter start-of-turn poison tick
     },
   },

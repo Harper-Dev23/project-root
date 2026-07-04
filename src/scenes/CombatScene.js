@@ -151,6 +151,24 @@ function moveCost(fromId, toId) {
 function getAdjacentSlots(slotId) {
   return ADJACENCY_MAP[slotId] || [];
 }
+
+/**
+ * Adjacent slots that lie strictly toward the back (direction -1) or toward
+ * the front (direction +1) column from slotId, nearest row first. Used by NPC
+ * repositioning (_enemyTryShuffleOneColumn/_enemyTryStepTowardFront) so it
+ * reads from the SAME adjacency data player movement uses, instead of a
+ * separate hardcoded table that can drift out of sync with it.
+ */
+function getAdjacentSlotsTowardColumn(slotId, direction) {
+  const from = SLOT_COORDS[slotId];
+  if (!from) return [];
+  return getAdjacentSlots(slotId)
+    .filter(id => {
+      const to = SLOT_COORDS[id];
+      return to && Math.sign(to.col - from.col) === direction;
+    })
+    .sort((a, b) => Math.abs(SLOT_COORDS[a].row - from.row) - Math.abs(SLOT_COORDS[b].row - from.row));
+}
 // =========================================================
 
 const LOG_COLORS = {
@@ -835,6 +853,20 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _createBattleSlots() {
+    // Slot IDs are NOT a strict descending sequence over this array — the mid
+    // column's top/bottom pair (indices 3-4) breaks the 8..1 countdown that
+    // every other entry follows. `container.slotId = 8 - index` used to be
+    // applied uniformly regardless, which silently transposed slots 4 and 5:
+    // the container actually rendered at mid-TOP got slotId 5, and the one at
+    // mid-BOTTOM got slotId 4 — backwards from _getColumnBySlotId, the
+    // ADJACENCY_MAP/MOVEMENT_COSTS tables, and PartyManagementScene.js, which
+    // all assume slot 4 = mid-top, slot 5 = mid-bottom. That's why a unit at
+    // slot 6 (back-bottom) with 1 movement had its correct destination (slot
+    // 5, the mid-bottom "bridge" slot) highlighted at the wrong on-screen
+    // position (mid-top). Explicit IDs here instead of a positional formula,
+    // matching the order the array is actually authored in.
+    const SLOT_IDS = [8, 7, 6, 4, 5, 3, 2, 1];
+
     const allyPositions = [
       { x: 200, y: 100 }, // Slot 8 (Back top)
       { x: 200, y: 180 }, // Slot 7
@@ -873,8 +905,8 @@ export default class CombatScene extends Phaser.Scene {
 
       container.add(rect);
 
-      container.slotId = 8 - index;
-      container.uniqueKey = `ally_${8 - index}`;
+      container.slotId = SLOT_IDS[index];
+      container.uniqueKey = `ally_${SLOT_IDS[index]}`;
       container.occupied = false;
       container.rect = rect;
       return container;
@@ -892,8 +924,8 @@ export default class CombatScene extends Phaser.Scene {
 
       container.add(rect);
 
-      container.slotId = 8 - index;
-      container.uniqueKey = `enemy_${8 - index}`;
+      container.slotId = SLOT_IDS[index];
+      container.uniqueKey = `enemy_${SLOT_IDS[index]}`;
       container.occupied = false;
       container.rect = rect;
       return container;
@@ -908,11 +940,16 @@ export default class CombatScene extends Phaser.Scene {
   }
   _findOpenSlotOnSide(unit, targetColumn) {
     const sideSlots = unit.isEnemy ? this.enemySlots : this.allySlots;
-    // Prefer same row; fall back to any in that column
+    // Prefer same row; fall back to any in that column. Row comes from the
+    // real SLOT_COORDS grid, not a `slotId % 3` guess — that guess grouped
+    // slots {3,6}/{1,4,7}/{2,5,8}, which doesn't match the actual row pairs
+    // (front/back both have 3 rows: {8,3}=row0, {7,2}=row1... plus 5, {6,1}=
+    // row2; mid only has 2 rows). Same class of bug as the slot 4/5 swap.
     const sameRowId = unit._slot?.slotId;
+    const sameRowValue = sameRowId != null ? SLOT_COORDS[sameRowId]?.row : null;
     const sameRow = sideSlots.find(s => this._getColumnBySlotId(s.slotId) === targetColumn
       && !s.occupied
-      && (sameRowId ? (s.slotId % 3) === (sameRowId % 3) : true));
+      && (sameRowValue != null ? SLOT_COORDS[s.slotId]?.row === sameRowValue : true));
     if (sameRow) return sameRow;
     return sideSlots.find(s => this._getColumnBySlotId(s.slotId) === targetColumn && !s.occupied) || null;
   }
@@ -976,37 +1013,24 @@ export default class CombatScene extends Phaser.Scene {
 
 
   // Use only the unit's side and respect the return value.
+  // Tries a real 1-step adjacent slot toward back first, then toward front —
+  // sourced from ADJACENCY_MAP/SLOT_COORDS (same data player movement uses)
+  // instead of a hardcoded toBack/toFront table. That table had drifted out
+  // of sync with the brick-offset adjacency system: several of its entries
+  // (e.g. slot 3 -> 6, slot 8 -> 5) were 2-3 movement-cost hops apart, not
+  // real neighbors, so NPCs could "shuffle" through slots they couldn't
+  // actually reach in one step. (This also used to be defined twice,
+  // byte-for-byte identical — the second copy silently shadowed the first;
+  // only one copy remains now.)
   _enemyTryShuffleOneColumn(npc) {
     const slotId = npc?._slot?.slotId;
     if (!slotId) return false;
 
-    const toBack = { 1: 4, 2: 5, 3: 6, 4: 7, 5: 8 };
-    const toFront = { 6: 3, 5: 2, 4: 1, 7: 4, 8: 5 };
-
-    const tryIds = [];
-    if (toBack[slotId]) tryIds.push(toBack[slotId]);
-    if (toFront[slotId]) tryIds.push(toFront[slotId]);
-
     const side = npc.isEnemy ? this.enemySlots : this.allySlots;
-    for (const destId of tryIds) {
-      const dest = side.find(s => s.slotId === destId && !s.occupied);
-      if (dest && this._moveUnitToSlot(npc, dest)) return true;
-    }
-    return false;
-  }
-
-  _enemyTryShuffleOneColumn(npc) {
-    const slotId = npc?._slot?.slotId;
-    if (!slotId) return false;
-
-    const toBack = { 1: 4, 2: 5, 3: 6, 4: 7, 5: 8 };
-    const toFront = { 6: 3, 5: 2, 4: 1, 7: 4, 8: 5 };
-
-    const tryIds = [];
-    if (toBack[slotId]) tryIds.push(toBack[slotId]);
-    if (toFront[slotId]) tryIds.push(toFront[slotId]);
-
-    const side = npc.isEnemy ? this.enemySlots : this.allySlots;
+    const tryIds = [
+      ...getAdjacentSlotsTowardColumn(slotId, -1), // toward back
+      ...getAdjacentSlotsTowardColumn(slotId, 1),  // toward front
+    ];
     for (const destId of tryIds) {
       const dest = side.find(s => s.slotId === destId && !s.occupied);
       if (dest && this._moveUnitToSlot(npc, dest)) return true;
@@ -1018,13 +1042,12 @@ export default class CombatScene extends Phaser.Scene {
     const slotId = npc?._slot?.slotId;
     if (!slotId) return false;
 
-    const forward = { 6: 3, 5: 2, 4: 1, 7: 4, 8: 5 };
-    const destId = forward[slotId];
-    if (!destId) return false;
-
     const side = npc.isEnemy ? this.enemySlots : this.allySlots;
-    const dest = side.find(s => s.slotId === destId && !s.occupied);
-    return dest ? this._moveUnitToSlot(npc, dest) : false;
+    for (const destId of getAdjacentSlotsTowardColumn(slotId, 1)) {
+      const dest = side.find(s => s.slotId === destId && !s.occupied);
+      if (dest && this._moveUnitToSlot(npc, dest)) return true;
+    }
+    return false;
   }
 
 
@@ -1692,60 +1715,167 @@ export default class CombatScene extends Phaser.Scene {
 
   _title(f) { return f.charAt(0).toUpperCase() + f.slice(1); }
 
-  _weaknessTooltipData(fam) {
+  // fam: family id. char: the currently-inspected character, used to compute
+  // real "Currently: ..." numbers from their actual meter/intensity — just
+  // the base weakness-scaled value, no gear/DR/other modifiers layered on
+  // (mirrors the same base formula each family's real tick/penalty code uses).
+  _weaknessTooltipData(fam, char) {
     const title = this._title(fam);
     const tierNames = WeaknessTierNames[fam] || [];
-    const lines = [];
+    const descLines = [];
+    const statLines = [];
+    const m = char?.weakness?.meters?.[fam] | 0;
+    const t = char?.weakness?.tiers?.[fam] | 0;
+    const cfg = WeaknessV3?.families?.[fam] || {};
     // label is the tier number (1 or 2); resolves to the actual tier name
     // (e.g. "Dazed") instead of a bare "T1" so it reads the same as the combat
-    // log and skill tooltips, which already use these names.
-    const add = (tier, text) => {
+    // log and skill tooltips, which already use these names. Descriptions go
+    // first (T1 then T2); the real "Currently: ..." numbers are collected
+    // separately and appended together afterward, colored by the same
+    // per-tier scheme as the info-panel pip (bright = this tier is actually
+    // active on the target right now, gray = just showing the base math).
+    const add = (tier, text, current) => {
       const name = tierNames[tier - 1] || `T${tier}`;
-      lines.push(`${name} (T${tier}): ${text}`);
+      descLines.push(`${name} (T${tier}): ${text}`);
+      if (current) {
+        const active = t >= tier;
+        const color = active ? this._getTierColor(tier, fam) : 0x666666;
+        statLines.push({ text: `Currently: ${current}`, color });
+      }
     };
 
     switch (fam) {
-      case 'fire':
-        add(1, 'Takes burn when acting; fire hits harder.');
-        add(2, 'Start-of-turn burn tick scales with overflow; can consume meter.');
+      case 'fire': {
+        const I = familyIntensityMult('fire', m);
+        const loss = Math.max(1, Math.floor((cfg.t1?.onActLoss ?? 10) * I));
+        const incBase = cfg.t1?.incomingFireBonus ?? 0;
+        const incCap = cfg.t1?.incomingFireBonusCap ?? incBase;
+        const incPct = Math.round(Math.min(incCap, incBase * I) * 100);
+        add(1, 'Takes burn when acting; fire hits harder.',
+          `−${loss} Fire buildup per action taken, +${incPct}% incoming Fire buildup.`);
+        const tickBase = cfg.t2?.startTickBase ?? 10;
+        const tick = Math.max(1, Math.floor(tickBase * I));
+        add(2, 'Start-of-turn burn tick scales with overflow; can consume meter.',
+          `${tick} burn damage at turn start.`);
         break;
-      case 'cold':
-        add(1, 'Initiative gain is slowed.');
-        add(2, 'Gauge drains at turn start; damage dealt and evasion drop.');
+      }
+      case 'cold': {
+        const I = familyIntensityMult('cold', m);
+        const regenBase = cfg.t1?.gaugeRegenPenalty ?? 0;
+        const regenCap = cfg.t1?.gaugeRegenPenaltyCap ?? regenBase;
+        const regenPct = Math.round(Math.min(regenBase * I, regenCap) * 100);
+        add(1, 'Initiative gain is slowed.', `−${regenPct}% Initiative Gauge gain.`);
+        const drainBase = cfg.t2?.gaugeStartDrainBase ?? 0;
+        const drainCap = cfg.t2?.gaugeStartDrainCap ?? 9999;
+        const drain = Math.min(Math.floor(drainBase * I), drainCap);
+        const dmgBase = cfg.t2?.dmgDealtPenalty ?? 0;
+        const dmgCap = cfg.t2?.dmgDealtPenaltyCap ?? dmgBase;
+        const dmgPct = Math.round(Math.min(dmgBase * I, dmgCap) * 100);
+        const evBase = cfg.t2?.evasionPenalty ?? 0;
+        const evCap = cfg.t2?.evasionPenaltyCap ?? evBase;
+        const evPct = Math.round(Math.min(evBase * I, evCap) * 100);
+        add(2, 'Gauge drains at turn start; damage dealt and evasion drop.',
+          `−${drain} Initiative Gauge at turn start, −${dmgPct}% damage dealt, −${evPct}% evasion.`);
         break;
-      case 'lightning':
-        add(1, 'Takes random jolts (1-4) of shock damage.');
-        add(2, 'Chance for multiple extra jolts based on overflow.');
+      }
+      case 'lightning': {
+        // Jolts are an on-hit rider (see applyWeaknessDamagePipeline in
+        // CombatLogic.js), not a start-of-turn tick like the other families —
+        // they fire whenever this character takes a hit while Zapped/Shocked.
+        const dieMax = cfg.t1?.joltDieMax ?? 0;
+        add(1, 'Takes random jolts of shock damage on each hit taken.',
+          `${dieMax ? `1–${dieMax}` : (cfg.t1?.joltFlat ?? 0)} shock damage per hit taken.`);
+        const I = familyIntensityMult('lightning', m);
+        const chanceBase = cfg.t2?.multiJoltChance ?? 0;
+        const chanceCap = cfg.t2?.multiJoltChanceCap ?? chanceBase;
+        const chancePct = Math.round(Math.min(chanceCap, chanceBase * I) * 100);
+        const extraMax = cfg.t2?.extraJoltsMax ?? 0;
+        add(2, 'Chance for multiple extra jolts based on overflow.',
+          `${chancePct}% chance per extra jolt (up to ${extraMax}), each hit taken.`);
         break;
-      case 'disorient':
-        add(1, 'MP costs rise (scales with overflow).');
-        add(2, 'Loses MP at the start of turn.');
+      }
+      case 'disorient': {
+        const I = familyIntensityMult('disorient', m);
+        const cmBase = cfg.t1?.costMultiplier ?? 0;
+        const cmCap = cfg.t1?.costMultiplierCap ?? cmBase;
+        let costAdd = cmBase * I;
+        if (t >= 2) costAdd *= 1.5;
+        costAdd = Math.min(costAdd, cmCap * (t >= 2 ? 1.5 : 1));
+        add(1, 'MP costs rise (scales with overflow).', `MP costs +${Math.round(costAdd * 100)}%.`);
+        const drainBase = cfg.t2?.startDrainMPBase ?? 0;
+        const drainCap = cfg.t2?.startDrainMPCap ?? 9999;
+        const drain = Math.min(Math.floor(drainBase * I), drainCap);
+        add(2, 'Loses MP at the start of turn.', `−${drain} MP at turn start.`);
         break;
-      case 'lacerate':
-        add(1, 'Acting adds lacerate buildup (bleed threat).');
-        add(2, 'Higher tiers would inflict heavier bleed if reached.');
+      }
+      case 'lacerate': {
+        const I = familyIntensityMult('lacerate', m);
+        const onActBase = cfg.t1?.onActBuildupFlat ?? 0;
+        const onAct = Math.max(1, Math.round(onActBase * I));
+        add(1, 'Acting adds lacerate buildup (bleed threat).', `+${onAct} Lacerate buildup per action taken (self).`);
+        const pctBase = cfg.t2?.startPctHP ?? 0.06;
+        const pctCap = cfg.t2?.startPctCap ?? 0.20;
+        const pct = Math.min(pctBase * I, pctCap);
+        const maxHP = Math.max(1, char?.maxHP | 0);
+        const dot = Math.max(1, Math.floor(maxHP * pct));
+        add(2, 'Hemorrhaging: deals a percentage of Max HP as bleed at start of turn.',
+          `${dot} damage (${Math.round(pct * 100)}% Max HP) at turn start.`);
         break;
-      case 'expose':
-        add(1, 'Physical DR is pierced; takes extra physical buildup.');
-        add(2, 'Bonus crit chance and crit damage against the target.');
+      }
+      case 'expose': {
+        const I = familyIntensityMult('expose', m);
+        const drPen = (cfg.t1?.physDRPen ?? 0) * I;
+        const buildupAmp = (cfg.t1?.physBuildupAmp ?? 0) * I;
+        add(1, 'Physical DR is pierced; takes extra physical buildup.',
+          `target's physical DR reduced ${Math.round(drPen * 100)} points, +${Math.round(buildupAmp * 100)}% incoming Disorient/Lacerate buildup.`);
+        const ccPct = Math.round((cfg.t2?.critChanceBonus ?? 0) * I * 100);
+        const cdPct = Math.round((cfg.t2?.critDamageBonus ?? 0) * 100);
+        add(2, 'Bonus crit chance and crit damage against the target.',
+          `attackers get +${ccPct}% crit chance, +${cdPct}% crit damage.`);
         break;
-      case 'toxic':
-        add(1, 'Sometimes skips decay, letting poison linger.');
-        add(2, 'Flat poison tick at start of turn.');
+      }
+      case 'toxic': {
+        const I = weaknessIntensityMult(m);
+        const bypassBase = cfg.t1?.decayBypassChance ?? 0;
+        const bypassCap = cfg.t1?.decayBypassChanceCap ?? bypassBase;
+        const bypassPct = Math.round(Math.min(bypassCap, bypassBase * I) * 100);
+        add(1, 'Sometimes skips decay, letting poison linger.', `${bypassPct}% chance to skip a decay tick.`);
+        const tickBase = cfg.t2?.startTickBase ?? 0;
+        const tick = Math.max(1, Math.floor(tickBase * I));
+        add(2, 'Flat poison tick at start of turn.', `${tick} poison damage at start of turn.`);
         break;
-      case 'disease':
-        add(1, 'Incoming healing reduced.');
-        add(2, 'Max HP temporarily reduced.');
+      }
+      case 'disease': {
+        const I = weaknessIntensityMult(m);
+        const healBase = cfg.t1?.healRecvPenalty ?? 0;
+        const healCap = cfg.t1?.healRecvPenaltyCap ?? healBase;
+        const healPct = Math.round(Math.min(healCap, healBase * I) * 100);
+        add(1, 'Incoming healing reduced.', `incoming healing reduced ${healPct}%.`);
+        const maxHPBase = cfg.t2?.maxHPDown ?? 0;
+        const maxHPPct = Math.round(Math.min(0.40, maxHPBase * I) * 100);
+        add(2, 'Max HP temporarily reduced.', `Max HP reduced ${maxHPPct}%.`);
         break;
-      case 'curse':
-        add(1, 'Curse meter decays slower.');
-        add(2, 'Decay slows further; curse-tagged effects amplify.');
+      }
+      case 'curse': {
+        const I = weaknessIntensityMult(m);
+        const dec1Base = cfg.t1?.decayReduction ?? 0;
+        const dec1Cap = cfg.t1?.decayReductionCap ?? dec1Base;
+        const dec1Pct = Math.round(Math.min(dec1Cap, dec1Base * I) * 100);
+        add(1, 'Curse meter decays slower.', `Curse decay slowed ${dec1Pct}%.`);
+        const dec2Base = cfg.t2?.decayReduction ?? 0;
+        const dec2Cap = cfg.t2?.decayReductionCap ?? dec2Base;
+        const dec2Pct = Math.round(Math.min(dec2Cap, dec2Base * I) * 100);
+        const ampMult = cfg.t2?.curseAmpMult ?? 1;
+        add(2, 'Decay slows further; curse-tagged effects amplify.',
+          `Curse decay slowed ${dec2Pct}%, curse-tagged effects ×${ampMult}.`);
         break;
+      }
       default:
         add(1, 'Weakness effect not yet described.');
         add(2, 'Weakness effect not yet described.');
     }
 
+    const lines = statLines.length ? [...descLines, '', ...statLines] : descLines;
     return { title: `${title} Weakness`, lines };
   }
 
@@ -1784,7 +1914,7 @@ export default class CombatScene extends Phaser.Scene {
         .setVisible(t > 0);
 
       const showTip = (pointer) => {
-        const data = this._weaknessTooltipData(fam);
+        const data = this._weaknessTooltipData(fam, char);
         this.tooltip?.show(pointer.worldX, pointer.worldY, data);
       };
       const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
@@ -2405,13 +2535,13 @@ export default class CombatScene extends Phaser.Scene {
       const full = (SKILLS[a?.id] || a);
 
       const cdRaw = actor.cooldowns?.[full.id] || 0;
-      const onCD = cdRaw > 0 && !DevFlags.isCooldownBypassed();
+      const onCD = cdRaw > 0 && !DevFlags.isNoCooldownEnabled();
       const noAction = full.actionCost && !this._canUseActionType(full.actionCost);
 
       const baseLabel = (this._displayNameForSkill
         ? this._displayNameForSkill(actor, full)
         : (full.name || a.name || 'Unnamed'));
-      const label = (cdRaw > 0 && !DevFlags.isCooldownBypassed()) ? `${baseLabel} (CD${cdRaw})` : baseLabel;
+      const label = (cdRaw > 0 && !DevFlags.isNoCooldownEnabled()) ? `${baseLabel} (CD${cdRaw})` : baseLabel;
 
       const btn = new UIButton(this, baseX, i * 50, label, () => {
         if (onCD || noAction) return;
@@ -2495,6 +2625,11 @@ export default class CombatScene extends Phaser.Scene {
 
   _canUseActionType(type) {
     const char = this._currentChar();
+    // Multi-cost skills (e.g. Heartpiercer's ["major","bonus"]) need every
+    // listed type available. Using an array directly as an object key would
+    // silently stringify to "major,bonus", which never matches a real key —
+    // that bug is why multi-action-cost skills always showed as unusable.
+    if (Array.isArray(type)) return type.every(t => char.actionsLeft?.[t] > 0);
     return char.actionsLeft?.[type] > 0;
   }
 
@@ -2512,7 +2647,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Cooldown gate BEFORE entering targeting mode
     const cdRemaining = actor.cooldowns?.[ability.id] || 0;
-    if (cdRemaining > 0 && !DevFlags.isCooldownBypassed()) {
+    if (cdRemaining > 0 && !DevFlags.isNoCooldownEnabled()) {
       this._log(`${ability.name} is on cooldown (${cdRemaining} turn${cdRemaining > 1 ? 's' : ''} left).`);
       return;
     }
@@ -2835,16 +2970,19 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
-    const _mpCost = DevFlags.isManaCostBypassed() ? 0 : calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost;
+    const _mpCost = DevFlags.isFreeManaEnabled() ? 0 : calculateEffectiveResourceCost(user, skill.mpCost || 0, 'mp').cost;
     if (user.currentMP < _mpCost) {
       this._log(`${user.name} lacks the MP to use ${skill.name}.`);
       return { ok: false };
     }
-    if (skill.actionCost && !(user.actionsLeft?.[skill.actionCost] > 0)) {
+    const hasActionCost = Array.isArray(skill.actionCost)
+      ? skill.actionCost.every(t => user.actionsLeft?.[t] > 0)
+      : (user.actionsLeft?.[skill.actionCost] > 0);
+    if (skill.actionCost && !hasActionCost) {
       this._log(`${user.name} has no ${skill.actionCost} actions left.`);
       return { ok: false };
     }
-    if (!DevFlags.isCooldownBypassed() && this._isSkillOnCooldown(user, skill.id)) {
+    if (!DevFlags.isNoCooldownEnabled() && this._isSkillOnCooldown(user, skill.id)) {
       const remain = user.cooldowns?.[skill.id] || 0;
       this._log(`${skill.name} is on cooldown (${remain} turn${remain === 1 ? '' : 's'} remaining).`);
       return { ok: false };
@@ -2936,7 +3074,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
-    const baseMpCost = DevFlags.isManaCostBypassed() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
+    const baseMpCost = DevFlags.isFreeManaEnabled() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
     const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
     const mpCost = mpInfo?.cost ?? baseMpCost;
 
@@ -2953,6 +3091,28 @@ export default class CombatScene extends Phaser.Scene {
         const ct = target?.weakness?.tiers?.curse | 0;
         if (ct < minTier) {
           this._log(`${ability.name} fizzles: ${target?.name || 'target'} is not at required CURSE tier (needs T${minTier}).`);
+          return; // no costs, no cooldown, no on-act triggers
+        }
+      }
+    }
+
+    // --- Generic weakness-tier requirement gate (e.g. Heartpiercer needing
+    // the target at least Raw). This field already existed declaratively on
+    // several skills and was checked in _executeSkill, but that function
+    // isn't what runs for a normal player enemy-target click — this is the
+    // path that actually needed the check, so the requirement silently never
+    // fired here before now.
+    if (ability?.requiresWeakness) {
+      const requirements = Array.isArray(ability.requiresWeakness) ? ability.requiresWeakness : [ability.requiresWeakness];
+      for (const req of requirements) {
+        const fam = req?.family;
+        if (!fam) continue;
+        const location = req.on === 'self' ? user : target;
+        const tiers = location?.weakness?.tiers || {};
+        const minTier = req.tierAtLeast ?? req.tier ?? 1;
+        if ((tiers[fam] || 0) < minTier) {
+          const who = req.on === 'self' ? (user?.name || 'user') : (target?.name || 'target');
+          this._log(`${ability.name} fizzles: ${who} needs ${fam.toUpperCase()} T${minTier}.`);
           return; // no costs, no cooldown, no on-act triggers
         }
       }
@@ -3403,6 +3563,20 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
+        // Crit-triggered bleed based on the FINAL damage this hit deals — after
+        // DR/mitigation AND every additive rider above (Curse of Needles,
+        // Pressure Point's ignition, etc.), so a bleed correctly reflects
+        // everything that actually landed, not just the ability's own base
+        // roll. Generic: any ability declaring critBleedPct gets this, not
+        // just Heartpiercer — same shape can be reused by future skills.
+        if (isCrit && dmg > 0 && Number.isFinite(ability?.critBleedPct) && ability.critBleedPct > 0) {
+          const tickDamage = Math.max(1, Math.floor(dmg * (ability.critBleedPct / 100)));
+          const bleedTurns = Number.isFinite(ability?.critBleedTurns) ? ability.critBleedTurns : 2;
+          const statusId = ability.critBleedStatusId || `${ability.id}_bleed`;
+          this._addStatusEffects(target, [{ id: statusId, turns: bleedTurns, tickDamage }]);
+          this._log(`${target.name} suffers a bleed from ${ability.name} — ${tickDamage} damage per turn for ${bleedTurns} turns.`);
+        }
+
         if (dealsDamage || dmg > 0) {
           target.currentHP = Math.max(0, target.currentHP - dmg);
 
@@ -3580,28 +3754,36 @@ export default class CombatScene extends Phaser.Scene {
     const currTiers = { ...(target?.weakness?.tiers || {}) };
     const crossed = (fam, tier) => (prevTiers[fam] || 0) < tier && (currTiers[fam] || 0) >= tier;
 
-    // (1) Reward on tier-cross
+    // (1) Reward on tier-cross — grouped by family, only the HIGHEST tier
+    // actually crossed is applied. A hit that skips two tiers at once (e.g.
+    // buildup amplified by devBuildup/gear%) would otherwise match every rule
+    // for that family and apply/log each one — mechanically harmless since
+    // same-id status effects coalesce, but it logs the same reward twice.
     if (Array.isArray(result?.rewardIfTierCross)) {
+      const bestPerFamily = new Map();
       for (const rule of result.rewardIfTierCross) {
         const families = rule.family === 'any' ? ['fire', 'cold', 'lightning'] : [rule.family];
         for (const fam of families) {
-          if (crossed(fam, rule.tier)) {
-            if (rule.healHPpct) {
-              const gain = Math.max(1, Math.floor((attacker.maxHP || 1) * rule.healHPpct));
-              attacker.currentHP = Math.min(attacker.maxHP || gain, (attacker.currentHP || 0) + gain);
-              this._log(`${attacker.name} recovers ${gain} HP (tier ${rule.tier} ${fam}).`);
-            }
-            if (rule.healMP) {
-              attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + rule.healMP);
-              this._log(`${attacker.name} recovers ${rule.healMP} MP (tier ${rule.tier} ${fam}).`);
-            }
-            if (rule.buff) {
-              this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
-            }
-            if (rule.debuff) {
-              this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier });
-            }
-          }
+          if (!crossed(fam, rule.tier)) continue;
+          const best = bestPerFamily.get(fam);
+          if (!best || rule.tier > best.tier) bestPerFamily.set(fam, rule);
+        }
+      }
+      for (const [fam, rule] of bestPerFamily) {
+        if (rule.healHPpct) {
+          const gain = Math.max(1, Math.floor((attacker.maxHP || 1) * rule.healHPpct));
+          attacker.currentHP = Math.min(attacker.maxHP || gain, (attacker.currentHP || 0) + gain);
+          this._log(`${attacker.name} recovers ${gain} HP (tier ${rule.tier} ${fam}).`);
+        }
+        if (rule.healMP) {
+          attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + rule.healMP);
+          this._log(`${attacker.name} recovers ${rule.healMP} MP (tier ${rule.tier} ${fam}).`);
+        }
+        if (rule.buff) {
+          this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
+        }
+        if (rule.debuff) {
+          this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier });
         }
       }
     }
@@ -3799,6 +3981,16 @@ export default class CombatScene extends Phaser.Scene {
             element: result.element,
             isMagic: result.isMagic,
           }, { ability, isRepeat: true });
+
+          // Re-fan-out splash too (e.g. Hex Stitch's same-column curse splash) —
+          // without this the repeat only ever re-hit the primary target, silently
+          // skipping every AoE target the original hit reached.
+          if (Array.isArray(result?.splash) && result.splash.length) {
+            for (const sp of result.splash) {
+              if (!sp?.target || sp.target.status === 'incapacitated') continue;
+              this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability, isRepeat: true });
+            }
+          }
         });
       }
     }
@@ -4222,13 +4414,18 @@ export default class CombatScene extends Phaser.Scene {
         if (bonusPct > 0) amt = Math.floor(amt * (1 + bonusPct / 100));
       }
 
-      // FIRE T1+: incoming fire buildup increased while Singed
+      // FIRE T1+: incoming fire buildup increased while Singed, scaling with
+      // Fire's own intensity curve (capped) instead of a flat bonus.
       if (key === 'fire' && (w.tiers?.fire | 0) >= 1) {
-        const inc = WeaknessV3?.families?.fire?.t1?.incomingFireBonus ?? 0;
+        const base = WeaknessV3?.families?.fire?.t1?.incomingFireBonus ?? 0;
+        const cap = WeaknessV3?.families?.fire?.t1?.incomingFireBonusCap ?? base;
+        const mFire = w.meters?.fire | 0;
+        const Ifire = familyIntensityMult?.('fire', mFire) ?? 1;
+        const inc = Math.min(cap, base * (Ifire > 0 ? Ifire : 1));
         const beforeAmt = amt;
         amt = Math.floor(amt * (1 + inc));
         if (beforeAmt !== amt) {
-          this._log(`${target.name} takes extra fire buildup (Singed): ${beforeAmt} → ${amt}`);
+          this._log(`${target.name} takes extra fire buildup (Singed, +${Math.round(inc * 100)}%): ${beforeAmt} → ${amt}`);
         }
       }
 
@@ -4333,20 +4530,29 @@ export default class CombatScene extends Phaser.Scene {
       const m = u.weakness.meters?.[fam] | 0;
       let decay = weaknessDecayAmount(conf.decay, m);
 
-      // 3) CURSE: reduce decay amount (T1/T2)
+      // 3) CURSE: reduce decay amount (T1/T2), scaling with intensity (was flat)
       if (fam === 'curse') {
         const t = u.weakness.tiers.curse | 0;
         if (t >= 1) {
-          const red = WeaknessV3?.families?.curse?.[t === 2 ? 't2' : 't1']?.decayReduction || 0;
+          const tierConf = WeaknessV3?.families?.curse?.[t === 2 ? 't2' : 't1'];
+          const base = tierConf?.decayReduction || 0;
+          const cap = tierConf?.decayReductionCap ?? base;
+          const I = weaknessIntensityMult(m);
+          const red = Math.min(cap, base * (I > 0 ? I : 1));
           decay = Math.max(1, Math.floor(decay * (1 - red)));
         }
       }
 
-      // 4) TOXIC T1+: chance to bypass ALL Toxic decay for THIS tick.
+      // 4) TOXIC T1+: chance to bypass ALL Toxic decay for THIS tick, scaling
+      // with overflow intensity (capped) — a heavier overflow is MORE likely
+      // to dodge decay, not a flat chance regardless of how far past T2 it is.
       if (fam === 'toxic' && ((u.weakness.tiers.toxic | 0) >= 1)) {
-        const chance = WeaknessV3?.families?.toxic?.t1?.decayBypassChance ?? 0;
+        const baseChance = WeaknessV3?.families?.toxic?.t1?.decayBypassChance ?? 0;
+        const cap = WeaknessV3?.families?.toxic?.t1?.decayBypassChanceCap ?? 1;
+        const I = weaknessIntensityMult(m);
+        const chance = Math.min(cap, baseChance * (I > 0 ? I : 1));
         if (Math.random() < chance) {
-          this._log(`${u.name} Toxic: decay bypassed (${Math.round(chance * 100)}% chance).`);
+          this._log(`${u.name} Toxic: decay bypassed (${Math.round(chance * 100)}% chance, I=${I.toFixed(2)}).`);
           continue; // NO DECAY THIS TICK
         }
       }
@@ -4795,13 +5001,15 @@ export default class CombatScene extends Phaser.Scene {
     if (this.characterInfoTab === 'weakness' && this._inspectedChar === char) {
       this._renderCharacterInfoBody(char);
     }
-    // Status effect duration tick + icon refresh
-    if (Array.isArray(char.statusEffects) && char.statusEffects.length) {
-      char.statusEffects = char.statusEffects
-        .map(e => ({ ...e, turns: Math.max(0, (e.turns | 0) - 1) }))
-        .filter(e => (e.turns | 0) > 0);
-      this._refreshStatusEffectIcons(char);
-    }
+    // Status effect duration is handled exclusively by _tickDownStatusDurations
+    // (called right after this, same end-of-turn sequence in _advanceTurn) —
+    // this function used to ALSO decrement + filter char.statusEffects itself,
+    // completely independently and with no `permanent` check and no log
+    // message. Since both ran back-to-back on the same character, every status
+    // effect was silently getting decremented twice per turn-end (halving
+    // real durations), and this copy — running first — stripped permanent
+    // effects (like Pressure Point's ignition) before the correct function
+    // ever got a chance to protect them.
   }
 
 
@@ -4873,11 +5081,15 @@ export default class CombatScene extends Phaser.Scene {
     const t = w?.tiers?.disease | 0;
     const m = w?.meters?.disease | 0;
 
-    // T1: healing received (scene-side so UI + heals agree)
+    // T1: healing received (scene-side so UI + heals agree). Scales with
+    // intensity now (was a flat tier-step 1.0x/1.5x, matching maxHPDown below).
     if (t >= 1) {
       const base = WeaknessV3?.families?.disease?.t1?.healRecvPenalty ?? 0;
-      const tierMult = (t === 2) ? 1.5 : 1.0;
-      const penalty = Math.max(0, base * tierMult);
+      const cap = WeaknessV3?.families?.disease?.t1?.healRecvPenaltyCap ?? base;
+      const I = (typeof weaknessIntensityMult === 'function')
+        ? weaknessIntensityMult(m)
+        : (typeof familyIntensityMult === 'function' ? familyIntensityMult('disease', m) : 1);
+      const penalty = Math.min(cap, base * (I > 0 ? I : 1));
       char.healingReceivedBonus = Math.max(0, 1 - penalty);
     } else {
       char.healingReceivedBonus = 1.0;
@@ -5781,6 +5993,8 @@ export default class CombatScene extends Phaser.Scene {
 
     // Specific status helpers (safe no-ops if not imported)
     try { tickDownCurseCinders?.(char); } catch { }
+
+    this._refreshStatusEffectIcons?.(char);
   }
 
 
@@ -5848,16 +6062,32 @@ export default class CombatScene extends Phaser.Scene {
       toStat('Initiative', -Math.abs(debuff.speedDownPct), 'initiative');
     }
 
-    if (Object.keys(mods).length === 0) return;
+    // Custom, non-stat marker consumed by a later hit rather than expressed as
+    // a numeric mod — e.g. Pressure Point's ignition (next hit taken gets
+    // bonus fire damage). Bypasses the "no stat mods, nothing to do" bailout
+    // below since it's a real effect even with an empty mods object.
+    const hasCustomMarker = !!debuff.onNextDamageTaken;
+    if (Object.keys(mods).length === 0 && !hasCustomMarker) return;
 
     const effectId = debuff.statusId || `reward_${ability?.id || 'skill'}_debuff`;
-    this._addStatusEffects(target, [{ id: effectId, turns, mods }]);
+    const statusPayload = { id: effectId, mods };
+    if (debuff.permanent) {
+      statusPayload.permanent = true;
+    } else {
+      statusPayload.turns = turns;
+    }
+    if (hasCustomMarker) statusPayload.onNextDamageTaken = debuff.onNextDamageTaken;
+    this._addStatusEffects(target, [statusPayload]);
 
     if (summary.length) {
       const durationText = turns > 1 ? `${turns} turns` : '1 turn';
       const abilityName = ability?.name || 'the skill';
       const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
       this._log(`${target.name} suffers ${summary.join(', ')} for ${durationText} from ${abilityName}${tierNote}.`);
+    } else if (hasCustomMarker) {
+      const abilityName = ability?.name || 'the skill';
+      const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
+      this._log(`${target.name} is marked by ${abilityName}${tierNote} — vulnerable on their next hit taken.`);
     }
   }
 
@@ -5869,13 +6099,24 @@ export default class CombatScene extends Phaser.Scene {
     let lodgeChanged = false;
     for (const se of effects) {
       const def = (StatusEffects && StatusEffects[se.id]) || {};
+      const permanent = se.permanent ?? def.permanent ?? false;
       const incoming = {
         id: se.id,
-        turns: se.turns ?? def.duration ?? 1,
+        // A permanent effect gets turns:null, not a real number — otherwise
+        // it always falls back to 1 (no turns given, no def.duration), which
+        // is why Pressure Point's ignition tooltip showed "Duration: 1 turn"
+        // even though _tickDownStatusDurations correctly never expired it.
+        turns: permanent ? null : (se.turns ?? def.duration ?? 1),
         tickDamage: se.tickDamage ?? def.tickDamage ?? 0,
         tickHeal: se.tickHeal ?? def.tickHeal ?? 0,
         blocksAction: se.blocksAction ?? def.blocksAction ?? false,
         stackable: se.stackable ?? def.stackable ?? false,
+        // permanent: lasts until explicitly consumed/removed elsewhere, not on a
+        // turn timer (_tickDownStatusDurations skips these). onNextDamageTaken:
+        // a "marker" consumed by the next hit this unit takes (e.g. Pressure
+        // Point's ignition) — an opaque payload, not interpreted here.
+        permanent,
+        onNextDamageTaken: se.onNextDamageTaken ?? def.onNextDamageTaken ?? undefined,
         mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
@@ -5891,7 +6132,9 @@ export default class CombatScene extends Phaser.Scene {
           const cur = target.statusEffects[i];
           cur.tickHeal = (cur.tickHeal | 0) + (incoming.tickHeal | 0);
           cur.tickDamage = (cur.tickDamage | 0) + (incoming.tickDamage | 0);
-          cur.turns = Math.max(cur.turns | 0, incoming.turns | 0);
+          cur.permanent = !!(cur.permanent || incoming.permanent);
+          cur.turns = cur.permanent ? null : Math.max(cur.turns | 0, incoming.turns | 0);
+          if (incoming.onNextDamageTaken !== undefined) cur.onNextDamageTaken = incoming.onNextDamageTaken;
           cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
           if (incoming.mods && Object.keys(incoming.mods).length) {
             cur.mods = { ...(incoming.mods) };

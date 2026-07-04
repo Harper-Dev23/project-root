@@ -21,7 +21,9 @@
       "Bash(node --check src/systems/CombatLogic.js)",
       "Read(//c/Users/eddie/Desktop/**)",
       "Bash(node --check src/systems/DevFlags.js)",
-      "Bash(node --check src/scenes/overlays/SkillsOverlay.js)"
+      "Bash(node --check src/scenes/overlays/SkillsOverlay.js)",
+      "Bash(node --check src/ui/statusEffectIcons.js)",
+      "Bash(node --check src/ui/Tooltip.js)"
     ]
   }
 }

@@ -121,6 +121,8 @@ export const getStatusEffectDisplay = (effectInput) => {
   const glyphSource = lib.glyph || base.icon || name || '?';
   const glyph = glyphSource.toString().toUpperCase().slice(0, 2);
 
+  const permanent = eff.permanent ?? base.permanent ?? false;
+
   return {
     id,
     name,
@@ -129,7 +131,11 @@ export const getStatusEffectDisplay = (effectInput) => {
     fg: lib.fg || base.iconColor || palette.fg,
     bg: lib.bg || base.iconBg || palette.bg,
     border: lib.border || base.iconBorder || palette.border,
-    turns: typeof eff.turns === 'number' ? eff.turns : (typeof base.duration === 'number' ? base.duration : null),
+    permanent,
+    // Permanent effects don't carry a real turn count (see CombatScene
+    // _addStatusEffects) — showing "Duration: 1 turn" for one would be
+    // actively misleading, since it lasts until consumed, not one turn.
+    turns: permanent ? null : (typeof eff.turns === 'number' ? eff.turns : (typeof base.duration === 'number' ? base.duration : null)),
     stacks: eff.stacks != null ? eff.stacks : null,
     tags: lib.tags || base.tags || [],
   };
@@ -177,7 +183,8 @@ export const createStatusIcon = (scene, effectInput, options = {}) => {
     container.setInteractive(new Phaser.Geom.Rectangle(-size, -size, size * 2, size * 2), Phaser.Geom.Rectangle.Contains);
     const lines = [];
     if (info.description) lines.push(info.description);
-    if (info.turns != null) lines.push(`Duration: ${info.turns} turn${info.turns === 1 ? '' : 's'}`);
+    if (info.permanent) lines.push('Duration: until consumed');
+    else if (info.turns != null) lines.push(`Duration: ${info.turns} turn${info.turns === 1 ? '' : 's'}`);
     if (info.stacks != null) lines.push(`Stacks: ${info.stacks}`);
 
     const show = (pointer) => tooltip.show(pointer.worldX, pointer.worldY, { title: info.name, lines });

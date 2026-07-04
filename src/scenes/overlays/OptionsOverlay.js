@@ -318,7 +318,7 @@ export default class OptionsOverlay extends Phaser.Scene {
     makeToggle('Free Mana (0 MP cost)', DevFlags.isFreeManaEnabled(), () => DevFlags.toggleFreeMana());
     makeToggle('No Cooldowns', DevFlags.isNoCooldownEnabled(), () => DevFlags.toggleNoCooldown());
     makeToggle('No Range Restrictions', DevFlags.isNoRangeEnabled(), () => DevFlags.toggleNoRange());
-    makeToggle('Breakthrough (free MP + zero stat reqs, bundles the above two)', DevFlags.isBreakthroughEnabled(), () => DevFlags.toggleBreakthrough());
+    makeToggle('Breakthrough (zero stat requirements)', DevFlags.isBreakthroughEnabled(), () => DevFlags.toggleBreakthrough());
     makeToggle('Buildup ×5', DevFlags.isBuildupEnabled(), () => DevFlags.toggleBuildup());
     makeToggle('Super Saiyan (×10 damage)', DevFlags.isSuperSaiyanEnabled(), () => DevFlags.toggleSuperSaiyan());
     makeToggle('All Tribes (bypass vendor tribe lock)', DevFlags.isAllTribesEnabled(), () => DevFlags.toggleAllTribes());

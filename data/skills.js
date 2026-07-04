@@ -5,9 +5,9 @@ import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
 import {
   applyDamageModifiers, applyTypedDamageModifiers, scaleTypedDamage, _pushBreakdown,
-  findRewardIfWeakRule, applyDamagePctBonus,
+  findRewardIfWeakRule, applyDamagePctBonus, getDamageReductionFraction,
 } from '../src/systems/CombatLogic.js';
-import { weaknessIntensityMult, weaknessTierFromMeter } from '../src/systems/StatusEffects.js';
+import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, WeaknessV3 } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
 
@@ -1984,50 +1984,6 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Stealth-friendly strike that hits harder when the target is Exposed. Does not consume Expose."
-  },
-
-  'curse_snap': {
-    id: "curse_snap",
-    name: "Curse Snap",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "INT",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["curse", "amplify", "magic"],
-    requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.curse_snap;
-      const roll = calculateDamage(attacker, target, ability);
-      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
-      const base = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'curse',
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-
-      const meter = target?.weakness?.meters?.curse || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.08));
-
-      const status = { id: 'curse_snap', turns: 1, doubleCurseTicks: true };
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        statusEffects: [status],
-      };
-    },
-    description: "For one turn, all Curse effects on the target tick twice (amplify only; no consume)."
   },
 
   'flash_overload': {
@@ -9177,14 +9133,13 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     cooldown: 2,
     buildupHint: { expose: 70 },
-    // Declarative so the tooltip can show it and apply() can read the same
-    // numbers instead of duplicating them inline. Fires on crossing EITHER
-    // threshold (Raw or Flayed) — apply() checks "did the tier go up at all",
-    // not "did it reach tier 1 specifically" — so both tiers are listed here
-    // to match what actually happens, not just the first one.
+    // Declarative — the engine's generic tier-cross reward system applies this
+    // itself using the REAL post-buildup tiers (see Pressure Point for the
+    // full rationale on why this can't be safely self-computed in apply()).
+    // Fires on crossing EITHER threshold (Raw or Flayed), same bonus either way.
     rewardIfTierCross: [
-      { family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1 } },
-      { family: "expose", tier: 2, buff: { critChanceBonusPct: 15, turns: 1 } },
+      { family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1, statusId: "reward_needle_feint_crit" } },
+      { family: "expose", tier: 2, buff: { critChanceBonusPct: 15, turns: 1, statusId: "reward_needle_feint_crit" } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_feint;
@@ -9193,18 +9148,12 @@ Object.assign(RAW_SKILLS, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       const exposeBuildup = ability?.buildupHint?.expose ?? 70;
-      const currentMeter = target?.weakness?.meters?.expose || 0;
-      const currentTier = weaknessTierFromMeter(currentMeter);
-      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
-      if (newTier > currentTier) {
-        const rules = Array.isArray(ability?.rewardIfTierCross) ? ability.rewardIfTierCross : [];
-        const rule = rules.find(r => r.tier === newTier) || rules[0];
-        const critBuff = rule?.buff?.critChanceBonusPct ?? 15;
-        const critTurns = rule?.buff?.turns ?? 1;
-        attacker.statusEffects = attacker.statusEffects || [];
-        attacker.statusEffects.push({ id: "needle_feint_crit", turns: critTurns, mods: { CritChance: critBuff } });
-      }
-      return { ...roll, amount, buildup: { expose: exposeBuildup } };
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: exposeBuildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
     },
     description: "Deals 100% weapon damage."
   },
@@ -9304,9 +9253,24 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose", "fire"],
     cooldown: 3,
     buildupHint: { expose: 100 },
-    // Declarative so the tooltip can show it and apply() reads the same numbers
-    // instead of duplicating them inline.
-    rewardIfTierCross: [{ family: "expose", tier: 2, buff: { onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } } } }],
+    // Declarative — the engine's generic tier-cross reward system (in
+    // CombatScene, right after the REAL buildup application) detects the
+    // cross and applies this itself. This used to be self-computed inline in
+    // apply() using the declared buildupHint value as a prediction of the
+    // real result — but the real applied amount can differ (gear buildup%,
+    // Hunter's Mark, devBuildup's 5x, etc.), so a target could actually skip
+    // straight past T1 to T2 while the self-computed check still thought only
+    // T1 was reached, silently never firing. The engine mechanism compares
+    // real pre/post tiers (>=, not ===), so a skipped tier still counts.
+    rewardIfTierCross: [{
+      family: "expose",
+      tier: 2,
+      debuff: {
+        statusId: "pressure_point_ignition",
+        permanent: true,
+        onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } },
+      },
+    }],
     apply: (attacker, target) => {
       const ability = SKILLS?.pressure_point;
       const roll = calculateDamage(attacker, target, ability);
@@ -9314,22 +9278,12 @@ Object.assign(RAW_SKILLS, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       const exposeBuildup = ability?.buildupHint?.expose ?? 100;
-      const currentMeter = target?.weakness?.meters?.expose || 0;
-      const currentTier = weaknessTierFromMeter(currentMeter);
-      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
-      if (newTier > currentTier && newTier >= 2) {
-        const rule = ability?.rewardIfTierCross?.find(r => r.tier === 2);
-        const ignite = rule?.buff?.onNextDamageTaken ?? { bonusDamagePercent: 30, buildup: { fire: 80 } };
-        target.statusEffects = target.statusEffects || [];
-        // permanent, not turns-based — it should last until the next hit
-        // consumes it (however many turns that takes), not expire on a timer.
-        target.statusEffects.push({
-          id: "pressure_point_ignition",
-          permanent: true,
-          onNextDamageTaken: ignite,
-        });
-      }
-      return { ...roll, amount, buildup: { expose: exposeBuildup } };
+      return {
+        ...roll,
+        amount,
+        buildup: { expose: exposeBuildup },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
     },
     description: "Deals 100% weapon damage."
   },
@@ -9582,24 +9536,32 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "lacerate"],
     cooldown: 4,
+    // Fizzles (no cost/cooldown spent) if the target isn't at least Raw —
+    // enforced generically in CombatScene._applyAbilityToTarget.
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    buildupHint: { expose: 60 },
+    // On a critical hit, applies a 2-turn bleed dealing 15% of the FINAL
+    // damage this hit deals (after target DR and any other riders) per tick.
+    // Handled generically in CombatScene, post-mitigation — see the
+    // "Crit-triggered bleed" block there — not computed here, since apply()
+    // only ever sees the pre-mitigation amount.
+    critBleedPct: 15,
+    critBleedTurns: 2,
+    critBleedStatusId: "heartpierced",
     apply: (attacker, target) => {
       const ability = SKILLS?.heartpiercer;
       const roll = calculateDamage(attacker, target, ability);
       let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      amount = Math.floor(amount * 1.60);
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      if (exposeTier >= 2) {
-        roll.critMultiplier = (roll.critMultiplier || 2.0) + 0.50;
-      }
+      amount = applyDamagePctBonus(amount, 60, `${ability?.name || 'Skill'} base bonus`);
       const lacTier = target?.weakness?.tiers?.lacerate || 0;
-      if (lacTier >= 2) amount = Math.floor(amount * 1.30);
-      return { ...roll, amount, buildup: { expose: ability?.buildupHint?.expose ?? 60 } };
+      if (lacTier >= 2) {
+        amount = applyDamagePctBonus(amount, 30, `${ability?.name || 'Skill'} Lacerate bonus`);
+      }
+
+      return { ...roll, amount };
     },
-    description: "Heavy two-action strike (160%, req expose T1). Expose T2: +50% crit multiplier. Lacerate T2: +30% damage."
+    description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). On crit, inflicts Heartpierced — a 2-turn bleed dealing 15% of the hit as damage per turn."
   },
 
   'venom_bloom': {
@@ -9615,31 +9577,74 @@ Object.assign(RAW_SKILLS, {
     mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "toxic", "necrotic"],
+    tags: ["toxic", "necrotic"],
     cooldown: 4,
-    apply: (attacker, target) => {
+    // Only usable on a target already Envenomed (Toxic T2) — fizzles for
+    // free otherwise, enforced generically in CombatScene._applyAbilityToTarget.
+    requiresWeakness: { family: "toxic", tierAtLeast: 2 },
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.venom_bloom;
+      const w = target?.weakness;
+      const meter = w?.meters?.toxic || 0;
+      const intensity = weaknessIntensityMult(meter) || 1;
+
+      // Plain 100% weapon damage strike, nothing added — same shape as every
+      // other basic hit this session (Needle Venom, Needle Feint, etc.).
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      const toxicMeter = target?.weakness?.meters?.toxic || 0;
-      const isDiseasedT1 = (target?.weakness?.tiers?.disease || 0) >= 1;
-      const costPerTick = isDiseasedT1 ? 75 : 100;
-      const maxTicks = Math.min(4, Math.floor(toxicMeter / costPerTick));
-      const consumed = maxTicks * costPerTick;
-      if (target?.weakness?.meters?.toxic != null) {
-        target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
-        target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
+
+      // Snapshot the SAME formula the natural Envenomed (Toxic T2) start-of-
+      // turn tick uses (base x intensity, necrotic/magic, target's own magic
+      // DR) — see CombatScene's "TOXIC — Envenomed start-of-turn tick" block,
+      // which this mirrors rather than calls directly (that one is written
+      // for the afflicted unit's own turn, not an attacker-driven hit).
+      const tickBase = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
+      const raw = Math.max(1, Math.floor(tickBase * intensity));
+      let dmgEach = Math.max(1, applyDamageModifiers(raw, null, target, {
+        ability, isMagic: true, element: 'necrotic', skipGearMultiplier: true,
+      }));
+      const dr = getDamageReductionFraction(target, { isMagic: true });
+      if (dr) dmgEach = Math.max(0, Math.floor(dmgEach * (1 - dr)));
+
+      // Diseased (T1+) target: one extra tick.
+      const diseaseTier = w?.tiers?.disease || 0;
+      const count = diseaseTier >= 1 ? 3 : 2;
+
+      // Using this ability also triggers ONE toxic decay tick on the target —
+      // same formula AND same intensity-scaled bypass chance as the normal
+      // end-of-turn decay (mirrors _weaknessDecayUnit's toxic-specific
+      // handling, including the intensity scaling on decayBypassChance). So
+      // the burst isn't free: it also eats into the buildup you'd need to
+      // rebuild toward the next Envenomed window, unless the bypass roll
+      // saves it — and a heavier overflow is more likely to dodge it, same
+      // as it would naturally.
+      if (w) {
+        const toxicTier = w.tiers?.toxic || 0;
+        const bypassBase = WeaknessV3?.families?.toxic?.t1?.decayBypassChance ?? 0;
+        const bypassCap = WeaknessV3?.families?.toxic?.t1?.decayBypassChanceCap ?? 1;
+        const bypassChance = toxicTier >= 1 ? Math.min(bypassCap, bypassBase * intensity) : 0;
+        const bypassed = bypassChance > 0 && Math.random() < bypassChance;
+        if (bypassed) {
+          scene?._log?.(`${target?.name || 'The target'}'s toxic decay is bypassed (${Math.round(bypassChance * 100)}% chance, I=${intensity.toFixed(2)}).`);
+        } else {
+          const baseDecay = WeaknessV3?.families?.toxic?.baseDecay ?? 30;
+          const decay = weaknessDecayAmount(baseDecay, meter);
+          const after = Math.max(0, meter - decay);
+          w.meters.toxic = after;
+          w.tiers.toxic = weaknessTierFromMeter(after);
+          scene?._log?.(`${target?.name || 'The target'}'s toxic weakness decays by ${decay} from the disturbance.`);
+        }
       }
-      const damageEach = maxTicks > 0 ? Math.floor(amount * 0.30) : 0;
+
       return {
         ...roll,
         amount,
-        poisonTicks: maxTicks > 0 ? { count: maxTicks, damageEach } : undefined,
+        poisonTicks: { count, damageEach: dmgEach },
       };
     },
-    description: "Venomous bloom (100%). Consumes 100 toxic per tick (75 if target diseased T1) for up to 4 delayed ticks of 30% damage."
+    description: "Deals 100% weapon damage. Requires target at least Envenomed (Toxic T2). Immediately triggers the Envenomed damage tick twice (three times if target is also Diseased), then applies one toxic decay tick to the target (subject to the normal, intensity-scaled decay-bypass chance)."
   },
 
   'silent_order': {
@@ -14488,5 +14493,61 @@ Object.assign(RAW_SKILLS, {
   },
 
 });
+
+// ===============================================================
+// OUTDATED — pulled from the active roster, kept for reference only.
+// Needs a rework pass before it's reintroduced (if ever). Not inside an
+// Object.assign(RAW_SKILLS, ...) call, so none of this registers as a
+// playable skill.
+// ===============================================================
+//
+// 'curse_snap' — dagger, INT 18, requires target Curse T1+. Was a v3.21
+// leftover that never got a v3.22 companion like its dagger siblings did;
+// its INT/magic/curse design doesn't match the DEX/CHA flavor of the rest
+// of the current dagger kit.
+//
+// 'curse_snap': {
+//   id: "curse_snap",
+//   name: "Curse Snap",
+//   type: "weapon",
+//   mechanic: "active",
+//   versionTag: "v3.21",
+//   requiredWeapon: ["dagger"],
+//   requiredStat: "INT",
+//   requiredValue: 18,
+//   actionCost: "major",
+//   mpCost: 7,
+//   requiresTarget: true,
+//   targetRequirement: "enemy",
+//   tags: ["curse", "amplify", "magic"],
+//   requiresWeakness: { family: "curse", tierAtLeast: 1 },
+//   apply: (attacker, target) => {
+//     const ability = SKILLS?.curse_snap;
+//     const roll = calculateDamage(attacker, target, ability);
+//     const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
+//     const base = roll.amount + intBonus;
+//     let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+//       ability,
+//       tags: ability?.tags,
+//       element: 'curse',
+//       isMagic: true,
+//       skipGearMultiplier: true,
+//     }));
+//
+//     const meter = target?.weakness?.meters?.curse || 0;
+//     const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
+//     amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.08));
+//
+//     const status = { id: 'curse_snap', turns: 1, doubleCurseTicks: true };
+//
+//     return {
+//       ...roll,
+//       amount,
+//       isMagic: true,
+//       statusEffects: [status],
+//     };
+//   },
+//   description: "For one turn, all Curse effects on the target tick twice (amplify only; no consume)."
+// },
 
 Object.assign(SKILLS, buildSkillRegistry(RAW_SKILLS));
