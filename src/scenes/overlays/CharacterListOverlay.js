@@ -430,7 +430,8 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     const resistances = [
       `Physical Res: ${character.derived?.PhysicalResist ?? '—'}`,
-      `Elemental Res: ${character.derived?.ElementalResist ?? '—'}`
+      `Elemental Res: ${character.derived?.ElementalResist ?? '—'}`,
+      `Necrotic Res: ${character.derived?.NecroticResist ?? '—'}`
     ];
     cursorY = this._writeSection(0, cursorY, 'Resistances', resistances, scrollWidth);
 

@@ -1174,7 +1174,7 @@ export default class CombatScene extends Phaser.Scene {
         // Equipment dict (populated below if config.drops present)
         equipment: {},
         // baseline derived stats enemies need for DR calculation
-        derived: { PhysicalResist: 0, ElementalResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5, CritAvoid: 0 },
+        derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5, CritAvoid: 0 },
       };
 
       // Equip any configured drops (random item + rarity per entry)
@@ -1248,7 +1248,10 @@ export default class CombatScene extends Phaser.Scene {
       enemy.currentHP += hpGain;
       enemy.derived.PhysicalResist += Math.round(bonuses.CON * 0.5);
     }
-    if (bonuses.WIS) enemy.derived.ElementalResist += Math.round(bonuses.WIS * 0.5);
+    if (bonuses.WIS) {
+      enemy.derived.ElementalResist += Math.round(bonuses.WIS * 0.5);
+      enemy.derived.NecroticResist += Math.round(bonuses.WIS * 1.0);
+    }
     if (bonuses.DEX) enemy.derived.Evasion += bonuses.DEX;
     if (bonuses.STR) { /* STR on enemies could boost damage — left as future hook */ }
   }
@@ -3854,7 +3857,7 @@ export default class CombatScene extends Phaser.Scene {
           this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
         }
         if (rule.debuff) {
-          this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier });
+          this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier, attacker });
         }
       }
     }
@@ -5008,7 +5011,7 @@ export default class CombatScene extends Phaser.Scene {
         } catch { }
 
         if (dmg > 0) {
-          const dr = getDamageReductionFraction(char, { isMagic: true });
+          const dr = getDamageReductionFraction(char, { damageType: 'necrotic' });
           if (dr) {
             dmg = Math.max(0, Math.floor(dmg * (1 - dr)));
           }
@@ -6103,6 +6106,17 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyRewardDebuff(target, debuff, ability, context = {}) {
     if (!target || !debuff) return;
+
+    // Immediate bonus buildup to the target (e.g. Marked Cut's bonus Lacerate
+    // on crossing an Expose tier) — goes through the real weakness buildup
+    // pipeline (respects BuildupReceived, Hunter's Mark, resilience, weapon
+    // buildup%, etc.), not expressed as a stat-mod status effect below, since
+    // it's an instant meter change rather than a duration-based effect. Uses
+    // context.attacker (passed by the rewardIfTierCross consumer) so gear/mark
+    // bonuses tied to the attacker still apply, same as any other buildup hit.
+    if (debuff.addBuildup) {
+      this._applyWeaknessBuildup(target, debuff.addBuildup, { user: context?.attacker, ability });
+    }
 
     const turns = Math.max(1, debuff.turns | 0);
     const mods = {};

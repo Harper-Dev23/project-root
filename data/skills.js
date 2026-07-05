@@ -9605,7 +9605,7 @@ Object.assign(RAW_SKILLS, {
       let dmgEach = Math.max(1, applyDamageModifiers(raw, null, target, {
         ability, isMagic: true, element: 'necrotic', skipGearMultiplier: true,
       }));
-      const dr = getDamageReductionFraction(target, { isMagic: true });
+      const dr = getDamageReductionFraction(target, { damageType: 'necrotic' });
       if (dr) dmgEach = Math.max(0, Math.floor(dmgEach * (1 - dr)));
 
       // Diseased (T1+) target: one extra tick.
@@ -9800,6 +9800,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -9809,12 +9810,22 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "toxic", "necrotic"],
     cooldown: 3,
+    // Declarative so the tooltip can show it and apply() reads the same
+    // number instead of duplicating it inline — same pattern as Needle
+    // Venom/Static Prick's rewardIfWeak.
+    rewardIfWeak: [
+      { family: "lacerate", tierAtLeast: 2, buff: { damagePct: 30, damageType: "necrotic" } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.vein_tap;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
       const lacMeter = target?.weakness?.meters?.lacerate || 0;
       const lacTier = target?.weakness?.tiers?.lacerate || 0;
       const exposeTier = target?.weakness?.tiers?.expose || 0;
@@ -9825,14 +9836,34 @@ Object.assign(RAW_SKILLS, {
         target.weakness.meters.lacerate = 0;
         target.weakness.tiers.lacerate = 0;
       }
-      if (lacTier >= 2) amount = Math.floor(amount * 1.30);
+
+      // Lacerate T2 (Hemorrhaging): this skill's own "hits harder while
+      // draining a Hemorrhaging target" reward — added as pure NECROTIC
+      // damage (the draining flavor) instead of scaling the whole hit
+      // uniformly, so it's reduced by the target's Necrotic DR specifically
+      // rather than whatever type the base weapon swing happens to be.
+      // Goes through the SAME applyDamagePctBonus() helper (and breakdown-
+      // tooltip entry shape: mult/from/to, not a flat add) every other
+      // dagger skill's damage% bonus uses, just applied to the necrotic
+      // share of the total instead of the scalar amount.
+      const rule = findRewardIfWeakRule(ability, lacTier);
+      if (rule) {
+        const preBonus = physical + elemental + necrotic;
+        const boosted = applyDamagePctBonus(preBonus, rule.buff?.damagePct || 0, `${ability?.name || 'Skill'} Hemorrhaging drain (necrotic)`);
+        necrotic += (boosted - preBonus);
+      }
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
       return {
         ...roll,
+        physical, elemental, necrotic,
         amount,
         buildup: { toxic: toxicGenerated },
+        rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Draining strike (100%). Consumes all lacerate, converting to toxic (120% if expose T1). Lacerate T2: +30% damage."
+    description: "Deals 100% weapon damage. Consumes all Lacerate, converting it to Toxic buildup (120% if target is at least Raw). Stronger if the target is Hemorrhaging."
   },
 
   // --- Sword (1h) --- v3.22
@@ -9843,6 +9874,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 10,
@@ -9853,23 +9885,39 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     cooldown: 2,
     buildupHint: { expose: 80 },
+    // Bonus Lacerate on ACTUALLY crossing an Expose tier — routed through the
+    // generic rewardIfTierCross engine (CombatScene.js), which snapshots
+    // tiers before/after the REAL buildup application (post Hunter's Mark,
+    // weapon buildup%, resilience, etc.), instead of predicting the cross
+    // from the raw declared buildup number here. Self-predicting like that
+    // was the exact bug Pressure Point and Needle Feint had — a hit
+    // amplified or reduced before landing could silently cross (or fail to
+    // cross) a tier the ability itself never actually saw happen.
+    rewardIfTierCross: [
+      { family: "expose", tier: 1, debuff: { addBuildup: { lacerate: 60 } } },
+      { family: "expose", tier: 2, debuff: { addBuildup: { lacerate: 120 } } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.marked_cut;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const exposeBuildup = ability?.buildupHint?.expose ?? 80;
-      const currentMeter = target?.weakness?.meters?.expose || 0;
-      const currentTier = weaknessTierFromMeter(currentMeter);
-      const newTier = weaknessTierFromMeter(currentMeter + exposeBuildup);
-      const buildup = { expose: exposeBuildup };
-      if (newTier > currentTier) {
-        buildup.lacerate = newTier >= 2 ? 120 : 60;
-      }
-      return { ...roll, amount, buildup };
+
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return {
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 80 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
     },
-    description: "A quick slice that exposes weakness; crossing a tier also opens a bleeding wound."
+    description: "Deals 100% weapon damage. Applies Expose. Crossing a tier also opens a bleeding wound (bonus Lacerate)."
   },
 
   'guarded_slash': {
@@ -9878,6 +9926,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 11,
@@ -9888,22 +9937,37 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "cold", "defensive"],
     cooldown: 3,
     buildupHint: { cold: 70 },
+    // Self PhysicalResist on ACTUALLY crossing Cold T1 — routed through the
+    // generic rewardIfTierCross engine (same fix as Marked Cut/Pressure
+    // Point/Needle Feint) instead of predicting the cross here from the raw
+    // declared buildup number, which can silently drift from what really
+    // lands once Hunter's Mark/weapon buildup%/resilience are in play.
+    // guardPct is _applyRewardBuff's existing PhysicalResist mapping — no
+    // engine changes needed, just declaring the reward.
+    rewardIfTierCross: [
+      { family: "cold", tier: 1, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance" } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.guarded_slash;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const coldBuildup = ability?.buildupHint?.cold ?? 70;
-      const currentTier = weaknessTierFromMeter(target?.weakness?.meters?.cold || 0);
-      const newTier = weaknessTierFromMeter((target?.weakness?.meters?.cold || 0) + coldBuildup);
-      // If cold crosses T1: grant self 15% PhysicalResist for 1 turn
-      const statusEffects = newTier > currentTier && newTier >= 1
-        ? [{ id: "guarded_stance", turns: 1, mods: { PhysicalResist: 15 } }]
-        : undefined;
-      return { ...roll, amount, buildup: { cold: coldBuildup }, statusEffects };
+
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return {
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        buildup: { cold: ability?.buildupHint?.cold ?? 70 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
     },
-    description: "A guarded swing that chills the foe; crossing cold T1 grants 15% physical damage reduction for 1 turn."
+    description: "Deals 100% weapon damage. Applies Cold. Crossing Cold T1 grants +15% Physical Resist for 1 turn."
   },
 
   'rally_blow': {

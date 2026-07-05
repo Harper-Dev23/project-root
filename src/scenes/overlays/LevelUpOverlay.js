@@ -43,7 +43,7 @@ const STAT_EFFECTS = {
   DEX: 'Accuracy +2/pt  ·  Crit chance',
   CON: 'Max HP +5/pt  ·  Physical Resist',
   INT: 'Max MP +2/pt  ·  Crit chance',
-  WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Crit Avoid',
+  WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Necrotic Resist  ·  Crit Avoid',
   CHA: 'Max MP +1/pt  ·  Initiative  ·  Elemental Resist',
 };
 
@@ -55,6 +55,7 @@ const PREVIEW_DEFS = [
   { key: 'CritChance',      label: 'Crit %'      },
   { key: 'PhysicalResist',  label: 'Phys Res'    },
   { key: 'ElementalResist', label: 'Elem Res'    },
+  { key: 'NecroticResist',  label: 'Necro Res'   },
 ];
 
 // Card dimensions

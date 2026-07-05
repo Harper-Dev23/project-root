@@ -168,6 +168,7 @@ const DERIVED_LABELS = {
   maxMP: 'Max MP',
   PhysicalResist: 'Physical Resist',
   ElementalResist: 'Elemental Resist',
+  NecroticResist: 'Necrotic Resist',
   Accuracy: 'Accuracy',
   CritAvoid: 'Crit Avoid'
 };

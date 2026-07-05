@@ -327,6 +327,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
       `Resilience: ${character.resilience ?? character.derived?.Resilience ?? '—'}`,
       `Phys Resist: ${character.derived?.PhysicalResist ?? '—'}`,
       `Elem Resist: ${character.derived?.ElementalResist ?? '—'}`,
+      `Necro Resist: ${character.derived?.NecroticResist ?? '—'}`,
     ], scrollW);
 
     // ── Equipment ──

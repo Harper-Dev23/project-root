@@ -26,7 +26,7 @@ export function _sumStatusEffectMods(char) {
   // Each effect can have: { mods: { Accuracy:+5, Evasion:-10, AttackPower:+15, ... } }
   const out = {
     Accuracy: 0, Evasion: 0, Initiative: 0, CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, CritAvoid: 0,
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0,
     AttackPower: 0, // % bonus to all outgoing damage (e.g. war_cry_buff)
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
@@ -49,6 +49,7 @@ export function getEffectiveDerived(char) {
     CritMult: (d.CritMult ?? 1.5) + (b.CritMult | 0) + s.CritMult,
     ElementalResist: (d.ElementalResist | 0) + (b.ElementalResist | 0) + s.ElementalResist,
     PhysicalResist: (d.PhysicalResist | 0) + (b.PhysicalResist | 0) + s.PhysicalResist,
+    NecroticResist: (d.NecroticResist | 0) + (b.NecroticResist | 0) + s.NecroticResist,
     CritAvoid: (d.CritAvoid | 0) + (b.CritAvoid | 0) + s.CritAvoid,
     AttackPower: (d.AttackPower | 0) + (b.AttackPower | 0) + s.AttackPower,
   };
@@ -169,14 +170,21 @@ export function getDamageReductionFraction(target, opts = {}) {
   const eff = getEffectiveDerived(target) || {};
 
   // Accept damageType:'physical'|'elemental'|'necrotic' as shorthand.
-  // Necrotic uses ElementalResist for now (no dedicated stat yet).
+  // Necrotic has its own NecroticResist stat — only routed here when the
+  // caller explicitly says damageType:'necrotic'; a bare isMagic:true with no
+  // damageType (e.g. a generic spell) still falls back to ElementalResist,
+  // same as before.
   const damageType = opts.damageType;
+  const isNecrotic = damageType === 'necrotic';
   const isMagic = opts.isMagic != null
     ? !!opts.isMagic
-    : (damageType === 'elemental' || damageType === 'necrotic');
+    : (damageType === 'elemental' || isNecrotic);
 
   let dr = 0;
-  if (isMagic) {
+  if (isNecrotic) {
+    dr += (eff.NecroticResist || 0) / 100;
+    if (Number.isFinite(target.magDR)) dr += target.magDR;
+  } else if (isMagic) {
     dr += (eff.ElementalResist || 0) / 100;
     if (Number.isFinite(target.magDR)) dr += target.magDR;
   } else {

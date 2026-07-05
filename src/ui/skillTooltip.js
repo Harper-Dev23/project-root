@@ -59,7 +59,12 @@ function buffToText(buff) {
   if (buff.critChanceBonusPct)  parts.push(`+${buff.critChanceBonusPct}% Crit Chance`);
   if (buff.critMultBonus)       parts.push(`+${buff.critMultBonus} Crit Mult`);
   if (buff.nextSkillDamagePct)  parts.push(`+${buff.nextSkillDamagePct}% next skill dmg`);
-  if (buff.damagePct)           parts.push(`+${buff.damagePct}% damage`);
+  // damageType is optional/descriptive: most damagePct rewards scale the
+  // whole hit uniformly (e.g. Needle Venom), but a few add the bonus to one
+  // specific typed component only (e.g. Vein Tap's necrotic-only drain) —
+  // this makes that distinction visible instead of reading identically to
+  // a whole-hit bonus.
+  if (buff.damagePct)           parts.push(`+${buff.damagePct}% damage${buff.damageType ? ` (as ${buff.damageType})` : ''}`);
   if (buff.evasionPct)          parts.push(`+${buff.evasionPct}% Evasion`);
   if (buff.guardPct)            parts.push(`+${buff.guardPct}% Guard`);
   if (buff.chanceExtraHitPct)   parts.push(`${buff.chanceExtraHitPct}% extra hit`);

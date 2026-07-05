@@ -188,6 +188,11 @@ const ARMOR_PREFIX_POOL = [
   makeDerivedArmorPrefix({ key: 'Redeemed', tier: 2, derivedKey: 'ElementalResist', range: [3, 5] }),
   makeDerivedArmorPrefix({ key: 'Samuel\u2019s', tier: 1, derivedKey: 'ElementalResist', range: [6, 9] }),
 
+  // Necrotic Resist
+  makeDerivedArmorPrefix({ key: 'Warded', tier: 3, derivedKey: 'NecroticResist', range: [1, 2] }),
+  makeDerivedArmorPrefix({ key: 'Sealed', tier: 2, derivedKey: 'NecroticResist', range: [3, 5] }),
+  makeDerivedArmorPrefix({ key: 'Ezekiel\u2019s', tier: 1, derivedKey: 'NecroticResist', range: [6, 9] }),
+
   // Accuracy
   makeDerivedArmorPrefix({ key: 'Ordained', tier: 3, derivedKey: 'Accuracy', range: [1, 2] }),
   makeDerivedArmorPrefix({ key: 'Zealous', tier: 2, derivedKey: 'Accuracy', range: [3, 5] }),

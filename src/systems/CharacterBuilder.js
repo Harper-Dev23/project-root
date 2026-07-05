@@ -88,13 +88,15 @@ export function calculateDerivedStats(stats) {
   // Resists (CHA contributes to Elemental as requested)
   const ElementalResist = Math.round(((stats.WIS || 0) * 0.5) + ((stats.CHA || 0) * 0.5));
   const PhysicalResist = Math.round((stats.CON || 0) * 0.5);
+  // WIS-only, full weight — resisting necrotic/unnatural decay via willpower/insight
+  const NecroticResist = Math.round((stats.WIS || 0) * 1.0);
   const CritAvoid = Math.round((stats.WIS || 0) * 0.5);
 
   return {
     maxHP, maxMP,
     Accuracy, Evasion,
     CritChance, CritMult, CritAvoid,
-    ElementalResist, PhysicalResist,
+    ElementalResist, PhysicalResist, NecroticResist,
     Initiative,
     ActionPoints: 1,
     BonusActions: 1,
@@ -310,7 +312,7 @@ export function resetCombatMods(character) {
   character.combatMods = {
     Accuracy: 0, Evasion: 0, Initiative: 0,
     CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, CritAvoid: 0
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0
   };
 }
 
@@ -502,7 +504,7 @@ export function rebuildCharacterStats(character) {
   if (!character.combatMods) character.combatMods = {
     Accuracy: 0, Evasion: 0, Initiative: 0,
     CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, CritAvoid: 0
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0
   };
 
   return character;

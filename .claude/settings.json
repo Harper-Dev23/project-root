@@ -31,7 +31,10 @@
       "Skill(run)",
       "Skill(run:*)",
       "Bash(cat /tmp/http_server.log 2>/dev/null; which python3 python 2>/dev/null; echo \"---\"; ps aux | grep -i \"http.server\\\\|python\" | grep -v grep)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(node --check src/systems/CharacterBuilder.js)",
+      "Bash(node --check src/systems/ItemFactory.js)",
+      "Bash(awk 'NR==4448,NR==4560' src/scenes/CombatScene.js)"
     ]
   }
 }
