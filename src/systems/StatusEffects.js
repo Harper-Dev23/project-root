@@ -287,7 +287,12 @@ export const WeaknessV3 = {
         name: 'Afflicted',
         decayReduction: 0.50,                 // even slower
         decayReductionCap: 0.85,
-        curseAmpMult: 1.25                    // amplifies CURSE-tagged abilities (damage/buildup hooks)
+        // Amplifies the flat bonus damage of active CURSE RIDER status effects
+        // (e.g. Curse of Needles' onHit.flatDamage) — NOT a curse-tagged
+        // skill's own damage roll. See onHit.curseScaled handling in
+        // CombatScene.js. A "curse" tag on a skill just means it interacts
+        // with this weakness (e.g. applies a rider), same as any other family.
+        curseAmpMult: 1.25
       },
       cinders: { baseCritChance: 0.10, critDamageBonus: 0.50 }
     },

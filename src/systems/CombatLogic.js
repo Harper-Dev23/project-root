@@ -385,7 +385,21 @@ export function calculateDamage(attacker, target, ability = null) {
   // any crit roll.
   const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
   const effDerived = getEffectiveDerived(attacker) || {};
-  const baseCritChance = (effDerived.CritChance || 0) + weaponCrit;
+  // Per-ability bonus crit chance vs a specific weakness tier (e.g. Silent
+  // Order vs an Exposed/Raw target) — additive percentage points, distinct
+  // from the global Expose T2 crit bonus below (applyExposeCritBonuses),
+  // which applies to every attack regardless of ability. Reusable: any
+  // ability can declare critChanceIfWeak (array of {family, tierAtLeast,
+  // bonusPct}), same shape as rewardIfWeak, highest tier met wins.
+  let abilityCritBonus = 0;
+  if (Array.isArray(ability?.critChanceIfWeak)) {
+    const tw = target?.weakness;
+    const matched = ability.critChanceIfWeak
+      .filter(r => (tw?.tiers?.[r.family] || 0) >= (r.tierAtLeast ?? 1))
+      .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
+    if (matched) abilityCritBonus = matched.bonusPct || 0;
+  }
+  const baseCritChance = (effDerived.CritChance || 0) + weaponCrit + abilityCritBonus;
   const baseCritMult = effDerived.CritMult || 1.5;
   const critBundle = applyExposeCritBonuses(attacker, target, baseCritChance, baseCritMult);
   try { _pushBreakdown({ label: 'critChance', value: Math.round(critBundle.critChance) }); } catch { }
@@ -545,21 +559,7 @@ export function calculateFireballDamage(attacker, target) {
 
 // Legacy tag-based post modifiers (kept, but now via an options object)
 export function applyDamageModifiers(amount, attacker, target, opts = {}) {
-  // ---- Safe locals (prevents ReferenceError on ability/intents/tags) ----
-  const ability = opts?.ability ?? null;
-  const intent = opts?.intent ?? null;
-  const isMagic = !!opts?.isMagic;
   const element = opts?.element ?? null;
-
-  // Tags can come from several places:
-  const tagsList =
-    opts?.tags ??
-    intent?.tags ??
-    ability?.tags ??
-    null; // may be null/undefined
-
-  // If callers pass legacy boolean flags like { curse: true }, use them too:
-  const tagFlags = (opts && typeof opts === 'object' && !Array.isArray(opts)) ? opts : {};
 
   let out = amount | 0;
 
@@ -593,17 +593,13 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
   // Category A "this skill hits harder" bonus, not a universal weakness effect —
   // see applyTypedDamageModifiers below and Needle Venom for an example).
 
-  // ---- Curse T2 amplifies CURSE-tagged abilities (damage path) ----
-  const curseTagged = !!(tagFlags.curse || (Array.isArray(tagsList) && tagsList.includes('curse')));
-  const curseT = target?.weakness?.tiers?.curse | 0;
-  if (curseTagged && curseT >= 2) {
-    const m = target?.weakness?.meters?.curse | 0;
-    const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1; // e.g. 1.25
-    const I = (typeof weaknessIntensityMult === 'function') ? weaknessIntensityMult(m) : 1;
-    const mult = Math.max(1, baseAmp * (I > 0 ? I : 1)); // optional clamp if you want
-    const prev = out; out = Math.floor(out * mult);
-    try { _pushBreakdown({ label: 'Curse T2 curse-amp', mult, from: prev, to: out }); } catch { }
-  }
+  // NOTE: Curse T2 (Afflicted) does NOT amplify a curse-tagged ability's own
+  // damage roll — a "curse" tag just means the skill interacts with the Curse
+  // weakness (e.g. applies a curse rider), not that it hits harder against an
+  // Afflicted target. What Afflicted actually amplifies is the flat bonus
+  // damage of active CURSE RIDER status effects (e.g. Curse of Needles) —
+  // see the `onHit.curseScaled` handling in CombatScene.js, applied after
+  // mitigation on the FINAL hit, not here on the skill's own base roll.
 
   // ---- Optional element hook (only if explicitly enabled) ----
   const enableElementBonus = !!opts?.enableElementBonus;
@@ -708,10 +704,6 @@ export function applyDamagePctBonus(amount, dmgPct, label) {
 }
 
 export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}) {
-  const ability = opts?.ability ?? null;
-  const tagsList = opts?.tags ?? ability?.tags ?? null;
-  const tagFlags = (opts && typeof opts === 'object' && !Array.isArray(opts)) ? opts : {};
-
   let physical = breakdown?.physical | 0;
   let elemental = breakdown?.elemental | 0;
   let necrotic = breakdown?.necrotic | 0;
@@ -743,19 +735,10 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
   // (No Expose/Flay entry here — see the Category B note above. Its T1/T2 effects
   // are handled elsewhere, not as a flat damage% on the hit.)
 
-  // Curse T2 is a NECROTIC-family weakness — only amplifies the necrotic component,
-  // and only for curse-tagged abilities (unchanged gating from the scalar path).
-  const curseTagged = !!(tagFlags.curse || (Array.isArray(tagsList) && tagsList.includes('curse')));
-  const curseT = target?.weakness?.tiers?.curse | 0;
-  if (curseTagged && curseT >= 2) {
-    const m = target?.weakness?.meters?.curse | 0;
-    const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
-    const I = (typeof weaknessIntensityMult === 'function') ? weaknessIntensityMult(m) : 1;
-    const mult = Math.max(1, baseAmp * (I > 0 ? I : 1));
-    const prev = necrotic;
-    necrotic = Math.floor(necrotic * mult);
-    try { _pushBreakdown({ label: 'Curse T2 amp (necro only)', mult, from: prev, to: necrotic }); } catch { }
-  }
+  // NOTE: no Curse T2 amp here either, for the same reason as the scalar path
+  // above (applyDamageModifiers) — a curse-tagged ability's own damage roll
+  // isn't what Afflicted amplifies. See the `onHit.curseScaled` rider handling
+  // in CombatScene.js.
 
   const amount = physical + elemental + necrotic;
   return { physical, elemental, necrotic, amount };

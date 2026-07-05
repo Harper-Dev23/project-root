@@ -136,6 +136,34 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     });
   }
 
+  // Bonus crit chance vs a weakness tier (e.g. Silent Order vs Exposed) — same
+  // shape/grouping rationale as rewardIfWeak above, just a dedicated field
+  // since it's not a post-hit "reward" but a modifier on this hit's own roll.
+  if (Array.isArray(sk.critChanceIfWeak) && sk.critChanceIfWeak.length) {
+    const rules = [...sk.critChanceIfWeak].sort((a, b) => (a.tierAtLeast ?? 1) - (b.tierAtLeast ?? 1));
+    rules.forEach(r => {
+      const label = tierLabel(r.family, r.tierAtLeast);
+      lines.push(`If target is at least ${label}: +${r.bonusPct}% crit chance`);
+    });
+  }
+
+  // Crit-triggered initiative gain scaled by a stat (e.g. Silent Order's CHA),
+  // with an optional stronger multiplier vs a weakness tier.
+  if (sk.critInitiative) {
+    const ci = sk.critInitiative;
+    const mult = Number.isFinite(ci.mult) ? ci.mult : 1;
+    const multStr = mult === 1 ? '' : ` ×${mult}`;
+    let line = `On crit: gain initiative equal to ${ci.stat}${multStr}`;
+    const rules = Array.isArray(ci.weaknessBonus) ? ci.weaknessBonus : (ci.weaknessBonus ? [ci.weaknessBonus] : []);
+    if (rules.length) {
+      const bonusParts = rules
+        .sort((a, b) => (a.tierAtLeast ?? 1) - (b.tierAtLeast ?? 1))
+        .map(r => `×${r.mult} if target is at least ${tierLabel(r.family, r.tierAtLeast)}`);
+      line += ` (${bonusParts.join(', ')})`;
+    }
+    lines.push(`${line}.`);
+  }
+
   // Reward if tier cross — same grouping rationale as above. When consecutive
   // rules grant the exact same buff (e.g. "fires on crossing either Raw or
   // Flayed, same bonus either way"), merge them into one line instead of
@@ -156,7 +184,8 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     });
   }
 
-  if (sk.buildupHint || sk.rewardIfWeak || (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length)) {
+  if (sk.buildupHint || sk.rewardIfWeak || sk.critChanceIfWeak || sk.critInitiative
+    || (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length)) {
     lines.push('');
   }
 

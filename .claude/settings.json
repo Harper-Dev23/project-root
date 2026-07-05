@@ -23,7 +23,9 @@
       "Bash(node --check src/systems/DevFlags.js)",
       "Bash(node --check src/scenes/overlays/SkillsOverlay.js)",
       "Bash(node --check src/ui/statusEffectIcons.js)",
-      "Bash(node --check src/ui/Tooltip.js)"
+      "Bash(node --check src/ui/Tooltip.js)",
+      "Bash(awk ' *)",
+      "Bash(awk 'NR==561,NR==630' src/systems/CombatLogic.js)"
     ]
   }
 }

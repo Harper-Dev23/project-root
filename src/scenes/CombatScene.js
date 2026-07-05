@@ -41,7 +41,7 @@ import {
   rollToHit, computeHitChance, getLastDamageBreakdown,
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
-  getDamageReductionFraction,
+  getDamageReductionFraction, _pushBreakdown,
 } from '../systems/CombatLogic.js';
 
 
@@ -1734,11 +1734,15 @@ export default class CombatScene extends Phaser.Scene {
     // separately and appended together afterward, colored by the same
     // per-tier scheme as the info-panel pip (bright = this tier is actually
     // active on the target right now, gray = just showing the base math).
-    const add = (tier, text, current) => {
+    // exact: true means this tier's own rule stops applying once the target
+    // moves past it (Curse's decay reduction is REPLACED at T2, not stacked
+    // on top of T1 — every other family's tiers are additive, T2 keeps T1's
+    // effect too, hence the default "at least" check).
+    const add = (tier, text, current, opts) => {
       const name = tierNames[tier - 1] || `T${tier}`;
       descLines.push(`${name} (T${tier}): ${text}`);
       if (current) {
-        const active = t >= tier;
+        const active = opts?.exact ? (t === tier) : (t >= tier);
         const color = active ? this._getTierColor(tier, fam) : 0x666666;
         statLines.push({ text: `Currently: ${current}`, color });
       }
@@ -1857,17 +1861,27 @@ export default class CombatScene extends Phaser.Scene {
         break;
       }
       case 'curse': {
+        // Curse's two tiers are mutually exclusive, not additive — whichever
+        // tier the target currently sits at determines the ENTIRE decay
+        // reduction; Afflicted's rate replaces Hexed's rather than stacking
+        // on top of it. exact:true below reflects that in the coloring (only
+        // the current tier's line lights up, not both at once).
         const I = weaknessIntensityMult(m);
         const dec1Base = cfg.t1?.decayReduction ?? 0;
         const dec1Cap = cfg.t1?.decayReductionCap ?? dec1Base;
         const dec1Pct = Math.round(Math.min(dec1Cap, dec1Base * I) * 100);
-        add(1, 'Curse meter decays slower.', `Curse decay slowed ${dec1Pct}%.`);
+        add(1, 'Curse meter decays slower.', `Curse decay slowed ${dec1Pct}% (replaced by Afflicted's rate, not stacked, once T2 is reached).`, { exact: true });
         const dec2Base = cfg.t2?.decayReduction ?? 0;
         const dec2Cap = cfg.t2?.decayReductionCap ?? dec2Base;
         const dec2Pct = Math.round(Math.min(dec2Cap, dec2Base * I) * 100);
-        const ampMult = cfg.t2?.curseAmpMult ?? 1;
-        add(2, 'Decay slows further; curse-tagged effects amplify.',
-          `Curse decay slowed ${dec2Pct}%, curse-tagged effects ×${ampMult}.`);
+        // Real live multiplier, matching the exact formula the rider consumer
+        // in CombatScene.js uses — was showing the flat base config value
+        // (e.g. always "×1.25") regardless of how far into overflow the
+        // target actually was, understating the real current amplification.
+        const baseAmp = cfg.t2?.curseAmpMult ?? 1;
+        const ampMult = Math.max(1, baseAmp * (I > 0 ? I : 1));
+        add(2, 'Decay slows further (replaces Hexed\'s rate). Amplifies active curse riders\' bonus damage — not the tagged skill\'s own hit.',
+          `Curse decay slowed ${dec2Pct}%, curse riders amplified ×${ampMult.toFixed(2)}.`, { exact: true });
         break;
       }
       default:
@@ -3211,6 +3225,16 @@ export default class CombatScene extends Phaser.Scene {
       se => se?.id === 'pressure_point_ignition'
     );
 
+    // Snapshot curse-rider ids BEFORE this ability runs — same reasoning as
+    // pressure_point_ignition above: if THIS hit is the one that applies a new
+    // curse rider (e.g. Curse of Needles' own strike), that rider must not
+    // also fire its onHit bonus on the very hit that created it.
+    const curseRiderIdsBeforeHit = new Set(
+      (target?.statusEffects || [])
+        .filter(se => se?.permanent && se?.onHit?.curseScaled)
+        .map(se => se.id)
+    );
+
     // Execute ability to get its payload
     let result = {};
     try {
@@ -3527,11 +3551,37 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
-        // Curse of Needles: permanent rider — flat bonus damage when target has curse T1+
-        if (dmg > 0) {
-          const needles = (target?.statusEffects || []).find(se => se?.id === 'curse_of_needles' && se.permanent === true);
-          if (needles && (target?.weakness?.tiers?.curse || 0) >= 1) {
-            dmg += needles.onHit?.flatDamage ?? 5;
+        // Curse riders: any PERMANENT status effect declaring onHit.curseScaled
+        // is a "curse rider" (e.g. Curse of Needles) — the curse tag on a SKILL
+        // no longer grants that skill's own damage roll a bonus vs an Afflicted
+        // target (see CombatLogic.js). Only these riders' flat bonus gets
+        // amplified by Afflicted, and only while the target currently has Curse
+        // T1+: the rider itself is permanent and never removed, but it goes
+        // dormant (not deleted) if curse decays back to 0, and re-activates on
+        // its own if curse builds back up later — same rider, no re-casting needed.
+        // Gated on curseRiderIdsBeforeHit so the hit that APPLIES a new rider
+        // (e.g. Curse of Needles' own strike) can't also be the hit that fires
+        // its bonus — same reasoning as Pressure Point's ignition above.
+        if (dmg > 0 && Array.isArray(target?.statusEffects)) {
+          const curseTier = target?.weakness?.tiers?.curse | 0;
+          if (curseTier >= 1) {
+            for (const se of target.statusEffects) {
+              if (!se?.permanent || !se.onHit?.curseScaled) continue;
+              if (!curseRiderIdsBeforeHit.has(se.id)) continue;
+              let flat = se.onHit.flatDamage || 0;
+              if (curseTier >= 2) {
+                const m = target?.weakness?.meters?.curse | 0;
+                const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
+                const I = weaknessIntensityMult(m);
+                const mult = Math.max(1, baseAmp * (I > 0 ? I : 1));
+                flat = Math.floor(flat * mult);
+              }
+              if (flat > 0) {
+                dmg += flat;
+                try { _pushBreakdown({ label: se.name || 'Curse rider', flat }); } catch { }
+                this._log(`${target.name}'s ${se.name || 'curse'} bites for +${flat}.`);
+              }
+            }
           }
         }
 
@@ -3575,6 +3625,27 @@ export default class CombatScene extends Phaser.Scene {
           const statusId = ability.critBleedStatusId || `${ability.id}_bleed`;
           this._addStatusEffects(target, [{ id: statusId, turns: bleedTurns, tickDamage }]);
           this._log(`${target.name} suffers a bleed from ${ability.name} — ${tickDamage} damage per turn for ${bleedTurns} turns.`);
+        }
+
+        // Crit-triggered initiative gain (e.g. Silent Order) — scales with the
+        // attacker's own stat instead of a flat number, with an optional
+        // stronger multiplier if the target is at least some weakness tier.
+        // Generic: any ability declaring critInitiative gets this.
+        if (isCrit && ability?.critInitiative) {
+          const ci = ability.critInitiative;
+          const statVal = user?.totalStats?.[ci.stat] || 0;
+          let mult = Number.isFinite(ci.mult) ? ci.mult : 1;
+          const rules = Array.isArray(ci.weaknessBonus) ? ci.weaknessBonus : (ci.weaknessBonus ? [ci.weaknessBonus] : []);
+          const tw = target?.weakness;
+          const matched = rules
+            .filter(r => (tw?.tiers?.[r.family] || 0) >= (r.tierAtLeast ?? 1))
+            .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
+          if (matched) mult = matched.mult;
+          const initGain = Math.max(0, Math.round(statVal * mult));
+          if (initGain > 0) {
+            user.initiative = (user.initiative || 0) + initGain;
+            this._log(`${user?.name ?? 'Attacker'} gains ${initGain} initiative (${ci.stat} ${statVal} × ${mult}).`);
+          }
         }
 
         if (dealsDamage || dmg > 0) {
@@ -4441,20 +4512,12 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
 
-      // CURSE T2: if this buildup came from a CURSE-tagged ability, amplify it
-      if ((w.tiers?.curse | 0) >= 2 && ctx?.ability?.tags?.includes?.('curse')) {
-        const mCur = w.meters?.curse | 0;
-        const Icur = (typeof familyIntensityMult === 'function') ? familyIntensityMult('curse', mCur) : 1;
-        const amp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
-        if (amp > 1) {
-          const beforeAmt = amt;
-          // scale the extra (amp-1) by intensity Icur so Afflicted scales with meter
-          amt = Math.max(1, Math.floor(amt * (1 + (amp - 1) * (Icur > 0 ? Icur : 1))));
-          if (amt !== beforeAmt) {
-            this._log(`${target.name} is Afflicted: CURSE-tagged buildup ${beforeAmt} → ${amt} (I_curse=${Icur.toFixed(2)})`);
-          }
-        }
-      }
+      // NOTE: Curse T2 (Afflicted) used to also amplify incoming CURSE buildup
+      // from any curse-tagged ability — same "any curse-tagged skill benefits"
+      // pattern removed from the damage pipeline in CombatLogic.js. Removed for
+      // now to keep the system consistent and barebones while curse gets
+      // rethought; curseAmpMult's only live consumer is the onHit.curseScaled
+      // rider hook above.
 
       // Apply
       const resilience = target?.gearEffects?.resilience ?? target?.resilience ?? 0;

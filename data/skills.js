@@ -9653,6 +9653,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -9663,24 +9664,47 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose"],
     cooldown: 3,
     buildupHint: { expose: 50 },
+    // Bonus crit chance vs an Exposed target — a per-ability rule (see
+    // critChanceIfWeak in CombatLogic.js's calculateDamage), not the global
+    // Expose T2 crit bonus every attack already gets.
+    critChanceIfWeak: [{ family: "expose", tierAtLeast: 1, bonusPct: 10 }],
+    // On crit: gain initiative equal to CHA, doubled if the target is at
+    // least Dazed (Disorient T1). Generic engine hook lives in CombatScene.js
+    // right after the crit-bleed rider — any skill can reuse this shape.
+    critInitiative: {
+      stat: "CHA",
+      mult: 1,
+      weaknessBonus: [{ family: "disorient", tierAtLeast: 1, mult: 2 }],
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.silent_order;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.15);
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      if (exposeTier >= 1) amount = Math.floor(amount * 1.20);
-      const isCrit = roll.isCrit || false;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      // Silent Order's own 115% weapon damage — a Category A "this skill hits
+      // harder" bonus, scales the whole hit uniformly like the base weapon%.
+      const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.15);
+      physical = scaled.physical;
+      elemental = scaled.elemental;
+      necrotic = scaled.necrotic;
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
       return {
         ...roll,
+        physical,
+        elemental,
+        necrotic,
         amount,
         buildup: { expose: ability?.buildupHint?.expose ?? 50 },
-        initiativeGained: isCrit ? 8 : 0,
       };
     },
-    description: "Precise dagger thrust (115% + 50 expose). Expose T1: +20% damage. Crit: grants +8 initiative."
+    description: "Deals 115% weapon damage. Stronger if the target is Raw or Dazed. Grants initiative on crit."
   },
 
   'curse_of_needles': {
@@ -9708,11 +9732,17 @@ Object.assign(RAW_SKILLS, {
       target.statusEffects = target.statusEffects || [];
       const alreadyCursed = target.statusEffects.some(se => se?.id === 'curse_of_needles');
       if (!alreadyCursed) {
-        target.statusEffects.push({ id: "curse_of_needles", permanent: true, onHit: { flatDamage: 5 } });
+        // curseScaled: true marks this as a curse rider for the generic engine
+        // hook in CombatScene.js — its flat bonus is amplified while the target
+        // is Afflicted (Curse T2), same as any future skill's curse rider would be.
+        target.statusEffects.push({
+          id: "curse_of_needles", name: "Curse of Needles", permanent: true,
+          onHit: { flatDamage: 3, curseScaled: true },
+        });
       }
       return { ...roll, amount: Math.floor(amount * 1.10) };
     },
-    description: "Curse strike (110%, req curse T1). Applies permanent Curse of Needles rider: each hit deals +5 flat damage while target is curse T1+."
+    description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits deal +3 flat damage while target is at least Hexed, amplified while Afflicted."
   },
 
   'flash_overload': {
@@ -9740,22 +9770,28 @@ Object.assign(RAW_SKILLS, {
       }));
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
       const repeatChance = lightningTier >= 2 ? 1.0 : 0;
-      // Apply 40 disorient buildup to all other enemies via pipeline (respects BuildupReceived, Hunter's Mark, etc.)
+
+      // All OTHER living enemies take Disorient buildup (no damage) — built as
+      // a splash payload instead of applied directly here, so the guaranteed
+      // repeat at Lightning T2 re-fans it too (same generic repeat/splash
+      // mechanism Hex Stitch's curse splash uses), hitting every other enemy
+      // with it twice instead of just once on the initial cast.
+      const disorientAmt = ability?.buildupHint?.disorient ?? 40;
       const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
-      (enemySlots || []).forEach(s => {
-        const enemy = s?.char;
-        if (!enemy || enemy === target || enemy.status === 'incapacitated') return;
-        scene?._applyWeaknessBuildup?.(enemy, { disorient: 40 }, { user: attacker });
-      });
+      const splash = (enemySlots || [])
+        .map(s => s?.char)
+        .filter(enemy => enemy && enemy !== target && enemy.status !== 'incapacitated')
+        .map(enemy => ({ target: enemy, amount: 0, tags: ability?.tags, buildup: { disorient: disorientAmt } }));
+
       return {
         ...roll,
         amount: Math.floor(amount * 1.25),
         repeatChance,
-        repeatDamageFraction: 0.60,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 40 },
+        splash: splash.length ? splash : undefined,
+        buildup: { disorient: disorientAmt },
       };
     },
-    description: "Lightning overload (125%, req lightning T1). Lightning T2: guaranteed repeat at 60% damage. Applies 40 disorient to all other enemies."
+    description: "Deals 125% weapon damage. Requires the target to be at least Zapped. Applies Disorient to all enemies. If the target is Shocked, the hit is guaranteed to repeat for free — including the Disorient applied to every other enemy."
   },
 
   'vein_tap': {
