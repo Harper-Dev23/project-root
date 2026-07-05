@@ -25,7 +25,13 @@
       "Bash(node --check src/ui/statusEffectIcons.js)",
       "Bash(node --check src/ui/Tooltip.js)",
       "Bash(awk ' *)",
-      "Bash(awk 'NR==561,NR==630' src/systems/CombatLogic.js)"
+      "Bash(awk 'NR==561,NR==630' src/systems/CombatLogic.js)",
+      "Bash(identify \"assets/UIinterface/ui_frame.png\")",
+      "Bash(node --check src/scenes/UIScene.js)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(cat /tmp/http_server.log 2>/dev/null; which python3 python 2>/dev/null; echo \"---\"; ps aux | grep -i \"http.server\\\\|python\" | grep -v grep)",
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -416,8 +416,23 @@ export default class UIScene extends Phaser.Scene {
       .setDepth(DEPTH.UI_OVERLAY)
 
 
-    const startY = 80;
-    const spacingY = 90;
+    // Party list is pinned directly to two fixed screen points instead of
+    // being derived from the right panel's button math — simpler, and the
+    // right panel's item count can change without affecting this at all.
+    // PARTY_LIST_TOP_Y is the top of the topmost member's name text;
+    // PARTY_LIST_BOTTOM_Y is the bottom of a FULL (max-size) party's last
+    // member's XP bar. spacingY is fixed (computed once for a full party),
+    // NOT redivided across however many members currently exist — members
+    // just stack sequentially downward from the top at that fixed gap, so a
+    // 2-person party sits snugly near the top instead of being stretched to
+    // span the whole 185-600 range with a big gap in between.
+    const PARTY_LIST_TOP_Y = 185;
+    const PARTY_LIST_BOTTOM_Y = 600;
+    const MEMBER_CONTENT_BOTTOM_OFFSET = 44; // xpBar's own y-offset (40) + its height (4)
+    const MAX_PARTY_SIZE = 6;
+
+    const startY = PARTY_LIST_TOP_Y;
+    const spacingY = (PARTY_LIST_BOTTOM_Y - MEMBER_CONTENT_BOTTOM_OFFSET - PARTY_LIST_TOP_Y) / (MAX_PARTY_SIZE - 1);
     const leftPanelX = 0;
 
     // 📦 Create a container for party UI elements
@@ -456,22 +471,26 @@ export default class UIScene extends Phaser.Scene {
 
       const panelCenterX = leftPanelWidth / 2;
 
-      // HP / MP / XP bars
-      const hpBar = new StatusBar(this, panelCenterX, panelY + 18, barWidth, 8, char.currentHP, char.maxHP, 0xff4444, 'HP');
+      // HP / MP / XP bars — was 16/26/36, but the name text's own height was
+      // clipping into the top of the HP bar at 16; +4 to all three keeps
+      // their 10px rhythm but adds clearance under the name.
+      const hpBar = new StatusBar(this, panelCenterX, panelY + 20, barWidth, 8, char.currentHP, char.maxHP, 0xff4444, 'HP');
       const mpBar = new StatusBar(this, panelCenterX, panelY + 30, barWidth, 8, char.currentMP, char.maxMP, 0x4444ff, 'MP');
       const xpBar = new StatusBar(
-        this, panelCenterX, panelY + 42, barWidth, 4,
+        this, panelCenterX, panelY + 40, barWidth, 4,
         char.experience, getXPNeededForLevel(char.level), 0xffff66, 0x222222
       );
 
       this._partyStatusBars.push({ char, hpBar, mpBar });
 
-      // Favor
-      const favorText = this.add.text(centerX, panelY + 50, `Favor: ${char.favor}`, {
-        fontSize: '11px',
+      // Favor — was its own row below the XP bar; now a short "★N" tucked
+      // just past the XP bar's right edge on the SAME row, instead of taking
+      // a whole extra line.
+      const favorText = this.add.text(barX + barWidth + 4, panelY + 40, `★${char.favor}`, {
+        fontSize: '9px',
         color: '#88ccff',
         fontFamily: 'Georgia'
-      }).setOrigin(0.5, 0);
+      }).setOrigin(0, 0.5);
 
       // Thin separator line after each member except the last
       const items = [nameText, hpBar, mpBar, xpBar, favorText];
