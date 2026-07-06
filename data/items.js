@@ -534,12 +534,23 @@ export const Items = {
     name: 'Bloodthirster',
     type: 'weapon',
     weaponType: 'sword_2h',
+    // rarity is the display/color tier — see RARITY_COLORS in styles.js
+    // (the single shared source; other files import it, don't redefine it).
+    // Rarity tiers, low to high: common < uncommon < rare < epic < legendary
+    // < historic. 'historic' is the top tier for one-of-a-kind quest/story
+    // items like this one — gold, same visual weight a "unique" tier would
+    // have had, we just don't keep a separately-named tier for it.
+    //
+    // NOTE: the `historic: true` boolean right below is a DIFFERENT, older
+    // system (drives renown/history-tracking — kills, damage dealt, battles
+    // carried, see item.history) that predates the rarity tier being named
+    // the same thing. They now share a name but aren't the same field.
     rarity: 'historic',
     historic: true,
     unique: true,  // soulbound is earned — granted on quest completion, not by default
     hands: 2,
     damage: { min: 20, max: 32 },
-    bonuses: { Strength: 5, Vitality: 4 },
+    bonuses: { STR: 5, CON: 4 },
     lifeStealPct: 0.10,  // heals wielder for 10% of damage dealt
     locked: true,
     description: 'A two-handed blade of impossible sharpness. It drinks deep of whatever it cuts. The edge never dulls.\n\n[10% Lifesteal]  [Soulbound]',

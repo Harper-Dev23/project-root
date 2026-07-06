@@ -9940,15 +9940,18 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "cold", "defensive"],
     cooldown: 3,
     buildupHint: { cold: 70 },
-    // Self PhysicalResist on ACTUALLY crossing Cold T1 — routed through the
-    // generic rewardIfTierCross engine (same fix as Marked Cut/Pressure
-    // Point/Needle Feint) instead of predicting the cross here from the raw
-    // declared buildup number, which can silently drift from what really
-    // lands once Hunter's Mark/weapon buildup%/resilience are in play.
+    // Self PhysicalResist on ACTUALLY crossing EITHER Cold tier — routed
+    // through the generic rewardIfTierCross engine (same fix as Marked
+    // Cut/Pressure Point/Needle Feint) instead of predicting the cross here
+    // from the raw declared buildup number, which can silently drift from
+    // what really lands once Hunter's Mark/weapon buildup%/resilience are in
+    // play. Two rules (not just T1) so reaching Frostbitten later in the
+    // fight re-triggers the guard too, not just the first Chilled crossing.
     // guardPct is _applyRewardBuff's existing PhysicalResist mapping — no
     // engine changes needed, just declaring the reward.
     rewardIfTierCross: [
       { family: "cold", tier: 1, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance" } },
+      { family: "cold", tier: 2, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance" } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.guarded_slash;
@@ -9970,7 +9973,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage. Applies Cold. Crossing Cold T1 grants +15% Physical Resist for 1 turn."
+    description: "Deals 100% weapon damage. Applies Cold. Reaching Chilled or Frostbitten grants +15% Physical Resist for 1 turn."
   },
 
   'rally_blow': {
@@ -10184,34 +10187,54 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to the column. If this pushes a column-mate into a new Disorient tier: builds Rhythm, and also drains their Initiative Gauge if they're at least Chilled."
   },
 
+  // --- Sword (1h) Reactions ---
   'read_and_react': {
     id: "read_and_react",
     name: "Read and React",
     type: "weapon",
-    mechanic: "active",
+    mechanic: "reaction",
     versionTag: "v3.22",
     requiredWeapon: ["sword_1h"],
     requiredStat: "WIS",
     requiredValue: 12,
-    actionCost: "bonus",
+    actionCost: "reaction",
     mpCost: 4,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["support", "defensive", "mana"],
     cooldown: 3,
-    apply: (attacker) => {
-      attacker.statusEffects = attacker.statusEffects || [];
-      attacker.statusEffects.push({
-        id: "read_and_react",
-        turns: 1,
-        onMeleeHitByExposed: { damageReduction: 25, manaRestore: 3 },
-      });
-      return {
-        amount: 0,
-        log: `${attacker?.name || "The swordsman"} reads the field — next exposed melee hit reduced and countered.`,
-      };
+    requiresTarget: false,
+    positionRequirement: ["front", "mid"],
+    reaction: {
+      trigger: "self_hit",
+      cooldownOn: "trigger",
+      // Broadened from "attacker is Exposed" to "attacker has ANY active
+      // weakness (any family, tier 1+)" per request.
+      //
+      // Melee check: don't rely SOLELY on the attacking ability tagging
+      // itself 'melee' — basic_attack (very commonly used by enemies) has no
+      // tags at all, which silently failed this check 100% of the time
+      // against any enemy using it. Falls back to the attacker's own
+      // equipped weapon type (reliably set on char.weaponType at combat
+      // start) when the ability itself doesn't say either way.
+      canTrigger: ({ attacker, sourceAbility, sourceIntent }) => {
+        const RANGED_WEAPON_TYPES = ['bow', 'sling', 'gun'];
+        const hitTags = sourceIntent?.tags || sourceAbility?.tags || [];
+        const taggedRanged = Array.isArray(hitTags) && hitTags.includes('ranged');
+        const taggedMelee = Array.isArray(hitTags) && hitTags.includes('melee');
+        const isMelee = !taggedRanged && (taggedMelee || !RANGED_WEAPON_TYPES.includes(attacker?.weaponType));
+        if (!isMelee) return false;
+        const tiers = attacker?.weakness?.tiers || {};
+        return Object.values(tiers).some(t => (t || 0) >= 1);
+      },
+      exec: ({ owner, scene, incoming }) => {
+        if (incoming) {
+          incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.25);
+        }
+        const mpRestore = 3;
+        const maxMP = owner.maxMP ?? 0;
+        owner.currentMP = Math.min(maxMP, (owner.currentMP || 0) + mpRestore);
+        scene?._log?.(`${owner.name} reads the attack — damage reduced 25%, ${mpRestore} MP restored!`);
+      },
     },
-    description: "Bonus action: until your next turn, the next melee hit from an exposed enemy is reduced by 25% and restores 3 MP."
+    description: "Reaction: prepare to read an incoming melee hit. If the attacker has any active weakness, the hit is reduced 25% and restores 3 MP."
   },
 
   'blazing_fervor': {

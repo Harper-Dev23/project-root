@@ -29,21 +29,32 @@ export const COLORS = {
   // Generic panel fill
   panel: 0x111111,
 
-  // Rarity (text) colors
+  // Rarity (text) colors, low to high: common < uncommon < rare < epic <
+  // legendary < historic. 'historic' is the top tier for one-of-a-kind
+  // quest/story items (e.g. Bloodthirster) — no separate "unique" tier name,
+  // this IS that tier, just named to match the historic/renown system.
   rarityCommon:   '#cccccc',
   rarityUncommon: '#33cc33',
   rarityRare:     '#3399ff',
   rarityEpic:     '#cc33cc',
   rarityLegend:   '#ff9933',
+  rarityHistoric: '#d4a017',
 };
 
-// Central rarity map for reuse across scenes/UI
+// Central rarity → color map. THE single source of truth for this — every
+// other file that needs rarity colors should import RARITY_COLORS (or
+// getRarityColor below) from here rather than keeping its own copy. This
+// used to be redefined independently in CombatScene.js, InventoryOverlay.js,
+// and StashOverlay.js (four separate copies total, one of which had drifted
+// to include an ad-hoc 'historic' entry none of the others had) — collapsed
+// down to just this one.
 export const RARITY_COLORS = {
   common:    COLORS.rarityCommon,
   uncommon:  COLORS.rarityUncommon,
   rare:      COLORS.rarityRare,
   epic:      COLORS.rarityEpic,
   legendary: COLORS.rarityLegend,
+  historic:  COLORS.rarityHistoric,
 };
 
 // Helper if you prefer a function

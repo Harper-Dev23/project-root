@@ -218,6 +218,10 @@ export const ENEMY_TYPES = {
     aiProfile: 'berserker_boss',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
-    lifeStealPct: 0.10,   // wields the Bloodthirster — 10% lifesteal on all damage dealt
+    // Lifesteal used to be a flat hardcoded stat here ("wields the
+    // Bloodthirster" was just a comment — nothing actually equipped it).
+    // Now genuinely tied to the Bloodthirster weapon via the scenario's
+    // drops config (combatScenarios.js) + _equipEnemyItem's gearEffects
+    // handling, so this template no longer needs its own copy of the number.
   }
 };

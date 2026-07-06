@@ -34,7 +34,14 @@
       "Read(//tmp/**)",
       "Bash(node --check src/systems/CharacterBuilder.js)",
       "Bash(node --check src/systems/ItemFactory.js)",
-      "Bash(awk 'NR==4448,NR==4560' src/scenes/CombatScene.js)"
+      "Bash(awk 'NR==4448,NR==4560' src/scenes/CombatScene.js)",
+      "Bash(node --check src/systems/ReactionSystem.js)",
+      "Bash(node --check data/enemyTypes.js)",
+      "Bash(node --check data/combatScenarios.js)",
+      "Bash(node --check data/items.js)",
+      "Bash(node --check src/ui/styles.js)",
+      "Bash(node --check src/scenes/overlays/InventoryOverlay.js)",
+      "Bash(node --check src/scenes/overlays/StashOverlay.js)"
     ]
   }
 }

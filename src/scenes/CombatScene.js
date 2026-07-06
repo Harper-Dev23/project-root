@@ -1,6 +1,6 @@
 // Core state & UI
 import GameState from '../systems/GameState.js';
-import { COLORS, UI_DEPTH, CLASS_COLORS } from '../ui/styles.js';
+import { COLORS, UI_DEPTH, CLASS_COLORS, RARITY_COLORS } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
@@ -25,7 +25,7 @@ import { isItemInstance, createItemInstance, getItemComputedData } from '../syst
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
-import ReactionSystem from '../systems/ReactionSystem.js';
+import ReactionSystem, { isReactableAttackSource } from '../systems/ReactionSystem.js';
 
 // Status / Weakness framework
 import {
@@ -187,13 +187,8 @@ const LOG_COLORS = {
 const LOG_LINE_HEIGHT = 18;
 
 // ── Enemy loot helpers ────────────────────────────────────────────────────────
-const RARITY_COLORS = {
-  common:    '#cccccc',
-  uncommon:  '#33cc33',
-  rare:      '#3399ff',
-  epic:      '#cc33cc',
-  legendary: '#ff9933',
-};
+// RARITY_COLORS is imported from styles.js — the single shared source (see
+// that file's comment). Don't redefine it here again.
 
 // Training encounters use this — caps at epic since legendary isn't implemented yet.
 function rollEnemyDropRarity() {
@@ -254,7 +249,7 @@ export default class CombatScene extends Phaser.Scene {
     // Reset all per-combat state — Phaser reuses the same scene instance on
     // scene.start(), so the constructor only runs once. Everything that must
     // start fresh each combat belongs here, not in the constructor.
-    this._rxSelection = [];
+    this._rxSelection = null; // seeded from real prepared state on first menu open
     this.combatEnded = false;
     this.currentTurnIndex = 0;
     this.menuLevel = 'root';
@@ -1096,6 +1091,14 @@ export default class CombatScene extends Phaser.Scene {
     char._weaknessDerived = char._weaknessDerived || { maxHPDown: 0, evasionDown: 0, initiativeSlow: 0 };
     char.healingReceivedBonus = (char.healingReceivedBonus == null) ? 1.0 : char.healingReceivedBonus;
 
+    // Reset prepared reactions for the new fight — char.reaction persists on
+    // the character object across combats (party members are the same
+    // objects between fights), but prep is now no-longer wiped at turn start
+    // (it persists across rounds within a fight), so without this it would
+    // otherwise carry over into a brand new combat no matter how the last
+    // one ended (win, loss, or exiting training).
+    char.reaction = null;
+
     // Side flags
     char.isEnemy = false;  // explicit
     char.team = 'ally';
@@ -1211,10 +1214,14 @@ export default class CombatScene extends Phaser.Scene {
   _equipEnemyItem(enemy, dropCfg) {
     const equipSlot = dropCfg.equip || 'chest';
     const droppable = dropCfg.droppable ?? false;
+    const isWeaponSlot = equipSlot === 'weaponMain' || equipSlot === 'weaponOff';
 
     // Pick a specific item ID or choose randomly from the slot pool
     let itemId = dropCfg.itemId;
     if (!itemId) {
+      // Weapons need an explicit itemId — no generic random-weapon pool here
+      // (armor's random fallback below assumes an armor slot).
+      if (isWeaponSlot) return;
       const pool = getItemIdsByTypeSlot('armor', equipSlot);
       if (!pool.length) return;
       itemId = pool[Math.floor(Math.random() * pool.length)];
@@ -1229,7 +1236,12 @@ export default class CombatScene extends Phaser.Scene {
         rarity = rollEnemyDropRarity();
       }
     }
-    const inst = createItemInstance(itemId, { rarity, rollAffixes: rarity !== 'common' });
+    // historic-rarity gear (e.g. Bloodthirster) is fixed/scripted, not a
+    // random roll — never gets random affixes by default even if a scenario
+    // forgot to pass an explicit rarity, matching how the quest-reward copy
+    // of this same item is created (rollAffixes: false) in TownScene.js.
+    const rollAffixes = dropCfg.rollAffixes ?? (rarity !== 'common' && rarity !== 'historic');
+    const inst = createItemInstance(itemId, { rarity, rollAffixes });
     if (!inst) return;
 
     // Mark whether this instance should drop on victory
@@ -1242,6 +1254,14 @@ export default class CombatScene extends Phaser.Scene {
     const view = getItemComputedData(inst);
     const bonuses = view?.bonuses || {};
 
+    // Generic stat accumulation for ALL bonus keys (STR/CON/DEX/WIS/etc.) —
+    // enemies never run through rebuildCharacterStats like players do, so
+    // this is the only place their totalStats picks anything up at all.
+    enemy.totalStats = enemy.totalStats || {};
+    for (const [k, v] of Object.entries(bonuses)) {
+      enemy.totalStats[k] = (enemy.totalStats[k] || 0) + v;
+    }
+
     if (bonuses.CON) {
       const hpGain = bonuses.CON * 5;
       enemy.maxHP += hpGain;
@@ -1253,7 +1273,26 @@ export default class CombatScene extends Phaser.Scene {
       enemy.derived.NecroticResist += Math.round(bonuses.WIS * 1.0);
     }
     if (bonuses.DEX) enemy.derived.Evasion += bonuses.DEX;
-    if (bonuses.STR) { /* STR on enemies could boost damage — left as future hook */ }
+    // STR: no derived-stat hook here yet — this enemy's own skills return
+    // flat hardcoded damage numbers rather than rolling calculateDamage(),
+    // so there's nothing for a STR bonus to feed into today. totalStats.STR
+    // above at least makes the stat exist for anything that reads it directly.
+
+    if (isWeaponSlot) {
+      // Mirrors _prepareCharForBattle's player-side weaponType assignment —
+      // needed for weapon-gated skills/reactions (e.g. Read and React's
+      // melee fallback check) to recognize this enemy as wielding a real
+      // weapon instead of silently having weaponType stay null.
+      enemy.weaponType = view?.weaponType || enemy.weaponType || null;
+    }
+
+    // Gear-driven bonus (e.g. Bloodthirster's lifesteal) instead of a flat
+    // hardcoded stat on the enemy template — same field the lifesteal check
+    // in _applyAbilityToTarget already reads (user?.gearEffects?.lifeStealPct).
+    if (view?.lifeStealPct) {
+      enemy.gearEffects = enemy.gearEffects || {};
+      enemy.gearEffects.lifeStealPct = (enemy.gearEffects.lifeStealPct || 0) + view.lifeStealPct;
+    }
   }
 
   // ===== Character Info Panel: Tabs & Body (RIGHT-ALIGNED) ===================
@@ -1546,7 +1585,13 @@ export default class CombatScene extends Phaser.Scene {
         label = `${labelMap[slot]}: —`;
       } else if (char.isEnemy) {
         const rarityLabel = rarity ? rarity.charAt(0).toUpperCase() + rarity.slice(1) : '?';
-        label = `${labelMap[slot]}: [${rarityLabel}]`;
+        // _droppable is set by _equipEnemyItem (defaults false) — some
+        // bosses (e.g. Berserker's Bloodthirster + full armor set) are
+        // scripted quest/story gear, not random loot, and shouldn't drop on
+        // defeat like a normal encounter's would. Show a lock so that's
+        // visible instead of just silently not dropping.
+        const lockIcon = inst._droppable === false ? ' 🔒' : '';
+        label = `${labelMap[slot]}: [${rarityLabel}]${lockIcon}`;
       } else {
         // Allied gear: show base item name only (affixes revealed in tooltip on hover)
         const baseName = base?.name || inst.id;
@@ -2392,9 +2437,6 @@ export default class CombatScene extends Phaser.Scene {
     const user = this._currentChar?.();
     if (!user) return;
 
-    // Selection memory
-    this._rxSelection = this._rxSelection || [];
-
     // Source data
     const abilities = (typeof getReactionSkillsFor === 'function')
       ? (getReactionSkillsFor(user) || [])
@@ -2408,20 +2450,26 @@ export default class CombatScene extends Phaser.Scene {
       ?? this._rxTriggersRemainingFor?.(user)
       ?? 1;
 
-    const hasPoint = (user.actionsLeft?.reaction ?? 0) > 0;
-
-    // Prepared set (to show ⦿)
+    // Prepared set (real current state)
     const preparedIds = new Set(
       (this.reactions?.listPrepared?.(user) || []).map(s => s.id)
     );
+
+    // Pending selection: seeded from whatever's actually prepared the first
+    // time this menu opens, so checkboxes reflect real state instead of
+    // always starting empty. Every row is freely toggleable (prepared or
+    // not) — "Prepare Selected" below replaces the whole prepared set to
+    // match this list, rather than only ever adding to it, so unchecking an
+    // already-prepared reaction and confirming actually un-prepares it.
+    if (!this._rxSelection) this._rxSelection = [...preparedIds];
 
     // Header (aligned at x=0 like the buttons)
     const baseX = this.actionMenuContentX ?? 0;
 
     const header = this.add.text(
       baseX, 0,
-      `Select up to ${cap}. Will trigger ≤ ${left} before your next turn.`,
-      { fontSize: '14px', color: '#ffddaa' }
+      `Select up to ${cap}. Prepared reactions stay armed until you change them — up to ${left} can trigger before your next turn.`,
+      { fontSize: '14px', color: '#ffddaa', wordWrap: { width: 260 } }
     ).setOrigin(0, 0);
     this._actionMenuAdd(header);
 
@@ -2429,34 +2477,24 @@ export default class CombatScene extends Phaser.Scene {
     let y = header.height + 8; // start buttons below header
     const ROW_H = 50;
 
-    // Prepare Selected (standard UIButton)
-    const prepBtn = new UIButton(
-      this, baseX, y,
-      hasPoint ? 'Prepare Selected' : 'Prepare Selected (no reaction action)',
-      () => {
-        if (!hasPoint) {
-          this._log(`${user.name} has no reaction actions left.`);
-          return;
-        }
-        const chosen = (this._rxSelection || []).slice(0, cap);
-        if (!chosen.length) {
-          this._log('Nothing selected to prepare.');
-          return;
-        }
-        for (const id of chosen) {
-          const sk = SKILLS?.[id];
-          if (sk) this.reactions?.arm?.(user, sk);
-        }
-        user.actionsLeft.reaction = Math.max(
-          0, (user.actionsLeft.reaction || 0) - 1
-        );
-        this._rxSelection = [];
-        this._log(`${user.name} prepares ${chosen.length} reaction${chosen.length > 1 ? 's' : ''}.`);
-        this._openReactionSubmenu();   // rebuild view
-        this._updateActionLights?.();  // refresh lights
+    // Prepare Selected — free (no reaction action point spent here anymore;
+    // that's only spent when a prepared reaction actually triggers, see
+    // ReactionSystem._fireReaction). Fully syncs the prepared set to match
+    // the pending selection: disarms anything unchecked, arms anything newly
+    // checked.
+    const prepBtn = new UIButton(this, baseX, y, 'Prepare Selected', () => {
+      const chosen = (this._rxSelection || []).slice(0, cap);
+      this.reactions?.disarm?.(user);
+      for (const id of chosen) {
+        const sk = SKILLS?.[id];
+        if (sk) this.reactions?.arm?.(user, sk);
       }
-    );
-    if (!hasPoint) prepBtn.setAlpha?.(0.5);
+      this._log(chosen.length
+        ? `${user.name} prepares ${chosen.length} reaction${chosen.length > 1 ? 's' : ''}.`
+        : `${user.name} stands down — no reactions prepared.`);
+      this._openReactionSubmenu();   // rebuild view (re-seeds from the new real state)
+      this._updateActionLights?.();  // refresh lights
+    });
     this._actionMenuAdd(prepBtn);
     y += ROW_H;
 
@@ -2464,16 +2502,15 @@ export default class CombatScene extends Phaser.Scene {
     const sel = new Set(this._rxSelection);
     abilities.forEach((a) => {
       const full = { ...(SKILLS?.[a.id] || a), id: a.id };
-      const isPrepared = preparedIds.has(a.id);
       const isSelected = sel.has(a.id);
+      const isPrepared = preparedIds.has(a.id);
 
-      const mark = isPrepared ? '⦿' : (isSelected ? '☑' : '☐');
+      const mark = isSelected ? (isPrepared ? '⦿' : '☑') : '☐';
       const name = this._displayNameForSkill
         ? this._displayNameForSkill(user, full)
         : (full.name || full.id);
 
       const btn = new UIButton(this, baseX, y, `${mark} ${name}`, () => {
-        if (isPrepared) return; // prepared entries are display-only
         const idx = this._rxSelection.indexOf(full.id);
         if (idx >= 0) {
           this._rxSelection.splice(idx, 1);
@@ -2487,9 +2524,6 @@ export default class CombatScene extends Phaser.Scene {
         this._openReactionSubmenu(); // refresh the marks
       });
 
-      // Slight visual hint for prepared rows (still using the same UIButton style)
-      if (isPrepared) btn.setAlpha?.(0.9);
-
       // Tooltip on the whole button (not the label only)
       this._wireAbilityTooltip?.(btn, full, user);
 
@@ -2497,9 +2531,10 @@ export default class CombatScene extends Phaser.Scene {
       y += ROW_H;
     });
 
-    // Back (standard UIButton)
+    // Back — discards any unconfirmed checkbox edits (next open re-seeds
+    // from whatever's actually prepared).
     const backBtn = new UIButton(this, baseX, y + 8, '🔙 Back', () => {
-      this._rxSelection = [];
+      this._rxSelection = null;
       this._buildActionMenuRoot?.();
     });
     this._actionMenuAdd(backBtn);
@@ -3357,7 +3392,12 @@ export default class CombatScene extends Phaser.Scene {
       const differentTeams = (!!user?.isEnemy) !== (!!target?.isEnemy);
       const rawAmt = (resultMutable.amount | 0);
       const isDamaging = rawAmt > 0 || ability.dealsDamage === true;
-      const allowSelfHit = differentTeams && isDamaging && isWeaponSource;
+      // Deliberately NOT reusing the local isWeaponSource here (that flag
+      // also gates hit-rolling/Expose pre-damage above and shouldn't change
+      // behavior there) — isReactableAttackSource is the shared, reaction-
+      // specific version; see its dev notes in ReactionSystem.js for why
+      // type:'enemy' is included and how to tighten it later.
+      const allowSelfHit = differentTeams && isDamaging && isReactableAttackSource(ability, intent);
 
       if (allowSelfHit) {
         this.bus?.emit('self_hit', {
@@ -3525,32 +3565,6 @@ export default class CombatScene extends Phaser.Scene {
             dmg = Math.max(0, dmg - reduction);
             blocked += reduction;
             this._log(`${target?.name ?? 'Target'}'s guard absorbs ${reduction} damage.`);
-          }
-        }
-
-        // read_and_react: if target has the buff, attacker is exposed, and the hit is melee
-        if (!missed && dmg > 0) {
-          const rarIdx = (target?.statusEffects || []).findIndex(
-            se => se?.id === 'read_and_react' && (se.turns || 0) > 0
-          );
-          if (rarIdx !== -1) {
-            const attackerExposed = (user?.weakness?.tiers?.expose || 0) >= 1;
-            const hitTags = intent?.tags || result?.tags || [];
-            const isMeleeHit = Array.isArray(hitTags) && hitTags.includes('melee');
-            if (attackerExposed && isMeleeHit) {
-              const rarCfg = target.statusEffects[rarIdx]?.onMeleeHitByExposed || {};
-              const rarFrac = (rarCfg.damageReduction ?? 25) / 100;
-              const rarReduce = Math.floor(dmg * rarFrac);
-              dmg = Math.max(0, dmg - rarReduce);
-              blocked += rarReduce;
-              const mpRestore = rarCfg.manaRestore ?? 3;
-              if (target.currentMP != null) {
-                const maxMP = target.maxMP ?? target.derivedStats?.maxMP ?? 0;
-                target.currentMP = Math.min(maxMP, (target.currentMP || 0) + mpRestore);
-              }
-              target.statusEffects.splice(rarIdx, 1);
-              this._log(`${target?.name ?? 'Target'} reads the attack — ${rarReduce} damage absorbed, ${mpRestore} MP restored!`);
-            }
           }
         }
 

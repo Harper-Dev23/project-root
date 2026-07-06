@@ -6,7 +6,7 @@ import InventorySystem from '../../systems/InventorySystem.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
-import { CLASS_COLORS } from '../../ui/styles.js';
+import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 
 
@@ -35,16 +35,6 @@ export default class InventoryOverlay extends Phaser.Scene {
 
 
 
-  // === Rarity → color map ===
-  RARITY_COLORS = {
-    common: '#cccccc',
-    uncommon: '#33cc33',
-    rare: '#3399ff',
-    epic: '#cc33cc',
-    legendary: '#ff9933',
-    historic: '#d4a017',   // D2 gold — historic items
-  };
-
   // Build a display object: name, color, and tooltip lines
   // Build a display object: title, titleColor, and body lines
   _formatItemDisplay(item) {
@@ -53,7 +43,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     const base = computed || Items[item.id] || Items[item] || {};
     const name = instance?.displayName || computed?.name || base.name || instance?.id || item?.id || 'Unknown';
     const rarity = instance?.rarity || instance?.quality || computed?.rarity || base.rarity || base.quality || 'common';
-    const color = this.RARITY_COLORS?.[rarity] || '#cccccc';
+    const color = RARITY_COLORS[rarity] || RARITY_COLORS.common;
 
     const lines = [];
     if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);

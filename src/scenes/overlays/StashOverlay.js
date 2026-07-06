@@ -6,7 +6,7 @@ import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.j
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
-import { DEPTH } from '../../ui/styles.js';
+import { DEPTH, RARITY_COLORS } from '../../ui/styles.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 
 const TRIBE_DISPLAY_NAMES = {
@@ -14,14 +14,6 @@ const TRIBE_DISPLAY_NAMES = {
   zafaar: 'Zafaar',
   elseth: 'Elseth',
   lesse:  "Le'sse",
-};
-
-const RARITY_COLORS = {
-  common:    '#cccccc',
-  uncommon:  '#33cc33',
-  rare:      '#3399ff',
-  epic:      '#cc33cc',
-  legendary: '#ff9933',
 };
 
 export default class StashOverlay extends Phaser.Scene {

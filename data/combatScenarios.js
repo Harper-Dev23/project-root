@@ -70,7 +70,24 @@ export const COMBAT_SCENARIOS = {
     longDescription: 'The berserker stresses every system: high initiative generation, layered weaknesses and punishing reactions. Survive the rush, manage his initiative and plan around Death Spiral.',
     portraitKey: 'berserker_portrait',
     enemies: [
-      { type: 'berserker_boss', slotId: 2 }
+      {
+        type: 'berserker_boss', slotId: 2,
+        drops: [
+          // Historic/soulbound — not a random loot drop. rarity/rollAffixes
+          // set explicitly so _equipEnemyItem's normal random-rarity roll
+          // can't override this fixed item's own 'historic' tier.
+          { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+          // Full "decent" armor set (everything but jewelry), fixed at
+          // uncommon rather than left to the normal random roll so it's
+          // consistent between test runs. None of it drops — unlike normal
+          // encounters/mobs, this boss keeps his gear on defeat.
+          { equip: 'chest', rarity: 'uncommon', droppable: false },
+          { equip: 'head', rarity: 'uncommon', droppable: false },
+          { equip: 'legs', rarity: 'uncommon', droppable: false },
+          { equip: 'gloves', rarity: 'uncommon', droppable: false },
+          { equip: 'boots', rarity: 'uncommon', droppable: false },
+        ],
+      }
     ]
   },
 

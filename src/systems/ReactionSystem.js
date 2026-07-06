@@ -1,9 +1,12 @@
 // ReactionSystem.js — Prep-based, scalable reactions
 // Supports:
-// - Prepare up to `capacity` reactions on your turn (default 2)
-// - Between your turns, at most `triggersPerRound` will actually fire (default 1)
-// - When one fires, remaining prepared reactions disarm until your next turn
-// - Cooldowns start on TRIGGER (not on prep), unless you choose otherwise
+// - Prepare up to `capacity` reactions; prep persists until it fires or the
+//   player changes their selection (does NOT auto-clear each turn)
+// - Between your turns, at most `triggersPerRound` will actually fire (default
+//   1) — firing one does NOT disarm the others, they just can't fire until
+//   triggersRemaining refreshes on your next turn (scales naturally once a
+//   character has more than 1 reaction point)
+// - Cooldowns (and MP) are paid on TRIGGER, not on prep
 //
 // Backward-compat:
 // - Works with skills that have mechanic: 'reaction' and triggers[],
@@ -17,6 +20,39 @@
 // - this.time.delayedCall(ms, fn) (optional)
 
 import { SKILLS } from '../../data/skills.js';
+
+/**
+ * isReactableAttackSource(ability) — the ONE place that decides whether a
+ * hit is eligible to trigger a reaction at all (before any specific
+ * reaction's own canTrigger/weakness/position checks even run). Used in
+ * exactly two places, both of which must agree: CombatScene.js's self_hit
+ * emission gate (`allowSelfHit`), and _onEvent's internal check below. If
+ * you ever need to touch this logic, change it HERE and both call sites
+ * pick it up — don't re-derive it inline anywhere else.
+ *
+ * DEV NOTE — why 'enemy' is in here, and how to retire it later:
+ * Every player weapon skill is `type: 'weapon'` and/or tagged 'attack', so
+ * either check alone would work for the player side. Every enemy-authored
+ * skill (Berserker, etc.) instead uses `type: 'enemy'` and — as of this
+ * writing — NONE of them have a `tags` array at all, not even 'attack'.
+ * Without explicitly allowing `type === 'enemy'` here, NO enemy attack could
+ * ever trigger ANY player reaction (Riposte, Cover Strike, Read and React —
+ * all of them), which is exactly the bug this fixed. This is a blanket
+ * allowance because enemy skill data just isn't granular enough yet to be
+ * pickier — every enemy skill is currently treated as a valid attack source
+ * for reaction purposes (a separate isDamaging check elsewhere already
+ * excludes non-damaging enemy actions from ever reaching this point).
+ *
+ * If enemy skills eventually get real tags (melee/ranged/attack/support/
+ * etc.) or a `dealsDamage` flag like player skills already have, tighten
+ * THIS function to check those instead of blanket-allowing `type ===
+ * 'enemy'` — every reaction in the game inherits the fix automatically,
+ * with no per-skill changes needed anywhere else.
+ */
+export function isReactableAttackSource(ability, intent) {
+  const hasAttackTag = (intent?.tags || []).includes('attack') || (ability?.tags || []).includes('attack');
+  return ability?.type === 'weapon' || ability?.type === 'enemy' || hasAttackTag;
+}
 
 export default class ReactionSystem {
   constructor(scene, bus, opts = {}) {
@@ -43,7 +79,10 @@ export default class ReactionSystem {
   onTurnStart(unit) {
     const st = this._state(unit);
     st.triggersRemaining = unit.reactionTriggers ?? this.defaults.triggersPerRound;
-    st.prepared.length = 0; // disarm old prep
+    // Prepared reactions now PERSIST across turns/rounds — they only clear
+    // when one actually fires (disarms the whole set, see _onEvent) or the
+    // player explicitly changes their selection via the reaction menu. This
+    // used to wipe prep every turn regardless of whether anything triggered.
   }
 
   // Arm a reaction (from a "prep" skill apply() returning { armReaction:true })
@@ -125,9 +164,12 @@ export default class ReactionSystem {
     // 1) Only react to *hostile* actions (different teams)
     if (!!attacker?.isEnemy === !!owner?.isEnemy) return;
 
-    // 2) Only react to WEAPON-origin hits by default (prevents Hide/other buffs)
-    const isWeaponSource = ability?.type === 'weapon' || (intent?.tags || []).includes('attack');
-    if (!isWeaponSource) return;
+    // 2) Only react to valid attack sources (see isReactableAttackSource's
+    // dev notes above — this is the ONE shared definition, also used by
+    // CombatScene's emission-side gate). Redundant with that gate in
+    // practice (it already filters before the event is even emitted) but
+    // kept here too so this function stays correct if ever called another way.
+    if (!isReactableAttackSource(ability, intent)) return;
 
     // (optional) block while stunned
     if (Array.isArray(owner.statusEffects)) {
@@ -169,7 +211,11 @@ export default class ReactionSystem {
     if (typeof chosen?.reaction?.canTrigger === 'function') {
       const ok = chosen.reaction.canTrigger({
         owner, attacker, target, scene: this.scene,
-        incoming: incomingMutable, event: evt
+        incoming: incomingMutable, event: evt,
+        // sourceAbility/sourceIntent weren't passed here before (only exec()
+        // got them) — added so a canTrigger can gate on the hit's own tags
+        // (e.g. Read and React needing to confirm the hit was melee).
+        sourceAbility: ability, sourceIntent: intent,
       });
       if (!ok) return;
     }
@@ -185,13 +231,33 @@ export default class ReactionSystem {
       sourceIntent: intent,
     });
 
-    // Spend budget & disarm leftovers
+    // Spend one trigger budget. Other prepared reactions stay ARMED (not
+    // disarmed) — they just can't fire until triggersRemaining refreshes on
+    // the owner's next turn, since that's already the gate checked above
+    // (`if (!st || (st.triggersRemaining|0) <= 0) return;`). This lets a
+    // player with more reaction points eventually fire more than one of
+    // their prepared reactions before needing to re-prepare anything.
     st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
-    st.prepared.length = 0;
   }
 
   _fireReaction({ owner, attacker, reactSkill, evt, incomingMutable, sourceAbility, sourceIntent }) {
     const cooldownOn = reactSkill?.reaction?.cooldownOn || 'trigger';
+
+    // Reaction action point + MP cost are both paid HERE, at trigger time —
+    // preparing is free; only an actual trigger spends anything. The action
+    // point deduction is purely a UI-light mirror of st.triggersRemaining
+    // (already the real gate in _onEvent, checked before we ever get here);
+    // this keeps the on-screen reaction light in sync without it being a
+    // second independent gate that could drift out of sync with the real one.
+    if (owner) {
+      owner.actionsLeft = owner.actionsLeft || {};
+      owner.actionsLeft.reaction = Math.max(0, (owner.actionsLeft.reaction || 0) - 1);
+      const mpCost = Number.isFinite(reactSkill?.mpCost) ? reactSkill.mpCost : 0;
+      if (mpCost > 0) {
+        owner.currentMP = Math.max(0, (owner.currentMP || 0) - mpCost);
+        this.scene?._log?.(`${owner.name} spends ${mpCost} MP on ${reactSkill.name}.`);
+      }
+    }
 
     // explicit executor hook
     if (reactSkill?.reaction?.exec) {
