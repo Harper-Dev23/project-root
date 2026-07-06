@@ -20,6 +20,7 @@
 // - this.time.delayedCall(ms, fn) (optional)
 
 import { SKILLS } from '../../data/skills.js';
+import { DevFlags } from './DevFlags.js';
 
 /**
  * isReactableAttackSource(ability) — the ONE place that decides whether a
@@ -177,7 +178,15 @@ export default class ReactionSystem {
     }
 
     const st = this._state(owner);
-    if (!st || (st.triggersRemaining | 0) <= 0) return;
+    if (!st || (st.triggersRemaining | 0) <= 0) {
+      // Diagnostic: only worth logging if they actually have something
+      // prepared (otherwise this fires on every single hit taken, which
+      // would be pure noise for a character with no reactions armed at all).
+      if (st?.prepared?.length) {
+        this.scene?._log?.(`${owner.name} has no reaction points left this round (refreshes on their next turn).`);
+      }
+      return;
+    }
 
     // prepared pool → candidates (same as before)
     let pool = this._resolvePrepared(owner);
@@ -188,7 +197,7 @@ export default class ReactionSystem {
       .filter(x =>
         x.trig &&
         this._meetsReqs(owner, x.s) &&
-        !this.scene?._isSkillOnCooldown?.(owner, x.s.id)
+        (DevFlags.isNoCooldownEnabled() || !this.scene?._isSkillOnCooldown?.(owner, x.s.id))
       )
       .sort((a, b) => (b.trig.priority || 0) - (a.trig.priority || 0));
 
@@ -199,12 +208,31 @@ export default class ReactionSystem {
         .filter(x =>
           x.trig &&
           this._meetsReqs(owner, x.s) &&
-          !this.scene?._isSkillOnCooldown?.(owner, x.s.id)
+          (DevFlags.isNoCooldownEnabled() || !this.scene?._isSkillOnCooldown?.(owner, x.s.id))
         )
         .sort((a, b) => (b.trig.priority || 0) - (a.trig.priority || 0));
     }
 
-    if (!candidates.length) return;
+    // Diagnostic: if something was actually prepared and its trigger matches
+    // this event, but it still didn't qualify, say exactly why instead of
+    // silently doing nothing. This is the one gap that made "why isn't my
+    // reaction firing" impossible to debug from outside — every other bail-
+    // out above this point is either irrelevant (wrong event/team) or
+    // already visible another way, but a prepared-and-ready-looking reaction
+    // failing silently here was the confusing case.
+    if (!candidates.length) {
+      for (const id of pool) {
+        const s = SKILLS[id];
+        const trig = s && getTriggerForEvent(s, evt);
+        if (!trig) continue;
+        if (!DevFlags.isNoCooldownEnabled() && this.scene?._isSkillOnCooldown?.(owner, id)) {
+          this.scene?._log?.(`${owner.name}'s ${s.name} is on cooldown and can't trigger yet.`);
+        } else if (!this._meetsReqs(owner, s)) {
+          this.scene?._log?.(`${owner.name}'s ${s.name} can't trigger — ${this._reqFailureReason(owner, s)}.`);
+        }
+      }
+      return;
+    }
 
     const chosen = candidates[0].s;
 
@@ -217,7 +245,10 @@ export default class ReactionSystem {
         // (e.g. Read and React needing to confirm the hit was melee).
         sourceAbility: ability, sourceIntent: intent,
       });
-      if (!ok) return;
+      if (!ok) {
+        this.scene?._log?.(`${owner.name}'s ${chosen.name} didn't trigger — its condition wasn't met.`);
+        return;
+      }
     }
 
     // Execute
@@ -325,8 +356,13 @@ export default class ReactionSystem {
   }
 
   _meetsReqs(u, s) {
-    // stat
-    if (s.requiredStat && ((u.totalStats?.[s.requiredStat] || 0) < (s.requiredValue || 0))) return false;
+    // stat — was checked here with NO DevFlags.isBreakthroughEnabled()
+    // exemption, even though getReactionSkillsFor() (which builds the prep
+    // menu) already respects it. That mismatch let a character prepare a
+    // reaction under Breakthrough that could then never actually fire,
+    // silently, since this real gate didn't know about the cheat at all.
+    if (s.requiredStat && !DevFlags.isBreakthroughEnabled()
+      && ((u.totalStats?.[s.requiredStat] || 0) < (s.requiredValue || 0))) return false;
 
     // weapon
     if (Array.isArray(s.requiredWeapon) && s.requiredWeapon.length) {
@@ -334,13 +370,40 @@ export default class ReactionSystem {
       if (!wType || !s.requiredWeapon.includes(wType)) return false;
     }
 
-    // position
-    if (Array.isArray(s.positionRequirement) && s.positionRequirement.length) {
+    // position — same gap as stat above, now respects the no-range cheat
+    // (positionRequirement/targetColumns bypass) like every other position
+    // check in the codebase does.
+    if (!DevFlags.isNoRangeEnabled()
+      && Array.isArray(s.positionRequirement) && s.positionRequirement.length) {
       const col = this.scene._getUnitColumn?.(u) || u.position;
       if (!s.positionRequirement.includes(col)) return false;
     }
 
     return true;
+  }
+
+  // Diagnostic-only twin of _meetsReqs — same three checks, same DevFlags
+  // exemptions, but returns WHICH one failed instead of a bare boolean.
+  // Only used for the log message above; the real gate stays _meetsReqs.
+  _reqFailureReason(u, s) {
+    if (s.requiredStat && !DevFlags.isBreakthroughEnabled()
+      && ((u.totalStats?.[s.requiredStat] || 0) < (s.requiredValue || 0))) {
+      return `needs ${s.requiredStat} ${s.requiredValue} (has ${u.totalStats?.[s.requiredStat] || 0})`;
+    }
+    if (Array.isArray(s.requiredWeapon) && s.requiredWeapon.length) {
+      const wType = u.weaponType || u.equipment?.weaponMain?.type || u.equipment?.weaponMain?.weaponType;
+      if (!wType || !s.requiredWeapon.includes(wType)) {
+        return `needs weapon [${s.requiredWeapon.join(', ')}] (has ${wType || 'none'})`;
+      }
+    }
+    if (!DevFlags.isNoRangeEnabled()
+      && Array.isArray(s.positionRequirement) && s.positionRequirement.length) {
+      const col = this.scene._getUnitColumn?.(u) || u.position;
+      if (!s.positionRequirement.includes(col)) {
+        return `needs position [${s.positionRequirement.join(', ')}] (in ${col || 'unknown'})`;
+      }
+    }
+    return 'requirements not met';
   }
 }
 

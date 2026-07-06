@@ -3399,6 +3399,20 @@ export default class CombatScene extends Phaser.Scene {
       // type:'enemy' is included and how to tighten it later.
       const allowSelfHit = differentTeams && isDamaging && isReactableAttackSource(ability, intent);
 
+      // Diagnostic: if the target has ANY reaction prepared at all and this
+      // hit didn't even qualify to emit self_hit, say why — otherwise a
+      // false allowSelfHit here means ReactionSystem never even sees the
+      // event, so none of ITS OWN diagnostics get a chance to explain anything.
+      if (!allowSelfHit && !missed && target?.reaction?.prepared?.length) {
+        if (!differentTeams) {
+          // (friendly fire on self typically can't happen, but cheap to check)
+        } else if (!isDamaging) {
+          this._log?.(`${target.name}'s prepared reaction didn't see a hit to react to (${ability?.name || 'that skill'} dealt no damage).`);
+        } else {
+          this._log?.(`${target.name}'s prepared reaction ignored ${ability?.name || 'that skill'} (not a recognized attack source — type:'${ability?.type}').`);
+        }
+      }
+
       if (allowSelfHit) {
         this.bus?.emit('self_hit', {
           attacker: user,
