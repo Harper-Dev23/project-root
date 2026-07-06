@@ -14,7 +14,7 @@ import { setupSceneCursor, setCursor } from '../ui/cursor.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items } from '../../data/items.js';
-import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor } from '../../data/skills.js';
+import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack } from '../../data/skills.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
@@ -3816,7 +3816,9 @@ export default class CombatScene extends Phaser.Scene {
       if (!missed && Array.isArray(result?.splash) && result.splash.length) {
         for (const sp of result.splash) {
           if (!sp?.target) continue;
+          const spPrevTiers = Array.isArray(sp.rewardIfTierCross) ? { ...(sp.target?.weakness?.tiers || {}) } : null;
           this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability });
+          if (spPrevTiers) this._applySplashTierCrossRewards(user, sp.target, sp.rewardIfTierCross, ability, spPrevTiers);
         }
       }
     }
@@ -3843,6 +3845,13 @@ export default class CombatScene extends Phaser.Scene {
           if (!best || rule.tier > best.tier) bestPerFamily.set(fam, rule);
         }
       }
+      // Optional extra gate on JUST the debuff half of a rule — e.g. "crossing
+      // Disorient always grants Rhythm, but ALSO drains Initiative only if the
+      // target already has Cold T1+" — checked against the target's current
+      // tiers, a second independent weakness check, not itself a tier-cross.
+      // Scoped to debuff.alsoRequires (not the whole rule) so an unconditional
+      // buff on the same rule still fires even when the gate fails.
+      const passesAlsoRequires = (gate) => !gate || ((target?.weakness?.tiers?.[gate.family] || 0) >= (gate.tierAtLeast ?? 1));
       for (const [fam, rule] of bestPerFamily) {
         if (rule.healHPpct) {
           const gain = Math.max(1, Math.floor((attacker.maxHP || 1) * rule.healHPpct));
@@ -3856,7 +3865,7 @@ export default class CombatScene extends Phaser.Scene {
         if (rule.buff) {
           this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
         }
-        if (rule.debuff) {
+        if (rule.debuff && passesAlsoRequires(rule.debuff.alsoRequires)) {
           this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier, attacker });
         }
       }
@@ -4062,7 +4071,9 @@ export default class CombatScene extends Phaser.Scene {
           if (Array.isArray(result?.splash) && result.splash.length) {
             for (const sp of result.splash) {
               if (!sp?.target || sp.target.status === 'incapacitated') continue;
+              const spPrevTiers = Array.isArray(sp.rewardIfTierCross) ? { ...(sp.target?.weakness?.tiers || {}) } : null;
               this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability, isRepeat: true });
+              if (spPrevTiers) this._applySplashTierCrossRewards(user, sp.target, sp.rewardIfTierCross, ability, spPrevTiers);
             }
           }
         });
@@ -6067,6 +6078,13 @@ export default class CombatScene extends Phaser.Scene {
   _applyRewardBuff(target, buff, ability, context = {}) {
     if (!target || !buff) return;
 
+    // Grants a Rhythm stack (shared mechanic — see applyRhythmStack in
+    // skills.js) instead of a stat-mod status effect. Bypasses the "no stat
+    // mods, nothing to do" bailout below since it's a real effect on its own.
+    if (buff.grantsRhythm) {
+      applyRhythmStack(target);
+    }
+
     const turns = Math.max(1, buff.turns | 0);
     const mods = {};
     const summary = [];
@@ -6118,6 +6136,17 @@ export default class CombatScene extends Phaser.Scene {
       this._applyWeaknessBuildup(target, debuff.addBuildup, { user: context?.attacker, ability });
     }
 
+    // Immediate Initiative Gauge penalty (e.g. Sword Flourish: crossing
+    // Disorient while already Chilled saps their momentum) — a direct gauge
+    // subtraction, not a status effect, same reasoning as addBuildup above.
+    if (Number.isFinite(debuff.initiativeGaugeDrop) && debuff.initiativeGaugeDrop > 0) {
+      const before = target.initiativeGauge | 0;
+      target.initiativeGauge = Math.max(0, before - debuff.initiativeGaugeDrop);
+      if (target.initiativeGauge !== before) {
+        this._log(`${target.name} loses ${before - target.initiativeGauge} Initiative Gauge from ${ability?.name || 'the skill'}.`);
+      }
+    }
+
     const turns = Math.max(1, debuff.turns | 0);
     const mods = {};
     const summary = [];
@@ -6165,6 +6194,41 @@ export default class CombatScene extends Phaser.Scene {
       const abilityName = ability?.name || 'the skill';
       const tierNote = context?.family ? ` (tier ${context.tier} ${context.family})` : '';
       this._log(`${target.name} is marked by ${abilityName}${tierNote} — vulnerable on their next hit taken.`);
+    }
+  }
+
+  // Same "did this ACTUALLY cross a tier" reward mechanism as the primary
+  // target's rewardIfTierCross consumer (see the tier-cross block above,
+  // near where prevTiers/currTiers are snapshotted), just scoped to one
+  // splash/AoE target instead of the primary target — e.g. Sword Flourish
+  // granting Rhythm only if the disorient it spreads actually pushes a
+  // column-mate into a new tier, not a self-predicted guess made before the
+  // real buildup (Hunter's Mark/weapon%/resilience) has been applied.
+  // prevTiers must be captured by the caller BEFORE _applyDirectResult runs.
+  _applySplashTierCrossRewards(attacker, target, rules, ability, prevTiers) {
+    if (!target || !Array.isArray(rules) || !rules.length) return;
+    this._recomputeWeaknessTiers?.(target);
+    const currTiers = { ...(target?.weakness?.tiers || {}) };
+    const crossed = (fam, tier) => (prevTiers[fam] || 0) < tier && (currTiers[fam] || 0) >= tier;
+
+    const bestPerFamily = new Map();
+    for (const rule of rules) {
+      const families = rule.family === 'any' ? ['fire', 'cold', 'lightning'] : [rule.family];
+      for (const fam of families) {
+        if (!crossed(fam, rule.tier)) continue;
+        const best = bestPerFamily.get(fam);
+        if (!best || rule.tier > best.tier) bestPerFamily.set(fam, rule);
+      }
+    }
+    // Gate scoped to debuff.alsoRequires only (see the primary-target
+    // consumer above for why) — an unconditional buff on the same rule
+    // (e.g. Rhythm on any cross) still fires even if this gate fails.
+    const passesAlsoRequires = (gate) => !gate || ((target?.weakness?.tiers?.[gate.family] || 0) >= (gate.tierAtLeast ?? 1));
+    for (const [fam, rule] of bestPerFamily) {
+      if (rule.buff) this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
+      if (rule.debuff && passesAlsoRequires(rule.debuff.alsoRequires)) {
+        this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier, attacker });
+      }
     }
   }
 

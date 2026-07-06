@@ -44,6 +44,13 @@ export const StatusEffects = {
     name: 'Roaring Focus',
     icon: 'R'
   },
+  rhythm_stack: {
+    id: 'rhythm_stack',
+    name: 'Rhythm',
+    stackable: true,
+    description: 'Each stack grants +5 Attack Power (max 3). Gaining a stack refreshes ALL current stacks to 2 turns.',
+    icon: 'RH'
+  },
   whip_rhythm: {
     id: 'whip_rhythm',
     name: 'Whip Rhythm',

@@ -30,6 +30,7 @@ const STATUS_ICON_LIBRARY = {
   focus_meditation: { glyph: 'FM', name: 'Focus Meditation', fg: '#e9e1ff', bg: '#241d35', border: '#8a6dc0', description: 'Calming mind and restoring mana.' },
   roaring_focus: { glyph: 'RF', name: 'Roaring Focus', fg: '#ffe6c9', bg: '#352218', border: '#c27a46', description: 'Ferocity channeled into focus.' },
   whip_rhythm: { glyph: 'WR', name: 'Whip Rhythm', fg: '#f7e4ff', bg: '#2a1b33', border: '#a16cc9', description: 'Combo rhythm building power.' },
+  rhythm_stack: { glyph: 'RH', name: 'Rhythm', fg: '#ffe4c9', bg: '#332318', border: '#c9926c', description: '+5 Attack Power per stack (max 3). Gaining a stack refreshes ALL stacks to 2 turns.' },
   shattering_cut_sundered: { glyph: 'SU', name: 'Sundered', fg: '#ffd1d1', bg: '#3b1d1d', border: '#b24a4a', description: 'Armor is fractured.' },
   ice_shatter_armorbreak: { glyph: 'IB', name: 'Armorbreak', fg: '#d5f1ff', bg: '#17344b', border: '#5fa0c8', description: 'Armor shattered by ice.' },
   tainted: { glyph: 'TN', name: 'Tainted', fg: '#ffd6f2', bg: '#30192b', border: '#b25d9c', description: 'Afflicted by foul magic.' },

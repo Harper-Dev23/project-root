@@ -34,14 +34,17 @@ const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
  * Adds one rhythm_stack statusEffect to char (max 3), and refreshes ALL existing
  * rhythm stacks to 2 turns so they don't expire mid-combo.
  * Each stack carries mods: { AttackPower: 5 } which flows through _sumStatusEffectMods automatically.
+ * stackable: true lets combineStatusEffects (statusEffectIcons.js) collapse the
+ * separate array entries into a single icon with a "×N" badge instead of N
+ * duplicate icons.
  */
-function applyRhythmStack(char) {
+export function applyRhythmStack(char) {
   if (!char) return;
   char.statusEffects = char.statusEffects || [];
   const existing = char.statusEffects.filter(se => se?.id === 'rhythm_stack');
   existing.forEach(se => { se.turns = 2; }); // always refresh duration on all stacks
   if (existing.length < 3) {
-    char.statusEffects.push({ id: 'rhythm_stack', turns: 2, mods: { AttackPower: 5 } });
+    char.statusEffects.push({ id: 'rhythm_stack', turns: 2, stackable: true, mods: { AttackPower: 5 } });
   }
 }
 
@@ -9976,6 +9979,8 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
+    grantsRhythm: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -9986,19 +9991,41 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "mana", "support"],
     cooldown: 2,
     requiresWeakness: { family: "expose", tierAtLeast: 2 },
+    // Declarative so the tooltip can show it and apply() reads the same
+    // number instead of duplicating it inline — same pattern as Needle
+    // Venom/Static Prick/Vein Tap.
+    rewardIfWeak: [
+      { family: "disorient", tierAtLeast: 1, buff: { damagePct: 10 } },
+    ],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.rally_blow;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const hasDisorient = (target?.weakness?.tiers?.disorient || 0) >= 1;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      const disorientTier = target?.weakness?.tiers?.disorient || 0;
+      const rule = findRewardIfWeakRule(ability, disorientTier);
       const statusEffects = [];
-      if (hasDisorient) {
-        amount = Math.floor(amount * 1.1);
+      if (rule) {
+        const dmgPct = rule.buff?.damagePct || 0;
+        if (dmgPct) {
+          const prevSum = physical + elemental + necrotic;
+          const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + dmgPct / 100);
+          physical = scaled.physical;
+          elemental = scaled.elemental;
+          necrotic = scaled.necrotic;
+          try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage bonus`, mult: 1 + dmgPct / 100, from: prevSum, to: scaled.amount }); } catch { }
+        }
         statusEffects.push({ id: "rallied_vulnerability", turns: 1, mods: { PhysicalResist: -10 } });
       }
-      // Restore 3 MP to all allies
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Restore MP to all allies
       const mpRestored = 3;
       const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
       (allySlots || []).forEach(s => {
@@ -10007,14 +10034,19 @@ Object.assign(RAW_SKILLS, {
         const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
         ally.currentMP = Math.min(maxMP, (ally.currentMP || 0) + mpRestored);
       });
+      scene?._log?.(`${attacker?.name || "The swordsman"} rallies the party, restoring ${mpRestored} MP to all allies.`);
+
       applyRhythmStack(attacker);
+
       return {
-        ...roll, amount,
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
         statusEffects: statusEffects.length ? statusEffects : undefined,
-        log: `${attacker?.name || "The swordsman"} rallies the party, restoring ${mpRestored} MP to all allies.`,
+        rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Follow-up vs expose T2 foe: 100% damage, +10% vs disoriented, restores 3 MP to all allies, and builds rhythm."
+    description: "Deals 100% weapon damage. Requires target at least Flayed. Restores MP to all allies and builds Rhythm. Stronger if the target is Dazed."
   },
 
   'soft_spot_exposed': {
@@ -10023,6 +10055,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 12,
@@ -10033,19 +10066,56 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "expose", "necrotic"],
     cooldown: 3,
     buildupHint: { expose: 90 },
+    // Builds Rhythm if the target is at least Flayed — reuses the rewardIfWeak
+    // convention (grantsRhythm instead of damagePct/addBuildup) so the
+    // tooltip shows it and apply() reads the same condition instead of a
+    // separate hardcoded check. Kept as its own rule (not merged with the
+    // necrotic-weakness bonus below) since findRewardIfWeakRule doesn't
+    // filter by family — mixing two independently-gated rules in one array
+    // risks one tier check accidentally matching the other's rule.
+    rewardIfWeak: [
+      { family: "expose", tierAtLeast: 2, buff: { grantsRhythm: true } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.soft_spot_exposed;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const hasNecrotic = (target?.weakness?.tiers?.toxic || 0) >= 1
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      // Bonus damage if the target has ANY necrotic-family weakness active —
+      // a whole-hit "this skill hits harder" reward (Category A), scales
+      // physical/elemental/necrotic uniformly, same as the base weapon damage%.
+      const hasNecroticWeakness = (target?.weakness?.tiers?.toxic || 0) >= 1
         || (target?.weakness?.tiers?.disease || 0) >= 1
         || (target?.weakness?.tiers?.curse || 0) >= 1;
-      if (hasNecrotic) amount += Math.floor(amount * 0.25);
-      return { ...roll, amount, buildup: { expose: ability?.buildupHint?.expose ?? 90 } };
+      if (hasNecroticWeakness) {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.25);
+        physical = scaled.physical;
+        elemental = scaled.elemental;
+        necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} necrotic weakness bonus`, mult: 1.25, from: prevSum, to: scaled.amount }); } catch { }
+      }
+
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const rule = findRewardIfWeakRule(ability, exposeTier);
+      if (rule?.buff?.grantsRhythm) applyRhythmStack(attacker);
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return {
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 90 },
+        rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
+      };
     },
-    description: "Aimed strike that exposes (90 buildup); deals +25% necrotic bonus damage if target has any necrotic weakness."
+    description: "Deals 100% weapon damage. Applies Expose. +25% damage if the target has any necrotic weakness (Toxic, Disease, or Curse)."
   },
 
   'sword_flourish': {
@@ -10054,6 +10124,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -10063,32 +10134,54 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient", "aoe"],
     cooldown: 4,
+    // Declared at the ability level purely so the tooltip can show it —
+    // apply() clones this same array onto each splash payload below, since
+    // the rewardIfTierCross engine consumer needs the rules attached to the
+    // SPLASH TARGET (whoever the disorient spread actually lands on), not
+    // the ability itself. Rhythm grants on ANY tier crossed; the Initiative
+    // drain additionally requires the column-mate to already be at least
+    // Chilled (Cold T1+).
+    rewardIfTierCross: [
+      {
+        family: "disorient", tier: 1,
+        buff: { grantsRhythm: true },
+        debuff: { initiativeGaugeDrop: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
+      },
+      {
+        family: "disorient", tier: 2,
+        buff: { grantsRhythm: true },
+        debuff: { initiativeGaugeDrop: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
+      },
+    ],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.sword_flourish;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      // Spread 100% of primary's disorient meter to column-mates
+
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Spread 100% of primary's disorient meter to column-mates. Each splash
+      // entry carries its own copy of rewardIfTierCross so the reward is
+      // checked against the REAL post-buildup tier (Hunter's Mark/weapon
+      // buildup%/resilience all apply first) instead of a self-predicted
+      // guess made here before any of that runs — see
+      // _applySplashTierCrossRewards in CombatScene.js.
       const spreadAmt = target?.weakness?.meters?.disorient || 0;
-      const splash = [];
-      resolveAOESplash(scene, target, { shape: "column" }).forEach(char => {
-        const prevTier = char?.weakness?.tiers?.disorient || 0;
-        const splashEffect = { target: char, amount: 0, buildup: { disorient: spreadAmt }, tags: ability?.tags };
-        // Check if this spread would cross a tier → immobilize
-        if (spreadAmt > 0) {
-          const newMeter = (char?.weakness?.meters?.disorient || 0) + spreadAmt;
-          if (weaknessTierFromMeter(newMeter) > prevTier) {
-            splashEffect.statusEffects = [{ id: "flourish_immobilize", turns: 1, immobilized: true }];
-          }
-        }
-        splash.push(splashEffect);
-      });
-      // Grant rhythm stack (refreshes all existing, adds if under cap)
-      applyRhythmStack(attacker);
-      return { ...roll, amount, splash: splash.length ? splash : undefined };
+      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(char => ({
+        target: char,
+        amount: 0,
+        buildup: { disorient: spreadAmt },
+        tags: ability?.tags,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      }));
+
+      return { ...roll, physical, elemental, necrotic, amount, splash: splash.length ? splash : undefined };
     },
-    description: "A sweeping flourish: 100% damage to primary, spreads their full disorient meter to the column. Tier cross on spread = 1-turn immobilize. Grants rhythm."
+    description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to the column. If this pushes a column-mate into a new Disorient tier: builds Rhythm, and also drains their Initiative Gauge if they're at least Chilled."
   },
 
   'read_and_react': {
@@ -10357,6 +10450,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    grantsRhythm: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 13,

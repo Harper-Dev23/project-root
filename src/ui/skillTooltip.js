@@ -65,6 +65,7 @@ function buffToText(buff) {
   // this makes that distinction visible instead of reading identically to
   // a whole-hit bonus.
   if (buff.damagePct)           parts.push(`+${buff.damagePct}% damage${buff.damageType ? ` (as ${buff.damageType})` : ''}`);
+  if (buff.grantsRhythm)        parts.push('Builds Rhythm');
   if (buff.evasionPct)          parts.push(`+${buff.evasionPct}% Evasion`);
   if (buff.guardPct)            parts.push(`+${buff.guardPct}% Guard`);
   if (buff.chanceExtraHitPct)   parts.push(`${buff.chanceExtraHitPct}% extra hit`);
@@ -107,6 +108,13 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   if (sk.buildupHint && typeof sk.buildupHint === 'object') {
     const buildupParts = Object.entries(sk.buildupHint).map(([fam, amt]) => `+${amt} ${capitalize(fam)} buildup`);
     if (buildupParts.length) lines.push(`Applies: ${buildupParts.join(', ')}`);
+  }
+
+  // Rhythm — shared mechanic across several one-handed sword skills (and
+  // others). One line here instead of repeating the same explanation in
+  // every skill's own description text.
+  if (sk.grantsRhythm) {
+    lines.push('Builds Rhythm: gain a stack (max 3) of +5 Attack Power; gaining a stack refreshes ALL current stacks to 2 turns.');
   }
 
   // Reward if weak (target is currently at/above a weakness tier) — grouped with
@@ -189,7 +197,7 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     });
   }
 
-  if (sk.buildupHint || sk.rewardIfWeak || sk.critChanceIfWeak || sk.critInitiative
+  if (sk.buildupHint || sk.rewardIfWeak || sk.critChanceIfWeak || sk.critInitiative || sk.grantsRhythm
     || (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length)) {
     lines.push('');
   }
