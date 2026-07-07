@@ -10253,14 +10253,23 @@ Object.assign(RAW_SKILLS, {
     tags: ["support", "buff", "fire"],
     cooldown: 6,
     apply: (attacker, _target, scene) => {
-      // Spend initiative — amplified if 20+ available
+      // Spend initiative — three tiers (10/20/30) based on CURRENT gauge,
+      // extending the original 2-tier split (10 at gauge<=20, else 20) with
+      // a new top tier reaching the 30 cap. Still automatic, not a player
+      // choice: initiativeGauge is a banked resource (higher = more to spend),
+      // so a smaller spend is picked automatically when the bank is low, to
+      // avoid clamping at 0 and effectively getting a discount on the buff.
       const gauge = attacker?.initiativeGauge || 0;
-      // Lower gauge = acts sooner; spending initiative = increase gauge
-      const spend = gauge <= 20 ? 10 : 20;
-      attacker.initiativeGauge = (attacker.initiativeGauge || 0) + spend;
-      const amplified = spend >= 20;
-      const fireDmgOnHit = amplified ? 10 : 5;
-      const fireBuildupOnHit = amplified ? 40 : 20;
+      const spend = gauge <= 20 ? 10 : gauge <= 40 ? 20 : 30;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+
+      // +2 fire damage and +20 fire buildup per 10 initiative spent (was a
+      // flat 5/40 or 10/40 two-tier split) — 10/20/30 spend now gives
+      // 2/4/6 damage and 20/40/60 buildup.
+      const steps = spend / 10;
+      const fireDmgOnHit = 2 * steps;
+      const fireBuildupOnHit = 20 * steps;
+
       // Apply buff to all allies including self
       const buff = { id: "blazing_fervor_buff", turns: 2, onHit: { fireDamage: fireDmgOnHit, fireBuildup: fireBuildupOnHit } };
       const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
@@ -10270,12 +10279,10 @@ Object.assign(RAW_SKILLS, {
         ally.statusEffects = ally.statusEffects || [];
         ally.statusEffects.push({ ...buff });
       });
-      return {
-        amount: 0,
-        log: `${attacker?.name || "The swordsman"} blazes with fervor${amplified ? " (amplified)" : ""} — allies deal +${fireDmgOnHit} fire damage and +${fireBuildupOnHit} fire buildup on hit for 2 turns.`,
-      };
+      scene?._log?.(`${attacker?.name || "The swordsman"} blazes with fervor (spent ${spend} initiative) — allies deal +${fireDmgOnHit} fire damage and +${fireBuildupOnHit} fire buildup on hit for 2 turns.`);
+      return { amount: 0 };
     },
-    description: "Spend initiative to rally allies with fire: each ally's attacks deal bonus fire damage and buildup for 2 turns. Amplified when spending 20+ initiative."
+    description: "Spend initiative (10/20/30, based on current gauge) to rally allies with fire: +2 fire damage and +20 fire buildup per 10 initiative spent, on their attacks, for 2 turns."
   },
 
   // -------- Payoff --------
@@ -10285,6 +10292,7 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -10295,25 +10303,54 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "consume", "expose"],
     cooldown: 4,
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
+    // Declarative so the tooltip can show the real rate/cap and apply() reads
+    // the same numbers instead of duplicating them inline.
+    consumeWeaknessBonus: { family: "expose", pctPer100: 20, maxConsume: 400 },
     apply: (attacker, target) => {
       const ability = SKILLS?.power_stab;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.2);
-      const currentExpose = target?.weakness?.meters?.expose || 0;
-      const consumed = Math.min(400, currentExpose);
-      const bonusPct = Math.floor(consumed / 100) * 0.10;
-      if (bonusPct > 0) amount = Math.floor(amount * (1 + bonusPct));
-      if (consumed > 0 && target?.weakness?.meters) {
-        target.weakness.meters.expose = Math.max(0, currentExpose - consumed);
-        if (target.weakness.tiers) target.weakness.tiers.expose = weaknessTierFromMeter(target.weakness.meters.expose);
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      // Base 120% weapon damage + up to +80% from consumed Expose — these two
+      // are ADDITIVE percentages of the same base (120% + 80% = 200% total
+      // at the cap), not sequential multipliers. Applying them as two
+      // separate scaleTypedDamage calls (×1.2 then ×1.8) would COMPOUND to
+      // ×2.16 (216%) instead of the intended ×2.0 (200%) — combine the
+      // percentages first, then scale once.
+      const cfg = ability.consumeWeaknessBonus;
+      const currentMeter = target?.weakness?.meters?.[cfg.family] || 0;
+      const consumed = Math.min(cfg.maxConsume, currentMeter);
+      const bonusPct = Math.floor(consumed / 100) * cfg.pctPer100;
+      const basePct = 120;
+      const totalMult = (basePct + bonusPct) / 100;
+      {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, totalMult);
+        physical = scaled.physical;
+        elemental = scaled.elemental;
+        necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (${basePct}% base + ${bonusPct}% Expose consumed)`, mult: totalMult, from: prevSum, to: scaled.amount }); } catch { }
       }
-      const buildup = roll.crit ? { expose: 50 } : undefined;
-      return { ...roll, amount, buildup };
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters[cfg.family] = Math.max(0, currentMeter - consumed);
+        if (target.weakness.tiers) target.weakness.tiers[cfg.family] = weaknessTierFromMeter(target.weakness.meters[cfg.family]);
+      }
+
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Crit reapplies 50 Expose — was reading roll.crit, a field that
+      // doesn't exist on calculateDamage()'s return (the real field is
+      // isCrit), so this never actually fired before.
+      const buildup = roll.isCrit ? { expose: 50 } : undefined;
+
+      return { ...roll, physical, elemental, necrotic, amount, buildup };
     },
-    description: "Heavy thrust at 120% base; consumes up to 400 expose for +10% per 100. Crits reapply 50 expose."
+    description: "Deals 120% weapon damage. Consumes up to 400 Expose for +20% damage per 100 consumed (up to +80%). Crits reapply 50 Expose."
   },
 
   'glacial_strike': {
@@ -10321,7 +10358,8 @@ Object.assign(RAW_SKILLS, {
     name: "Glacial Strike",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "WIS",
     requiredValue: 15,
@@ -10335,37 +10373,71 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.glacial_strike;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.3);
-      // Consume all cold → immobilize
-      const consumedCold = target?.weakness?.meters?.cold || 0;
-      if (target?.weakness?.meters) {
-        target.weakness.meters.cold = 0;
-        if (target.weakness.tiers) target.weakness.tiers.cold = 0;
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+      {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.3);
+        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (130%)`, mult: 1.3, from: prevSum, to: scaled.amount }); } catch { }
       }
-      const statusEffects = [{ id: "glacial_freeze", turns: 1, immobilized: true }];
-      // If fire T2+: consume up to 400 fire → bonus damage + cold buildup
+
+      const statusEffects = [];
+
+      // Cold only immobilizes once it reaches the 400 threshold — below that,
+      // the skill still fires (T2 = 200+ is enough to use it) but does not
+      // consume or immobilize.
+      const coldMeter = target?.weakness?.meters?.cold || 0;
+      let consumedCold = 0;
+      if (coldMeter >= 400) {
+        consumedCold = 400;
+        if (target?.weakness?.meters) {
+          target.weakness.meters.cold = Math.max(0, coldMeter - consumedCold);
+          if (target.weakness.tiers) target.weakness.tiers.cold = weaknessTierFromMeter(target.weakness.meters.cold);
+        }
+        statusEffects.push({ id: "immobilized", turns: 1 });
+      }
+
+      // Fire T2+: consume up to 400 fire, independent of the cold threshold above.
       const buildup = {};
       const hasFireT2 = (target?.weakness?.tiers?.fire || 0) >= 2;
+      let consumedFire = 0;
       if (hasFireT2) {
         const currentFire = target?.weakness?.meters?.fire || 0;
-        const consumedFire = Math.min(400, currentFire);
-        amount += Math.floor(consumedFire / 10);
-        buildup.cold = Math.floor(consumedFire * 0.5);
+        consumedFire = Math.min(400, currentFire);
         if (target?.weakness?.meters) {
           target.weakness.meters.fire = Math.max(0, currentFire - consumedFire);
           if (target.weakness.tiers) target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
         }
+        // Added afterward — this cold does NOT count toward this cast's own 400 threshold above.
+        buildup.cold = Math.floor(consumedFire * 0.5);
+        const steps = Math.floor(consumedFire / 100);
+        if (steps > 0) {
+          statusEffects.push({
+            id: "glacial_scorch",
+            turns: 1,
+            fireBuildupMul: 1 + steps * 0.1,
+            // General elemental vulnerability (not fire-only) — reuses the same
+            // Resist-as-mitigation-points convention as torn_defenses/rallied_vulnerability.
+            mods: { ElementalResist: -(steps * 10) },
+            onTurnEndOnce: { damage: steps * 10, isMagic: true },
+          });
+        }
       }
+
+      const amount = Math.max(1, physical + elemental + necrotic);
       return {
-        ...roll, amount, statusEffects,
+        ...roll, physical, elemental, necrotic, amount,
+        statusEffects: statusEffects.length ? statusEffects : undefined,
         buildup: Object.keys(buildup).length ? buildup : undefined,
-        log: `${attacker?.name || "The swordsman"} freezes the target solid!${hasFireT2 ? " Fire converts to cold buildup." : ""}`,
+        log: `${attacker?.name || "The swordsman"} strikes with glacial force!`
+          + (consumedCold ? ` The frost locks ${target?.name || 'the target'} in place!` : "")
+          + (consumedFire ? " Trapped fire will flare at the end of their next turn." : ""),
       };
     },
-    description: "Consumes all cold to immobilize for 1 turn at 130% damage. If fire T2+: convert up to 400 fire to bonus damage + cold buildup."
+    description: "Deals 130% weapon damage. If the target has 400+ Cold, consumes it to immobilize them for 1 turn. If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 50% consumed, increases Fire buildup taken by 10% per 100 consumed, and makes the target vulnerable to all Elemental damage by 10% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 10 damage per 100 consumed."
   },
 
   'taunting_cry': {
@@ -10385,26 +10457,28 @@ Object.assign(RAW_SKILLS, {
     cooldown: 5,
     apply: (attacker, _target, scene) => {
       const initiativeSpend = 15;
-      attacker.initiativeGauge = (attacker.initiativeGauge || 0) + initiativeSpend;
-      // Apply taunt to all disoriented enemies for 1 turn
-      let taunted = 0;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeSpend);
+      // Rattle all disoriented enemies for 1 turn — every attack they make
+      // this turn (including multi-hit skills) rolls against this Accuracy
+      // penalty, via the shared computeHitChance()/getEffectiveDerived() pipeline.
+      let affected = 0;
       const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
       (enemySlots || []).forEach(s => {
         const enemy = s?.char;
         if (!enemy || enemy.status === 'incapacitated') return;
         if ((enemy?.weakness?.tiers?.disorient || 0) < 1) return;
         enemy.statusEffects = enemy.statusEffects || [];
-        enemy.statusEffects.push({ id: "taunted", turns: 1, tauntTarget: attacker });
-        taunted++;
+        enemy.statusEffects.push({ id: "shaken_aim", turns: 1, mods: { Accuracy: -50 } });
+        affected++;
       });
       return {
         amount: 0,
-        log: taunted > 0
-          ? `${attacker?.name || "The swordsman"} taunts ${taunted} disoriented foe${taunted > 1 ? "s" : ""}, drawing their ire!`
+        log: affected > 0
+          ? `${attacker?.name || "The swordsman"} rattles ${affected} disoriented foe${affected > 1 ? "s" : ""} — their aim falters!`
           : `${attacker?.name || "The swordsman"} cries out but no disoriented foes respond.`,
       };
     },
-    description: "Spend 15 initiative: all disoriented enemies target you for 1 turn."
+    description: "Spend 15 initiative: all disoriented enemies have Accuracy reduced by 50 for 1 turn, greatly increasing their chance to miss on every attack they make (including multi-hit skills). Deals no damage."
   },
 
   'crescent_cleave': {
@@ -10412,7 +10486,8 @@ Object.assign(RAW_SKILLS, {
     name: "Crescent Cleave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 14,
@@ -10420,51 +10495,56 @@ Object.assign(RAW_SKILLS, {
     mpCost: 8,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe", "expose"],
+    tags: ["melee", "attack", "aoe", "lacerate"],
     cooldown: 5,
+    // Must target an enemy standing in one of the two flank arcs — center-row
+    // slots (7, 2) aren't valid targets for this skill. See aoeResolver.js's
+    // "arc" shape for the matching splash resolution (top {8,4,3} / bottom {6,5,1}).
+    targetSlots: [8, 4, 3, 6, 5, 1],
+    aoe: { shape: "arc" },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.crescent_cleave;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.1);
-      const hasExpose = (target?.weakness?.tiers?.expose || 0) >= 1;
-      if (hasExpose) amount = Math.floor(amount * 1.2);
-      // Arc targeting: top (8,4,3) or bottom (6,5,1) based on primary target's slot
-      const TOP_ARC = new Set([8, 4, 3]);
-      const BOT_ARC = new Set([6, 5, 1]);
-      const primarySlotId = target?._slot?.slotId ?? target?.slotId;
-      const arcSlots = TOP_ARC.has(primarySlotId) ? TOP_ARC : BOT_ARC.has(primarySlotId) ? BOT_ARC : TOP_ARC;
-      const sideSlots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
-      const splash = [];
-      let healAmt = 0;
-      (sideSlots || []).forEach(s => {
-        if (!s?.char || s.char === target || s.char.status === 'incapacitated') return;
-        if (!arcSlots.has(s.slotId)) return;
-        const prevTier = s.char?.weakness?.tiers?.expose || 0;
-        const splashEntry = { target: s.char, amount: Math.max(1, Math.floor(amount * 0.85)), tags: ability?.tags };
-        // Heal per enemy that crosses expose tier (splash doesn't add expose buildup here, just damage)
-        // But checking if they already have expose that might cross is meaningful, so note as forward-looking
-        splash.push(splashEntry);
-      });
-      // Self-heal based on how many enemies in arc have expose T1+
-      const arcEnemiesWithExpose = (sideSlots || []).filter(s =>
-        s?.char && arcSlots.has(s.slotId) && (s.char?.weakness?.tiers?.expose || 0) >= 1
-      ).length;
-      if (arcEnemiesWithExpose > 0) {
-        const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
-        healAmt = Math.floor(maxHP * 0.05 * arcEnemiesWithExpose);
-        if (attacker && healAmt > 0) {
-          attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
-        }
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+      const hasLacerate = (target?.weakness?.tiers?.lacerate || 0) >= 1;
+      const totalPct = 110 + (hasLacerate ? 20 : 0);
+      {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, totalPct / 100);
+        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (${totalPct}%)`, mult: totalPct / 100, from: prevSum, to: scaled.amount }); } catch { }
       }
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Lifesteal vs Lacerated foes — same "heal = damage dealt × pct" formula as
+      // the gear lifesteal check in _applyAbilityToTarget, just scoped to this
+      // skill's own hits and gated on each target's own Lacerate tier.
+      const LIFESTEAL_PCT = 0.3;
+      let healAmt = hasLacerate ? Math.ceil(amount * LIFESTEAL_PCT) : 0;
+
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(char => {
+        const splashAmount = Math.max(1, Math.floor(amount * 0.85));
+        if ((char?.weakness?.tiers?.lacerate || 0) >= 1) {
+          healAmt += Math.ceil(splashAmount * LIFESTEAL_PCT);
+        }
+        return { target: char, amount: splashAmount, tags: ability?.tags };
+      });
+
+      if (healAmt > 0 && attacker) {
+        const maxHP = attacker.maxHP ?? attacker.derivedStats?.maxHP ?? 0;
+        attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
+      }
+
       return {
-        ...roll, amount, splash: splash.length ? splash : undefined,
-        log: healAmt > 0 ? `${attacker?.name || "The swordsman"} cleaves the arc and heals ${healAmt} HP from exposed foes!` : undefined,
+        ...roll, physical, elemental, necrotic, amount,
+        splash: splash.length ? splash : undefined,
+        log: healAmt > 0 ? `${attacker?.name || "The swordsman"} cleaves the arc and drains ${healAmt} HP from lacerated foes!` : undefined,
       };
     },
-    description: "Arc cleave at 110% (+20% vs exposed): auto-selects top (8,4,3) or bottom (6,5,1) arc by target position. Heals 5% HP per exposed enemy in the arc."
+    description: "Arc cleave at 110% (+20% vs Lacerated) against an enemy in either flank arc — top (8,4,3) or bottom (6,5,1); hits the other two enemies in that same arc for 85% damage. Heals 30% of damage dealt to any Lacerated enemy hit."
   },
 
   'momentum_strike': {
@@ -10472,8 +10552,18 @@ Object.assign(RAW_SKILLS, {
     name: "Momentum Strike",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
-    grantsRhythm: true,
+    versionTag: "v3.23",
+    typedDamage: true,
+    // First skill to use a rank-conditional reward — same idea as
+    // rewardIfWeak/rewardIfTierCross, just keyed on the attacker's own rank
+    // instead of a target's weakness. Read by both apply() below and
+    // skillTooltip.js's generic renderer, so logic and tooltip can't drift
+    // apart. Expect this shape to recur on future skills.
+    rankVariants: {
+      front: { damagePct: 25 },
+      middle: { initiativePerRhythmStack: 10, consumesRhythm: true },
+      back: { grantsRhythm: true },
+    },
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -10486,24 +10576,48 @@ Object.assign(RAW_SKILLS, {
     conditionHint: { requiresMovedThisTurn: true },
     apply: (attacker, target, scene) => {
       if (!scene?.currentActorMovedThisTurn) {
-        return { amount: 0, log: `${attacker?.name || "The swordsman"} hasn't moved yet this turn.` };
+        return { amount: 0, fizzle: true, log: `${attacker?.name || "The swordsman"} hasn't moved this turn — Momentum Strike fizzles.` };
       }
       const ability = SKILLS?.momentum_strike;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      // +25% in front rank (ally slots 1,2,3 = front column)
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+
+      const FRONT = [1, 2, 3], MIDDLE = [4, 5], BACK = [6, 7, 8];
       const slotId = attacker?._slot?.slotId ?? attacker?.slotId;
-      if ([1, 2, 3].includes(slotId)) amount = Math.floor(amount * 1.25);
-      // Gain initiative based on current rhythm stacks (including new one)
-      applyRhythmStack(attacker);
-      const totalStacks = Math.min(3, (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length);
-      const initiativeGain = totalStacks * 5;
-      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
-      return { ...roll, amount };
+      const rank = FRONT.includes(slotId) ? 'front' : MIDDLE.includes(slotId) ? 'middle' : BACK.includes(slotId) ? 'back' : null;
+      const variant = rank ? ability.rankVariants?.[rank] : null;
+
+      if (variant?.damagePct) {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + variant.damagePct / 100);
+        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} front-rank bonus (+${variant.damagePct}%)`, mult: 1 + variant.damagePct / 100, from: prevSum, to: scaled.amount }); } catch { }
+      }
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      let log;
+      if (variant?.grantsRhythm) {
+        applyRhythmStack(attacker);
+        log = `${attacker?.name || "The swordsman"} strikes from the back rank, building rhythm!`;
+      } else if (variant?.initiativePerRhythmStack) {
+        const totalStacks = Math.min(3, (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length);
+        const gain = totalStacks * variant.initiativePerRhythmStack;
+        if (gain > 0) {
+          if (variant.consumesRhythm) {
+            attacker.statusEffects = (attacker.statusEffects || []).filter(se => se?.id !== 'rhythm_stack');
+          }
+          const max = attacker.initiativeGaugeMax || 100;
+          attacker.initiativeGauge = Math.min(max, (attacker.initiativeGauge || 0) + gain);
+          log = `${attacker?.name || "The swordsman"} consumes ${totalStacks} Rhythm stack${totalStacks !== 1 ? 's' : ''} for +${gain} initiative!`;
+        }
+      }
+
+      return { ...roll, physical, elemental, necrotic, amount, log };
     },
-    description: "FREE action after moving: 100% damage (+25% in front rank), builds rhythm and gains 5 initiative per rhythm stack."
+    description: "FREE action after moving this turn: 100% weapon damage. The bonus depends on your current rank."
   },
 
   'balancing_blow': {
@@ -10511,7 +10625,8 @@ Object.assign(RAW_SKILLS, {
     name: "Balancing Blow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "CON",
     requiredValue: 14,
@@ -10525,24 +10640,25 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.balancing_blow;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.1);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const totalNecrotic = (target?.weakness?.meters?.toxic || 0)
         + (target?.weakness?.meters?.disease || 0)
         + (target?.weakness?.meters?.curse || 0);
-      const healAmt = Math.floor(totalNecrotic / 20);
+      const healAmt = Math.floor(totalNecrotic / 25);
       if (healAmt > 0 && attacker) {
         const maxHP = attacker.maxHP ?? attacker.derivedStats?.maxHP ?? 0;
         attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
       }
       return {
-        ...roll, amount,
+        ...roll, physical, elemental, necrotic, amount,
         log: healAmt > 0 ? `${attacker?.name || "The swordsman"} siphons life — heals ${healAmt} HP from ${totalNecrotic} necrotic buildup.` : undefined,
       };
     },
-    description: "110% damage vs necrotically afflicted; heals 1 HP per 20 total necrotic buildup (toxic + disease + curse)."
+    description: "100% damage vs necrotically afflicted; heals 1 HP per 25 total necrotic buildup (toxic + disease + curse)."
   },
 
   'shattering_cut': {
@@ -10550,7 +10666,8 @@ Object.assign(RAW_SKILLS, {
     name: "Shattering Cut",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 16,
@@ -10563,10 +10680,18 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.shattering_cut;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.25);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+      );
+      {
+        const prevSum = physical + elemental + necrotic;
+        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.25);
+        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
+        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (125%)`, mult: 1.25, from: prevSum, to: scaled.amount }); } catch { }
+      }
+      const amount = Math.max(1, physical + elemental + necrotic);
+
       const currentLacerate = target?.weakness?.meters?.lacerate || 0;
       const consumed = Math.min(400, currentLacerate);
       if (consumed > 0 && target?.weakness?.meters) {
@@ -10579,17 +10704,21 @@ Object.assign(RAW_SKILLS, {
         statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction } });
       }
       if (consumed >= 200) {
-        statusEffects.push({ id: "torn_defenses", turns: 2, mods: { PhysicalResist: -5 } }); // lacerate vulnerability (additional penalty)
+        // Lacerate-buildup vulnerability, not a resist debuff — target takes
+        // +50% Lacerate buildup from any source for 2 turns. Uses the same
+        // generic <family>BuildupMul enforcement added for Glacial Strike's
+        // Trapped Fire (_applyWeaknessBuildup in CombatScene.js).
+        statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1.5 });
       }
       return {
-        ...roll, amount,
+        ...roll, physical, elemental, necrotic, amount,
         statusEffects: statusEffects.length ? statusEffects : undefined,
         log: consumed > 0
-          ? `${attacker?.name || "The swordsman"} shatters armor — -${pdrReduction}% PDR${consumed >= 200 ? " + lacerate vulnerability" : ""}.`
+          ? `${attacker?.name || "The swordsman"} shatters armor — -${pdrReduction}% PDR${consumed >= 200 ? ", +50% Lacerate buildup taken" : ""}.`
           : undefined,
       };
     },
-    description: "125% damage; consume up to 400 lacerate for -10% PDR per 100 for 3 turns. 200+ consumed adds lacerate vulnerability."
+    description: "125% damage; consume up to 400 lacerate for -10% PDR per 100 for 3 turns. 200+ consumed also makes the target take +50% Lacerate buildup for 2 turns."
   },
 
   // --- Sword (1h) Reactions ---

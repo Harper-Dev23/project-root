@@ -51,6 +51,41 @@ export const StatusEffects = {
     description: 'Each stack grants +5 Attack Power (max 3). Gaining a stack refreshes ALL current stacks to 2 turns.',
     icon: 'RH'
   },
+  immobilized: {
+    id: 'immobilized',
+    name: 'Immobilized',
+    isDebuff: true,
+    description: 'Unable to reposition.',
+    icon: 'IM'
+  },
+  glacial_scorch: {
+    id: 'glacial_scorch',
+    name: 'Trapped Fire',
+    isDebuff: true,
+    description: 'Fire buildup taken is increased. Lingering fire will burn at the end of this turn.',
+    icon: '🔥'
+  },
+  shattered_defenses: {
+    id: 'shattered_defenses',
+    name: 'Shattered Defenses',
+    isDebuff: true,
+    description: 'Physical Resist reduced.',
+    icon: 'SD'
+  },
+  torn_defenses: {
+    id: 'torn_defenses',
+    name: 'Torn Defenses',
+    isDebuff: true,
+    description: 'Lacerate buildup taken is increased.',
+    icon: 'TD'
+  },
+  shaken_aim: {
+    id: 'shaken_aim',
+    name: 'Shaken Aim',
+    isDebuff: true,
+    description: 'Accuracy is reduced, greatly increasing the chance to miss on every attack this turn.',
+    icon: '?'
+  },
   whip_rhythm: {
     id: 'whip_rhythm',
     name: 'Whip Rhythm',

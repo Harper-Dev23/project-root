@@ -13,12 +13,18 @@
  *   "diamond"  – fixed slots {2,4,5,7} on target's side (position is absolute, cannot be moved)
  *   "all"      – every living unit on target's side
  *   "adjacent" – all living units in slots directly adjacent to primaryTarget (uses scene._getAdjacentSlots)
+ *   "arc"      – the other two slots in primaryTarget's flank arc: top {8,4,3} or bottom {6,5,1}.
+ *                Center-row slots {7,2} belong to neither arc (see TOP_ARC/BOT_ARC below).
  *
  * Adding a new shape: add a case to the switch. No other files need to change.
  */
 
 /** The four "diamond" slot IDs — centre-mass of the brick-offset formation. */
 const DIAMOND_SLOTS = new Set([2, 4, 5, 7]);
+
+/** The two flank "arc" groups — one slot per column (back/mid/front), top and bottom. */
+const TOP_ARC = new Set([8, 4, 3]);
+const BOT_ARC = new Set([6, 5, 1]);
 
 /**
  * @param {Phaser.Scene} scene          The active CombatScene (must have enemySlots / allySlots).
@@ -65,6 +71,15 @@ export function resolveAOESplash(scene, primaryTarget, aoe) {
       const adjList = scene._getAdjacentSlots?.(primarySlotId) ?? [];
       return candidates
         .filter(s => adjList.includes(s.slotId))
+        .map(s => s.char);
+    }
+
+    case 'arc': {
+      const primarySlotId = primaryTarget._slot?.slotId ?? primaryTarget.slotId;
+      const arcSlots = TOP_ARC.has(primarySlotId) ? TOP_ARC : BOT_ARC.has(primarySlotId) ? BOT_ARC : null;
+      if (!arcSlots) return []; // primary target is in the center row (7/2) — not a valid arc member
+      return candidates
+        .filter(s => arcSlots.has(s.slotId))
         .map(s => s.char);
     }
 

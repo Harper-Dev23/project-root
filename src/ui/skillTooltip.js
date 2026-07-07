@@ -66,6 +66,7 @@ function buffToText(buff) {
   // a whole-hit bonus.
   if (buff.damagePct)           parts.push(`+${buff.damagePct}% damage${buff.damageType ? ` (as ${buff.damageType})` : ''}`);
   if (buff.grantsRhythm)        parts.push('Builds Rhythm');
+  if (buff.initiativePerRhythmStack) parts.push(`+${buff.initiativePerRhythmStack} Initiative per Rhythm stack${buff.consumesRhythm ? ' (consumes them)' : ''}`);
   if (buff.evasionPct)          parts.push(`+${buff.evasionPct}% Evasion`);
   if (buff.guardPct)            parts.push(`+${buff.guardPct}% Guard`);
   if (buff.chanceExtraHitPct)   parts.push(`${buff.chanceExtraHitPct}% extra hit`);
@@ -197,7 +198,18 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     });
   }
 
+  // Rank-conditional rewards (e.g. Momentum Strike) — one line per rank that
+  // has a variant defined, in a fixed front/middle/back reading order.
+  if (sk.rankVariants) {
+    const RANK_LABEL = { front: 'Front rank', middle: 'Middle rank', back: 'Back rank' };
+    for (const rank of ['front', 'middle', 'back']) {
+      const variant = sk.rankVariants[rank];
+      if (variant) lines.push(`${RANK_LABEL[rank]}: ${buffToText(variant)}`);
+    }
+  }
+
   if (sk.buildupHint || sk.rewardIfWeak || sk.critChanceIfWeak || sk.critInitiative || sk.grantsRhythm
+    || sk.rankVariants
     || (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length)) {
     lines.push('');
   }
@@ -293,6 +305,15 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   // Weakness consumption
   if (Array.isArray(sk.consumeWeakness) && sk.consumeWeakness.length) {
     lines.push(`Consumes: ${sk.consumeWeakness.join(', ')} weakness`);
+  }
+
+  // Weakness consumption for a scaling damage bonus (e.g. Power Stab) —
+  // distinct from the flat consumeWeakness list above since this one has a
+  // real rate/cap to show, not just "drains this family."
+  if (sk.consumeWeaknessBonus) {
+    const cfg = sk.consumeWeaknessBonus;
+    const maxBonusPct = Math.floor(cfg.maxConsume / 100) * cfg.pctPer100;
+    lines.push(`Consumes up to ${cfg.maxConsume} ${capitalize(cfg.family)}: +${cfg.pctPer100}% damage per 100 consumed (up to +${maxBonusPct}%).`);
   }
 
   // Transform weakness

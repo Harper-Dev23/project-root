@@ -41,7 +41,9 @@
       "Bash(node --check data/items.js)",
       "Bash(node --check src/ui/styles.js)",
       "Bash(node --check src/scenes/overlays/InventoryOverlay.js)",
-      "Bash(node --check src/scenes/overlays/StashOverlay.js)"
+      "Bash(node --check src/scenes/overlays/StashOverlay.js)",
+      "Bash(node --check src/systems/aoeResolver.js)",
+      "Read(//c/Users/eddie/.claude/projects/c--Users-eddie-Desktop-project-root/memory/**)"
     ]
   }
 }

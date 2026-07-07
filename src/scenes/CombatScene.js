@@ -968,6 +968,14 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Character-bound immobilize (e.g. Glacial Strike, Shield Hook): blocks
+    // repositioning wherever the unit stands, independent of any tile zone.
+    if (Array.isArray(unit.statusEffects) && unit.statusEffects.some(se =>
+        se?.id === 'immobilized' && (se.permanent || (se.turns || 0) > 0))) {
+      this._log?.(`${unit?.name ?? 'Unit'} is immobilized and cannot move.`);
+      return false;
+    }
+
     // --- clear old slot ties ---
     const old = unit._slot;
     if (old) {
@@ -1377,6 +1385,13 @@ export default class CombatScene extends Phaser.Scene {
     if (evEff < baseEv) evColor = '#ff6666';
     else if (evEff > baseEv) evColor = '#66ff66';
 
+    // Accuracy vs its unmodified base — flags temporary combat mods (e.g. Shaken Aim)
+    const baseAcc = derived.Accuracy | 0;
+    const effAcc = eff.Accuracy | 0;
+    let accColor = '#eeeeee';
+    if (effAcc < baseAcc) accColor = '#ff6666';
+    else if (effAcc > baseAcc) accColor = '#66ff66';
+
     // Middle column values
     const pdr = getEffectivePDR?.(char) ?? 0;
     const edr = getEffectiveEDR?.(char) ?? 0;
@@ -1420,7 +1435,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
       { label: 'Resilience:', value: `${resilience}` },
-      { label: 'Accuracy:', value: `${eff.Accuracy ?? 0}` },
+      { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc },
       { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true },
       { label: 'Crit Chance:', value: `${eff.CritChance ?? 0}` },
       { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}` },
@@ -2677,6 +2692,15 @@ export default class CombatScene extends Phaser.Scene {
 
   _canUseActionType(type) {
     const char = this._currentChar();
+    // "free" actions (e.g. Momentum Strike) aren't tracked in actionsLeft at
+    // all ({major, bonus, class, reaction} only) — they bypass the action-
+    // point economy entirely. _useAbility already knew to skip this check for
+    // 'free', but _openSubmenu's button-graying logic called this directly
+    // without that exemption, so actionsLeft.free (always undefined) made
+    // every free-action skill's button permanently grayed out/unclickable
+    // regardless of any other condition (e.g. Momentum Strike's "moved this
+    // turn" requirement never even got a chance to matter).
+    if (type === 'free') return true;
     // Multi-cost skills (e.g. Heartpiercer's ["major","bonus"]) need every
     // listed type available. Using an array directly as an object key would
     // silently stringify to "major,bonus", which never matches a real key —
@@ -2757,6 +2781,12 @@ export default class CombatScene extends Phaser.Scene {
         const col = this._getColumnBySlotId(s.slotId);
         return ability.targetColumns.includes(col);
       });
+    }
+    // Optional explicit slot-ID target filter (e.g. arc-pattern skills that can
+    // only be aimed at a flank slot, not the center row) — same shape as
+    // targetColumns above, just keyed on raw slotId instead of column.
+    if (ability.targetSlots?.length && !DevFlags.isNoRangeEnabled()) {
+      filtered = filtered.filter(s => ability.targetSlots.includes(s.slotId));
     }
 
 
@@ -3282,6 +3312,18 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`⚠ ${ability.name} fizzled.`);
       return;
     }
+    // True no-op: some skills can only check an unmet condition from inside
+    // apply() itself, once scene state is available (e.g. Momentum Strike
+    // requiring movement this turn — the requiresWeakness/minCurseTier gates
+    // above can't cover this since it's not a declarative field). result.fizzle
+    // lets apply() signal "nothing happened" after the fact: skip costs,
+    // cooldown, action spend, and the generic "X uses Y" line entirely, same
+    // as the pre-apply gates above do.
+    if (result?.fizzle) {
+      if (result.log) this._log(result.log);
+      return;
+    }
+
     if (result && Array.isArray(result.statusEffects)) {
       this._addStatusEffects(target, result.statusEffects);
     }
@@ -3644,12 +3686,40 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
+        // Attacker-side onHit procs (e.g. Blazing Fervor's fire rider): unlike
+        // Curse riders above (which live on the TARGET being hit), these live
+        // on the ATTACKER's own statusEffects and add bonus damage of their
+        // own to THIS hit — same "additive in the same step" treatment as
+        // Curse of Needles: a flat, unmitigated add straight onto dmg, not a
+        // separate, independent HP subtraction fired later (which used to
+        // show as its own floating number/log line for what should read as
+        // one combined hit). Generic: any status effect with an onHit object
+        // gets checked here, not just blazing_fervor_buff — extend with more
+        // onHit.* fields (coldDamage, necroticDamage, etc.) as needed, same
+        // as this used to be documented on the old _processOnHitProcs.
+        if (dmg > 0 && Array.isArray(user?.statusEffects)) {
+          for (const se of user.statusEffects) {
+            const proc = se?.onHit;
+            if (!proc) continue;
+            if (!se.permanent && (se.turns || 0) <= 0) continue;
+            if (proc.fireDamage > 0) {
+              dmg += proc.fireDamage;
+              try { _pushBreakdown({ label: se.name || 'Fire rider', flat: proc.fireDamage }); } catch { }
+              this._log(`${user.name}'s ${se.name || 'fire rider'} burns ${target.name} for +${proc.fireDamage} fire damage.`);
+            }
+            if (proc.fireBuildup > 0 && target?.weakness) {
+              this._applyWeaknessBuildup(target, { fire: proc.fireBuildup }, { user });
+            }
+          }
+        }
+
         // Crit-triggered bleed based on the FINAL damage this hit deals — after
         // DR/mitigation AND every additive rider above (Curse of Needles,
-        // Pressure Point's ignition, etc.), so a bleed correctly reflects
-        // everything that actually landed, not just the ability's own base
-        // roll. Generic: any ability declaring critBleedPct gets this, not
-        // just Heartpiercer — same shape can be reused by future skills.
+        // Pressure Point's ignition, Blazing Fervor's fire rider, etc.), so a
+        // bleed correctly reflects everything that actually landed, not just
+        // the ability's own base roll. Generic: any ability declaring
+        // critBleedPct gets this, not just Heartpiercer — same shape can be
+        // reused by future skills.
         if (isCrit && dmg > 0 && Number.isFinite(ability?.critBleedPct) && ability.critBleedPct > 0) {
           const tickDamage = Math.max(1, Math.floor(dmg * (ability.critBleedPct / 100)));
           const bleedTurns = Number.isFinite(ability?.critBleedTurns) ? ability.critBleedTurns : 2;
@@ -3708,7 +3778,11 @@ export default class CombatScene extends Phaser.Scene {
 
           // Next-hit one-shot effects (e.g. bedrock_guard cold retaliation on attacker)
           if (dmg > 0) this._processNextHitStatusEffects(target, user);
-          if (dmg > 0) this._processOnHitProcs(user, target);
+          // (attacker onHit procs — e.g. Blazing Fervor's fire rider — now
+          // handled earlier, added directly into dmg alongside Curse of
+          // Needles/Pressure Point Ignition; see that block above. This used
+          // to be a separate _processOnHitProcs() call here, firing as its
+          // own independent HP subtraction after dmg was already applied.)
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';
@@ -4250,6 +4324,35 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
 
+  // One-shot payloads that resolve at the END of a character's own next turn
+  // (after they've had a chance to act — cleanse, reposition, etc.), rather
+  // than at start-of-turn like every other tick in this file. Currently only
+  // Glacial Strike's Trapped Fire uses this (`se.onTurnEndOnce`); consumed and
+  // removed the first time it fires, regardless of the status's own turns left.
+  _applyEndOfTurnProcs(char) {
+    if (!Array.isArray(char?.statusEffects)) return;
+    for (let i = char.statusEffects.length - 1; i >= 0; i--) {
+      const se = char.statusEffects[i];
+      const proc = se?.onTurnEndOnce;
+      if (!proc) continue;
+      if (proc.damage > 0 && char.status !== 'incapacitated') {
+        const dr = proc.isMagic ? getDamageReductionFraction(char, { isMagic: true }) : 0;
+        const dealt = dr ? Math.max(0, Math.floor(proc.damage * (1 - dr))) : proc.damage;
+        const before = char.currentHP | 0;
+        const after = Math.max(0, before - dealt);
+        char.currentHP = after;
+        this._showFloatingNumber?.(dealt, char, false, false);
+        this._log(`${char.name} is scorched by trapped fire for ${dealt} damage.`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+        if (after === 0 && char.status !== 'incapacitated') {
+          char.status = 'incapacitated';
+          this._onUnitKnockedOut?.(char);
+        }
+      }
+      char.statusEffects.splice(i, 1);
+    }
+  }
+
   _startTurnStatusEffects(char) {
     // Apply per-turn effects (DOT, HOT, blocksAction) without touching duration.
     // Duration countdown and expiry is handled exclusively by _tickDownStatusDurations
@@ -4409,35 +4512,11 @@ export default class CombatScene extends Phaser.Scene {
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
   }
 
-  /**
-   * _processOnHitProcs(user, target)
-   *
-   * Called after damage lands. Checks `user`'s status effects for `onHit` objects and fires them.
-   * Supported onHit fields:
-   *   fireDamage   – flat fire damage dealt to target
-   *   fireBuildup  – fire buildup applied to target's weakness meter
-   *   (extend with coldDamage, buildup: { family: N }, etc. as new procs are added)
-   */
-  _processOnHitProcs(user, target) {
-    if (!user || !target) return;
-    const effects = Array.isArray(user.statusEffects) ? user.statusEffects : [];
-    for (const se of effects) {
-      const proc = se?.onHit;
-      if (!proc) continue;
-      if ((se.turns || 0) <= 0) continue;
-
-      if (proc.fireDamage > 0) {
-        const fd = proc.fireDamage | 0;
-        target.currentHP = Math.max(0, (target.currentHP || 0) - fd);
-        this._showFloatingNumber?.(fd, target, false);
-        this._log(`${user?.name ?? 'Ally'}'s blazing fervor burns ${target?.name ?? 'the target'} for ${fd} fire damage.`);
-      }
-
-      if (proc.fireBuildup > 0 && target?.weakness) {
-        this._applyWeaknessBuildup(target, { fire: proc.fireBuildup }, { user });
-      }
-    }
-  }
+  // _processOnHitProcs was removed — its logic (attacker-side onHit.fireDamage
+  // / onHit.fireBuildup procs, e.g. Blazing Fervor) now runs earlier, folded
+  // into the same additive-rider step Curse of Needles/Pressure Point
+  // Ignition use, adding straight into `dmg` instead of firing as its own
+  // separate HP subtraction. See that block in _applyAbilityToTarget.
 
   _applyGearStartOfTurn(char) {
     const regen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
@@ -4525,6 +4604,19 @@ export default class CombatScene extends Phaser.Scene {
         const mark = (target?.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
         const bonusPct = mark?.mods?.BuildupReceived || 0;
         if (bonusPct > 0) amt = Math.floor(amt * (1 + bonusPct / 100));
+      }
+
+      // Generic per-family incoming-buildup vulnerability, e.g.
+      // `{ fireBuildupMul: 1.4 }` on a status effect (Glacial Strike's
+      // Trapped Fire, Gust Lash's Wind Exposed). Multiple active sources stack.
+      {
+        const mulKey = `${key}BuildupMul`;
+        let vulnMul = 1;
+        for (const se of (target?.statusEffects || [])) {
+          const m = se?.[mulKey];
+          if ((se?.turns || 0) > 0 && typeof m === 'number') vulnMul *= m;
+        }
+        if (vulnMul !== 1) amt = Math.max(0, Math.floor(amt * vulnMul));
       }
 
       // FIRE T1+: incoming fire buildup increased while Singed, scaling with
@@ -5960,6 +6052,9 @@ export default class CombatScene extends Phaser.Scene {
       this._tickCooldownsEndOfTurn(previousChar);
       // NEW: decay weaknesses at end of *their* turn
       this._endTurnWeakness(previousChar);
+      // Resolve delayed one-shot payloads (e.g. Glacial Strike's Trapped Fire)
+      // before the normal duration tick below removes/logs the status.
+      this._applyEndOfTurnProcs(previousChar);
 
       // === NEW: tick down timed statuses (includes Cinders) ===
       this._tickDownStatusDurations(previousChar);
@@ -6286,9 +6381,20 @@ export default class CombatScene extends Phaser.Scene {
         // Point's ignition) — an opaque payload, not interpreted here.
         permanent,
         onNextDamageTaken: se.onNextDamageTaken ?? def.onNextDamageTaken ?? undefined,
+        // One-shot payload resolved by _applyEndOfTurnProcs at end of the
+        // owner's own next turn (e.g. Glacial Strike's Trapped Fire).
+        onTurnEndOnce: se.onTurnEndOnce ?? def.onTurnEndOnce ?? undefined,
         mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
+      // Generic per-family incoming-buildup vulnerability keys, e.g.
+      // `fireBuildupMul`/`lightningBuildupMul` (Wind Exposed, Trapped Fire).
+      // Not in the fixed field list above since the family set is data-driven.
+      for (const fam of Object.keys(WeaknessFamilies || {})) {
+        const mulKey = `${fam}BuildupMul`;
+        const val = se[mulKey] ?? def[mulKey];
+        if (typeof val === 'number') incoming[mulKey] = val;
+      }
 
       if (incoming.stackable) {
         // Each application is its own entry — e.g. lodged arrows stack visually
@@ -6304,9 +6410,14 @@ export default class CombatScene extends Phaser.Scene {
           cur.permanent = !!(cur.permanent || incoming.permanent);
           cur.turns = cur.permanent ? null : Math.max(cur.turns | 0, incoming.turns | 0);
           if (incoming.onNextDamageTaken !== undefined) cur.onNextDamageTaken = incoming.onNextDamageTaken;
+          if (incoming.onTurnEndOnce !== undefined) cur.onTurnEndOnce = incoming.onTurnEndOnce;
           cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
           if (incoming.mods && Object.keys(incoming.mods).length) {
             cur.mods = { ...(incoming.mods) };
+          }
+          for (const fam of Object.keys(WeaknessFamilies || {})) {
+            const mulKey = `${fam}BuildupMul`;
+            if (incoming[mulKey] !== undefined) cur[mulKey] = incoming[mulKey];
           }
         } else {
           target.statusEffects.push(incoming);
