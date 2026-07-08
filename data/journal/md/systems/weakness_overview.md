@@ -22,7 +22,7 @@ This journal page summarizes the **nine weakness families** and their tier ident
 |------------|-------------|-------------|---------------|----------------------------------------------------|
 | Lightning  | `lightning` | Zapped      | Shocked       | Flat damage jolts; tier 2 can trigger multiple hits |
 | Cold       | `cold`      | Chilled     | Frostbitten   | Slows turn order; reduces output and defense       |
-| Fire       | `fire`      | Singed      | Ablaze        | Flammable actions; burn damage at turn start       |
+| Fire       | `fire`      | Singed      | Ablaze        | Flammable actions; burn damage at turn end         |
 | Disorient  | `disorient` | Dazed       | Concussed     | Increased costs; drains spirit points              |
 | Lacerate   | `lacerate`  | Bleeding    | Hemorrhaging  | Actions add stacks; percent health loss each turn  |
 | Expose     | `expose`    | Raw         | Flayed        | Reduced physical defense; critical vulnerability   |

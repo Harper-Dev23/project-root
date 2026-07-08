@@ -288,8 +288,11 @@ export function getHealingReceivedMult(char) {
 }
 
 // --------------------------------------------------
-// Weakness riders applied on hit (Cold T2 dmg-out, Lightning jolts → elemental bucket)
+// Weakness riders applied on hit (Cold T2 dmg-out)
 // Expose T1 DR penalty is a delta on resultMutable.damageReduction via applyExposePreDamage.
+// Lightning jolts are NOT handled here — see applyLightningJolt() below, which
+// is added after the crit multiplier in calculateDamage() so jolt damage can
+// never itself be crit-amplified.
 // Signature: (physical, elemental, attacker, target, ability) → { physical, elemental }
 // --------------------------------------------------
 function applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability) {
@@ -309,55 +312,59 @@ function applyWeaknessDamagePipeline(physical, elemental, attacker, target, abil
     }
   }
 
+  return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
+}
+
+// --------------------------------------------------
+// Lightning jolts: a flat, non-crittable rider added to the elemental bucket
+// AFTER the crit multiplier (see calculateDamage) — it bypasses PhysicalResist
+// (elemental bucket) but is deliberately excluded from crit amplification,
+// same as a rider like Curse of Needles rather than part of the base swing.
+// Intensity currently only scales the CHANCE of extra jolts (T2); the size of
+// each individual jolt (1..dieMax) stays flat/unscaled regardless of overflow.
+// Signature: (target) → { joltTotal }
+// --------------------------------------------------
+function applyLightningJolt(target) {
   const w = target?.weakness;
-  if (!w) return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
+  if (!w) return { joltTotal: 0 };
 
-  // Lightning jolts: magic-typed, added to elemental bucket (bypasses PhysicalResist)
-  if ((w.tiers[famKey(w, 'lightning')] | 0) >= 1) {
-    const key = famKey(w, 'lightning');
-    const t = w.tiers[key] | 0;
-    const m = w.meters[key] | 0;
+  const key = famKey(w, 'lightning');
+  const t = w.tiers?.[key] | 0;
+  if (t < 1) return { joltTotal: 0 };
 
-    // Intensity only scales the CHANCE of extra jolts (below); the base
-    // per-jolt die roll stays a flat, unscaled 1..dieMax regardless of overflow.
-    const I = familyIntensityMult('lightning', m);
-    const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
-    const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
+  const m = w.meters?.[key] | 0;
+  const I = familyIntensityMult('lightning', m);
+  const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
+  const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
 
-    let repeats = 1;
-    let joltTotal = 0;
+  let repeats = 1;
+  let joltTotal = 0;
 
-    if (t >= 2) {
-      const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
-      const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
-      const extraMax = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
-      // Was also adding a second, redundant additive term on top of baseP*I
-      // (double-counting the same overflow) — simplified to the same
-      // min(base*I, cap) pattern every other family's scaled fields use.
-      const p = Math.min(capP, baseP * I);
-      let extra = 0;
-      for (let i = 0; i < extraMax; i++) {
-        if (Math.random() < p) extra++;
-      }
-      repeats += extra;
-      try { _pushBreakdown({ label: 'Lightning extra-proc chance', value: Math.round(p * 100) }); } catch { }
+  if (t >= 2) {
+    const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
+    const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
+    const extraMax = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
+    const p = Math.min(capP, baseP * I);
+    let extra = 0;
+    for (let i = 0; i < extraMax; i++) {
+      if (Math.random() < p) extra++;
     }
-
-    for (let r = 0; r < repeats; r++) {
-      let j = 0;
-      if (dieMax && dieMax > 0) {
-        j = Phaser?.Math?.Between ? Phaser.Math.Between(1, dieMax) : (1 + Math.floor(Math.random() * dieMax));
-      } else {
-        j = flat;
-      }
-      joltTotal += j;
-    }
-
-    elemental += joltTotal;
-    try { if (joltTotal > 0) _pushBreakdown({ label: `Lightning Jolt x${repeats}`, flat: joltTotal }); } catch { }
+    repeats += extra;
+    try { _pushBreakdown({ label: 'Lightning extra-proc chance', value: Math.round(p * 100) }); } catch { }
   }
 
-  return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
+  for (let r = 0; r < repeats; r++) {
+    let j = 0;
+    if (dieMax && dieMax > 0) {
+      j = Phaser?.Math?.Between ? Phaser.Math.Between(1, dieMax) : (1 + Math.floor(Math.random() * dieMax));
+    } else {
+      j = flat;
+    }
+    joltTotal += j;
+  }
+
+  try { if (joltTotal > 0) _pushBreakdown({ label: `Lightning Jolt x${repeats}`, flat: joltTotal }); } catch { }
+  return { joltTotal };
 }
 
 
@@ -475,7 +482,7 @@ export function calculateDamage(attacker, target, ability = null) {
     necrotic += conv;
   }
 
-  // Weakness pipeline: Cold T2 penalty + Lightning jolts (modifies physical & elemental)
+  // Weakness pipeline: Cold T2 damage-dealt penalty (modifies physical & elemental)
   const pipeResult = applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability);
   physical = pipeResult.physical;
   elemental = pipeResult.elemental;
@@ -489,6 +496,11 @@ export function calculateDamage(attacker, target, ability = null) {
     necrotic = Math.floor(necrotic * critBundle.critMult);
     try { _pushBreakdown({ label: 'crit', from: prevSum, mult: critBundle.critMult, to: physical + elemental + necrotic }); } catch { }
   }
+
+  // Lightning jolts: added AFTER crit, deliberately non-crittable (a rider on
+  // the hit, not part of the base swing that gets amplified).
+  const { joltTotal } = applyLightningJolt(target);
+  if (joltTotal > 0) elemental += joltTotal;
 
   if (attacker) attacker.__gearAppliedForLastDamage = true;
 

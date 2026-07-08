@@ -1822,8 +1822,8 @@ export default class CombatScene extends Phaser.Scene {
           `−${loss} Fire buildup per action taken, +${incPct}% incoming Fire buildup.`);
         const tickBase = cfg.t2?.startTickBase ?? 10;
         const tick = Math.max(1, Math.floor(tickBase * I));
-        add(2, 'Start-of-turn burn tick scales with overflow; can consume meter.',
-          `${tick} burn damage at turn start.`);
+        add(2, 'End-of-turn burn tick scales with overflow; can consume meter.',
+          `${tick} burn damage at end of turn.`);
         break;
       }
       case 'cold': {
@@ -1865,9 +1865,14 @@ export default class CombatScene extends Phaser.Scene {
         const I = familyIntensityMult('disorient', m);
         const cmBase = cfg.t1?.costMultiplier ?? 0;
         const cmCap = cfg.t1?.costMultiplierCap ?? cmBase;
+        // Cap is flat regardless of tier — matches calculateEffectiveResourceCost
+        // in CombatScene.js exactly (the real consumer): the ×1.5 T2 bump is
+        // applied to the raw value BEFORE capping, not to the cap itself. This
+        // used to scale the cap by 1.5 at T2 too, which could show a bigger
+        // number here than the game would ever actually charge.
         let costAdd = cmBase * I;
         if (t >= 2) costAdd *= 1.5;
-        costAdd = Math.min(costAdd, cmCap * (t >= 2 ? 1.5 : 1));
+        costAdd = Math.min(costAdd, cmCap);
         add(1, 'MP costs rise (scales with overflow).', `MP costs +${Math.round(costAdd * 100)}%.`);
         const drainBase = cfg.t2?.startDrainMPBase ?? 0;
         const drainCap = cfg.t2?.startDrainMPCap ?? 9999;
@@ -1885,8 +1890,8 @@ export default class CombatScene extends Phaser.Scene {
         const pct = Math.min(pctBase * I, pctCap);
         const maxHP = Math.max(1, char?.maxHP | 0);
         const dot = Math.max(1, Math.floor(maxHP * pct));
-        add(2, 'Hemorrhaging: deals a percentage of Max HP as bleed at start of turn.',
-          `${dot} damage (${Math.round(pct * 100)}% Max HP) at turn start.`);
+        add(2, 'Hemorrhaging: deals a percentage of Max HP as bleed at end of turn.',
+          `${dot} damage (${Math.round(pct * 100)}% Max HP) at end of turn.`);
         break;
       }
       case 'expose': {
@@ -1896,7 +1901,11 @@ export default class CombatScene extends Phaser.Scene {
         add(1, 'Physical DR is pierced; takes extra physical buildup.',
           `target's physical DR reduced ${Math.round(drPen * 100)} points, +${Math.round(buildupAmp * 100)}% incoming Disorient/Lacerate buildup.`);
         const ccPct = Math.round((cfg.t2?.critChanceBonus ?? 0) * I * 100);
-        const cdPct = Math.round((cfg.t2?.critDamageBonus ?? 0) * 100);
+        // Was missing * I entirely — the real calc (applyExposeCritBonuses in
+        // CombatLogic.js) scales crit damage by intensity same as crit chance,
+        // but this display showed only the flat base config value, understating
+        // the actual bonus at any overflow above the T2 threshold.
+        const cdPct = Math.round((cfg.t2?.critDamageBonus ?? 0) * I * 100);
         add(2, 'Bonus crit chance and crit damage against the target.',
           `attackers get +${ccPct}% crit chance, +${cdPct}% crit damage.`);
         break;
@@ -1909,7 +1918,7 @@ export default class CombatScene extends Phaser.Scene {
         add(1, 'Sometimes skips decay, letting poison linger.', `${bypassPct}% chance to skip a decay tick.`);
         const tickBase = cfg.t2?.startTickBase ?? 0;
         const tick = Math.max(1, Math.floor(tickBase * I));
-        add(2, 'Flat poison tick at start of turn.', `${tick} poison damage at start of turn.`);
+        add(2, 'Flat poison tick at end of turn.', `${tick} poison damage at end of turn.`);
         break;
       }
       case 'disease': {
@@ -4779,22 +4788,36 @@ export default class CombatScene extends Phaser.Scene {
   _applySlotEffectsTick(char) {
     const slotKey = this._charSlotKey(char);
     const effects = slotKey ? this.slotEffects?.[slotKey] : null;
-    if (!effects || effects.length === 0) return;
+    if (!effects || effects.length === 0) return { died: false };
 
     const stillActive = [];
+    let died = false;
     for (const eff of effects) {
       // Damage-over-time from the ground (tickPctMaxHP: 0 = no damage)
-      if (eff.tickPctMaxHP > 0) {
+      if (!died && eff.tickPctMaxHP > 0) {
         const maxHP = Math.max(1, char.maxHP || 1);
         const dot = Math.max(1, Math.floor(maxHP * eff.tickPctMaxHP));
         const dr = getDamageReductionFraction(char, { isMagic: !!eff.element });
         const tileDmg = dr ? Math.max(0, Math.floor(dot * (1 - dr))) : dot;
         char.currentHP = Math.max(0, char.currentHP - tileDmg);
         this._log(`${char.name} suffers ${tileDmg} damage from ${eff.id}.`);
+        this._showFloatingNumber?.(tileDmg, char, false);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+        // This tick was previously only ever called at start-of-turn, where
+        // _startTurnStatusEffects/_startTurnWeakness ran afterward and caught
+        // a 0-HP result themselves — so a lethal zone tick was never actually
+        // marked incapacitated here. Now that this can run standalone at
+        // end-of-turn (nothing downstream double-checks HP), it needs its own
+        // death handling like every other damage tick in this file.
+        if (char.currentHP === 0 && char.status !== 'incapacitated') {
+          char.status = 'incapacitated';
+          this._onUnitKnockedOut?.(char);
+          died = true;
+        }
       }
 
       // Named buildup families (e.g. disorient +50 per turn) — explicit map
-      if (eff.buildupFamilies && char.weakness) {
+      if (!died && eff.buildupFamilies && char.weakness) {
         char.weakness.meters = char.weakness.meters || {};
         let anyBuildup = false;
         for (const [fam, amt] of Object.entries(eff.buildupFamilies)) {
@@ -4805,7 +4828,7 @@ export default class CombatScene extends Phaser.Scene {
           const parts = Object.entries(eff.buildupFamilies).map(([f, v]) => `${f} +${v}`).join(', ');
           this._log(`${char.name} suffers ${parts} from the quake zone.`);
         }
-      } else if (eff.element && eff.buildup && char.weakness) {
+      } else if (!died && eff.element && eff.buildup && char.weakness) {
         // Legacy: single-element buildup via element key
         char.weakness.meters[eff.element] = (char.weakness.meters[eff.element] || 0) + eff.buildup;
         this._recomputeWeaknessTiers(char);
@@ -4817,6 +4840,7 @@ export default class CombatScene extends Phaser.Scene {
     }
     this.slotEffects[slotKey] = stillActive;
     this._refreshGroundSprites(slotKey);
+    return { died };
   }
 
   // ---------- Slot key helpers ----------
@@ -4970,197 +4994,14 @@ export default class CombatScene extends Phaser.Scene {
     // If unit has no weakness state, nothing to do
     if (!char?.weakness) return { died: false, skip: false };
 
-    // 🔥 FIRE — Ablaze start-of-turn tick (MAGIC), per-family intensity curve + optional meter burn-out
-    {
-      const tiers = char?.weakness?.tiers || {};
-      const meters = char?.weakness?.meters || {};
-      if ((tiers.fire | 0) >= 2) {
-        const m = meters.fire | 0;
-
-        // Base tick, then multiply by Fire's own curve (does NOT affect Lightning)
-        const base = (WeaknessV3?.families?.fire?.t2?.startTickBase ??
-          WeaknessV3?.families?.fire?.t2?.startTickFlat ?? 10);
-        const mult = familyIntensityMult('fire', m);
-        const burnRaw = Math.max(1, Math.floor((+base || 0) * mult));
-
-        // MAGIC-typed ; route through magic modifiers if desired
-        let burn = burnRaw;
-
-        // --- Cinders rider: allow AFLAME tick to crit iff Cinders active AND Curse T1+ right now ---
-        try {
-          // Prefer your helpers if present (supports either map-style statuses or your array style as fallback)
-          const cindersActive =
-            (typeof hasCurseCinders === 'function' ? hasCurseCinders(char)
-              : (char.statuses?.curse_cinders || (char.statusEffects || []).some(e => e.id === 'curse_cinders')));
-
-          const curseT1Plus =
-            (typeof hasCurseTier1Plus === 'function' ? hasCurseTier1Plus(char)
-              : ((char?.weakness?.meters?.curse | 0) >= 100));
-
-          if (cindersActive && curseT1Plus) {
-            // Base crit chance & mult (safe defaults if you haven't added these to WeaknessV3)
-            const baseCritChance = WeaknessV3?.families?.curse?.cinders?.baseCritChance ?? 0.05;  // 5% base
-            const critMult = WeaknessV3?.families?.curse?.cinders?.critMult ?? 1.50;  // x1.5
-
-            // Extra crit chance scales with Curse overflow above 200; cap it
-            const of =
-              (typeof curseOverflowFactor === 'function' ? curseOverflowFactor(char)
-                : Math.max(0, ((char?.weakness?.meters?.curse | 0) - 200) / 100));
-
-            const extraCritChance = Math.min(
-              WeaknessV3?.families?.curse?.cinders?.extraCritCap ?? 0.35, // cap
-              (WeaknessV3?.families?.curse?.cinders?.extraCritSlope ?? 0.20) * of
-            );
-
-            const finalCritChance = Math.max(0, Math.min(0.95, baseCritChance + extraCritChance));
-
-            if (Math.random() < finalCritChance) {
-              burn = Math.floor(burn * critMult);
-              this._log(`${char.name} suffers AFLAME (Cinders CRIT) for ${burn} (chance ${Math.round(finalCritChance * 100)}%).`);
-              try { addDamageBreakdown?.({ label: 'Cinders crit', mult: critMult }); } catch { }
-            } else {
-              this._log(`${char.name} suffers AFLAME (Cinders) for ${burn}.`);
-            }
-          } else {
-            // Not active or not hexed/afflicted → normal log keeps your previous context
-            this._log(`${char.name} suffers AFLAME for ${burn}.`);
-          }
-        } catch {
-          // Hard-fail safe: normal log if something odd happens
-          this._log(`${char.name} suffers AFLAME for ${burn}.`);
-        }
-
-
-        try {
-          if (typeof applyDamageModifiers === 'function') {
-            burn = applyDamageModifiers(burn, /*attacker*/ null, char, { isMagic: true, element: 'fire' });
-          }
-        } catch { }
-
-        if (burn > 0) {
-          const dr = getDamageReductionFraction(char, { isMagic: true });
-          if (dr) {
-            burn = Math.max(0, Math.floor(burn * (1 - dr)));
-          }
-        }
-
-
-        char.currentHP = Math.max(0, (char.currentHP | 0) - burn);
-        this._showFloatingNumber?.(burn, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} Ablaze: base ${base} × I_fire=${mult.toFixed(2)} (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
-        this._updateHealthBars?.(); this._updateHPMPBars?.();
-        if (char.currentHP === 0 && char.status !== 'incapacitated') {
-          char.status = 'incapacitated';
-          this._onUnitKnockedOut?.(char);
-          return { died: true, skip: true };
-        }
-
-        // Optional extra meter consumption at start of turn (per Fire config)
-        const consume = familyStartConsume('fire', m);
-        if (consume > 0) {
-          const before = meters.fire | 0;
-          meters.fire = Math.max(0, before - consume);
-          this._log(`${char.name} burns out: Fire meter ${before} → ${meters.fire} (−${consume}).`);
-
-          // Recompute tier if you don't have a global recompute here
-          const fam = WeaknessFamilies.fire;
-          const newTier = (meters.fire >= fam.t2) ? 2 : (meters.fire >= fam.t1 ? 1 : 0);
-          const oldTier = tiers.fire | 0;
-          if (newTier !== oldTier) {
-            tiers.fire = newTier;
-            (char.weakness.grace || (char.weakness.grace = {})).fire = fam.grace || 0;
-            this._onWeaknessTierChanged?.(char, 'fire', newTier, oldTier, { startTick: true });
-          }
-        }
-      }
-    }
-
-
-    // 🩸 LACERATE — Hemorrhaging %HP at start of turn (T2)
-    {
-      const w = char?.weakness;
-      const t = w?.tiers?.lacerate | 0;
-      if (t >= 2) {
-        const maxHP = Math.max(1, (char.maxHP | 0));
-        const meter = w?.meters?.lacerate | 0;
-
-        // Safe config reads with defaults
-        const basePct = WeaknessV3?.families?.lacerate?.t2?.startPctHP ?? 0.06; // 6% base
-        const capPct = WeaknessV3?.families?.lacerate?.t2?.startPctCap ?? 0.20; // 20% cap
-
-        // Intensity factor (prefer your helper; fall back to 1)
-        const I = (typeof weaknessIntensityMult === 'function')
-          ? weaknessIntensityMult(meter)
-          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('lacerate', meter) : 1);
-
-        const pct = Math.min(basePct * (I > 0 ? I : 1), capPct);
-        const dot = Math.max(1, Math.floor(maxHP * pct));
-
-        let bleed = dot;
-        const dr = getDamageReductionFraction(char, { isMagic: false });
-        if (dr) {
-          bleed = Math.max(0, Math.floor(bleed * (1 - dr)));
-        }
-
-        char.currentHP = Math.max(0, (char.currentHP | 0) - bleed);
-        this._showFloatingNumber?.(bleed, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} hemorrhages ${bleed} (${Math.round(pct * 100)}% of Max HP).`);
-        this._updateHealthBars?.(); this._updateHPMPBars?.();
-
-        if (char.currentHP === 0 && char.status !== 'incapacitated') {
-          char.status = 'incapacitated';
-          this._onUnitKnockedOut?.(char);
-          return { died: true, skip: true };
-        }
-      }
-    }
-
-
-    // ☠️ TOXIC — Envenomed start-of-turn tick (T2)
-    {
-      const w = char?.weakness;
-      const t = w?.tiers?.toxic | 0;
-      if (t >= 2) {
-        const m = w?.meters?.toxic | 0;
-
-        // NOTE: config uses startTickBase (not startTickFlat)
-        const base = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
-
-        // Intensity (use your helper, fall back safely)
-        const I = (typeof weaknessIntensityMult === 'function')
-          ? weaknessIntensityMult(m)
-          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('toxic', m) : 1);
-
-        const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1)));
-
-        // Treat as 'necrotic' magic so MDR/element hooks can apply
-        let dmg = raw;
-        try {
-          if (typeof applyDamageModifiers === 'function') {
-            dmg = applyDamageModifiers(raw, /*attacker*/ null, char, { isMagic: true, element: 'necrotic' });
-          }
-        } catch { }
-
-        if (dmg > 0) {
-          const dr = getDamageReductionFraction(char, { damageType: 'necrotic' });
-          if (dr) {
-            dmg = Math.max(0, Math.floor(dmg * (1 - dr)));
-          }
-        }
-
-        char.currentHP = Math.max(0, (char.currentHP | 0) - dmg);
-        this._showFloatingNumber?.(dmg, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} Envenomed: base ${base} × I_toxic=${I.toFixed(2)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
-        this._updateHealthBars?.(); this._updateHPMPBars?.();
-
-        if (char.currentHP === 0 && char.status !== 'incapacitated') {
-          char.status = 'incapacitated';
-          this._onUnitKnockedOut?.(char);
-          return { died: true, skip: true };
-        }
-      }
-    }
-
+    // Fire (Ablaze), Lacerate (Hemorrhage), and Toxic (Envenomed) DOT ticks
+    // used to fire here, before the character ever got to act. Moved to
+    // _endTurnWeakness (2026-07) so the tick lands AFTER the character's own
+    // turn — a real counterplay window (cleanse, reposition, retreat) instead
+    // of an unavoidable hit before they've done anything. Cold's gauge
+    // penalty (above, via _tickInitiativeGauge) and Disorient's MP drain stay
+    // here deliberately: both shape the character's OWN upcoming turn rather
+    // than being a delayed consequence of a past one.
 
     // 🤯 DISORIENT — Concussed (T2) drains MP at start of turn
     {
@@ -5190,10 +5031,196 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _endTurnWeakness(char) {
-    if (!char?.weakness) return;
+    if (!char?.weakness) return { died: false };
     // Clear per-turn temp mods
     if (char.combat) char.combat.accPenalty = 0;
-    // Apply this unit's decay now
+
+    // Fire (Ablaze), Lacerate (Hemorrhage), and Toxic (Envenomed) DOT ticks —
+    // moved here from _startTurnWeakness (2026-07) so they land AFTER the
+    // character's own turn instead of before it (see _startTurnWeakness for
+    // the reasoning). Deliberately fire BEFORE decay below: the tick uses the
+    // FULL, undecayed meter (the character was at this weakness's full
+    // strength for their entire turn), then decay reduces it afterward.
+
+    // 🔥 FIRE — Ablaze end-of-turn tick (MAGIC), per-family intensity curve + optional meter burn-out
+    {
+      const tiers = char?.weakness?.tiers || {};
+      const meters = char?.weakness?.meters || {};
+      if ((tiers.fire | 0) >= 2) {
+        const m = meters.fire | 0;
+
+        // Base tick, then multiply by Fire's own curve (does NOT affect Lightning)
+        const base = (WeaknessV3?.families?.fire?.t2?.startTickBase ??
+          WeaknessV3?.families?.fire?.t2?.startTickFlat ?? 10);
+        const mult = familyIntensityMult('fire', m);
+        const burnRaw = Math.max(1, Math.floor((+base || 0) * mult));
+
+        // MAGIC-typed ; route through magic modifiers if desired
+        let burn = burnRaw;
+
+        // --- Cinders rider: allow AFLAME tick to crit iff Cinders active AND Curse T1+ right now ---
+        try {
+          const cindersActive =
+            (typeof hasCurseCinders === 'function' ? hasCurseCinders(char)
+              : (char.statuses?.curse_cinders || (char.statusEffects || []).some(e => e.id === 'curse_cinders')));
+
+          const curseT1Plus =
+            (typeof hasCurseTier1Plus === 'function' ? hasCurseTier1Plus(char)
+              : ((char?.weakness?.meters?.curse | 0) >= 100));
+
+          if (cindersActive && curseT1Plus) {
+            const baseCritChance = WeaknessV3?.families?.curse?.cinders?.baseCritChance ?? 0.05;
+            const critMult = WeaknessV3?.families?.curse?.cinders?.critMult ?? 1.50;
+
+            const of =
+              (typeof curseOverflowFactor === 'function' ? curseOverflowFactor(char)
+                : Math.max(0, ((char?.weakness?.meters?.curse | 0) - 200) / 100));
+
+            const extraCritChance = Math.min(
+              WeaknessV3?.families?.curse?.cinders?.extraCritCap ?? 0.35,
+              (WeaknessV3?.families?.curse?.cinders?.extraCritSlope ?? 0.20) * of
+            );
+
+            const finalCritChance = Math.max(0, Math.min(0.95, baseCritChance + extraCritChance));
+
+            if (Math.random() < finalCritChance) {
+              burn = Math.floor(burn * critMult);
+              this._log(`${char.name} suffers AFLAME (Cinders CRIT) for ${burn} (chance ${Math.round(finalCritChance * 100)}%).`);
+              try { addDamageBreakdown?.({ label: 'Cinders crit', mult: critMult }); } catch { }
+            } else {
+              this._log(`${char.name} suffers AFLAME (Cinders) for ${burn}.`);
+            }
+          } else {
+            this._log(`${char.name} suffers AFLAME for ${burn}.`);
+          }
+        } catch {
+          this._log(`${char.name} suffers AFLAME for ${burn}.`);
+        }
+
+        try {
+          if (typeof applyDamageModifiers === 'function') {
+            burn = applyDamageModifiers(burn, /*attacker*/ null, char, { isMagic: true, element: 'fire' });
+          }
+        } catch { }
+
+        if (burn > 0) {
+          const dr = getDamageReductionFraction(char, { isMagic: true });
+          if (dr) {
+            burn = Math.max(0, Math.floor(burn * (1 - dr)));
+          }
+        }
+
+        char.currentHP = Math.max(0, (char.currentHP | 0) - burn);
+        this._showFloatingNumber?.(burn, char, /*isHeal=*/false, /*isCrit=*/false);
+        this._log(`${char.name} Ablaze: base ${base} × I_fire=${mult.toFixed(2)} (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+        if (char.currentHP === 0 && char.status !== 'incapacitated') {
+          char.status = 'incapacitated';
+          this._onUnitKnockedOut?.(char);
+          return { died: true };
+        }
+
+        // Optional extra meter consumption at end of turn (per Fire config)
+        const consume = familyStartConsume('fire', m);
+        if (consume > 0) {
+          const before = meters.fire | 0;
+          meters.fire = Math.max(0, before - consume);
+          this._log(`${char.name} burns out: Fire meter ${before} → ${meters.fire} (−${consume}).`);
+
+          const fam = WeaknessFamilies.fire;
+          const newTier = (meters.fire >= fam.t2) ? 2 : (meters.fire >= fam.t1 ? 1 : 0);
+          const oldTier = tiers.fire | 0;
+          if (newTier !== oldTier) {
+            tiers.fire = newTier;
+            (char.weakness.grace || (char.weakness.grace = {})).fire = fam.grace || 0;
+            this._onWeaknessTierChanged?.(char, 'fire', newTier, oldTier, { startTick: true });
+          }
+        }
+      }
+    }
+
+    // 🩸 LACERATE — Hemorrhaging %HP at end of turn (T2)
+    {
+      const w = char?.weakness;
+      const t = w?.tiers?.lacerate | 0;
+      if (t >= 2) {
+        const maxHP = Math.max(1, (char.maxHP | 0));
+        const meter = w?.meters?.lacerate | 0;
+
+        const basePct = WeaknessV3?.families?.lacerate?.t2?.startPctHP ?? 0.06;
+        const capPct = WeaknessV3?.families?.lacerate?.t2?.startPctCap ?? 0.20;
+
+        const I = (typeof weaknessIntensityMult === 'function')
+          ? weaknessIntensityMult(meter)
+          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('lacerate', meter) : 1);
+
+        const pct = Math.min(basePct * (I > 0 ? I : 1), capPct);
+        const dot = Math.max(1, Math.floor(maxHP * pct));
+
+        let bleed = dot;
+        const dr = getDamageReductionFraction(char, { isMagic: false });
+        if (dr) {
+          bleed = Math.max(0, Math.floor(bleed * (1 - dr)));
+        }
+
+        char.currentHP = Math.max(0, (char.currentHP | 0) - bleed);
+        this._showFloatingNumber?.(bleed, char, /*isHeal=*/false, /*isCrit=*/false);
+        this._log(`${char.name} hemorrhages ${bleed} (${Math.round(pct * 100)}% of Max HP).`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+
+        if (char.currentHP === 0 && char.status !== 'incapacitated') {
+          char.status = 'incapacitated';
+          this._onUnitKnockedOut?.(char);
+          return { died: true };
+        }
+      }
+    }
+
+    // ☠️ TOXIC — Envenomed end-of-turn tick (T2)
+    {
+      const w = char?.weakness;
+      const t = w?.tiers?.toxic | 0;
+      if (t >= 2) {
+        const m = w?.meters?.toxic | 0;
+
+        const base = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
+
+        const I = (typeof weaknessIntensityMult === 'function')
+          ? weaknessIntensityMult(m)
+          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('toxic', m) : 1);
+
+        const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1)));
+
+        let dmg = raw;
+        try {
+          if (typeof applyDamageModifiers === 'function') {
+            dmg = applyDamageModifiers(raw, /*attacker*/ null, char, { isMagic: true, element: 'necrotic' });
+          }
+        } catch { }
+
+        if (dmg > 0) {
+          const dr = getDamageReductionFraction(char, { damageType: 'necrotic' });
+          if (dr) {
+            dmg = Math.max(0, Math.floor(dmg * (1 - dr)));
+          }
+        }
+
+        char.currentHP = Math.max(0, (char.currentHP | 0) - dmg);
+        this._showFloatingNumber?.(dmg, char, /*isHeal=*/false, /*isCrit=*/false);
+        this._log(`${char.name} Envenomed: base ${base} × I_toxic=${I.toFixed(2)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+
+        if (char.currentHP === 0 && char.status !== 'incapacitated') {
+          char.status = 'incapacitated';
+          this._onUnitKnockedOut?.(char);
+          return { died: true };
+        }
+      }
+    }
+
+    // Apply this unit's decay now — AFTER the DOT ticks above, so decay
+    // reflects the meter post-tick (fire's optional burn-out consumption
+    // included), not pre-tick.
     this._weaknessDecayUnit(char);
     if (this.characterInfoTab === 'weakness' && this._inspectedChar === char) {
       this._renderCharacterInfoBody(char);
@@ -5207,6 +5234,7 @@ export default class CombatScene extends Phaser.Scene {
     // real durations), and this copy — running first — stripped permanent
     // effects (like Pressure Point's ignition) before the correct function
     // ever got a chance to protect them.
+    return { died: false };
   }
 
 
@@ -6045,24 +6073,52 @@ export default class CombatScene extends Phaser.Scene {
   _advanceTurn() {
     if (this.combatEnded) return;
 
-    // 1) Apply END-OF-TURN decay for the actor who just acted
+    // 1) Apply END-OF-TURN consequences for the actor who just acted
     const previousChar = this._currentChar?.();
+    let previousCharDied = false;
     if (previousChar) {
       // tick centralized cooldowns for the actor who just acted
       this._tickCooldownsEndOfTurn(previousChar);
-      // NEW: decay weaknesses at end of *their* turn
-      this._endTurnWeakness(previousChar);
-      // Resolve delayed one-shot payloads (e.g. Glacial Strike's Trapped Fire)
-      // before the normal duration tick below removes/logs the status.
-      this._applyEndOfTurnProcs(previousChar);
 
-      // === NEW: tick down timed statuses (includes Cinders) ===
-      this._tickDownStatusDurations(previousChar);
+      // Ground/hazard zone tick (e.g. Frozen Quake) — moved here from start-
+      // of-turn (2026-07): the occupant now gets their own full turn to move
+      // out of a hazard zone before it can hit them, instead of being ticked
+      // before they've had any chance to react.
+      const zoneResult = this._applySlotEffectsTick(previousChar);
+      if (this.combatEnded) return;
+      if (zoneResult?.died) previousCharDied = true;
+
+      if (!previousCharDied) {
+        // Weakness DOT ticks (Fire/Lacerate/Toxic) + decay, end of *their* turn
+        const weaknessResult = this._endTurnWeakness(previousChar);
+        if (this.combatEnded) return;
+        if (weaknessResult?.died) previousCharDied = true;
+      }
+
+      if (!previousCharDied) {
+        // Resolve delayed one-shot payloads (e.g. Glacial Strike's Trapped Fire)
+        // before the normal duration tick below removes/logs the status.
+        this._applyEndOfTurnProcs(previousChar);
+
+        // === NEW: tick down timed statuses (includes Cinders) ===
+        this._tickDownStatusDurations(previousChar);
+      }
     }
 
     // 2) Advance to next actor
     if (!this.turnOrder?.length) return;                  // avoid modulo 0
-    this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
+    if (previousCharDied) {
+      // previousChar was just removed from turnOrder by _onUnitKnockedOut,
+      // which only decrements currentTurnIndex if the removed slot was
+      // BEFORE it — since previousChar WAS AT currentTurnIndex, that
+      // condition is false, so the index is left pointing at whichever unit
+      // slid into the now-vacant slot (already the correct "next" unit).
+      // Incrementing here, like the normal case below, would skip that unit
+      // entirely.
+      if (this.currentTurnIndex >= this.turnOrder.length) this.currentTurnIndex = 0;
+    } else {
+      this.currentTurnIndex = (this.currentTurnIndex + 1) % this.turnOrder.length;
+    }
     const _isNewRound = this.currentTurnIndex === 0;
 
     const char = this._currentChar?.();
@@ -6076,9 +6132,6 @@ export default class CombatScene extends Phaser.Scene {
     this.killedEnemyLacerateTier = 0;
     this.currentActorMovedThisTurn = false;
     this.lodgesDislodgedThisTurn = 0;
-
-    // 3) Apply START-OF-TURN ongoings (DOT/skip-turn/penalties)
-    this._applySlotEffectsTick(char);   // ground zone ticks for the current actor's tile
 
     // Tick down ground zones on unoccupied slots ONCE per full round (when the
     // turn array wraps back to index 0). Occupied slots are already handled by
