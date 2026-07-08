@@ -9192,36 +9192,22 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.needle_venom;
       const roll = calculateDamage(attacker, target, ability);
 
-      // Typed pipeline: universal gear/buff % and Curse's necrotic-only amp are
-      // applied here — see applyTypedDamageModifiers. Expose/Flay has no universal
-      // damage bonus of its own (T1 is a PDR/buildup effect, T2 is crit-only, both
-      // handled elsewhere); any Expose-triggered damage bonus below is specific to
-      // this skill, not part of the weakness system itself.
+      // This skill's own Expose-triggered bonus is a Category A "this skill hits
+      // harder" reward (NOT an effect of the weakness system itself) — combined
+      // additively with the 100% base into ONE skillPct, per applyTypedDamageModifiers
+      // below, rather than two chained multiplies.
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const activeRule = findRewardIfWeakRule(ability, exposeTier);
+      const dmgPct = activeRule?.buff?.damagePct || 0;
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100 + dmgPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const activeRule = findRewardIfWeakRule(ability, exposeTier);
 
       let toxicBuildup = ability?.buildupHint?.toxic ?? 90;
       if (activeRule) {
-        const dmgPct = activeRule.buff?.damagePct || 0;
-        // This is a Category A "this skill hits harder" reward that Needle Venom
-        // itself grants when the target is Exposed enough — NOT an effect of the
-        // weakness system. It scales the FULL weapon hit (physical + elemental +
-        // necrotic) uniformly, same as the skill's base weapon-damage%. The label
-        // is generic so the same pattern can be reused by other skills.
-        if (dmgPct) {
-          const prevSum = physical + elemental + necrotic;
-          const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + dmgPct / 100);
-          physical = scaled.physical;
-          elemental = scaled.elemental;
-          necrotic = scaled.necrotic;
-          try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage bonus`, mult: 1 + dmgPct / 100, from: prevSum, to: scaled.amount }); } catch { }
-        }
         toxicBuildup += activeRule.buff?.addBuildup?.toxic || 0;
       }
 
@@ -9686,15 +9672,8 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 115, isCrit: roll.isCrit, critMult: roll.critMult }
       );
-
-      // Silent Order's own 115% weapon damage — a Category A "this skill hits
-      // harder" bonus, scales the whole hit uniformly like the base weapon%.
-      const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.15);
-      physical = scaled.physical;
-      elemental = scaled.elemental;
-      necrotic = scaled.necrotic;
 
       const amount = Math.max(1, physical + elemental + necrotic);
 
@@ -9735,17 +9714,19 @@ Object.assign(RAW_SKILLS, {
       target.statusEffects = target.statusEffects || [];
       const alreadyCursed = target.statusEffects.some(se => se?.id === 'curse_of_needles');
       if (!alreadyCursed) {
-        // curseScaled: true marks this as a curse rider for the generic engine
-        // hook in CombatScene.js — its flat bonus is amplified while the target
-        // is Afflicted (Curse T2), same as any future skill's curse rider would be.
+        // Tier 1 rider ("+X weapon damage") — weaponDamageFlat is read inside
+        // calculateDamage() (applyCurseWeaponRiders) and baked directly into
+        // the base weapon roll, before skill%/buffs/gear/crit, for ANY hit
+        // this target takes while cursed. curseScaled: true amplifies it
+        // while the target is Afflicted (Curse T2), same as before.
         target.statusEffects.push({
           id: "curse_of_needles", name: "Curse of Needles", permanent: true,
-          onHit: { flatDamage: 3, curseScaled: true },
+          onHit: { weaponDamageFlat: 2, curseScaled: true },
         });
       }
       return { ...roll, amount: Math.floor(amount * 1.10) };
     },
-    description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits deal +3 flat damage while target is at least Hexed, amplified while Afflicted."
+    description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while at least Hexed, amplified while Afflicted."
   },
 
   'flash_overload': {
@@ -9826,7 +9807,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const lacMeter = target?.weakness?.meters?.lacerate || 0;
@@ -9907,7 +9888,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const amount = Math.max(1, physical + elemental + necrotic);
@@ -9960,7 +9941,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const amount = Math.max(1, physical + elemental + necrotic);
@@ -10004,25 +9985,18 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.rally_blow;
       const roll = calculateDamage(attacker, target, ability);
 
+      const disorientTier = target?.weakness?.tiers?.disorient || 0;
+      const rule = findRewardIfWeakRule(ability, disorientTier);
+      const dmgPct = rule?.buff?.damagePct || 0;
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100 + dmgPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
-      const disorientTier = target?.weakness?.tiers?.disorient || 0;
-      const rule = findRewardIfWeakRule(ability, disorientTier);
       const statusEffects = [];
       if (rule) {
-        const dmgPct = rule.buff?.damagePct || 0;
-        if (dmgPct) {
-          const prevSum = physical + elemental + necrotic;
-          const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + dmgPct / 100);
-          physical = scaled.physical;
-          elemental = scaled.elemental;
-          necrotic = scaled.necrotic;
-          try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage bonus`, mult: 1 + dmgPct / 100, from: prevSum, to: scaled.amount }); } catch { }
-        }
         statusEffects.push({ id: "rallied_vulnerability", turns: 1, mods: { PhysicalResist: -10 } });
       }
 
@@ -10083,26 +10057,19 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.soft_spot_exposed;
       const roll = calculateDamage(attacker, target, ability);
 
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
-      );
-
       // Bonus damage if the target has ANY necrotic-family weakness active —
-      // a whole-hit "this skill hits harder" reward (Category A), scales
-      // physical/elemental/necrotic uniformly, same as the base weapon damage%.
+      // a whole-hit "this skill hits harder" reward (Category A), combined
+      // additively with the 100% base into ONE skillPct rather than a second
+      // chained multiply.
       const hasNecroticWeakness = (target?.weakness?.tiers?.toxic || 0) >= 1
         || (target?.weakness?.tiers?.disease || 0) >= 1
         || (target?.weakness?.tiers?.curse || 0) >= 1;
-      if (hasNecroticWeakness) {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.25);
-        physical = scaled.physical;
-        elemental = scaled.elemental;
-        necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} necrotic weakness bonus`, mult: 1.25, from: prevSum, to: scaled.amount }); } catch { }
-      }
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: hasNecroticWeakness ? 125 : 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       const rule = findRewardIfWeakRule(ability, exposeTier);
@@ -10163,7 +10130,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
@@ -10310,32 +10277,27 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.power_stab;
       const roll = calculateDamage(attacker, target, ability);
 
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true }
-      );
-
       // Base 120% weapon damage + up to +80% from consumed Expose — these two
       // are ADDITIVE percentages of the same base (120% + 80% = 200% total
-      // at the cap), not sequential multipliers. Applying them as two
-      // separate scaleTypedDamage calls (×1.2 then ×1.8) would COMPOUND to
-      // ×2.16 (216%) instead of the intended ×2.0 (200%) — combine the
-      // percentages first, then scale once.
+      // at the cap), not sequential multipliers, so they're combined into ONE
+      // skillPct below instead of two chained multiplies (which would compound
+      // to 216% instead of the intended 200% at the cap).
       const cfg = ability.consumeWeaknessBonus;
       const currentMeter = target?.weakness?.meters?.[cfg.family] || 0;
       const consumed = Math.min(cfg.maxConsume, currentMeter);
       const bonusPct = Math.floor(consumed / 100) * cfg.pctPer100;
       const basePct = 120;
-      const totalMult = (basePct + bonusPct) / 100;
-      {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, totalMult);
-        physical = scaled.physical;
-        elemental = scaled.elemental;
-        necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (${basePct}% base + ${bonusPct}% Expose consumed)`, mult: totalMult, from: prevSum, to: scaled.amount }); } catch { }
-      }
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: basePct + bonusPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}% base + ${bonusPct}% Expose consumed)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+
       if (consumed > 0 && target?.weakness?.meters) {
         target.weakness.meters[cfg.family] = Math.max(0, currentMeter - consumed);
         if (target.weakness.tiers) target.weakness.tiers[cfg.family] = weaknessTierFromMeter(target.weakness.meters[cfg.family]);
@@ -10375,14 +10337,8 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 130, isCrit: roll.isCrit, critMult: roll.critMult }
       );
-      {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.3);
-        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (130%)`, mult: 1.3, from: prevSum, to: scaled.amount }); } catch { }
-      }
 
       const statusEffects = [];
 
@@ -10505,18 +10461,12 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.crescent_cleave;
       const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
-      );
       const hasLacerate = (target?.weakness?.tiers?.lacerate || 0) >= 1;
       const totalPct = 110 + (hasLacerate ? 20 : 0);
-      {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, totalPct / 100);
-        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (${totalPct}%)`, mult: totalPct / 100, from: prevSum, to: scaled.amount }); } catch { }
-      }
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: totalPct, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
       const amount = Math.max(1, physical + elemental + necrotic);
 
       // Lifesteal vs Lacerated foes — same "heal = damage dealt × pct" formula as
@@ -10580,22 +10530,22 @@ Object.assign(RAW_SKILLS, {
       }
       const ability = SKILLS?.momentum_strike;
       const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
-      );
 
       const FRONT = [1, 2, 3], MIDDLE = [4, 5], BACK = [6, 7, 8];
       const slotId = attacker?._slot?.slotId ?? attacker?.slotId;
       const rank = FRONT.includes(slotId) ? 'front' : MIDDLE.includes(slotId) ? 'middle' : BACK.includes(slotId) ? 'back' : null;
       const variant = rank ? ability.rankVariants?.[rank] : null;
+      const skillPct = 100 + (variant?.damagePct || 0);
 
-      if (variant?.damagePct) {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1 + variant.damagePct / 100);
-        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} front-rank bonus (+${variant.damagePct}%)`, mult: 1 + variant.damagePct / 100, from: prevSum, to: scaled.amount }); } catch { }
-      }
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true, skillPct,
+          skillLabel: variant?.damagePct ? `${ability?.name || 'Skill'} front-rank bonus (${skillPct}%)` : undefined,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
       const amount = Math.max(1, physical + elemental + necrotic);
 
       let log;
@@ -10642,7 +10592,7 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       const totalNecrotic = (target?.weakness?.meters?.toxic || 0)
@@ -10682,14 +10632,8 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true }
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 125, isCrit: roll.isCrit, critMult: roll.critMult }
       );
-      {
-        const prevSum = physical + elemental + necrotic;
-        const scaled = scaleTypedDamage({ physical, elemental, necrotic }, 1.25);
-        physical = scaled.physical; elemental = scaled.elemental; necrotic = scaled.necrotic;
-        try { _pushBreakdown({ label: `${ability?.name || 'Skill'} weapon damage (125%)`, mult: 1.25, from: prevSum, to: scaled.amount }); } catch { }
-      }
       const amount = Math.max(1, physical + elemental + necrotic);
 
       const currentLacerate = target?.weakness?.meters?.lacerate || 0;

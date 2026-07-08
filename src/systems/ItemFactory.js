@@ -275,10 +275,15 @@ const WEAPON_PREFIX_POOL = [
   makeWeaponFlatPrefix({ key: 'Tempered', tier: 2, field: 'max', range: [2, 3] }),
   makeWeaponFlatPrefix({ key: 'Crushing', tier: 1, field: 'max', range: [4, 5] }),
 
-  // % weapon damage (local)
-  makeWeaponPercentPrefix({ key: 'Rugged', tier: 3, range: [2, 3] }),
-  makeWeaponPercentPrefix({ key: 'Savage', tier: 2, range: [4, 6] }),
-  makeWeaponPercentPrefix({ key: 'Brutal', tier: 1, range: [7, 10] }),
+  // % weapon damage (local) — was topping out at 7-10%, vastly outcomputed by
+  // flat damage adds; new top tier reaches up to 40% so this stat has room to
+  // actually matter on the item once flat numbers scale up too. Gapless: each
+  // tier's max is exactly one less than the next tier's min.
+  makeWeaponPercentPrefix({ key: 'Rugged', tier: 4, range: [2, 3] }),
+  makeWeaponPercentPrefix({ key: 'Savage', tier: 3, range: [4, 6] }),
+  makeWeaponPercentPrefix({ key: 'Vicious', tier: 2, range: [7, 15] }),
+  makeWeaponPercentPrefix({ key: 'Brutal', tier: 1, range: [16, 27] }),
+  makeWeaponPercentPrefix({ key: 'Merciless', tier: 0, range: [28, 40] }),
 
   // Flat elemental damage
   makeWeaponElementFlatPrefix({ key: 'Smoldering', tier: 3, element: 'fire', range: [1, 2] }),
@@ -755,6 +760,23 @@ export function getItemComputedData(itemRef) {
     const elementalFlat = {};
     for (const [element, range] of Object.entries(instanceMods.elementalFlat || {})) {
       elementalFlat[element] = cloneRange(range);
+    }
+
+    // Display-only: elemental/necrotic flat damage scaled by local weapon
+    // damage% for the TOOLTIP total. Deliberately a SEPARATE field from the
+    // raw elementalFlat above — combat's calculateDamage() reads _weaponMods
+    // .elementalFlat directly and applies its own localDamageMult to it, so
+    // pre-scaling that same object here would double-apply local% in real
+    // combat the moment the two ever got merged. This one is tooltip-only.
+    {
+      const localMult = 1 + ((instanceMods.damagePercent?.weapon || 0) / 100);
+      view.displayScaledElementalFlat = {};
+      for (const [element, range] of Object.entries(elementalFlat)) {
+        view.displayScaledElementalFlat[element] = {
+          min: Math.max(0, Math.floor((range.min || 0) * localMult)),
+          max: Math.max(0, Math.floor((range.max || 0) * localMult)),
+        };
+      }
     }
 
     view._weaponMods = {

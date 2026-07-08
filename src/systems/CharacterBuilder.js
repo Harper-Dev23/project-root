@@ -392,11 +392,6 @@ export function rebuildCharacterStats(character) {
       if (misc.elementalDamagePercent) gearEffects.elementalDamagePercent += misc.elementalDamagePercent;
       if (misc.necroticDamagePercent) gearEffects.necroticDamagePercent += misc.necroticDamagePercent;
       if (misc.resilience) gearEffects.resilience += misc.resilience;
-      if (misc.buildupPercent) {
-        for (const [fam, amt] of Object.entries(misc.buildupPercent)) {
-          gearEffects.weaponBuildupPercent[fam] = (gearEffects.weaponBuildupPercent[fam] || 0) + amt;
-        }
-      }
       // Jewelry misc mods
       if (misc.physToElemPercent) gearEffects.physToElemPercent += misc.physToElemPercent;
       if (misc.physToNecroPercent) gearEffects.physToNecroPercent += misc.physToNecroPercent;
@@ -418,6 +413,17 @@ export function rebuildCharacterStats(character) {
         for (const [fam, amt] of Object.entries(misc.elemBuildupOnElemDmg)) {
           gearEffects.elemBuildupOnElemDmg[fam] = (gearEffects.elemBuildupOnElemDmg[fam] || 0) + amt;
         }
+      }
+    }
+
+    // Weapon suffix buildup% (e.g. "of Sparks" +fire buildup) lives under
+    // _weaponMods, not _miscMods — this was being read from _miscMods.buildupPercent
+    // above, which never exists there (getItemComputedData only ever puts
+    // buildupPercent on _weaponMods), so no weapon's buildup suffix was ever
+    // actually reaching combat regardless of how many were equipped.
+    if (view?._weaponMods?.buildupPercent) {
+      for (const [fam, amt] of Object.entries(view._weaponMods.buildupPercent)) {
+        gearEffects.weaponBuildupPercent[fam] = (gearEffects.weaponBuildupPercent[fam] || 0) + amt;
       }
     }
 

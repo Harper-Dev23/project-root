@@ -7,6 +7,7 @@ import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
+import { buildItemTooltipLines } from '../../ui/itemTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 
 
@@ -35,113 +36,12 @@ export default class InventoryOverlay extends Phaser.Scene {
 
 
 
-  // Build a display object: name, color, and tooltip lines
-  // Build a display object: title, titleColor, and body lines
+  // Build a display object: title, titleColor, and body lines.
+  // Delegates to the shared builder (src/ui/itemTooltip.js) so this overlay,
+  // StashOverlay, and TownScene all render the exact same tooltip content
+  // instead of three independently-maintained (and previously drifted) copies.
   _formatItemDisplay(item) {
-    const instance = isItemInstance(item) ? item : null;
-    const computed = instance ? getItemComputedData(instance) : null;
-    const base = computed || Items[item.id] || Items[item] || {};
-    const name = instance?.displayName || computed?.name || base.name || instance?.id || item?.id || 'Unknown';
-    const rarity = instance?.rarity || instance?.quality || computed?.rarity || base.rarity || base.quality || 'common';
-    const color = RARITY_COLORS[rarity] || RARITY_COLORS.common;
-
-    const lines = [];
-    if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);
-
-    if (computed?.damage) {
-      const range = `${computed.damage.min}–${computed.damage.max}`;
-      lines.push(`Damage: ${range}${base.hands === 2 ? ' (2h)' : ''}`);
-    }
-
-    const statBonuses = computed?.bonuses || {};
-    const statKeys = Object.keys(statBonuses);
-    if (statKeys.length) {
-      lines.push('Bonuses:');
-      statKeys.forEach(k => lines.push(`  • ${k} +${statBonuses[k]}`));
-    }
-
-    const derivedMods = instance?.instanceMods?.derived || {};
-    const derivedKeys = Object.keys(derivedMods);
-    if (derivedKeys.length) {
-      lines.push('Derived:');
-      derivedKeys.forEach(k => lines.push(`  • ${k} +${derivedMods[k]}`));
-    }
-
-    const dmgFlat = instance?.instanceMods?.damageFlat || {};
-    const dmgPercent = instance?.instanceMods?.damagePercent?.weapon || 0;
-    if ((dmgFlat.min || 0) || (dmgFlat.max || 0) || dmgPercent) {
-      lines.push('Weapon Modifiers:');
-      if (dmgFlat.min) lines.push(`  • Min Damage +${dmgFlat.min}`);
-      if (dmgFlat.max) lines.push(`  • Max Damage +${dmgFlat.max}`);
-      if (dmgPercent) lines.push(`  • Local Weapon Damage +${dmgPercent}%`);
-    }
-
-    const elemFlat = instance?.instanceMods?.elementalFlat || {};
-    const elemEntries = Object.entries(elemFlat).filter(([, v]) => (v.min || 0) || (v.max || 0));
-    if (elemEntries.length) {
-      lines.push('Added Damage:');
-      elemEntries.forEach(([el, v]) => lines.push(`  • ${el.toUpperCase()} +${v.min}–${v.max}`));
-    }
-
-    const misc = instance?.instanceMods?.misc || {};
-    if (misc.mpPerTurn) lines.push(`MP per Turn: +${misc.mpPerTurn}`);
-    if (misc.skillCostReductionPct) lines.push(`Skill Cost Reduction: -${misc.skillCostReductionPct}%`);
-    if (misc.globalDamagePercent) lines.push(`Damage (all sources): +${misc.globalDamagePercent}%`);
-    if (misc.elementalDamagePercent) lines.push(`Elemental Damage: +${misc.elementalDamagePercent}%`);
-    if (misc.necroticDamagePercent) lines.push(`Necrotic Damage: +${misc.necroticDamagePercent}%`);
-    if (misc.resilience) lines.push(`Resilience: +${misc.resilience}`);
-
-    const buildup = misc.buildupPercent || {};
-    Object.entries(buildup).forEach(([k, v]) => { if (v) lines.push(`+${v}% ${k} Buildup`); });
-
-    // Jewelry: damage conversion
-    if (misc.physToElemPercent) lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
-    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
-    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
-    // Jewelry: battle-start passives
-    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
-    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
-    // Jewelry: buildup-on-hit
-    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Phys Dmg → ${fam} Buildup`);
-    });
-    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Elem Dmg → ${fam} Buildup`);
-    });
-    // Jewelry: procs
-    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
-    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
-    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
-    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
-    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
-    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
-
-    // Granted skills
-    if (instance?.grantsSkills?.length) {
-      const skillNames = instance.grantsSkills.map(id =>
-        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      );
-      lines.push(`Grants: ${skillNames.join(', ')}`);
-    }
-
-    if (base.description && !instance?.fixedAffixValue && !instance?.grantsSkills?.length) {
-      lines.push('', base.description);
-    }
-
-    if (base.locked) lines.push('', '[ Locked — Cannot be transferred ]');
-
-    // Historic / renown properties
-    if (instance?.historic) {
-      if (base.lifeStealPct) lines.push(`✦ ${Math.round(base.lifeStealPct * 100)}% Lifesteal`);
-      if (instance.soulbound) lines.push('✦ Soulbound — cannot be lost on party wipe');
-      lines.push('', '[ ✦ HISTORIC ITEM — press [Inspect] to read its history ]');
-    } else if (instance?.renownState === 'gaining') {
-      const pct = Math.round(((instance.renown || 0) / (instance.renownMax || 1000)) * 100);
-      lines.push('', `◆ Gaining Renown: ${instance.renown || 0} / ${instance.renownMax || 1000}  (${pct}%)`);
-      lines.push('[ Use this item in combat to build Renown ]');
-    }
-
-    return { title: name, titleColor: color, lines, name, color };
+    return buildItemTooltipLines(item, { rarityColors: RARITY_COLORS });
   }
 
 

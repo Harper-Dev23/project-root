@@ -367,6 +367,39 @@ function applyLightningJolt(target) {
   return { joltTotal };
 }
 
+// --------------------------------------------------
+// Tier-1 "+X weapon damage" riders (e.g. Curse of Needles): baked directly
+// into the base weapon roll, BEFORE anything else (skill%, combat buffs,
+// gear, crit) — so they ride the entire multiplicative stack, same as any
+// other point of weapon damage. Live on the TARGET's own statusEffects
+// (se.onHit.weaponDamageFlat), fire on every hit taken while active, for any
+// attacker/skill (legacy or typed) — this check lives in calculateDamage()
+// itself so it's universal, not gated behind the typed pipeline.
+// Signature: (target) → flat total to add to baseDamage
+// --------------------------------------------------
+function applyCurseWeaponRiders(target) {
+  if (!Array.isArray(target?.statusEffects)) return 0;
+  let total = 0;
+  for (const se of target.statusEffects) {
+    const flatBase = se?.onHit?.weaponDamageFlat;
+    if (!(flatBase > 0)) continue;
+    let flat = flatBase;
+    if (se.onHit.curseScaled) {
+      const curseTier = target?.weakness?.tiers?.curse | 0;
+      if (curseTier >= 2) {
+        const m = target?.weakness?.meters?.curse | 0;
+        const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
+        const I = weaknessIntensityMult(m);
+        const mult = Math.max(1, baseAmp * (I > 0 ? I : 1));
+        flat = Math.floor(flat * mult);
+      }
+    }
+    total += flat;
+    try { _pushBreakdown({ label: se.name || 'Weapon damage rider', flat }); } catch { }
+  }
+  return total;
+}
+
 
 // --------------------------------------------------
 // Typed damage calculation — returns { physical, elemental, necrotic, amount, isCrit }
@@ -382,10 +415,24 @@ export function calculateDamage(attacker, target, ability = null) {
   if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
   const weaponMods = weaponData?._weaponMods || {};
   const localDamageMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
-  // STR scaling
+
+  // Local weapon damage% scales the WEAPON's own dice roll — same "local"
+  // modifier PoE uses on weapon prefixes, treated as part of the weapon's own
+  // damage rather than a combat-stage buff. It was already applied to weapon
+  // elemental flats below, but not to the physical die roll itself, so a
+  // weapon with local% but no elemental flat got no benefit from it at all.
+  const dieRoll = Phaser.Math.Between(min, max);
+  const scaledDieRoll = Math.floor(dieRoll * localDamageMult);
+
+  // STR scaling — a character-level bonus, not part of "the weapon's own"
+  // damage, so it's added AFTER local% rather than being scaled by it.
   const strengthMod = Math.floor((attacker.totalStats?.STR || 0) / 5);
-  let baseDamage = Phaser.Math.Between(min, max) + strengthMod;
+  let baseDamage = scaledDieRoll + strengthMod;
   try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
+
+  // Tier-1 "+X weapon damage" riders (e.g. Curse of Needles) — baked in here,
+  // before gear/skill%/buffs/crit, so they ride the whole multiplicative stack.
+  baseDamage += applyCurseWeaponRiders(target);
 
   // Crit chance/mult resolved now (Expose T2 can boost both via applyExposeCritBonuses),
   // but the multiply itself is deferred to the very end of this function so it scales
@@ -464,22 +511,31 @@ export function calculateDamage(attacker, target, ability = null) {
     }
   }
 
-  // Jewelry damage conversions (from attacker's gearEffects — set by CharacterBuilder)
+  // Jewelry damage conversions (from attacker's gearEffects — set by CharacterBuilder).
+  // Logged to the breakdown so the tooltip actually shows the split happening
+  // (e.g. "10 physical -> 7 physical / 3 necrotic"), not just the end result.
+  // Uses `convert` (not `flat`) so the formula renderer in CombatScene.js shows
+  // it as "(3 phys→ele)" instead of "+3 ..." — a `flat` entry reads as an
+  // ADDITION to the total, but a conversion is a net-zero redistribution
+  // between two typed buckets, not new damage.
   const ge = attacker?.gearEffects || {};
   if (ge.physToElemPercent) {
     const conv = Math.floor(physical * ge.physToElemPercent / 100);
     physical -= conv;
     elemental += conv;
+    try { if (conv > 0) _pushBreakdown({ label: 'phys→ele', convert: conv }); } catch { }
   }
   if (ge.physToNecroPercent) {
     const conv = Math.floor(physical * ge.physToNecroPercent / 100);
     physical -= conv;
     necrotic += conv;
+    try { if (conv > 0) _pushBreakdown({ label: 'phys→necro', convert: conv }); } catch { }
   }
   if (ge.elemToNecroPercent) {
     const conv = Math.floor(elemental * ge.elemToNecroPercent / 100);
     elemental -= conv;
     necrotic += conv;
+    try { if (conv > 0) _pushBreakdown({ label: 'elem→necro', convert: conv }); } catch { }
   }
 
   // Weakness pipeline: Cold T2 damage-dealt penalty (modifies physical & elemental)
@@ -487,6 +543,18 @@ export function calculateDamage(attacker, target, ability = null) {
   physical = pipeResult.physical;
   elemental = pipeResult.elemental;
   necrotic = Math.max(0, necrotic);
+
+  if (attacker) attacker.__gearAppliedForLastDamage = true;
+
+  // Typed-pipeline skills (ability.typedDamage === true) defer crit AND jolt to
+  // applyTypedDamageModifiers(), which applies them AFTER the skill's own
+  // weapon% and combat buffs — see that function for why. Legacy (scalar-path)
+  // skills keep the original behavior unchanged below: crit and jolt applied
+  // right here, since those skills have no later "finalize" step to defer to.
+  if (ability?.typedDamage) {
+    const amount = physical + elemental + necrotic;
+    return { physical, elemental, necrotic, amount, isCrit, critMult: critBundle.critMult };
+  }
 
   // Crit — last step before returning, whole hit, uniform across all three types.
   if (isCrit) {
@@ -501,8 +569,6 @@ export function calculateDamage(attacker, target, ability = null) {
   // the hit, not part of the base swing that gets amplified).
   const { joltTotal } = applyLightningJolt(target);
   if (joltTotal > 0) elemental += joltTotal;
-
-  if (attacker) attacker.__gearAppliedForLastDamage = true;
 
   const amount = physical + elemental + necrotic;
   return { physical, elemental, necrotic, amount, isCrit };
@@ -601,7 +667,7 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
     const prev = out;
     const mult = 1 + atkPowerPct / 100;
     out = Math.max(0, Math.floor(out * mult));
-    try { _pushBreakdown({ label: 'AttackPower buff', mult, from: prev, to: out }); } catch { }
+    try { _pushBreakdown({ label: 'Generic increased damage', mult, from: prev, to: out }); } catch { }
   }
 
   // NOTE: there used to be a "Flay/Expose universal damage amp" here (+10%/+20%
@@ -723,33 +789,81 @@ export function applyDamagePctBonus(amount, dmgPct, label) {
   return next;
 }
 
+// --------------------------------------------------
+// applyTypedDamageModifiers — the typed-pipeline "finalize" step. Order matters
+// here and is deliberate (2026-07 pipeline reorder, see project_damage_pipeline_reorder
+// memory for the full design discussion):
+//
+//   1. skill's own weapon% (opts.skillPct)   — Category A, e.g. Power Stab's 200%
+//   2. combat buffs (AttackPower, summed)     — Category A, e.g. Rhythm/War Cry
+//   3. crit (opts.isCrit / opts.critMult)     — moved here from calculateDamage()
+//   4. Lightning jolt                         — Tier-3 rider, non-crittable
+//
+// Gear% is NOT applied here — it's already baked into the roll inside
+// calculateDamage() (attacker.__gearAppliedForLastDamage marks that).
+//
+// This order is what makes a "Tier 2" rider possible: something that needs to
+// be scaled by combat buffs and crit, but NOT by the skill's own weapon% (e.g.
+// Blazing Fervor's onHit bonus), can simply be added to the breakdown AFTER
+// step 1 resolves and BEFORE this function's steps 2-4 run — call this function
+// once for the skill's own weapon%+rider math is threaded through, or add the
+// rider between two calls if a skill needs that split. See CombatLogic.js
+// header comment for the Tier 1/2/3 rider taxonomy this maps to.
+// --------------------------------------------------
 export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}) {
+  // Carried as FLOATS through every multiplicative step below, floored only
+  // ONCE at the very end. Flooring after each individual step (skill% → buffs
+  // → crit) compounds rounding loss — e.g. base 4 through three separate
+  // floor(x*mult) steps can lose a whole point versus computing the combined
+  // multiplier once and flooring the final result, and it gets worse the more
+  // steps are chained or the smaller the base number is. See
+  // project_rounding_precision_fix memory note for a worked example.
   let physical = breakdown?.physical | 0;
   let elemental = breakdown?.elemental | 0;
   let necrotic = breakdown?.necrotic | 0;
 
-  // Gear % damage and AttackPower buffs are universal "more damage" modifiers —
-  // apply equally to every component, same as the scalar path.
-  const autoSkip = attacker && attacker.__gearAppliedForLastDamage;
-  if (autoSkip) attacker.__gearAppliedForLastDamage = false;
-  if (!opts?.skipGearMultiplier && !autoSkip && attacker) {
-    const mult = getAttackerDamageMultiplier(attacker);
-    if (mult !== 1) {
-      const prev = physical + elemental + necrotic;
-      physical = Math.floor(physical * mult);
-      elemental = Math.floor(elemental * mult);
-      necrotic = Math.floor(necrotic * mult);
-      try { _pushBreakdown({ label: 'gear damage', mult, from: prev, to: physical + elemental + necrotic }); } catch { }
+  // Gear% already applied inside calculateDamage() for this hit — just clear
+  // the marker so an unrelated later call for the same attacker doesn't
+  // mistakenly skip ITS OWN gear application.
+  if (attacker?.__gearAppliedForLastDamage) attacker.__gearAppliedForLastDamage = false;
+
+  // 1) Skill's own weapon% (Category A)
+  const skillMult = Number.isFinite(opts.skillPct) ? opts.skillPct / 100 : 1;
+  if (skillMult !== 1) {
+    const prev = physical + elemental + necrotic;
+    physical *= skillMult;
+    elemental *= skillMult;
+    necrotic *= skillMult;
+    try { _pushBreakdown({ label: opts.skillLabel || `${opts.ability?.name || 'Skill'} weapon damage (${opts.skillPct}%)`, mult: skillMult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
+  }
+
+  // 1.5) Tier-2 "+X [Type] damage" riders (e.g. Blazing Fervor's fire rider):
+  // added AFTER the skill's own weapon% (so a big skillPct doesn't touch them)
+  // but BEFORE combat buffs/crit below (so both of those still apply). Live on
+  // the ATTACKER's own statusEffects. Legacy (non-typed) skills still get these
+  // via the flat/unmitigated fallback in CombatScene.js's onHit-proc block —
+  // this is the typed-pipeline-only, properly-scaled version. Flat integer add,
+  // no rounding concern of its own.
+  for (const se of (attacker?.statusEffects || [])) {
+    const proc = se?.onHit;
+    if (!proc) continue;
+    if (!se.permanent && (se.turns || 0) <= 0) continue;
+    if (proc.fireDamage > 0) {
+      elemental += proc.fireDamage;
+      try { _pushBreakdown({ label: se.name || 'Fire rider', flat: proc.fireDamage }); } catch { }
     }
   }
+
+  // 2) Combat buffs (Category A) — AttackPower status mods, summed across every
+  // active buff into ONE multiplier (two +20% buffs = +40% total, not 1.2×1.2).
   const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
   if (atkPowerPct !== 0) {
     const mult = 1 + atkPowerPct / 100;
     const prev = physical + elemental + necrotic;
-    physical = Math.floor(physical * mult);
-    elemental = Math.floor(elemental * mult);
-    necrotic = Math.floor(necrotic * mult);
-    try { _pushBreakdown({ label: 'AttackPower buff', mult, from: prev, to: physical + elemental + necrotic }); } catch { }
+    physical *= mult;
+    elemental *= mult;
+    necrotic *= mult;
+    try { _pushBreakdown({ label: 'Generic increased damage', mult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
   }
 
   // (No Expose/Flay entry here — see the Category B note above. Its T1/T2 effects
@@ -757,8 +871,34 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
 
   // NOTE: no Curse T2 amp here either, for the same reason as the scalar path
   // above (applyDamageModifiers) — a curse-tagged ability's own damage roll
-  // isn't what Afflicted amplifies. See the `onHit.curseScaled` rider handling
-  // in CombatScene.js.
+  // isn't what Afflicted amplifies. Curse riders are now a Tier-1 rider inside
+  // calculateDamage() (applyCurseWeaponRiders), not handled here at all.
+
+  // 3) Crit — moved here from calculateDamage() so it lands AFTER the skill's
+  // own weapon% and combat buffs, not before them. Whatever is present in the
+  // running total at this exact point gets swept up; anything a skill wants
+  // to shield from crit must be added to the breakdown AFTER this call returns.
+  if (opts.isCrit) {
+    const mult = Number.isFinite(opts.critMult) ? opts.critMult : 1.5;
+    const prev = physical + elemental + necrotic;
+    physical *= mult;
+    elemental *= mult;
+    necrotic *= mult;
+    try { _pushBreakdown({ label: 'crit', mult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
+  }
+
+  // 4) Lightning jolt — deliberately LAST: non-crittable, not scaled by the
+  // skill's own % or combat buffs (a rider on the hit, not part of the swing
+  // that gets amplified). Moved here from calculateDamage() so typed-pipeline
+  // skills get the exact same non-scaling treatment legacy skills already had.
+  const { joltTotal } = applyLightningJolt(target);
+  if (joltTotal > 0) elemental += joltTotal;
+
+  // Floor ONCE, here, after every multiplicative step above has run on the
+  // full-precision float total.
+  physical = Math.floor(physical);
+  elemental = Math.floor(elemental);
+  necrotic = Math.floor(necrotic);
 
   const amount = physical + elemental + necrotic;
   return { physical, elemental, necrotic, amount };

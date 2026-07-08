@@ -41,7 +41,7 @@ import {
   rollToHit, computeHitChance, getLastDamageBreakdown,
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
-  getDamageReductionFraction, _pushBreakdown,
+  getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
 } from '../systems/CombatLogic.js';
 
 
@@ -1426,11 +1426,22 @@ export default class CombatScene extends Phaser.Scene {
       return { line, color, bold };
     })();
 
+    // Generic "increased damage" per type — gear's globalDamagePercent and any
+    // AttackPower-granting combat buff (Rhythm, War Cry, etc.) populate ALL
+    // THREE columns uniformly; gear's element/necrotic-specific % only adds to
+    // its own column. Matches the same additive-then-multiply model PDR/EDR/NDR
+    // already uses on the defensive side, just for outgoing damage instead.
+    const ge = char?.gearEffects || {};
+    const atkPowerPct = _sumStatusEffectMods?.(char)?.AttackPower || 0;
+    const pdPct = Math.round((ge.globalDamagePercent || 0) + atkPowerPct);
+    const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct);
+    const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct);
+
     const rowsRight = [
       { label: 'HP:', value: `${dispHP}/${effMaxHP}` },
       { label: 'MP:', value: `${char.currentMP}/${char.maxMP}` },
-      { label: 'PDR:', value: `${pdr}%` },
-      { label: 'EDR/NDR:', value: `${edr}% / ${ndr}%` },
+      { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%` },
+      { label: 'PD/ED/ND:', value: `+${pdPct}% / +${edPct}% / +${ndPct}%` },
       { label: 'Healing Recv:', value: `${healPct}%` },
       { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
@@ -3302,15 +3313,11 @@ export default class CombatScene extends Phaser.Scene {
       se => se?.id === 'pressure_point_ignition'
     );
 
-    // Snapshot curse-rider ids BEFORE this ability runs — same reasoning as
-    // pressure_point_ignition above: if THIS hit is the one that applies a new
-    // curse rider (e.g. Curse of Needles' own strike), that rider must not
-    // also fire its onHit bonus on the very hit that created it.
-    const curseRiderIdsBeforeHit = new Set(
-      (target?.statusEffects || [])
-        .filter(se => se?.permanent && se?.onHit?.curseScaled)
-        .map(se => se.id)
-    );
+    // Curse riders no longer need a "before hit" snapshot: their Tier-1 bonus
+    // is now applied inside calculateDamage() (called at the very start of a
+    // skill's apply(), before that skill can push a NEW rider onto the
+    // target), so a rider a skill applies this cast naturally can't also
+    // fire its own bonus on that same cast — no gating required.
 
     // Execute ability to get its payload
     let result = {};
@@ -3633,39 +3640,12 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
-        // Curse riders: any PERMANENT status effect declaring onHit.curseScaled
-        // is a "curse rider" (e.g. Curse of Needles) — the curse tag on a SKILL
-        // no longer grants that skill's own damage roll a bonus vs an Afflicted
-        // target (see CombatLogic.js). Only these riders' flat bonus gets
-        // amplified by Afflicted, and only while the target currently has Curse
-        // T1+: the rider itself is permanent and never removed, but it goes
-        // dormant (not deleted) if curse decays back to 0, and re-activates on
-        // its own if curse builds back up later — same rider, no re-casting needed.
-        // Gated on curseRiderIdsBeforeHit so the hit that APPLIES a new rider
-        // (e.g. Curse of Needles' own strike) can't also be the hit that fires
-        // its bonus — same reasoning as Pressure Point's ignition above.
-        if (dmg > 0 && Array.isArray(target?.statusEffects)) {
-          const curseTier = target?.weakness?.tiers?.curse | 0;
-          if (curseTier >= 1) {
-            for (const se of target.statusEffects) {
-              if (!se?.permanent || !se.onHit?.curseScaled) continue;
-              if (!curseRiderIdsBeforeHit.has(se.id)) continue;
-              let flat = se.onHit.flatDamage || 0;
-              if (curseTier >= 2) {
-                const m = target?.weakness?.meters?.curse | 0;
-                const baseAmp = WeaknessV3?.families?.curse?.t2?.curseAmpMult ?? 1;
-                const I = weaknessIntensityMult(m);
-                const mult = Math.max(1, baseAmp * (I > 0 ? I : 1));
-                flat = Math.floor(flat * mult);
-              }
-              if (flat > 0) {
-                dmg += flat;
-                try { _pushBreakdown({ label: se.name || 'Curse rider', flat }); } catch { }
-                this._log(`${target.name}'s ${se.name || 'curse'} bites for +${flat}.`);
-              }
-            }
-          }
-        }
+        // Curse riders (e.g. Curse of Needles) are now a Tier-1 "+X weapon
+        // damage" rider handled directly inside calculateDamage() — baked into
+        // the base roll before skill%/buffs/gear/crit, universally for every
+        // skill (legacy and typed), instead of a flat unmitigated add here
+        // after everything (including the target's resistance) had already
+        // resolved. See applyCurseWeaponRiders in CombatLogic.js.
 
         // Pressure Point Ignition: bonus fire damage on next hit, then consumed.
         // Gated on hadPressurePointIgnitionBefore so the hit that APPLIES this
@@ -3695,23 +3675,21 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
 
-        // Attacker-side onHit procs (e.g. Blazing Fervor's fire rider): unlike
-        // Curse riders above (which live on the TARGET being hit), these live
-        // on the ATTACKER's own statusEffects and add bonus damage of their
-        // own to THIS hit — same "additive in the same step" treatment as
-        // Curse of Needles: a flat, unmitigated add straight onto dmg, not a
-        // separate, independent HP subtraction fired later (which used to
-        // show as its own floating number/log line for what should read as
-        // one combined hit). Generic: any status effect with an onHit object
-        // gets checked here, not just blazing_fervor_buff — extend with more
-        // onHit.* fields (coldDamage, necroticDamage, etc.) as needed, same
-        // as this used to be documented on the old _processOnHitProcs.
+        // Attacker-side onHit procs (e.g. Blazing Fervor's fire rider): these
+        // live on the ATTACKER's own statusEffects and add bonus damage to
+        // THIS hit. For typed-pipeline skills, the fire-damage portion is now
+        // a Tier-2 rider handled inside applyTypedDamageModifiers instead
+        // (scaled by combat buffs + crit, NOT by the attacking skill's own
+        // weapon% — see CombatLogic.js) — only fire it here as a flat,
+        // unmitigated fallback for legacy skills, so typed skills don't
+        // double-count it. fireBuildup isn't part of that damage-scaling
+        // question, so it still applies unconditionally either way.
         if (dmg > 0 && Array.isArray(user?.statusEffects)) {
           for (const se of user.statusEffects) {
             const proc = se?.onHit;
             if (!proc) continue;
             if (!se.permanent && (se.turns || 0) <= 0) continue;
-            if (proc.fireDamage > 0) {
+            if (proc.fireDamage > 0 && !ability?.typedDamage) {
               dmg += proc.fireDamage;
               try { _pushBreakdown({ label: se.name || 'Fire rider', flat: proc.fireDamage }); } catch { }
               this._log(`${user.name}'s ${se.name || 'fire rider'} burns ${target.name} for +${proc.fireDamage} fire damage.`);
@@ -3858,6 +3836,11 @@ export default class CombatScene extends Phaser.Scene {
               } else if (e.label === 'crit') {
                 const m = (e.mult != null) ? e.mult : (e.to && e.from ? (e.to / e.from) : 1.5);
                 formulaParts.push(`×${(+m).toFixed(2)}`);
+              } else if (e.label && e.convert != null) {
+                // Redistribution between typed buckets, not new damage — shown
+                // in parens so it doesn't read as an addition to the total
+                // (e.g. "(3 phys→ele)", not "+3 phys→ele").
+                formulaParts.push(`(${e.convert} ${e.label})`);
               } else if (e.label && e.flat) {
                 formulaParts.push(`+${e.flat} ${e.label}`);
               } else if (e.label && e.mult && e.from != null && e.to != null) {

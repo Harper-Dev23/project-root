@@ -8,6 +8,7 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { DEPTH, RARITY_COLORS } from '../../ui/styles.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { buildItemTooltipLines } from '../../ui/itemTooltip.js';
 
 const TRIBE_DISPLAY_NAMES = {
   styx:   'Styx',
@@ -127,25 +128,12 @@ export default class StashOverlay extends Phaser.Scene {
   }
 
   // ── Build item display info ──
+  // Delegates to the shared builder (src/ui/itemTooltip.js) — same tooltip
+  // content as InventoryOverlay/TownScene now, instead of this file's own
+  // lighter (and previously incomplete — no elemental/buildup/jewelry lines
+  // at all) copy.
   _fmt(item) {
-    const instance = isItemInstance(item) ? item : null;
-    const computed  = instance ? getItemComputedData(instance) : null;
-    const base      = computed || Items[item?.id] || {};
-    const name      = instance?.displayName || base.name || item?.id || 'Unknown';
-    const rarity    = instance?.rarity || instance?.quality || base.rarity || base.quality || 'common';
-    const color     = RARITY_COLORS[rarity] || '#cccccc';
-
-    const lines = [];
-    if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);
-    if (computed?.damage) lines.push(`Damage: ${computed.damage.min}–${computed.damage.max}`);
-    const statBonuses = computed?.bonuses || {};
-    for (const [k, v] of Object.entries(statBonuses)) lines.push(`  ${k} +${v}`);
-    const misc = instance?.instanceMods?.misc || {};
-    if (misc.mpPerTurn) lines.push(`MP/turn +${misc.mpPerTurn}`);
-    if (misc.globalDamagePercent) lines.push(`Damage +${misc.globalDamagePercent}%`);
-    if (base.description) lines.push('', base.description);
-
-    return { title: name, titleColor: color, lines, name, color };
+    return buildItemTooltipLines(item, { rarityColors: RARITY_COLORS });
   }
 
   // ── Render both lists ──

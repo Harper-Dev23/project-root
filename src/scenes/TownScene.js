@@ -11,6 +11,7 @@ import { SoundManager } from '../systems/SoundManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { describeModifiers } from '../systems/HuntModifiers.js';
 import { setupSceneCursor } from '../ui/cursor.js';
+import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -331,118 +332,13 @@ export default class TownScene extends Phaser.Scene {
     this.tooltip?.hide();
   }
 
+  // Delegates to the shared builder (src/ui/itemTooltip.js) — same tooltip
+  // content as InventoryOverlay/StashOverlay now, instead of this file's own
+  // independently-worded (and previously unscaled/uncolored) copy.
   _buildItemTooltipData(itemRef) {
     const view = getItemComputedData(itemRef);
     if (!view) return null;
-
-    const lines = [];
-    // Skip the static description for fixed-affix instances (rolled value shown via
-    // misc mods below) and grantsSkills items (skill shown via Grants line below).
-    if (view.description && !view.fixedAffixValue && !view.grantsSkills?.length) lines.push(view.description);
-
-    if (view.type === 'weapon') {
-      if (view.weaponType) lines.push(`Type: ${formatLabel(view.weaponType)}`);
-      if (typeof view.hands === 'number') lines.push(`Hands: ${view.hands}`);
-      if (view.damage && (view.damage.min != null || view.damage.max != null)) {
-        const min = view.damage.min ?? '?';
-        const max = view.damage.max ?? '?';
-        lines.push(`Damage: ${min}–${max}`);
-      }
-
-      const weaponMods = view._weaponMods || {};
-      const flat = weaponMods.damageFlat || {};
-      const flatLine = [];
-      if (flat.min) flatLine.push(formatSigned(flat.min, ' Min Damage'));
-      if (flat.max) flatLine.push(formatSigned(flat.max, ' Max Damage'));
-      if (flatLine.length) lines.push(flatLine.join(', '));
-
-      if (weaponMods.localDamagePercent) {
-        lines.push(`${formatSigned(weaponMods.localDamagePercent, '%')} Local Damage`);
-      }
-
-      const elementalFlat = weaponMods.elementalFlat || {};
-      Object.entries(elementalFlat).forEach(([element, range]) => {
-        if (!range) return;
-        const min = range.min ?? 0;
-        const max = range.max ?? min;
-        lines.push(`+${min}–${max} ${formatLabel(element)} Damage`);
-      });
-
-      const buildup = weaponMods.buildupPercent || {};
-      Object.entries(buildup).forEach(([family, amount]) => {
-        if (!amount) return;
-        lines.push(`${formatSigned(amount, '%')} ${formatLabel(family)} Buildup`);
-      });
-    } else if (view.type === 'armor') {
-      if (view.slot) lines.push(`Slot: ${formatLabel(view.slot)}`);
-    }
-
-    const bonuses = view.bonuses || {};
-    Object.entries(bonuses).forEach(([stat, amount]) => {
-      if (!amount) return;
-      lines.push(`${formatSigned(amount)} ${formatStatKey(stat)}`);
-    });
-
-    const derived = view._derivedMods || {};
-    Object.entries(derived).forEach(([key, amount]) => {
-      if (!amount) return;
-      const label = DERIVED_LABELS[key] || formatLabel(key);
-      lines.push(`${formatSigned(amount)} ${label}`);
-    });
-
-    const misc = view._miscMods || {};
-    if (misc.resilience) lines.push(`${formatSigned(misc.resilience)} Resilience`);
-    if (misc.globalDamagePercent) lines.push(`${formatSigned(misc.globalDamagePercent, '%')} Global Damage`);
-    if (misc.elementalDamagePercent) lines.push(`${formatSigned(misc.elementalDamagePercent, '%')} Elemental Damage`);
-    if (misc.necroticDamagePercent) lines.push(`${formatSigned(misc.necroticDamagePercent, '%')} Necrotic Damage`);
-    if (misc.mpPerTurn) lines.push(`${formatSigned(misc.mpPerTurn)} MP per Turn`);
-    if (misc.skillCostReductionPct) lines.push(`${formatSigned(misc.skillCostReductionPct, '%')} Skill Cost Reduction`);
-
-    if (view.type === 'huntPlan') lines.push(...describeModifiers(misc));
-
-    const miscBuildup = misc.buildupPercent || {};
-    Object.entries(miscBuildup).forEach(([family, amount]) => {
-      if (!amount) return;
-      lines.push(`${formatSigned(amount, '%')} ${formatLabel(family)} Buildup`);
-    });
-
-    // Jewelry: damage conversion
-    if (misc.physToElemPercent) lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
-    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
-    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
-    // Jewelry: battle-start passives
-    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
-    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
-    // Jewelry: buildup-on-hit
-    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Phys Dmg → ${formatLabel(fam)} Buildup`);
-    });
-    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Elem Dmg → ${formatLabel(fam)} Buildup`);
-    });
-    // Jewelry: proc effects
-    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
-    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
-    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
-    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
-    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
-    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
-
-    // Granted skills
-    if (view.grantsSkills?.length) {
-      const names = view.grantsSkills.map(id =>
-        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      );
-      lines.push(`Grants: ${names.join(', ')}`);
-    }
-
-    if (!lines.length) lines.push('No additional properties.');
-
-    return {
-      title: view.name,
-      titleColor: RARITY_COLORS[view.rarity || view.quality] || '#dddddd',
-      lines
-    };
+    return buildItemTooltipLines(itemRef, { rarityColors: RARITY_COLORS });
   }
 
   _attachTooltip(displayObj, {

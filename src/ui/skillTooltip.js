@@ -82,7 +82,7 @@ function buffToText(buff) {
   if (buff.onNextDamageTaken) {
     const n = buff.onNextDamageTaken;
     const nParts = [];
-    if (n.bonusDamagePercent) nParts.push(`next hit taken: +${n.bonusDamagePercent}% fire damage`);
+    if (n.bonusDamagePercent) nParts.push(`next hit taken: damage added as Fire (+${n.bonusDamagePercent}%)`);
     if (n.buildup) {
       const b = Object.entries(n.buildup).map(([k, v]) => `+${v} ${capitalize(k)} buildup`);
       if (b.length) nParts.push(b.join(', '));
@@ -115,7 +115,7 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   // others). One line here instead of repeating the same explanation in
   // every skill's own description text.
   if (sk.grantsRhythm) {
-    lines.push('Builds Rhythm: gain a stack (max 3) of +5 Attack Power; gaining a stack refreshes ALL current stacks to 2 turns.');
+    lines.push('Builds Rhythm: gain a stack (max 3) of +5% generic increased damage; gaining a stack refreshes ALL current stacks to 2 turns.');
   }
 
   // Reward if weak (target is currently at/above a weakness tier) — grouped with

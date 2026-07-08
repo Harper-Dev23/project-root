@@ -48,7 +48,7 @@ export const StatusEffects = {
     id: 'rhythm_stack',
     name: 'Rhythm',
     stackable: true,
-    description: 'Each stack grants +5 Attack Power (max 3). Gaining a stack refreshes ALL current stacks to 2 turns.',
+    description: 'Each stack grants +5% generic increased damage (max 3). Gaining a stack refreshes ALL current stacks to 2 turns.',
     icon: 'RH'
   },
   immobilized: {
