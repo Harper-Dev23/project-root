@@ -84,11 +84,36 @@ function getAttackerDamageMultiplier(attacker, opts = {}) {
 // base-damage floor in calculateDamage()) — a build's best stat, whatever it
 // is, contributes here. +1% per point above 10, floored at 0 (no penalty for
 // a low peak stat — that's the future "Deficiency" stat's job, not this one).
-function getProficiencyMultiplier(attacker) {
+export function getProficiencyMultiplier(attacker) {
   const s = attacker?.totalStats || {};
   const highest = Math.max(s.STR || 0, s.DEX || 0, s.CON || 0, s.INT || 0, s.WIS || 0, s.CHA || 0);
   const bonusPct = Math.max(0, highest - 10);
   return 1 + (bonusPct / 100);
+}
+// Display-only helper (CombatScene.js equipment tab) — same formula as
+// getProficiencyMultiplier above, but returns the raw %/driving-stat pair
+// instead of a multiplier, so the UI doesn't need to reverse-engineer it.
+export function getProficiencyBreakdown(char) {
+  const s = char?.totalStats || {};
+  const keys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+  let bestKey = 'STR', bestVal = -Infinity;
+  for (const k of keys) {
+    const v = s[k] || 0;
+    if (v > bestVal) { bestVal = v; bestKey = k; }
+  }
+  return { stat: bestKey, value: bestVal, bonusPct: Math.max(0, bestVal - 10) };
+}
+
+// Excess Accuracy beyond what's needed to reach 100% hit chance converts
+// into bonus Crit Chance instead of being wasted (e.g. 12 Accuracy vs 8
+// Evasion would already be a guaranteed hit at +4 to spare — that +4 buys
+// extra precision on the crit roll instead of doing nothing).
+export function getAccuracyOverflow(attacker, target) {
+  const A = getEffectiveDerived(attacker);
+  const T = getEffectiveDerived(target);
+  const evasionEff = applyColdEvasionPenalty(target, T.Evasion | 0);
+  const raw = 100 - (evasionEff | 0) + (A.Accuracy | 0);
+  return Math.max(0, raw - 100);
 }
 
 
@@ -478,6 +503,17 @@ export function calculateDamage(attacker, target, ability = null) {
     if (matched) abilityCritBonus = matched.bonusPct || 0;
   }
   let baseCritChance = (effDerived.CritChance || 0) + weaponCrit + abilityCritBonus;
+  // Excess Accuracy (beyond what's needed to guarantee the hit) converts at
+  // half value into bonus Crit Chance instead of being wasted past the 100%
+  // hit chance cap — half weight to match Evasion's half-weight crit effect
+  // below, so neither side of the accuracy/evasion relationship dominates
+  // the crit roll on its own — see getAccuracyOverflow.
+  const accuracyOverflow = getAccuracyOverflow(attacker, target) * 0.5;
+  if (accuracyOverflow > 0) {
+    const prev = baseCritChance;
+    baseCritChance += accuracyOverflow;
+    try { _pushBreakdown({ label: 'accuracy overflow vs crit', from: prev, value: Math.round(baseCritChance) }); } catch { }
+  }
   // Evasion double-duty: on a landed hit, target Evasion also partially
   // resists the crit itself (retired CritAvoid's job — that stat was computed
   // but never actually read by the crit roll, so this is Evasion's alone now).

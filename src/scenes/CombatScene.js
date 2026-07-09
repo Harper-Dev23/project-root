@@ -42,6 +42,7 @@ import {
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
+  getProficiencyBreakdown, getProficiencyMultiplier,
 } from '../systems/CombatLogic.js';
 
 
@@ -1285,7 +1286,11 @@ export default class CombatScene extends Phaser.Scene {
       enemy.gearEffects = enemy.gearEffects || {};
       enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + Math.round(bonuses.WIS * 0.5);
     }
-    if (bonuses.DEX) enemy.derived.Evasion += bonuses.DEX;
+    // DEX: no Evasion hook, matching the player-side rule (CharacterBuilder.js
+    // calculateDerivedStats: "DEX no longer grants Evasion" — Evasion is
+    // purely gear/buff/weakness-driven for both sides now). This enemy branch
+    // used to add DEX straight to Evasion, which was never updated when that
+    // rule changed for players — real inconsistency, now aligned.
     // STR: no derived-stat hook here yet — this enemy's own skills return
     // flat hardcoded damage numbers rather than rolling calculateDamage(),
     // so there's nothing for a STR bonus to feed into today. totalStats.STR
@@ -1477,18 +1482,18 @@ export default class CombatScene extends Phaser.Scene {
     const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct);
 
     const rowsRight = [
-      { label: 'HP:', value: `${dispHP}/${effMaxHP}` },
-      { label: 'MP:', value: `${char.currentMP}/${char.maxMP}` },
-      { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%` },
-      { label: 'PD/ED/ND:', value: `+${pdPct}% / +${edPct}% / +${ndPct}%` },
-      { label: 'Healing Recv:', value: `${healPct}%` },
-      { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1 },
-      { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold },
-      { label: 'Resilience:', value: `${resilience}` },
-      { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc },
-      { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true },
-      { label: 'Crit Chance:', value: `${eff.CritChance ?? 0}` },
-      { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}` },
+      { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
+      { label: 'MP:', value: `${char.currentMP}/${char.maxMP}`, desc: 'Current / maximum Mana Points, spent on skills with an MP cost.' },
+      { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%`, desc: 'Physical / Elemental / Necrotic Damage Reduction — % of incoming damage of each type prevented.' },
+      { label: 'PD/ED/ND:', value: `+${pdPct}% / +${edPct}% / +${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus added to this character\'s own outgoing damage of each type (gear + buffs). Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
+      { label: 'Healing Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
+      { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
+      { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold, desc: 'Bonus crit chance and crit damage attackers get against this character — raised by Expose T2.' },
+      { label: 'Resilience:', value: `${resilience}`, desc: 'Flat reduction applied to incoming buildup toward every weakness family. Comes from Wisdom and gear.' },
+      { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc, desc: 'Raises this character\'s chance to land a hit. Any excess beyond what\'s needed to reach 100% hit chance instead adds to Crit Chance (half value).' },
+      { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true, desc: 'Lowers the attacker\'s chance to hit this character. On a landed hit, it also partially resists being crit (half value).' },
+      { label: 'Crit Chance:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
+      { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}`, desc: 'Fills each turn, primarily from Charisma. Spent as a resource by some skills for bonus effects. Initiative sets turn order at the start of battle.' },
     ];
 
     // ===== Middle column (aligned to HP row Y) =====
@@ -1514,6 +1519,23 @@ export default class CombatScene extends Phaser.Scene {
       const labelText = this.add.text(labelX, y, row.label, labelStyle).setOrigin(1, 0);
       this.characterInfoPanel.add(labelText);
       this._charInfoBodyGroup.push(labelText);
+
+      if (row.desc) {
+        const showTip = (pointer) => {
+          this.tooltip?.show(pointer.worldX, pointer.worldY, {
+            title: row.label.replace(/:$/, ''),
+            lines: [row.desc]
+          });
+        };
+        const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+        const hideTip = () => this.tooltip?.hide();
+        [valueText, labelText].forEach(t => {
+          t.setInteractive({ useHandCursor: true });
+          t.on('pointerover', showTip);
+          t.on('pointermove', moveTip);
+          t.on('pointerout', hideTip);
+        });
+      }
     });
 
     // --- MIDDLE column (3 rows), aligned to HP row Y ---
@@ -1601,12 +1623,12 @@ export default class CombatScene extends Phaser.Scene {
 
     const stats = char.totalStats || {};
     const statRows = [
-      { label: 'STR:', value: `${stats.STR ?? 0}` },
-      { label: 'DEX:', value: `${stats.DEX ?? 0}` },
-      { label: 'CON:', value: `${stats.CON ?? 0}` },
-      { label: 'INT:', value: `${stats.INT ?? 0}` },
-      { label: 'WIS:', value: `${stats.WIS ?? 0}` },
-      { label: 'CHA:', value: `${stats.CHA ?? 0}` },
+      { label: 'STR:', value: `${stats.STR ?? 0}`, desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT). Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT). Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+5 Max HP and +0.5 Physical Resist per point. Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point. Feeds Crit Chance (with STR/DEX). Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +1 Necrotic Resist, +0.5 Resilience per point. Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP and +1 Initiative per point (sets turn order and Initiative Gauge regen). Also drives Proficiency if it\'s your highest stat.' },
     ];
 
     const statLabelStyle = { fontSize: '14px', color: '#cccccc', align: 'right' };
@@ -1622,6 +1644,59 @@ export default class CombatScene extends Phaser.Scene {
       const labelText = this.add.text(labelX, y, row.label, statLabelStyle).setOrigin(1, 0);
       this.characterInfoPanel.add(labelText);
       this._charInfoBodyGroup.push(labelText);
+
+      const showStatTip = (pointer) => {
+        this.tooltip?.show(pointer.worldX, pointer.worldY, {
+          title: row.label.replace(/:$/, ''),
+          lines: [row.desc]
+        });
+      };
+      const moveStatTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      const hideStatTip = () => this.tooltip?.hide();
+      [valueText, labelText].forEach(t => {
+        t.setInteractive({ useHandCursor: true });
+        t.on('pointerover', showStatTip);
+        t.on('pointermove', moveStatTip);
+        t.on('pointerout', hideStatTip);
+      });
+    });
+
+    // Proficiency — %damage bonus off the highest of the 6 core stats above,
+    // shown directly beneath them since it's derived straight from this list.
+    const profGap = 8;
+    const profY = startY + statRows.length * statsLineH + profGap;
+    const prof = getProficiencyBreakdown(char);
+    const profValueText = this.add.text(statsColumnRight, profY, `+${prof.bonusPct}%`, {
+      ...statValueStyle,
+      color: prof.bonusPct > 0 ? '#66ff66' : '#eeeeee'
+    }).setOrigin(1, 0);
+    this.characterInfoPanel.add(profValueText);
+    this._charInfoBodyGroup.push(profValueText);
+
+    const profLabelX = statsColumnRight - profValueText.width - 6;
+    const profLabelText = this.add.text(profLabelX, profY, 'Proficiency:', statLabelStyle).setOrigin(1, 0);
+    this.characterInfoPanel.add(profLabelText);
+    this._charInfoBodyGroup.push(profLabelText);
+
+    const showProfTip = (pointer) => {
+      this.tooltip?.show(pointer.worldX, pointer.worldY, {
+        title: 'Proficiency',
+        lines: [
+          'A separate %bonus based on your single highest core stat',
+          '(whichever of STR/DEX/CON/INT/WIS/CHA is highest), on top of gear.',
+          '+1% per point above 10 — applies to outgoing damage and healing.',
+          '',
+          { text: `Driving stat: ${prof.stat} (${prof.value})`, color: '#66ff66' },
+        ]
+      });
+    };
+    const moveProfTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+    const hideProfTip = () => this.tooltip?.hide();
+    [profValueText, profLabelText].forEach(t => {
+      t.setInteractive({ useHandCursor: true });
+      t.on('pointerover', showProfTip);
+      t.on('pointermove', moveProfTip);
+      t.on('pointerout', hideProfTip);
     });
 
     const slots = ['weaponMain', 'weaponOff', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
@@ -3603,7 +3678,10 @@ export default class CombatScene extends Phaser.Scene {
 
         // Costs/cooldown/action payment happens later as normal.
       } else if (isHeal) {
-        const healed = Math.floor(amount * (target.healingReceivedBonus || 1.0));
+        // Proficiency (highest-core-stat %bonus) applies to healing output the
+        // same as it does to damage — caster-side, so healers aren't left
+        // without a use for a high stat the way pure-damage builds have one.
+        const healed = Math.floor(amount * (target.healingReceivedBonus || 1.0) * getProficiencyMultiplier(user));
         target.currentHP = Math.min(target.maxHP, target.currentHP + healed);
         if (healed > 0) {
           this._showFloatingNumber?.(healed, target, true);
@@ -4277,7 +4355,8 @@ export default class CombatScene extends Phaser.Scene {
     if (amt !== 0 || isHeal) {
       if (isHeal) {
         const before = target.currentHP | 0;
-        const after = Math.min((target.maxHP | 0) || before, before + Math.max(0, rawAmt));
+        const profHealAmt = Math.floor(rawAmt * getProficiencyMultiplier(user));
+        const after = Math.min((target.maxHP | 0) || before, before + Math.max(0, profHealAmt));
         const healed = after - before;
         target.currentHP = after;
         if (healed > 0) {

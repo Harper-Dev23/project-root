@@ -76,13 +76,20 @@ export function calculateDerivedStats(stats) {
   const maxMP = Math.max(0, 2 * (stats.INT || 0) + (stats.CHA || 0) + (stats.WIS || 0));
 
   // DEX no longer grants Evasion; Initiative now tied to CHA
-  const Accuracy = Math.round((stats.DEX || 0) * 2);
+  // Accuracy rate halved (was ×2) — with Accuracy now also feeding bonus
+  // Crit Chance via overflow (CombatLogic.js getAccuracyOverflow), ×2 was
+  // compounding: same DEX investment pushed both hit chance and crit chance
+  // up together, faster than intended.
+  const Accuracy = Math.round((stats.DEX || 0) * 1);
   const Evasion = 0;                // base is 0; runtime only via buffs/gear/weaknesses
   const Initiative = Math.round((stats.CHA || 0) * 1);
 
-  // Crit chance uses STR+DEX+INT equally; higher baseline
+  // Crit chance uses STR+DEX+INT equally. Flat baseline lowered from 5 to 2
+  // (a flat -3 for everyone) as a first pass at bringing overall crit chance
+  // down, alongside the Accuracy-side reductions above — the 0.30/point rate
+  // itself is untouched for now, revisit if this alone isn't enough.
   const tri = (stats.STR || 0) + (stats.DEX || 0) + (stats.INT || 0);
-  const CritChance = Math.max(0, Math.min(100, Math.round(5 + 0.30 * tri)));
+  const CritChance = Math.max(0, Math.min(100, Math.round(2 + 0.30 * tri)));
   const CritMult = 1.5;
 
   // Resists (CHA contributes to Elemental as requested)
