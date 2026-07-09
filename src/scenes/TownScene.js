@@ -171,7 +171,7 @@ const DERIVED_LABELS = {
   ElementalResist: 'Elemental Resist',
   NecroticResist: 'Necrotic Resist',
   Accuracy: 'Accuracy',
-  CritAvoid: 'Crit Avoid'
+  Resilience: 'Resilience'
 };
 
 const DEFAULT_VENDOR_FLAVOR = "A selection of traders await behind makeshift stalls.";

@@ -90,13 +90,17 @@ export function calculateDerivedStats(stats) {
   const PhysicalResist = Math.round((stats.CON || 0) * 0.5);
   // WIS-only, full weight — resisting necrotic/unnatural decay via willpower/insight
   const NecroticResist = Math.round((stats.WIS || 0) * 1.0);
-  const CritAvoid = Math.round((stats.WIS || 0) * 0.5);
+  // CritAvoid retired (was WIS-derived, never actually consumed by the crit
+  // roll) — its job folded into Evasion, which now also partially reduces
+  // attacker crit chance on a landed hit (see calculateDamage() in
+  // CombatLogic.js). WIS's freed-up weight moved to Resilience instead.
+  const Resilience = Math.round((stats.WIS || 0) * 0.5);
 
   return {
     maxHP, maxMP,
     Accuracy, Evasion,
-    CritChance, CritMult, CritAvoid,
-    ElementalResist, PhysicalResist, NecroticResist,
+    CritChance, CritMult,
+    ElementalResist, PhysicalResist, NecroticResist, Resilience,
     Initiative,
     ActionPoints: 1,
     BonusActions: 1,
@@ -312,7 +316,7 @@ export function resetCombatMods(character) {
   character.combatMods = {
     Accuracy: 0, Evasion: 0, Initiative: 0,
     CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0
   };
 }
 
@@ -448,6 +452,12 @@ export function rebuildCharacterStats(character) {
     d[k] = (d[k] || 0) + v;
   }
 
+  // WIS-derived Resilience folds into gearEffects.resilience (not a separate
+  // top-level field) so the one combat read site (target.gearEffects.resilience,
+  // in CombatScene.js's buildup mitigation) picks it up automatically alongside
+  // gear-rolled resilience, with no separate call site to keep in sync.
+  gearEffects.resilience += (baseDerived.Resilience || 0);
+
   character.derived = d;               // single source of baseline truth
   character.maxHP = d.maxHP;
   character.maxMP = d.maxMP;
@@ -510,7 +520,7 @@ export function rebuildCharacterStats(character) {
   if (!character.combatMods) character.combatMods = {
     Accuracy: 0, Evasion: 0, Initiative: 0,
     CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0
   };
 
   return character;

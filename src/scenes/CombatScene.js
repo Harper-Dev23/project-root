@@ -1185,7 +1185,7 @@ export default class CombatScene extends Phaser.Scene {
         // Equipment dict (populated below if config.drops present)
         equipment: {},
         // baseline derived stats enemies need for DR calculation
-        derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5, CritAvoid: 0 },
+        derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5 },
       };
 
       // Equip any configured drops (random item + rarity per entry)
@@ -1279,12 +1279,51 @@ export default class CombatScene extends Phaser.Scene {
     if (bonuses.WIS) {
       enemy.derived.ElementalResist += Math.round(bonuses.WIS * 0.5);
       enemy.derived.NecroticResist += Math.round(bonuses.WIS * 1.0);
+      // Mirrors the player-side WIS->Resilience rule (CharacterBuilder.js
+      // rebuildCharacterStats) — folds into gearEffects so it's picked up by
+      // the same target.gearEffects.resilience read as gear-rolled resilience.
+      enemy.gearEffects = enemy.gearEffects || {};
+      enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + Math.round(bonuses.WIS * 0.5);
     }
     if (bonuses.DEX) enemy.derived.Evasion += bonuses.DEX;
     // STR: no derived-stat hook here yet — this enemy's own skills return
     // flat hardcoded damage numbers rather than rolling calculateDamage(),
     // so there's nothing for a STR bonus to feed into today. totalStats.STR
     // above at least makes the stat exist for anything that reads it directly.
+
+    // Direct derived-stat affixes (e.g. armor's "Hallowed" ElementalResist,
+    // or any PhysicalResist/NecroticResist/Accuracy/Evasion/CritChance roll
+    // that isn't CON/WIS/DEX-derived) were never applied to enemies at all —
+    // only the CON/WIS/DEX branches above fed enemy.derived. Player
+    // characters get these via rebuildCharacterStats' gearDerived loop in
+    // CharacterBuilder.js; this is the enemy-side equivalent.
+    if (view?._derivedMods) {
+      for (const [k, v] of Object.entries(view._derivedMods)) {
+        if (!v) continue;
+        enemy.derived[k] = (enemy.derived[k] || 0) + v;
+      }
+    }
+
+    // Same generic accumulation for the misc gear-effect fields (resilience,
+    // global/elemental/necrotic damage%) — currently has nowhere to matter
+    // for THIS encounter's enemies specifically (their skills return
+    // hardcoded flat damage, not a calculateDamage() roll that would read
+    // gearEffects), but wiring it now means it works automatically the
+    // moment any enemy skill is migrated to the real pipeline, instead of
+    // silently doing nothing forever like lifeStealPct almost did.
+    if (view?._miscMods) {
+      const misc = view._miscMods;
+      enemy.gearEffects = enemy.gearEffects || {};
+      if (misc.resilience) enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + misc.resilience;
+      if (misc.globalDamagePercent) enemy.gearEffects.globalDamagePercent = (enemy.gearEffects.globalDamagePercent || 0) + misc.globalDamagePercent;
+      if (misc.elementalDamagePercent) enemy.gearEffects.elementalDamagePercent = (enemy.gearEffects.elementalDamagePercent || 0) + misc.elementalDamagePercent;
+      if (misc.necroticDamagePercent) enemy.gearEffects.necroticDamagePercent = (enemy.gearEffects.necroticDamagePercent || 0) + misc.necroticDamagePercent;
+      // mpPerTurn/skillCostReductionPct are read generically off gearEffects
+      // (calculateEffectiveResourceCost, per-turn MP regen) with no player-only
+      // gate, so enemy casters (e.g. animated_healer/warlock_dummy) benefit too.
+      if (misc.mpPerTurn) enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + misc.mpPerTurn;
+      if (misc.skillCostReductionPct) enemy.gearEffects.skillCostReductionPct = (enemy.gearEffects.skillCostReductionPct || 0) + misc.skillCostReductionPct;
+    }
 
     if (isWeaponSlot) {
       // Mirrors _prepareCharForBattle's player-side weaponType assignment —
@@ -3611,9 +3650,15 @@ export default class CombatScene extends Phaser.Scene {
           const elemDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }), -0.95, 0.95);
           const necrDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'necrotic', applyExpose: false }), -0.95, 0.95);
 
-          const physDmg = Math.max(0, Math.floor(p * (1 - physDR)));
-          const elemDmg = Math.max(0, Math.floor(e * (1 - elemDR)));
-          const necrDmg = Math.max(0, Math.floor(n * (1 - necrDR)));
+          // Minimum-1 floor per typed component: if there was ANY damage of
+          // this type before mitigation, at least 1 gets through regardless
+          // of resist — otherwise a small flat bonus (e.g. a weapon's +1
+          // necrotic affix) gets fully erased by even 1% resist, since
+          // floor(1 * 0.99) = 0. Only applies when the pre-mitigation value
+          // was actually positive; a type with 0 damage stays 0.
+          const physDmg = p > 0 ? Math.max(1, Math.floor(p * (1 - physDR))) : 0;
+          const elemDmg = e > 0 ? Math.max(1, Math.floor(e * (1 - elemDR))) : 0;
+          const necrDmg = n > 0 ? Math.max(1, Math.floor(n * (1 - necrDR))) : 0;
           dmg = physDmg + elemDmg + necrDmg;
           blocked = raw - dmg;
           // Effective combined DR for tooltip display

@@ -198,11 +198,6 @@ const ARMOR_PREFIX_POOL = [
   makeDerivedArmorPrefix({ key: 'Zealous', tier: 2, derivedKey: 'Accuracy', range: [3, 5] }),
   makeDerivedArmorPrefix({ key: 'Zechariah\u2019s', tier: 1, derivedKey: 'Accuracy', range: [6, 9] }),
 
-  // Crit Avoid
-  makeDerivedArmorPrefix({ key: 'Consecrated', tier: 3, derivedKey: 'CritAvoid', range: [1, 2] }),
-  makeDerivedArmorPrefix({ key: 'Holy', tier: 2, derivedKey: 'CritAvoid', range: [3, 5] }),
-  makeDerivedArmorPrefix({ key: 'Jeremiah\u2019s', tier: 1, derivedKey: 'CritAvoid', range: [6, 9] }),
-
   // Evasion
   makeDerivedArmorPrefix({ key: 'Fleet', tier: 3, derivedKey: 'Evasion', range: [1, 2] }),
   makeDerivedArmorPrefix({ key: 'Swift', tier: 2, derivedKey: 'Evasion', range: [3, 5] }),
@@ -279,8 +274,7 @@ const WEAPON_PREFIX_POOL = [
   // flat damage adds; new top tier reaches up to 40% so this stat has room to
   // actually matter on the item once flat numbers scale up too. Gapless: each
   // tier's max is exactly one less than the next tier's min.
-  makeWeaponPercentPrefix({ key: 'Rugged', tier: 4, range: [2, 3] }),
-  makeWeaponPercentPrefix({ key: 'Savage', tier: 3, range: [4, 6] }),
+  makeWeaponPercentPrefix({ key: 'Rugged', tier: 3, range: [2, 6] }),
   makeWeaponPercentPrefix({ key: 'Vicious', tier: 2, range: [7, 15] }),
   makeWeaponPercentPrefix({ key: 'Brutal', tier: 1, range: [16, 27] }),
   makeWeaponPercentPrefix({ key: 'Merciless', tier: 0, range: [28, 40] }),

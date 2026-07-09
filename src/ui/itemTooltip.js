@@ -13,6 +13,7 @@
 
 import { isItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import { Items } from '../../data/items.js';
+import { SKILLS } from '../../data/skills.js';
 
 // Matches Tooltip.js's existing _pillColorFor palette where a family overlaps
 // (fire/cold/lightning), so a skill's fire tag and a weapon's fire damage
@@ -132,15 +133,21 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     if (misc.procNecroFlat) lines.push(`  • ${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
   }
 
-  if (instance?.grantsSkills?.length) {
-    const skillNames = instance.grantsSkills.map(id =>
-      id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    );
+  // Falls back to base.grantsSkills (view already spreads it in) for items
+  // that haven't been instanced yet, e.g. a pre-purchase vendor preview.
+  const grantedSkillIds = instance?.grantsSkills?.length ? instance.grantsSkills : (base.grantsSkills || []);
+  if (grantedSkillIds.length) {
     lines.push('');
-    lines.push(`Grants: ${skillNames.join(', ')}`);
+    lines.push('Grants:');
+    grantedSkillIds.forEach(id => {
+      const sk = SKILLS?.[id];
+      const skillName = sk?.name || id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      lines.push(`  • ${skillName}`);
+      if (sk?.description) lines.push(`    ${sk.description}`);
+    });
   }
 
-  if (base.description && !instance?.fixedAffixValue && !instance?.grantsSkills?.length) {
+  if (base.description && !instance?.fixedAffixValue && !grantedSkillIds.length) {
     lines.push('', base.description);
   }
 

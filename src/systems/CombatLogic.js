@@ -26,7 +26,7 @@ export function _sumStatusEffectMods(char) {
   // Each effect can have: { mods: { Accuracy:+5, Evasion:-10, AttackPower:+15, ... } }
   const out = {
     Accuracy: 0, Evasion: 0, Initiative: 0, CritChance: 0, CritMult: 0,
-    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0, CritAvoid: 0,
+    ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0,
     AttackPower: 0, // % bonus to all outgoing damage (e.g. war_cry_buff)
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
@@ -50,7 +50,6 @@ export function getEffectiveDerived(char) {
     ElementalResist: (d.ElementalResist | 0) + (b.ElementalResist | 0) + s.ElementalResist,
     PhysicalResist: (d.PhysicalResist | 0) + (b.PhysicalResist | 0) + s.PhysicalResist,
     NecroticResist: (d.NecroticResist | 0) + (b.NecroticResist | 0) + s.NecroticResist,
-    CritAvoid: (d.CritAvoid | 0) + (b.CritAvoid | 0) + s.CritAvoid,
     AttackPower: (d.AttackPower | 0) + (b.AttackPower | 0) + s.AttackPower,
   };
 }
@@ -76,6 +75,20 @@ function getAttackerDamageMultiplier(attacker, opts = {}) {
   }
 
   return mult;
+}
+
+// Proficiency — a %damage multiplier off the attacker's single highest core
+// stat (STR/DEX/CON/INT/WIS/CHA), deliberately its own multiplicative step,
+// separate from gear's globalDamagePercent above. Lets any build raise
+// damage without specifically pumping STR (which still gates the flat
+// base-damage floor in calculateDamage()) — a build's best stat, whatever it
+// is, contributes here. +1% per point above 10, floored at 0 (no penalty for
+// a low peak stat — that's the future "Deficiency" stat's job, not this one).
+function getProficiencyMultiplier(attacker) {
+  const s = attacker?.totalStats || {};
+  const highest = Math.max(s.STR || 0, s.DEX || 0, s.CON || 0, s.INT || 0, s.WIS || 0, s.CHA || 0);
+  const bonusPct = Math.max(0, highest - 10);
+  return 1 + (bonusPct / 100);
 }
 
 
@@ -293,10 +306,12 @@ export function getHealingReceivedMult(char) {
 // Lightning jolts are NOT handled here — see applyLightningJolt() below, which
 // is added after the crit multiplier in calculateDamage() so jolt damage can
 // never itself be crit-amplified.
-// Signature: (physical, elemental, attacker, target, ability) → { physical, elemental }
+// Signature: (physical, elemental, necrotic, attacker, target, ability) → { physical, elemental, necrotic }
 // --------------------------------------------------
-function applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability) {
-  // Attacker under Cold T2 → deals less physical AND elemental damage (overflow-scaled, capped)
+function applyWeaknessDamagePipeline(physical, elemental, necrotic, attacker, target, ability) {
+  // Attacker under Cold T2 → deals less physical, elemental, AND necrotic
+  // damage (overflow-scaled, capped) — previously only reduced physical and
+  // elemental, silently leaving necrotic output untouched.
   {
     const wa = attacker?.weakness;
     if (wa && ((wa.tiers?.cold | 0) >= 2)) {
@@ -305,14 +320,15 @@ function applyWeaknessDamagePipeline(physical, elemental, attacker, target, abil
       const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
       const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
       const pen = Math.min(basePen * I, capPen);
-      const prevTotal = physical + elemental;
+      const prevTotal = physical + elemental + necrotic;
       physical = Math.max(0, Math.floor(physical * (1 - pen)));
       elemental = Math.max(0, Math.floor(elemental * (1 - pen)));
-      try { _pushBreakdown?.({ label: 'Cold T2 damage-out', mult: (1 - pen), from: prevTotal, to: physical + elemental }); } catch { }
+      necrotic = Math.max(0, Math.floor(necrotic * (1 - pen)));
+      try { _pushBreakdown?.({ label: 'Cold T2 damage-out', mult: (1 - pen), from: prevTotal, to: physical + elemental + necrotic }); } catch { }
     }
   }
 
-  return { physical: Math.max(0, physical), elemental: Math.max(0, elemental) };
+  return { physical: Math.max(0, physical), elemental: Math.max(0, elemental), necrotic: Math.max(0, necrotic) };
 }
 
 // --------------------------------------------------
@@ -461,7 +477,19 @@ export function calculateDamage(attacker, target, ability = null) {
       .sort((a, b) => (b.tierAtLeast ?? 1) - (a.tierAtLeast ?? 1))[0];
     if (matched) abilityCritBonus = matched.bonusPct || 0;
   }
-  const baseCritChance = (effDerived.CritChance || 0) + weaponCrit + abilityCritBonus;
+  let baseCritChance = (effDerived.CritChance || 0) + weaponCrit + abilityCritBonus;
+  // Evasion double-duty: on a landed hit, target Evasion also partially
+  // resists the crit itself (retired CritAvoid's job — that stat was computed
+  // but never actually read by the crit roll, so this is Evasion's alone now).
+  // Half weight: full Evasion already fully governs whether the hit lands at
+  // all via computeHitChance, so only half again counts a second time here.
+  const targetEvasionEff = applyColdEvasionPenalty(target, getEffectiveDerived(target).Evasion | 0);
+  const critAvoidance = targetEvasionEff * 0.5;
+  if (critAvoidance > 0) {
+    const prev = baseCritChance;
+    baseCritChance = Math.max(0, baseCritChance - critAvoidance);
+    try { _pushBreakdown({ label: 'evasion vs crit', from: prev, value: Math.round(baseCritChance) }); } catch { }
+  }
   const baseCritMult = effDerived.CritMult || 1.5;
   const critBundle = applyExposeCritBonuses(attacker, target, baseCritChance, baseCritMult);
   try { _pushBreakdown({ label: 'critChance', value: Math.round(critBundle.critChance) }); } catch { }
@@ -538,11 +566,24 @@ export function calculateDamage(attacker, target, ability = null) {
     try { if (conv > 0) _pushBreakdown({ label: 'elem→necro', convert: conv }); } catch { }
   }
 
-  // Weakness pipeline: Cold T2 damage-dealt penalty (modifies physical & elemental)
-  const pipeResult = applyWeaknessDamagePipeline(physical, elemental, attacker, target, ability);
+  // Weakness pipeline: Cold T2 damage-dealt penalty (modifies physical, elemental & necrotic)
+  const pipeResult = applyWeaknessDamagePipeline(physical, elemental, necrotic, attacker, target, ability);
   physical = pipeResult.physical;
   elemental = pipeResult.elemental;
-  necrotic = Math.max(0, necrotic);
+  necrotic = pipeResult.necrotic;
+
+  // Proficiency — own multiplicative step, uniform across all three typed
+  // components (same "whole hit" treatment as crit below), applied to both
+  // legacy and typed-pipeline skills since it happens here in the shared
+  // calculateDamage() rather than in either path's own finalize step.
+  const profMult = getProficiencyMultiplier(attacker);
+  if (profMult !== 1) {
+    const prevSum = physical + elemental + necrotic;
+    physical = Math.floor(physical * profMult);
+    elemental = Math.floor(elemental * profMult);
+    necrotic = Math.floor(necrotic * profMult);
+    try { _pushBreakdown({ label: 'proficiency', from: prevSum, mult: profMult, to: physical + elemental + necrotic }); } catch { }
+  }
 
   if (attacker) attacker.__gearAppliedForLastDamage = true;
 
