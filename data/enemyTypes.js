@@ -212,6 +212,10 @@ export const ENEMY_TYPES = {
     // run dry and stop acting entirely without this. Stacks additively with
     // the INT-derived regen from baseStats below (small, ~+1 at INT 8).
     mpRegenPerTurn: 12,
+    // Blunt overall damage dial — every ability he has deals 80% damage,
+    // without touching his base stats or Bloodthirster. A quick lever while
+    // he's still overtuned post-stat-rework, not a real balance pass.
+    damageMultiplierPct: -20,
     // Core stats — run through the same calculateDerivedStats() players use
     // (see _placeEnemies), so these actually drive his weapon damage
     // (STR), HP (CON), Initiative/gauge regen (CHA), MP (INT/WIS/CHA),

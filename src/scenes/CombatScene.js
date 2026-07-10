@@ -1225,15 +1225,23 @@ export default class CombatScene extends Phaser.Scene {
         // equivalent to their old zero-stat behavior — see the
         // calculateDerivedStats() pass after the drops loop below.
         totalStats: { ...(template.baseStats || {}) },
-        // Optional flat per-turn MP regen declared directly on the enemy
-        // template (not gear-derived) — for MP-hungry bosses that shouldn't
-        // be able to run completely dry and stop acting. Reuses the same
-        // gearEffects.mpPerTurn field _applyGearStartOfTurn already reads for
-        // everyone; _equipEnemyItem's own mpPerTurn writes stack additively
-        // on top of this baseline, not replace it.
-        gearEffects: Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
-          ? { mpPerTurn: template.mpRegenPerTurn }
-          : undefined,
+        // Optional flat per-turn MP regen + overall damage multiplier
+        // declared directly on the enemy template (not gear-derived).
+        // mpRegenPerTurn: for MP-hungry bosses that shouldn't be able to run
+        // completely dry and stop acting — reuses the same gearEffects.
+        // mpPerTurn field _applyGearStartOfTurn already reads for everyone;
+        // _equipEnemyItem's own mpPerTurn writes stack additively on top.
+        // damageMultiplierPct: a blunt overall damage dial (e.g. -20 = 80%
+        // damage on everything) without touching stats or gear — reuses
+        // gearEffects.globalDamagePercent, the same field calculateDamage()
+        // already reads via getAttackerDamageMultiplier() for every hit this
+        // unit lands, positive or negative.
+        gearEffects: {
+          ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
+            ? { mpPerTurn: template.mpRegenPerTurn } : {}),
+          ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
+            ? { globalDamagePercent: template.damageMultiplierPct } : {}),
+        },
       };
 
       // Equip any configured drops (random item + rarity per entry)
@@ -1542,23 +1550,44 @@ export default class CombatScene extends Phaser.Scene {
     const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct);
     const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct);
 
+    const mpPerTurn = char?.gearEffects?.mpPerTurn || 0;
+    const lifeStealPct = Math.round((char?.gearEffects?.lifeStealPct || 0) * 100);
+    const healGivenPct = (typeof getProficiencyBreakdown === 'function' ? getProficiencyBreakdown(char)?.bonusPct : 0) ?? 0;
+
+    // Paired rows (right + mid share a row, each independently hoverable —
+    // NOT a single "X / Y" string like PDR/EDR/NDR below, since these two
+    // need their OWN separate tooltips rather than one shared one). rowsMid
+    // entries line up by INDEX with the rowsRight row they sit next to; a
+    // rowsRight row with no pair just gets `null` at that index in rowsMid.
     const rowsRight = [
-      { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
       { label: 'MP:', value: `${char.currentMP}/${char.maxMP}`, desc: 'Current / maximum Mana Points, spent on skills with an MP cost.' },
       { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%`, desc: 'Physical / Elemental / Necrotic Damage Reduction — % of incoming damage of each type prevented.' },
       { label: 'PD/ED/ND:', value: `+${pdPct}% / +${edPct}% / +${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus added to this character\'s own outgoing damage of each type (gear + buffs). Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
-      { label: 'Healing Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
+      { label: 'Heal Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
       { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
-      { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold, desc: 'Bonus crit chance and crit damage attackers get against this character — raised by Expose T2.' },
+      { label: 'Crit%:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
       { label: 'Resilience:', value: `${resilience}`, desc: 'Flat reduction applied to incoming buildup toward every weakness family. Comes from Wisdom and gear.' },
       { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc, desc: 'Raises this character\'s chance to land a hit. Any excess beyond what\'s needed to reach 100% hit chance instead adds to Crit Chance (half value).' },
       { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true, desc: 'Lowers the attacker\'s chance to hit this character. On a landed hit, it also partially resists being crit (half value).' },
-      { label: 'Crit Chance:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
       { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}`, desc: 'Fills each turn, primarily from Charisma. Spent as a resource by some skills for bonus effects. Initiative sets turn order at the start of battle.' },
+      { label: 'Lifesteal:', value: `${lifeStealPct}%`, desc: 'Heals this character for a % of damage dealt — from gear.' },
     ];
 
-    // ===== Middle column (aligned to HP row Y) =====
-    const rowsMid = [];
+    // ===== Middle column — paired counterparts, aligned by index to the
+    // rowsRight row they sit next to (see comment above) =====
+    const rowsMid = [
+      { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
+      null,
+      null,
+      { label: 'Heal Given:', value: `+${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — currently comes from Proficiency (see the Equipment tab).' },
+      { label: 'MP/Turn:', value: `+${mpPerTurn}`, desc: 'Flat MP restored at the start of this character\'s turn — from gear and Intelligence (+1 per 5 INT). Reduced by this character\'s own Disorient, same scaling as Cost Mult.' },
+      { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold, desc: 'Bonus crit chance and crit damage attackers get against this character — raised by Expose T2.' },
+      null,
+      null,
+      null,
+      null,
+      null,
+    ];
 
 
     const labelStyle = { fontSize: `${fontPx}px`, color: '#cccccc', align: 'right' };
@@ -1599,12 +1628,17 @@ export default class CombatScene extends Phaser.Scene {
       }
     });
 
-    // --- MIDDLE column (3 rows), aligned to HP row Y ---
+    // --- MIDDLE column — paired counterpart to the rowsRight row at the
+    // same index (see rowsRight/rowsMid comment above); `null` entries mean
+    // that rowsRight row has no pair and this column stays blank there ---
     rowsMid.forEach((row, idx) => {
-      const y = startY + idx * lineH; // align with HP, MP, STR, ...
+      if (!row) return;
+      const y = startY + idx * lineH;
+
       const valueText = this.add.text(midX, y, row.value, {
         ...valueBase,
-        color: '#eeeeee'
+        color: row.valueColor || '#eeeeee',
+        fontStyle: row.valueBold ? 'bold' : 'normal'
       }).setOrigin(1, 0);
       this.characterInfoPanel.add(valueText);
       this._charInfoBodyGroup.push(valueText);
@@ -1613,6 +1647,23 @@ export default class CombatScene extends Phaser.Scene {
       const labelText = this.add.text(labelX, y, row.label, labelStyle).setOrigin(1, 0);
       this.characterInfoPanel.add(labelText);
       this._charInfoBodyGroup.push(labelText);
+
+      if (row.desc) {
+        const showTip = (pointer) => {
+          this.tooltip?.show(pointer.worldX, pointer.worldY, {
+            title: row.label.replace(/:$/, ''),
+            lines: [row.desc]
+          });
+        };
+        const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+        const hideTip = () => this.tooltip?.hide();
+        [valueText, labelText].forEach(t => {
+          t.setInteractive({ useHandCursor: true });
+          t.on('pointerover', showTip);
+          t.on('pointermove', moveTip);
+          t.on('pointerout', hideTip);
+        });
+      }
     });
 
   }
@@ -4771,8 +4822,18 @@ export default class CombatScene extends Phaser.Scene {
   // separate HP subtraction. See that block in _applyAbilityToTarget.
 
   _applyGearStartOfTurn(char) {
-    const regen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
+    const baseRegen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
+    if (!baseRegen) return;
+
+    // Disorient impairs MP regen too, not just costs — reuses the SAME
+    // intensity-scaled bump _getDisorientCostMult already computes for the
+    // cost-side penalty (costMult = 1 + bump), just applied as a reduction
+    // instead of an increase, so both effects stay tuned together.
+    const costMult = this._getDisorientCostMult(char);
+    const disorientBump = Math.max(0, costMult - 1);
+    const regen = Math.max(0, Math.floor(baseRegen * (1 - disorientBump)));
     if (!regen) return;
+
     const before = char.currentMP | 0;
     const max = char.maxMP | 0;
     if (max <= 0 || before >= max) return;
