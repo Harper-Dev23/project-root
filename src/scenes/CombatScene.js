@@ -20,7 +20,7 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, ap
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
-import { rebuildCharacterStats, resetCombatMods } from '../systems/CharacterBuilder.js';
+import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
@@ -280,9 +280,16 @@ export default class CombatScene extends Phaser.Scene {
     this._placePartyMembers();
     this._placeEnemies(this.scenarioId);
 
-    // Build fixed turn order (decided at combat start)
-    this.turnOrder = [...GameState.party, ...(this.enemies || [])];
-    this.turnOrder.sort((a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a));
+    // Build fixed turn order (decided at combat start) — grouped by TEAM
+    // first (no interleaving/"stragglers" between sides), Initiative only
+    // decides order WITHIN each team's own block. Which team's block goes
+    // first is currently hardcoded to the player party for the combat pit;
+    // a real circumstance-based rule (ambush, enemy initiative, etc.) is a
+    // separate, later decision — this is a deliberate placeholder for that.
+    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
+    const partyOrder = [...GameState.party].sort(byInitiativeDesc);
+    const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
+    this.turnOrder = [...partyOrder, ...enemyOrder];
 
     this._resetAllCooldowns();
 
@@ -1026,6 +1033,28 @@ export default class CombatScene extends Phaser.Scene {
   // actually reach in one step. (This also used to be defined twice,
   // byte-for-byte identical — the second copy silently shadowed the first;
   // only one copy remains now.)
+  // Key a slot object the same way _charSlotKey keys a character's current
+  // slot (uniqueKey preferred, side_slotId fallback) — lets hazard checks run
+  // against a candidate destination slot without needing a char standing there.
+  _slotKeyFor(slotEntry, isEnemy) {
+    if (!slotEntry) return null;
+    if (slotEntry.uniqueKey) return slotEntry.uniqueKey;
+    return slotEntry.slotId != null ? `${isEnemy ? 'enemy' : 'ally'}_${slotEntry.slotId}` : null;
+  }
+
+  // A slot counts as hazardous if it carries a ground effect that actually
+  // harms whoever stands there (direct tile damage, or a weakness buildup
+  // tick) — NOT any slotEffect at all, since e.g. Sanctified Slam's zone only
+  // grants MP on hit and shouldn't be avoided like a Quake zone would be.
+  _slotIsHazardous(slotEntry, isEnemy) {
+    const key = this._slotKeyFor(slotEntry, isEnemy);
+    const effects = key != null ? this.slotEffects?.[key] : null;
+    if (!Array.isArray(effects) || !effects.length) return false;
+    return effects.some(eff =>
+      (eff?.tickPctMaxHP > 0) || (eff?.buildupFamilies && Object.keys(eff.buildupFamilies).length > 0)
+    );
+  }
+
   _enemyTryShuffleOneColumn(npc) {
     const slotId = npc?._slot?.slotId;
     if (!slotId) return false;
@@ -1037,7 +1066,8 @@ export default class CombatScene extends Phaser.Scene {
     ];
     for (const destId of tryIds) {
       const dest = side.find(s => s.slotId === destId && !s.occupied);
-      if (dest && this._moveUnitToSlot(npc, dest)) return true;
+      if (!dest || this._slotIsHazardous(dest, npc.isEnemy)) continue;
+      if (this._moveUnitToSlot(npc, dest)) return true;
     }
     return false;
   }
@@ -1049,7 +1079,8 @@ export default class CombatScene extends Phaser.Scene {
     const side = npc.isEnemy ? this.enemySlots : this.allySlots;
     for (const destId of getAdjacentSlotsTowardColumn(slotId, 1)) {
       const dest = side.find(s => s.slotId === destId && !s.occupied);
-      if (dest && this._moveUnitToSlot(npc, dest)) return true;
+      if (!dest || this._slotIsHazardous(dest, npc.isEnemy)) continue;
+      if (this._moveUnitToSlot(npc, dest)) return true;
     }
     return false;
   }
@@ -1187,6 +1218,22 @@ export default class CombatScene extends Phaser.Scene {
         equipment: {},
         // baseline derived stats enemies need for DR calculation
         derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5 },
+        // Base core stats (STR/DEX/CON/INT/WIS/CHA), optional per template —
+        // gear-rolled stat bonuses accumulate on top of this in
+        // _equipEnemyItem, same field either way. Most enemy types still
+        // have no baseStats at all (empty object), which is intentionally
+        // equivalent to their old zero-stat behavior — see the
+        // calculateDerivedStats() pass after the drops loop below.
+        totalStats: { ...(template.baseStats || {}) },
+        // Optional flat per-turn MP regen declared directly on the enemy
+        // template (not gear-derived) — for MP-hungry bosses that shouldn't
+        // be able to run completely dry and stop acting. Reuses the same
+        // gearEffects.mpPerTurn field _applyGearStartOfTurn already reads for
+        // everyone; _equipEnemyItem's own mpPerTurn writes stack additively
+        // on top of this baseline, not replace it.
+        gearEffects: Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
+          ? { mpPerTurn: template.mpRegenPerTurn }
+          : undefined,
       };
 
       // Equip any configured drops (random item + rarity per entry)
@@ -1194,6 +1241,33 @@ export default class CombatScene extends Phaser.Scene {
         config.drops.forEach(dropCfg => {
           this._equipEnemyItem(enemy, dropCfg);
         });
+      }
+
+      // Resolve base + gear core stats (enemy.totalStats, now fully
+      // accumulated) through the SAME calculateDerivedStats() players use —
+      // replaces the old ad-hoc CON/WIS-only branches that used to live in
+      // _equipEnemyItem. Applied ADDITIVELY on top of the template's flat
+      // maxHP/maxMP and the zero-baseline derived stats (direct armor
+      // affixes from _derivedMods already landed in enemy.derived per-item
+      // above) — for an enemy with no baseStats and no stat-granting gear,
+      // every field here is 0 except calculateDerivedStats' own Math.max(1,...)
+      // floor on maxHP, so this is a no-op in practice for the common case.
+      {
+        const statDerived = calculateDerivedStats(enemy.totalStats || {});
+        enemy.maxHP += statDerived.maxHP;
+        enemy.currentHP = Math.min(enemy.maxHP, enemy.currentHP + statDerived.maxHP);
+        enemy.maxMP += statDerived.maxMP;
+        enemy.currentMP = Math.min(enemy.maxMP, enemy.currentMP + statDerived.maxMP);
+        enemy.derived.Accuracy += statDerived.Accuracy;
+        enemy.derived.Evasion += statDerived.Evasion;
+        enemy.derived.CritChance += statDerived.CritChance;
+        enemy.derived.PhysicalResist += statDerived.PhysicalResist;
+        enemy.derived.ElementalResist += statDerived.ElementalResist;
+        enemy.derived.NecroticResist += statDerived.NecroticResist;
+        enemy.derived.Initiative += statDerived.Initiative;
+        enemy.gearEffects = enemy.gearEffects || {};
+        enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + (statDerived.Resilience || 0);
+        enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + (statDerived.MpRegenPerTurn || 0);
       }
 
       // Find target slot
@@ -1215,8 +1289,13 @@ export default class CombatScene extends Phaser.Scene {
 
   /**
    * Creates a random item instance for the given drop config and equips it on the enemy.
-   * Applies stat bonuses directly to the enemy's derived/maxHP without going through
-   * the full rebuildCharacterStats pipeline (which is player-character-specific).
+   * Accumulates gear stat bonuses into enemy.totalStats and applies direct
+   * armor affixes (_derivedMods/_miscMods) straight to enemy.derived/gearEffects.
+   * Core-stat-DERIVED effects (HP from CON, resists, Accuracy, etc.) are NOT
+   * computed here — _placeEnemies runs calculateDerivedStats() once after all
+   * of an enemy's drops are equipped, the same function rebuildCharacterStats
+   * uses for players, just without the player-specific parts (equipment
+   * inventory management, skill unlocks, etc.) that don't apply to enemies.
    *
    * dropCfg: { equip: 'chest'|'head'|..., itemId?: string, droppable?: bool }
    */
@@ -1271,30 +1350,12 @@ export default class CombatScene extends Phaser.Scene {
       enemy.totalStats[k] = (enemy.totalStats[k] || 0) + v;
     }
 
-    if (bonuses.CON) {
-      const hpGain = bonuses.CON * 5;
-      enemy.maxHP += hpGain;
-      enemy.currentHP += hpGain;
-      enemy.derived.PhysicalResist += Math.round(bonuses.CON * 0.5);
-    }
-    if (bonuses.WIS) {
-      enemy.derived.ElementalResist += Math.round(bonuses.WIS * 0.5);
-      enemy.derived.NecroticResist += Math.round(bonuses.WIS * 1.0);
-      // Mirrors the player-side WIS->Resilience rule (CharacterBuilder.js
-      // rebuildCharacterStats) — folds into gearEffects so it's picked up by
-      // the same target.gearEffects.resilience read as gear-rolled resilience.
-      enemy.gearEffects = enemy.gearEffects || {};
-      enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + Math.round(bonuses.WIS * 0.5);
-    }
-    // DEX: no Evasion hook, matching the player-side rule (CharacterBuilder.js
-    // calculateDerivedStats: "DEX no longer grants Evasion" — Evasion is
-    // purely gear/buff/weakness-driven for both sides now). This enemy branch
-    // used to add DEX straight to Evasion, which was never updated when that
-    // rule changed for players — real inconsistency, now aligned.
-    // STR: no derived-stat hook here yet — this enemy's own skills return
-    // flat hardcoded damage numbers rather than rolling calculateDamage(),
-    // so there's nothing for a STR bonus to feed into today. totalStats.STR
-    // above at least makes the stat exist for anything that reads it directly.
+    // CON/WIS/DEX/STR derived-stat effects (HP, resists, Accuracy, Evasion,
+    // Initiative, weapon damage, Proficiency, ...) all now come from the
+    // single calculateDerivedStats() pass in _placeEnemies, run once after
+    // every drop for this enemy has been equipped and totalStats is fully
+    // accumulated — same formulas players use, no separate ad-hoc branches
+    // needed here anymore.
 
     // Direct derived-stat affixes (e.g. armor's "Hallowed" ElementalResist,
     // or any PhysicalResist/NecroticResist/Accuracy/Evasion/CritChance roll
@@ -1623,12 +1684,12 @@ export default class CombatScene extends Phaser.Scene {
 
     const stats = char.totalStats || {};
     const statRows = [
-      { label: 'STR:', value: `${stats.STR ?? 0}`, desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT). Also drives Proficiency if it\'s your highest stat.' },
-      { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT). Also drives Proficiency if it\'s your highest stat.' },
-      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+5 Max HP and +0.5 Physical Resist per point. Also drives Proficiency if it\'s your highest stat.' },
-      { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point. Feeds Crit Chance (with STR/DEX). Also drives Proficiency if it\'s your highest stat.' },
-      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +1 Necrotic Resist, +0.5 Resilience per point. Also drives Proficiency if it\'s your highest stat.' },
-      { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP and +1 Initiative per point (sets turn order and Initiative Gauge regen). Also drives Proficiency if it\'s your highest stat.' },
+      { label: 'STR:', value: `${stats.STR ?? 0}`, desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT).' },
+      { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT).' },
+      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+5 Max HP and +0.5 Physical Resist per point.' },
+      { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point, +1 MP regen per turn per 5 points. Feeds Crit Chance (with STR/DEX).' },
+      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point.' },
+      { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP, +1 Initiative per point (sets turn order and Initiative Gauge regen), +0.5 Elemental Resist, +0.5 Necrotic Resist per point.' },
     ];
 
     const statLabelStyle = { fontSize: '14px', color: '#cccccc', align: 'right' };
@@ -1683,7 +1744,7 @@ export default class CombatScene extends Phaser.Scene {
         title: 'Proficiency',
         lines: [
           'A separate %bonus based on your single highest core stat',
-          '(whichever of STR/DEX/CON/INT/WIS/CHA is highest), on top of gear.',
+          '(whichever of STR/DEX/CON/INT/WIS/CHA is highest).',
           '+1% per point above 10 — applies to outgoing damage and healing.',
           '',
           { text: `Driving stat: ${prof.stat} (${prof.value})`, color: '#66ff66' },
@@ -1780,7 +1841,13 @@ export default class CombatScene extends Phaser.Scene {
       const lines = [`${rarityLabel} ${slotLabel} ${typeLabel} — unrevealed`, ''];
       for (let a = 0; a < affixCount; a++) lines.push('?? ??');
       if (affixCount) lines.push('');
-      lines.push('Defeat this enemy to loot this item.');
+      // Matches the lock icon's own condition in _renderCharacterInfoEquipment
+      // (inst._droppable === false) — was saying "defeat this enemy to loot
+      // this item" unconditionally, even on soulbound/historic gear that's
+      // locked and will never actually drop.
+      lines.push(inst._droppable === false
+        ? '🔒 Soulbound — will not drop on defeat.'
+        : 'Defeat this enemy to loot this item.');
       return { title: `?? [${rarityLabel}]`, titleColor: color, lines };
     }
 
@@ -2610,7 +2677,20 @@ export default class CombatScene extends Phaser.Scene {
     // not) — "Prepare Selected" below replaces the whole prepared set to
     // match this list, rather than only ever adding to it, so unchecking an
     // already-prepared reaction and confirming actually un-prepares it.
-    if (!this._rxSelection) this._rxSelection = [...preparedIds];
+    //
+    // Also reseed whenever the CURRENT CHARACTER differs from whoever this
+    // selection was last built for — _rxSelection previously only reset via
+    // the Back button, so switching characters any other way (ending your
+    // turn, clicking a different portrait, etc.) left a stale selection from
+    // the PREVIOUS character sitting around. Hitting "Prepare Selected" for
+    // the new character then re-armed whatever was in that stale list —
+    // including reactions the new character can't even use (e.g. a mace
+    // wielder ending up with a sword-only reaction like Read and React
+    // re-armed on them every time they touched this menu).
+    if (!this._rxSelection || this._rxSelectionOwner !== user) {
+      this._rxSelection = [...preparedIds];
+      this._rxSelectionOwner = user;
+    }
 
     // Header (aligned at x=0 like the buttons)
     const baseX = this.actionMenuContentX ?? 0;
@@ -2684,6 +2764,7 @@ export default class CombatScene extends Phaser.Scene {
     // from whatever's actually prepared).
     const backBtn = new UIButton(this, baseX, y + 8, '🔙 Back', () => {
       this._rxSelection = null;
+      this._rxSelectionOwner = null;
       this._buildActionMenuRoot?.();
     });
     this._actionMenuAdd(backBtn);
@@ -3312,6 +3393,18 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // --- Generic Initiative Gauge requirement gate (e.g. Blazing Fervor,
+    // whose entire purpose is spending the gauge — below the minimum spend
+    // tier there's nothing for it to do, so it should fizzle rather than
+    // silently firing for free).
+    if (Number.isFinite(ability?.requiresInitiativeGauge) && ability.requiresInitiativeGauge > 0) {
+      const gauge = user?.initiativeGauge || 0;
+      if (gauge < ability.requiresInitiativeGauge) {
+        this._log(`${ability.name} fizzles: ${user?.name || 'user'} lacks the Initiative Gauge (needs ${ability.requiresInitiativeGauge}).`);
+        return; // no costs, no cooldown, no on-act triggers
+      }
+    }
+
     // --- Generic weakness-tier requirement gate (e.g. Heartpiercer needing
     // the target at least Raw). This field already existed declaratively on
     // several skills and was checked in _executeSkill, but that function
@@ -3808,7 +3901,9 @@ export default class CombatScene extends Phaser.Scene {
         // double-count it. fireBuildup isn't part of that damage-scaling
         // question, so it still applies unconditionally either way.
         if (dmg > 0 && Array.isArray(user?.statusEffects)) {
-          for (const se of user.statusEffects) {
+          const onHitToRemove = [];
+          for (let i = 0; i < user.statusEffects.length; i++) {
+            const se = user.statusEffects[i];
             const proc = se?.onHit;
             if (!proc) continue;
             if (!se.permanent && (se.turns || 0) <= 0) continue;
@@ -3820,7 +3915,16 @@ export default class CombatScene extends Phaser.Scene {
             if (proc.fireBuildup > 0 && target?.weakness) {
               this._applyWeaknessBuildup(target, { fire: proc.fireBuildup }, { user });
             }
+            // Generic family-keyed buildup rider (e.g. Bedrock Guard's cold
+            // surge on the wielder's next attack) — same shape as
+            // nextHitBuildup elsewhere, but attacker-side (applies when THIS
+            // unit lands a hit, not when they're hit).
+            if (proc.buildup && target?.weakness) {
+              this._applyWeaknessBuildup(target, proc.buildup, { user });
+            }
+            if (se.nextHitOnly) onHitToRemove.push(i);
           }
+          for (let i = onHitToRemove.length - 1; i >= 0; i--) user.statusEffects.splice(onHitToRemove[i], 1);
         }
 
         // Crit-triggered bleed based on the FINAL damage this hit deals — after
@@ -4138,7 +4242,7 @@ export default class CombatScene extends Phaser.Scene {
         a.statusEffects = a.statusEffects || [];
         a.statusEffects.push({ ...result.teamBuff.effect });
       }
-      this._log(`${attacker.name} grants ${result.teamBuff.effect.id} to their column.`);
+      this._log(`${attacker.name} grants ${result.teamBuff.effect.id} to their rank.`);
     }
 
     // (5) Slot effects on the target's tile
@@ -4326,10 +4430,33 @@ export default class CombatScene extends Phaser.Scene {
   _applyDirectResult(user, target, payload, opts = {}) {
     if (!target || !payload) return;
 
-    // Damage / heal
-    const rawAmt = payload.amount | 0;
     const isHeal = !!payload.isHeal;
     const isSplashOrAoe = !!(opts?.isSplash || opts?.isVolleyCopy);
+
+    // Reaction window for splash hits — self_hit was previously only ever
+    // emitted from the PRIMARY-target path (_applyAbilityToTarget), so a
+    // reaction could never trigger off being hit as a secondary target of
+    // someone else's AOE (e.g. Bedrock Guard reacting to Disrupting Roar's
+    // splash onto an ally who wasn't the chosen primary target). intent.
+    // isSplash lets a reaction's canTrigger specifically gate on "I was hit
+    // by splash," distinct from a normal direct hit.
+    if (!isHeal && (payload.amount | 0) > 0 && opts?.isSplash) {
+      const differentTeams = (!!user?.isEnemy) !== (!!target?.isEnemy);
+      const ability = opts?.ability || null;
+      if (differentTeams && isReactableAttackSource(ability, null)) {
+        this.bus?.emit('self_hit', {
+          attacker: user,
+          target,
+          ability,
+          intent: { isSplash: true, tags: ability?.tags },
+          incomingMutable: payload,
+        });
+      }
+    }
+
+    // Damage / heal — read fresh; a reaction's exec above may have zeroed
+    // payload.amount (e.g. Bedrock Guard negating the splash entirely).
+    const rawAmt = payload.amount | 0;
 
     // Apply DR to all non-heal hits (splash, repeats, volley copies all respect armor/resist)
     let amt = rawAmt;
@@ -4569,12 +4696,21 @@ export default class CombatScene extends Phaser.Scene {
 
     for (let i = 0; i < list.length; i++) {
       const se = list[i];
-      if (!Number.isFinite(se.guardPct) || se.guardPct <= 0) continue;
 
-      // Conditional guard: only triggers if attacker has the required weakness tier
-      if (se.guardDiseaseCond && (attacker?.weakness?.tiers?.disease || 0) < 1) continue;
+      // Tiered disease-conditional guard (e.g. Iron Chant: 25% vs a Diseased
+      // attacker, 50% vs a Plagued one) — keyed by the ATTACKER's own Disease
+      // tier, so the % itself scales with tier instead of being a flat gate.
+      let guardPctThisEffect;
+      if (se.guardDiseaseTierPct) {
+        const attackerDiseaseTier = attacker?.weakness?.tiers?.disease || 0;
+        guardPctThisEffect = se.guardDiseaseTierPct[attackerDiseaseTier] || 0;
+        if (guardPctThisEffect <= 0) continue;
+      } else {
+        if (!Number.isFinite(se.guardPct) || se.guardPct <= 0) continue;
+        guardPctThisEffect = se.guardPct;
+      }
 
-      totalGuard += se.guardPct / 100;
+      totalGuard += guardPctThisEffect / 100;
 
       // Retaliate: apply buildup to the attacker when this guard fires
       if (se.retaliateBuildup && attacker?.weakness) {
@@ -4941,6 +5077,18 @@ export default class CombatScene extends Phaser.Scene {
         this._recomputeWeaknessTiers(char);
       }
 
+      // Elemental vulnerability while standing in the zone (e.g. Frozen
+      // Quake's Lightning synergy: if the target was already Zapped when the
+      // zone was cast, it also makes anyone standing in it take +20%
+      // elemental damage). Refreshed every tick via _addStatusEffects'
+      // same-id coalescing, so it naturally lapses within a turn of leaving.
+      if (!died && eff.elementalVulnPct > 0) {
+        this._addStatusEffects(char, [{
+          id: 'zone_elemental_vuln', turns: 1,
+          mods: { ElementalResist: -eff.elementalVulnPct },
+        }]);
+      }
+
       eff.turns -= 1;
       if (eff.turns > 0) stillActive.push(eff);
       else this._log(`The ${eff.id.replace(/_/g, ' ')} zone on this tile dissipates.`);
@@ -5000,12 +5148,12 @@ export default class CombatScene extends Phaser.Scene {
 
     const total = effects.length;
     effects.forEach((eff, i) => {
-      const sprite = this._makeGroundSprite(sx, sy, eff, i, total);
+      const sprite = this._makeGroundSprite(sx, sy, eff, i, total, slotKey);
       if (sprite) this.groundSprites[slotKey].push(sprite);
     });
   }
 
-  _makeGroundSprite(cx, cy, eff, stackIndex, totalStacks) {
+  _makeGroundSprite(cx, cy, eff, stackIndex, totalStacks, slotKey) {
     const key = CombatScene.GROUND_SPRITE_KEY[eff.id] || 'fx_crack';
     if (!this.textures?.exists(key)) return null;
 
@@ -5031,6 +5179,34 @@ export default class CombatScene extends Phaser.Scene {
 
     const tint = CombatScene.GROUND_TINT[eff.element] ?? null;
     if (tint) sprite.setTint(tint);
+
+    // Hover/click to see remaining turns and every effect stacked on this
+    // tile — works even if nobody is currently standing there, since this
+    // sprite exists independent of tile occupancy.
+    if (slotKey != null) {
+      sprite.setInteractive({ useHandCursor: true });
+      const showTip = (pointer) => {
+        const stack = this.slotEffects?.[slotKey] || [];
+        const lines = stack.length ? stack.map(e => {
+          const label = (e.id || 'effect').replace(/_/g, ' ');
+          const parts = [`${e.turns ?? '?'} turn${e.turns === 1 ? '' : 's'} left`];
+          if (e.tickPctMaxHP > 0) parts.push(`${Math.round(e.tickPctMaxHP * 100)}% max HP damage/turn`);
+          if (e.buildupFamilies) {
+            const fams = Object.entries(e.buildupFamilies).map(([f, v]) => `+${v} ${f}`).join(', ');
+            if (fams) parts.push(fams);
+          }
+          if (e.immobilizes) parts.push('immobilizes');
+          if (e.onHitMpGain) parts.push(`+${e.onHitMpGain} MP to attackers hitting enemies here`);
+          return `${label}: ${parts.join(', ')}`;
+        }) : ['No active effects'];
+        this.tooltip?.show(pointer.worldX, pointer.worldY, { title: 'Ground Effect', lines });
+      };
+      const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      const hideTip = () => this.tooltip?.hide();
+      sprite.on('pointerover', showTip);
+      sprite.on('pointermove', moveTip);
+      sprite.on('pointerout', hideTip);
+    }
 
     return sprite;
   }
@@ -5665,13 +5841,21 @@ export default class CombatScene extends Phaser.Scene {
       slot.rect.disableInteractive();
 
       if (slot === activeSlot) {
-        slot.rect.setStrokeStyle(3, 0x00ff00);       // thicker green = "my turn"
+        // Scaled up (not just a thicker stroke) so the border clearly extends
+        // past the 64x64 portrait sprite's edges instead of being mostly
+        // covered by it — a same-size stroke was easy to miss since the
+        // portrait (added on top, same dimensions) hid all but a sliver of it.
+        slot.rect.setStrokeStyle(3, 0x7fc8ff);       // light blue = "my turn"
+        slot.rect.setScale(1.08);
       } else if (slot.char?.isEnemy) {
         slot.rect.setStrokeStyle(2, 0xff4444);       // red for enemies
+        slot.rect.setScale(1);
       } else if (slot.char) {
         slot.rect.setStrokeStyle(2, 0xffffff);       // white for allies
+        slot.rect.setScale(1);
       } else {
         slot.rect.setStrokeStyle(2, 0x888888);       // gray for empty
+        slot.rect.setScale(1);
       }
     });
   }
@@ -5904,8 +6088,16 @@ export default class CombatScene extends Phaser.Scene {
 
     this.targetingAbility = null;
 
-    // Hard reset borders so nothing stays highlighted
-    [...this.allySlots, ...this.enemySlots].forEach(slot => this._resetSlotStroke(slot));
+    // NOTE: used to hard-reset every slot's border here via _resetSlotStroke
+    // (a plain red/white default with no concept of "whose turn is it") —
+    // that ran AFTER _clearSlotHighlights() above had already set the
+    // current turn's highlight, silently overwriting it back to the default
+    // every time the player's action menu rebuilt (_buildActionMenuRoot
+    // calls _exitTargetingMode first thing, every player turn). Enemy turns
+    // never called this at all, which is why only allies lost the highlight.
+    // _clearSlotHighlights() above already resets every slot correctly
+    // (including the turn-aware case), so this second pass was redundant
+    // and actively wrong — removed instead of fixed.
 
     // Restore info-click on the slot container (sprites are never interactive).
     // The container keeps its default Rectangle(0,0,64,64) geometry from _createBattleSlots.
@@ -6772,7 +6964,13 @@ export default class CombatScene extends Phaser.Scene {
   _placePortrait(char, slot) {
     this._clearPortrait(slot); // Remove old visuals
 
-    slot.rect.setStrokeStyle(2, 0xffffff); // Reset outline
+    // Was unconditionally resetting to plain white here — that's correct for
+    // initial placement (no turn in progress yet), but wiping the border on
+    // every re-placement also wiped out the current-turn highlight the
+    // instant that character moved to a new slot mid-turn (_moveUnitToSlot
+    // calls this), even though it was still their turn. Recompute properly
+    // instead, so the light-blue highlight survives a move.
+    this._clearSlotHighlights?.();
 
     // Sprite is purely visual — the slot CONTAINER handles all clicks.
     const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64);

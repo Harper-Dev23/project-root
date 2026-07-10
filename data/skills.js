@@ -1430,6 +1430,31 @@ const NPC_ONLY_SKILLS = {
   },
 
   // Encounter 6 - Berserker Boss
+  'berserker_reckless_strike': {
+    id: 'berserker_reckless_strike',
+    name: 'Reckless Strike',
+    type: 'enemy',
+    actionCost: 'major',
+    mpCost: 0,
+    cooldown: 0,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack'],
+    // Free fallback so he's never fully locked out of acting once MP runs
+    // dry — every other move in his kit costs MP, and with no 0-cost option
+    // he'd just do nothing on any turn he couldn't afford anything.
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_reckless_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      return { ...roll, amount };
+    },
+    description: "A free, no-frills swing — always available, even at 0 MP."
+  },
+
   'berserker_crushing_blow': {
     id: 'berserker_crushing_blow',
     name: 'Crushing Blow',
@@ -1440,7 +1465,15 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 9, buildup: { expose: 90, lacerate: 80 } })
+    tags: ['melee', 'attack', 'expose', 'lacerate'],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_crushing_blow;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, buildup: { expose: 90, lacerate: 80 } };
+    }
   },
   'berserker_disrupting_roar': {
     id: 'berserker_disrupting_roar',
@@ -1450,14 +1483,31 @@ const NPC_ONLY_SKILLS = {
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
-    requiresTarget: false,
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    // Was requiresTarget:false with 100% of its damage living in `splash`
+    // (no real primary target hit at all) — that meant it could never emit
+    // the self_hit event reactions listen for, so nothing (Bedrock Guard
+    // included) could ever trigger against it. Now hits a real primary
+    // target (picked by the AI, see berserker_boss profile) and splashes
+    // the same amount to the rest of the party, same as before.
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['aoe', 'disorient'],
+    aoe: { shape: 'party', scale: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.berserker_disrupting_roar;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
       return {
-        amount: 0,
-        splash: foes.map(t => ({ target: t, amount: 3, buildup: { disorient: 80 } }))
+        ...roll,
+        amount,
+        buildup: { disorient: 80 },
+        splash: others.map(t => ({ target: t, amount, buildup: { disorient: 80 } })),
       };
-    }
+    },
+    description: "Roars, disorienting the whole party. Deals damage and builds Disorient on every foe."
   },
   'berserker_bleeding_sweep': {
     id: 'berserker_bleeding_sweep',
@@ -1467,14 +1517,27 @@ const NPC_ONLY_SKILLS = {
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
-    requiresTarget: false,
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    // Same fix as Disrupting Roar — was 100% splash with no real primary
+    // target, so it could never emit self_hit for any reaction to see.
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'aoe', 'lacerate'],
+    aoe: { shape: 'party', scale: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.berserker_bleeding_sweep;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
       return {
-        amount: 0,
-        splash: foes.map(t => ({ target: t, amount: 6, buildup: { lacerate: 90 } }))
+        ...roll,
+        amount,
+        buildup: { lacerate: 90 },
+        splash: others.map(t => ({ target: t, amount, buildup: { lacerate: 90 } })),
       };
-    }
+    },
+    description: "A wide, bleeding sweep across the whole party."
   },
   'berserker_guarded_fury': {
     id: 'berserker_guarded_fury',
@@ -1486,11 +1549,20 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (user, target) => ({
-      amount: 5,
-      buildup: { cold: 70 },
-      statusEffects: [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]
-    })
+    tags: ['melee', 'attack', 'cold'],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_guarded_fury;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      return {
+        ...roll,
+        amount,
+        buildup: { cold: 70 },
+        statusEffects: [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]
+      };
+    }
   },
   'berserker_battle_frenzy': {
     id: 'berserker_battle_frenzy',
@@ -1516,11 +1588,19 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'finisher'],
     requiresWeakness: [
       { family: 'expose', tier: 1 },
       { family: 'lacerate', tier: 1 }
     ],
-    apply: () => ({ amount: 15, consumeWeakness: ['expose', 'lacerate'] })
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_death_spiral;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, consumeWeakness: ['expose', 'lacerate'] };
+    }
   },
   'berserker_unstoppable_rush': {
     id: 'berserker_unstoppable_rush',
@@ -1532,13 +1612,19 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (user, target) => {
-      if (user) {
-        user.initiativeGauge = Math.max(0, (user.initiativeGauge || 0) - 50);
+    tags: ['melee', 'attack'],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_unstoppable_rush;
+      if (attacker) {
+        attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - 50);
       }
       const disorientStacks = target?.weakness?.tiers?.disorient || 0;
-      const bonus = disorientStacks >= 1 ? 3 * disorientStacks : 0;
-      return { amount: 9 + bonus };
+      const roll = calculateDamage(attacker, target, ability);
+      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      if (disorientStacks >= 1) amount += 3 * disorientStacks;
+      return { ...roll, amount };
     }
   },
   'berserker_blood_fury': {
@@ -1552,7 +1638,32 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 6, buildup: { expose: 60, disorient: 60 } })
+    tags: ['melee', 'attack', 'expose', 'disorient'],
+    // Was missing a reaction.trigger/exec entirely — mechanic:'reaction' with
+    // no trigger meant this could never actually fire, even if armed (and
+    // nothing armed it either, since berserker_boss's AI never referenced
+    // it). Now: real trigger, and the AI arms it at the start of the fight
+    // (see berserker_boss profile) so it's live for the whole encounter.
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker || !scene) return;
+        const counterSkill = SKILLS?.berserker_blood_fury;
+        scene.time?.delayedCall?.(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, counterSkill, { isReaction: true, tags: counterSkill?.tags || [] });
+        });
+      },
+    },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_blood_fury;
+      const roll = calculateDamage(attacker, target, ability);
+      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      return { ...roll, amount, buildup: { expose: 60, disorient: 60 } };
+    },
+    description: "Reaction: lashes back at whoever strikes him, dealing damage and building Expose and Disorient."
   }
 };
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
@@ -1563,547 +1674,6 @@ Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
 // ===============================
 Object.assign(RAW_SKILLS, {
 
-  // -------- Generation (7) --------
-  // NOTE: needle_feint and needle_venom used to be defined here (v3.21). That
-  // copy was dead — a later "v3.22" copy further down in this file (search for
-  // "Dagger (1h) --- v3.22") redefines the same IDs and wins via Object.assign
-  // last-write-wins, since RAW_SKILLS is finalized at the very end of the file.
-  // Deleted the dead copy here; the typed-damage-pipeline / tiered-reward work
-  // that used to live in this spot has been ported onto the real v3.22 entries.
-  // pressure_point below is ALSO duplicated further down (same v3.22 section) —
-  // still dead-code-shadowed as of this note, not yet reconciled.
-
-  'pressure_point': {
-    id: "pressure_point",
-    name: "Pressure Point",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "bonus",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "expose"],
-    buildupHint: { expose: 80 },
-    rewardIfTierCross: [{ family: "expose", tier: 2, buff: { nextSkillDamagePct: 20, turns: 1 } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.pressure_point;
-      const roll = calculateDamage(attacker, target, ability);
-      const dex = attacker?.totalStats?.DEX || 0;
-      const precisionBonus = Math.floor(dex / 6);
-      let base = roll.amount + precisionBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * 1.1);
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: 80 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "Precise strike that ramps Expose; hitting T2 buffs your next skill this turn."
-  },
-
-  'ghoststep': {
-    id: "ghoststep",
-    name: "Ghoststep",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "CHA",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 4,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stealth", "support"],
-    statusEffects: [{ id: "stealth", turns: 1 }],
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { evasionPct: 10, turns: 1, scope: "selfNearExposed" } },
-    apply: (attacker, _target, scene) => {
-      const ability = SKILLS?.ghoststep;
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : [];
-
-      let nearExposed = false;
-      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(attacker);
-        if (column) {
-          const opposingSlots = attacker?.isEnemy ? scene.allySlots : scene.enemySlots;
-          nearExposed = opposingSlots?.some(slot => {
-            if (!slot || scene._getColumnBySlotId(slot.slotId) !== column) return false;
-            const unit = slot.char;
-            if (!unit || unit.status === 'incapacitated') return false;
-            return (unit?.weakness?.tiers?.expose || 0) >= 1;
-          }) || false;
-        }
-      }
-
-      if (nearExposed) {
-        const buff = ability?.rewardIfWeak?.buff || {};
-        statusEffects.push({
-          id: 'ghoststep_evasion',
-          turns: buff.turns ?? 1,
-          evasionPct: buff.evasionPct ?? 10,
-        });
-      }
-
-      const log = nearExposed
-        ? `${attacker.name} melts into shadow, drawing cover from exposed foes.`
-        : `${attacker.name} slips into the shadows.`;
-
-      return {
-        amount: 0,
-        statusEffects,
-        log,
-      };
-    },
-    description: "Slip into stealth; standing near Exposed foes grants extra evasion."
-  },
-
-  'hex_stitch': {
-    id: "hex_stitch",
-    name: "Hex Stitch",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["curse", "magic", "attack"],
-    buildupHint: { curse: 60 },
-    aoe: { shape: "circle", scale: 1 }, // "adjacent" in your tooltip
-    proliferateWeakness: { families: ["curse"], to: "adjacent", ratio: 0.5, maxTargets: 2 },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.hex_stitch;
-      const roll = calculateDamage(attacker, target, ability);
-      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 3);
-      const preAmount = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(preAmount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'curse',
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-
-      const curseTier = target?.weakness?.tiers?.curse || 0;
-      if (curseTier > 0) {
-        const meter = target?.weakness?.meters?.curse || 0;
-        const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-        const tierBonus = 0.12 * curseTier;
-        const overflowBonus = Math.max(0, intensity - 1) * 0.08;
-        amount = Math.floor(amount * (1 + tierBonus + overflowBonus));
-      }
-
-      let splash;
-      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const neighbors = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
-            .slice(0, 2) || [];
-          if (neighbors.length) {
-            const splashAmount = Math.max(1, Math.floor(amount * 0.55));
-            const splashBuildup = Math.max(1, Math.floor(ability?.buildupHint?.curse ? ability.buildupHint.curse * 0.5 : 30));
-            splash = neighbors.map(slot => ({
-              target: slot.char,
-              amount: splashAmount,
-              isMagic: true,
-              buildup: { curse: splashBuildup },
-              tags: ability?.tags,
-            }));
-          }
-        }
-      }
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        buildup: { curse: 60 },
-        splash,
-      };
-    },
-    description: "Applies lingering Curse; spreads half the current Curse to nearby enemies."
-  },
-
-  'static_prick': {
-    id: "static_prick",
-    name: "Static Prick",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning"],
-    buildupHint: { lightning: 60 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 1, buff: { chanceExtraHitPct: 25 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.static_prick;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'lightning',
-        skipGearMultiplier: true,
-      }));
-
-      const lightningTier = target?.weakness?.tiers?.lightning || 0;
-      let buildup = 60;
-      let extraHitAmount = 0;
-      if (lightningTier >= 1) {
-        amount = Math.floor(amount * 1.1);
-        buildup += 20;
-        const chance = ability?.rewardIfWeak?.buff?.chanceExtraHitPct || 0;
-        if (chance > 0 && (Math.random() * 100) < chance) {
-          extraHitAmount = Math.max(1, Math.floor(amount * 0.35));
-          amount += extraHitAmount;
-        }
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { lightning: buildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        extraHits: extraHitAmount ? [{ amount: extraHitAmount, element: 'lightning' }] : undefined,
-      };
-    },
-    description: "Seeds Shock; against Shocked foes, chance to add a bonus light hit."
-  },
-
-  'street_panacea': {
-    id: "street_panacea",
-    name: "Street Panacea",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "CHA",
-    requiredValue: 15,
-    actionCost: "bonus",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "ally",
-    tags: ["support", "mp", "cleanse"],
-    apply: (attacker, target, scene) => {
-      if (!target) {
-        return { amount: 0, log: `${attacker.name} fumbles for a vial but finds no recipient.` };
-      }
-
-      const cha = attacker?.totalStats?.CHA || 0;
-      const baseRestore = 3 + Math.floor(cha / 5);
-      let bonus = 0;
-
-      if (scene && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const enemySlots = target?.isEnemy ? scene.allySlots : scene.enemySlots;
-          const diseasedNearby = enemySlots?.some(slot => {
-            if (!slot || scene._getColumnBySlotId(slot.slotId) !== column) return false;
-            const foe = slot.char;
-            if (!foe || foe.status === 'incapacitated') return false;
-            return (foe?.weakness?.tiers?.disease || 0) >= 1;
-          });
-          if (diseasedNearby) bonus += 2;
-        }
-      }
-
-      const restore = Math.max(0, baseRestore + bonus);
-      if (restore > 0) {
-        const maxMP = target.maxMP || target.derived?.maxMP || 0;
-        if (maxMP > 0) {
-          target.currentMP = Math.min(maxMP, (target.currentMP || 0) + restore);
-        } else {
-          target.currentMP = (target.currentMP || 0) + restore;
-        }
-      }
-
-      let cleansed = false;
-      if (target?.weakness?.meters?.disease > 0) {
-        const newMeter = Math.max(0, target.weakness.meters.disease - 60);
-        target.weakness.meters.disease = newMeter;
-        if (target.weakness.tiers) {
-          target.weakness.tiers.disease = weaknessTierFromMeter(newMeter);
-        }
-        cleansed = true;
-      }
-
-      const logParts = [`${attacker.name} administers a quick tonic to ${target.name}, restoring ${restore} MP.`];
-      if (bonus > 0) logParts.push('Nearby illness sharpens the mixture.');
-      if (cleansed) logParts.push('Some lingering disease fades.');
-
-      return {
-        amount: 0,
-        log: logParts.join(' '),
-      };
-    },
-    description: "Restore small MP to self/ally; a bit more if any nearby enemy is Diseased."
-  },
-
-  // -------- Payoff (6) --------
-  'heartpiercer': {
-    id: "heartpiercer",
-    name: "Heartpiercer",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "execute"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.5 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.heartpiercer;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const finisherBase = 1.35 + Math.max(0, exposeTier - 1) * 0.1;
-      amount = Math.floor(amount * finisherBase);
-
-      return {
-        ...roll,
-        amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "Heavy finisher usable only on Exposed targets; bigger crits at T2. Does not consume."
-  },
-
-  'venom_bloom': {
-    id: "venom_bloom",
-    name: "Venom Bloom",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "toxic", "consume"],
-    requiresWeakness: { family: "toxic", tierAtLeast: 1 },
-    consumeWeakness: ["toxic"],
-    buildupHint: { toxic: 100 }, // for tooltip: intended consumption cap
-    rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.venom_bloom;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const toxicMeter = target?.weakness?.meters?.toxic || 0;
-      const toxicTier = target?.weakness?.tiers?.toxic || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(toxicMeter) || 1);
-      const rapidTicks = 3 + (toxicTier >= 2 ? 1 : 0);
-      const tickBase = Math.max(1, Math.floor((attacker?.totalStats?.DEX || 0) / 6) + Math.floor(toxicMeter / 45));
-      const rapidDamage = Math.max(0, tickBase * rapidTicks);
-
-      amount += rapidDamage;
-
-      return {
-        ...roll,
-        amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        rapidWeakness: rapidDamage ? { family: 'toxic', ticks: rapidTicks, snapshotIntensity: intensity } : undefined,
-      };
-    },
-    description: "Consume Toxic to trigger rapid DOT ticks (snapshot). Adds a 4th tick at T2."
-  },
-
-  'silent_order': {
-    id: "silent_order",
-    name: "Silent Order",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "CHA",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "stealth"],
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { damagePct: 15 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.silent_order;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * 1.15);
-      }
-
-      return {
-        ...roll,
-        amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "Stealth-friendly strike that hits harder when the target is Exposed. Does not consume Expose."
-  },
-
-  'flash_overload': {
-    id: "flash_overload",
-    name: "Flash Overload",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning", "amplify"],
-    requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 60 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.flash_overload;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'lightning',
-        skipGearMultiplier: true,
-      }));
-
-      const lightningTier = target?.weakness?.tiers?.lightning || 0;
-      let repeatDamage = 0;
-      if (lightningTier >= 1) {
-        amount = Math.floor(amount * 1.2);
-      }
-      if (lightningTier >= 2) {
-        const pct = ability?.rewardIfWeak?.buff?.repeatPowerPct ?? 60;
-        repeatDamage = Math.max(1, Math.floor(amount * (pct / 100)));
-        amount += repeatDamage;
-      }
-
-      return {
-        ...roll,
-        amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        extraHits: repeatDamage ? [{ amount: repeatDamage, element: 'lightning', repeat: true }] : undefined,
-      };
-    },
-    description: "Requires Shocked target; at T2 repeats the strike once at reduced power."
-  },
-
-  'vein_tap': {
-    id: "vein_tap",
-    name: "Vein Tap",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["dagger"],
-    requiredStat: "INT",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 8,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "transform"],
-    requiresWeakness: { family: "lacerate", tierAtLeast: 1 },
-    transformWeakness: { from: "lacerate", to: "toxic", ratio: 0.75 },
-    buildupHint: { lacerate: 100 }, // tooltip: transform cap
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.vein_tap;
-      const roll = calculateDamage(attacker, target, ability);
-      const intBonus = Math.floor((attacker?.totalStats?.INT || 0) / 4);
-      const base = roll.amount + intBonus;
-      let amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const transform = ability?.transformWeakness;
-      let transformed;
-      if (transform && target?.weakness) {
-        const fromKey = transform.from;
-        const toKey = transform.to;
-        const ratio = transform.ratio ?? 1;
-        const current = target.weakness.meters?.[fromKey] || 0;
-        if (current > 0) {
-          const transfer = Math.max(0, Math.floor(current * ratio));
-          const remaining = Math.max(0, current - transfer);
-          target.weakness.meters[fromKey] = remaining;
-          target.weakness.meters[toKey] = (target.weakness.meters[toKey] || 0) + transfer;
-          if (target.weakness.tiers) {
-            target.weakness.tiers[fromKey] = weaknessTierFromMeter(target.weakness.meters[fromKey]);
-            target.weakness.tiers[toKey] = weaknessTierFromMeter(target.weakness.meters[toKey]);
-          }
-          transformed = { from: fromKey, to: toKey, amount: transfer };
-        }
-      }
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const buildup = exposeTier >= 1 ? { toxic: 30 } : undefined;
-      const log = transformed
-        ? `${attacker.name} taps the wound, turning bleed into venom.`
-        : undefined;
-
-      return {
-        ...roll,
-        amount,
-        buildup,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        transformedWeakness: transformed,
-        log,
-      };
-    },
-    description: "Transforms Bleed into Poison and strikes; adds bonus Poison if the target is also Exposed."
-  },
-
-  // (1h sword v3.22 skills are in the --- Sword (1h) --- section below)
 
 
   // ===============================
@@ -9351,7 +8921,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Deals 100% weapon damage. Splashes 50% of the Curse buildup to same-column enemies (no damage to them). Chance to repeat the hit for free, scaling with the target's Toxic meter (max 50%)."
+    description: "Deals 100% weapon damage. Splashes 50% of the Curse buildup to same-rank enemies (no damage to them). Chance to repeat the hit for free, scaling with the target's Toxic meter (max 50%)."
   },
 
   'static_prick': {
@@ -9469,17 +9039,25 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.poison_extraction;
       const toxicMeter = target?.weakness?.meters?.toxic || 0;
-      // 4 bands keyed off the raw METER, not tier — Toxic only ever reaches
-      // tier 2, so gating this on toxicTier could never reach the 4th (200)
-      // band. Banding by meter directly makes all 4 steps reachable.
-      const band = Math.min(3, Math.floor(toxicMeter / 50));
-      const consumeCap = (band + 1) * 50; // 50, 100, 150, 200
+      // 5 bands keyed off the raw METER, not tier — Toxic only ever reaches
+      // tier 2, so gating this on toxicTier could never reach the top (250)
+      // band. Banding by meter directly makes all 5 steps reachable.
+      // 50 minimum: below that there's nothing meaningful to extract — this
+      // used to let band 0 fire on ANY toxic including 0, restoring free
+      // party MP off a target with no toxic buildup at all. True fizzle
+      // (skips costs/cooldown/action-spend, same as requiresWeakness gates)
+      // rather than "using" the skill for a no-op result.
+      if (toxicMeter < 50) {
+        return { fizzle: true, log: `${attacker?.name || "The rogue"} finds no meaningful toxic buildup to extract from ${target?.name || "the target"}.` };
+      }
+      const band = Math.min(4, Math.floor(toxicMeter / 50) - 1);
+      const consumeCap = (band + 1) * 50; // 50, 100, 150, 200, 250
       const consumed = Math.min(toxicMeter, consumeCap);
       if (target?.weakness?.meters?.toxic != null) {
         target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
         target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
       }
-      const mpTable = [2, 4, 7, 8];
+      const mpTable = [2, 4, 6, 8, 10];
       const mpGain = mpTable[band];
 
       // Party-wide: every living character on the attacker's own side gets
@@ -9506,7 +9084,7 @@ Object.assign(RAW_SKILLS, {
 
       return { amount: 0 };
     },
-    description: "Consumes up to 200 Toxic buildup from the target, in 50-point steps based on their current meter. Restores 2/4/7/8 MP to your entire party, scaling with how much was consumed."
+    description: "Requires at least 50 Toxic on the target. Consumes up to 250 Toxic buildup, in 50-point steps based on their current meter. Restores 2/4/6/8/10 MP to your entire party, scaling with how much was consumed."
   },
 
   // -------- Payoff --------
@@ -10151,7 +9729,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, splash: splash.length ? splash : undefined };
     },
-    description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to the column. If this pushes a column-mate into a new Disorient tier: builds Rhythm, and also drains their Initiative Gauge if they're at least Chilled."
+    description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to their rank. If this pushes a rank-mate into a new Disorient tier: builds Rhythm, and also drains their Initiative Gauge if they're at least Chilled."
   },
 
   // --- Sword (1h) Reactions ---
@@ -10219,15 +9797,20 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "buff", "fire"],
     cooldown: 6,
+    // Spending initiative is this skill's whole job — below the minimum
+    // spend tier, it has nothing to do, so it should fizzle instead of
+    // silently firing for free. Checked generically in _applyAbilityToTarget.
+    requiresInitiativeGauge: 10,
     apply: (attacker, _target, scene) => {
-      // Spend initiative — three tiers (10/20/30) based on CURRENT gauge,
-      // extending the original 2-tier split (10 at gauge<=20, else 20) with
-      // a new top tier reaching the 30 cap. Still automatic, not a player
-      // choice: initiativeGauge is a banked resource (higher = more to spend),
-      // so a smaller spend is picked automatically when the bank is low, to
-      // avoid clamping at 0 and effectively getting a discount on the buff.
+      // Spend initiative — three tiers (10/20/30), spends the HIGHEST tier
+      // the current gauge can fully afford. Was checking `gauge <= 40 ? 20`
+      // before falling to the 30 case, a leftover boundary from the old
+      // 2-tier version that never got adjusted when the 30 tier was added —
+      // meant e.g. a gauge of 32 got the 20 tier instead of the 30 it could
+      // actually afford. Still automatic, not a player choice: a smaller
+      // spend is picked when the bank can't afford a bigger one.
       const gauge = attacker?.initiativeGauge || 0;
-      const spend = gauge <= 20 ? 10 : gauge <= 40 ? 20 : 30;
+      const spend = gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
       attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
 
       // +2 fire damage and +20 fire buildup per 10 initiative spent (was a
@@ -10681,7 +10264,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     positionRequirement: ["front", "mid"],
     apply: (attacker) => {
-      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} watches over their column.` };
+      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} watches over their rank.` };
     },
     reaction: {
       trigger: "ally_hit",
@@ -10701,7 +10284,7 @@ Object.assign(RAW_SKILLS, {
         }
       }
     },
-    description: "Arm yourself to strike back when an ally in your column is attacked."
+    description: "Arm yourself to strike back when an ally in your rank is attacked."
   },
 
   'riposte': {
@@ -11698,7 +11281,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    buildupHint: { disorient: 100 },
+    buildupHint: { disorient: 80 },
     // Zone: brownish tint (element: 'physical'); enemies standing in it take
     // +50 disorient buildup at the end of their own turn, for 3 turns.
     slotEffect: {
@@ -11723,11 +11306,9 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const buildupVal = ability?.buildupHint?.disorient ?? 100;
+      const buildupVal = ability?.buildupHint?.disorient ?? 80;
       // Spread slotEffect from definition so buildupFamilies is preserved
       const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
-      const bucket = ensureStatusBucket(attacker);
-      if (bucket) bucket.mace_quake_zones = (bucket.mace_quake_zones || 0) + 1;
       return {
         ...roll,
         physical, elemental, necrotic, amount,
@@ -11755,13 +11336,22 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     cooldown: 2,
     buildupHint: { disorient: 60 },
-    rewardIfTierCross: [{ family: "disorient", tier: 1, debuff: { physVulnPct: 15, turns: 2 } }],
+    // Was `physVulnPct` — didn't match the field CombatScene.js's
+    // rewardIfTierCross consumer and the tooltip's buffToText() both actually
+    // read (`physicalVulnPct`), so this debuff never applied in combat and
+    // never rendered a real number in the tooltip. Renamed to match.
+    // Fires on crossing EITHER threshold (Dazed or Concussed), same debuff
+    // either way — same pattern as Needle Feint's crit-chance reward.
+    rewardIfTierCross: [
+      { family: "disorient", tier: 1, debuff: { physicalVulnPct: 15, turns: 2 } },
+      { family: "disorient", tier: 2, debuff: { physicalVulnPct: 15, turns: 2 } },
+    ],
     apply: (attacker, target) => {
       const ability = SKILLS?.ringing_blow;
       const roll = calculateDamage(attacker, target, ability);
 
-      // 100% base + 20% vs a Lacerated target — additive into ONE skillPct
-      // (Category A: a skill-specific reward for hitting a Lacerated target).
+      // 100% base + 20% vs a Lacerated (Bleeding+) target — additive into ONE
+      // skillPct (Category A: a skill-specific reward for hitting a bleeding target).
       const lacerateTier = target?.weakness?.tiers?.lacerate || 0;
       const bonusPct = lacerateTier >= 1 ? 20 : 0;
       const basePct = 100;
@@ -11785,42 +11375,58 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A concussive strike that jars the foe's senses, building Disorient. Hits 20% harder against Lacerated targets; crossing a Disorient tier leaves them physically vulnerable."
+    description: "Deals 100% weapon damage, +20% against a Bleeding (Lacerate) target. Builds Disorient. Crossing either Disorient tier applies a physical vulnerability debuff."
   },
 
   'bedrock_guard': {
     id: "bedrock_guard",
     name: "Bedrock Guard",
     type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
+    mechanic: "reaction",
+    versionTag: "v3.22",
     requiredWeapon: ["mace_2h"],
     requiredStat: "CON",
     requiredValue: 15,
-    actionCost: "bonus",
+    actionCost: "reaction",
     mpCost: 3,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["stance", "support", "cold"],
     cooldown: 3,
-    buildupHint: { cold: 100 },
-    rewardIfTier: { family: "cold", tierAtLeast: 1, buff: { guardPct: 15, turns: 1 } },
-    statusEffects: [{ id: "bedrock_guard", turns: 1, guardPct: 18, damageReduction: 0.18, nextHitBuildup: { cold: 100 }, nextHitOnly: true }],
-    apply: (attacker) => {
-      const ability = SKILLS?.bedrock_guard;
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({
-          ...effect,
-          nextHitBuildup: { cold: ability?.buildupHint?.cold ?? 100 }
-        }))
-        : undefined;
-      return {
-        amount: 0,
-        statusEffects,
-        rewardIfTier: cloneRewardStruct(ability?.rewardIfTier),
-      };
+    requiresTarget: false,
+    tags: ["support", "cold"],
+    reaction: {
+      trigger: "self_hit",
+      cooldownOn: "trigger",
+      // Only trigger when hit as a SPLASH target of an AOE (not the primary
+      // target) — per request, this rewards being caught in someone else's
+      // blast rather than competing with single-target mitigation. Needs
+      // _applyDirectResult (CombatScene.js) to emit self_hit with
+      // intent.isSplash for splash hits, which it now does.
+      canTrigger: ({ sourceIntent }) => !!sourceIntent?.isSplash,
+      exec: ({ owner, scene, incoming }) => {
+        // Zero the incoming hit directly rather than setting
+        // damageReduction — that field is capped at 95% and, on the typed
+        // per-component mitigation path, only ever discounts the physical
+        // component (elemental/necrotic untouched) with a minimum-1-per-type
+        // floor on top, so it could never actually reach true 0 damage the
+        // way this skill promises. Zeroing amount/physical/elemental/
+        // necrotic directly on the mutable payload sidesteps all of that.
+        if (incoming) {
+          incoming.amount = 0;
+          incoming.physical = 0;
+          incoming.elemental = 0;
+          incoming.necrotic = 0;
+        }
+        owner.statusEffects = owner.statusEffects || [];
+        owner.statusEffects.push({
+          id: "bedrock_guard_charge",
+          name: "Bedrock Guard",
+          turns: 1,
+          nextHitOnly: true,
+          onHit: { buildup: { cold: 100 } },
+        });
+        scene?._log?.(`${owner.name} braces against the blast — the splash damage is completely negated! Their next attack carries a surge of cold.`);
+      },
     },
-    description: "Hunker down behind the mace, gaining guard; the next attacker is chilled."
+    description: "Reaction: when you're caught in the splash of an AOE attack (not the primary target), negate that instance's damage entirely. Your next attack applies +100 Cold buildup."
   },
 
   'frozen_quake': {
@@ -11837,15 +11443,14 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "cold", "terrain", "aoe"],
+    tags: ["melee", "attack", "cold", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    aoe: { shape: "column", scale: 1 },
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     buildupHint: { cold: 80 },
     // immobilizes: true — stub, requires CombatScene support to enforce
     slotEffect: { id: "frozen_quake_zone", element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
-    apply: (attacker, target, scene) => {
+    apply: (attacker, target) => {
       const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
 
@@ -11865,42 +11470,27 @@ Object.assign(RAW_SKILLS, {
       physical = 0;
       const amount = Math.max(1, physical + elemental + necrotic);
       const baseBuildup = ability?.buildupHint?.cold ?? 80;
-      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
-      const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.slice(0, 2).forEach(char => {
-            const splashAmount = Math.max(1, Math.floor(amount * 0.75));
-            const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.8));
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              isMagic: true,
-              element: "cold",
-              buildup: { cold: splashBuildup },
-              tags: ability?.tags,
-            });
-          });
-        }
-      }
-      const bucket = ensureStatusBucket(attacker);
-      if (bucket) bucket.mace_quake_zones = (bucket.mace_quake_zones || 0) + 1;
+
+      // Lightning synergy: if the target is ALSO already Zapped (Lightning
+      // T1+) at cast time, the resulting zone additionally makes anyone
+      // standing in it take +20% elemental damage — checked once here, baked
+      // into the zone's own properties, not re-checked per occupant later.
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const slotEffect = ability?.slotEffect ? {
+        ...ability.slotEffect,
+        ...(lightningTier >= 1 ? { elementalVulnPct: 20 } : {}),
+      } : undefined;
+
       return {
         ...roll,
         physical, elemental, necrotic, amount,
         isMagic: true,
         element: "cold",
         buildup: { cold: baseBuildup },
-        splash: splash.length ? splash : undefined,
         slotEffect,
       };
     },
-    description: "Requires Cold T1. Smash a frost crack through the line, leaving a chilling hazard zone for 2 turns. Enemies in the zone suffer Cold buildup and may be immobilized."
+    description: "Requires Cold T1. Smash a frost crack beneath a single foe, leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +50 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
   },
 
   'iron_chant': {
@@ -11919,8 +11509,11 @@ Object.assign(RAW_SKILLS, {
     tags: ["support", "stance", "disease"],
     cooldown: 3,
     buildupHint: { disease: 100 },
-    // guardHits: 2 and guardDiseaseCond: true are stubs — require future CombatScene support
-    teamBuff: { scope: "column", effect: { id: "iron_chant", turns: 1, guardPct: 25, guardHits: 2, guardDiseaseCond: true, retaliateBuildup: { disease: 80 } } },
+    // guardDiseaseTierPct scales the guard % by the ATTACKER's own Disease
+    // tier (25% vs Diseased/T1, 50% vs Plagued/T2) — implemented generically
+    // in _processGuardStatusEffects (CombatScene.js). guardHits limits it to
+    // 2 triggers before the buff is consumed.
+    teamBuff: { scope: "column", effect: { id: "iron_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 80 } } },
     apply: () => {
       const ability = SKILLS?.iron_chant;
       const effect = ability?.teamBuff?.effect ? {
@@ -11932,7 +11525,7 @@ Object.assign(RAW_SKILLS, {
         teamBuff: effect ? { scope: "column", effect } : undefined,
       };
     },
-    description: "Chant a harsh mantra, granting guard to nearby allies; attackers accrue Disease."
+    description: "Chant a harsh mantra, granting your rank guard against Diseased attackers: -25% damage taken from a Sickened (T1) attacker, -50% from a Plagued (T2) one. Lasts 2 hits. Attackers accrue Disease when the guard triggers."
   },
 
   'staggering_clout': {
@@ -12202,9 +11795,6 @@ Object.assign(RAW_SKILLS, {
           });
         });
       }
-      // Also clear the bucket counter
-      const bucket = ensureStatusBucket(attacker);
-      if (bucket) bucket.mace_quake_zones = 0;
 
       const splash = [];
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {

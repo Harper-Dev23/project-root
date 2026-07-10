@@ -549,7 +549,10 @@ export const Items = {
     historic: true,
     unique: true,  // soulbound is earned — granted on quest completion, not by default
     hands: 2,
-    damage: { min: 20, max: 32 },
+    // -30% from the original 20-32 (14-22.4, rounded) — a quick, un-tuned
+    // trim while the Berserker gets a real base-stat block on top of this;
+    // no real balance pass on the weapon itself yet, just a blunt reduction.
+    damage: { min: 14, max: 22 },
     bonuses: { STR: 5, CON: 4 },
     lifeStealPct: 0.10,  // heals wielder for 10% of damage dealt
     locked: true,

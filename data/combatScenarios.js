@@ -15,15 +15,15 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_2: {
     name: 'Basic Training II',
-    description: 'Reinforced stationary dummies built for longer drills.',
-    longDescription: 'These sturdier targets remain fixed in place so you can focus on rotations, weakness application tests and UI exercises without reactive behaviour from the enemy side.',
+    description: 'Reinforced dummies that shuffle around — practice range and AOE shapes.',
+    longDescription: 'These sturdier targets deal no damage but move erratically and dodge out of ground hazards, giving you a safe way to practice range, positioning, and AOE shapes before facing anything that hits back.',
     portraitKey: 'dummy_portrait',
     enemies: [
-      { type: 'stationary_training_dummy_elite', slotId: 4 },
-      { type: 'stationary_training_dummy_elite', slotId: 5 },
-      { type: 'stationary_training_dummy_elite', slotId: 6 },
-      { type: 'stationary_training_dummy_elite', slotId: 7 },
-      { type: 'stationary_training_dummy_elite', slotId: 8 }
+      { type: 'mobile_training_dummy_elite', slotId: 4 },
+      { type: 'mobile_training_dummy_elite', slotId: 5 },
+      { type: 'mobile_training_dummy_elite', slotId: 6 },
+      { type: 'mobile_training_dummy_elite', slotId: 7 },
+      { type: 'mobile_training_dummy_elite', slotId: 8 }
     ]
   },
 

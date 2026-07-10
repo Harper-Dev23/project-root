@@ -9,12 +9,14 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
-  stationary_training_dummy_elite: {
+  mobile_training_dummy_elite: {
     skin: 'dummy_portrait',
     maxHP: 40,
     maxMP: 0,
-    skills: ['dummy_sway'],
-    aiProfile: 'stationary_dummy',
+    // Still deals no damage — the only new element vs the basic dummy is
+    // movement, to teach range/AOE shapes (Basic Training II).
+    skills: ['dummy_sway', 'dummy_shuffle'],
+    aiProfile: 'mobile_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
@@ -205,7 +207,21 @@ export const ENEMY_TYPES = {
     skin: 'berserker_portrait',
     maxHP: 420,
     maxMP: 150,
+    // Flat per-turn MP regen (see _placeEnemies in CombatScene.js) — his
+    // whole kit costs MP with no free option otherwise, so he'd eventually
+    // run dry and stop acting entirely without this. Stacks additively with
+    // the INT-derived regen from baseStats below (small, ~+1 at INT 8).
+    mpRegenPerTurn: 12,
+    // Core stats — run through the same calculateDerivedStats() players use
+    // (see _placeEnemies), so these actually drive his weapon damage
+    // (STR), HP (CON), Initiative/gauge regen (CHA), MP (INT/WIS/CHA),
+    // Proficiency (highest of the six), and resists, on top of whatever his
+    // equipped gear (Bloodthirster: +5 STR/+4 CON) adds. Traditional brute
+    // spread — high STR/CON, everything else baseline-to-low, CHA nudged up
+    // over INT/WIS so Initiative and MP regen have some real footing.
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
     skills: [
+      'berserker_reckless_strike',
       'berserker_crushing_blow',
       'berserker_disrupting_roar',
       'berserker_bleeding_sweep',

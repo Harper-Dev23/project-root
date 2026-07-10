@@ -95,19 +95,27 @@ export function calculateDerivedStats(stats) {
   // Resists (CHA contributes to Elemental as requested)
   const ElementalResist = Math.round(((stats.WIS || 0) * 0.5) + ((stats.CHA || 0) * 0.5));
   const PhysicalResist = Math.round((stats.CON || 0) * 0.5);
-  // WIS-only, full weight — resisting necrotic/unnatural decay via willpower/insight
-  const NecroticResist = Math.round((stats.WIS || 0) * 1.0);
+  // Moved from WIS (was ×1.0) to CHA, at the same ×0.5 rate CON→PhysicalResist
+  // and WIS→ElementalResist already use — keeps all three "0.5 resist per
+  // point" symmetric instead of NecroticResist being the odd one out at full
+  // weight on a stat that already carries ElementalResist too.
+  const NecroticResist = Math.round((stats.CHA || 0) * 0.5);
   // CritAvoid retired (was WIS-derived, never actually consumed by the crit
   // roll) — its job folded into Evasion, which now also partially reduces
   // attacker crit chance on a landed hit (see calculateDamage() in
   // CombatLogic.js). WIS's freed-up weight moved to Resilience instead.
   const Resilience = Math.round((stats.WIS || 0) * 0.5);
+  // +1 MP per turn per 5 INT — folded into gearEffects.mpPerTurn in
+  // rebuildCharacterStats (same pattern as WIS->Resilience above), so it
+  // stacks additively with gear-rolled mpPerTurn through the one existing
+  // consumer (_applyGearStartOfTurn) instead of needing a new read site.
+  const MpRegenPerTurn = Math.floor((stats.INT || 0) / 5);
 
   return {
     maxHP, maxMP,
     Accuracy, Evasion,
     CritChance, CritMult,
-    ElementalResist, PhysicalResist, NecroticResist, Resilience,
+    ElementalResist, PhysicalResist, NecroticResist, Resilience, MpRegenPerTurn,
     Initiative,
     ActionPoints: 1,
     BonusActions: 1,
@@ -464,6 +472,9 @@ export function rebuildCharacterStats(character) {
   // in CombatScene.js's buildup mitigation) picks it up automatically alongside
   // gear-rolled resilience, with no separate call site to keep in sync.
   gearEffects.resilience += (baseDerived.Resilience || 0);
+  // Same pattern for INT-derived MP regen — folds into gearEffects.mpPerTurn,
+  // the one field _applyGearStartOfTurn already reads for everyone.
+  gearEffects.mpPerTurn += (baseDerived.MpRegenPerTurn || 0);
 
   character.derived = d;               // single source of baseline truth
   character.maxHP = d.maxHP;

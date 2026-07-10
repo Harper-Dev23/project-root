@@ -106,6 +106,28 @@ export const AI_PROFILES = {
     }
   },
 
+  // No offense — deals no damage, same as stationary_dummy. Only difference
+  // is movement: bounces around erratically (teaching players about range/
+  // AOE shapes) and always prioritizes moving off a hazardous tile (e.g. a
+  // Quake zone) if currently standing on one. Hazard-awareness itself lives
+  // in the movement helpers (_enemyTryShuffleOneColumn skips hazardous
+  // destinations) — this profile just decides WHEN to move.
+  mobile_dummy: {
+    decide(npc, scene) {
+      const onHazard = !!scene?._slotIsHazardous?.(npc?._slot, npc?.isEnemy);
+      if (onHazard && canUseSkill(npc, 'dummy_shuffle')) {
+        return buildAction('dummy_shuffle', null);
+      }
+      if (canUseSkill(npc, 'dummy_shuffle') && Math.random() < 0.5) {
+        return buildAction('dummy_shuffle', null);
+      }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
+      }
+      return null;
+    }
+  },
+
   warmup_dummy: {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
@@ -395,6 +417,15 @@ export const AI_PROFILES = {
 
   berserker_boss: {
     decide(npc, scene, enemies) {
+      // Bosses don't go through the player's manual "prepare a reaction" UI,
+      // so the AI arms Blood Fury itself, once, and keeps it armed for the
+      // whole fight (arm() is idempotent, but gate on listPrepared anyway so
+      // this doesn't spam "readies Blood Fury" into the log every turn).
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'berserker_blood_fury');
+      if (!alreadyArmed && scene?.reactions?.arm) {
+        scene.reactions.arm(npc, SKILLS.berserker_blood_fury);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
       const heavyTarget = pickTarget(foes.filter(t => hasAnyWeakness(t, ['expose', 'lacerate'], 2)), { preferLowHP: true, noise: 0.9 });
       if (canUseSkill(npc, 'berserker_death_spiral') && heavyTarget) {
@@ -407,6 +438,17 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('berserker_unstoppable_rush', target);
       }
+      // Both AOE moves now need a real primary target (see their definitions
+      // in skills.js for why) — picked the same way every other single-target
+      // move here already picks one.
+      if (canUseSkill(npc, 'berserker_disrupting_roar')) {
+        const target = weakest(foes);
+        if (target) return buildAction('berserker_disrupting_roar', target);
+      }
+      if (canUseSkill(npc, 'berserker_bleeding_sweep')) {
+        const target = weakest(foes);
+        if (target) return buildAction('berserker_bleeding_sweep', target);
+      }
       if (canUseSkill(npc, 'berserker_crushing_blow')) {
         const target = weakest(foes);
         if (target) return buildAction('berserker_crushing_blow', target);
@@ -415,8 +457,11 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('berserker_guarded_fury', target);
       }
-      if (canUseSkill(npc, 'berserker_disrupting_roar')) {
-        return buildAction('berserker_disrupting_roar', npc);
+      // Free fallback — every move above costs MP, so without this he'd go
+      // completely idle on any turn he can't afford anything.
+      if (canUseSkill(npc, 'berserker_reckless_strike')) {
+        const target = weakest(foes);
+        if (target) return buildAction('berserker_reckless_strike', target);
       }
       return null;
     }
