@@ -1233,14 +1233,15 @@ export default class CombatScene extends Phaser.Scene {
         // _equipEnemyItem's own mpPerTurn writes stack additively on top.
         // damageMultiplierPct: a blunt overall damage dial (e.g. -20 = 80%
         // damage on everything) without touching stats or gear — reuses
-        // gearEffects.globalDamagePercent, the same field calculateDamage()
-        // already reads via getAttackerDamageMultiplier() for every hit this
-        // unit lands, positive or negative.
+        // gearEffects.hiddenDamagePercent, a CombatLogic.js field that
+        // affects real damage output the same way globalDamagePercent does,
+        // but is deliberately NOT read by the character sheet's PD/ED/ND
+        // display — this is a dev balance lever, not a user-facing buff/debuff.
         gearEffects: {
           ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
             ? { mpPerTurn: template.mpRegenPerTurn } : {}),
           ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
-            ? { globalDamagePercent: template.damageMultiplierPct } : {}),
+            ? { hiddenDamagePercent: template.damageMultiplierPct } : {}),
         },
       };
 
@@ -1544,15 +1545,51 @@ export default class CombatScene extends Phaser.Scene {
     // THREE columns uniformly; gear's element/necrotic-specific % only adds to
     // its own column. Matches the same additive-then-multiply model PDR/EDR/NDR
     // already uses on the defensive side, just for outgoing damage instead.
+    // Deliberately reads globalDamagePercent only, NOT gearEffects.
+    // hiddenDamagePercent (a dev-only balance dial, e.g. the Berserker's
+    // un-tuned damage trim) — that one's meant to stay invisible here.
     const ge = char?.gearEffects || {};
     const atkPowerPct = _sumStatusEffectMods?.(char)?.AttackPower || 0;
-    const pdPct = Math.round((ge.globalDamagePercent || 0) + atkPowerPct);
-    const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct);
-    const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct);
 
-    const mpPerTurn = char?.gearEffects?.mpPerTurn || 0;
+    // Cold T2's attacker-side "deals less damage" penalty IS a real,
+    // player-visible weakness effect (unlike the hidden balance dial above),
+    // so it belongs here — mirrors applyWeaknessDamagePipeline's exact
+    // formula (CombatLogic.js) so the number shown matches what combat
+    // actually applies.
+    let coldDealtPenaltyPct = 0;
+    if ((char?.weakness?.tiers?.cold || 0) >= 2) {
+      const coldMeter = char?.weakness?.meters?.cold || 0;
+      const I = familyIntensityMult('cold', coldMeter);
+      const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
+      const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
+      coldDealtPenaltyPct = Math.round(Math.min(basePen * I, capPen) * 100);
+    }
+
+    const pdPct = Math.round((ge.globalDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+    const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+    const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+
+    // Net MP change at the start of this character's turn: gear/INT regen
+    // MINUS Concussed's flat drain (Disorient T2) — mirrors the exact
+    // formula _startTurnWeakness uses for that drain, so this matches what
+    // actually happens. NOT a percentage reduction of the regen rate itself;
+    // these are two separate mechanics that both happen to fire at turn start.
+    const baseMpPerTurn = char?.gearEffects?.mpPerTurn || 0;
+    let concussedDrain = 0;
+    if ((char?.weakness?.tiers?.disorient || 0) >= 2) {
+      const dm = char?.weakness?.meters?.disorient || 0;
+      const dI = familyIntensityMult('disorient', dm);
+      const drainBase = WeaknessV3?.families?.disorient?.t2?.startDrainMPBase ?? 0;
+      const drainCap = WeaknessV3?.families?.disorient?.t2?.startDrainMPCap ?? 9999;
+      concussedDrain = Math.min(Math.floor(drainBase * dI), drainCap);
+    }
+    const mpPerTurn = baseMpPerTurn - concussedDrain;
     const lifeStealPct = Math.round((char?.gearEffects?.lifeStealPct || 0) * 100);
-    const healGivenPct = (typeof getProficiencyBreakdown === 'function' ? getProficiencyBreakdown(char)?.bonusPct : 0) ?? 0;
+    // Separate from Proficiency (a highest-core-stat bonus that ALSO affects
+    // healing, shown on the Equipment tab) — this is purely a combat-buff
+    // source (HealingPower status mod), currently always 0 since no skill
+    // grants it yet. Deliberately not additive with Proficiency here.
+    const healGivenPct = _sumStatusEffectMods?.(char)?.HealingPower || 0;
 
     // Paired rows (right + mid share a row, each independently hoverable —
     // NOT a single "X / Y" string like PDR/EDR/NDR below, since these two
@@ -1562,9 +1599,9 @@ export default class CombatScene extends Phaser.Scene {
     const rowsRight = [
       { label: 'MP:', value: `${char.currentMP}/${char.maxMP}`, desc: 'Current / maximum Mana Points, spent on skills with an MP cost.' },
       { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%`, desc: 'Physical / Elemental / Necrotic Damage Reduction — % of incoming damage of each type prevented.' },
-      { label: 'PD/ED/ND:', value: `+${pdPct}% / +${edPct}% / +${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus added to this character\'s own outgoing damage of each type (gear + buffs). Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
-      { label: 'Heal Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
-      { label: 'Cost Mult:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ffcc66' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
+      { label: 'PD/ED/ND:', value: `${pdPct >= 0 ? '+' : ''}${pdPct}% / ${edPct >= 0 ? '+' : ''}${edPct}% / ${ndPct >= 0 ? '+' : ''}${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
+      { label: 'H.Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
+      { label: 'CostX:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ff6666' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
       { label: 'Crit%:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
       { label: 'Resilience:', value: `${resilience}`, desc: 'Flat reduction applied to incoming buildup toward every weakness family. Comes from Wisdom and gear.' },
       { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc, desc: 'Raises this character\'s chance to land a hit. Any excess beyond what\'s needed to reach 100% hit chance instead adds to Crit Chance (half value).' },
@@ -1579,8 +1616,15 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
       null,
       null,
-      { label: 'Heal Given:', value: `+${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — currently comes from Proficiency (see the Equipment tab).' },
-      { label: 'MP/Turn:', value: `+${mpPerTurn}`, desc: 'Flat MP restored at the start of this character\'s turn — from gear and Intelligence (+1 per 5 INT). Reduced by this character\'s own Disorient, same scaling as Cost Mult.' },
+      { label: 'H.Given:', value: `+${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — from combat buffs. Separate from Proficiency (Equipment tab), which also affects healing but isn\'t added in here.' },
+      {
+        label: 'MP/Trn:', value: `${mpPerTurn >= 0 ? '+' : ''}${mpPerTurn}`,
+        valueColor: concussedDrain > 0 ? '#ff6666' : '#eeeeee',
+        valueBold: concussedDrain > 0,
+        desc: concussedDrain > 0
+          ? `Net MP change at the start of this character's turn: +${baseMpPerTurn} regen (gear + Intelligence) − ${concussedDrain} from Concussed (Disorient T2, flat drain that scales with intensity).`
+          : 'Flat MP restored at the start of this character\'s turn — from gear and Intelligence (+1 per 5 INT).',
+      },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold, desc: 'Bonus crit chance and crit damage attackers get against this character — raised by Expose T2.' },
       null,
       null,
@@ -1590,7 +1634,7 @@ export default class CombatScene extends Phaser.Scene {
     ];
 
 
-    const labelStyle = { fontSize: `${fontPx}px`, color: '#cccccc', align: 'right' };
+    const labelStyle = { fontSize: `${fontPx}px`, color: '#e6d27a', align: 'right' };
     const valueBase = { fontSize: `${fontPx}px`, align: 'right', stroke: '#111111', strokeThickness: 1 };
 
     // --- RIGHT column ---
@@ -3895,7 +3939,7 @@ export default class CombatScene extends Phaser.Scene {
         // devSuperSaiyan: 10× damage multiplier for player units only
         if (DevFlags.isSuperSaiyanEnabled() && user && !user.isEnemy) dmg *= 10;
 
-        // Status guard effects (guardPct on statusEffects, e.g. iron_chant, bedrock_guard).
+        // Status guard effects (guardPct on statusEffects, e.g. fel_chant, bedrock_guard).
         // Must run before damage is applied. Also fires retaliate buildup and consumes guardHits.
         if (!missed && !ignoreDR && dmg > 0) {
           const statusGuardFrac = this._processGuardStatusEffects(target, user);
@@ -4822,16 +4866,12 @@ export default class CombatScene extends Phaser.Scene {
   // separate HP subtraction. See that block in _applyAbilityToTarget.
 
   _applyGearStartOfTurn(char) {
-    const baseRegen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
-    if (!baseRegen) return;
-
-    // Disorient impairs MP regen too, not just costs — reuses the SAME
-    // intensity-scaled bump _getDisorientCostMult already computes for the
-    // cost-side penalty (costMult = 1 + bump), just applied as a reduction
-    // instead of an increase, so both effects stay tuned together.
-    const costMult = this._getDisorientCostMult(char);
-    const disorientBump = Math.max(0, costMult - 1);
-    const regen = Math.max(0, Math.floor(baseRegen * (1 - disorientBump)));
+    // NOTE: does NOT factor in Disorient — that's a separate, real mechanic
+    // (Concussed/T2 drains a FLAT amount of MP directly, see the Disorient
+    // block in _startTurnWeakness) rather than a reduction to this regen
+    // rate. An earlier version of this function incorrectly invented a
+    // percentage-based regen reduction reusing Cost Mult's scaling; removed.
+    const regen = Math.max(0, Math.floor(char?.gearEffects?.mpPerTurn || 0));
     if (!regen) return;
 
     const before = char.currentMP | 0;
@@ -5089,7 +5129,11 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
-  _applySlotEffectsTick(char) {
+  // opts.skipTurnDecrement: apply every effect's damage/buildup/vuln exactly
+  // as normal, but don't tick eff.turns down or remove expired zones — for
+  // skills that trigger a zone's effect as a bonus (e.g. Tremor Echo) without
+  // "spending" any of its remaining duration.
+  _applySlotEffectsTick(char, opts = {}) {
     const slotKey = this._charSlotKey(char);
     const effects = slotKey ? this.slotEffects?.[slotKey] : null;
     if (!effects || effects.length === 0) return { died: false };
@@ -5150,6 +5194,10 @@ export default class CombatScene extends Phaser.Scene {
         }]);
       }
 
+      if (opts.skipTurnDecrement) {
+        stillActive.push(eff);
+        continue;
+      }
       eff.turns -= 1;
       if (eff.turns > 0) stillActive.push(eff);
       else this._log(`The ${eff.id.replace(/_/g, ' ')} zone on this tile dissipates.`);
@@ -5258,6 +5306,7 @@ export default class CombatScene extends Phaser.Scene {
           }
           if (e.immobilizes) parts.push('immobilizes');
           if (e.onHitMpGain) parts.push(`+${e.onHitMpGain} MP to attackers hitting enemies here`);
+          if (e.elementalVulnPct > 0) parts.push(`+${e.elementalVulnPct}% elemental damage taken`);
           return `${label}: ${parts.join(', ')}`;
         }) : ['No active effects'];
         this.tooltip?.show(pointer.worldX, pointer.worldY, { title: 'Ground Effect', lines });

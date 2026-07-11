@@ -192,6 +192,7 @@ export function getWeaponSkillsFor(char) {
   for (const [id, skill] of Object.entries(SKILLS)) {
     if (skill.type !== 'weapon') continue;
     if (skill.enemyOnly) continue;
+    if (skill.disabled) continue;
 
     // ? Unify stat key case
     const statKey = skill.requiredStat?.toUpperCase();
@@ -241,6 +242,7 @@ export function getClassSkillsFor(char) {
     const skill = SKILLS[id];
     if (!skill) continue;
     if (skill.enemyOnly) continue;
+    if (skill.disabled) continue;
     out.push({ id, ...skill });
   }
   return out;
@@ -257,6 +259,7 @@ export function getReactionSkillsFor(char) {
   for (const [id, s] of Object.entries(SKILLS)) {
     if (!s || s.mechanic !== 'reaction') continue;
     if (s.enemyOnly) continue;
+    if (s.disabled) continue;
 
     // stat gate
     if (s.requiredStat && !DevFlags.isBreakthroughEnabled()) {
@@ -11493,9 +11496,9 @@ Object.assign(RAW_SKILLS, {
     description: "Requires Cold T1. Smash a frost crack beneath a single foe, leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +50 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
   },
 
-  'iron_chant': {
-    id: "iron_chant",
-    name: "Iron Chant",
+  'fel_chant': {
+    id: "fel_chant",
+    name: "Fel Chant",
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.21",
@@ -11513,9 +11516,13 @@ Object.assign(RAW_SKILLS, {
     // tier (25% vs Diseased/T1, 50% vs Plagued/T2) — implemented generically
     // in _processGuardStatusEffects (CombatScene.js). guardHits limits it to
     // 2 triggers before the buff is consumed.
-    teamBuff: { scope: "column", effect: { id: "iron_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 80 } } },
+    // Status effect id also renamed (was iron_chant) — the buff icon system
+    // falls back to title-casing the id when there's no STATUS_ICON_LIBRARY
+    // entry, so leaving the old id here would've still shown "Iron Chant" on
+    // buffed allies even after the skill's own display name changed.
+    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 80 } } },
     apply: () => {
-      const ability = SKILLS?.iron_chant;
+      const ability = SKILLS?.fel_chant;
       const effect = ability?.teamBuff?.effect ? {
         ...ability.teamBuff.effect,
         retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 80 }
@@ -11528,9 +11535,9 @@ Object.assign(RAW_SKILLS, {
     description: "Chant a harsh mantra, granting your rank guard against Diseased attackers: -25% damage taken from a Sickened (T1) attacker, -50% from a Plagued (T2) one. Lasts 2 hits. Attackers accrue Disease when the guard triggers."
   },
 
-  'staggering_clout': {
-    id: "staggering_clout",
-    name: "Staggering Clout",
+  'searing_clout': {
+    id: "searing_clout",
+    name: "Searing Clout",
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
@@ -11542,18 +11549,22 @@ Object.assign(RAW_SKILLS, {
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
+    // Was Staggering Clout — redundant with the mace block's several other
+    // Disorient-buildup skills, and the block had no Fire skill at all.
+    // Reworked to fill that gap: same 15%/30% conditional-bonus shape, now
+    // keyed off Fire instead of Disorient, and the hit itself is Fire damage.
+    tags: ["melee", "attack", "fire"],
     emitTagsOnUse: ["swing"],
     cooldown: 2,
-    buildupHint: { disorient: 70 },
+    buildupHint: { fire: 70 },
     apply: (attacker, target) => {
-      const ability = SKILLS?.staggering_clout;
+      const ability = SKILLS?.searing_clout;
       const roll = calculateDamage(attacker, target, ability);
 
-      // 100% base + 15%/30% at Disorient T1/T2 — flat per tier (not stacking),
+      // 100% base + 15%/30% at Fire T1/T2 — flat per tier (not stacking),
       // combined into ONE skillPct.
-      const disorientTier = target?.weakness?.tiers?.disorient || 0;
-      const bonusPct = disorientTier >= 2 ? 30 : disorientTier >= 1 ? 15 : 0;
+      const fireTier = target?.weakness?.tiers?.fire || 0;
+      const bonusPct = fireTier >= 2 ? 30 : fireTier >= 1 ? 15 : 0;
       const basePct = 100;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
@@ -11562,19 +11573,25 @@ Object.assign(RAW_SKILLS, {
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
           skillPct: basePct + bonusPct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% Disorient tier` : ''})`,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% Fire tier` : ''})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
+      // Whole hit reflavored as Fire/Elemental regardless of the weapon's own
+      // physical/elemental split — a searing mace blow, not a physical swing.
+      elemental += physical;
+      physical = 0;
       const amount = Math.max(1, physical + elemental + necrotic);
 
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 70 },
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: ability?.buildupHint?.fire ?? 70 },
       };
     },
-    description: "A sideways blow that rattles already-dazed foes. Deals 15% more damage per Disorient tier (+15% at T1, +30% at T2)."
+    description: "Deals 100% weapon damage, +15% against a Singed (Fire T1) target (+30% instead if Ablaze, Fire T2). Builds Fire."
   },
 
   // -------- Payoff --------
@@ -12176,6 +12193,12 @@ Object.assign(RAW_SKILLS, {
     mechanic: "active",
     versionTag: "v3.22",
     typedDamage: true,
+    // Set aside — redundant with the other Disorient-buildup mace skills and
+    // was mainly a test skill to begin with. Left intact (not deleted) in
+    // case it gets adapted for something later; `disabled` is a generic flag
+    // getWeaponSkillsFor/getClassSkillsFor/getReactionSkillsFor all respect,
+    // so it's simply excluded from action menus without touching its logic.
+    disabled: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 10,
@@ -12357,58 +12380,59 @@ Object.assign(RAW_SKILLS, {
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.22",
-    typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 14,
     actionCost: "bonus",
     mpCost: 0,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disorient"],
-    emitTagsOnUse: ["smash"],
+    requiresTarget: false,
+    tags: ["support", "terrain"],
     cooldown: 2,
-    buildupHint: { disorient: 60 },
-    // MP gain when hitting an enemy standing in a quake zone — zone occupant check runs inline
+    // Reworked into a pure MP-support skill — no longer deals weapon damage
+    // or requires a target. Triggers every active quake-family zone's own
+    // effect (damage/buildup/vuln) on whoever's actually standing in it,
+    // WITHOUT consuming any of the zone's remaining duration (see
+    // _applySlotEffectsTick's skipTurnDecrement option), then restores 5 MP
+    // per DISTINCT enemy caught in any zone — a unit in two zones at once
+    // still only counts once, and unoccupied zones (or zones with only
+    // allies in them) trigger their effect but grant no MP.
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.tremor_echo;
-      const roll = calculateDamage(attacker, target, ability);
+      const quakeIds = ["quake_mark_zone", "frozen_quake_zone"];
 
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        {
-          ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 75, skillLabel: `${ability?.name || 'Skill'} weapon damage (75%)`,
-          isCrit: roll.isCrit, critMult: roll.critMult,
-        }
+      const activeZoneKeys = Object.keys(scene?.slotEffects || {}).filter(key =>
+        (scene.slotEffects[key] || []).some(eff => quakeIds.includes(eff?.id) && (eff.turns || 0) > 0)
       );
-      const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Check if target is currently standing in a quake zone
-      let mpGain = 0;
-      if (scene?.slotEffects) {
-        // Find the target's slot key
-        const targetSlot = (target?.isEnemy ? scene.enemySlots : scene.allySlots)
-          ?.find(s => s?.char === target);
-        if (targetSlot) {
-          const sid = scene._charSlotKey ? scene._charSlotKey(target) : targetSlot.slotId;
-          const zones = sid != null ? (scene.slotEffects[sid] || []) : [];
-          const inQuakeZone = zones.some(eff =>
-            (eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") && (eff.turns || 0) > 0
-          );
-          if (inQuakeZone) mpGain = 3;
-        }
+      if (!activeZoneKeys.length) {
+        return { fizzle: true, log: `${attacker?.name || "The warrior"} finds no active quake zones to draw on.` };
+      }
+
+      const allUnits = (scene?.turnOrder || [])
+        .filter(u => u && u.status !== "incapacitated");
+      const enemiesHit = new Set();
+
+      activeZoneKeys.forEach(key => {
+        const occupant = allUnits.find(u => scene._charSlotKey?.(u) === key);
+        if (!occupant) return;
+        scene._applySlotEffectsTick?.(occupant, { skipTurnDecrement: true });
+        if (!!occupant.isEnemy !== !!attacker?.isEnemy) enemiesHit.add(occupant);
+      });
+
+      const mpGain = enemiesHit.size * 5;
+      if (mpGain > 0 && attacker) {
+        const maxMP = attacker.maxMP ?? 0;
+        attacker.currentMP = Math.min(maxMP, (attacker.currentMP || 0) + mpGain);
       }
 
       return {
-        ...roll,
-        physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 60 },
-        mpGain,
+        amount: 0,
+        log: mpGain > 0
+          ? `${attacker?.name || "The warrior"} draws on ${enemiesHit.size} enem${enemiesHit.size === 1 ? "y" : "ies"} caught in active quake zones, restoring ${mpGain} MP.`
+          : `${attacker?.name || "The warrior"} triggers the active quake zones, but no enemies are caught in them.`,
       };
     },
-    description: "A quick follow-up smash that rattles a foe standing in a Quake zone, returning 3 MP to the attacker. Builds Disorient at 75% weapon strength."
+    description: "Requires at least one active Quake zone. Triggers the effect of every active Quake zone on whoever's standing in it, without using up any of their remaining duration. Restores 5 MP per distinct enemy caught in a zone."
   },
 
   'concussive_drain': {

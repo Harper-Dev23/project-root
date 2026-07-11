@@ -28,6 +28,12 @@ export function _sumStatusEffectMods(char) {
     Accuracy: 0, Evasion: 0, Initiative: 0, CritChance: 0, CritMult: 0,
     ElementalResist: 0, PhysicalResist: 0, NecroticResist: 0,
     AttackPower: 0, // % bonus to all outgoing damage (e.g. war_cry_buff)
+    // % bonus to outgoing HEALING specifically — deliberately separate from
+    // Proficiency (a highest-core-stat bonus that also touches healing) so
+    // the two don't get conflated into one number; this one is purely a
+    // combat-buff source. No skill grants it yet — architecture in place for
+    // when one does.
+    HealingPower: 0,
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
   for (const se of list) {
@@ -72,6 +78,14 @@ function getAttackerDamageMultiplier(attacker, opts = {}) {
 
   if (element === 'necrotic' && ge.necroticDamagePercent) {
     mult *= 1 + (ge.necroticDamagePercent / 100);
+  }
+
+  // Balance-only dial (e.g. a boss's un-tuned overall damage trim) — applies
+  // the same way globalDamagePercent does, but deliberately kept OUT of the
+  // character sheet's PD/ED/ND display, which only reads globalDamagePercent.
+  // Not a player-facing buff/debuff, just a dev lever.
+  if (ge.hiddenDamagePercent) {
+    mult *= 1 + (ge.hiddenDamagePercent / 100);
   }
 
   return mult;
