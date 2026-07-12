@@ -2604,7 +2604,7 @@ Object.assign(RAW_SKILLS, {
       // +50% if target is standing on an active quake zone
       const slotKey = scene?._charSlotKey?.(target);
       const hasQuake = slotKey && (scene?.slotEffects?.[slotKey] || []).some(
-        e => (e.id === 'quake_mark_zone' || e.id === 'frozen_quake_zone') && (e.turns || 0) > 0
+        e => e.isQuakeZone && (e.turns || 0) > 0
       );
       if (hasQuake) {
         amount = Math.floor(amount * 1.50);
@@ -11289,6 +11289,7 @@ Object.assign(RAW_SKILLS, {
     // +50 disorient buildup at the end of their own turn, for 3 turns.
     slotEffect: {
       id: "quake_mark_zone",
+      isQuakeZone: true,
       element: "physical",
       tickPctMaxHP: 0.0,
       turns: 3,
@@ -11319,7 +11320,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Smash the ground, applying Disorient on hit and leaving a trembling zone for 3 turns. Enemies standing in the zone suffer +50 Disorient buildup at the end of their turn."
+    description: "Deals 90% weapon damage, smashing the ground and applying Disorient on hit. Leaves a trembling zone for 3 turns — enemies standing in it suffer +50 Disorient buildup at the end of their turn."
   },
 
   'ringing_blow': {
@@ -11452,7 +11453,7 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     buildupHint: { cold: 80 },
     // immobilizes: true — stub, requires CombatScene support to enforce
-    slotEffect: { id: "frozen_quake_zone", element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
+    slotEffect: { id: "frozen_quake_zone", isQuakeZone: true, element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
     apply: (attacker, target) => {
       const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
@@ -11493,7 +11494,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Requires Cold T1. Smash a frost crack beneath a single foe, leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +50 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
+    description: "Requires Cold T1. Deals 95% weapon damage, smashing a frost crack beneath a single foe and leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +50 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
   },
 
   'fel_chant': {
@@ -11511,7 +11512,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "stance", "disease"],
     cooldown: 3,
-    buildupHint: { disease: 100 },
+    buildupHint: { disease: 50 },
     // guardDiseaseTierPct scales the guard % by the ATTACKER's own Disease
     // tier (25% vs Diseased/T1, 50% vs Plagued/T2) — implemented generically
     // in _processGuardStatusEffects (CombatScene.js). guardHits limits it to
@@ -11520,12 +11521,12 @@ Object.assign(RAW_SKILLS, {
     // falls back to title-casing the id when there's no STATUS_ICON_LIBRARY
     // entry, so leaving the old id here would've still shown "Iron Chant" on
     // buffed allies even after the skill's own display name changed.
-    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 80 } } },
+    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 50 } } },
     apply: () => {
       const ability = SKILLS?.fel_chant;
       const effect = ability?.teamBuff?.effect ? {
         ...ability.teamBuff.effect,
-        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 80 }
+        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 50 }
       } : undefined;
       return {
         amount: 0,
@@ -11600,34 +11601,45 @@ Object.assign(RAW_SKILLS, {
     name: "Gravity Slam",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 0,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher"],
+    tags: ["melee", "attack", "finisher", "consume", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
+    // Now requires Concussed (Disorient T2) specifically, not just Dazed —
+    // strong enough a payoff that it earns the steeper requirement.
+    requiresWeakness: { family: "disorient", tierAtLeast: 2 },
+    // Costs Initiative instead of MP now — this is the finisher of the two
+    // (vs. Earthshatter, which reverted back to a normal MP cost since it's
+    // too situational to also gate behind Initiative). Same flat-spend
+    // pattern as Earthshatter/Blazing Fervor.
+    requiresInitiativeGauge: 20,
+    // Consume config for the MP drain below — no damage bonus attached to
+    // this consumption (unlike Power Stab's consumeWeaknessBonus, which this
+    // deliberately does NOT reuse: that field's generic tooltip text always
+    // reads "+X% damage per 100 consumed," which would misdescribe this).
+    consumeDisorientForDrain: { maxConsume: 400, drainPctPer100: 5 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.gravity_slam;
       const roll = calculateDamage(attacker, target, ability);
 
       const meter = target?.weakness?.meters?.disorient || 0;
-      const tier = target?.weakness?.tiers?.disorient || 0;
       const intensity = weaknessIntensityMult(meter) || 1;
 
-      // 130%/160% by Disorient tier, plus an overflow bonus (+20% per
-      // intensity point above 1.0) — both are Category A (this skill hits
-      // harder based on the target's own weakness), combined additively into
-      // ONE skillPct instead of two sequential multiplies.
-      const tierPct = tier >= 2 ? 160 : tier >= 1 ? 130 : 100;
-      const overflowPct = intensity > 1 ? Math.round((intensity - 1) * 20) : 0;
-      const skillPct = tierPct + overflowPct;
+      // 130% base (Disorient T2 is required to even cast this now, so no
+      // more tier branching) + an overflow bonus (+10% per intensity point
+      // above 1.0) — Category A, combined additively. The Disorient
+      // consumption below is a pure resource drain, not a damage source.
+      const basePct = 130;
+      const overflowPct = intensity > 1 ? Math.round((intensity - 1) * 10) : 0;
+      const skillPct = basePct + overflowPct;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -11635,34 +11647,50 @@ Object.assign(RAW_SKILLS, {
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
           skillPct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (${tierPct}%${overflowPct ? ` + ${overflowPct}% overflow` : ''})`,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}% base${overflowPct ? ` + ${overflowPct}% overflow` : ''})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Extend all active quake zones by 1 turn
+      // Consume up to 400 Disorient buildup, draining 5% of the target's
+      // CURRENT MP per 100 consumed (up to 20% at the cap) — a scaling
+      // version of the skill's old flat 20% drain, now tied to how much
+      // Disorient is actually available to consume.
+      const cfg = ability.consumeDisorientForDrain;
+      const consumed = Math.min(cfg.maxConsume, meter);
+      let manaDrained = 0;
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.disorient = Math.max(0, meter - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.disorient = weaknessTierFromMeter(target.weakness.meters.disorient);
+        const drainPct = Math.floor(consumed / 100) * cfg.drainPctPer100;
+        if (drainPct > 0 && (target.currentMP || 0) > 0) {
+          manaDrained = Math.floor(target.currentMP * (drainPct / 100));
+          target.currentMP = Math.max(0, (target.currentMP || 0) - manaDrained);
+        }
+      }
+
+      // Extend every active quake zone (Quake Mark / Frozen Quake / Plague
+      // Slam / Sanctified Slam) by 1 turn.
       if (scene?.slotEffects) {
         Object.values(scene.slotEffects).forEach(zoneList => {
           if (!Array.isArray(zoneList)) return;
           zoneList.forEach(eff => {
-            if (eff?.id === "quake_mark_zone" && eff.turns > 0) eff.turns += 1;
+            if (eff?.isQuakeZone && eff.turns > 0) eff.turns += 1;
           });
         });
       }
-      // Drain 20% of target's current MP
-      let manaDrained = 0;
-      if (target && (target.currentMP || 0) > 0) {
-        manaDrained = Math.floor(target.currentMP * 0.2);
-        target.currentMP = Math.max(0, target.currentMP - manaDrained);
-      }
+
+      const initiativeSpend = 20;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeSpend);
+
       return {
         ...roll,
         physical, elemental, necrotic, amount,
         manaDrained: manaDrained > 0 ? manaDrained : undefined,
       };
     },
-    description: "Bring the mace down with crushing force on a Disoriented foe. 130% damage at T1, 160% at T2, with an overflow bonus. Drains 20% of target MP and extends all active Quake zones by 1 turn."
+    description: "Requires Concussed (Disorient T2). Deals 130% weapon damage, +10% per intensity point of overflow. Consumes up to 400 Disorient, draining 5% of the target's current MP per 100 consumed (up to 20%). Extends every active quake zone by 1 turn. Spends 20 Initiative."
   },
 
   'miasma_crush': {
@@ -11710,26 +11738,22 @@ Object.assign(RAW_SKILLS, {
       const rawTotal = physical + elemental + necrotic;
       physical = 0; elemental = 0; necrotic = rawTotal;
 
-      // Spread 50% of disease meter to up to 2 column neighbors
+      // Spread 50% of disease meter to up to 2 adjacent (movement-range-1)
+      // neighbors — uses the same grid-adjacency system player movement and
+      // other skills' "adjacent" AOE shape use, not same-column.
       const spreadMeta = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const neighbors = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const transfer = meter > 0 ? Math.max(20, Math.floor(meter * 0.5)) : 0;
-          neighbors.slice(0, 2).forEach(char => {
-            if (!char) return;
-            char.weakness = char.weakness || { meters: {}, tiers: {} };
-            char.weakness.meters = char.weakness.meters || {};
-            char.weakness.tiers = char.weakness.tiers || {};
-            char.weakness.meters.disease = (char.weakness.meters.disease || 0) + transfer;
-            char.weakness.tiers.disease = weaknessTierFromMeter(char.weakness.meters.disease);
-            spreadMeta.push({ targetId: char.id || char.name, family: "disease", amount: transfer });
-          });
-        }
+      if (scene && target) {
+        const neighbors = resolveAOESplash(scene, target, { shape: 'adjacent' });
+        const transfer = meter > 0 ? Math.max(20, Math.floor(meter * 0.5)) : 0;
+        neighbors.slice(0, 2).forEach(char => {
+          if (!char) return;
+          char.weakness = char.weakness || { meters: {}, tiers: {} };
+          char.weakness.meters = char.weakness.meters || {};
+          char.weakness.tiers = char.weakness.tiers || {};
+          char.weakness.meters.disease = (char.weakness.meters.disease || 0) + transfer;
+          char.weakness.tiers.disease = weaknessTierFromMeter(char.weakness.meters.disease);
+          spreadMeta.push({ targetId: char.id || char.name, family: "disease", amount: transfer });
+        });
       }
 
       // Clear disease on the target
@@ -11748,15 +11772,15 @@ Object.assign(RAW_SKILLS, {
         proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
       };
     },
-    description: "Requires Disease T2. Crushes a rotting foe with necrotic force, spreading 50% of their Disease meter to nearby column enemies before clearing it."
+    description: "Requires Disease T2. Deals 100% weapon damage (+15% per Disease tier, plus overflow), converting the entire hit to Necrotic damage. Spreads 50% of the target's Disease meter to up to 2 adjacent enemies before clearing it."
   },
 
-  'fault_collapse': {
-    id: "fault_collapse",
-    name: "Fault Collapse",
+  'fault_line': {
+    id: "fault_line",
+    name: "Fault Line",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
@@ -11765,81 +11789,64 @@ Object.assign(RAW_SKILLS, {
     mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe", "terrain"],
+    tags: ["melee", "attack", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 4,
-    conditionHint: { requiresQuakeZone: true },
-    aoe: { shape: "column", scale: 1 },
     apply: (attacker, target, scene) => {
-      const ability = SKILLS?.fault_collapse;
+      const ability = SKILLS?.fault_line;
       const roll = calculateDamage(attacker, target, ability);
-
-      // Count total remaining zone-turns across all active Quake Mark and Frozen Quake zones
-      let totalZoneTurns = 0;
-      if (scene?.slotEffects) {
-        Object.values(scene.slotEffects).forEach(zoneList => {
-          if (!Array.isArray(zoneList)) return;
-          zoneList.forEach(eff => {
-            if ((eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") && (eff.turns || 0) > 0) {
-              totalZoneTurns += eff.turns;
-            }
-          });
-        });
-      }
-      // +25% per zone-turn remaining
-      const zonePct = totalZoneTurns > 0 ? 25 * totalZoneTurns : 0;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100 + zonePct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${zonePct ? ` + ${zonePct}% zone-turns` : ''})`,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Collapse (clear) all zones
-      if (scene?.slotEffects) {
-        Object.values(scene.slotEffects).forEach(zoneList => {
-          if (!Array.isArray(zoneList)) return;
-          zoneList.forEach(eff => {
-            if (eff?.id === "quake_mark_zone" || eff?.id === "frozen_quake_zone") {
-              eff.turns = 0;
-            }
-          });
-        });
-      }
+      // If the target is standing in any active quake zone, copy every zone
+      // effect there (with its CURRENT remaining turns, not reset) onto a
+      // random adjacent enemy's tile, WITHOUT clearing the original — then
+      // trigger both tiles' zone effects at once, without consuming any of
+      // their remaining duration (same skipTurnDecrement mechanism Tremor
+      // Echo/Earthshatter use). No-ops if the target isn't in a zone; the
+      // hit itself always lands regardless.
+      let copiedTo = null;
+      const targetSlotKey = scene?._charSlotKey?.(target);
+      const targetZones = targetSlotKey != null ? (scene?.slotEffects?.[targetSlotKey] || []) : [];
+      const quakeZonesOnTarget = targetZones.filter(eff => eff?.isQuakeZone && (eff.turns || 0) > 0);
 
-      const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
-          others.slice(0, 2).forEach(char => {
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              tags: ability?.tags,
+      if (quakeZonesOnTarget.length && scene) {
+        const adjacentEnemies = resolveAOESplash(scene, target, { shape: 'adjacent' });
+        if (adjacentEnemies.length) {
+          const pick = adjacentEnemies[Math.floor(Math.random() * adjacentEnemies.length)];
+          const pickSlotKey = scene._charSlotKey?.(pick);
+          if (pickSlotKey != null) {
+            scene.slotEffects[pickSlotKey] = scene.slotEffects[pickSlotKey] || [];
+            quakeZonesOnTarget.forEach(eff => {
+              scene.slotEffects[pickSlotKey].push({ ...eff });
             });
-          });
+            scene._refreshGroundSprites?.(pickSlotKey);
+            copiedTo = pick;
+          }
         }
+
+        scene._applySlotEffectsTick?.(target, { skipTurnDecrement: true });
+        if (copiedTo) scene._applySlotEffectsTick?.(copiedTo, { skipTurnDecrement: true });
       }
 
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        splash: splash.length ? splash : undefined,
-        removedZones: totalZoneTurns > 0 ? totalZoneTurns : undefined,
+        log: copiedTo
+          ? `${attacker?.name || "The warrior"}'s blow splits the ground, copying the quake to ${copiedTo.name}.`
+          : undefined,
       };
     },
-    description: "Collapse all active Quake Mark and Frozen Quake zones at once, dealing +25% damage per zone-turn remaining. Deals 75% to column targets."
+    description: "Deals 100% weapon damage. If the target is standing in a quake zone, copies every active zone effect there (with its current remaining duration) onto a random adjacent enemy's tile without clearing the original, then triggers both tiles' zone effects at once — without consuming any of their remaining duration."
   },
 
   'bell_ringer': {
@@ -11929,13 +11936,13 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.boulder_toss;
       const roll = calculateDamage(attacker, target, ability);
 
-      // 125% base + 15% per elemental tier (cold, lightning, fire) — combined
-      // additively into ONE skillPct.
-      const elemTier = Math.max(
-        target?.weakness?.tiers?.cold || 0,
-        target?.weakness?.tiers?.lightning || 0,
-        target?.weakness?.tiers?.fire || 0,
-      );
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const fireTier = target?.weakness?.tiers?.fire || 0;
+
+      // 125% base + 15% per elemental tier (highest of cold/lightning/fire)
+      // — combined additively into ONE skillPct.
+      const elemTier = Math.max(coldTier, lightningTier, fireTier);
       const elemPct = 15 * elemTier;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
@@ -11948,18 +11955,31 @@ Object.assign(RAW_SKILLS, {
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
+
+      // Ablaze (Fire T2): the hit's physical component converts to
+      // Elemental — physical→elemental is a valid one-way conversion.
+      if (fireTier >= 2 && physical > 0) {
+        elemental += physical;
+        physical = 0;
+      }
+
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Extend all active quake zones by 1 turn
-      if (scene?.slotEffects) {
-        Object.values(scene.slotEffects).forEach(zoneList => {
-          if (!Array.isArray(zoneList)) return;
-          zoneList.forEach(eff => {
-            if (eff?.id === "quake_mark_zone" && eff.turns > 0) eff.turns += 1;
-          });
-        });
-      }
+      // Frostbitten (Cold T2): this hit ignores the target's Evasion
+      // entirely — a per-cast override (resultMutable.autoHit), not a
+      // permanent flag on the shared ability.
+      const autoHit = coldTier >= 2 ? true : undefined;
+
+      // Shocked (Lightning T2): 50% chance to repeat the hit at 50% damage,
+      // capped at one repeat — an extra splash entry targeting the primary
+      // target itself.
       const splash = [];
+      if (lightningTier >= 2 && Math.random() < 0.5) {
+        splash.push({ target, amount: Math.max(1, Math.floor(amount * 0.5)), tags: ability?.tags });
+      }
+
+      // All three (Ablaze/Frostbitten/Shocked) can apply together if the
+      // target carries all three weaknesses at once.
       if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
         if (column) {
@@ -11986,10 +12006,11 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
+        autoHit,
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Costs both actions. Hurl a boulder for 125% damage to a column. Deals +15% per elemental weakness tier on each target. Also extends active Quake zones by 1 turn."
+    description: "Costs both actions. Hurl a boulder for 125% damage to a column, +15% per elemental weakness tier (highest of Cold/Lightning/Fire) on the target. If Ablaze (Fire T2), the hit's physical damage converts to Elemental. If Frostbitten (Cold T2), the hit cannot miss. If Shocked (Lightning T2), 50% chance to repeat the hit at 50% damage (max once). All three can apply together."
   },
 
   'sacred_shockwave': {
@@ -12191,14 +12212,8 @@ Object.assign(RAW_SKILLS, {
     name: "Bonecrusher",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
-    // Set aside — redundant with the other Disorient-buildup mace skills and
-    // was mainly a test skill to begin with. Left intact (not deleted) in
-    // case it gets adapted for something later; `disabled` is a generic flag
-    // getWeaponSkillsFor/getClassSkillsFor/getReactionSkillsFor all respect,
-    // so it's simply excluded from action menus without touching its logic.
-    disabled: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 10,
@@ -12215,12 +12230,24 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.bonecrusher;
       const roll = calculateDamage(attacker, target, ability);
+
+      // Rewards each physical weakness family the target already carries —
+      // +30% for Bleeding (Lacerate T1+), +30% for Raw (Expose T1+), +30%
+      // for Dazed (Disorient T1+). Combines additively into ONE skillPct
+      // (Category A bonuses), so a target weak from all three sits at
+      // 100% + 30% + 30% + 30% = 190% weapon damage.
+      const tiers = target?.weakness?.tiers || {};
+      let skillPct = 100;
+      if ((tiers.lacerate | 0) >= 1) skillPct += 30;
+      if ((tiers.expose | 0) >= 1) skillPct += 30;
+      if ((tiers.disorient | 0) >= 1) skillPct += 30;
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
@@ -12231,7 +12258,7 @@ Object.assign(RAW_SKILLS, {
         buildup: { disorient: ability?.buildupHint?.disorient ?? 40 },
       };
     },
-    description: "A crushing mace strike that dazes; repeated hits can Stun."
+    description: "Deals 100% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 190% against a foe weak from all three. Builds Disorient."
   },
 
   'plague_slam': {
@@ -12239,41 +12266,61 @@ Object.assign(RAW_SKILLS, {
     name: "Plague Slam",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
-    requiredValue: 10,
+    requiredValue: 15,
     actionCost: "major",
-    mpCost: 0,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "disease"],
-    cooldown: 2,
-    // Was 600 — a leftover debug value (this file's own old description said
-    // "to test DISEASE buildup"). Matched to Bonecrusher's 40, the mace's
-    // other free/basic-tier poke.
-    buildupHint: { disease: 40 },
+    tags: ["melee", "attack", "disease", "terrain"],
+    emitTagsOnUse: ["smash"],
+    cooldown: 3,
+    buildupHint: { disease: 80 },
+    // Zone: enemies standing in it take +50 Disease buildup at the end of
+    // their own turn, for 3 turns — same shape as Quake Mark's zone, just
+    // Disease-flavored instead of Disorient. Additionally, if an occupant is
+    // Ablaze (Fire T2) at the moment the zone ticks, they combust for Fire
+    // damage = 2 per 100 CURRENT Disease, scaled by their current Fire
+    // intensity — read live at trigger time (see _zoneFireBurnPreview,
+    // CombatScene.js). Entirely separate from Ablaze's own standalone
+    // end-of-turn weakness DOT, which this doesn't touch.
+    slotEffect: {
+      id: "plague_quake_zone",
+      isQuakeZone: true,
+      element: "disease",
+      tickPctMaxHP: 0.0,
+      turns: 3,
+      buildupFamilies: { disease: 50 },
+      fireBurnProc: { perHundredDisease: 2 },
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.plague_slam;
       const roll = calculateDamage(attacker, target, ability);
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
+
+      const buildupVal = ability?.buildupHint?.disease ?? 80;
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { disease: ability?.buildupHint?.disease ?? 40 },
+        buildup: { disease: buildupVal },
+        slotEffect,
       };
     },
-    description: "A filthy overhead slam that fouls the wound, building Disease."
+    description: "Deals 90% weapon damage, smashing the ground and applying Disease on hit. Leaves a festering zone for 3 turns — enemies standing in it suffer +50 Disease buildup at the end of their turn. If an occupant is Ablaze (Fire T2), they also combust for 2 per 100 Disease buildup, scaled by their Fire intensity — read live when the zone triggers."
   },
 
   'earthshatter': {
@@ -12281,38 +12328,51 @@ Object.assign(RAW_SKILLS, {
     name: "Earthshatter",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
-    typedDamage: true,
+    versionTag: "v3.23",
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 0,
+    // Reverted back to a normal MP cost — too situational (needs the target
+    // already standing in a zone) to also gate behind Initiative; that
+    // resource instead went to Gravity Slam, which is more of a reliable
+    // finisher.
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher"],
+    tags: ["support", "terrain", "finisher"],
     cooldown: 3,
-    rewardIfTierCross: [{ family: "any", tier: 2, healHPpct: 0.05 }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.earthshatter;
-      const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        {
-          ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
-          isCrit: roll.isCrit, critMult: roll.critMult,
-        }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
+    apply: (attacker, target, scene) => {
+      const slotKey = scene?._charSlotKey?.(target);
+      const hasZone = slotKey != null && (scene?.slotEffects?.[slotKey]?.length > 0);
+      if (!hasZone) {
+        return { fizzle: true, log: `${attacker?.name || "The warrior"} finds no active quake zone beneath ${target?.name || "the target"}.` };
+      }
+
+      // Repeatedly trigger every zone stacked on the target's tile (same
+      // skipTurnDecrement mechanism Tremor Echo uses — doesn't consume any
+      // zone's remaining duration) as long as the LAST pass pushed the
+      // target across at least one weakness tier boundary (0→T1 or T1→T2,
+      // any family). Weakness tiers cap at 2, so a pass eventually MUST
+      // produce zero new crossings — MAX_TICKS is just a defensive backstop.
+      let ticks = 0;
+      const MAX_TICKS = 10;
+      while (ticks < MAX_TICKS) {
+        if (target.status === 'incapacitated') break;
+        const before = { ...(target.weakness?.tiers || {}) };
+        scene._applySlotEffectsTick?.(target, { skipTurnDecrement: true });
+        ticks++;
+        const after = target.weakness?.tiers || {};
+        const crossed = Object.keys(after).some(fam => (after[fam] | 0) > (before[fam] | 0));
+        if (!crossed) break;
+      }
+
       return {
-        ...roll,
-        physical, elemental, necrotic, amount,
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+        amount: 0,
+        log: `${attacker?.name || "The warrior"} shatters the earth beneath ${target?.name || "the target"}, chaining ${ticks} quake tick${ticks === 1 ? "" : "s"}.`,
       };
     },
-    description: "Crushing blow; if this push hits an elemental threshold, you siphon life."
+    description: "Requires the target to already be standing in an active quake zone (fizzles otherwise). Triggers every zone stacked on the target's tile without consuming their remaining duration. If this pushes the target across a weakness tier (any family), the zones trigger again — repeating until a pass causes no new tier crossings. Deals no weapon damage."
   },
 
   'sanctified_slam': {
@@ -12334,7 +12394,8 @@ Object.assign(RAW_SKILLS, {
     buildupHint: { lightning: 40 },
     // Zone spawned only if target has lightning t1+: yellow tint, attackers hitting enemies in it gain 2 MP
     slotEffect: {
-      id: "sanctified_zone",
+      id: "sanctified_quake_zone",
+      isQuakeZone: true,
       element: "lightning",
       tickPctMaxHP: 0.0,
       turns: 2,
@@ -12371,7 +12432,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Blessed impact dealing extra damage to a zapped foe. If the target has Lightning weakness (t1+), consecrates the tile for 2 turns — attackers hitting enemies on it gain 2 MP per strike."
+    description: "Deals 100% weapon damage, +15% against a Zapped (Lightning T1+) target. If the target has Lightning weakness (T1+), consecrates the tile for 2 turns — attackers hitting enemies on it gain 2 MP per strike."
   },
 
   'tremor_echo': {
@@ -12398,10 +12459,9 @@ Object.assign(RAW_SKILLS, {
     // allies in them) trigger their effect but grant no MP.
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.tremor_echo;
-      const quakeIds = ["quake_mark_zone", "frozen_quake_zone"];
 
       const activeZoneKeys = Object.keys(scene?.slotEffects || {}).filter(key =>
-        (scene.slotEffects[key] || []).some(eff => quakeIds.includes(eff?.id) && (eff.turns || 0) > 0)
+        (scene.slotEffects[key] || []).some(eff => eff?.isQuakeZone && (eff.turns || 0) > 0)
       );
 
       if (!activeZoneKeys.length) {

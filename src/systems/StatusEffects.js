@@ -259,6 +259,14 @@ export const WeaknessV3 = {
         // Start-of-turn base burn before multiplier (we'll multiply by the intensity curve above)
         startTickBase: 10,
 
+        // A second, INDEPENDENT damage term added on top of (startTickBase ×
+        // intensity) — X per 100 current Fire meter, NOT itself multiplied by
+        // intensity. Keeping it additive-only (rather than also riding the
+        // intensity curve) avoids the two terms compounding into a quadratic
+        // — total damage stays linear in meter. See startTickPerHundred
+        // handling in _startTurnWeakness (CombatScene.js).
+        startTickPerHundred: 5,
+
         // Optional: extra meter consumption at start of turn (scales with intensity)
         // Targets: ~150 at 400, ~300-350 at 650-700; clamped by 'cap'
         startConsume: { base: 50, c1: 0.5, c2: 0.2, S2: 1000, cap: 400 },

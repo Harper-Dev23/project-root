@@ -469,11 +469,27 @@ export default class CombatScene extends Phaser.Scene {
       const excess = this.logEntries.length - this.combatLogMaxEntries;
       if (excess > 0) this.logEntries.splice(0, excess);
     }
-    this._renderCombatLog();
+    this._scheduleLogRender();
+  }
 
-    if (!this.isHoveringCombatLog) {
-      this._scrollCombatLogToBottom();
-    }
+  // _renderCombatLog() fully rebuilds every visible log entry's display
+  // objects — a single ability resolution commonly calls _log() several
+  // times in a row (damage line, crit line, buildup line, tier-cross line,
+  // etc.), which used to mean a full rebuild PER line. This coalesces any
+  // _log() calls that land in the same synchronous burst into one deferred
+  // rebuild instead, via a same-tick delayedCall — updates still land
+  // essentially immediately (next frame), but a 5-line burst from one
+  // action now costs 1 rebuild instead of 5.
+  _scheduleLogRender() {
+    if (this._logRenderPending) return;
+    this._logRenderPending = true;
+    this.time.delayedCall(0, () => {
+      this._logRenderPending = false;
+      this._renderCombatLog();
+      if (!this.isHoveringCombatLog) {
+        this._scrollCombatLogToBottom();
+      }
+    });
   }
 
   _normalizeLogEntry(entry, opts = {}) {
@@ -2108,8 +2124,9 @@ export default class CombatScene extends Phaser.Scene {
         add(1, 'Takes burn when acting; fire hits harder.',
           `−${loss} Fire buildup per action taken, +${incPct}% incoming Fire buildup.`);
         const tickBase = cfg.t2?.startTickBase ?? 10;
-        const tick = Math.max(1, Math.floor(tickBase * I));
-        add(2, 'End-of-turn burn tick scales with overflow; can consume meter.',
+        const tickPerHundred = cfg.t2?.startTickPerHundred ?? 0;
+        const tick = Math.max(1, Math.floor(tickBase * I + tickPerHundred * (m / 100)));
+        add(2, 'End-of-turn burn tick scales with overflow, plus a flat add-on from current buildup; can consume meter.',
           `${tick} burn damage at end of turn.`);
         break;
       }
@@ -3708,7 +3725,11 @@ export default class CombatScene extends Phaser.Scene {
       || resultMutable?.isHeal === true
       || friendlyTag;
 
-    const usesHitRoll = !friendlyOutcome && isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true;
+    // resultMutable.autoHit lets a skill's own apply() force a guaranteed hit
+    // for THIS cast only (e.g. Boulder Toss vs a Frostbitten target) without
+    // mutating the shared ability.autoHit flag, which would apply to every
+    // cast regardless of the condition that earned it.
+    const usesHitRoll = !friendlyOutcome && isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true && resultMutable?.autoHit !== true;
     let missed = false;
     let hitChanceShown = null;
 
@@ -5129,6 +5150,31 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
+  // Shared by _applySlotEffectsTick (to actually apply it) and the ground
+  // sprite's hover tooltip (to preview it) — a zone with a fireBurnProc
+  // field (e.g. Plague Slam) only does anything to a char who's currently
+  // Ablaze (Fire T2): perHundredDisease% of their CURRENT Disease meter,
+  // scaled by their current Fire intensity (the same familyIntensityMult
+  // curve used everywhere else). This is entirely separate from Ablaze's
+  // own standalone end-of-turn weakness DOT — that mechanic is untouched;
+  // this is purely the zone's own bonus proc. Read live rather than
+  // snapshotted at cast time. Returns null if the proc doesn't apply right
+  // now (no char, not Ablaze, or a zero result).
+  _zoneFireBurnPreview(eff, char) {
+    const proc = eff?.fireBurnProc;
+    if (!proc || !char) return null;
+    const fireTier = char?.weakness?.tiers?.fire | 0;
+    if (fireTier < 2) return null;
+    const diseaseMeter = char?.weakness?.meters?.disease | 0;
+    const fireMeter = char?.weakness?.meters?.fire | 0;
+    const fireI = familyIntensityMult('fire', fireMeter);
+    const raw = (proc.perHundredDisease || 0) * (diseaseMeter / 100) * fireI;
+    if (raw <= 0) return null;
+    const dr = getDamageReductionFraction(char, { isMagic: true, damageType: 'elemental' });
+    const dmg = Math.max(1, Math.floor(raw * (1 - (dr || 0))));
+    return { dmg, diseaseMeter, fireMeter };
+  }
+
   // opts.skipTurnDecrement: apply every effect's damage/buildup/vuln exactly
   // as normal, but don't tick eff.turns down or remove expired zones — for
   // skills that trigger a zone's effect as a bonus (e.g. Tremor Echo) without
@@ -5182,6 +5228,27 @@ export default class CombatScene extends Phaser.Scene {
         this._recomputeWeaknessTiers(char);
       }
 
+      // Plague Slam's Disease/Fire synergy: if the occupant is Ablaze
+      // (Fire T2) at the moment the zone ticks, they combust for Fire
+      // damage — purely additive from CURRENT Disease + CURRENT Fire
+      // buildup (see _zoneFireBurnPreview), both read live at trigger time.
+      // Unlike Frozen Quake's Lightning synergy below (baked in once at
+      // cast time, since that condition only ever needs checking once).
+      if (!died && eff.fireBurnProc) {
+        const preview = this._zoneFireBurnPreview(eff, char);
+        if (preview) {
+          char.currentHP = Math.max(0, char.currentHP - preview.dmg);
+          this._log(`${char.name} combusts in the plague zone for ${preview.dmg} Fire damage (Disease ${preview.diseaseMeter}, Fire ${preview.fireMeter}).`);
+          this._showFloatingNumber?.(preview.dmg, char, false);
+          this._updateHealthBars?.(); this._updateHPMPBars?.();
+          if (char.currentHP === 0 && char.status !== 'incapacitated') {
+            char.status = 'incapacitated';
+            this._onUnitKnockedOut?.(char);
+            died = true;
+          }
+        }
+      }
+
       // Elemental vulnerability while standing in the zone (e.g. Frozen
       // Quake's Lightning synergy: if the target was already Zapped when the
       // zone was cast, it also makes anyone standing in it take +20%
@@ -5229,6 +5296,7 @@ export default class CombatScene extends Phaser.Scene {
     magic:     0xcc88ff,
     curse:     0xcc66aa,
     physical:  0xaa8855,  // warm brown for earth/quake zones
+    disease:   0x7fae3f,  // sickly plague green, distinct from toxic's brighter green
   };
 
   // Sprite key per slotEffect id (fall back to 'fx_crack' for all ground effects)
@@ -5296,6 +5364,11 @@ export default class CombatScene extends Phaser.Scene {
       sprite.setInteractive({ useHandCursor: true });
       const showTip = (pointer) => {
         const stack = this.slotEffects?.[slotKey] || [];
+        // Current occupant (if any) — used to make conditional zone effects
+        // (e.g. Plague Slam's Ablaze proc) show CURRENT/live info here,
+        // unlike the skill's own tooltip which always states the full,
+        // unconditional mechanic.
+        const occupant = (this.turnOrder || []).find(u => u && u.status !== 'incapacitated' && this._charSlotKey?.(u) === slotKey);
         const lines = stack.length ? stack.map(e => {
           const label = (e.id || 'effect').replace(/_/g, ' ');
           const parts = [`${e.turns ?? '?'} turn${e.turns === 1 ? '' : 's'} left`];
@@ -5307,6 +5380,10 @@ export default class CombatScene extends Phaser.Scene {
           if (e.immobilizes) parts.push('immobilizes');
           if (e.onHitMpGain) parts.push(`+${e.onHitMpGain} MP to attackers hitting enemies here`);
           if (e.elementalVulnPct > 0) parts.push(`+${e.elementalVulnPct}% elemental damage taken`);
+          if (e.fireBurnProc) {
+            const preview = occupant ? this._zoneFireBurnPreview(e, occupant) : null;
+            if (preview) parts.push(`${occupant.name} is Ablaze here — combusts for ${preview.dmg} Fire dmg this turn`);
+          }
           return `${label}: ${parts.join(', ')}`;
         }) : ['No active effects'];
         this.tooltip?.show(pointer.worldX, pointer.worldY, { title: 'Ground Effect', lines });
@@ -5442,11 +5519,17 @@ export default class CombatScene extends Phaser.Scene {
       if ((tiers.fire | 0) >= 2) {
         const m = meters.fire | 0;
 
-        // Base tick, then multiply by Fire's own curve (does NOT affect Lightning)
+        // Base tick, then multiply by Fire's own curve (does NOT affect Lightning).
+        // A second, independent term (X per 100 CURRENT Fire meter) is added
+        // on top WITHOUT going through the intensity multiplier — riding the
+        // same curve twice would compound into a quadratic; keeping it a
+        // flat add-on keeps total growth linear in meter.
         const base = (WeaknessV3?.families?.fire?.t2?.startTickBase ??
           WeaknessV3?.families?.fire?.t2?.startTickFlat ?? 10);
         const mult = familyIntensityMult('fire', m);
-        const burnRaw = Math.max(1, Math.floor((+base || 0) * mult));
+        const perHundred = WeaknessV3?.families?.fire?.t2?.startTickPerHundred ?? 0;
+        const buildupAddOn = perHundred * (m / 100);
+        const burnRaw = Math.max(1, Math.floor((+base || 0) * mult + buildupAddOn));
 
         // MAGIC-typed ; route through magic modifiers if desired
         let burn = burnRaw;
@@ -5505,7 +5588,7 @@ export default class CombatScene extends Phaser.Scene {
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - burn);
         this._showFloatingNumber?.(burn, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} Ablaze: base ${base} × I_fire=${mult.toFixed(2)} (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
+        this._log(`${char.name} Ablaze: (base ${base} × I_fire=${mult.toFixed(2)}) + ${buildupAddOn.toFixed(1)} buildup (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
         if (char.currentHP === 0 && char.status !== 'incapacitated') {
           char.status = 'incapacitated';
@@ -6595,7 +6678,7 @@ export default class CombatScene extends Phaser.Scene {
     this.reactions?.onTurnStart(char);
     // Turn separator in combat log
     this.logEntries.push({ separator: true });
-    this._renderCombatLog();
+    this._scheduleLogRender();
     // 6) Update highlights/UI shell
     this._highlightCurrentTurn();
 
