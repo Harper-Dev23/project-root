@@ -43,6 +43,7 @@ import {
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
   getProficiencyBreakdown, getProficiencyMultiplier,
+  applyGearConversionAndPercent, applyLightningJolt,
 } from '../systems/CombatLogic.js';
 
 
@@ -3661,6 +3662,40 @@ export default class CombatScene extends Phaser.Scene {
 
     if (result && Array.isArray(result.statusEffects)) {
       this._addStatusEffects(target, result.statusEffects);
+    }
+
+    // Gear conversion + gear damage% — deferred here (see
+    // applyGearConversionAndPercent, CombatLogic.js) so it reacts to the
+    // skill's OWN finished output, including any manual type conversion the
+    // skill just did (e.g. Boulder Toss's Ablaze phys→elem, Miasma Crush's
+    // forced necrotic), instead of the weapon's original pre-skill roll.
+    // Typed-pipeline skills only — legacy skills already had gear% baked in
+    // early, inside calculateDamage(), and are unaffected by this.
+    if (ability?.typedDamage && result && !result.isHeal
+      && ((result.physical || 0) || (result.elemental || 0) || (result.necrotic || 0))) {
+      const converted = applyGearConversionAndPercent(
+        { physical: result.physical || 0, elemental: result.elemental || 0, necrotic: result.necrotic || 0 },
+        user
+      );
+      result.physical = converted.physical;
+      result.elemental = converted.elemental;
+      result.necrotic = converted.necrotic;
+      result.amount = converted.amount;
+    }
+
+    // Lightning Jolt — Tier-3 rider, added dead last: AFTER gear conversion/
+    // gear% too (previously it ran inside applyTypedDamageModifiers, before
+    // this function even existed, so it couldn't avoid being swept into
+    // either). A target-side effect (Zapped/Shocked), unrelated to the
+    // skill's own damage composition — never scaled by skill%, buffs, crit,
+    // the skill's own conversion, OR gear. Typed-pipeline skills only —
+    // legacy skills still get this inside calculateDamage(), unchanged.
+    if (ability?.typedDamage && result && !result.isHeal) {
+      const { joltTotal } = applyLightningJolt(target);
+      if (joltTotal > 0) {
+        result.elemental = (result.elemental || 0) + joltTotal;
+        result.amount = (result.amount || 0) + joltTotal;
+      }
     }
 
     if (options.logUsage !== false) {

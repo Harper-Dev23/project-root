@@ -70,6 +70,8 @@ function buffToText(buff) {
   if (buff.evasionPct)          parts.push(`+${buff.evasionPct}% Evasion`);
   if (buff.guardPct)            parts.push(`+${buff.guardPct}% Guard`);
   if (buff.chanceExtraHitPct)   parts.push(`${buff.chanceExtraHitPct}% extra hit`);
+  if (buff.healMP)              parts.push(`+${buff.healMP} MP`);
+  if (buff.healHP)              parts.push(`+${buff.healHP} HP`);
   if (buff.repeatStrikeOnce)    parts.push(`repeat strike (${buff.repeatPowerPct ?? 60}%)`);
   if (buff.extraRapidTicks)     parts.push(`+${buff.extraRapidTicks} tick`);
   if (buff.addBuildup) {

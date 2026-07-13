@@ -378,8 +378,13 @@ function applyWeaknessDamagePipeline(physical, elemental, necrotic, attacker, ta
 // Intensity currently only scales the CHANCE of extra jolts (T2); the size of
 // each individual jolt (1..dieMax) stays flat/unscaled regardless of overflow.
 // Signature: (target) → { joltTotal }
+// Exported so CombatScene.js can call it as the true final step for
+// typed-pipeline skills — AFTER applyGearConversionAndPercent — instead of
+// inside applyTypedDamageModifiers, where gear conversion/gear% couldn't
+// avoid touching it. Pure function of the TARGET's weakness state, no side
+// effects, so WHEN it's called doesn't change what it rolls.
 // --------------------------------------------------
-function applyLightningJolt(target) {
+export function applyLightningJolt(target) {
   const w = target?.weakness;
   if (!w) return { joltTotal: 0 };
 
@@ -547,7 +552,17 @@ export function calculateDamage(attacker, target, ability = null) {
   const critRoll = Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : (Math.floor(Math.random() * 100) + 1);
   const isCrit = critRoll <= critBundle.critChance;
 
-  const gearMult = getAttackerDamageMultiplier(attacker);
+  // Typed-pipeline skills (ability.typedDamage) DEFER gear damage% to the very
+  // end of the whole cast — see applyGearConversionAndPercent, called from
+  // CombatScene.js AFTER ability.apply() (including the skill's own manual
+  // type conversion, e.g. Boulder Toss's Ablaze phys→elem) has fully
+  // resolved. Applying it here instead, before the skill has even run, would
+  // mean gear's type-specific bonuses (and the Elseth conversion amulets
+  // below) only ever see the weapon's ORIGINAL composition, never anything a
+  // skill converts later — see project_damage_pipeline_reorder memory.
+  // Legacy (non-typed) skills are unaffected — they keep this early
+  // application exactly as before.
+  const gearMult = ability?.typedDamage ? 1 : getAttackerDamageMultiplier(attacker);
   if (gearMult !== 1) {
     const prev = baseDamage;
     baseDamage = Math.max(0, Math.floor(baseDamage * gearMult));
@@ -578,7 +593,7 @@ export function calculateDamage(attacker, target, ability = null) {
     let scaled = Math.max(0, Math.floor(rolled * localDamageMult));
     if (scaled <= 0) continue;
 
-    const elementMult = getAttackerDamageMultiplier(attacker, { element });
+    const elementMult = ability?.typedDamage ? 1 : getAttackerDamageMultiplier(attacker, { element });
     if (elementMult !== 1) {
       scaled = Math.max(0, Math.floor(scaled * elementMult));
     }
@@ -596,24 +611,33 @@ export function calculateDamage(attacker, target, ability = null) {
   // it as "(3 phys→ele)" instead of "+3 ..." — a `flat` entry reads as an
   // ADDITION to the total, but a conversion is a net-zero redistribution
   // between two typed buckets, not new damage.
+  //
+  // Typed-pipeline skills defer this to applyGearConversionAndPercent (see
+  // comment above the early gear% block) — same reasoning: run it here and a
+  // skill's own later conversion (Boulder Toss's Ablaze phys→elem) would
+  // move damage into a bucket this step already finished checking, so the
+  // amulet silently converts nothing. Legacy (non-typed) skills keep the
+  // original early-conversion behavior unchanged.
   const ge = attacker?.gearEffects || {};
-  if (ge.physToElemPercent) {
-    const conv = Math.floor(physical * ge.physToElemPercent / 100);
-    physical -= conv;
-    elemental += conv;
-    try { if (conv > 0) _pushBreakdown({ label: 'phys→ele', convert: conv }); } catch { }
-  }
-  if (ge.physToNecroPercent) {
-    const conv = Math.floor(physical * ge.physToNecroPercent / 100);
-    physical -= conv;
-    necrotic += conv;
-    try { if (conv > 0) _pushBreakdown({ label: 'phys→necro', convert: conv }); } catch { }
-  }
-  if (ge.elemToNecroPercent) {
-    const conv = Math.floor(elemental * ge.elemToNecroPercent / 100);
-    elemental -= conv;
-    necrotic += conv;
-    try { if (conv > 0) _pushBreakdown({ label: 'elem→necro', convert: conv }); } catch { }
+  if (!ability?.typedDamage) {
+    if (ge.physToElemPercent) {
+      const conv = Math.floor(physical * ge.physToElemPercent / 100);
+      physical -= conv;
+      elemental += conv;
+      try { if (conv > 0) _pushBreakdown({ label: 'phys→ele', convert: conv }); } catch { }
+    }
+    if (ge.physToNecroPercent) {
+      const conv = Math.floor(physical * ge.physToNecroPercent / 100);
+      physical -= conv;
+      necrotic += conv;
+      try { if (conv > 0) _pushBreakdown({ label: 'phys→necro', convert: conv }); } catch { }
+    }
+    if (ge.elemToNecroPercent) {
+      const conv = Math.floor(elemental * ge.elemToNecroPercent / 100);
+      elemental -= conv;
+      necrotic += conv;
+      try { if (conv > 0) _pushBreakdown({ label: 'elem→necro', convert: conv }); } catch { }
+    }
   }
 
   // Weakness pipeline: Cold T2 damage-dealt penalty (modifies physical, elemental & necrotic)
@@ -635,7 +659,9 @@ export function calculateDamage(attacker, target, ability = null) {
     try { _pushBreakdown({ label: 'proficiency', from: prevSum, mult: profMult, to: physical + elemental + necrotic }); } catch { }
   }
 
-  if (attacker) attacker.__gearAppliedForLastDamage = true;
+  // Only true when gear% was actually applied above (legacy/non-typed skills)
+  // — typed-pipeline skills defer it, so this must NOT claim it happened.
+  if (attacker) attacker.__gearAppliedForLastDamage = !ability?.typedDamage;
 
   // Typed-pipeline skills (ability.typedDamage === true) defer crit AND jolt to
   // applyTypedDamageModifiers(), which applies them AFTER the skill's own
@@ -880,18 +906,54 @@ export function applyDamagePctBonus(amount, dmgPct, label) {
   return next;
 }
 
+// Shared conversion primitive — physical→elemental, then physical→necrotic,
+// then elemental→necrotic, in that FIXED order, matching the canon
+// conversion hierarchy (Physical → Elemental → Necrotic; Necrotic terminal;
+// Elemental cannot revert to Physical). Used by BOTH a skill's own declared
+// conversion (opts.skillConversion below) and gear's conversion
+// (applyGearConversionAndPercent) so the two can never drift apart. `conv`
+// shape: { physToElemPct, physToNecroPct, elemToNecroPct } (any subset).
+function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = '') {
+  if (!conv) return { physical, elemental, necrotic };
+  if (conv.physToElemPct) {
+    const c = Math.floor(physical * conv.physToElemPct / 100);
+    physical -= c; elemental += c;
+    try { if (c > 0) _pushBreakdown({ label: `phys→ele${labelSuffix}`, convert: c }); } catch { }
+  }
+  if (conv.physToNecroPct) {
+    const c = Math.floor(physical * conv.physToNecroPct / 100);
+    physical -= c; necrotic += c;
+    try { if (c > 0) _pushBreakdown({ label: `phys→necro${labelSuffix}`, convert: c }); } catch { }
+  }
+  if (conv.elemToNecroPct) {
+    const c = Math.floor(elemental * conv.elemToNecroPct / 100);
+    elemental -= c; necrotic += c;
+    try { if (c > 0) _pushBreakdown({ label: `elem→necro${labelSuffix}`, convert: c }); } catch { }
+  }
+  return { physical, elemental, necrotic };
+}
+
 // --------------------------------------------------
 // applyTypedDamageModifiers — the typed-pipeline "finalize" step. Order matters
 // here and is deliberate (2026-07 pipeline reorder, see project_damage_pipeline_reorder
 // memory for the full design discussion):
 //
-//   1. skill's own weapon% (opts.skillPct)   — Category A, e.g. Power Stab's 200%
-//   2. combat buffs (AttackPower, summed)     — Category A, e.g. Rhythm/War Cry
-//   3. crit (opts.isCrit / opts.critMult)     — moved here from calculateDamage()
-//   4. Lightning jolt                         — Tier-3 rider, non-crittable
+//   1. skill's own weapon% (opts.skillPct)      — Category A, e.g. Power Stab's 200%
+//   1.5 skill's own conversion (opts.skillConversion) — e.g. Boulder Toss's
+//       Ablaze phys→elem. Runs BEFORE Tier-2 riders/combat buffs/crit
+//       specifically so a skill's own conversion only touches ITS OWN
+//       weapon-swing-times-skillPct portion — a Tier-2 rider or combat buff
+//       added afterward (by a DIFFERENT source) keeps whatever type IT
+//       specifies, rather than being swept into the skill's conversion just
+//       because it landed in a bucket the conversion later touches.
+//   2. Tier-2 "+X [Type] damage" riders          — e.g. Blazing Fervor's fire rider
+//   3. combat buffs (AttackPower, summed)         — Category A, e.g. Rhythm/War Cry
+//   4. crit (opts.isCrit / opts.critMult)         — moved here from calculateDamage()
+//   5. Lightning jolt                             — Tier-3 rider, non-crittable
 //
-// Gear% is NOT applied here — it's already baked into the roll inside
-// calculateDamage() (attacker.__gearAppliedForLastDamage marks that).
+// Gear% and gear conversion are NOT applied here — they're deferred even
+// later, to applyGearConversionAndPercent, called from CombatScene.js AFTER
+// this skill's apply() (including step 1.5 above) has fully resolved.
 //
 // This order is what makes a "Tier 2" rider possible: something that needs to
 // be scaled by combat buffs and crit, but NOT by the skill's own weapon% (e.g.
@@ -928,7 +990,19 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
     try { _pushBreakdown({ label: opts.skillLabel || `${opts.ability?.name || 'Skill'} weapon damage (${opts.skillPct}%)`, mult: skillMult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
   }
 
-  // 1.5) Tier-2 "+X [Type] damage" riders (e.g. Blazing Fervor's fire rider):
+  // 1.5) Skill's own declared conversion (opts.skillConversion) — e.g.
+  // Boulder Toss's Ablaze phys→elem, Miasma Crush's forced necrotic. Runs
+  // HERE, before Tier-2 riders/combat buffs/crit, so it only touches the
+  // skill's own weapon-swing-times-skillPct portion — see the header comment
+  // above for the worked example that established this exact placement.
+  if (opts.skillConversion) {
+    const converted = convertDamageType(physical, elemental, necrotic, opts.skillConversion, ' (skill)');
+    physical = converted.physical;
+    elemental = converted.elemental;
+    necrotic = converted.necrotic;
+  }
+
+  // 2) Tier-2 "+X [Type] damage" riders (e.g. Blazing Fervor's fire rider):
   // added AFTER the skill's own weapon% (so a big skillPct doesn't touch them)
   // but BEFORE combat buffs/crit below (so both of those still apply). Live on
   // the ATTACKER's own statusEffects. Legacy (non-typed) skills still get these
@@ -945,7 +1019,7 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
     }
   }
 
-  // 2) Combat buffs (Category A) — AttackPower status mods, summed across every
+  // 3) Combat buffs (Category A) — AttackPower status mods, summed across every
   // active buff into ONE multiplier (two +20% buffs = +40% total, not 1.2×1.2).
   const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
   if (atkPowerPct !== 0) {
@@ -965,7 +1039,7 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
   // isn't what Afflicted amplifies. Curse riders are now a Tier-1 rider inside
   // calculateDamage() (applyCurseWeaponRiders), not handled here at all.
 
-  // 3) Crit — moved here from calculateDamage() so it lands AFTER the skill's
+  // 4) Crit — moved here from calculateDamage() so it lands AFTER the skill's
   // own weapon% and combat buffs, not before them. Whatever is present in the
   // running total at this exact point gets swept up; anything a skill wants
   // to shield from crit must be added to the breakdown AFTER this call returns.
@@ -978,12 +1052,10 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
     try { _pushBreakdown({ label: 'crit', mult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
   }
 
-  // 4) Lightning jolt — deliberately LAST: non-crittable, not scaled by the
-  // skill's own % or combat buffs (a rider on the hit, not part of the swing
-  // that gets amplified). Moved here from calculateDamage() so typed-pipeline
-  // skills get the exact same non-scaling treatment legacy skills already had.
-  const { joltTotal } = applyLightningJolt(target);
-  if (joltTotal > 0) elemental += joltTotal;
+  // Lightning Jolt is NOT added here anymore — it's a Tier-3 rider and needs
+  // to be immune to gear conversion/gear% too, which don't run until AFTER
+  // this function returns (applyGearConversionAndPercent, called later from
+  // CombatScene.js). See applyLightningJolt's call site there.
 
   // Floor ONCE, here, after every multiplicative step above has run on the
   // full-precision float total.
@@ -993,6 +1065,74 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
 
   const amount = physical + elemental + necrotic;
   return { physical, elemental, necrotic, amount };
+}
+
+// --------------------------------------------------
+// applyGearConversionAndPercent — the LATE gear step for typed-pipeline
+// skills (2026-07 pipeline reorder, see project_damage_pipeline_reorder
+// memory). Called from CombatScene.js AFTER ability.apply() has fully
+// resolved — including the skill's OWN manual type conversion (e.g. Boulder
+// Toss's Ablaze phys→elem, Miasma Crush's forced necrotic) — so gear
+// conversion and gear damage% both react to the FINAL composition of the
+// hit, not the weapon's original roll. This is the whole point of the
+// reorder: previously both ran inside calculateDamage(), before the skill
+// (or its own conversion) had even happened, so e.g. an Elemental→Necrotic
+// amulet paired with a phys→elemental-converting skill silently converted
+// nothing (checking an elemental bucket that was still empty at that point).
+//
+// Conversion order is fixed: phys→elem, then phys→necro, then elem→necro —
+// matches the in-game hierarchy (Physical → Elemental → Necrotic, Necrotic
+// terminal, Elemental cannot revert to Physical).
+//
+// Legacy (non-typed) skills don't call this — they keep the original early
+// application inside calculateDamage()/applyDamageModifiers unchanged.
+// --------------------------------------------------
+export function applyGearConversionAndPercent(breakdown, attacker) {
+  let physical = breakdown?.physical | 0;
+  let elemental = breakdown?.elemental | 0;
+  let necrotic = breakdown?.necrotic | 0;
+  const ge = attacker?.gearEffects || {};
+
+  const converted = convertDamageType(physical, elemental, necrotic, {
+    physToElemPct: ge.physToElemPercent,
+    physToNecroPct: ge.physToNecroPercent,
+    elemToNecroPct: ge.elemToNecroPercent,
+  }, ' (gear)');
+  physical = converted.physical;
+  elemental = converted.elemental;
+  necrotic = converted.necrotic;
+
+  // Gear damage% — global (+hidden) multiplies everything uniformly, same
+  // compounding relationship as before (mult *= each in turn, not summed).
+  // Elemental/necrotic-specific% now apply to the FINAL bucket regardless of
+  // source (weapon's own roll, a skill's conversion, or gear's own
+  // conversion above) — previously elementalDamagePercent only ever touched
+  // the weapon's originally-rolled elemental flat.
+  let globalMult = 1;
+  if (ge.globalDamagePercent) globalMult *= 1 + ge.globalDamagePercent / 100;
+  if (ge.hiddenDamagePercent) globalMult *= 1 + ge.hiddenDamagePercent / 100;
+  if (globalMult !== 1) {
+    const prev = physical + elemental + necrotic;
+    physical *= globalMult; elemental *= globalMult; necrotic *= globalMult;
+    try { _pushBreakdown({ label: 'gear damage', mult: globalMult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
+  }
+  if (ge.elementalDamagePercent && elemental > 0) {
+    const mult = 1 + ge.elementalDamagePercent / 100;
+    const prev = elemental;
+    elemental *= mult;
+    try { _pushBreakdown({ label: 'gear elemental damage', mult, from: Math.round(prev), to: Math.round(elemental) }); } catch { }
+  }
+  if (ge.necroticDamagePercent && necrotic > 0) {
+    const mult = 1 + ge.necroticDamagePercent / 100;
+    const prev = necrotic;
+    necrotic *= mult;
+    try { _pushBreakdown({ label: 'gear necrotic damage', mult, from: Math.round(prev), to: Math.round(necrotic) }); } catch { }
+  }
+
+  physical = Math.max(0, Math.floor(physical));
+  elemental = Math.max(0, Math.floor(elemental));
+  necrotic = Math.max(0, Math.floor(necrotic));
+  return { physical, elemental, necrotic, amount: physical + elemental + necrotic };
 }
 
 

@@ -8698,7 +8698,8 @@ Object.assign(RAW_SKILLS, {
     name: "Needle Feint",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 10,
@@ -8720,13 +8721,20 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_feint;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const exposeBuildup = ability?.buildupHint?.expose ?? 70;
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         buildup: { expose: exposeBuildup },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
@@ -8804,7 +8812,8 @@ Object.assign(RAW_SKILLS, {
     name: "Pressure Point",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -8836,13 +8845,20 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.pressure_point;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const exposeBuildup = ability?.buildupHint?.expose ?? 100;
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         buildup: { expose: exposeBuildup },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
@@ -8855,7 +8871,8 @@ Object.assign(RAW_SKILLS, {
     name: "Ghoststep",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 11,
@@ -8874,14 +8891,21 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.ghoststep;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const disorientTier = target?.weakness?.tiers?.disorient || 0;
       const rule = findRewardIfWeakRule(ability, disorientTier);
       let curseBuildup = ability?.buildupHint?.curse ?? 90;
       if (rule) curseBuildup += rule.buff?.addBuildup?.curse || 0;
-      return { ...roll, amount, buildup: { curse: curseBuildup } };
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: curseBuildup } };
     },
     description: "Deals 100% weapon damage."
   },
@@ -8892,7 +8916,8 @@ Object.assign(RAW_SKILLS, {
     name: "Hex Stitch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
     requiredValue: 12,
@@ -8906,9 +8931,16 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.hex_stitch;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const primaryCurse = ability?.buildupHint?.curse ?? 60;
       const splashCurse = Math.floor(primaryCurse * 0.50);
       const toxicMeter = target?.weakness?.meters?.toxic || target?.currentStats?.toxic || 0;
@@ -8918,7 +8950,7 @@ Object.assign(RAW_SKILLS, {
       }));
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         buildup: { curse: primaryCurse },
         splash: splash.length ? splash : undefined,
         repeatChance,
@@ -8932,7 +8964,8 @@ Object.assign(RAW_SKILLS, {
     name: "Static Prick",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
@@ -8951,19 +8984,31 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.static_prick;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+
+      // 100% base + 25% if target is at least Ablaze (Fire T2) — Category A,
+      // combined additively into ONE skillPct instead of a second chained
+      // multiply.
       const fireTier = target?.weakness?.tiers?.fire || 0;
       const rule = findRewardIfWeakRule(ability, fireTier);
-      if (rule) {
-        amount = applyDamagePctBonus(amount, rule.buff?.damagePct || 0, `${ability?.name || 'Skill'} weapon damage bonus`);
-      }
+      const bonusPct = rule?.buff?.damagePct || 0;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100 + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${bonusPct ? ` + ${bonusPct}% Fire tier` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
       const lightningMeter = target?.weakness?.meters?.lightning || target?.currentStats?.lightning || 0;
       const repeatChance = Math.min(0.40, lightningMeter / 1000);
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
         repeatChance,
       };
@@ -9096,7 +9141,8 @@ Object.assign(RAW_SKILLS, {
     name: "Heartpiercer",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -9120,16 +9166,28 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.heartpiercer;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = applyDamagePctBonus(amount, 60, `${ability?.name || 'Skill'} base bonus`);
-      const lacTier = target?.weakness?.tiers?.lacerate || 0;
-      if (lacTier >= 2) {
-        amount = applyDamagePctBonus(amount, 30, `${ability?.name || 'Skill'} Lacerate bonus`);
-      }
 
-      return { ...roll, amount };
+      // 160% base (100% + 60%) + 30% more if target is at least Hemorrhaging
+      // (Lacerate T2) — Category A, combined additively into ONE skillPct
+      // (was two sequential multiplies: 1.6x then 1.3x = 208% instead of the
+      // intended 190% at the Lacerate T2 cap).
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      const lacPct = lacTier >= 2 ? 30 : 0;
+      const skillPct = 160 + lacPct;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (160%${lacPct ? ` + ${lacPct}% Lacerate tier` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return { ...roll, physical, elemental, necrotic, amount };
     },
     description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). On crit, inflicts Heartpierced — a 2-turn bleed dealing 15% of the hit as damage per turn."
   },
@@ -9139,7 +9197,8 @@ Object.assign(RAW_SKILLS, {
     name: "Venom Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 13,
@@ -9161,9 +9220,16 @@ Object.assign(RAW_SKILLS, {
       // Plain 100% weapon damage strike, nothing added — same shape as every
       // other basic hit this session (Needle Venom, Needle Feint, etc.).
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
 
       // Snapshot the SAME formula the natural Envenomed (Toxic T2) start-of-
       // turn tick uses (base x intensity, necrotic/magic, target's own magic
@@ -9210,7 +9276,7 @@ Object.assign(RAW_SKILLS, {
 
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         poisonTicks: { count, damageEach: dmgEach },
       };
     },
@@ -9275,7 +9341,8 @@ Object.assign(RAW_SKILLS, {
     name: "Curse of Needles",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "CHA",
     requiredValue: 13,
@@ -9289,9 +9356,16 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.curse_of_needles;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       target.statusEffects = target.statusEffects || [];
       const alreadyCursed = target.statusEffects.some(se => se?.id === 'curse_of_needles');
       if (!alreadyCursed) {
@@ -9305,7 +9379,7 @@ Object.assign(RAW_SKILLS, {
           onHit: { weaponDamageFlat: 2, curseScaled: true },
         });
       }
-      return { ...roll, amount: Math.floor(amount * 1.10) };
+      return { ...roll, physical, elemental, necrotic, amount };
     },
     description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while at least Hexed, amplified while Afflicted."
   },
@@ -9315,7 +9389,8 @@ Object.assign(RAW_SKILLS, {
     name: "Flash Overload",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -9330,9 +9405,16 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.flash_overload;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 125, skillLabel: `${ability?.name || 'Skill'} weapon damage (125%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
       const repeatChance = lightningTier >= 2 ? 1.0 : 0;
 
@@ -9350,7 +9432,7 @@ Object.assign(RAW_SKILLS, {
 
       return {
         ...roll,
-        amount: Math.floor(amount * 1.25),
+        physical, elemental, necrotic, amount,
         repeatChance,
         splash: splash.length ? splash : undefined,
         buildup: { disorient: disorientAmt },
@@ -11458,6 +11540,12 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
 
+      // Whole hit reflavored as Cold/Elemental regardless of the weapon's own
+      // physical/elemental split — matches the pre-migration element:'cold',
+      // isMagic:true behavior (a magic frost attack, not a physical mace
+      // swing). Declared via skillConversion so it runs at the correct pipeline
+      // stage (right after skillPct, before any onHit rider/combat buff/crit
+      // is added) — see project_damage_pipeline_reorder memory.
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
@@ -11465,13 +11553,9 @@ Object.assign(RAW_SKILLS, {
           ability, tags: ability?.tags, skipGearMultiplier: true,
           skillPct: 95, skillLabel: `${ability?.name || 'Skill'} weapon damage (95%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
         }
       );
-      // Whole hit reflavored as Cold/Elemental regardless of the weapon's own
-      // physical/elemental split — matches the pre-migration element:'cold',
-      // isMagic:true behavior (a magic frost attack, not a physical mace swing).
-      elemental += physical;
-      physical = 0;
       const amount = Math.max(1, physical + elemental + necrotic);
       const baseBuildup = ability?.buildupHint?.cold ?? 80;
 
@@ -11568,6 +11652,10 @@ Object.assign(RAW_SKILLS, {
       const bonusPct = fireTier >= 2 ? 30 : fireTier >= 1 ? 15 : 0;
       const basePct = 100;
 
+      // Whole hit reflavored as Fire/Elemental regardless of the weapon's own
+      // physical/elemental split — a searing mace blow, not a physical swing.
+      // Declared via skillConversion, not a manual post-step — see
+      // project_damage_pipeline_reorder memory for why the timing matters.
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
@@ -11576,12 +11664,9 @@ Object.assign(RAW_SKILLS, {
           skillPct: basePct + bonusPct,
           skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% Fire tier` : ''})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
         }
       );
-      // Whole hit reflavored as Fire/Elemental regardless of the weapon's own
-      // physical/elemental split — a searing mace blow, not a physical swing.
-      elemental += physical;
-      physical = 0;
       const amount = Math.max(1, physical + elemental + necrotic);
 
       return {
@@ -11723,6 +11808,12 @@ Object.assign(RAW_SKILLS, {
       const overflowPct = Math.max(0, intensity - 1) * 15;
       const skillPct = 100 + tierPct + overflowPct;
 
+      // Force necrotic typing regardless of the weapon's own physical/elemental
+      // split — this is a rotting/necrotic crush, not a physical mace swing.
+      // Both physToNecroPct and elemToNecroPct declared so BOTH the physical
+      // base AND any weapon elemental flat end up necrotic — see
+      // project_damage_pipeline_reorder memory for why this runs as
+      // skillConversion rather than a manual post-step.
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
@@ -11731,12 +11822,9 @@ Object.assign(RAW_SKILLS, {
           skillPct,
           skillLabel: `${ability?.name || 'Skill'} weapon damage (100% + ${tierPct}% Disease tier + ${Math.round(overflowPct)}% overflow)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
         }
       );
-      // Force necrotic typing regardless of the weapon's own physical/elemental
-      // split — this is a rotting/necrotic crush, not a physical mace swing.
-      const rawTotal = physical + elemental + necrotic;
-      physical = 0; elemental = 0; necrotic = rawTotal;
 
       // Spread 50% of disease meter to up to 2 adjacent (movement-range-1)
       // neighbors — uses the same grid-adjacency system player movement and
@@ -11854,7 +11942,7 @@ Object.assign(RAW_SKILLS, {
     name: "Bell Ringer",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "CON",
@@ -11866,29 +11954,44 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    // Also requires T1 Expose — validated in apply; conditionHint for UI tooltip
-    conditionHint: { requiresDisorient: 1, requiresExpose: 1 },
+    // Genuine dual gate now — BOTH must be true to even cast. (The old
+    // conditionHint claimed this was already enforced, but conditionHint is
+    // never read anywhere in src/ and the actual check only required
+    // Disorient; removed as dead weight.)
+    requiresWeakness: [
+      { family: "disorient", tierAtLeast: 1 },
+      { family: "expose", tierAtLeast: 1 },
+    ],
     statusEffects: [{ id: "bell_ringer_concuss", turns: 2, mods: { Initiative: -15, speedDownPct: 12 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.bell_ringer;
       const roll = calculateDamage(attacker, target, ability);
 
       const disorientTier = target?.weakness?.tiers?.disorient || 0;
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const meter = target?.weakness?.meters?.disorient || 0;
-      const intensity = weaknessIntensityMult(meter) || 1;
+      const disorientMeter = target?.weakness?.meters?.disorient || 0;
+      const disorientIntensity = weaknessIntensityMult(disorientMeter) || 1;
 
-      // 125% base + condition bonus (12%/tier, only if both Disorient T1+ and
-      // Expose T1+) + overflow bonus — all Category A, combined additively
-      // into ONE skillPct. The extra 50% on crit is a skill-specific crit
-      // amplifier instead, applied via a boosted critMult so it scales
-      // uniformly with the normal crit step rather than a second multiply.
-      const conditionMet = disorientTier >= 1 && exposeTier >= 1;
-      const conditionPct = conditionMet ? 12 * disorientTier : 0;
-      const overflowPct = Math.max(0, intensity - 1) * 15;
-      const skillPct = 125 + conditionPct + overflowPct;
-      const boostedCritMult = (roll.critMult || 1.5) * 1.5;
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const exposeMeter = target?.weakness?.meters?.expose || 0;
+      const exposeIntensity = weaknessIntensityMult(exposeMeter) || 1;
+
+      // Damage scales with Disorient alone — both requirements are already
+      // guaranteed by requiresWeakness above, so no AND-check needed here,
+      // just Disorient's own tier/intensity. 100% base + 8%/tier + 10%/
+      // intensity-overflow, Category A, combined additively into ONE skillPct.
+      const disorientTierPct = 8 * disorientTier;
+      const disorientOverflowPct = Math.max(0, disorientIntensity - 1) * 10;
+      const skillPct = 100 + disorientTierPct + disorientOverflowPct;
+
+      // Crit multiplier scales with Expose instead — a separate, skill-own
+      // bonus stacked on top of the universal Expose T2 crit chance/damage
+      // system (applyExposeCritBonuses, CombatLogic.js) that already applies
+      // to every attack in the game regardless of this skill. 15%/tier +
+      // 10%/intensity-overflow, using Expose's own numbers.
+      const exposeTierPct = 15 * exposeTier;
+      const exposeOverflowPct = Math.max(0, exposeIntensity - 1) * 10;
+      const critMultBonusPct = exposeTierPct + exposeOverflowPct;
+      const boostedCritMult = (roll.critMult || 1.5) * (1 + critMultBonusPct / 100);
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -11896,7 +11999,7 @@ Object.assign(RAW_SKILLS, {
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
           skillPct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (125%${conditionPct ? ` + ${conditionPct}% condition` : ''}${overflowPct ? ` + ${Math.round(overflowPct)}% overflow` : ''})`,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${disorientTierPct ? ` + ${disorientTierPct}% Disorient tier` : ''}${disorientOverflowPct ? ` + ${Math.round(disorientOverflowPct)}% overflow` : ''})`,
           isCrit: roll.isCrit, critMult: boostedCritMult,
         }
       );
@@ -11904,14 +12007,23 @@ Object.assign(RAW_SKILLS, {
 
       const statusEffects = Array.isArray(ability?.statusEffects)
         ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
+        : [];
+
+      // On crit: the target takes +50% Disorient buildup for 1 turn — a
+      // reward for landing the crit, distinct from Gravity Slam's own
+      // Disorient-finisher identity (this doesn't consume any buildup at
+      // all, just a temporary incoming-buildup vulnerability).
+      if (roll.isCrit) {
+        statusEffects.push({ id: "bell_ringer_rattled", turns: 1, disorientBuildupMul: 1.5 });
+      }
+
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        statusEffects,
+        statusEffects: statusEffects.length ? statusEffects : undefined,
       };
     },
-    description: "Requires T1 Disorient and T1 Expose. A ringing concussion dealing 125% damage, scaling with overflow. Crits deal an additional 50% on top. Applies an Initiative penalty debuff."
+    description: "Requires Disorient T1+ and Expose T1+. Deals 100% weapon damage, +8% per Disorient tier, plus overflow. Crit multiplier is separately boosted +15% per Expose tier, plus overflow — on top of the universal Expose T2 crit bonus every attack already gets. If this hit crits, the target also takes +50% Disorient buildup for 1 turn. Applies an Initiative/speed penalty debuff."
   },
 
   'boulder_toss': {
@@ -11945,6 +12057,11 @@ Object.assign(RAW_SKILLS, {
       const elemTier = Math.max(coldTier, lightningTier, fireTier);
       const elemPct = 15 * elemTier;
 
+      // Ablaze (Fire T2): the hit's physical component converts to Elemental
+      // — physical→elemental is a valid one-way conversion. Declared via
+      // skillConversion (only when Ablaze) so it runs at the correct pipeline
+      // stage — right after skillPct, before any onHit rider/combat buff/
+      // crit gets added — see project_damage_pipeline_reorder memory.
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
@@ -11953,15 +12070,9 @@ Object.assign(RAW_SKILLS, {
           skillPct: 125 + elemPct,
           skillLabel: `${ability?.name || 'Skill'} weapon damage (125%${elemPct ? ` + ${elemPct}% elemental tier` : ''})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: fireTier >= 2 ? { physToElemPct: 100 } : undefined,
         }
       );
-
-      // Ablaze (Fire T2): the hit's physical component converts to
-      // Elemental — physical→elemental is a valid one-way conversion.
-      if (fireTier >= 2 && physical > 0) {
-        elemental += physical;
-        physical = 0;
-      }
 
       const amount = Math.max(1, physical + elemental + necrotic);
 
@@ -12018,7 +12129,7 @@ Object.assign(RAW_SKILLS, {
     name: "Sacred Shockwave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "CHA",
@@ -12032,55 +12143,62 @@ Object.assign(RAW_SKILLS, {
     cooldown: 4,
     // Diamond: fixed slots {2,4,5,7} — the four centre positions. Cannot be moved.
     aoe: { shape: "diamond" },
-    healHPPerStack: 3,
-    healMPPerStack: 2,
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.sacred_shockwave;
       const roll = calculateDamage(attacker, target, ability);
 
-      // Shared typed baseline (100% weapon damage, skill%/buffs/crit applied
-      // once) — each victim below scales THIS by their own disorient
-      // tier/intensity, same shared-base-then-per-victim-multiply structure
-      // the legacy scalar version used.
+      // Flat 25% weapon damage to every enemy in the diamond — this is a
+      // utility/support hit, not a nuke, per dev notes. Shared typed baseline
+      // computed once, applied uniformly to every victim (no per-victim scaling).
       const { physical: baseP, elemental: baseE, necrotic: baseN } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 25, skillLabel: `${ability?.name || 'Skill'} weapon damage (25%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
+      const amount = Math.max(1, baseP + baseE + baseN);
 
-      let totalStacksConsumed = 0;
+      let totalDisorientCleared = 0;
+      let totalToxicDiseaseCleared = 0;
 
-      // Hit an enemy: scale the shared typed base by THIS victim's own
-      // disorient tier/intensity (combined additively), clear disorient/toxic/disease.
+      // Hit an enemy: clear Disorient/Toxic/Disease, tally the cleared meter
+      // amounts (for ally healing) and the cleared tiers (for the enemy's own
+      // damage-dealt debuff), then apply that debuff.
       const hitAndClear = (victim) => {
-        if (!victim) return { physical: 0, elemental: 0, necrotic: 0, amount: 0 };
-        const tier = victim?.weakness?.tiers?.disorient || 0;
-        const meter = victim?.weakness?.meters?.disorient || 0;
-        const intensity = weaknessIntensityMult(meter) || 1;
-        const victimPct = 10 * tier + Math.max(0, intensity - 1) * 12;
-        const mult = 1 + victimPct / 100;
-        totalStacksConsumed += tier;
-        if (victim?.weakness?.meters) {
-          victim.weakness.meters.disorient = 0;
-          victim.weakness.meters.toxic = 0;
-          victim.weakness.meters.disease = 0;
-          if (victim.weakness.tiers) {
-            victim.weakness.tiers.disorient = weaknessTierFromMeter(0);
-            victim.weakness.tiers.toxic = weaknessTierFromMeter(0);
-            victim.weakness.tiers.disease = weaknessTierFromMeter(0);
+        if (!victim) return;
+        const w = victim.weakness;
+        const disorientMeter = w?.meters?.disorient || 0;
+        const toxicMeter = w?.meters?.toxic || 0;
+        const diseaseMeter = w?.meters?.disease || 0;
+        const tierSum = (w?.tiers?.disorient || 0) + (w?.tiers?.toxic || 0) + (w?.tiers?.disease || 0);
+
+        totalDisorientCleared += disorientMeter;
+        totalToxicDiseaseCleared += toxicMeter + diseaseMeter;
+
+        if (w?.meters) {
+          w.meters.disorient = 0;
+          w.meters.toxic = 0;
+          w.meters.disease = 0;
+          if (w.tiers) {
+            w.tiers.disorient = weaknessTierFromMeter(0);
+            w.tiers.toxic = weaknessTierFromMeter(0);
+            w.tiers.disease = weaknessTierFromMeter(0);
           }
         }
-        const physical = Math.floor(baseP * mult);
-        const elemental = Math.floor(baseE * mult);
-        const necrotic = Math.floor(baseN * mult);
-        return { physical, elemental, necrotic, amount: Math.max(1, physical + elemental + necrotic) };
+
+        // -5% damage dealt per tier cleared (summed across all three
+        // families, so max 3 families x T2 x 5% = -30% cap), 2-turn debuff.
+        const weakenPct = Math.min(30, tierSum * 5);
+        if (weakenPct > 0) {
+          victim.statusEffects = victim.statusEffects || [];
+          victim.statusEffects.push({ id: "sacred_shockwave_weakened", turns: 2, mods: { AttackPower: -weakenPct } });
+        }
       };
 
-      const main = hitAndClear(target);
+      hitAndClear(target);
 
       // Diamond AOE: fixed slots {2,4,5,7} via aoeResolver. Splash targets
       // still resolve through the scalar/legacy splash pipeline (amount only
@@ -12088,15 +12206,18 @@ Object.assign(RAW_SKILLS, {
       // as every other typed skill's splash array in this file.
       const splashChars = resolveAOESplash(scene, target, ability?.aoe);
       const splash = splashChars.map(char => {
-        const res = hitAndClear(char);
-        return { target: char, amount: res.amount, tags: ability?.tags };
+        hitAndClear(char);
+        return { target: char, amount, tags: ability?.tags };
       });
 
-      // Heal allies: HP and MP per Disorient stack consumed across all hits
+      // Heal allies: 1 MP per 50 total Disorient cleared, 1 HP per 50 total
+      // Toxic+Disease cleared — summed across every enemy hit. Finer
+      // 50-point breakpoints (rather than 100) so less cleared buildup goes
+      // "wasted" with no reward before crossing the next threshold.
       let healedAllies;
-      const healHP = ability?.healHPPerStack ?? 3;
-      const healMP = ability?.healMPPerStack ?? 2;
-      if (attacker?.team && totalStacksConsumed > 0) {
+      const healMP = Math.floor(totalDisorientCleared / 50);
+      const healHP = Math.floor(totalToxicDiseaseCleared / 50);
+      if (attacker?.team && (healMP > 0 || healHP > 0)) {
         healedAllies = [];
         attacker.team.forEach(ally => {
           if (!ally) return;
@@ -12104,8 +12225,8 @@ Object.assign(RAW_SKILLS, {
           const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
           const hpBefore = ally.currentHP ?? 0;
           const mpBefore = ally.currentMP ?? 0;
-          const hpAfter = maxHP > 0 ? Math.min(maxHP, hpBefore + totalStacksConsumed * healHP) : hpBefore;
-          const mpAfter = maxMP > 0 ? Math.min(maxMP, mpBefore + totalStacksConsumed * healMP) : mpBefore;
+          const hpAfter = maxHP > 0 ? Math.min(maxHP, hpBefore + healHP) : hpBefore;
+          const mpAfter = maxMP > 0 ? Math.min(maxMP, mpBefore + healMP) : mpBefore;
           ally.currentHP = hpAfter;
           ally.currentMP = mpAfter;
           healedAllies.push({ id: ally.id || ally.name, healedHP: hpAfter - hpBefore, healedMP: mpAfter - mpBefore });
@@ -12114,12 +12235,12 @@ Object.assign(RAW_SKILLS, {
 
       return {
         ...roll,
-        physical: main.physical, elemental: main.elemental, necrotic: main.necrotic, amount: main.amount,
+        physical: baseP, elemental: baseE, necrotic: baseN, amount,
         splash: splash.length ? splash : undefined,
         healedAllies: healedAllies && healedAllies.length ? healedAllies : undefined,
       };
     },
-    description: "Slam a sanctified wave through the formation's diamond (slots 2,4,5,7), clearing Disorient, Toxic, and Disease from each target hit. Allies heal HP and MP for each Disorient stack consumed."
+    description: "Deals 25% weapon damage to every enemy in the formation's diamond (slots 2,4,5,7), clearing their Disorient, Toxic, and Disease buildup. Each enemy hit takes a 2-turn damage-dealt debuff, -5% per tier cleared (max -30%). Allies gain 1 MP per 50 total Disorient cleared and 1 HP per 50 total Toxic+Disease cleared."
   },
 
   'earthen_tempest': {
@@ -12127,18 +12248,18 @@ Object.assign(RAW_SKILLS, {
     name: "Earthen Tempest",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "WIS",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["attack", "aoe", "proliferate", "disorient"],
     emitTagsOnUse: ["swing"],
-    cooldown: 3,
+    cooldown: 4,
     requiresWeakness: { family: "disorient", tierAtLeast: 1 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.earthen_tempest;
@@ -12204,7 +12325,7 @@ Object.assign(RAW_SKILLS, {
         proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
       };
     },
-    description: "Requires Disorient T1. Strike the target and whip up an earthen gale, copying their Disorient meter to 3 random enemies. At T2, also copies elemental weaknesses. Does not clear the source."
+    description: "Requires Disorient T1. Deals 95% weapon damage, whipping up an earthen gale that copies the target's Disorient meter to 3 random enemies. At T2, also copies any Cold/Fire/Lightning weakness. Does not clear the source."
   },
 
   'bonecrusher': {
@@ -12500,7 +12621,7 @@ Object.assign(RAW_SKILLS, {
     name: "Concussive Drain",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
@@ -12538,7 +12659,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A crushing blow that saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2."
+    description: "Deals 100% weapon damage, saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2 (both fire if a single hit skips straight past T1)."
   },
 
   // --- Spear (1h) ---
