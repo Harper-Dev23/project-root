@@ -2465,6 +2465,15 @@ Object.assign(RAW_SKILLS, {
 
       const healPerStatus = ability?.healPerStatus ?? 3;
       let healedAllies;
+      // KNOWN BUG, not yet fixed (found while fixing the identical issue in
+      // Sacred Shockwave): attacker.team is a STRING ('ally'/'enemy'), not an
+      // array of teammates — .forEach on it throws, gets caught by
+      // CombatScene's ability-apply try/catch, and the whole cast silently
+      // "fizzles" (discarding damage already computed above) whenever this
+      // block is reached with totalConsumed > 0. Fix: enumerate via
+      // scene.allySlots/enemySlots instead, same as every other skill in
+      // this file. Left alone for now — revisit when this weapon type gets
+      // its own pass.
       if (attacker?.team && totalConsumed > 0) {
         healedAllies = [];
         attacker.team.forEach(ally => {
@@ -6785,7 +6794,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "zone", "mana"],
-    apply: (attacker) => {
+    apply: (attacker, target, scene) => {
       attacker.statusEffects = attacker.statusEffects || [];
       if (getRunicZone(attacker)) {
         return { amount: 0, log: `${attacker?.name ?? 'Mage'} already has an active runic zone.` };
@@ -6800,7 +6809,7 @@ Object.assign(RAW_SKILLS, {
       // TODO (CombatScene): each turn caster is in zone, restore mpPerTurn MP
       // TODO (CombatScene): on caster movement, find and remove runic_zone effect
       // TODO (CombatScene): apply kindlingRite/wardWeave/runeChannel tick effects per turn
-      // TODO (visual): ground tile effect at caster slot (use quake as placeholder)
+      scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: `${attacker?.name ?? 'Mage'} traces a runic circle of power!` };
     },
     description: "Trace a runic circle at your feet. Lasts 4 turns, generates 2 MP/turn. Dissipates if you move. Required for zone modification skills."
@@ -6907,7 +6916,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire", "elemental", "zone"],
     buildupHint: { fire: 120 },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Kindling Rite requires an active runic zone." };
       const ability = SKILLS?.kindling_rite;
@@ -6920,6 +6929,7 @@ Object.assign(RAW_SKILLS, {
       zone.mods.kindlingRite = true;
       // TODO (CombatScene): each turn caster is in zone — apply 80 fire buildup to caster
       // TODO (CombatScene): while kindlingRite active, caster deals +10% elemental damage
+      scene?._refreshRunicZoneSprite?.(attacker);
       return {
         ...roll,
         amount,
@@ -6987,13 +6997,14 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "defensive", "zone"],
-    apply: (attacker) => {
+    apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Ward Weave requires an active runic zone." };
       zone.mods = zone.mods || {};
       zone.mods.wardWeave = true;
       // TODO (CombatScene): replace mpPerTurn MP restore with -3 initiative drain per turn
       // TODO (CombatScene): while wardWeave active, caster takes 10% less damage
+      scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Protective wards weave through the runic circle!" };
     },
     description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), caster takes 10% less damage while in zone."
@@ -7061,7 +7072,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "zone"],
-    apply: (attacker) => {
+    apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Rune Channel requires an active runic zone." };
       zone.mods = zone.mods || {};
@@ -7069,6 +7080,7 @@ Object.assign(RAW_SKILLS, {
       // TODO (CombatScene): spells cast while runeChannel active → 25% chance to repeat at 60%
       // TODO (CombatScene): caster takes 80 lightning buildup per turn
       // TODO (CombatScene): caster takes 1 lightning damage when they act
+      scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Lightning crackles through the runes!" };
     },
     description: "Req zone. Modifies zone: spells have 25% chance to repeat at 60% power, caster takes 80 lightning buildup/turn and 1 lightning damage on act."
@@ -7381,6 +7393,89 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "110% arcane stampede hitting all enemies. If primary has elemental T2: +20% damage. AOE targets with T2: 75% splash, others: 60%."
+  },
+
+  // Moved out of the dead Staff surplus block (below) — kept as-is for now,
+  // still on the legacy scalar damage path, not yet brought up to v3.23.
+  'restoration_light': {
+    id: "restoration_light",
+    name: "Restoration Light",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "WIS",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "ally",
+    tags: ["magic", "holy", "heal", "regen"],
+    cooldown: 3,
+    statusEffects: [{ id: "regen", turns: 2, tickHeal: 3 }],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.restoration_light;
+      const wis = attacker?.totalStats?.WIS ?? attacker?.WIS ?? 0;
+      const healAmount = 10 + Math.floor(wis / 2);
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect }))
+        : undefined;
+      return {
+        amount: healAmount,
+        isHeal: true,
+        statusEffects,
+      };
+    },
+    description: "Restore moderate HP and grant regen for 2 turns."
+  },
+
+  'curse_cinders': {
+    id: "curse_cinders",
+    name: "Curse of Cinders",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.21",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 1,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "curse", "necrotic"],
+    cooldown: 2,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    statusEffects: [{ id: "curse_cinders", turns: 3 }],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_cinders;
+      const meter = target?.weakness?.meters?.curse || 0;
+      if (meter < 100) {
+        scene?._log?.(`${target?.name || "The target"} is not Hexed; Curse of Cinders fails.`);
+        return { amount: 0, dealsDamage: false };
+      }
+      const intStat = attacker?.totalStats?.INT ?? attacker?.INT ?? 0;
+      const base = 6 + (intStat >> 3);
+      const amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
+        ability,
+        tags: ability?.tags,
+        element: "necrotic",
+        isMagic: true,
+        skipGearMultiplier: true,
+      }));
+      const statusEffects = Array.isArray(ability?.statusEffects)
+        ? ability.statusEffects.map(effect => ({ ...effect, sourceId: attacker?.id ?? effect.sourceId }))
+        : undefined;
+      return {
+        amount,
+        isMagic: true,
+        element: "necrotic",
+        dealsDamage: true,
+        buildup: { curse: ability?.buildupHint?.curse ?? 60 },
+        statusEffects,
+      };
+    },
+    description: "Afflicts the target with Cinders; adds CURSE buildup and lingering burn."
   },
 
   // ===============================
@@ -12143,6 +12238,13 @@ Object.assign(RAW_SKILLS, {
     cooldown: 4,
     // Diamond: fixed slots {2,4,5,7} — the four centre positions. Cannot be moved.
     aoe: { shape: "diamond" },
+    // Since the diamond AOE is an absolute fixed pattern (not relative to
+    // whoever you target), the primary target selection itself is restricted
+    // to those same 4 slots — targeting someone outside the diamond would
+    // otherwise be a valid-looking selection that doesn't actually align
+    // with what the AOE hits. Enforced generically via the existing
+    // targetSlots filter in CombatScene's targeting logic.
+    targetSlots: [2, 4, 5, 7],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.sacred_shockwave;
       const roll = calculateDamage(attacker, target, ability);
@@ -12214,12 +12316,23 @@ Object.assign(RAW_SKILLS, {
       // Toxic+Disease cleared — summed across every enemy hit. Finer
       // 50-point breakpoints (rather than 100) so less cleared buildup goes
       // "wasted" with no reward before crossing the next threshold.
+      // NOTE: attacker.team is a STRING ('ally'/'enemy'), not an array of
+      // teammates — calling .forEach on it throws, which used to get caught
+      // by CombatScene's ability-apply try/catch and logged as "fizzled,"
+      // discarding the damage that had already been computed above. The
+      // correct way to enumerate the attacker's own side is via
+      // scene.allySlots/enemySlots, same pattern every other skill in this
+      // file already uses.
       let healedAllies;
       const healMP = Math.floor(totalDisorientCleared / 50);
       const healHP = Math.floor(totalToxicDiseaseCleared / 50);
-      if (attacker?.team && (healMP > 0 || healHP > 0)) {
+      const ownSlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const ownTeam = (ownSlots || [])
+        .map(s => s?.char)
+        .filter(c => c && c.status !== 'incapacitated');
+      if (ownTeam.length && (healMP > 0 || healHP > 0)) {
         healedAllies = [];
-        attacker.team.forEach(ally => {
+        ownTeam.forEach(ally => {
           if (!ally) return;
           const maxHP = ally.maxHP ?? ally.derivedStats?.maxHP ?? 0;
           const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
@@ -13713,38 +13826,6 @@ Object.assign(RAW_SKILLS, {
     description: "Hurl a burning fireball that explodes in a column, dealing high damage and scorching nearby foes."
   },
 
-  'restoration_light': {
-    id: "restoration_light",
-    name: "Restoration Light",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["staff"],
-    requiredStat: "WIS",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "ally",
-    tags: ["magic", "holy", "heal", "regen"],
-    cooldown: 3,
-    statusEffects: [{ id: "regen", turns: 2, tickHeal: 3 }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.restoration_light;
-      const wis = attacker?.totalStats?.WIS ?? attacker?.WIS ?? 0;
-      const healAmount = 10 + Math.floor(wis / 2);
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
-      return {
-        amount: healAmount,
-        isHeal: true,
-        statusEffects,
-      };
-    },
-    description: "Restore moderate HP and grant regen for 2 turns."
-  },
-
   'frostlash': {
     id: "frostlash",
     name: "Frostlash",
@@ -13818,55 +13899,6 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "A heavy malediction that surges the CURSE meter."
-  },
-
-  'curse_cinders': {
-    id: "curse_cinders",
-    name: "Curse of Cinders",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 1,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["magic", "spell", "curse", "necrotic"],
-    cooldown: 2,
-    requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    buildupHint: { curse: 60 },
-    statusEffects: [{ id: "curse_cinders", turns: 3 }],
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.curse_cinders;
-      const meter = target?.weakness?.meters?.curse || 0;
-      if (meter < 100) {
-        scene?._log?.(`${target?.name || "The target"} is not Hexed; Curse of Cinders fails.`);
-        return { amount: 0, dealsDamage: false };
-      }
-      const intStat = attacker?.totalStats?.INT ?? attacker?.INT ?? 0;
-      const base = 6 + (intStat >> 3);
-      const amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "necrotic",
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect, sourceId: attacker?.id ?? effect.sourceId }))
-        : undefined;
-      return {
-        amount,
-        isMagic: true,
-        element: "necrotic",
-        dealsDamage: true,
-        buildup: { curse: ability?.buildupHint?.curse ?? 60 },
-        statusEffects,
-      };
-    },
-    description: "Afflicts the target with Cinders; adds CURSE buildup and lingering burn."
   },
 
   'ember_ward': {
@@ -14661,6 +14693,14 @@ Object.assign(RAW_SKILLS, {
         amount = Math.floor(amount * (1 + 0.08 * debuffCount));
       }
       let healedAllies;
+      // KNOWN BUG, not yet fixed (found while fixing the identical issue in
+      // Sacred Shockwave): attacker.team is a STRING ('ally'/'enemy'), not an
+      // array of teammates — .forEach on it throws, gets caught by
+      // CombatScene's ability-apply try/catch, and the whole cast silently
+      // "fizzles" (discarding damage already computed above) whenever this
+      // block is reached with debuffCount > 0. Fix: enumerate via
+      // scene.allySlots/enemySlots instead, same as every other skill in
+      // this file. Left alone for now — revisit when Whip gets its own pass.
       if (scene && attacker?.team && debuffCount > 0) {
         healedAllies = [];
         attacker.team.forEach(ally => {

@@ -73,6 +73,10 @@ export default class LoadingScene extends Phaser.Scene {
     // Combat VFX sprites (ground effects, status indicators)
     this.load.image('fx_crack', 'assets/sprites/fx_crack.png');
     this.load.image('fx_lodge_arrow', 'assets/sprites/fx_lodge_arrow.png');
+    this.load.image('fx_runic_zone', 'assets/sprites/fx_runic_zone.png');
+    this.load.image('fx_runic_zone_addition_1', 'assets/sprites/fx_runic_zone_addition_1.png');
+    this.load.image('fx_runic_zone_addition_2', 'assets/sprites/fx_runic_zone_addition_2.png');
+    this.load.image('fx_runic_zone_addition_3', 'assets/sprites/fx_runic_zone_addition_3.png');
 
     // Interior backgrounds
     this.load.image('zafaar_interior', 'assets/interiors/zafaar_interior.png');

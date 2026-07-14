@@ -5433,6 +5433,97 @@ export default class CombatScene extends Phaser.Scene {
     return sprite;
   }
 
+  // ---------- Runic Zone sprite (Conclave Circle + its modifier skills) ----------
+  // Deliberately separate from the generic slotEffects ground-zone system
+  // above (quake-style zones): the runic zone's real lifetime and mods
+  // (kindlingRite/wardWeave/runeChannel) live on the CASTER's own
+  // 'runic_zone' status effect, not a tile-keyed slotEffects entry. Sharing
+  // that same object into slotEffects (for the generic tick/decay system to
+  // manage) would double-decrement its `turns` — once via the status-effect
+  // tick, once via the slotEffects tick. So this just visualizes whatever
+  // the status effect's CURRENT state is, keyed by owner, redrawn on demand
+  // (cast / modified) rather than on a per-round tick.
+  //
+  // Base ring: blue, getting MORE INTENSE/saturated the more mods are
+  // active (0 active = pale blue, all 3 = deep vivid blue) — see
+  // RUNIC_ZONE_BASE_TINT_BY_COUNT. One additional overlay glyph per active
+  // mod (fx_runic_zone_addition_1/2/3), each its own theme color, layered
+  // on top. kindlingRite/addition_1 is confirmed working well as-is
+  // (position/scale/depth) — left completely untouched. wardWeave/
+  // runeChannel (addition_2/3) are unconfirmed/untested so far (no skill
+  // sets those mods to true yet) — given a small radial offset so they
+  // don't all spin stacked dead-center on top of each other/the base ring.
+  static RUNIC_ZONE_MOD_TINT = {
+    kindlingRite: { key: 'fx_runic_zone_addition_1', tint: 0xff7733 }, // fire
+    wardWeave: { key: 'fx_runic_zone_addition_2', tint: 0x66ddaa }, // warding green
+    runeChannel: { key: 'fx_runic_zone_addition_3', tint: 0xaa77ee }, // arcane purple
+  };
+  // Indexed by count of currently-active mods (0-3) — pale to deep blue.
+  static RUNIC_ZONE_BASE_TINT_BY_COUNT = [0xbbddff, 0x77bbff, 0x3388ff, 0x0055dd];
+
+  _refreshRunicZoneSprite(owner) {
+    if (!owner) return;
+    const ownerKey = owner.id || owner.name;
+    if (!ownerKey) return;
+
+    this.runicZoneSprites = this.runicZoneSprites || {};
+    const prev = this.runicZoneSprites[ownerKey];
+    if (prev) prev.forEach(s => s.destroy());
+    delete this.runicZoneSprites[ownerKey];
+
+    const zone = (owner.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
+    if (!zone) return;
+    if (!this.textures?.exists('fx_runic_zone')) return;
+
+    const slotKey = this._charSlotKey?.(owner);
+    const slotContainer = this.unitSlots.find(c => c.uniqueKey === slotKey);
+    if (!slotContainer) return;
+    const { x: cx, y: cy } = slotContainer;
+
+    const sprites = [];
+
+    // Base ring — scaled down 25% per feedback (was 0.9), rotation slowed
+    // way down (was 8s/turn), tint intensity scales with active mod count.
+    const activeMods = Object.entries(zone.mods || {}).filter(([, v]) => v).map(([k]) => k);
+    const baseTint = CombatScene.RUNIC_ZONE_BASE_TINT_BY_COUNT[Math.min(3, activeMods.length)];
+    const base = this.add.image(cx, cy, 'fx_runic_zone')
+      .setScale(0.9 * 0.75)
+      .setAlpha(0.85)
+      .setDepth(1)
+      .setTint(baseTint);
+    this.tweens.add({ targets: base, rotation: Math.PI * 2, duration: 20000, repeat: -1 });
+    sprites.push(base);
+
+    activeMods.forEach((modKey, i) => {
+      const cfg = CombatScene.RUNIC_ZONE_MOD_TINT[modKey];
+      if (!cfg || !this.textures?.exists(cfg.key)) return;
+
+      // kindlingRite (confirmed working) keeps its original dead-center
+      // placement exactly as-is. The other two get spread around the ring
+      // instead of piling up in the same spot. wardWeave gets pushed out
+      // further than runeChannel — it was still reading as too tucked
+      // behind the portrait at the shared default distance.
+      let ox = 0, oy = 0;
+      if (modKey !== 'kindlingRite') {
+        const angle = (i / Math.max(1, activeMods.length)) * Math.PI * 2;
+        const dist = modKey === 'wardWeave' ? 18 : 10;
+        ox = Math.cos(angle) * dist;
+        oy = Math.sin(angle) * dist;
+      }
+
+      const overlay = this.add.image(cx + ox, cy + oy, cfg.key)
+        .setScale(0.8)
+        .setAlpha(0.9)
+        .setDepth(1 + (i + 1) * 0.01)
+        .setTint(cfg.tint)
+        .setRotation(Math.random() * Math.PI * 2);
+      this.tweens.add({ targets: overlay, rotation: overlay.rotation + Math.PI, duration: 6000, yoyo: true, repeat: -1 });
+      sprites.push(overlay);
+    });
+
+    this.runicZoneSprites[ownerKey] = sprites;
+  }
+
   // ---------- Lodge arrow sprites (attached to character, one per stack) ----------
   _refreshLodgeSprites(char) {
     if (!char) return;
