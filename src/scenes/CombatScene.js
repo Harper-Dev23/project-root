@@ -1009,6 +1009,22 @@ export default class CombatScene extends Phaser.Scene {
       this._clearPortrait?.(old); // remove old visuals but keep the container
     }
 
+    // Conclave Circle's runic zone "dissipates if you move" (per its own
+    // description) — it lives on the mover's own statusEffects (character-
+    // bound, not slot-bound), so any movement should end it rather than let
+    // it silently relocate/linger. This was still just a TODO before; the
+    // status effect is removed here, and the ground sprite refresh clears
+    // the now-stale visual (previously it stuck around at the old position
+    // until some unrelated skill cast happened to trigger a redraw).
+    if (Array.isArray(unit.statusEffects)) {
+      const zoneIdx = unit.statusEffects.findIndex(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
+      if (zoneIdx !== -1) {
+        unit.statusEffects.splice(zoneIdx, 1);
+        this._log?.(`${unit?.name ?? 'The mage'}'s runic circle dissipates as they move.`);
+        this._refreshRunicZoneSprite?.(unit);
+      }
+    }
+
     // --- assign new slot ---
     newSlot.char = unit;
     newSlot.occupied = true;
@@ -1175,11 +1191,10 @@ export default class CombatScene extends Phaser.Scene {
     mpBar.setAngle(-90);
 
     slot.removeAllListeners();
-    slot.on('pointerdown', () => this._showCharacterInfo(char));
-
     slot.add([sprite, nameText, hpBar, mpBar]);
     slot.occupied = true;
     slot.char = char;
+    this._wireSlotInfoClick(slot, char);
 
     char._slot = slot;
     char.icon = sprite;
@@ -2047,6 +2062,10 @@ export default class CombatScene extends Phaser.Scene {
     this.characterInfoPanel.add(bg);
     //Who's shown
     this._inspectedChar = char;
+    // Refresh slot borders now — this char's border needs to show (they're
+    // now the inspected one), and whoever was previously inspected (if
+    // anyone, and if not also mid-turn/targeted) needs theirs to hide again.
+    this._clearSlotHighlights?.();
     // Persistent header: portrait + name/level under portrait, shows on all tabs
     this._clearCharacterInfoHeader();
     this._renderCharacterInfoHeader(char);
@@ -2055,6 +2074,23 @@ export default class CombatScene extends Phaser.Scene {
 
     // Body
     this._renderCharacterInfoBody(char);
+
+    // Close button — top-left corner. Previously there was no way to
+    // deselect short of clicking a different character, which the border-
+    // declutter feature above depends on being possible.
+    const closeBtn = this.add.text(8, 8, '✕', {
+      fontSize: '16px',
+      color: '#cccccc',
+      fontStyle: 'bold',
+    }).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    closeBtn.on('pointerover', () => closeBtn.setColor('#ffffff'));
+    closeBtn.on('pointerout', () => closeBtn.setColor('#cccccc'));
+    closeBtn.on('pointerdown', () => {
+      this.characterInfoPanel.setVisible(false);
+      this._inspectedChar = null;
+      this._clearSlotHighlights?.();
+    });
+    this.characterInfoPanel.add(closeBtn);
   }
 
 
@@ -3133,6 +3169,7 @@ export default class CombatScene extends Phaser.Scene {
 
       /* ---- 3️⃣  Gold outline for feedback ---- */
       slot.rect.setStrokeStyle(3, 0xffff00);
+      slot.rect.setAlpha(1); // in case this slot was idle-hidden (alpha 0) before targeting started
     });
   }
 
@@ -4333,6 +4370,19 @@ export default class CombatScene extends Phaser.Scene {
         if (rule.healMP) {
           attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + rule.healMP);
           this._log(`${attacker.name} recovers ${rule.healMP} MP (tier ${rule.tier} ${fam}).`);
+        }
+        if (rule.stealInitiative) {
+          // Genuine theft, not a flat grant — capped by both the cap itself
+          // AND whatever the target actually has available. Draining 0 from
+          // an empty gauge is a no-op, not a free grant to the attacker.
+          const avail = target?.initiativeGauge || 0;
+          const stolen = Math.min(rule.stealInitiative, avail);
+          if (stolen > 0) {
+            target.initiativeGauge = Math.max(0, avail - stolen);
+            const cap = attacker.initiativeGaugeMax ?? 100;
+            attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + stolen);
+            this._log(`${attacker.name} steals ${stolen} Initiative from ${target.name} (tier ${rule.tier} ${fam}).`);
+          }
         }
         if (rule.buff) {
           this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
@@ -6192,8 +6242,34 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
+  // Wires the info-click handler AND the idle-border hover-reveal together —
+  // three call sites re-attach the info click on a slot (_assignCharToSlot,
+  // _placePortrait, _exitTargetingMode), each via slot.removeAllListeners()
+  // first, which would otherwise silently wipe out any hover listeners set
+  // up elsewhere. Centralizing here means all three get the hover affordance
+  // for free and can't drift out of sync with each other.
+  _wireSlotInfoClick(slot, char) {
+    slot.on('pointerdown', () => this._showCharacterInfo(char));
+    slot.on('pointerover', () => {
+      if (!slot.char) return; // empty slots already always show their border
+      if (slot === this._currentChar()?._slot) return; // don't clobber the active-turn highlight
+      slot.rect.setStrokeStyle(2, slot.char.isEnemy ? 0xff4444 : 0xffffff);
+      slot.rect.setAlpha(1);
+    });
+    slot.on('pointerout', () => this._clearSlotHighlights());
+  }
+
   _clearSlotHighlights() {
     const activeSlot = this._currentChar()?._slot;
+    const isTargeting = !!this.targetingAbility;
+    // Position-targeting (movement, e.g. Move Step/Dash): reachable empty
+    // slots get a green highlight set directly by _enterPositionTargeting.
+    // This function has no other awareness of that mode, so without this it
+    // would stomp the green back to plain gray the instant it ran for any
+    // other reason (e.g. hovering off a nearby occupied ally slot fires the
+    // idle-hide hover-out handler, which calls this) — the slot stayed
+    // clickable since listeners are untouched, just the feedback vanished.
+    const posTargetSet = this._posTargets ? new Set(this._posTargets) : null;
 
     this.unitSlots.forEach(slot => {
       slot.rect.disableInteractive();
@@ -6205,15 +6281,30 @@ export default class CombatScene extends Phaser.Scene {
         // portrait (added on top, same dimensions) hid all but a sliver of it.
         slot.rect.setStrokeStyle(3, 0x7fc8ff);       // light blue = "my turn"
         slot.rect.setScale(1.08);
-      } else if (slot.char?.isEnemy) {
-        slot.rect.setStrokeStyle(2, 0xff4444);       // red for enemies
+        slot.rect.setAlpha(1);
+      } else if (posTargetSet && posTargetSet.has(slot)) {
+        slot.rect.setStrokeStyle(3, 0x88ff88);       // green = reachable move target
         slot.rect.setScale(1);
-      } else if (slot.char) {
-        slot.rect.setStrokeStyle(2, 0xffffff);       // white for allies
+        slot.rect.setAlpha(1);
+      } else if (!slot.char) {
+        slot.rect.setStrokeStyle(2, 0x888888);       // gray for empty — always shown, no portrait to fall back on
         slot.rect.setScale(1);
+        slot.rect.setAlpha(1);
+      } else if (isTargeting || this._inspectedChar === slot.char) {
+        // Occupied AND needs to show: either targeting mode (need to see who's
+        // a valid target) or this is who's currently pinned in the info panel.
+        slot.rect.setStrokeStyle(2, slot.char.isEnemy ? 0xff4444 : 0xffffff);
+        slot.rect.setScale(1);
+        slot.rect.setAlpha(1);
       } else {
-        slot.rect.setStrokeStyle(2, 0x888888);       // gray for empty
+        // Idle, occupied, not selected — declutter: hide the border AND the
+        // fill (the object's own alpha covers both at once, since the fill's
+        // own 0.2 alpha and the stroke's opacity are both multiplied by it) —
+        // just the portrait shows. Briefly reappears on hover (see
+        // _wireSlotInfoClick).
+        slot.rect.setStrokeStyle(0);
         slot.rect.setScale(1);
+        slot.rect.setAlpha(0);
       }
     });
   }
@@ -6364,6 +6455,7 @@ export default class CombatScene extends Phaser.Scene {
   _resetSlotStroke(slot) {
     const isEnemy = this.enemySlots.includes(slot);
     slot.rect.setStrokeStyle(2, isEnemy ? 0xff4444 : 0xffffff);
+    slot.rect.setAlpha(1);
   }
 
 
@@ -6429,6 +6521,14 @@ export default class CombatScene extends Phaser.Scene {
 
   // Keep this, but make sure it restores default strokes
   _exitTargetingMode() {
+    // Clear targetingAbility FIRST — _clearSlotHighlights() below reads it to
+    // decide whether occupied-but-idle slots should stay visible (targeting)
+    // or declutter-hide again (not targeting). Calling it while
+    // targetingAbility was still set meant every occupied slot got forced
+    // visible on exit, and only actually re-hid itself on the NEXT unrelated
+    // _clearSlotHighlights() call (e.g. a hover in/out cycle) — exactly the
+    // "squares pop up until I hover a character" symptom reported.
+    this.targetingAbility = null;
     this._clearSlotHighlights?.();
     this._clearSlotListeners?.();   // removes all slot/icon listeners, keeps interactive active
 
@@ -6443,8 +6543,6 @@ export default class CombatScene extends Phaser.Scene {
       }
       if (btn.text?.active) btn.text.setStyle({ color: '#b8bccf' });
     }
-
-    this.targetingAbility = null;
 
     // NOTE: used to hard-reset every slot's border here via _resetSlotStroke
     // (a plain red/white default with no concept of "whose turn is it") —
@@ -6462,7 +6560,7 @@ export default class CombatScene extends Phaser.Scene {
     [...this.allySlots, ...this.enemySlots].forEach(slot => {
       const char = slot.char;
       if (!char || !char.icon?.active) return;
-      slot.on('pointerdown', () => this._showCharacterInfo(char));
+      this._wireSlotInfoClick(slot, char);
     });
   }
 
@@ -7336,9 +7434,7 @@ export default class CombatScene extends Phaser.Scene {
     // The slot container keeps its Rectangle(-32,-32,64,64) geometry from _createBattleSlots.
     // Just swap the listener so clicking shows character info.
     slot.removeAllListeners();
-    slot.on('pointerdown', () => {
-      this._showCharacterInfo(char);
-    });
+    this._wireSlotInfoClick(slot, char);
 
     // Name label
     const classColor = CLASS_COLORS?.[char.baseClass] || '#ffffff';

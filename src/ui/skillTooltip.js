@@ -53,6 +53,22 @@ function buffDelta(prevBuff, buff) {
   return delta;
 }
 
+// rewardIfTierCross/rewardIfWeak rules can carry reward fields DIRECTLY on
+// the rule object (e.g. Concussive Drain's { family, tier, healMP: 2 }),
+// not just nested under buff/debuff — buffToText(rule.buff ?? rule.debuff)
+// alone silently produced "—" for these, since neither key was ever set.
+// This checks both shapes and combines them if a rule somehow has both.
+function rewardRuleToText(rule) {
+  if (!rule) return '—';
+  const parts = [];
+  if (rule.healMP) parts.push(`+${rule.healMP} MP`);
+  if (rule.healHPpct) parts.push(`+${Math.round(rule.healHPpct * 100)}% max HP healed`);
+  if (rule.stealInitiative) parts.push(`steals up to ${rule.stealInitiative} Initiative`);
+  const nested = buffToText(rule.buff ?? rule.debuff);
+  if (nested !== '—') parts.push(nested);
+  return parts.length ? parts.join(', ') : '—';
+}
+
 function buffToText(buff) {
   if (!buff) return '—';
   const parts = [];
@@ -187,7 +203,7 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   if (Array.isArray(sk.rewardIfTierCross) && sk.rewardIfTierCross.length) {
     const grouped = [];
     sk.rewardIfTierCross.forEach(rule => {
-      const buffStr = buffToText(rule.buff ?? rule.debuff);
+      const buffStr = rewardRuleToText(rule);
       const last = grouped[grouped.length - 1];
       if (last && last.buffStr === buffStr && last.family === rule.family) {
         last.labels.push(tierLabel(rule.family, rule.tier));

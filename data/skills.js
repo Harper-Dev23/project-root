@@ -6820,7 +6820,8 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Swell",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -6831,31 +6832,50 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "cold", "elemental"],
     buildupHint: { cold: 65 },
-    rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
+    // If target is at least Chilled (Cold T1): flat +20% damage and +20
+    // additional Cold buildup — both flat now, replacing the old per-tier/
+    // intensity-scaled formulas. Crossing Frostbitten (Cold T2) steals up to
+    // 5 Initiative from the target (genuine theft, capped by what they
+    // actually have — see stealInitiative in CombatScene.js).
+    rewardIfWeak: [{ family: "cold", tierAtLeast: 1, buff: { damagePct: 20, addBuildup: { cold: 20 } } }],
+    rewardIfTierCross: [{ family: "cold", tier: 2, stealInitiative: 5 }],
     apply: (attacker, target) => {
       const ability = SKILLS?.frost_swell;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: 'cold', isMagic: true, skipGearMultiplier: true,
-      }));
+
       const coldTier = target?.weakness?.tiers?.cold || 0;
-      const meter = target?.weakness?.meters?.cold || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      let coldBuildup = ability?.buildupHint?.cold ?? 65;
-      if (coldTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * coldTier));
-        coldBuildup += Math.max(5, Math.floor(6 * intensity));
-      }
+      const rule = findRewardIfWeakRule(ability, coldTier);
+      const bonusPct = rule?.buff?.damagePct || 0;
+      const bonusBuildup = rule?.buff?.addBuildup?.cold || 0;
+
+      // Whole hit reflavored as Cold/Elemental regardless of the weapon's own
+      // physical/elemental split — a frost spell, not a physical staff swing.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100 + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${bonusPct ? ` + ${bonusPct}% Chilled` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const coldBuildup = (ability?.buildupHint?.cold ?? 65) + bonusBuildup;
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'cold',
         buildup: { cold: coldBuildup },
+        rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "100% cold damage + 65 buildup. If target has cold T1+: +12% damage/tier, more buildup. Crossing cold T1: -10% speed for 1 turn."
+    description: "Deals 100% weapon damage as Cold, +65 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +20 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 5 Initiative from the target."
   },
 
   'galvanic_touch': {
@@ -6863,7 +6883,8 @@ Object.assign(RAW_SKILLS, {
     name: "Galvanic Touch",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 12,
@@ -6877,27 +6898,47 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const ability = SKILLS?.galvanic_touch;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: 'lightning', isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.90);
+
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
-      let lightningBuildup = ability?.buildupHint?.lightning ?? 55;
-      if (lightningTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * lightningTier));
-        lightningBuildup += 10 * lightningTier;
-        // Deterministic extra jolt at 25% of damage
-        amount += Math.max(1, Math.floor(amount * 0.25));
-      }
+      const lightningMeter = target?.weakness?.meters?.lightning || 0;
+
+      // Whole hit reflavored as Lightning/Elemental — a bonus-action spark,
+      // not a physical staff swing.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 80, skillLabel: `${ability?.name || 'Skill'} weapon damage (80%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // +10 Lightning buildup per tier (T1 = +10, T2 = +20 total) — flat,
+      // not intensity-scaled.
+      const lightningBuildup = (ability?.buildupHint?.lightning ?? 55) + 10 * lightningTier;
+
+      // Small chance of an extra hit once at least Zapped (Lightning T1+),
+      // scaling with the target's current meter — same meter-scaled-chance
+      // model Static Prick/Hex Stitch already use, capped modest since this
+      // is only a bonus action. The generic repeatChance mechanic
+      // (CombatScene.js) carries element/isMagic/buildup through correctly,
+      // which is everything this hit has since it's 100% elemental after
+      // the conversion above — nothing gets lost.
+      const repeatChance = lightningTier >= 1 ? Math.min(0.20, lightningMeter / 1000) : 0;
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'lightning',
         buildup: { lightning: lightningBuildup },
+        repeatChance,
       };
     },
-    description: "Bonus action, 90% lightning damage. If target has lightning T1+: +12%/tier, more buildup, +25% extra damage jolt."
+    description: "Bonus action. Deals 80% weapon damage as Lightning, +55 Lightning buildup. If target is at least Zapped (Lightning T1+): +10 additional Lightning buildup per tier (up to +20 at T2), plus a small meter-scaled chance (up to 20%) of an extra hit carrying the same damage and buildup."
   },
 
   'kindling_rite': {
