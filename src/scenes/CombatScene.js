@@ -5460,6 +5460,14 @@ export default class CombatScene extends Phaser.Scene {
   };
   // Indexed by count of currently-active mods (0-3) — pale to deep blue.
   static RUNIC_ZONE_BASE_TINT_BY_COUNT = [0xbbddff, 0x77bbff, 0x3388ff, 0x0055dd];
+  // Short label/summary per mod for the hover tooltip — mirrors each
+  // modifier skill's own description text, kept in sync manually since this
+  // lives in CombatScene.js rather than reading data/skills.js directly.
+  static RUNIC_ZONE_MOD_INFO = {
+    kindlingRite: { label: 'Kindling Rite', desc: '+10% elemental damage dealt, 80 Fire buildup/turn to caster' },
+    wardWeave: { label: 'Ward Weave', desc: '-10% damage taken, drains 3 Initiative/turn (replaces MP regen)' },
+    runeChannel: { label: 'Rune Channel', desc: '25% chance to repeat spells at 60% power, 80 Lightning buildup/turn to caster' },
+  };
 
   _refreshRunicZoneSprite(owner) {
     if (!owner) return;
@@ -5519,6 +5527,37 @@ export default class CombatScene extends Phaser.Scene {
         .setRotation(Math.random() * Math.PI * 2);
       this.tweens.add({ targets: overlay, rotation: overlay.rotation + Math.PI, duration: 6000, yoyo: true, repeat: -1 });
       sprites.push(overlay);
+    });
+
+    // Hover tooltip — same "show CURRENT/live info" convention the quake
+    // ground-effect tooltip uses, re-reading the zone fresh on every hover
+    // rather than capturing a snapshot, so it can't go stale if a mod skill
+    // fires while the tooltip happens to be open. Attached to every sprite
+    // (base + overlays) so hovering anywhere on the zone works, not just
+    // the small dead-center base ring.
+    const showTip = (pointer) => {
+      const liveZone = (owner.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
+      if (!liveZone) { this.tooltip?.hide(); return; }
+      const lines = [`${liveZone.turns ?? '?'} turn${liveZone.turns === 1 ? '' : 's'} left`];
+      if (liveZone.mpPerTurn) lines.push(`+${liveZone.mpPerTurn} MP/turn to ${owner.name || 'owner'}`);
+      const liveActive = Object.entries(liveZone.mods || {}).filter(([, v]) => v).map(([k]) => k);
+      if (liveActive.length) {
+        liveActive.forEach(modKey => {
+          const info = CombatScene.RUNIC_ZONE_MOD_INFO[modKey];
+          lines.push(info ? `${info.label}: ${info.desc}` : modKey);
+        });
+      } else {
+        lines.push('No modifiers active yet.');
+      }
+      this.tooltip?.show(pointer.worldX, pointer.worldY, { title: 'Runic Zone', lines });
+    };
+    const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+    const hideTip = () => this.tooltip?.hide();
+    sprites.forEach(s => {
+      s.setInteractive({ useHandCursor: true });
+      s.on('pointerover', showTip);
+      s.on('pointermove', moveTip);
+      s.on('pointerout', hideTip);
     });
 
     this.runicZoneSprites[ownerKey] = sprites;
