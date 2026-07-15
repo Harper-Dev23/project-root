@@ -3484,6 +3484,18 @@ export default class CombatScene extends Phaser.Scene {
     (this.lodgeSprites[_lodgeKey] || []).forEach(s => s?.destroy());
     this.lodgeSprites[_lodgeKey] = [];
 
+    // Runic Zone dissipates if its owner is knocked out — same "dissipates"
+    // handling movement already gets, just never wired up for death (e.g. a
+    // Rune Channel self-jolt, or the zone's own Fire buildup DOT finishing
+    // the caster off at end of turn). Removing the status effect alone
+    // doesn't clear the ground sprite — _refreshRunicZoneSprite has to be
+    // called explicitly to actually destroy it.
+    if (Array.isArray(unit.statusEffects)) {
+      const zoneIdx = unit.statusEffects.findIndex(se => se?.id === 'runic_zone');
+      if (zoneIdx !== -1) unit.statusEffects.splice(zoneIdx, 1);
+    }
+    this._refreshRunicZoneSprite?.(unit);
+
     if (unit._slot) {
       unit._slot.char = null;
       this._clearPortrait(unit._slot);
@@ -3616,11 +3628,16 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
-    const baseMpCost = DevFlags.isFreeManaEnabled() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
+    // A recast (options.isRepeat — e.g. Rune Channel's spell echo calling
+    // this function again at reduced power) is a free automatic proc, not a
+    // real player action — it never costs MP, so it's not gated on
+    // affording it either (see the matching skip on the actual deduction
+    // further down, and on cooldown-start/action-cost-consumption).
+    const baseMpCost = (DevFlags.isFreeManaEnabled() || options?.isRepeat) ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
     const mpInfo = calculateEffectiveResourceCost(user, baseMpCost, 'mp');
     const mpCost = mpInfo?.cost ?? baseMpCost;
 
-    if (user.currentMP < mpCost) {
+    if (!options?.isRepeat && user.currentMP < mpCost) {
       this._log(`${user.name} lacks the MP to use ${ability.name}.`);
       return;
     }
@@ -3743,13 +3760,41 @@ export default class CombatScene extends Phaser.Scene {
     const attacker = user;
     const isMovement = !!(ability?.isMovement || ability?.targetRequirement === 'position');
 
-    // Rune Channel: caster takes 1 lightning damage on every skill use while zone mod is active
+    // Rune Channel: caster takes 80 lightning buildup + 1 flat lightning damage
+    // on EVERY skill use while the zone mod is active — including a recast
+    // this same zone mod causes (see runeChannel recast block below, which
+    // calls this whole function again), since that's a genuine second cast.
+    // Deliberately does NOT fire for a plain hit-repeat (repeatChance/
+    // _buildRepeatPayload), which never re-enters this function at all —
+    // only a true recast does. Buildup is applied FIRST, so a caster already
+    // sitting on a lot of accumulated Lightning buildup can have THIS cast's
+    // own +80 push them over a jolt-triggering tier, then get jolted by their
+    // own rune channel on the very same action — unmitigated by design, same
+    // as the original flat 1-damage this replaces.
     {
       const rZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
       if (rZone?.mods?.runeChannel) {
-        user.currentHP = Math.max(0, (user.currentHP || 0) - 1);
-        this._showFloatingNumber?.(1, user, false);
-        this._log(`${user?.name ?? 'Mage'} is shocked by the runes for 1 lightning damage.`);
+        this._applyWeaknessBuildup(user, { lightning: 80 }, { user });
+        const { joltTotal } = applyLightningJolt(user);
+        const selfDmg = 1 + joltTotal;
+        user.currentHP = Math.max(0, (user.currentHP || 0) - selfDmg);
+        this._showFloatingNumber?.(selfDmg, user, false);
+        const joltNote = joltTotal > 0 ? ` (jolt adds ${joltTotal}!)` : '';
+        this._log(`${user?.name ?? 'Mage'} is shocked by the runes for ${selfDmg} lightning damage${joltNote}.`);
+
+        // This self-damage could genuinely knock the caster out (a big
+        // self-jolt on top of an already-low HP caster) — it was never
+        // checked at all before, so a caster could sit at 0 HP and still be
+        // considered "alive" (not incapacitated) for the rest of combat.
+        // Same knockout handling every other damage source uses.
+        if (user.currentHP <= 0 && user.status !== 'incapacitated') {
+          user.status = 'incapacitated';
+          this._onUnitKnockedOut(user);
+          if (this.combatEnded) return;
+          // Caster is down — abort the rest of this cast entirely; there's
+          // no one left to deal damage to the target or pay costs/cooldown.
+          return;
+        }
       }
     }
 
@@ -3771,10 +3816,16 @@ export default class CombatScene extends Phaser.Scene {
     // target), so a rider a skill applies this cast naturally can't also
     // fire its own bonus on that same cast — no gating required.
 
-    // Execute ability to get its payload
+    // Execute ability to get its payload. `powerScale` (default 1) lets a
+    // caller re-invoke this whole function for a genuine RECAST (e.g. Rune
+    // Channel's spell echo) at reduced power — a skill opts into supporting
+    // this by reading opts.powerScale itself and scaling its own skillPct/
+    // buildup numbers; skills that don't read it are simply unaffected
+    // (recast at full power) until they're migrated to support it.
+    const powerScale = Number.isFinite(options?.powerScale) ? options.powerScale : 1;
     let result = {};
     try {
-      result = ability.apply(user, target, this) || {};
+      result = ability.apply(user, target, this, { powerScale }) || {};
     } catch (e) {
       console.error(`[Ability Error] ${ability.name}`, e);
       this._log(`⚠ ${ability.name} fizzled.`);
@@ -3879,14 +3930,24 @@ export default class CombatScene extends Phaser.Scene {
       this._logAbilityUseEntry(user, ability, target);
     }
 
-    // Kindling Rite zone mod: +10% elemental (fire/cold/lightning) damage while zone active
-    if ((result?.amount || 0) > 0 && !isMovement) {
+    // Kindling Rite zone mod: +20%/stack elemental (fire/cold/lightning)
+    // damage while zone active (max 3 stacks, +60%). Legacy (non-typed)
+    // fallback ONLY now — typed-pipeline skills get this properly and
+    // precisely (elemental component only, not the whole scalar amount) via
+    // applyTypedDamageModifiers' own step in CombatLogic.js, which also
+    // keeps the typed breakdown correctly in sync with `amount` (this flat
+    // scalar version doesn't, by nature — this was the exact "known
+    // accepted gap" flagged in project_damage_pipeline_reorder memory,
+    // closed for typed skills going forward; still needed here for any
+    // fire/cold/lightning staff skill not yet migrated to typedDamage).
+    if ((result?.amount || 0) > 0 && !isMovement && !ability?.typedDamage) {
       const kindZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
-      if (kindZone?.mods?.kindlingRite) {
+      const kindStacks = kindZone?.mods?.kindlingRiteStacks || 0;
+      if (kindStacks > 0) {
         const abilityTags = ability?.tags || [];
         const isElemental = ['fire', 'cold', 'lightning'].some(t => abilityTags.includes(t));
         if (isElemental) {
-          result.amount = Math.floor(result.amount * 1.10);
+          result.amount = Math.floor(result.amount * (1 + 0.20 * kindStacks));
         }
       }
     }
@@ -4641,14 +4702,19 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
+    // Cooldown-start and action-pool consumption are both skipped for a
+    // recast (options.isRepeat) — it's a free proc off the ORIGINAL cast,
+    // which already started the cooldown and spent the action point once;
+    // re-doing either here would double-charge a cast the player only
+    // actually took once.
     const delayCD = result?.armReaction && result?.consumeOn === 'trigger';
-    if (!delayCD && Number.isFinite(ability.cooldown) && ability.cooldown > 0) {
+    if (!options?.isRepeat && !delayCD && Number.isFinite(ability.cooldown) && ability.cooldown > 0) {
       if (!user.cooldowns) user.cooldowns = {};
       user.cooldowns[ability.id] = Math.max(0, ability.cooldown || 0);
     }
 
     // Spend action pool for any non-reaction skill ("free" costs nothing)
-    if (ability.actionCost && ability.actionCost !== 'free') {
+    if (!options?.isRepeat && ability.actionCost && ability.actionCost !== 'free') {
       const isCounter = intent?.isReaction === true;
       if (!isCounter) {
         const pool = user.actionsLeft || (user.actionsLeft = {});
@@ -4698,12 +4764,16 @@ export default class CombatScene extends Phaser.Scene {
     // ---- Repeat mechanic: scalable for any skill returning result.repeatChance ----
     // Repeats fire _applyDirectResult directly (same damage/buildup, no costs/cooldown).
     // Pass isRepeat: true so the copy cannot itself repeat (no infinite chains).
+    // Optional result.repeatScale (default 1 = full power) lets a skill declare
+    // a reduced-power repeat instead of always repeating at 100% — e.g.
+    // Boulder Toss's Shocked proc repeats at 50% damage.
     if (!missed && !options?.isRepeat && (result?.repeatChance || 0) > 0) {
       if (Math.random() < result.repeatChance) {
         this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
         this.time.delayedCall(380, () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
-          this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, 1), { ability, isRepeat: true });
+          const repeatScale = Number.isFinite(result?.repeatScale) ? result.repeatScale : 1;
+          this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, repeatScale), { ability, isRepeat: true });
 
           // Re-fan-out splash too (e.g. Hex Stitch's same-column curse splash) —
           // without this the repeat only ever re-hit the primary target, silently
@@ -4720,14 +4790,33 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // ---- runeChannel: 25% chance to repeat the spell at 60% damage ----
-    if (!missed && !options?.isRepeat && (ability?.tags || []).includes('spell')) {
+    // ---- runeChannel: 25% chance to RECAST the spell at 60% power ----
+    // A genuine recast — re-invokes the whole ability via
+    // _applyAbilityToTarget (not a flat scaled-damage replay like the
+    // generic repeatChance mechanic uses) so it independently re-derives its
+    // own damage/buildup through the skill's OWN logic, and can trigger that
+    // skill's own repeatChance/rewardIfTierCross/splash exactly like a real
+    // cast would — a skill opts into the power reduction itself by reading
+    // opts.powerScale (see _applyAbilityToTarget's ability.apply call).
+    // isRepeat:true on the recast both skips MP/cooldown/action-cost (see
+    // the gates on those above, and the resource gate at the top of this
+    // function) AND prevents the recast from triggering ANOTHER rune
+    // channel recast — capped at one extra cast per original action, per
+    // design. A plain hit-repeat (repeatChance) never re-enters this
+    // function at all, so it can't trigger this block a second time either —
+    // only a true recast (and the original cast) ever do.
+    // noRecast (Conclave Circle/Ward Weave/Rune Channel itself) — zone-toggle
+    // utility casts with no repeatable damage/buildup value; recasting them
+    // would only waste the caster's own self-punishment for nothing, and for
+    // Rune Channel specifically, it's what stops the ability recasting
+    // ITSELF the moment its own apply() turns the mod on.
+    if (!missed && !options?.isRepeat && !ability?.noRecast && (ability?.tags || []).includes('spell')) {
       const rcZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.runeChannel);
       if (rcZone && Math.random() < 0.25) {
-        this._log(`${user?.name ?? 'Mage'}'s rune channel echoes the spell!`);
+        this._log(`${user?.name ?? 'Mage'}'s rune channel recasts the spell at reduced power!`);
         this.time.delayedCall(480, () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
-          this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, 0.60), { ability, isRepeat: true });
+          this._applyAbilityToTarget(user, target, ability, null, { isRepeat: true, powerScale: 0.60 });
         });
       }
     }
@@ -5019,14 +5108,17 @@ export default class CombatScene extends Phaser.Scene {
         }
 
         if (se.mods?.kindlingRite) {
-          this._applyWeaknessBuildup(char, { fire: 80 }, { user: char });
-          this._log(`${char.name}'s kindling rite pulses — 80 fire buildup.`);
+          const kindStacks = se.mods.kindlingRiteStacks || 1;
+          const fireAmt = 80 * kindStacks;
+          this._applyWeaknessBuildup(char, { fire: fireAmt }, { user: char });
+          this._log(`${char.name}'s kindling rite pulses — ${fireAmt} fire buildup (${kindStacks}/3 stacks).`);
         }
 
-        if (se.mods?.runeChannel) {
-          this._applyWeaknessBuildup(char, { lightning: 80 }, { user: char });
-          this._log(`${char.name}'s rune channel pulses — 80 lightning buildup.`);
-        }
+        // Rune Channel's lightning buildup moved to a PER-CAST trigger
+        // instead of a per-turn passive tick (see the runeChannel block in
+        // _applyAbilityToTarget) — per the user's explicit call, the per-turn
+        // tick is gone entirely; buildup now only happens when the caster
+        // actually casts/recasts a spell.
       }
     }
 
@@ -5663,15 +5755,24 @@ export default class CombatScene extends Phaser.Scene {
     wardWeave: { key: 'fx_runic_zone_addition_2', tint: 0x66ddaa }, // warding green
     runeChannel: { key: 'fx_runic_zone_addition_3', tint: 0xaa77ee }, // arcane purple
   };
+  // Corner offsets for Kindling Rite's stacked overlays (up to 3) — spread to
+  // opposite corners instead of all piling up dead-center once it can stack.
+  static KINDLING_RITE_STACK_OFFSETS = [
+    { ox: -12, oy: -12 }, // top-left
+    { ox: 12, oy: 12 },   // bottom-right — opposite corner from stack 1
+    { ox: 12, oy: -12 },  // top-right
+  ];
   // Indexed by count of currently-active mods (0-3) — pale to deep blue.
   static RUNIC_ZONE_BASE_TINT_BY_COUNT = [0xbbddff, 0x77bbff, 0x3388ff, 0x0055dd];
   // Short label/summary per mod for the hover tooltip — mirrors each
   // modifier skill's own description text, kept in sync manually since this
   // lives in CombatScene.js rather than reading data/skills.js directly.
+  // Kindling Rite's entry here is a fallback only — showTip below renders a
+  // stack-count-aware line for it instead, since its numbers now scale.
   static RUNIC_ZONE_MOD_INFO = {
-    kindlingRite: { label: 'Kindling Rite', desc: '+10% elemental damage dealt, 80 Fire buildup/turn to caster' },
+    kindlingRite: { label: 'Kindling Rite', desc: '+20%/stack elemental damage dealt, 80/stack Fire buildup/turn to caster (max 3 stacks)' },
     wardWeave: { label: 'Ward Weave', desc: '-10% damage taken, drains 3 Initiative/turn (replaces MP regen)' },
-    runeChannel: { label: 'Rune Channel', desc: '25% chance to repeat spells at 60% power, 80 Lightning buildup/turn to caster' },
+    runeChannel: { label: 'Rune Channel', desc: '25% chance to recast spells at 60% power, 80 Lightning buildup + 1 lightning damage on cast/recast' },
   };
 
   _refreshRunicZoneSprite(owner) {
@@ -5697,7 +5798,11 @@ export default class CombatScene extends Phaser.Scene {
 
     // Base ring — scaled down 25% per feedback (was 0.9), rotation slowed
     // way down (was 8s/turn), tint intensity scales with active mod count.
-    const activeMods = Object.entries(zone.mods || {}).filter(([, v]) => v).map(([k]) => k);
+    // Filtered against the KNOWN mod-key list (not raw Object.entries) so a
+    // companion numeric field like kindlingRiteStacks doesn't get counted as
+    // its own "mod" — it's metadata about kindlingRite, not a 4th mod.
+    const MOD_KEYS = Object.keys(CombatScene.RUNIC_ZONE_MOD_TINT);
+    const activeMods = MOD_KEYS.filter(k => zone.mods?.[k]);
     const baseTint = CombatScene.RUNIC_ZONE_BASE_TINT_BY_COUNT[Math.min(3, activeMods.length)];
     const base = this.add.image(cx, cy, 'fx_runic_zone')
       .setScale(0.9 * 0.75)
@@ -5711,18 +5816,34 @@ export default class CombatScene extends Phaser.Scene {
       const cfg = CombatScene.RUNIC_ZONE_MOD_TINT[modKey];
       if (!cfg || !this.textures?.exists(cfg.key)) return;
 
-      // kindlingRite (confirmed working) keeps its original dead-center
-      // placement exactly as-is. The other two get spread around the ring
+      // Kindling Rite now stacks up to 3 — one overlay per stack, spread
+      // across corners (see KINDLING_RITE_STACK_OFFSETS) instead of the old
+      // single dead-center placement, which would just overlap once this
+      // could stack past 1.
+      if (modKey === 'kindlingRite') {
+        const stacks = Math.min(3, Math.max(1, zone.mods.kindlingRiteStacks || 1));
+        for (let s = 0; s < stacks; s++) {
+          const { ox, oy } = CombatScene.KINDLING_RITE_STACK_OFFSETS[s] || CombatScene.KINDLING_RITE_STACK_OFFSETS[0];
+          const overlay = this.add.image(cx + ox, cy + oy, cfg.key)
+            .setScale(0.8)
+            .setAlpha(0.9)
+            .setDepth(1 + (i + 1) * 0.01 + s * 0.001)
+            .setTint(cfg.tint)
+            .setRotation(Math.random() * Math.PI * 2);
+          this.tweens.add({ targets: overlay, rotation: overlay.rotation + Math.PI, duration: 6000, yoyo: true, repeat: -1 });
+          sprites.push(overlay);
+        }
+        return;
+      }
+
+      // wardWeave/runeChannel: single instance, spread around the ring
       // instead of piling up in the same spot. wardWeave gets pushed out
       // further than runeChannel — it was still reading as too tucked
       // behind the portrait at the shared default distance.
-      let ox = 0, oy = 0;
-      if (modKey !== 'kindlingRite') {
-        const angle = (i / Math.max(1, activeMods.length)) * Math.PI * 2;
-        const dist = modKey === 'wardWeave' ? 18 : 10;
-        ox = Math.cos(angle) * dist;
-        oy = Math.sin(angle) * dist;
-      }
+      const angle = (i / Math.max(1, activeMods.length)) * Math.PI * 2;
+      const dist = modKey === 'wardWeave' ? 18 : 10;
+      const ox = Math.cos(angle) * dist;
+      const oy = Math.sin(angle) * dist;
 
       const overlay = this.add.image(cx + ox, cy + oy, cfg.key)
         .setScale(0.8)
@@ -5745,9 +5866,14 @@ export default class CombatScene extends Phaser.Scene {
       if (!liveZone) { this.tooltip?.hide(); return; }
       const lines = [`${liveZone.turns ?? '?'} turn${liveZone.turns === 1 ? '' : 's'} left`];
       if (liveZone.mpPerTurn) lines.push(`+${liveZone.mpPerTurn} MP/turn to ${owner.name || 'owner'}`);
-      const liveActive = Object.entries(liveZone.mods || {}).filter(([, v]) => v).map(([k]) => k);
+      const liveActive = MOD_KEYS.filter(k => liveZone.mods?.[k]);
       if (liveActive.length) {
         liveActive.forEach(modKey => {
+          if (modKey === 'kindlingRite') {
+            const stacks = liveZone.mods.kindlingRiteStacks || 1;
+            lines.push(`Kindling Rite (${stacks}/3 stacks): +${stacks * 20}% elemental damage dealt, ${stacks * 80} Fire buildup/turn to caster`);
+            return;
+          }
           const info = CombatScene.RUNIC_ZONE_MOD_INFO[modKey];
           lines.push(info ? `${info.label}: ${info.desc}` : modKey);
         });

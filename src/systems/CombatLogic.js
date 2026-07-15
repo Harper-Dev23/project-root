@@ -1028,6 +1028,26 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
     try { _pushBreakdown({ label: 'Generic increased damage', mult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
   }
 
+  // 3.5) Kindling Rite's own elemental-only damage buff (Category A, scoped
+  // to elemental only — a "burn hotter" effect, not a generic damage buff).
+  // +20% elemental damage per active stack (max 3 stacks, +60% total),
+  // read directly off the attacker's own runic_zone status effect. This was
+  // declared in the skill's description for a long time but never actually
+  // enforced anywhere — same "declared but unenforced status field" bug
+  // class as the Glacial Strike engine additions. Applies to ANY typed hit
+  // with an elemental component while the mod is active, not just Kindling
+  // Rite's own cast (matches "caster deals +X% elemental damage" framing).
+  const kindlingZone = (attacker?.statusEffects || []).find(
+    se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.kindlingRite
+  );
+  const kindlingStacks = kindlingZone?.mods?.kindlingRiteStacks || 0;
+  if (kindlingStacks > 0 && elemental > 0) {
+    const mult = 1 + (0.20 * kindlingStacks);
+    const prev = elemental;
+    elemental *= mult;
+    try { _pushBreakdown({ label: `Kindling Rite (+${20 * kindlingStacks}% elemental)`, mult, from: Math.round(prev), to: Math.round(elemental) }); } catch { }
+  }
+
   // (No Expose/Flay entry here — see the Category B note above. Its T1/T2 effects
   // are handled elsewhere, not as a flat damage% on the hit.)
 

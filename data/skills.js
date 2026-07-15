@@ -6794,6 +6794,12 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "zone", "mana"],
+    // Zone-toggle utility cast, not a repeatable damage/buildup spell —
+    // Rune Channel's recast mechanic would only ever waste the caster's own
+    // self-punishment for zero benefit (and casting Rune Channel itself
+    // would otherwise become instantly eligible to recast ITSELF the moment
+    // it turns its own mod on). See noRecast check in _applyAbilityToTarget.
+    noRecast: true,
     apply: (attacker, target, scene) => {
       attacker.statusEffects = attacker.statusEffects || [];
       if (getRunicZone(attacker)) {
@@ -6839,14 +6845,24 @@ Object.assign(RAW_SKILLS, {
     // actually have — see stealInitiative in CombatScene.js).
     rewardIfWeak: [{ family: "cold", tierAtLeast: 1, buff: { damagePct: 20, addBuildup: { cold: 20 } } }],
     rewardIfTierCross: [{ family: "cold", tier: 2, stealInitiative: 5 }],
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.frost_swell;
+      // powerScale (default 1) — set by a Rune Channel recast at 0.60. Only
+      // damage and buildup scale; rewardIfTierCross's stealInitiative is a
+      // discrete effect the engine grants separately from amount/buildup, so
+      // it's untouched here and stays full value on a recast, same as a
+      // normal cast — see project_damage_pipeline_reorder memory.
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
 
       const coldTier = target?.weakness?.tiers?.cold || 0;
       const rule = findRewardIfWeakRule(ability, coldTier);
       const bonusPct = rule?.buff?.damagePct || 0;
       const bonusBuildup = rule?.buff?.addBuildup?.cold || 0;
+
+      const basePct = 100 + bonusPct;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
       // Whole hit reflavored as Cold/Elemental regardless of the weapon's own
       // physical/elemental split — a frost spell, not a physical staff swing.
@@ -6855,15 +6871,15 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100 + bonusPct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${bonusPct ? ` + ${bonusPct}% Chilled` : ''})`,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% Chilled` : ''}${powerNote})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const coldBuildup = (ability?.buildupHint?.cold ?? 65) + bonusBuildup;
+      const coldBuildup = Math.floor(((ability?.buildupHint?.cold ?? 65) + bonusBuildup) * powerScale);
 
       return {
         ...roll,
@@ -6946,7 +6962,8 @@ Object.assign(RAW_SKILLS, {
     name: "Kindling Rite",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -6957,30 +6974,63 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire", "elemental", "zone"],
     buildupHint: { fire: 120 },
-    apply: (attacker, target, scene) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Kindling Rite requires an active runic zone." };
       const ability = SKILLS?.kindling_rite;
+      // powerScale (default 1) — set by a Rune Channel recast at 0.60. Damage
+      // and buildup scale; the zone stack (below) does NOT scale — a recast
+      // is still a genuine second cast, so it stacks a second time at full
+      // value, same as the user's explicit spec for Frost Swell's rewards.
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: 'fire', isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.80);
+
+      const basePct = 80;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // Whole hit reflavored as Fire/Elemental — a fire spell, not a physical
+      // staff swing. Step 3.5 in applyTypedDamageModifiers (CombatLogic.js)
+      // reads THIS caster's own runic_zone kindlingRite stacks and adds the
+      // ongoing +20%/stack elemental buff on top, using whatever stack count
+      // was active BEFORE this cast (the stack incremented by THIS cast,
+      // below, only benefits casts/recasts after it — not retroactively).
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Stacks the zone's Kindling Rite mod, capped at 3. A Rune Channel
+      // recast re-runs this whole apply() a second time, so it naturally
+      // stacks TWICE in one action if the recast fires — per explicit
+      // request, not something the engine needs to special-case.
       zone.mods = zone.mods || {};
-      zone.mods.kindlingRite = true;
-      // TODO (CombatScene): each turn caster is in zone — apply 80 fire buildup to caster
-      // TODO (CombatScene): while kindlingRite active, caster deals +10% elemental damage
+      const stacksBefore = zone.mods.kindlingRiteStacks || 0;
+      const stacksAfter = Math.min(3, stacksBefore + 1);
+      zone.mods.kindlingRiteStacks = stacksAfter;
+      zone.mods.kindlingRite = true; // legacy boolean — still read by the "active mod count" tint logic
       scene?._refreshRunicZoneSprite?.(attacker);
+
+      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 120) * powerScale);
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'fire',
-        buildup: { fire: ability?.buildupHint?.fire ?? 120 },
-        log: "The runic zone ignites with flames!",
+        buildup: { fire: fireBuildup },
+        log: `The runic zone ignites with flames! (Kindling Rite ${stacksAfter}/3 stacks)`,
       };
     },
-    description: "Req zone. 80% fire damage + 120 fire buildup. Modifies zone: caster takes 80 fire buildup/turn, caster deals +10% elemental damage."
+    description: "Req zone. Deals 80% weapon damage as Fire, +120 Fire buildup. Modifies zone: stacks up to 3 times. Each stack: caster takes 80 Fire buildup/turn, caster deals +20% elemental damage. At max stacks: 240 Fire buildup/turn, +60% elemental damage."
   },
 
   'cone_of_blight': {
@@ -7038,6 +7088,9 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "defensive", "zone"],
+    // Zone-toggle utility cast, not a repeatable damage/buildup spell — see
+    // conclave_circle's noRecast comment.
+    noRecast: true,
     apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Ward Weave requires an active runic zone." };
@@ -7113,18 +7166,35 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["magic", "spell", "zone"],
+    // Zone-toggle utility cast, not a repeatable damage/buildup spell — and
+    // critically, without this flag Rune Channel could recast ITSELF the
+    // instant it's first cast, since its own apply() (below) turns
+    // mods.runeChannel on before the recast-eligibility check later in
+    // _applyAbilityToTarget ever runs — a same-cast bootstrapping paradox
+    // the user caught in testing. See conclave_circle's noRecast comment.
+    noRecast: true,
     apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Rune Channel requires an active runic zone." };
       zone.mods = zone.mods || {};
       zone.mods.runeChannel = true;
-      // TODO (CombatScene): spells cast while runeChannel active → 25% chance to repeat at 60%
-      // TODO (CombatScene): caster takes 80 lightning buildup per turn
-      // TODO (CombatScene): caster takes 1 lightning damage when they act
+      // Implemented in CombatScene.js's _applyAbilityToTarget:
+      // - spells (tags includes 'spell') have a 25% chance to fully RECAST
+      //   themselves at 60% power (damage/buildup only — rewardIfTierCross
+      //   rewards like Frost Swell's Initiative steal still grant full
+      //   value; MP/cooldown/action cost are untouched, it's a free proc).
+      //   Capped at one recast per original cast — a recast can't itself
+      //   trigger another rune channel recast.
+      // - every cast OR recast, the caster takes 80 lightning buildup then 1
+      //   lightning damage, unmitigated — that 1 damage can itself trigger
+      //   Lightning Jolt on the caster if they're sufficiently
+      //   Zapped/Shocked from their own accumulated buildup.
+      // - a skill's own hit-repeat (repeatChance) does NOT re-trigger any of
+      //   this — only a genuine recast (or the original cast) does.
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Lightning crackles through the runes!" };
     },
-    description: "Req zone. Modifies zone: spells have 25% chance to repeat at 60% power, caster takes 80 lightning buildup/turn and 1 lightning damage on act."
+    description: "Req zone. Modifies zone: spells have a 25% chance to fully recast at 60% power (tier-cross rewards still grant full value). Every cast or recast, the caster takes 80 lightning buildup and 1 lightning damage — which can itself trigger Lightning Jolt if the caster is sufficiently charged."
   },
 
   'ward_focus': {
@@ -12227,19 +12297,13 @@ Object.assign(RAW_SKILLS, {
       const autoHit = coldTier >= 2 ? true : undefined;
 
       // Shocked (Lightning T2): 50% chance to repeat the hit at 50% damage,
-      // capped at one repeat — an extra splash entry targeting the primary
-      // target itself.
-      const splash = [];
-      if (lightningTier >= 2 && Math.random() < 0.5) {
-        const repPhysical = Math.floor(physical * 0.5);
-        const repElemental = Math.floor(elemental * 0.5);
-        const repNecrotic = Math.floor(necrotic * 0.5);
-        splash.push({
-          target, amount: Math.max(1, repPhysical + repElemental + repNecrotic),
-          physical: repPhysical, elemental: repElemental, necrotic: repNecrotic,
-          tags: ability?.tags,
-        });
-      }
+      // capped at one repeat. Uses the same generic repeatChance/repeatScale
+      // mechanism Hex Stitch/Static Prick/Flash Overload use (previously
+      // this rolled its own chance here and manually pushed a same-target
+      // splash entry — which meant it displayed as "(splash)" in the log/
+      // tooltip instead of reading as a genuine repeat like every other
+      // lightning skill's does).
+      const repeatChance = lightningTier >= 2 ? 0.5 : 0;
 
       // All three (Ablaze/Frostbitten/Shocked) can apply together if the
       // target carries all three weaknesses at once. No longer an AOE — this
@@ -12248,7 +12312,8 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         physical, elemental, necrotic, amount,
         autoHit,
-        splash: splash.length ? splash : undefined,
+        repeatChance,
+        repeatScale: 0.5,
       };
     },
     description: "Hurl a boulder at a single enemy for 125% damage, +15% per elemental weakness tier reached, summed across Cold/Lightning/Fire (up to +90% at all 6 tiers). If Ablaze (Fire T2), the hit's physical damage converts to Elemental. If Frostbitten (Cold T2), the hit cannot miss. If Shocked (Lightning T2), 50% chance to repeat the hit at 50% damage (max once)."
