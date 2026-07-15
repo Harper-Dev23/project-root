@@ -10279,12 +10279,20 @@ Object.assign(RAW_SKILLS, {
       const LIFESTEAL_PCT = 0.3;
       let healAmt = hasLacerate ? Math.ceil(amount * LIFESTEAL_PCT) : 0;
 
+      const SPLASH_SCALE = 0.85;
       const splash = resolveAOESplash(scene, target, ability.aoe).map(char => {
-        const splashAmount = Math.max(1, Math.floor(amount * 0.85));
+        const splashPhysical = Math.floor(physical * SPLASH_SCALE);
+        const splashElemental = Math.floor(elemental * SPLASH_SCALE);
+        const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        const splashAmount = Math.max(1, splashPhysical + splashElemental + splashNecrotic);
         if ((char?.weakness?.tiers?.lacerate || 0) >= 1) {
           healAmt += Math.ceil(splashAmount * LIFESTEAL_PCT);
         }
-        return { target: char, amount: splashAmount, tags: ability?.tags };
+        return {
+          target: char, amount: splashAmount,
+          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
+          tags: ability?.tags,
+        };
       });
 
       if (healAmt > 0 && attacker) {
@@ -12176,10 +12184,9 @@ Object.assign(RAW_SKILLS, {
     mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["attack", "aoe", "blunt"],
+    tags: ["attack", "blunt"],
     emitTagsOnUse: ["throw"],
     cooldown: 3,
-    aoe: { shape: "column", scale: 1 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.boulder_toss;
       const roll = calculateDamage(attacker, target, ability);
@@ -12188,9 +12195,11 @@ Object.assign(RAW_SKILLS, {
       const lightningTier = target?.weakness?.tiers?.lightning || 0;
       const fireTier = target?.weakness?.tiers?.fire || 0;
 
-      // 125% base + 15% per elemental tier (highest of cold/lightning/fire)
-      // — combined additively into ONE skillPct.
-      const elemTier = Math.max(coldTier, lightningTier, fireTier);
+      // 125% base + 15% per elemental tier reached, SUMMED across all three
+      // families (up to 2 each, 6 total) rather than just the highest single
+      // family — a target Chilled+Zapped+Ablaze all at once now stacks all
+      // three instead of only counting whichever is highest.
+      const elemTier = coldTier + lightningTier + fireTier;
       const elemPct = 15 * elemTier;
 
       // Ablaze (Fire T2): the hit's physical component converts to Elemental
@@ -12222,34 +12231,19 @@ Object.assign(RAW_SKILLS, {
       // target itself.
       const splash = [];
       if (lightningTier >= 2 && Math.random() < 0.5) {
-        splash.push({ target, amount: Math.max(1, Math.floor(amount * 0.5)), tags: ability?.tags });
+        const repPhysical = Math.floor(physical * 0.5);
+        const repElemental = Math.floor(elemental * 0.5);
+        const repNecrotic = Math.floor(necrotic * 0.5);
+        splash.push({
+          target, amount: Math.max(1, repPhysical + repElemental + repNecrotic),
+          physical: repPhysical, elemental: repElemental, necrotic: repNecrotic,
+          tags: ability?.tags,
+        });
       }
 
       // All three (Ablaze/Frostbitten/Shocked) can apply together if the
-      // target carries all three weaknesses at once.
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          others.slice(0, 2).forEach(char => {
-            let splashAmount = Math.max(1, Math.floor(amount * 0.8));
-            const charElemTier = Math.max(
-              char?.weakness?.tiers?.cold || 0,
-              char?.weakness?.tiers?.lightning || 0,
-              char?.weakness?.tiers?.fire || 0,
-            );
-            if (charElemTier > 0) splashAmount = Math.floor(splashAmount * (1 + 0.15 * charElemTier));
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              tags: ability?.tags,
-            });
-          });
-        }
-      }
+      // target carries all three weaknesses at once. No longer an AOE — this
+      // hits only the primary target (plus its own Shocked repeat above).
       return {
         ...roll,
         physical, elemental, necrotic, amount,
@@ -12257,7 +12251,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Costs both actions. Hurl a boulder for 125% damage to a column, +15% per elemental weakness tier (highest of Cold/Lightning/Fire) on the target. If Ablaze (Fire T2), the hit's physical damage converts to Elemental. If Frostbitten (Cold T2), the hit cannot miss. If Shocked (Lightning T2), 50% chance to repeat the hit at 50% damage (max once). All three can apply together."
+    description: "Hurl a boulder at a single enemy for 125% damage, +15% per elemental weakness tier reached, summed across Cold/Lightning/Fire (up to +90% at all 6 tiers). If Ablaze (Fire T2), the hit's physical damage converts to Elemental. If Frostbitten (Cold T2), the hit cannot miss. If Shocked (Lightning T2), 50% chance to repeat the hit at 50% damage (max once)."
   },
 
   'sacred_shockwave': {
@@ -12343,14 +12337,15 @@ Object.assign(RAW_SKILLS, {
 
       hitAndClear(target);
 
-      // Diamond AOE: fixed slots {2,4,5,7} via aoeResolver. Splash targets
-      // still resolve through the scalar/legacy splash pipeline (amount only
-      // — it has no typed physical/elemental/necrotic mitigation path), same
-      // as every other typed skill's splash array in this file.
+      // Diamond AOE: fixed slots {2,4,5,7} via aoeResolver. Every victim takes
+      // the SAME flat baseline (no per-victim scaling), so the splash entries
+      // carry the identical physical/elemental/necrotic breakdown as the
+      // primary hit — lets _resolveMitigation mitigate each victim's own
+      // PDR/EDR/NDR correctly instead of collapsing to a single isMagic flag.
       const splashChars = resolveAOESplash(scene, target, ability?.aoe);
       const splash = splashChars.map(char => {
         hitAndClear(char);
-        return { target: char, amount, tags: ability?.tags };
+        return { target: char, amount, physical: baseP, elemental: baseE, necrotic: baseN, tags: ability?.tags };
       });
 
       // Heal allies: 1 MP per 50 total Disorient cleared, 1 HP per 50 total

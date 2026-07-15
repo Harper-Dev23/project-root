@@ -781,7 +781,8 @@ export default class CombatScene extends Phaser.Scene {
     mpCost,
     mpInfo,
     isMagic,
-    isSplash
+    isSplash,
+    typeBreakdown
   }) {
     const lines = [];
     const title = `${ability?.name || ability?.id || 'Damage'} Breakdown`;
@@ -791,7 +792,26 @@ export default class CombatScene extends Phaser.Scene {
     lines.push(`Source: ${actorName}`);
     lines.push(`Target: ${targetName}`);
 
-    if (isMagic != null) {
+    // Prefer the precise typed physical/elemental/necrotic mix (from
+    // _resolveMitigation's typed branch) over the old isMagic boolean, which
+    // could only ever say "Magic" or "Physical" and collapsed elemental and
+    // necrotic into the same label. Falls back to isMagic for legacy/scalar
+    // hits that never had a typed breakdown computed.
+    const typeLabel = (() => {
+      if (!typeBreakdown) return null;
+      const { physDmg = 0, elemDmg = 0, necrDmg = 0 } = typeBreakdown;
+      const total = physDmg + elemDmg + necrDmg;
+      if (total <= 0) return null;
+      const parts = [];
+      if (physDmg > 0) parts.push(['Physical', physDmg]);
+      if (elemDmg > 0) parts.push(['Elemental', elemDmg]);
+      if (necrDmg > 0) parts.push(['Necrotic', necrDmg]);
+      if (parts.length === 1) return parts[0][0];
+      return parts.map(([name, amt]) => `${name} ${Math.round(amt / total * 100)}%`).join(' / ');
+    })();
+    if (typeLabel) {
+      lines.push(`Type: ${typeLabel}`);
+    } else if (isMagic != null) {
       lines.push(`Type: ${isMagic ? 'Magic' : 'Physical'}`);
     }
 
@@ -3519,6 +3539,81 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
+  // Shared typed/scalar mitigation resolver — used by BOTH the primary-hit
+  // path below and _applyDirectResult (splash/repeats). Before this, those
+  // two had separately-maintained implementations that had drifted apart:
+  // the primary path had full physical/elemental/necrotic resolution
+  // (physDR/elemDR/necrDR, each with its own min-1 floor), while splash and
+  // repeats only ever had a single isMagic-boolean-gated fraction — meaning
+  // any hit whose composition became a real mix (e.g. an Elseth amulet
+  // converting 30% elemental→necrotic) had that entire mix silently
+  // flattened to "all magic or all physical" the moment it splashed or
+  // repeated. Unifying them here means both paths automatically get typed
+  // resolution whenever a typed breakdown is available, and both fall back
+  // identically when one isn't (legacy/~150 unmigrated skills, unaffected).
+  //
+  // Params:
+  //   raw              — pre-mitigation total (already includes any
+  //                       normalization the caller did)
+  //   physical/elemental/necrotic — optional typed breakdown; if ANY is
+  //                       present, typed resolution is used
+  //   ignoreDR         — bypass mitigation entirely (e.g. a miss already
+  //                       zeroed things, or a skill explicitly says so)
+  //   damageReduction  — dual-purpose, matching each path's pre-existing
+  //                       semantics: in TYPED mode it's a delta ADDED to the
+  //                       freshly-computed physical DR (e.g. Expose T1's
+  //                       pierce); in SCALAR mode with no isMagic given, it's
+  //                       read as the WHOLE fraction directly (legacy skills
+  //                       that pre-compute their own DR via applyDamageModifiers)
+  //   isMagic          — SCALAR mode only, used when damageReduction wasn't
+  //                       supplied (matches _applyDirectResult's original
+  //                       splash/repeat behavior)
+  // Returns { dmg, blocked, dr, physDmg, elemDmg, necrDmg } — the typed
+  // sub-amounts are only meaningful in typed mode, undefined otherwise.
+  _resolveMitigation(target, opts = {}) {
+    const { physical, elemental, necrotic, raw, ignoreDR, damageReduction, isMagic } = opts;
+    const hasTyped = physical != null || elemental != null || necrotic != null;
+
+    if (hasTyped && !ignoreDR) {
+      const rP = physical || 0;
+      const rE = elemental || 0;
+      const rN = necrotic || 0;
+      const typedSum = rP + rE + rN;
+
+      // Re-normalize proportionally if something changed the total after the
+      // typed breakdown was computed (e.g. a skill amp applied to `raw` only).
+      let p = rP, e = rE, n = rN;
+      if (typedSum > 0 && typedSum !== raw) {
+        const scale = raw / typedSum;
+        p = Math.round(rP * scale);
+        e = Math.round(rE * scale);
+        n = raw - p - e; // ensure exact sum
+      }
+
+      const physDRDelta = damageReduction || 0;
+      const physDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'physical', applyExpose: false }) + physDRDelta, -0.95, 0.95);
+      const elemDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }), -0.95, 0.95);
+      const necrDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'necrotic', applyExpose: false }), -0.95, 0.95);
+
+      // Minimum-1 floor per typed component — a small flat bonus (e.g. a
+      // weapon's +1 necrotic affix) shouldn't be fully erased by even 1% resist.
+      const physDmg = p > 0 ? Math.max(1, Math.floor(p * (1 - physDR))) : 0;
+      const elemDmg = e > 0 ? Math.max(1, Math.floor(e * (1 - elemDR))) : 0;
+      const necrDmg = n > 0 ? Math.max(1, Math.floor(n * (1 - necrDR))) : 0;
+      const dmg = physDmg + elemDmg + necrDmg;
+      const blocked = raw - dmg;
+      const dr = raw > 0 ? Math.max(0, 1 - (dmg / raw)) : 0;
+      return { dmg, blocked, dr, physDmg, elemDmg, necrDmg };
+    }
+
+    const dr = ignoreDR ? 0 : (damageReduction != null
+      ? Phaser.Math.Clamp(damageReduction, -0.95, 0.95)
+      : Phaser.Math.Clamp(getDamageReductionFraction(target, { isMagic: !!isMagic, applyExpose: false }), -0.95, 0.95));
+    const dmg = Math.max(0, Math.floor(raw * (1 - dr)));
+    const blocked = raw - dmg;
+    return { dmg, blocked, dr };
+  }
+
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
     // ===== Resource gate =====
     const baseMpCost = DevFlags.isFreeManaEnabled() ? 0 : (Number.isFinite(ability?.mpCost) ? ability.mpCost : 0);
@@ -3718,6 +3813,51 @@ export default class CombatScene extends Phaser.Scene {
       result.elemental = converted.elemental;
       result.necrotic = converted.necrotic;
       result.amount = converted.amount;
+    }
+
+    // Same gear conversion + gear% for every splash entry that carries its
+    // own typed breakdown — previously only the primary hit ever got this,
+    // so a splash victim never reflected the attacker's Elseth conversion
+    // amulets or elemental/necrotic gear% at all (their "type" line only
+    // ever showed the skill's own pre-gear composition). Uses the SAME
+    // attacker gear as the primary hit — gear conversion depends on the
+    // attacker, not the target. `silent:true` — without it, each splash
+    // instance's conversion/gear-damage steps push onto the SAME shared
+    // breakdown log the PRIMARY hit's tooltip reads from afterward, so a
+    // 3-target AOE made the primary's own tooltip show the "phys→ele (gear)"
+    // line duplicated 3 times. The primary already logged its own copy of
+    // this step a few lines above; splash's own tooltip never reads
+    // formulaParts at all (see _buildDamageTooltipData call in
+    // _applyDirectResult — formulaParts is hardcoded to []), so there's
+    // nothing legitimate for these pushes to feed either way.
+    if (ability?.typedDamage && Array.isArray(result?.splash)) {
+      for (const sp of result.splash) {
+        if (!sp || (sp.physical == null && sp.elemental == null && sp.necrotic == null)) continue;
+        const spConverted = applyGearConversionAndPercent(
+          { physical: sp.physical || 0, elemental: sp.elemental || 0, necrotic: sp.necrotic || 0 },
+          user, { silent: true }
+        );
+        sp.physical = spConverted.physical;
+        sp.elemental = spConverted.elemental;
+        sp.necrotic = spConverted.necrotic;
+        sp.amount = spConverted.amount;
+      }
+    }
+
+    // Snapshot the CORE hit composition here — post-gear-conversion, but
+    // BEFORE any Tier-3 rider (Jolt) is folded in. This is "the hit itself"
+    // as the player would describe it; a rider is a separate thing that
+    // TRIGGERS off the hit, not part of its own composition. Repeats/echoes
+    // (the generic repeatChance mechanic, runeChannel's echo) use this
+    // snapshot instead of the post-Jolt result, and independently re-roll
+    // their own Jolt — otherwise a repeat would silently inherit the
+    // primary's exact Jolt roll instead of getting its own.
+    if (ability?.typedDamage && result && !result.isHeal) {
+      result._coreBreakdown = {
+        physical: result.physical || 0,
+        elemental: result.elemental || 0,
+        necrotic: result.necrotic || 0,
+      };
     }
 
     // Lightning Jolt — Tier-3 rider, added dead last: AFTER gear conversion/
@@ -3982,52 +4122,19 @@ export default class CombatScene extends Phaser.Scene {
         const raw = Math.max(0, (amount | 0));
         const ignoreDR = !!result?.ignoreDR;
 
-        // Typed path: physical/elemental/necrotic each use their own resist stat.
-        // Re-normalize splits to the final `raw` (which may include skill amps like Flay/Curse
-        // applied in skills.js after calculateDamage was called).
-        const _hasTyped = result.physical != null || result.elemental != null || result.necrotic != null;
-        let dr, dmg, blocked;
-
-        if (_hasTyped && !ignoreDR) {
-          const rP = result.physical || 0;
-          const rE = result.elemental || 0;
-          const rN = result.necrotic || 0;
-          const typedSum = rP + rE + rN;
-
-          // Re-normalize proportionally if skill amps changed the total
-          let p = rP, e = rE, n = rN;
-          if (typedSum > 0 && typedSum !== raw) {
-            const scale = raw / typedSum;
-            p = Math.round(rP * scale);
-            e = Math.round(rE * scale);
-            n = raw - p - e; // ensure exact sum
-          }
-
-          // Expose T1 stores a physical DR delta in result.damageReduction (starts at 0 for typed path)
-          const physDRDelta = result.damageReduction || 0;
-          const physDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'physical', applyExpose: false }) + physDRDelta, -0.95, 0.95);
-          const elemDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }), -0.95, 0.95);
-          const necrDR = Phaser.Math.Clamp(getDamageReductionFraction(target, { damageType: 'necrotic', applyExpose: false }), -0.95, 0.95);
-
-          // Minimum-1 floor per typed component: if there was ANY damage of
-          // this type before mitigation, at least 1 gets through regardless
-          // of resist — otherwise a small flat bonus (e.g. a weapon's +1
-          // necrotic affix) gets fully erased by even 1% resist, since
-          // floor(1 * 0.99) = 0. Only applies when the pre-mitigation value
-          // was actually positive; a type with 0 damage stays 0.
-          const physDmg = p > 0 ? Math.max(1, Math.floor(p * (1 - physDR))) : 0;
-          const elemDmg = e > 0 ? Math.max(1, Math.floor(e * (1 - elemDR))) : 0;
-          const necrDmg = n > 0 ? Math.max(1, Math.floor(n * (1 - necrDR))) : 0;
-          dmg = physDmg + elemDmg + necrDmg;
-          blocked = raw - dmg;
-          // Effective combined DR for tooltip display
-          dr = raw > 0 ? Math.max(0, 1 - (dmg / raw)) : 0;
-        } else {
-          // Legacy path: single isMagic DR (used by abilities not returning typed splits)
-          dr = ignoreDR ? 0 : Phaser.Math.Clamp(result?.damageReduction || 0, -0.95, 0.95);
-          dmg = Math.max(0, Math.floor(raw * (1 - dr)));
-          blocked = raw - dmg;
-        }
+        // See _resolveMitigation for the full rationale — this used to be a
+        // separate inline implementation here, now shared with
+        // _applyDirectResult (splash/repeats) so the two can't drift apart.
+        // damageReduction is coerced to 0 (not left undefined) to preserve
+        // this path's exact original behavior: scalar mode here has never
+        // fallen back to an isMagic-based computation, unlike
+        // _applyDirectResult's own scalar mode, which does.
+        const { dmg: dmg0, blocked: blocked0, dr: dr0, physDmg, elemDmg, necrDmg } = this._resolveMitigation(target, {
+          physical: result.physical, elemental: result.elemental, necrotic: result.necrotic,
+          raw, ignoreDR, damageReduction: result?.damageReduction || 0,
+        });
+        let dr = dr0, dmg = dmg0, blocked = blocked0;
+        const typeBreakdown = (physDmg != null) ? { physDmg, elemDmg, necrDmg } : null;
 
         // devSuperSaiyan: 10× damage multiplier for player units only
         if (DevFlags.isSuperSaiyanEnabled() && user && !user.isEnemy) dmg *= 10;
@@ -4284,7 +4391,8 @@ export default class CombatScene extends Phaser.Scene {
             mpCost,
             mpInfo,
             isMagic,
-            isSplash: options?.isSplash
+            isSplash: options?.isSplash,
+            typeBreakdown
           });
 
           const damageSegments = [
@@ -4325,6 +4433,21 @@ export default class CombatScene extends Phaser.Scene {
       if (!missed && Array.isArray(result?.splash) && result.splash.length) {
         for (const sp of result.splash) {
           if (!sp?.target) continue;
+          // Independent Lightning Jolt roll per splash victim — Jolt is purely
+          // a function of the TARGET's own weakness state, so each AOE splash
+          // target needs its own fresh roll instead of only ever firing for
+          // the primary target (the primary hit's Jolt is added earlier in
+          // this function and never touches splash payloads at all). Gated
+          // on the splash entry actually carrying a typed breakdown (real
+          // damage) — buildup-only splash (Hex Stitch's curse spread, etc.)
+          // has no physical/elemental/necrotic fields and is left alone.
+          if (ability?.typedDamage && (sp.physical != null || sp.elemental != null || sp.necrotic != null)) {
+            const { joltTotal } = applyLightningJolt(sp.target);
+            if (joltTotal > 0) {
+              sp.elemental = (sp.elemental || 0) + joltTotal;
+              sp.amount = (sp.amount || 0) + joltTotal;
+            }
+          }
           const spPrevTiers = Array.isArray(sp.rewardIfTierCross) ? { ...(sp.target?.weakness?.tiers || {}) } : null;
           this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability });
           if (spPrevTiers) this._applySplashTierCrossRewards(user, sp.target, sp.rewardIfTierCross, ability, spPrevTiers);
@@ -4580,12 +4703,7 @@ export default class CombatScene extends Phaser.Scene {
         this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
         this.time.delayedCall(380, () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
-          this._applyDirectResult(user, target, {
-            amount: result.amount || 0,
-            buildup: result.buildup ? { ...result.buildup } : undefined,
-            element: result.element,
-            isMagic: result.isMagic,
-          }, { ability, isRepeat: true });
+          this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, 1), { ability, isRepeat: true });
 
           // Re-fan-out splash too (e.g. Hex Stitch's same-column curse splash) —
           // without this the repeat only ever re-hit the primary target, silently
@@ -4609,12 +4727,7 @@ export default class CombatScene extends Phaser.Scene {
         this._log(`${user?.name ?? 'Mage'}'s rune channel echoes the spell!`);
         this.time.delayedCall(480, () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
-          this._applyDirectResult(user, target, {
-            amount: Math.floor((result.amount || 0) * 0.60),
-            buildup: result.buildup ? { ...result.buildup } : undefined,
-            element: result.element,
-            isMagic: result.isMagic,
-          }, { ability, isRepeat: true });
+          this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, 0.60), { ability, isRepeat: true });
         });
       }
     }
@@ -4627,6 +4740,39 @@ export default class CombatScene extends Phaser.Scene {
     if (!this._currentChar?.()?.isEnemy) this._buildActionMenuRoot?.();
   }
 
+
+  // Builds a repeat/echo's own payload from the CORE hit breakdown
+  // (post-gear-conversion, pre-Tier-3-rider) snapshotted as
+  // result._coreBreakdown in _applyAbilityToTarget, scaled by `scale` (1.0
+  // for the generic repeatChance mechanic, 0.60 for runeChannel's echo).
+  // Independently re-rolls Tier-3 riders (Jolt) for THIS instance instead of
+  // reusing whatever the primary hit rolled — a repeat should trigger its
+  // own riders with their own fresh roll, not inherit the first hit's exact
+  // number. Falls back to the old flat-amount behavior for legacy (non-
+  // typed) skills, which never populate _coreBreakdown.
+  _buildRepeatPayload(result, target, scale = 1) {
+    const core = result?._coreBreakdown;
+    if (core) {
+      const physical = Math.floor(core.physical * scale);
+      let elemental = Math.floor(core.elemental * scale);
+      const necrotic = Math.floor(core.necrotic * scale);
+      const { joltTotal } = applyLightningJolt(target);
+      if (joltTotal > 0) elemental += joltTotal;
+      return {
+        amount: physical + elemental + necrotic,
+        physical, elemental, necrotic,
+        buildup: result.buildup ? { ...result.buildup } : undefined,
+        element: result.element,
+        isMagic: result.isMagic,
+      };
+    }
+    return {
+      amount: Math.floor((result?.amount || 0) * scale),
+      buildup: result?.buildup ? { ...result.buildup } : undefined,
+      element: result?.element,
+      isMagic: result?.isMagic,
+    };
+  }
 
   _applyDirectResult(user, target, payload, opts = {}) {
     if (!target || !payload) return;
@@ -4659,14 +4805,22 @@ export default class CombatScene extends Phaser.Scene {
     // payload.amount (e.g. Bedrock Guard negating the splash entirely).
     const rawAmt = payload.amount | 0;
 
-    // Apply DR to all non-heal hits (splash, repeats, volley copies all respect armor/resist)
+    // Apply DR to all non-heal hits (splash, repeats, volley copies all respect armor/resist).
+    // Uses the SAME shared resolver the primary-hit path does — if payload
+    // carries a physical/elemental/necrotic breakdown (a typed-pipeline
+    // skill's repeat/splash populating it), this now properly mitigates
+    // each component separately instead of collapsing everything to a
+    // single isMagic-gated fraction. Falls back to the original isMagic
+    // behavior when no breakdown is given (legacy skills, unaffected).
     let amt = rawAmt;
+    let directTypeBreakdown = null;
     if (!isHeal && amt > 0) {
-      const dr = Phaser.Math.Clamp(
-        getDamageReductionFraction(target, { isMagic: !!payload.isMagic, applyExpose: false }),
-        -0.95, 0.95
-      );
-      amt = Math.max(0, Math.floor(amt * (1 - dr)));
+      const { dmg, physDmg, elemDmg, necrDmg } = this._resolveMitigation(target, {
+        physical: payload.physical, elemental: payload.elemental, necrotic: payload.necrotic,
+        raw: rawAmt, ignoreDR: !!payload.ignoreDR, isMagic: !!payload.isMagic,
+      });
+      amt = dmg;
+      if (physDmg != null) directTypeBreakdown = { physDmg, elemDmg, necrDmg };
 
       // Guard status effects apply on direct hits only (not splash/aoe — guards are triggered
       // reactions and shouldn't fire multiple times per action or on background aoe)
@@ -4723,7 +4877,8 @@ export default class CombatScene extends Phaser.Scene {
           mpCost: null,
           mpInfo: null,
           isMagic,
-          isSplash: opts?.isSplash
+          isSplash: opts?.isSplash,
+          typeBreakdown: directTypeBreakdown
         });
 
         const damageSegments = [
@@ -6249,7 +6404,17 @@ export default class CombatScene extends Phaser.Scene {
   // up elsewhere. Centralizing here means all three get the hover affordance
   // for free and can't drift out of sync with each other.
   _wireSlotInfoClick(slot, char) {
-    slot.on('pointerdown', () => this._showCharacterInfo(char));
+    slot.on('pointerdown', () => {
+      // Clicking the ALREADY-selected character again deselects — same
+      // effect as the ✕ button — instead of just re-rendering the same panel.
+      if (this._inspectedChar === char && this.characterInfoPanel?.visible) {
+        this.characterInfoPanel.setVisible(false);
+        this._inspectedChar = null;
+        this._clearSlotHighlights?.();
+        return;
+      }
+      this._showCharacterInfo(char);
+    });
     slot.on('pointerover', () => {
       if (!slot.char) return; // empty slots already always show their border
       if (slot === this._currentChar()?._slot) return; // don't clobber the active-turn highlight
@@ -6605,7 +6770,9 @@ export default class CombatScene extends Phaser.Scene {
 
   _highlightCurrentTurn() {
     this._clearSlotHighlights(); // ✅ Update green slot border
-    this.characterInfoPanel?.setVisible(false);
+    // Info panel deliberately stays open across turn transitions now — only
+    // the X button or selecting a different character closes it (previously
+    // this force-hid it every single turn, even the player's own).
 
     const currentChar = this._currentChar();
 
@@ -6993,6 +7160,12 @@ export default class CombatScene extends Phaser.Scene {
             this._log(`${char.name}'s ${pretty} fades.`);
             if (st.id === 'lodged') lodgeCountChanged = true;
             char.statusEffects.splice(i, 1);
+            // Natural turn-countdown expiry — the ONLY other place runic_zone
+            // gets removed is _moveUnitToSlot's movement dissipation, which
+            // explicitly refreshes the sprite; this generic path never did,
+            // so a zone that simply ran out of turns left an orphaned ground
+            // sprite on screen indefinitely instead of disappearing.
+            if (st.id === 'runic_zone') this._refreshRunicZoneSprite?.(char);
           }
         }
       }

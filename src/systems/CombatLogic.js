@@ -64,31 +64,28 @@ function getAttackerDamageMultiplier(attacker, opts = {}) {
   const ge = attacker?.gearEffects;
   if (!ge) return 1;
 
-  let mult = 1;
-  if (ge.globalDamagePercent) {
-    mult *= 1 + (ge.globalDamagePercent / 100);
-  }
-
-  const element = opts.element;
-  if (element && ['fire', 'cold', 'lightning'].includes(element)) {
-    if (ge.elementalDamagePercent) {
-      mult *= 1 + (ge.elementalDamagePercent / 100);
-    }
-  }
-
-  if (element === 'necrotic' && ge.necroticDamagePercent) {
-    mult *= 1 + (ge.necroticDamagePercent / 100);
-  }
-
+  // global/hidden% and the type-scoped elemental/necrotic% are all the same
+  // category of bonus (Category A — see feedback_additive_damage_bonuses),
+  // so they combine ADDITIVELY into one percentage before being turned into
+  // a single multiplier. Chaining them as sequential `mult *= ...` steps
+  // (the old behavior) compounds them instead — e.g. 11% global + 5%
+  // elemental became a genuine ×1.1655 instead of the intended +16%.
+  let pct = ge.globalDamagePercent || 0;
   // Balance-only dial (e.g. a boss's un-tuned overall damage trim) — applies
   // the same way globalDamagePercent does, but deliberately kept OUT of the
   // character sheet's PD/ED/ND display, which only reads globalDamagePercent.
   // Not a player-facing buff/debuff, just a dev lever.
-  if (ge.hiddenDamagePercent) {
-    mult *= 1 + (ge.hiddenDamagePercent / 100);
+  pct += ge.hiddenDamagePercent || 0;
+
+  const element = opts.element;
+  if (element && ['fire', 'cold', 'lightning'].includes(element)) {
+    pct += ge.elementalDamagePercent || 0;
+  }
+  if (element === 'necrotic') {
+    pct += ge.necroticDamagePercent || 0;
   }
 
-  return mult;
+  return 1 + pct / 100;
 }
 
 // Proficiency — a %damage multiplier off the attacker's single highest core
@@ -913,22 +910,22 @@ export function applyDamagePctBonus(amount, dmgPct, label) {
 // conversion (opts.skillConversion below) and gear's conversion
 // (applyGearConversionAndPercent) so the two can never drift apart. `conv`
 // shape: { physToElemPct, physToNecroPct, elemToNecroPct } (any subset).
-function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = '') {
+function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = '', opts = {}) {
   if (!conv) return { physical, elemental, necrotic };
   if (conv.physToElemPct) {
     const c = Math.floor(physical * conv.physToElemPct / 100);
     physical -= c; elemental += c;
-    try { if (c > 0) _pushBreakdown({ label: `phys→ele${labelSuffix}`, convert: c }); } catch { }
+    if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `phys→ele${labelSuffix}`, convert: c }); } catch { } }
   }
   if (conv.physToNecroPct) {
     const c = Math.floor(physical * conv.physToNecroPct / 100);
     physical -= c; necrotic += c;
-    try { if (c > 0) _pushBreakdown({ label: `phys→necro${labelSuffix}`, convert: c }); } catch { }
+    if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `phys→necro${labelSuffix}`, convert: c }); } catch { } }
   }
   if (conv.elemToNecroPct) {
     const c = Math.floor(elemental * conv.elemToNecroPct / 100);
     elemental -= c; necrotic += c;
-    try { if (c > 0) _pushBreakdown({ label: `elem→necro${labelSuffix}`, convert: c }); } catch { }
+    if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `elem→necro${labelSuffix}`, convert: c }); } catch { } }
   }
   return { physical, elemental, necrotic };
 }
@@ -1087,46 +1084,68 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
 // Legacy (non-typed) skills don't call this — they keep the original early
 // application inside calculateDamage()/applyDamageModifiers unchanged.
 // --------------------------------------------------
-export function applyGearConversionAndPercent(breakdown, attacker) {
+export function applyGearConversionAndPercent(breakdown, attacker, opts = {}) {
   let physical = breakdown?.physical | 0;
   let elemental = breakdown?.elemental | 0;
   let necrotic = breakdown?.necrotic | 0;
   const ge = attacker?.gearEffects || {};
+  const silent = !!opts.silent;
 
   const converted = convertDamageType(physical, elemental, necrotic, {
     physToElemPct: ge.physToElemPercent,
     physToNecroPct: ge.physToNecroPercent,
     elemToNecroPct: ge.elemToNecroPercent,
-  }, ' (gear)');
+  }, ' (gear)', { silent });
   physical = converted.physical;
   elemental = converted.elemental;
   necrotic = converted.necrotic;
 
-  // Gear damage% — global (+hidden) multiplies everything uniformly, same
-  // compounding relationship as before (mult *= each in turn, not summed).
-  // Elemental/necrotic-specific% now apply to the FINAL bucket regardless of
-  // source (weapon's own roll, a skill's conversion, or gear's own
-  // conversion above) — previously elementalDamagePercent only ever touched
-  // the weapon's originally-rolled elemental flat.
-  let globalMult = 1;
-  if (ge.globalDamagePercent) globalMult *= 1 + ge.globalDamagePercent / 100;
-  if (ge.hiddenDamagePercent) globalMult *= 1 + ge.hiddenDamagePercent / 100;
-  if (globalMult !== 1) {
-    const prev = physical + elemental + necrotic;
-    physical *= globalMult; elemental *= globalMult; necrotic *= globalMult;
-    try { _pushBreakdown({ label: 'gear damage', mult: globalMult, from: Math.round(prev), to: Math.round(physical + elemental + necrotic) }); } catch { }
+  // Gear damage% — global (+hidden) applies to every type; elemental%/
+  // necrotic% are the SAME category of bonus (Category A), just scoped to
+  // one type, so they combine ADDITIVELY into one multiplier per component
+  // instead of being chained as sequential multiplies (which compounds them
+  // — e.g. 11% global + 5% elemental becoming a genuine ×1.1655 instead of
+  // the intended +16% elemental). See feedback_additive_damage_bonuses.
+  const globalPct = (ge.globalDamagePercent || 0) + (ge.hiddenDamagePercent || 0);
+  const physPct = globalPct;
+  const elemPct = globalPct + (ge.elementalDamagePercent || 0);
+  const necroPct = globalPct + (ge.necroticDamagePercent || 0);
+
+  // Pushed as ONE combined breakdown entry instead of one per typed bucket —
+  // a hit split across e.g. physical+necrotic with only a flat global% (no
+  // type-specific gear%) used to log "×1.11 gear damage" TWICE, identically,
+  // which read like the bonus was being counted twice even though each line
+  // was correctly scoped to its own bucket. Now shows one line, e.g.
+  // "gear damage (P +11% / N +11%)" — or with genuinely different per-type
+  // rates, "gear damage (P +11% / E +16%)".
+  const gearParts = [];
+  let gearPrevTotal = 0, gearNewTotal = 0;
+  if (physPct && physical > 0) {
+    gearPrevTotal += physical;
+    physical *= 1 + physPct / 100;
+    gearNewTotal += physical;
+    gearParts.push(`P +${physPct}%`);
   }
-  if (ge.elementalDamagePercent && elemental > 0) {
-    const mult = 1 + ge.elementalDamagePercent / 100;
-    const prev = elemental;
-    elemental *= mult;
-    try { _pushBreakdown({ label: 'gear elemental damage', mult, from: Math.round(prev), to: Math.round(elemental) }); } catch { }
+  if (elemPct && elemental > 0) {
+    gearPrevTotal += elemental;
+    elemental *= 1 + elemPct / 100;
+    gearNewTotal += elemental;
+    gearParts.push(`E +${elemPct}%`);
   }
-  if (ge.necroticDamagePercent && necrotic > 0) {
-    const mult = 1 + ge.necroticDamagePercent / 100;
-    const prev = necrotic;
-    necrotic *= mult;
-    try { _pushBreakdown({ label: 'gear necrotic damage', mult, from: Math.round(prev), to: Math.round(necrotic) }); } catch { }
+  if (necroPct && necrotic > 0) {
+    gearPrevTotal += necrotic;
+    necrotic *= 1 + necroPct / 100;
+    gearNewTotal += necrotic;
+    gearParts.push(`N +${necroPct}%`);
+  }
+  if (gearParts.length && !silent) {
+    const label = gearParts.length > 1 ? `gear damage (${gearParts.join(' / ')})` : 'gear damage';
+    try {
+      _pushBreakdown({
+        label, mult: gearPrevTotal > 0 ? gearNewTotal / gearPrevTotal : 1,
+        from: Math.round(gearPrevTotal), to: Math.round(gearNewTotal),
+      });
+    } catch { }
   }
 
   physical = Math.max(0, Math.floor(physical));
