@@ -26,6 +26,7 @@ import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
 import ReactionSystem, { isReactableAttackSource } from '../systems/ReactionSystem.js';
+import { resolveAOESplash } from '../systems/aoeResolver.js';
 
 // Status / Weakness framework
 import {
@@ -3801,13 +3802,16 @@ export default class CombatScene extends Phaser.Scene {
     // Snapshot weakness tiers BEFORE any new buildup
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
 
-    // Snapshot pressure_point_ignition presence BEFORE this ability runs — if this
-    // very hit is the one that applies it (e.g. Pressure Point itself crossing
-    // Flayed), it must NOT also be the hit that consumes it. Without this, the
-    // ignition status gets pushed and immediately eaten by the same strike that
-    // created it, instead of carrying over to a later hit as intended.
-    const hadPressurePointIgnitionBefore = (target?.statusEffects || []).some(
-      se => se?.id === 'pressure_point_ignition'
+    // Snapshot every target-side "reacts when hit" rider (onNextDamageTaken/
+    // onHitBy/nextHitBuildup — see _processTargetHitRiders) BEFORE this
+    // ability runs. If THIS very hit is the one that applies a rider (e.g.
+    // Pressure Point itself crossing Flayed, or Toxic Bloom applying its own
+    // aura), it must NOT also be the hit that triggers/consumes it — only
+    // riders that existed before this cast are eligible. By object
+    // reference, not id, so a skill that reapplies the same-id rider this
+    // same cast is still correctly excluded.
+    const preHitRiderRefs = new Set(
+      (target?.statusEffects || []).filter(se => se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup)
     );
 
     // Curse riders no longer need a "before hit" snapshot: their Tier-1 bonus
@@ -4219,32 +4223,22 @@ export default class CombatScene extends Phaser.Scene {
         // after everything (including the target's resistance) had already
         // resolved. See applyCurseWeaponRiders in CombatLogic.js.
 
-        // Pressure Point Ignition: bonus fire damage on next hit, then consumed.
-        // Gated on hadPressurePointIgnitionBefore so the hit that APPLIES this
-        // status (crossing Flayed) can't also be the hit that CONSUMES it.
-        // Computed off `raw` (the pre-mitigation hit) rather than the already-
-        // mitigated `dmg`, then run through the SAME ElementalResist DR helper
-        // Needle Venom's typed path uses — this is genuinely fire damage, so it
-        // gets reduced/increased by the target's elemental resistance (and any
-        // other elemental-type modifier that helper accounts for) like any other
-        // fire damage would, instead of being a flat unresisted bonus.
-        if (raw > 0 && hadPressurePointIgnitionBefore) {
-          const ignIdx = (target?.statusEffects || []).findIndex(
-            se => se?.id === 'pressure_point_ignition'
-          );
-          if (ignIdx !== -1) {
-            const ign = target.statusEffects[ignIdx].onNextDamageTaken || {};
-            const fireBonusRaw = Math.floor(raw * (ign.bonusDamagePercent ?? 30) / 100);
-            const elemDR = ignoreDR ? 0 : Phaser.Math.Clamp(
-              getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }),
-              -0.95, 0.95
-            );
-            const fireBonus = Math.max(0, Math.floor(fireBonusRaw * (1 - elemDR)));
-            dmg += fireBonus;
-            target.statusEffects.splice(ignIdx, 1);
-            if ((ign.buildup?.fire ?? 0) > 0) this._applyWeaknessBuildup(target, { fire: ign.buildup.fire }, { user });
-            this._log(`Pressure Point ignites — +${fireBonus} fire damage!`);
-          }
+        // Target-side "reacts when hit" riders (onNextDamageTaken/onHitBy/
+        // nextHitBuildup) — consolidated into _processTargetHitRiders so
+        // this works identically for splash/repeat hits too (previously
+        // Pressure Point Ignition, Toxic Bloom's heal aura, and Bedrock
+        // Guard's retaliation each only ever fired here, never on AOE
+        // splash or repeats — see that function's header comment). Only
+        // bonusDamage needs folding into `dmg` here — onHitBy's heal-
+        // attacker/buildup and nextHitBuildup's attacker-buildup are
+        // applied as side effects inside the function itself. Positioned
+        // here (not after HP subtraction) so crit-bleed below correctly
+        // reflects any onNextDamageTaken bonus as part of the final hit.
+        if (raw > 0) {
+          const { bonusDamage } = this._processTargetHitRiders(target, user, {
+            rawDamage: raw, ignoreDR, preHitRiderRefs,
+          });
+          dmg += bonusDamage;
         }
 
         // Attacker-side onHit procs (e.g. Blazing Fervor's fire rider): these
@@ -4330,29 +4324,12 @@ export default class CombatScene extends Phaser.Scene {
             this._showFloatingNumber?.(healed, user, true);
           }
 
-          // onMeleeHitBy: heal the attacker when a melee hit lands on a target with this debuff
-          if (dmg > 0) {
-            const hitTags = intent?.tags || result?.tags || [];
-            const isMeleeHit = Array.isArray(hitTags) && hitTags.includes('melee');
-            if (isMeleeHit) {
-              for (const se of (target?.statusEffects || [])) {
-                const healAmt = se?.onMeleeHitBy?.healAttacker || 0;
-                if (healAmt > 0 && user?.currentHP != null && user?.maxHP != null) {
-                  user.currentHP = Math.min(user.maxHP, user.currentHP + healAmt);
-                  this._showFloatingNumber?.(healAmt, user, true);
-                  this._log(`${user?.name ?? 'Attacker'} is healed for ${healAmt} HP by ${target?.name ?? 'target'}'s toxic bloom aura.`);
-                }
-              }
-            }
-          }
-
-          // Next-hit one-shot effects (e.g. bedrock_guard cold retaliation on attacker)
-          if (dmg > 0) this._processNextHitStatusEffects(target, user);
-          // (attacker onHit procs — e.g. Blazing Fervor's fire rider — now
-          // handled earlier, added directly into dmg alongside Curse of
-          // Needles/Pressure Point Ignition; see that block above. This used
-          // to be a separate _processOnHitProcs() call here, firing as its
-          // own independent HP subtraction after dmg was already applied.)
+          // (onMeleeHitBy/onHitBy heal-attacker/buildup and nextHitBuildup
+          // attacker-retaliation are now handled generically, earlier, by
+          // the single _processTargetHitRiders call above — see that
+          // function's header comment. attacker onHit procs, e.g. Blazing
+          // Fervor's fire rider, are handled earlier still, added directly
+          // into dmg alongside Curse of Needles/Pressure Point Ignition.)
 
           if (target.currentHP <= 0 && target.status !== 'incapacitated') {
             target.status = 'incapacitated';
@@ -4921,6 +4898,22 @@ export default class CombatScene extends Phaser.Scene {
           this._log(`${target?.name ?? 'Target'}'s guard absorbs ${reduction} damage.`);
         }
       }
+
+      // Target-side "reacts when hit" riders (onNextDamageTaken/onHitBy/
+      // nextHitBuildup) — same consolidated function the primary-hit path
+      // uses (see _processTargetHitRiders's header comment). Previously
+      // NONE of these three ever fired for a splash or repeat hit at all —
+      // this is the actual fix for that. Snapshotting here (rather than
+      // just reusing whatever's currently on the target) still correctly
+      // excludes a rider THIS SAME payload might apply via its own
+      // statusEffects, applied later in this function.
+      const preHitRiderRefs = new Set(
+        (target?.statusEffects || []).filter(se => se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup)
+      );
+      const { bonusDamage } = this._processTargetHitRiders(target, user, {
+        rawDamage: rawAmt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs,
+      });
+      amt += bonusDamage;
     }
 
     if (amt !== 0 || isHeal) {
@@ -5177,39 +5170,100 @@ export default class CombatScene extends Phaser.Scene {
     // Remove exhausted guard effects (reverse order keeps indices stable)
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
 
-    // wardWeave: runic zone mod grants a flat 10% damage reduction as guard
+    // wardWeave: runic zone mod grants a flat 15% damage reduction as guard
     const wardZone = list.find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.wardWeave);
-    if (wardZone) totalGuard += 0.10;
+    if (wardZone) totalGuard += 0.15;
 
     return Math.min(0.95, totalGuard);
   }
 
   /**
-   * _processNextHitStatusEffects(target, attacker)
+   * _processTargetHitRiders(target, attacker, opts)
    *
-   * Called AFTER damage lands on `target`. Handles one-shot "next hit" triggers:
-   *   – `nextHitBuildup`: immediately applies buildup to the attacker.
-   *   – If the effect also has `nextHitOnly: true`, the effect is consumed after firing.
+   * Consolidates every "target has a status effect that reacts when hit"
+   * mechanic into ONE function, called from BOTH the primary-hit path
+   * (_applyAbilityToTarget) and the splash/repeat path (_applyDirectResult).
+   * Previously each of the three shapes below only ever lived in the
+   * primary path — Pressure Point Ignition, Toxic Bloom's old melee-only
+   * heal aura, and Bedrock Guard's nextHitBuildup retaliation ALL silently
+   * did nothing when the target was hit by AOE splash or a repeat, since
+   * _applyDirectResult never checked any of them. This is the single place
+   * that needs updating if a fourth shape is ever added — no per-skill
+   * wiring required elsewhere.
    *
-   * Example: bedrock_guard { nextHitBuildup: { cold: 100 }, nextHitOnly: true }
+   * Shapes handled:
+   *   - onNextDamageTaken: { bonusDamagePercent, buildup } — ONE-SHOT, adds
+   *     a %-of-raw-damage bonus (its own ElementalResist check) to THIS
+   *     hit, then is consumed. (Pressure Point Ignition)
+   *   - onHitBy: { healAttacker, buildup, buildupAdjacent } — PERSISTENT
+   *     (not consumed by a hit), fires on every hit while active. (Toxic
+   *     Bloom's aura)
+   *   - nextHitBuildup (+ optional nextHitOnly) — buildup applied TO THE
+   *     ATTACKER; consumed only if nextHitOnly is set. (Bedrock Guard)
+   *
+   * opts.preHitRiderRefs — a Set of status-effect object references
+   * snapshotted BEFORE this ability's own apply() ran — ensures a rider a
+   * skill just applied to the target THIS SAME hit can't also fire off that
+   * same hit (mirrors the pre-existing hadPressurePointIgnitionBefore
+   * pattern, generalized). Pass null to process everything currently on
+   * the target (no snapshot available/needed).
+   *
+   * Returns { bonusDamage } — additional damage the CALLER must fold into
+   * the hit before final HP subtraction (onNextDamageTaken only).
    */
-  _processNextHitStatusEffects(target, attacker) {
+  _processTargetHitRiders(target, attacker, opts = {}) {
+    const { rawDamage = 0, ignoreDR = false, preHitRiderRefs = null } = opts;
+    let bonusDamage = 0;
     const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
     const toRemove = [];
 
     for (let i = 0; i < list.length; i++) {
       const se = list[i];
-      if (!se.nextHitBuildup) continue;
+      if (preHitRiderRefs && !preHitRiderRefs.has(se)) continue;
+      // _addStatusEffects never copies a `name` onto the runtime status
+      // object (only StatusEffects.js's registry has display names) — look
+      // it up fresh here instead of falling back to the raw id in logs.
+      const displayName = StatusEffects?.[se.id]?.name || se.id || 'effect';
 
-      if (attacker?.weakness) {
-        this._applyWeaknessBuildup(attacker, se.nextHitBuildup, { user: target });
-        this._log(`${target?.name ?? 'Target'}'s ${se.id ?? 'effect'} retaliates with buildup on ${attacker?.name}.`);
+      if (se.onNextDamageTaken && rawDamage > 0) {
+        const ign = se.onNextDamageTaken;
+        const bonusRaw = Math.floor(rawDamage * (ign.bonusDamagePercent ?? 30) / 100);
+        const elemDR = ignoreDR ? 0 : Phaser.Math.Clamp(
+          getDamageReductionFraction(target, { damageType: 'elemental', applyExpose: false }),
+          -0.95, 0.95
+        );
+        const bonus = Math.max(0, Math.floor(bonusRaw * (1 - elemDR)));
+        bonusDamage += bonus;
+        if ((ign.buildup?.fire ?? 0) > 0) this._applyWeaknessBuildup(target, { fire: ign.buildup.fire }, { user: attacker });
+        this._log(`${displayName} ignites — +${bonus} fire damage!`);
+        toRemove.push(i);
       }
 
-      if (se.nextHitOnly) toRemove.push(i);
+      if (se.onHitBy && rawDamage > 0) {
+        const r = se.onHitBy;
+        if (r.healAttacker > 0 && attacker?.currentHP != null && attacker?.maxHP != null) {
+          attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + r.healAttacker);
+          this._showFloatingNumber?.(r.healAttacker, attacker, true);
+          this._log(`${attacker?.name ?? 'Attacker'} is healed for ${r.healAttacker} HP by ${target?.name ?? 'target'}'s ${displayName}.`);
+        }
+        if (r.buildup) this._applyWeaknessBuildup(target, r.buildup, { user: attacker });
+        if (r.buildupAdjacent) {
+          const adjacent = resolveAOESplash(this, target, { shape: 'adjacent' });
+          for (const adj of adjacent) this._applyWeaknessBuildup(adj, r.buildupAdjacent, { user: attacker });
+        }
+      }
+
+      if (se.nextHitBuildup) {
+        if (attacker?.weakness) {
+          this._applyWeaknessBuildup(attacker, se.nextHitBuildup, { user: target });
+          this._log(`${target?.name ?? 'Target'}'s ${displayName} retaliates with buildup on ${attacker?.name}.`);
+        }
+        if (se.nextHitOnly) toRemove.push(i);
+      }
     }
 
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
+    return { bonusDamage };
   }
 
   // _processOnHitProcs was removed — its logic (attacker-side onHit.fireDamage
@@ -5771,7 +5825,7 @@ export default class CombatScene extends Phaser.Scene {
   // stack-count-aware line for it instead, since its numbers now scale.
   static RUNIC_ZONE_MOD_INFO = {
     kindlingRite: { label: 'Kindling Rite', desc: '+20%/stack elemental damage dealt, 80/stack Fire buildup/turn to caster (max 3 stacks)' },
-    wardWeave: { label: 'Ward Weave', desc: '-10% damage taken, drains 3 Initiative/turn (replaces MP regen)' },
+    wardWeave: { label: 'Ward Weave', desc: '-15% damage taken, drains 3 Initiative/turn (replaces MP regen)' },
     runeChannel: { label: 'Rune Channel', desc: '25% chance to recast spells at 60% power, 80 Lightning buildup + 1 lightning damage on cast/recast' },
   };
 
@@ -7397,6 +7451,16 @@ export default class CombatScene extends Phaser.Scene {
     if (Number.isFinite(debuff.speedDownPct)) {
       toStat('Initiative', -Math.abs(debuff.speedDownPct), 'initiative');
     }
+    // Routes through AttackPower — the SAME generic increased/decreased-
+    // damage-dealt mod every combat buff and Sacred Shockwave's own weaken
+    // debuff already use. Silence Crescent's old version wrote a bespoke
+    // `DamageDealt` mod key instead, which was never read ANYWHERE in the
+    // codebase — a real, previously undiscovered "declared but unenforced"
+    // bug (same class as Kindling Rite's elemental buff before that was
+    // fixed). Fixed by expressing it as negative AttackPower instead.
+    if (Number.isFinite(debuff.damageDealtDownPct)) {
+      toStat('AttackPower', -Math.abs(debuff.damageDealtDownPct), 'damage dealt');
+    }
 
     // Custom, non-stat marker consumed by a later hit rather than expressed as
     // a numeric mod — e.g. Pressure Point's ignition (next hit taken gets
@@ -7491,6 +7555,22 @@ export default class CombatScene extends Phaser.Scene {
         // One-shot payload resolved by _applyEndOfTurnProcs at end of the
         // owner's own next turn (e.g. Glacial Strike's Trapped Fire).
         onTurnEndOnce: se.onTurnEndOnce ?? def.onTurnEndOnce ?? undefined,
+        // Target-side "reacts when hit" riders read by _processTargetHitRiders
+        // (onHitBy: Toxic Bloom's debuff; nextHitBuildup/nextHitOnly: Bedrock
+        // Guard's retaliation) — these were missing from this whitelist
+        // entirely, so any status effect carrying them got silently stripped
+        // down to nothing the moment it passed through this function. Same
+        // opaque-payload treatment as onNextDamageTaken/onTurnEndOnce above.
+        onHitBy: se.onHitBy ?? def.onHitBy ?? undefined,
+        // Attacker-side rider (Blazing Fervor's fire rider, Curse of
+        // Needles, Ward Focus's accuracy consumption) — every EXISTING use
+        // of this field worked around this same whitelist gap by pushing
+        // directly onto statusEffects instead of returning it from apply(),
+        // bypassing this function entirely. Fixed properly here instead of
+        // adding another bypass.
+        onHit: se.onHit ?? def.onHit ?? undefined,
+        nextHitBuildup: se.nextHitBuildup ?? def.nextHitBuildup ?? undefined,
+        nextHitOnly: se.nextHitOnly ?? def.nextHitOnly ?? undefined,
         mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
@@ -7518,6 +7598,10 @@ export default class CombatScene extends Phaser.Scene {
           cur.turns = cur.permanent ? null : Math.max(cur.turns | 0, incoming.turns | 0);
           if (incoming.onNextDamageTaken !== undefined) cur.onNextDamageTaken = incoming.onNextDamageTaken;
           if (incoming.onTurnEndOnce !== undefined) cur.onTurnEndOnce = incoming.onTurnEndOnce;
+          if (incoming.onHitBy !== undefined) cur.onHitBy = incoming.onHitBy;
+          if (incoming.onHit !== undefined) cur.onHit = incoming.onHit;
+          if (incoming.nextHitBuildup !== undefined) cur.nextHitBuildup = incoming.nextHitBuildup;
+          if (incoming.nextHitOnly !== undefined) cur.nextHitOnly = incoming.nextHitOnly;
           cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
           if (incoming.mods && Object.keys(incoming.mods).length) {
             cur.mods = { ...(incoming.mods) };

@@ -7038,7 +7038,8 @@ Object.assign(RAW_SKILLS, {
     name: "Cone of Blight",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -7049,28 +7050,65 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "toxic", "aoe", "necrotic"],
     buildupHint: { toxic: 90 },
-    apply: (attacker, target, scene) => {
+    // "Small cone": only the front rank (1,2,3) and mid rank (4,5) are valid
+    // primary targets — the back rank has nothing further behind it to cone
+    // into. See aoeResolver.js's "smallCone" shape for the exact per-slot
+    // splash mapping (front rank fans into mid rank; mid rank fans into
+    // back rank). Enemy slots share the identical row/slot-ID layout as
+    // allies (just X-mirrored), so this needs no per-side translation.
+    targetSlots: [1, 2, 3, 4, 5],
+    aoe: { shape: 'smallCone' },
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.cone_of_blight;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.90);
-      const toxicBuildup = ability?.buildupHint?.toxic ?? 90;
-      // Splash column as front-cone approximation — TODO: implement true front-cone AOE shape
-      const splash = resolveAOESplash(scene, target, { shape: 'column' }).map(tgt => ({
-        target: tgt, amount: Math.floor(amount * 0.70), isMagic: true,
-        buildup: { toxic: Math.floor(toxicBuildup * 0.70) }, tags: ability?.tags,
-      }));
+
+      const basePct = 90;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // Whole hit reflavored as Necrotic — the old legacy version used
+      // isMagic:true for a necrotic-typed hit, which can only ever mean
+      // "elemental" (isMagic's one real limitation — see
+      // project_gear_damage_audit memory), so it was silently mitigated by
+      // the target's Elemental Resist instead of Necrotic Resist.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const toxicBuildup = Math.floor((ability?.buildupHint?.toxic ?? 90) * powerScale);
+
+      const SPLASH_SCALE = 0.70;
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
+        const spPhysical = Math.floor(physical * SPLASH_SCALE);
+        const spElemental = Math.floor(elemental * SPLASH_SCALE);
+        const spNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        return {
+          target: tgt, amount: Math.max(1, spPhysical + spElemental + spNecrotic),
+          physical: spPhysical, elemental: spElemental, necrotic: spNecrotic,
+          buildup: { toxic: Math.floor(toxicBuildup * SPLASH_SCALE) },
+          tags: ability?.tags,
+        };
+      });
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         buildup: { toxic: toxicBuildup },
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "90% necrotic damage + 90 toxic buildup in a front cone (column splash at 70%)."
+    description: "Deals 90% weapon damage as Necrotic + 90 Toxic buildup to a target in the front two ranks. Also hits the 1-2 slots directly behind it in a small cone, for 70% damage/buildup."
   },
 
   'ward_weave': {
@@ -7096,12 +7134,14 @@ Object.assign(RAW_SKILLS, {
       if (!zone) return { amount: 0, log: "Ward Weave requires an active runic zone." };
       zone.mods = zone.mods || {};
       zone.mods.wardWeave = true;
-      // TODO (CombatScene): replace mpPerTurn MP restore with -3 initiative drain per turn
-      // TODO (CombatScene): while wardWeave active, caster takes 10% less damage
+      // Implemented in CombatScene.js: _startTurnStatusEffects drains 3
+      // Initiative/turn (replacing the zone's normal MP restore) while this
+      // mod is active, and _processGuardStatusEffects grants a flat 15%
+      // damage-reduction guard on every hit taken.
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Protective wards weave through the runic circle!" };
     },
-    description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), caster takes 10% less damage while in zone."
+    description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), caster takes 15% less damage while in zone."
   },
 
   'silence_crescent': {
@@ -7109,7 +7149,8 @@ Object.assign(RAW_SKILLS, {
     name: "Silence Crescent",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 13,
@@ -7120,35 +7161,72 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "disorient", "aoe"],
     buildupHint: { disorient: 80 },
-    apply: (attacker, target, scene) => {
+    // Fixed "back crescent" — always the back rank + mid rank {8,4,5,6},
+    // regardless of which of those four is targeted. Same mechanic as
+    // Sacred Shockwave's diamond, just a different fixed group — see
+    // aoeResolver.js's "backCrescent" shape.
+    targetSlots: [8, 4, 5, 6],
+    aoe: { shape: 'backCrescent' },
+    // Crossing Disorient T2 gives the target -20% damage dealt for 1 turn —
+    // declared here so EVERY enemy hit (primary AND each splash target)
+    // independently checks their own tier-cross via the generic
+    // rewardIfTierCross engine, instead of the old version which only ever
+    // checked the primary target's own crossing. Also fixes a real bug: the
+    // old debuff wrote a `DamageDealt` status mod that was never read
+    // anywhere in the codebase — this now routes through the actual working
+    // AttackPower mechanic (see damageDealtDownPct in
+    // CombatScene.js's _applyRewardDebuff).
+    rewardIfTierCross: [{ family: "disorient", tier: 2, debuff: { damageDealtDownPct: 20, turns: 1 } }],
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.silence_crescent;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.85);
-      const disorientBuildup = ability?.buildupHint?.disorient ?? 80;
-      const currentMeter = target?.weakness?.meters?.disorient || 0;
-      const currentTier = weaknessTierFromMeter(currentMeter);
-      const newTier = weaknessTierFromMeter(currentMeter + disorientBuildup);
-      const primaryStatus = (newTier > currentTier && newTier >= 2)
-        ? [{ id: 'silenced', turns: 1, mods: { DamageDealt: -20 } }]
-        : undefined;
-      // Splash column as front-crescent approximation — TODO: implement true crescent AOE
-      const splash = resolveAOESplash(scene, target, { shape: 'column' }).map(tgt => ({
-        target: tgt, amount: Math.floor(amount * 0.60), isMagic: true,
-        buildup: { disorient: Math.floor(disorientBuildup * 0.60) }, tags: ability?.tags,
-      }));
+
+      const basePct = 85;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // No skillConversion — a disorient/support spell, not tied to a
+      // specific elemental type, so it keeps whatever physical/elemental
+      // split the weapon naturally rolls (same pattern as Sword Flourish).
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const disorientBuildup = Math.floor((ability?.buildupHint?.disorient ?? 80) * powerScale);
+
+      const SPLASH_SCALE = 0.60;
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
+        const spPhysical = Math.floor(physical * SPLASH_SCALE);
+        const spElemental = Math.floor(elemental * SPLASH_SCALE);
+        const spNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        return {
+          target: tgt, amount: Math.max(1, spPhysical + spElemental + spNecrotic),
+          physical: spPhysical, elemental: spElemental, necrotic: spNecrotic,
+          buildup: { disorient: Math.floor(disorientBuildup * SPLASH_SCALE) },
+          tags: ability?.tags,
+          rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+        };
+      });
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         buildup: { disorient: disorientBuildup },
-        statusEffects: primaryStatus,
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "85% damage + 80 disorient in a front crescent (column splash at 60%). Crossing disorient T2: -20% damage dealt for 1 turn."
+    description: "Deals 85% weapon damage + 80 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
   },
 
   'rune_channel': {
@@ -7216,11 +7294,23 @@ Object.assign(RAW_SKILLS, {
       return {
         amount: 0,
         mpGain: 3,
-        statusEffects: [{ id: 'ward_focus_accuracy', turns: 1, mods: { Accuracy: 10 } }],
+        // permanent (not turns:1) — persists until actually consumed by the
+        // next damaging hit, however many turns away that is, instead of a
+        // fixed 1-turn window that could expire unused. onHit:{} +
+        // nextHitOnly:true piggybacks on the existing attacker-side onHit
+        // consumption mechanic (CombatScene.js's "Attacker-side onHit procs"
+        // block) purely for its "remove after next damage-dealing hit"
+        // behavior — Accuracy itself is a flat stat (not a percentage; see
+        // getEffectiveDerived's 100-baseline hit-chance formula), read
+        // generically via the mods field the whole time it's active.
+        statusEffects: [{
+          id: 'ward_focus_accuracy', permanent: true,
+          mods: { Accuracy: 50 }, onHit: {}, nextHitOnly: true,
+        }],
         log: `${attacker?.name ?? 'Mage'} focuses, restoring 3 MP!`,
       };
     },
-    description: "Bonus action, 0 MP. Restore 3 MP and gain +10% accuracy for 1 turn."
+    description: "Bonus action, 0 MP. Restore 3 MP and gain +50 Accuracy, consumed on your next damaging hit (persists until then, not just for 1 turn)."
   },
 
   // -------- Payoff --------
@@ -7230,7 +7320,8 @@ Object.assign(RAW_SKILLS, {
     name: "Flame Pillar",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 16,
@@ -7242,28 +7333,66 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "fire", "aoe", "elemental"],
     requiresWeakness: { family: "fire", tierAtLeast: 2 },
     buildupHint: { fire: 60 },
-    apply: (attacker, target, scene) => {
+    // Diamond AOE — fixed centre-mass slots {2,4,5,7}, same shape (and same
+    // targetSlots restriction) Sacred Shockwave uses. The primary target
+    // must be one of the four diamond slots — otherwise the "diamond" would
+    // just be a bonus AOE tacked onto an unrelated primary target instead of
+    // the primary target always being part of the same four-enemy formation
+    // it hits.
+    targetSlots: [2, 4, 5, 7],
+    aoe: { shape: 'diamond' },
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.flame_pillar;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: 'fire', isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.40);
-      // Diamond AOE — hits fixed centre-mass slots (2,4,5,7)
-      const splash = resolveAOESplash(scene, target, { shape: 'diamond' }).map(tgt => ({
-        target: tgt, amount: Math.floor(amount * 0.80), isMagic: true, element: 'fire',
-        buildup: { fire: ability?.buildupHint?.fire ?? 60 }, tags: ability?.tags,
-      }));
+
+      const basePct = 140;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // Whole hit reflavored as Fire/Elemental — a fire spell, not a
+      // physical staff swing (same pattern as Frost Swell/Kindling Rite).
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 60) * powerScale);
+
+      // Splash buildup now scales with the 80% damage split (previously
+      // flat — every other AOE skill this pass scales buildup proportionally
+      // with the damage share, this brings Flame Pillar in line).
+      const SPLASH_SCALE = 0.80;
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
+        const spPhysical = Math.floor(physical * SPLASH_SCALE);
+        const spElemental = Math.floor(elemental * SPLASH_SCALE);
+        const spNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        return {
+          target: tgt, amount: Math.max(1, spPhysical + spElemental + spNecrotic),
+          physical: spPhysical, elemental: spElemental, necrotic: spNecrotic,
+          buildup: { fire: Math.floor(fireBuildup * SPLASH_SCALE) },
+          tags: ability?.tags,
+        };
+      });
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'fire',
-        buildup: { fire: ability?.buildupHint?.fire ?? 60 },
+        buildup: { fire: fireBuildup },
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Req fire T2. 140% fire damage, diamond AOE at 80% to centre-mass slots."
+    description: "Requires the target to already be Ablaze (Fire T2). Deals 140% weapon damage as Fire + 60 Fire buildup, plus a diamond AOE (fixed slots 2,4,5,7) at 80% damage/buildup to whoever else stands in that formation."
   },
 
   'toxic_bloom': {
@@ -7271,7 +7400,8 @@ Object.assign(RAW_SKILLS, {
     name: "Toxic Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 15,
@@ -7282,37 +7412,86 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "toxic", "consume", "aoe", "necrotic"],
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
-    apply: (attacker, target, scene) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.toxic_bloom;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.10);
+
+      const basePct = 110;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // Whole hit reflavored as Necrotic — the old legacy version used
+      // isMagic:true for a necrotic-typed hit, which can only ever mean
+      // "elemental" (isMagic's one real limitation — see
+      // project_gear_damage_audit memory), so it was silently mitigated by
+      // Elemental Resist instead of Necrotic Resist.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Consumes only WHOLE 100-increments, capped at 400 — a target sitting
+      // on 350 toxic only has 300 drained (3 clean increments), leaving the
+      // leftover 50 behind rather than wastefully consuming it for no extra
+      // tier benefit. (Several other weakness-consuming skills across
+      // dagger/1h-sword/mace/staff likely have this same "consumes past the
+      // last clean increment" issue in various forms — flagged for a
+      // dedicated audit pass later, see project_weakness_consume_increments
+      // memory; not fixed project-wide in this pass.)
       const currentToxic = target?.weakness?.meters?.toxic || 0;
-      const consumed = Math.min(400, currentToxic);
+      const consumed = Math.min(400, Math.floor(currentToxic / 100) * 100);
       if (target?.weakness?.meters != null) {
         target.weakness.meters.toxic = Math.max(0, currentToxic - consumed);
         target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
       }
-      // Proliferate consumed toxic to adjacent enemies
+
+      // Proliferate half the consumed toxic to adjacent enemies as buildup
+      // — a one-time spread at cast time, distinct from the ongoing debuff
+      // below. Not powerScale-scaled: this is a real quantity actually
+      // drained from the target, not a %-of-damage bonus.
       const adjacentSplash = resolveAOESplash(scene, target, { shape: 'adjacent' }).map(tgt => ({
         target: tgt, amount: 0, buildup: { toxic: Math.floor(consumed * 0.50) }, tags: ability?.tags,
       }));
-      // Debuff: melee attackers heal 2 HP per hit (TODO CombatScene: check onMeleeHitBy in damage pipeline)
-      const statusEffects = consumed > 0
-        ? [{ id: 'toxic_bloom_aura', turns: 3, onMeleeHitBy: { healAttacker: 2 } }]
+
+      // Debuff, tiered by how much toxic was actually drained (per 100):
+      // 1/2/3/4 HP healed to whoever hits this target, per hit, for 3 turns
+      // — plus 10/15/20/25 Toxic buildup (also tiered) to the target AND
+      // adjacent enemies on each of those hits. Uses the generic onHitBy
+      // shape (see _processTargetHitRiders in CombatScene.js), so this now
+      // correctly triggers on ANY hit the target takes — primary, AOE
+      // splash, or a repeat — not just direct hits, and NOT on this cast's
+      // own hit (the preHitRiderRefs snapshot excludes a status a skill
+      // just applied on the same cast that created it). Registered in
+      // StatusEffects.js as 'toxic_bloom_debuff' / display name "Toxic
+      // Bloom" — no "rider" in anything user-facing.
+      const tier = Math.min(4, Math.floor(consumed / 100));
+      const tierBuildup = 5 + tier * 5; // tier 1→10, 2→15, 3→20, 4→25
+      const statusEffects = tier > 0
+        ? [{
+          id: 'toxic_bloom_debuff', turns: 3,
+          onHitBy: { healAttacker: tier, buildup: { toxic: tierBuildup }, buildupAdjacent: { toxic: tierBuildup } },
+        }]
         : undefined;
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         statusEffects,
         splash: adjacentSplash.length ? adjacentSplash : undefined,
         log: consumed > 0 ? `Toxic Bloom consumes ${consumed} toxic and spreads it to adjacent enemies!` : undefined,
       };
     },
-    description: "Req toxic T1. 110% damage. Consumes up to 400 toxic, proliferates 50% to adjacent enemies. Debuffs target: melee attackers heal 2 HP/hit for 3 turns."
+    description: "Deals 110% weapon damage as Necrotic. Consumes up to 400 Toxic buildup from the target, proliferating half of it to adjacent enemies. Based on toxic consumed (per 100, up to 4): applies a 3-turn debuff — whoever hits this target heals 1/2/3/4 HP per hit and deals 10/15/20/25 Toxic buildup to the target and adjacent enemies per hit."
   },
 
   'mana_fountain': {

@@ -29,6 +29,20 @@ export const StatusEffects = {
     description: 'The next hit taken deals bonus fire damage and inflicts fire buildup.',
     icon: '🔥'
   },
+  toxic_bloom_debuff: {
+    id: 'toxic_bloom_debuff',
+    name: 'Toxic Bloom',
+    isDebuff: true,
+    description: 'Attackers heal HP and inflict extra Toxic buildup (to this target and adjacent enemies) on every hit.',
+    icon: '☣'
+  },
+  ward_focus_accuracy: {
+    id: 'ward_focus_accuracy',
+    name: 'Ward Focus',
+    permanent: true,
+    description: '+50 Accuracy, consumed on your next damaging hit.',
+    icon: '🎯'
+  },
   shattering_cut_sundered: {
     id: 'shattering_cut_sundered',
     name: 'Shattered Guard',
