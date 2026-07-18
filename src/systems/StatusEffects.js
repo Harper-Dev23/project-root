@@ -8,6 +8,8 @@ export const StatusEffects = {
     id: 'curse_cinders',
     name: 'Curse of Cinders',
     isDebuff: true,
+    permanent: true,
+    description: 'Acting no longer drains Fire buildup — it builds Fire instead, scaling with Curse intensity.',
     icon: '☠🔥'   // placeholder icon; you’ll swap to a sprite later
   },
   reward_needle_feint_crit: {
@@ -42,6 +44,12 @@ export const StatusEffects = {
     permanent: true,
     description: '+50 Accuracy, consumed on your next damaging hit.',
     icon: '🎯'
+  },
+  curse_suppression_ward: {
+    id: 'curse_suppression_ward',
+    name: 'Curse Suppression',
+    description: 'Flat Resilience bonus (reduces all incoming weakness buildup) from suppressed Curse.',
+    icon: '🛡️'
   },
   shattering_cut_sundered: {
     id: 'shattering_cut_sundered',
@@ -358,7 +366,11 @@ export const WeaknessV3 = {
         // with this weakness (e.g. applies a rider), same as any other family.
         curseAmpMult: 1.25
       },
-      cinders: { baseCritChance: 0.10, critDamageBonus: 0.50 }
+      // Curse of Cinders rider: while active (Curse T1+), the target's own
+      // Fire-T1 "acting loses Fire buildup" penalty is overridden into a GAIN
+      // instead — see the per-action trigger in CombatScene.js. Base amount
+      // before Curse's own intensity scaling (familyIntensityMult).
+      cinders: { onActFireGainBase: 10 }
     },
 
 
@@ -530,47 +542,4 @@ export function familyStartConsume(family, meters, families = WeaknessFamilies, 
     return 0;
   }
 }
-
-// === Curse of Cinders status =========================
-// Applied to a target that already has Curse T1+. Lasts fixed turns.
-// While present (and the target remains Curse T1+), Fire T2's burn tick (AFLAME) can crit,
-// with extra crit chance scaling by the target's Curse overflow.
-
-export function addCurseCindersStatus(target, { sourceId, duration = 3 } = {}) {
-  if (!target?.statuses) target.statuses = {};
-  target.statuses.curse_cinders = {
-    id: 'curse_cinders',
-    turns: Math.max(1, duration),
-    sourceId: sourceId ?? null, // caster (for crit stats if you want)
-    appliedAtRound: (globalThis?.BattleRoundCounter ?? 0),
-  };
-}
-
-export function hasCurseCinders(target) {
-  return !!target?.statuses?.curse_cinders;
-}
-
-export function tickDownCurseCinders(target) {
-  const st = target?.statuses?.curse_cinders;
-  if (!st) return;
-  st.turns -= 1;
-  if (st.turns <= 0) {
-    delete target.statuses.curse_cinders;
-  }
-}
-
-// True if target’s Curse meter is at least T1
-export function hasCurseTier1Plus(target) {
-  const m = target?.weakness?.meters?.curse || 0;
-  return m >= 100; // your global T1 threshold
-}
-
-// Returns a 0..1 “overflow factor” above T2 for scaling (0 if below 200).
-// Example: 220 => 0.20, 350 => 1.50 (cap later where used).
-export function curseOverflowFactor(target) {
-  const m = target?.weakness?.meters?.curse || 0;
-  if (m <= 200) return 0;
-  return (m - 200) / 100; // 1.0 per +100 overflow; adjust if you prefer milder curves
-}
-
 

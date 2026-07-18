@@ -29,15 +29,16 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_3: {
     name: 'Animated Party Test',
-    description: 'Five animated dummies demonstrating classic RPG roles.',
-    longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger and rogue—showcases weakness synergies, payoffs and interlocking behaviour.',
+    description: 'Six animated dummies demonstrating classic RPG roles.',
+    longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger, rogue and wizard—showcases weakness synergies, payoffs and interlocking behaviour.',
     portraitKey: 'dummy_party',
     enemies: [
-      { type: 'animated_fighter_dummy', slotId: 1, drops: [{ equip: 'chest', droppable: true }] },
-      { type: 'animated_healer_dummy',  slotId: 5, drops: [{ equip: 'chest', droppable: true }] },
-      { type: 'animated_warlock_dummy', slotId: 7, drops: [{ equip: 'chest', droppable: true }] },
-      { type: 'animated_ranger_dummy',  slotId: 6, drops: [{ equip: 'chest', droppable: true }] },
-      { type: 'animated_rogue_dummy',   slotId: 2, drops: [{ equip: 'chest', droppable: true }] }
+      { type: 'animated_fighter_dummy', slotId: 1, drops: [{ equip: 'head', droppable: true }] },
+      { type: 'animated_healer_dummy',  slotId: 5, drops: [{ equip: 'head', droppable: true }] },
+      { type: 'animated_warlock_dummy', slotId: 7, drops: [{ equip: 'head', droppable: true }] },
+      { type: 'animated_ranger_dummy',  slotId: 6, drops: [{ equip: 'head', droppable: true }] },
+      { type: 'animated_rogue_dummy',   slotId: 2, drops: [{ equip: 'head', droppable: true }] },
+      { type: 'animated_wizard_dummy',  slotId: 8, drops: [{ equip: 'head', droppable: true }] }
     ]
   },
 

@@ -39,7 +39,7 @@ const STATUS_ICON_LIBRARY = {
   ice_shatter_armorbreak: { glyph: 'IB', name: 'Armorbreak', fg: '#d5f1ff', bg: '#17344b', border: '#5fa0c8', description: 'Armor shattered by ice.' },
   tainted: { glyph: 'TN', name: 'Tainted', fg: '#ffd6f2', bg: '#30192b', border: '#b25d9c', description: 'Afflicted by foul magic.' },
   regen: { glyph: 'RG', name: 'Regeneration', fg: '#9fe6a0', bg: '#16311f', border: '#2a7b3c', description: 'Restoring health over time.' },
-  curse_cinders: { glyph: 'CC', name: 'Curse of Cinders', fg: '#ffd4a3', bg: '#362017', border: '#b36c36', description: 'Curse turns flames volatile.' },
+  curse_cinders: { glyph: 'CC', name: 'Curse of Cinders', fg: '#ffd4a3', bg: '#362017', border: '#b36c36', description: 'Acting gains Fire buildup instead of losing it, scaling with Curse intensity.' },
   lodged: { glyph: 'LD', name: 'Lodged', fg: '#ffd2a3', bg: '#2f1f14', border: '#a06c36', description: 'A projectile remains embedded.' },
 };
 

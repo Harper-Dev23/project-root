@@ -33,8 +33,6 @@ import {
   makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult,
   WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
   WeaknessAliases, familyIntensityMult, familyStartConsume,
-  hasCurseCinders, hasCurseTier1Plus, curseOverflowFactor,
-  tickDownCurseCinders,
 } from '../systems/StatusEffects.js';
 
 // Combat logic
@@ -684,7 +682,7 @@ export default class CombatScene extends Phaser.Scene {
       return;
     }
 
-    if (segment.type === 'damage' && segment.tooltipData) {
+    if ((segment.type === 'damage' || segment.type === 'heal') && segment.tooltipData) {
       const show = (pointer) => {
         if (!allowTooltip(pointer)) return;
         this.tooltip?.show(pointer.worldX, pointer.worldY, segment.tooltipData);
@@ -865,6 +863,79 @@ export default class CombatScene extends Phaser.Scene {
       title,
       lines,
       tags: ['damage']
+    };
+  }
+
+  // Heal-side counterpart to _buildDamageTooltipData — no "Type:" line (heals
+  // aren't typed physical/elemental/necrotic) and no Damage Reduction; the
+  // target-side equivalent (healingReceivedBonus + Proficiency, applied
+  // together outside the skill's own apply()) is shown as one combined
+  // "Healing Modifier" percentage instead, same idea as DR but framed as a
+  // bonus/penalty rather than a reduction.
+  _buildHealTooltipData({
+    user,
+    target,
+    ability,
+    amount,
+    raw,
+    critPct,
+    isCrit,
+    formulaParts,
+    mpCost,
+    mpInfo,
+    isSplash
+  }) {
+    const lines = [];
+    const title = `${ability?.name || ability?.id || 'Healing'} Breakdown`;
+
+    const actorName = user?.name || 'Source';
+    const targetName = target?.name || 'Target';
+    lines.push(`Source: ${actorName}`);
+    lines.push(`Target: ${targetName}`);
+
+    lines.push(`Final Healing: ${amount}`);
+    if (raw != null && raw !== amount) {
+      lines.push(`Raw Healing: ${raw}`);
+      if (raw > 0) {
+        const pct = Math.round(((amount / raw) - 1) * 100);
+        const sign = pct >= 0 ? '+' : '';
+        lines.push(`Healing Modifier: ${sign}${pct}% (Proficiency + target healing received)`);
+      }
+    }
+
+    if (Array.isArray(formulaParts) && formulaParts.length) {
+      lines.push(`Formula: ${formulaParts.join(' ')}`);
+    }
+
+    if (critPct != null) {
+      lines.push(`Crit Chance: ${Math.round(critPct)}%`);
+    }
+    if (isCrit) {
+      lines.push('Critical Heal!');
+    }
+
+    if (typeof mpCost === 'number' && mpCost > 0) {
+      let mpLine = `MP Cost: ${mpCost}`;
+      const gear = mpInfo?.gear;
+      if (gear && gear.before != null && gear.after != null && gear.after !== gear.before) {
+        mpLine += ` (gear ${gear.before} → ${gear.after})`;
+      }
+      const penalty = mpInfo?.penalty;
+      if (penalty && penalty.before != null && penalty.after != null && penalty.after !== penalty.before) {
+        const mult = penalty.mult ? ` ×${penalty.mult.toFixed(2)}` : '';
+        mpLine += ` (penalty ${penalty.before} → ${penalty.after}${mult})`;
+      }
+      lines.push(mpLine);
+    }
+
+    if (isSplash) {
+      lines.push('Splash healing instance');
+    }
+
+    return {
+      title,
+      lines,
+      tags: ['heal']
     };
   }
 
@@ -1446,6 +1517,7 @@ export default class CombatScene extends Phaser.Scene {
       if (misc.globalDamagePercent) enemy.gearEffects.globalDamagePercent = (enemy.gearEffects.globalDamagePercent || 0) + misc.globalDamagePercent;
       if (misc.elementalDamagePercent) enemy.gearEffects.elementalDamagePercent = (enemy.gearEffects.elementalDamagePercent || 0) + misc.elementalDamagePercent;
       if (misc.necroticDamagePercent) enemy.gearEffects.necroticDamagePercent = (enemy.gearEffects.necroticDamagePercent || 0) + misc.necroticDamagePercent;
+      if (misc.healingPercent) enemy.gearEffects.healingPercent = (enemy.gearEffects.healingPercent || 0) + misc.healingPercent;
       // mpPerTurn/skillCostReductionPct are read generically off gearEffects
       // (calculateEffectiveResourceCost, per-turn MP regen) with no player-only
       // gate, so enemy casters (e.g. animated_healer/warlock_dummy) benefit too.
@@ -1639,10 +1711,11 @@ export default class CombatScene extends Phaser.Scene {
     const mpPerTurn = baseMpPerTurn - concussedDrain;
     const lifeStealPct = Math.round((char?.gearEffects?.lifeStealPct || 0) * 100);
     // Separate from Proficiency (a highest-core-stat bonus that ALSO affects
-    // healing, shown on the Equipment tab) — this is purely a combat-buff
-    // source (HealingPower status mod), currently always 0 since no skill
-    // grants it yet. Deliberately not additive with Proficiency here.
-    const healGivenPct = _sumStatusEffectMods?.(char)?.HealingPower || 0;
+    // healing, shown on the Equipment tab) — this combines the HealingPower
+    // combat-buff status mod with gear's healingPercent (armor/weapon
+    // affixes — see ItemFactory.js), matching applyHealModifiers'
+    // (CombatLogic.js) own additive combination of the two.
+    const healGivenPct = (_sumStatusEffectMods?.(char)?.HealingPower || 0) + (char?.gearEffects?.healingPercent || 0);
 
     // Paired rows (right + mid share a row, each independently hoverable —
     // NOT a single "X / Y" string like PDR/EDR/NDR below, since these two
@@ -1669,7 +1742,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
       null,
       null,
-      { label: 'H.Given:', value: `+${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — from combat buffs. Separate from Proficiency (Equipment tab), which also affects healing but isn\'t added in here.' },
+      { label: 'H.Given:', value: `${healGivenPct >= 0 ? '+' : ''}${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — gear healingPercent + Healing Power combat buffs. Separate from Proficiency (Equipment tab), which also affects healing but isn\'t added in here.' },
       {
         label: 'MP/Trn:', value: `${mpPerTurn >= 0 ? '+' : ''}${mpPerTurn}`,
         valueColor: concussedDrain > 0 ? '#ff6666' : '#eeeeee',
@@ -3697,9 +3770,26 @@ export default class CombatScene extends Phaser.Scene {
       const w = actor.weakness;
       const fam = (k) => (k in w.meters) ? k : (WeaknessAliases[k] || k);
 
-      // FIRE T1: acting loses fire buildup (scaled by Fire's intensity)
+      // FIRE T1: acting loses fire buildup (scaled by Fire's intensity) —
+      // UNLESS the actor carries the Curse of Cinders rider (Curse T1+),
+      // which overrides this into a Fire buildup GAIN instead, scaled by
+      // Curse's own intensity. The gain fires regardless of the actor's own
+      // Fire tier (unlike the loss, which requires Fire T1+ already).
       {
-        if ((w.tiers?.fire | 0) >= 1) {
+        const curseTier = w.tiers?.curse | 0;
+        const hasCindersRider = curseTier >= 1 &&
+          (actor.statusEffects || []).some(se => se?.id === 'curse_cinders' && se?.onAct?.fireBuildupOverride);
+
+        if (hasCindersRider) {
+          const mCurse = w.meters?.curse | 0;
+          const gainBase = WeaknessV3?.families?.curse?.cinders?.onActFireGainBase ?? 10;
+          const I_curse = familyIntensityMult?.('curse', mCurse) ?? 1;
+          const gain = Math.max(1, Math.floor(gainBase * I_curse));
+          const before = w.meters?.fire | 0;
+          w.meters.fire = before + gain;
+          this._log(`${actor.name} acts while Cindered: Fire ${before} → ${w.meters.fire} (+${gain}, I=${I_curse.toFixed(2)})`);
+          // (Tier recompute handled below)
+        } else if ((w.tiers?.fire | 0) >= 1) {
           const mFire = w.meters?.fire | 0;
           const baseLoss = WeaknessV3?.families?.fire?.t1?.onActLoss ?? 50;
           const I = familyIntensityMult?.('fire', mFire) ?? 1;
@@ -4170,15 +4260,60 @@ export default class CombatScene extends Phaser.Scene {
         const healed = Math.floor(amount * (target.healingReceivedBonus || 1.0) * getProficiencyMultiplier(user));
         target.currentHP = Math.min(target.maxHP, target.currentHP + healed);
         if (healed > 0) {
+          // Not passing isCrit through here — _showFloatingNumber's isCrit
+          // branch unconditionally overrides to yellow regardless of isHeal,
+          // which would make a crit heal's floating number look like a
+          // damage number instead of a heal. The "(CRIT!)" log tag below is
+          // the crit signal for heals; the floating number stays heal-green.
           this._showFloatingNumber?.(healed, target, true);
+
+          // Same tooltip mechanism damage numbers get — reads the SAME
+          // shared breakdown log calculateHealRoll now correctly
+          // resets/populates (see that function's own comment), so this
+          // formula is scoped to THIS heal only, never a stale prior
+          // damage-skill's numbers.
+          const bd = getLastDamageBreakdown?.() || null;
+          let healCritPct = null;
+          const healFormulaParts = [];
+          if (bd && bd.length) {
+            const critEntry = bd.find(e => e && e.label === 'critChance' && typeof e.value === 'number');
+            if (critEntry) healCritPct = critEntry.value;
+            let baseShown = false;
+            for (const e of bd) {
+              if (e.label === 'base' && !baseShown) {
+                healFormulaParts.push(String(e.value));
+                baseShown = true;
+              } else if (e.label === 'crit') {
+                const m = (e.mult != null) ? e.mult : (e.to && e.from ? (e.to / e.from) : 1.5);
+                healFormulaParts.push(`×${(+m).toFixed(2)}`);
+              } else if (e.label && e.mult && e.from != null && e.to != null) {
+                healFormulaParts.push(`×${(e.mult).toFixed(2)} ${e.label}`);
+              }
+            }
+          }
+          const healTooltip = this._buildHealTooltipData({
+            user, target, ability,
+            amount: healed, raw: amount,
+            critPct: healCritPct, isCrit,
+            formulaParts: healFormulaParts,
+            mpCost, mpInfo,
+          });
+
           const healSegments = [
             { text: user.name, color: this._getLogColorForUnit(user), bold: true },
             { text: ' heals ', color: LOG_COLORS.default },
             { text: target.name, color: this._getLogColorForUnit(target), bold: true },
             { text: ' for ', color: LOG_COLORS.default },
-            { text: `${healed} HP`, color: LOG_COLORS.heal, bold: true },
-            { text: '.', color: LOG_COLORS.default }
+            {
+              text: `${healed} HP`,
+              color: LOG_COLORS.heal,
+              bold: true,
+              type: 'heal',
+              tooltipData: healTooltip
+            },
           ];
+          if (isCrit) healSegments.push({ text: ' (CRIT!)', color: LOG_COLORS.crit, bold: true });
+          healSegments.push({ text: '.', color: LOG_COLORS.default });
           this._log({ segments: healSegments });
         }
       } else {
@@ -4490,6 +4625,17 @@ export default class CombatScene extends Phaser.Scene {
           this._applyDirectResult(user, sp.target, sp, { isSplash: true, ability });
           if (spPrevTiers) this._applySplashTierCrossRewards(user, sp.target, sp.rewardIfTierCross, ability, spPrevTiers);
         }
+      }
+
+      // ===== Penetration chain (e.g. Arcane Avalanche) =====
+      // A declarative, sequential "overkill cascade" — see
+      // _resolvePenetrationChain's header comment for the full shape. Reads
+      // a custom _penetrationBreakdown field (NOT result.physical/etc,
+      // which this skill's apply() deliberately leaves at 0 so the normal
+      // primary-hit HP subtraction above is a no-op — every real hit in
+      // this mechanic is dealt by the chain resolver itself).
+      if (!missed && ability?.penetrationChain && result?._penetrationBreakdown) {
+        this._resolvePenetrationChain(user, target, ability, result._penetrationBreakdown);
       }
     }
 
@@ -4841,7 +4987,13 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _applyDirectResult(user, target, payload, opts = {}) {
-    if (!target || !payload) return;
+    if (!target || !payload) return null;
+    // Populated below and returned at the end — purely additive, every
+    // existing caller ignores the return value already. Lets a caller (e.g.
+    // _resolvePenetrationChain) know exactly how much this specific hit was
+    // mitigated down to and how much of it actually landed, so it can
+    // compute real overkill for a follow-up cascade step.
+    let resultInfo = { mitigatedAmount: 0, dealt: 0, hpBefore: target.currentHP | 0 };
 
     const isHeal = !!payload.isHeal;
     const isSplashOrAoe = !!(opts?.isSplash || opts?.isVolleyCopy);
@@ -4914,6 +5066,7 @@ export default class CombatScene extends Phaser.Scene {
         rawDamage: rawAmt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs,
       });
       amt += bonusDamage;
+      resultInfo.mitigatedAmount = amt;
     }
 
     if (amt !== 0 || isHeal) {
@@ -4925,12 +5078,26 @@ export default class CombatScene extends Phaser.Scene {
         target.currentHP = after;
         if (healed > 0) {
           this._showFloatingNumber?.(healed, target, /*isHeal=*/true, /*isCrit=*/false);
+          const healTooltip = this._buildHealTooltipData({
+            user, target, ability: opts?.ability || null,
+            amount: healed, raw: rawAmt,
+            critPct: null, isCrit: false,
+            formulaParts: [],
+            mpCost: null, mpInfo: null,
+            isSplash: opts?.isSplash,
+          });
           const healSegments = [
             { text: user.name, color: this._getLogColorForUnit(user), bold: true },
             { text: ' heals ', color: LOG_COLORS.default },
             { text: target.name, color: this._getLogColorForUnit(target), bold: true },
             { text: ' for ', color: LOG_COLORS.default },
-            { text: `${healed} HP`, color: LOG_COLORS.heal, bold: true },
+            {
+              text: `${healed} HP`,
+              color: LOG_COLORS.heal,
+              bold: true,
+              type: 'heal',
+              tooltipData: healTooltip
+            },
             { text: '.', color: LOG_COLORS.default }
           ];
           this._log({ segments: healSegments });
@@ -4940,6 +5107,8 @@ export default class CombatScene extends Phaser.Scene {
         const after = Math.max(0, before - Math.max(0, amt));
         const dealt = before - after;
         target.currentHP = after;
+        resultInfo.hpBefore = before;
+        resultInfo.dealt = dealt;
         this._showFloatingNumber?.(dealt, target, /*isHeal=*/false, /*isCrit=*/false);
 
         const isMagic = !!payload.isMagic;
@@ -5001,6 +5170,113 @@ export default class CombatScene extends Phaser.Scene {
       this._applyWeaknessBuildup?.(target, payload.buildup, { user, ability: null });
       if (this.characterInfoTab === 'weakness' && this._inspectedChar === target) {
         this._renderCharacterInfoBody?.(target);
+      }
+    }
+
+    return resultInfo;
+  }
+
+  /**
+   * _resolvePenetrationChain(user, target, ability, coreBreakdown)
+   *
+   * Generic, declarative "sequential overkill cascade" resolver. A skill
+   * declares `ability.penetrationChain = { lines: [...] }` (see Arcane
+   * Avalanche for the reference case); this function fires each line IN
+   * ARRAY ORDER, fully resolving one (including all of its own recursive
+   * overflow) before the next line starts — a slot hit by more than one
+   * line needs its HP tracked cumulatively across them, not independently.
+   *
+   * Each line: { entry: slotId, splitTo: [slotA, slotB], overflow?: { from: slotId|[slotId,slotId], to: slotId } }
+   *   1. Deal the full `coreBreakdown` amount to whoever's in `entry` (if anyone).
+   *   2. Determine how much of that PROPAGATES onward: the WHOLE amount if
+   *      the entry slot was empty or its occupant is at Fire/Cold/Lightning
+   *      T2+ (their weakness "conducts" everything through them, not just
+   *      overkill) — otherwise real overkill (the mitigated amount dealt
+   *      minus their HP immediately before this hit).
+   *   3. Split the propagating amount 50/50 across `splitTo`, dealing each
+   *      half the exact same way (steps 1-2, one level deep).
+   *   4. Whichever of `splitTo`'s slots are named in `overflow.from` have
+   *      THEIR OWN propagating amounts summed together and dealt, once, to
+   *      `overflow.to`.
+   *
+   * Every individual hit gets its own independent gear-conversion + gear%
+   * and Lightning Jolt roll — same treatment every other splash/repeat
+   * instance gets elsewhere in this file — since this bypasses the normal
+   * result.splash fan-out loop entirely (it isn't built from a pre-computed
+   * array, each step depends on the REAL, live outcome of the step before
+   * it). All hits share the same physical/elemental/necrotic RATIO as
+   * `coreBreakdown` — one continuous spell, not independently-typed sub-hits.
+   */
+  _resolvePenetrationChain(user, target, ability, coreBreakdown) {
+    const sideSlots = target?.isEnemy ? this.enemySlots : this.allySlots;
+    if (!Array.isArray(sideSlots)) return;
+    const lines = ability?.penetrationChain?.lines;
+    if (!Array.isArray(lines) || !lines.length) return;
+
+    const totalCore = (coreBreakdown?.physical || 0) + (coreBreakdown?.elemental || 0) + (coreBreakdown?.necrotic || 0);
+    if (totalCore <= 0) return;
+    const ratios = {
+      physical: (coreBreakdown.physical || 0) / totalCore,
+      elemental: (coreBreakdown.elemental || 0) / totalCore,
+      necrotic: (coreBreakdown.necrotic || 0) / totalCore,
+    };
+
+    const charInSlot = (slotId) => {
+      const slot = sideSlots.find(s => s.slotId === slotId);
+      return (slot?.char && slot.char.status !== 'incapacitated') ? slot.char : null;
+    };
+    const isElementalT2 = (char) => ['fire', 'cold', 'lightning'].some(f => (char?.weakness?.tiers?.[f] || 0) >= 2);
+    const breakdownFor = (amount) => {
+      const physical = Math.floor(amount * ratios.physical);
+      const elemental = Math.floor(amount * ratios.elemental);
+      const necrotic = Math.max(0, amount - physical - elemental); // exact sum, no rounding loss
+      return { physical, elemental, necrotic };
+    };
+
+    // Deals `amount` to whoever's in `slotId` (if anyone) and returns how
+    // much of it should propagate onward.
+    const dealAndGetPropagation = (slotId, amount) => {
+      if (amount <= 0 || slotId == null) return 0;
+      const occupant = charInSlot(slotId);
+      if (!occupant) return amount; // nobody home — the whole hit passes through untouched
+
+      const conducts = isElementalT2(occupant);
+      let bd = breakdownFor(amount);
+      // Independent gear-conversion + gear% per hit — silent:true so this
+      // doesn't pollute the primary's own breakdown log (see the earlier
+      // Sacred Shockwave splash-duplication fix this same session).
+      bd = applyGearConversionAndPercent(bd, user, { silent: true });
+      // Independent Lightning Jolt roll per hit.
+      const { joltTotal } = applyLightningJolt(occupant);
+      if (joltTotal > 0) bd.elemental += joltTotal;
+      const finalAmount = bd.physical + bd.elemental + bd.necrotic;
+
+      const info = this._applyDirectResult(user, occupant, {
+        amount: finalAmount, physical: bd.physical, elemental: bd.elemental, necrotic: bd.necrotic,
+        isMagic: !!ability?.isMagic, tags: ability?.tags,
+      }, { isSplash: true, ability });
+
+      const mitigated = info?.mitigatedAmount ?? finalAmount;
+      const hpBefore = info?.hpBefore ?? 0;
+      return conducts ? mitigated : Math.max(0, mitigated - hpBefore);
+    };
+
+    for (const line of lines) {
+      const entryPropagation = dealAndGetPropagation(line.entry, totalCore);
+      if (entryPropagation <= 0 || !Array.isArray(line.splitTo) || line.splitTo.length !== 2) continue;
+
+      const [slotA, slotB] = line.splitTo;
+      const halfA = Math.floor(entryPropagation / 2);
+      const halfB = entryPropagation - halfA; // exact sum, no rounding loss
+      const propA = dealAndGetPropagation(slotA, halfA);
+      const propB = dealAndGetPropagation(slotB, halfB);
+
+      if (line.overflow) {
+        const fromList = Array.isArray(line.overflow.from) ? line.overflow.from : [line.overflow.from];
+        let overflowTotal = 0;
+        if (fromList.includes(slotA)) overflowTotal += propA;
+        if (fromList.includes(slotB)) overflowTotal += propB;
+        if (overflowTotal > 0) dealAndGetPropagation(line.overflow.to, overflowTotal);
       }
     }
   }
@@ -5413,8 +5689,12 @@ export default class CombatScene extends Phaser.Scene {
       // rethought; curseAmpMult's only live consumer is the onHit.curseScaled
       // rider hook above.
 
-      // Apply
-      const resilience = target?.gearEffects?.resilience ?? target?.resilience ?? 0;
+      // Apply — permanent gear/stat Resilience plus any temporary status-
+      // effect Resilience (e.g. Curse Suppression's ward), both flat
+      // reductions to this same incoming buildup.
+      const baseResilience = target?.gearEffects?.resilience ?? target?.resilience ?? 0;
+      const statusResilience = _sumStatusEffectMods(target)?.Resilience || 0;
+      const resilience = baseResilience + statusResilience;
       if (resilience > 0) {
         const before = amt;
         amt = Math.max(0, amt - resilience);
@@ -6083,45 +6363,6 @@ export default class CombatScene extends Phaser.Scene {
 
         // MAGIC-typed ; route through magic modifiers if desired
         let burn = burnRaw;
-
-        // --- Cinders rider: allow AFLAME tick to crit iff Cinders active AND Curse T1+ right now ---
-        try {
-          const cindersActive =
-            (typeof hasCurseCinders === 'function' ? hasCurseCinders(char)
-              : (char.statuses?.curse_cinders || (char.statusEffects || []).some(e => e.id === 'curse_cinders')));
-
-          const curseT1Plus =
-            (typeof hasCurseTier1Plus === 'function' ? hasCurseTier1Plus(char)
-              : ((char?.weakness?.meters?.curse | 0) >= 100));
-
-          if (cindersActive && curseT1Plus) {
-            const baseCritChance = WeaknessV3?.families?.curse?.cinders?.baseCritChance ?? 0.05;
-            const critMult = WeaknessV3?.families?.curse?.cinders?.critMult ?? 1.50;
-
-            const of =
-              (typeof curseOverflowFactor === 'function' ? curseOverflowFactor(char)
-                : Math.max(0, ((char?.weakness?.meters?.curse | 0) - 200) / 100));
-
-            const extraCritChance = Math.min(
-              WeaknessV3?.families?.curse?.cinders?.extraCritCap ?? 0.35,
-              (WeaknessV3?.families?.curse?.cinders?.extraCritSlope ?? 0.20) * of
-            );
-
-            const finalCritChance = Math.max(0, Math.min(0.95, baseCritChance + extraCritChance));
-
-            if (Math.random() < finalCritChance) {
-              burn = Math.floor(burn * critMult);
-              this._log(`${char.name} suffers AFLAME (Cinders CRIT) for ${burn} (chance ${Math.round(finalCritChance * 100)}%).`);
-              try { addDamageBreakdown?.({ label: 'Cinders crit', mult: critMult }); } catch { }
-            } else {
-              this._log(`${char.name} suffers AFLAME (Cinders) for ${burn}.`);
-            }
-          } else {
-            this._log(`${char.name} suffers AFLAME for ${burn}.`);
-          }
-        } catch {
-          this._log(`${char.name} suffers AFLAME for ${burn}.`);
-        }
 
         try {
           if (typeof applyDamageModifiers === 'function') {
@@ -7311,7 +7552,6 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   // Decrement per-turn status durations at end of the unit's own turn.
-  // Generic loop first; then call specific helpers (like tickDownCurseCinders) for any special cases.
   _tickDownStatusDurations(char) {
     // Map-style statuses: { id: { turns, ... } }
     if (char?.statuses && typeof char.statuses === 'object') {
@@ -7351,9 +7591,6 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
     if (lodgeCountChanged) this._refreshLodgeSprites(char);
-
-    // Specific status helpers (safe no-ops if not imported)
-    try { tickDownCurseCinders?.(char); } catch { }
 
     this._refreshStatusEffectIcons?.(char);
   }
@@ -7531,56 +7768,54 @@ export default class CombatScene extends Phaser.Scene {
     if (!target || !Array.isArray(effects) || effects.length === 0) return;
     target.statusEffects = target.statusEffects || [];
 
+    // Fields with real, non-generic merge/default semantics — everything
+    // else (onHitBy, onHit, nextHitBuildup, nextHitOnly, onNextDamageTaken,
+    // onTurnEndOnce, any per-family *BuildupMul key, and any FUTURE field a
+    // skill invents) is copied through generically below instead of needing
+    // to be individually whitelisted. This is the actual fix for the bug
+    // class that bit onHitBy/onHit/nextHitBuildup/nextHitOnly one at a time
+    // this session — a status effect field used to get silently stripped to
+    // nothing unless someone remembered to add it here by name.
+    const SPECIAL_KEYS = new Set(['id', 'turns', 'tickDamage', 'tickHeal', 'blocksAction', 'stackable', 'permanent', 'mods', 'data']);
+    const buildupMulKeys = new Set(Object.keys(WeaknessFamilies || {}).map(fam => `${fam}BuildupMul`));
+
     let lodgeChanged = false;
     for (const se of effects) {
       const def = (StatusEffects && StatusEffects[se.id]) || {};
       const permanent = se.permanent ?? def.permanent ?? false;
       const incoming = {
+        // Spread registry defaults, then the caller's own values (winning
+        // over the registry) — this is what lets ANY field survive without
+        // being named here. The explicit fields below then override with
+        // their own special default/merge logic.
+        ...def,
+        ...se,
         id: se.id,
         // A permanent effect gets turns:null, not a real number — otherwise
         // it always falls back to 1 (no turns given, no def.duration), which
         // is why Pressure Point's ignition tooltip showed "Duration: 1 turn"
         // even though _tickDownStatusDurations correctly never expired it.
+        // Field name mismatch is intentional/pre-existing: the registry
+        // calls this `duration`, the runtime instance calls it `turns` — the
+        // generic spread above can't bridge that on its own.
         turns: permanent ? null : (se.turns ?? def.duration ?? 1),
         tickDamage: se.tickDamage ?? def.tickDamage ?? 0,
         tickHeal: se.tickHeal ?? def.tickHeal ?? 0,
         blocksAction: se.blocksAction ?? def.blocksAction ?? false,
         stackable: se.stackable ?? def.stackable ?? false,
         // permanent: lasts until explicitly consumed/removed elsewhere, not on a
-        // turn timer (_tickDownStatusDurations skips these). onNextDamageTaken:
-        // a "marker" consumed by the next hit this unit takes (e.g. Pressure
-        // Point's ignition) — an opaque payload, not interpreted here.
+        // turn timer (_tickDownStatusDurations skips these).
         permanent,
-        onNextDamageTaken: se.onNextDamageTaken ?? def.onNextDamageTaken ?? undefined,
-        // One-shot payload resolved by _applyEndOfTurnProcs at end of the
-        // owner's own next turn (e.g. Glacial Strike's Trapped Fire).
-        onTurnEndOnce: se.onTurnEndOnce ?? def.onTurnEndOnce ?? undefined,
-        // Target-side "reacts when hit" riders read by _processTargetHitRiders
-        // (onHitBy: Toxic Bloom's debuff; nextHitBuildup/nextHitOnly: Bedrock
-        // Guard's retaliation) — these were missing from this whitelist
-        // entirely, so any status effect carrying them got silently stripped
-        // down to nothing the moment it passed through this function. Same
-        // opaque-payload treatment as onNextDamageTaken/onTurnEndOnce above.
-        onHitBy: se.onHitBy ?? def.onHitBy ?? undefined,
-        // Attacker-side rider (Blazing Fervor's fire rider, Curse of
-        // Needles, Ward Focus's accuracy consumption) — every EXISTING use
-        // of this field worked around this same whitelist gap by pushing
-        // directly onto statusEffects instead of returning it from apply(),
-        // bypassing this function entirely. Fixed properly here instead of
-        // adding another bypass.
-        onHit: se.onHit ?? def.onHit ?? undefined,
-        nextHitBuildup: se.nextHitBuildup ?? def.nextHitBuildup ?? undefined,
-        nextHitOnly: se.nextHitOnly ?? def.nextHitOnly ?? undefined,
         mods: { ...(def.mods || {}), ...(se.mods || {}) },
         data: { ...(def.data || {}), ...(se.data || {}) },
       };
-      // Generic per-family incoming-buildup vulnerability keys, e.g.
-      // `fireBuildupMul`/`lightningBuildupMul` (Wind Exposed, Trapped Fire).
-      // Not in the fixed field list above since the family set is data-driven.
-      for (const fam of Object.keys(WeaknessFamilies || {})) {
-        const mulKey = `${fam}BuildupMul`;
-        const val = se[mulKey] ?? def[mulKey];
-        if (typeof val === 'number') incoming[mulKey] = val;
+      // Defensive type-guard for per-family incoming-buildup vulnerability
+      // keys, e.g. fireBuildupMul/lightningBuildupMul (Wind Exposed, Trapped
+      // Fire) — only a real family name with a numeric value survives,
+      // matching the old hardcoded loop's validation exactly, just without
+      // needing to enumerate WeaknessFamilies by hand at each call site.
+      for (const key of Object.keys(incoming)) {
+        if (buildupMulKeys.has(key) && typeof incoming[key] !== 'number') delete incoming[key];
       }
 
       if (incoming.stackable) {
@@ -7592,23 +7827,51 @@ export default class CombatScene extends Phaser.Scene {
         const i = target.statusEffects.findIndex(e => e.id === incoming.id && !e.stackable);
         if (i >= 0) {
           const cur = target.statusEffects[i];
+          // Additive/OR/max fields — reapplying the same status STACKS these,
+          // it doesn't just overwrite them.
           cur.tickHeal = (cur.tickHeal | 0) + (incoming.tickHeal | 0);
           cur.tickDamage = (cur.tickDamage | 0) + (incoming.tickDamage | 0);
           cur.permanent = !!(cur.permanent || incoming.permanent);
           cur.turns = cur.permanent ? null : Math.max(cur.turns | 0, incoming.turns | 0);
-          if (incoming.onNextDamageTaken !== undefined) cur.onNextDamageTaken = incoming.onNextDamageTaken;
-          if (incoming.onTurnEndOnce !== undefined) cur.onTurnEndOnce = incoming.onTurnEndOnce;
-          if (incoming.onHitBy !== undefined) cur.onHitBy = incoming.onHitBy;
-          if (incoming.onHit !== undefined) cur.onHit = incoming.onHit;
-          if (incoming.nextHitBuildup !== undefined) cur.nextHitBuildup = incoming.nextHitBuildup;
-          if (incoming.nextHitOnly !== undefined) cur.nextHitOnly = incoming.nextHitOnly;
           cur.blocksAction = !!(cur.blocksAction || incoming.blocksAction);
+          // mods/onHit: per-key "strongest wins" (bigger |value|), not a
+          // blind overwrite — a weaker recast (e.g. Sacred Shockwave's
+          // AttackPower debuff scaling with tiers cleared, or Shattering
+          // Cut's PhysicalResist debuff scaling with Lacerate consumed) must
+          // not silently downgrade an existing stronger application. Falls
+          // back to incoming-wins for any non-numeric sub-field — "stronger"
+          // isn't well-defined for those.
+          const mergeStrongerKeys = (curSub, incSub) => {
+            const out = { ...(curSub || {}) };
+            for (const k of Object.keys(incSub || {})) {
+              const a = out[k], b = incSub[k];
+              out[k] = (typeof a === 'number' && typeof b === 'number')
+                ? (Math.abs(b) > Math.abs(a) ? b : a)
+                : b;
+            }
+            return out;
+          };
           if (incoming.mods && Object.keys(incoming.mods).length) {
-            cur.mods = { ...(incoming.mods) };
+            cur.mods = mergeStrongerKeys(cur.mods, incoming.mods);
           }
-          for (const fam of Object.keys(WeaknessFamilies || {})) {
-            const mulKey = `${fam}BuildupMul`;
-            if (incoming[mulKey] !== undefined) cur[mulKey] = incoming[mulKey];
+          if (incoming.onHit && Object.keys(incoming.onHit).length) {
+            cur.onHit = mergeStrongerKeys(cur.onHit, incoming.onHit);
+          }
+          // `data` is deliberately NOT touched here — the original code never
+          // merged it on reapply either; preserved as-is rather than silently
+          // changing that behavior as part of this cleanup.
+          // Everything else — last-cast-wins overwrite, generic instead of
+          // one `if (incoming.X !== undefined) cur.X = incoming.X` per field —
+          // EXCEPT per-family *BuildupMul keys (Trapped Fire, Torn Defenses,
+          // Glacial Scorch, etc.), which get the same "stronger wins" rule.
+          for (const key of Object.keys(incoming)) {
+            if (SPECIAL_KEYS.has(key) || key === 'onHit') continue;
+            if (incoming[key] === undefined) continue;
+            if (buildupMulKeys.has(key) && typeof cur[key] === 'number' && typeof incoming[key] === 'number') {
+              cur[key] = Math.max(cur[key], incoming[key]);
+            } else {
+              cur[key] = incoming[key];
+            }
           }
         } else {
           target.statusEffects.push(incoming);

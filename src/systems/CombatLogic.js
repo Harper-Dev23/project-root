@@ -34,6 +34,12 @@ export function _sumStatusEffectMods(char) {
     // combat-buff source. No skill grants it yet — architecture in place for
     // when one does.
     HealingPower: 0,
+    // Flat reduction to ALL incoming weakness buildup (see the real,
+    // permanent WIS-derived Resilience stat in CharacterBuilder.js) — lets a
+    // temporary status effect (e.g. Curse Suppression's ward) grant the
+    // same thing on top for a few turns instead of only ever being a
+    // permanent gear/stat value.
+    Resilience: 0,
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
   for (const se of list) {
@@ -686,6 +692,115 @@ export function calculateDamage(attacker, target, ability = null) {
 
   const amount = physical + elemental + necrotic;
   return { physical, elemental, necrotic, amount, isCrit };
+}
+
+// --------------------------------------------------
+// calculateHealRoll — the healing-side counterpart to calculateDamage().
+// Deliberately does NOT reuse calculateDamage() — that function's crit
+// chance is tangled up with target-hostile mechanics (Expose T2's crit
+// bonus, target Evasion partially resisting crit, accuracy-overflow
+// converting to crit) that make no sense against a friendly heal target and
+// were explicitly excluded per design discussion. A heal's base roll is
+// JUST the weapon's own die (local% included, same as damage) — no STR, no
+// WIS, kept deliberately simple per explicit request; Proficiency (the
+// caster's own highest-core-stat bonus) still applies, but separately,
+// later, in the engine's existing heal-application code, same as before.
+// Crit chance is JUST the caster's own base CritChance + weapon crit affix.
+// --------------------------------------------------
+export function calculateHealRoll(attacker, ability = null) {
+  // Resets the SAME shared module-level breakdown log calculateDamage()
+  // uses (getLastDamageBreakdown/_pushBreakdown) — without this, a heal
+  // tooltip built from that log would show leftover entries from whatever
+  // damage skill ran most recently, including a "base" value with STR baked
+  // into it from an unrelated prior action. Same reset calculateDamage()
+  // already does as its own first line.
+  try { _resetDamageBreakdown(); } catch { }
+
+  let min = 1, max = 2;
+  const weaponData = getEquippedWeaponData(attacker, 'weaponMain');
+  if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
+  const weaponMods = weaponData?._weaponMods || {};
+  const localHealMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
+
+  const dieRoll = Phaser.Math.Between(min, max);
+  const baseAmount = Math.floor(dieRoll * localHealMult);
+  try { _pushBreakdown({ label: 'base', value: baseAmount }); } catch { }
+
+  const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
+  const effDerived = getEffectiveDerived(attacker) || {};
+  const critChance = (effDerived.CritChance || 0) + weaponCrit;
+  const critMult = effDerived.CritMult || 1.5;
+  try { _pushBreakdown({ label: 'critChance', value: Math.round(critChance) }); } catch { }
+
+  const critRoll = Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : (Math.floor(Math.random() * 100) + 1);
+  const isCrit = critRoll <= critChance;
+
+  return { amount: baseAmount, isCrit, critMult };
+}
+
+// --------------------------------------------------
+// applyHealModifiers — the healing-side counterpart to
+// applyTypedDamageModifiers(). Order mirrors the REAL damage pipeline
+// exactly: skill's own healPct (Category A) -> HealingPower combat buff
+// (the counterpart to AttackPower — its own stage) -> crit -> gear
+// healingPercent (the counterpart to gear damage% — a SEPARATE, LATER
+// stage, applied AFTER crit). This is deliberately TWO sequential
+// multiplies, not one combined percentage — combat buffs and gear% are
+// different STAGES of the pipeline, not the same category of bonus. For
+// damage, AttackPower is applied inside applyTypedDamageModifiers while
+// gear% is applied afterward in a wholly separate function
+// (applyGearConversionAndPercent, called by the engine only once apply()
+// returns) — verified this explicitly rather than assuming, since the
+// additive-combination rule (feedback_additive_damage_bonuses) only applies
+// to multiple sources WITHIN the same stage (e.g. globalDamagePercent +
+// elementalDamagePercent, both gear-stage), never across stages. A flat
+// "+X healing" rider slot (the counterpart to a Tier-2 damage rider) has no
+// current consumer — no skill needs one yet. Deliberately does NOT touch
+// anything target-side — target.healingReceivedBonus is applied separately,
+// by the engine, AFTER this returns (see _applyAbilityToTarget's isHeal
+// branch) — that's the "last, target-side" step, equivalent to where
+// PDR/EDR/NDR sits for damage.
+// --------------------------------------------------
+export function applyHealModifiers(baseAmount, attacker, opts = {}) {
+  let amount = baseAmount;
+
+  const skillMult = Number.isFinite(opts.skillPct) ? opts.skillPct / 100 : 1;
+  if (skillMult !== 1) {
+    const prev = amount;
+    amount *= skillMult;
+    try { _pushBreakdown({ label: opts.skillLabel || `${opts.ability?.name || 'Skill'} healing (${opts.skillPct}%)`, mult: skillMult, from: Math.round(prev), to: Math.round(amount) }); } catch { }
+  }
+
+  // Combat buff stage — HealingPower only, for now.
+  const healingPowerPct = _sumStatusEffectMods(attacker)?.HealingPower || 0;
+  if (healingPowerPct !== 0) {
+    const mult = 1 + healingPowerPct / 100;
+    const prev = amount;
+    amount *= mult;
+    try { _pushBreakdown({ label: 'Healing Power', mult, from: Math.round(prev), to: Math.round(amount) }); } catch { }
+  }
+
+  if (opts.isCrit) {
+    const mult = Number.isFinite(opts.critMult) ? opts.critMult : 1.5;
+    const prev = amount;
+    amount *= mult;
+    try { _pushBreakdown({ label: 'crit', from: Math.round(prev), mult, to: Math.round(amount) }); } catch { }
+  }
+
+  // Gear stage — separate, later multiply (matches gear damage% landing
+  // after crit for the damage pipeline). Only one source right now
+  // (healingPercent), but if a second gear healing stat is ever added, IT
+  // combines additively with this one, same as globalDamagePercent +
+  // elementalDamagePercent do within the gear stage for damage.
+  const gearHealingPct = attacker?.gearEffects?.healingPercent || 0;
+  if (gearHealingPct !== 0) {
+    const mult = 1 + gearHealingPct / 100;
+    const prev = amount;
+    amount *= mult;
+    try { _pushBreakdown({ label: 'gear healing', mult, from: Math.round(prev), to: Math.round(amount) }); } catch { }
+  }
+
+  return Math.max(0, Math.floor(amount));
 }
 
 

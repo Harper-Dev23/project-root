@@ -89,7 +89,7 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
 
   const hasModifiers = (dmgFlat.min || 0) || (dmgFlat.max || 0) || dmgPercent || elemEntries.length
     || misc.mpPerTurn || misc.skillCostReductionPct || misc.globalDamagePercent || misc.elementalDamagePercent
-    || misc.necroticDamagePercent || misc.resilience || Object.keys(buildup).length
+    || misc.necroticDamagePercent || misc.healingPercent || misc.resilience || Object.keys(buildup).length
     || misc.physToElemPercent || misc.physToNecroPercent || misc.elemToNecroPercent
     || misc.initBonusOnBattleStart || misc.shieldPctOnBattleStart
     || Object.keys(misc.physBuildupOnPhysDmg || {}).length || Object.keys(misc.elemBuildupOnElemDmg || {}).length
@@ -110,6 +110,7 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     // the type color, per the user's call, kept consistent everywhere.
     if (misc.elementalDamagePercent) lines.push(`  • Elemental Damage: +${misc.elementalDamagePercent}%`);
     if (misc.necroticDamagePercent) lines.push(`  • Necrotic Damage: +${misc.necroticDamagePercent}%`);
+    if (misc.healingPercent) lines.push(`  • Healing: +${misc.healingPercent}%`);
     if (misc.resilience) lines.push(`  • Resilience: +${misc.resilience}`);
     Object.entries(buildup).forEach(([k, v]) => { if (v) lines.push(`  • +${v}% ${capitalize(k)} Buildup`); });
 

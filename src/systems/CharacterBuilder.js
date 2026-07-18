@@ -358,6 +358,7 @@ export function rebuildCharacterStats(character) {
     globalDamagePercent: 0,
     elementalDamagePercent: 0,
     necroticDamagePercent: 0,
+    healingPercent: 0,
     resilience: 0,
     weaponBuildupPercent: {},
     lifeStealPct: 0,
@@ -410,6 +411,7 @@ export function rebuildCharacterStats(character) {
       if (misc.globalDamagePercent) gearEffects.globalDamagePercent += misc.globalDamagePercent;
       if (misc.elementalDamagePercent) gearEffects.elementalDamagePercent += misc.elementalDamagePercent;
       if (misc.necroticDamagePercent) gearEffects.necroticDamagePercent += misc.necroticDamagePercent;
+      if (misc.healingPercent) gearEffects.healingPercent += misc.healingPercent;
       if (misc.resilience) gearEffects.resilience += misc.resilience;
       // Jewelry misc mods
       if (misc.physToElemPercent) gearEffects.physToElemPercent += misc.physToElemPercent;
@@ -493,6 +495,7 @@ export function rebuildCharacterStats(character) {
       globalDamagePercent: gearEffects.globalDamagePercent,
       elementalDamagePercent: gearEffects.elementalDamagePercent,
       necroticDamagePercent: gearEffects.necroticDamagePercent,
+      healingPercent: gearEffects.healingPercent,
       resilience: gearEffects.resilience,
       weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent }
     }
@@ -504,6 +507,7 @@ export function rebuildCharacterStats(character) {
     globalDamagePercent: gearEffects.globalDamagePercent,
     elementalDamagePercent: gearEffects.elementalDamagePercent,
     necroticDamagePercent: gearEffects.necroticDamagePercent,
+    healingPercent: gearEffects.healingPercent,
     resilience: gearEffects.resilience,
     weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent },
     lifeStealPct: gearEffects.lifeStealPct,

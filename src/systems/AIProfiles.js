@@ -302,6 +302,28 @@ export const AI_PROFILES = {
       return null;
     }
   },
+  wizard_dummy: {
+    decide(npc, scene, enemies) {
+      const { foes } = buildTargetList(npc, scene, enemies);
+      const charged = highestWeakness(foes, 'lightning', 1);
+      if (canUseSkill(npc, 'wizard_overload') && charged) {
+        return buildAction('wizard_overload', charged);
+      }
+      if (canUseSkill(npc, 'wizard_mana_shield') && !hasStatus(npc, 'wizard_mana_shield')) {
+        return buildAction('wizard_mana_shield', npc);
+      }
+      if (canUseSkill(npc, 'wizard_static_field')) {
+        const target = weakest(foes);
+        if (target) return buildAction('wizard_static_field', target);
+      }
+      if (canUseSkill(npc, 'wizard_arcane_bolt')) {
+        const target = weakest(foes);
+        if (target) return buildAction('wizard_arcane_bolt', target);
+      }
+      return null;
+    }
+  },
+
   huntsman: {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);

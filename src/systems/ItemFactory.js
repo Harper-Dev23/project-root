@@ -223,6 +223,12 @@ const ARMOR_PREFIX_POOL = [
   makeMiscArmorPrefix({ key: 'Mighty', tier: 2, prop: 'globalDamagePercent', range: [2, 3] }),
   makeMiscArmorPrefix({ key: 'Amos\u2019', tier: 1, prop: 'globalDamagePercent', range: [4, 5] }),
 
+  // Healing % (all sources) \u2014 armor-side counterpart, same ranges as
+  // globalDamagePercent above. Consumed by applyHealModifiers (CombatLogic.js).
+  makeMiscArmorPrefix({ key: 'Nurturing', tier: 3, prop: 'healingPercent', range: [1, 1] }),
+  makeMiscArmorPrefix({ key: 'Restoring', tier: 2, prop: 'healingPercent', range: [2, 3] }),
+  makeMiscArmorPrefix({ key: 'Miriam\u2019s', tier: 1, prop: 'healingPercent', range: [4, 5] }),
+
   // Resilience (Buildup resistance)
   // v3.3: buffed alongside the weakness decay rebalance \u2014 decay got weaker, so
   // resilience (flat reduction to incoming buildup, CombatScene.js _applyWeakness)
@@ -304,6 +310,12 @@ const WEAPON_PREFIX_POOL = [
   makeWeaponElementPercentPrefix({ key: 'Foul', tier: 3, prop: 'necroticDamagePercent', range: [2, 3] }),
   makeWeaponElementPercentPrefix({ key: 'Profane', tier: 2, prop: 'necroticDamagePercent', range: [4, 6] }),
   makeWeaponElementPercentPrefix({ key: 'Unholy', tier: 1, prop: 'necroticDamagePercent', range: [7, 10] }),
+
+  // % Healing — weapon-side counterpart, same ranges as the elemental/
+  // necrotic % affixes above. Consumed by applyHealModifiers (CombatLogic.js).
+  makeWeaponElementPercentPrefix({ key: 'Soothing', tier: 3, prop: 'healingPercent', range: [2, 3] }),
+  makeWeaponElementPercentPrefix({ key: 'Restorative', tier: 2, prop: 'healingPercent', range: [4, 6] }),
+  makeWeaponElementPercentPrefix({ key: 'Sanctified', tier: 1, prop: 'healingPercent', range: [7, 10] }),
 ];
 
 const WEAPON_SUFFIX_POOL = [
@@ -448,6 +460,11 @@ function buildInstanceModifiers(prefixes, suffixes) {
       globalDamagePercent: 0,
       elementalDamagePercent: 0,
       necroticDamagePercent: 0,
+      // Healing-side counterpart to globalDamagePercent/elementalDamagePercent
+      // — consumed by applyHealModifiers (CombatLogic.js), the new heal
+      // pipeline. One shared stat regardless of source (armor or weapon
+      // affix), same pattern globalDamagePercent/elementalDamagePercent use.
+      healingPercent: 0,
       resilience: 0,
       buildupPercent: {},
       // Jewelry: damage conversion (%)
@@ -514,6 +531,7 @@ function buildInstanceModifiers(prefixes, suffixes) {
       if (misc.globalDamagePercent) mods.misc.globalDamagePercent += misc.globalDamagePercent;
       if (misc.elementalDamagePercent) mods.misc.elementalDamagePercent += misc.elementalDamagePercent;
       if (misc.necroticDamagePercent) mods.misc.necroticDamagePercent += misc.necroticDamagePercent;
+      if (misc.healingPercent) mods.misc.healingPercent += misc.healingPercent;
       if (misc.resilience) mods.misc.resilience += misc.resilience;
       if (misc.buildupPercent) {
         for (const [fam, v] of Object.entries(misc.buildupPercent)) {
@@ -786,6 +804,7 @@ export function getItemComputedData(itemRef) {
       globalDamagePercent: misc.globalDamagePercent || 0,
       elementalDamagePercent: misc.elementalDamagePercent || 0,
       necroticDamagePercent: misc.necroticDamagePercent || 0,
+      healingPercent: misc.healingPercent || 0,
       resilience: misc.resilience || 0,
       // Jewelry
       physToElemPercent: misc.physToElemPercent || 0,

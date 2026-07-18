@@ -52,7 +52,7 @@ export const ENEMY_TYPES = {
   },
 
   animated_fighter_dummy: {
-    skin: 'soldier_portrait',
+    skin: 'dummy_portrait_equipped_fighter',
     maxHP: 180,
     maxMP: 60,
     skills: ['fighter_heavy_slash', 'fighter_guarded_blow', 'fighter_taunt', 'fighter_executioner'],
@@ -62,7 +62,7 @@ export const ENEMY_TYPES = {
   },
 
   animated_healer_dummy: {
-    skin: 'priest_portrait',
+    skin: 'dummy_portrait_equipped_healer',
     maxHP: 140,
     maxMP: 120,
     skills: ['healer_heal', 'healer_cleanse', 'healer_blessing', 'healer_flame_flick'],
@@ -72,7 +72,7 @@ export const ENEMY_TYPES = {
   },
 
   animated_warlock_dummy: {
-    skin: 'warlock_portrait',
+    skin: 'dummy_portrait_equipped_warlock',
     maxHP: 130,
     maxMP: 120,
     skills: ['warlock_hex', 'warlock_dark_bolts', 'warlock_curse_amplify', 'warlock_drain_life'],
@@ -82,7 +82,7 @@ export const ENEMY_TYPES = {
   },
 
   animated_ranger_dummy: {
-    skin: 'ranger_portrait',
+    skin: 'dummy_portrait_equipped_ranger',
     maxHP: 150,
     maxMP: 80,
     skills: ['ranger_quick_shot', 'ranger_frost_arrow', 'ranger_volley', 'ranger_aimed_shot'],
@@ -92,11 +92,21 @@ export const ENEMY_TYPES = {
   },
 
   animated_rogue_dummy: {
-    skin: 'rogue_portrait',
+    skin: 'dummy_portrait_equipped_rogue',
     maxHP: 140,
     maxMP: 70,
     skills: ['rogue_poisoned_knife', 'rogue_hamstring', 'rogue_evasion', 'rogue_sneak_attack', 'rogue_finishing_strike'],
     aiProfile: 'rogue_dummy',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  animated_wizard_dummy: {
+    skin: 'dummy_portrait_equipped_wizard',
+    maxHP: 130,
+    maxMP: 110,
+    skills: ['wizard_arcane_bolt', 'wizard_static_field', 'wizard_mana_shield', 'wizard_overload'],
+    aiProfile: 'wizard_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },

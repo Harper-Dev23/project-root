@@ -6,6 +6,7 @@ import { Items } from './items.js';
 import {
   applyDamageModifiers, applyTypedDamageModifiers, scaleTypedDamage, _pushBreakdown,
   findRewardIfWeakRule, applyDamagePctBonus, getDamageReductionFraction,
+  calculateHealRoll, applyHealModifiers,
 } from '../src/systems/CombatLogic.js';
 import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, WeaknessV3 } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
@@ -1125,6 +1126,57 @@ const NPC_ONLY_SKILLS = {
       return count >= 2 ? true : { ok: false, reason: `${target.name} lacks layered weaknesses.` };
     },
     apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] })
+  },
+
+  'wizard_arcane_bolt': {
+    id: 'wizard_arcane_bolt',
+    name: 'Arcane Bolt',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 5, buildup: { lightning: 60 } })
+  },
+  'wizard_static_field': {
+    id: 'wizard_static_field',
+    name: 'Static Field',
+    type: 'enemy',
+    actionCost: 'major',
+    mpCost: 5,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    apply: () => ({ amount: 5, buildup: { lightning: 90 } })
+  },
+  'wizard_mana_shield': {
+    id: 'wizard_mana_shield',
+    name: 'Mana Shield',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 4,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (user) => ({
+      amount: 0,
+      statusEffects: [{ id: 'wizard_mana_shield', turns: 2, mods: { ElementalResist: 20 } }]
+    })
+  },
+  'wizard_overload': {
+    id: 'wizard_overload',
+    name: 'Overload',
+    type: 'enemy',
+    actionCost: 'class',
+    mpCost: 8,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'lightning', tier: 1 },
+    apply: () => ({ amount: 12, consumeWeakness: ['lightning'] })
   },
 
   // Encounter 4 - Huntsman & Beasts
@@ -7499,7 +7551,7 @@ Object.assign(RAW_SKILLS, {
     name: "Mana Fountain",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 13,
@@ -7508,20 +7560,24 @@ Object.assign(RAW_SKILLS, {
     cooldown: 3,
     requiresTarget: false,
     targetRequirement: "self",
+    // No "spell"/"magic" tag — same pattern as Ward Focus — so this is
+    // never eligible for Rune Channel's recast check (gated on tags
+    // including 'spell') without needing an explicit noRecast flag; a
+    // simple self-utility buff, not a real recast candidate.
     tags: ["support", "mana", "zone"],
     apply: (attacker) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Mana Fountain requires an active runic zone." };
       zone.turns += 1;
       const maxMP = attacker?.maxMP ?? attacker?.derivedStats?.maxMP ?? 0;
-      const mpGain = Math.max(1, Math.floor(maxMP * 0.30));
+      const mpGain = Math.max(1, Math.floor(maxMP * 0.20));
       return {
         amount: 0,
         mpGain,
         log: `${attacker?.name ?? 'Mage'} taps the zone — restores ${mpGain} MP and extends it by 1 turn!`,
       };
     },
-    description: "Req zone. Bonus action, 0 MP. Extends zone +1 turn and restores 30% max MP."
+    description: "Req zone. Bonus action, 0 MP. Extends zone +1 turn and restores 20% max MP."
   },
 
   'silencing_shockwave': {
@@ -7529,7 +7585,8 @@ Object.assign(RAW_SKILLS, {
     name: "Silencing Shockwave",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 15,
@@ -7540,27 +7597,65 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "disorient", "consume"],
     requiresWeakness: { family: "disorient", tierAtLeast: 2 },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.silencing_shockwave;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.30);
-      const consumed = target?.weakness?.meters?.disorient || 0;
-      amount += Math.floor((consumed / 10) * (amount / 100));
+
+      // Consumes up to 400 current Disorient for bonus damage (excess
+      // beyond 400 stays on the target, not wasted — same "don't consume
+      // past what's actually used" rule as Toxic Bloom's clean-increment
+      // fix): +2% per 10 consumed, capped at +80% (400/10×2), folded
+      // directly into skillPct (Category A, additive with the base 130% —
+      // see feedback_additive_damage_bonuses) rather than a separate
+      // post-hoc add. This does NOT have its own repeat mechanic — no
+      // repeatChance here, per explicit design: it's only ever repeated via
+      // a Rune Channel recast, which re-runs this WHOLE function fresh, so
+      // each cast independently reads whatever's CURRENTLY on the target at
+      // that moment. If the original cast already consumed the target's
+      // Disorient down below 400, the recast's own bonusPct naturally comes
+      // out lower (or 0) instead of inheriting the original's bonus — "the
+      // second cast is inherently weaker," by design, not a bug to work
+      // around.
+      const currentDisorient = target?.weakness?.meters?.disorient || 0;
+      const consumed = Math.min(400, currentDisorient);
+      const bonusPct = (consumed / 10) * 2;
+      const basePct = 130;
+      const scaledPct = (basePct + bonusPct) * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // Necrotic reflavor if the target is critically low on mana (below
+      // 20% max MP) — otherwise keeps the weapon's own natural physical/
+      // elemental split (no forced conversion), same as Silence Crescent.
+      const targetMaxMP = target?.maxMP ?? target?.derivedStats?.maxMP ?? 0;
+      const lowMana = targetMaxMP > 0 && (target?.currentMP || 0) < targetMaxMP * 0.20;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct.toFixed(1)}% Disorient consumed` : ''}${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: lowMana ? { physToNecroPct: 100, elemToNecroPct: 100 } : undefined,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
       if (target?.weakness?.meters != null) {
-        target.weakness.meters.disorient = 0;
-        target.weakness.tiers.disorient = 0;
+        target.weakness.meters.disorient = Math.max(0, currentDisorient - consumed);
+        target.weakness.tiers.disorient = weaknessTierFromMeter(target.weakness.meters.disorient);
       }
+
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         log: consumed > 0 ? `Silencing Shockwave consumes ${consumed} disorient for bonus damage!` : undefined,
       };
     },
-    description: "Req disorient T2. 130% base damage. Consumes ALL disorient: +1% damage per 10 consumed."
+    description: "Requires Disorient T2 (Silenced). Deals 130% weapon damage — converts to Necrotic if the target is below 20% max MP. Consumes up to 400 Disorient buildup for bonus damage (+2% per 10 consumed, up to +80%); any excess beyond 400 is left on the target."
   },
 
   'curse_suppression': {
@@ -7568,7 +7663,7 @@ Object.assign(RAW_SKILLS, {
     name: "Curse Suppression",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["staff"],
     requiredStat: "CON",
     requiredValue: 14,
@@ -7576,70 +7671,38 @@ Object.assign(RAW_SKILLS, {
     mpCost: 6,
     cooldown: 5,
     requiresTarget: true,
+    // "ally" targeting already includes the caster's own slot (allySlots
+    // covers everyone on your side, self included — confirmed in
+    // _enterTargetingMode) — no separate self/ally distinction needed here.
     targetRequirement: "ally",
     tags: ["support", "cleanse", "defensive"],
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
     apply: (attacker, target) => {
       const currentCurse = target?.weakness?.meters?.curse || 0;
-      if (currentCurse === 0) return { amount: 0, log: `${target?.name ?? 'Ally'} has no curse to suppress.` };
       const curseRemoved = Math.min(400, currentCurse);
-      const resilienceStacks = Math.min(4, Math.floor(curseRemoved / 100));
+      // +1 Resilience per 10 curse removed (up to +40 at the 400 cap) — a
+      // flat reduction to ALL incoming weakness buildup, same real stat WIS
+      // derives permanently (see CharacterBuilder.js), just granted
+      // temporarily here via mods.Resilience (now summed by
+      // _sumStatusEffectMods alongside the character's own permanent
+      // value — see CombatLogic.js). Replaces the old BuildupReceived %
+      // mod entirely, per explicit request.
+      const resilienceGain = Math.floor(curseRemoved / 10);
       if (target?.weakness?.meters != null) {
         target.weakness.meters.curse = Math.max(0, currentCurse - curseRemoved);
         target.weakness.tiers.curse = weaknessTierFromMeter(target.weakness.meters.curse);
       }
-      const statusEffects = resilienceStacks > 0
-        ? [{ id: 'curse_suppression_ward', turns: 3, mods: { BuildupReceived: -(resilienceStacks * 5) } }]
+      const statusEffects = resilienceGain > 0
+        ? [{ id: 'curse_suppression_ward', turns: 3, mods: { Resilience: resilienceGain } }]
         : undefined;
       return {
         amount: 0,
         isHeal: false,
         statusEffects,
-        log: `${curseRemoved} curse suppressed — ${target?.name ?? 'ally'} gains ${resilienceStacks} resilience!`,
+        log: `${curseRemoved} curse suppressed — ${target?.name ?? 'ally'} gains +${resilienceGain} Resilience!`,
       };
     },
-    description: "Bonus action. Remove up to 400 curse from ally. Grant -5% buildup received per 100 removed (max 4 stacks) for 3 turns."
-  },
-
-  'arc_echo': {
-    id: "arc_echo",
-    name: "Arc Echo",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.22",
-    requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    cooldown: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["magic", "spell", "lightning", "elemental"],
-    requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.arc_echo;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: 'lightning', isMagic: true, skipGearMultiplier: true,
-      }));
-      const meter = target?.weakness?.meters?.lightning || 0;
-      const tier = target?.weakness?.tiers?.lightning || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier >= 1) amount = Math.floor(amount * (1 + 0.15 * tier));
-      if (intensity > 1) amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
-      const repeatChance = tier >= 2 ? 1.0 : 0;
-      const initiativeGained = tier >= 2 ? 5 : 0;
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: 'lightning',
-        repeatChance,
-        repeatDamageFraction: 0.55,
-        initiativeGained: initiativeGained || undefined,
-      };
-    },
-    description: "Req lightning T1. Damage amplified by tier (+15%) and intensity. Lightning T2: guaranteed repeat at 55% + gain 5 initiative."
+    description: "Bonus action. Requires the target (self or ally) to have Curse T1+. Removes up to 400 Curse buildup, granting +1 Resilience per 10 removed (up to +40) for 3 turns."
   },
 
   'arcane_avalanche': {
@@ -7647,7 +7710,8 @@ Object.assign(RAW_SKILLS, {
     name: "Arcane Avalanche",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 16,
@@ -7657,32 +7721,66 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "aoe"],
-    apply: (attacker, target, scene) => {
+    // Fixed front-rank entry — the player must click one of the three front
+    // slots, but ALL THREE fire regardless of which specific one was
+    // clicked (same "fixed formation, restricted click" pattern Sacred
+    // Shockwave/Flame Pillar use for their diamond).
+    targetSlots: [1, 2, 3],
+    // Declarative cascade graph — see _resolvePenetrationChain
+    // (CombatScene.js) for the full mechanic. Three lines, fired in THIS
+    // exact order (a slot hit by more than one line needs its HP tracked
+    // cumulatively across them):
+    //   Line 1 (front-bottom): 1 -> splits (5,6) -> 5's own overflow -> 6
+    //   Line 2 (front-mid):    2 -> splits (4,5) -> 4+5's combined overflow -> 7
+    //   Line 3 (front-top):    3 -> splits (4,8) -> 4's own overflow -> 8
+    penetrationChain: {
+      lines: [
+        { entry: 1, splitTo: [5, 6], overflow: { from: 5, to: 6 } },
+        { entry: 2, splitTo: [4, 5], overflow: { from: [4, 5], to: 7 } },
+        { entry: 3, splitTo: [4, 8], overflow: { from: 4, to: 8 } },
+      ],
+    },
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.arcane_avalanche;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, isMagic: true, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.10);
-      const hasElementalT2 = ['fire', 'cold', 'lightning'].some(
-        f => (target?.weakness?.tiers?.[f] || 0) >= 2
+
+      const basePct = 100;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      // No skillConversion — "arcane" damage keeps the weapon's own natural
+      // physical/elemental split, same as Silence Crescent/Arc Echo's
+      // pre-conversion pattern. Gear conversion + gear% and Lightning Jolt
+      // are NOT applied here — they happen independently PER HIT inside
+      // _resolvePenetrationChain, since every step of the cascade (each
+      // front entry, each split half, each overflow) is its own separate
+      // instance, same as any other splash gets elsewhere in this file.
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
       );
-      // Stampede: hit all enemies, penetration bonus damage if target has elemental T2
-      // TODO: replace 'all' with proper stampede sequence (3 in-line enemies) when AOE shape added
-      const splash = resolveAOESplash(scene, target, { shape: 'all' }).map(tgt => {
-        const tgtHasT2 = ['fire', 'cold', 'lightning'].some(f => (tgt?.weakness?.tiers?.[f] || 0) >= 2);
-        const splashAmt = Math.floor(amount * (tgtHasT2 ? 0.75 : 0.60));
-        return { target: tgt, amount: splashAmt, isMagic: true, tags: ability?.tags };
-      });
-      if (hasElementalT2) amount = Math.floor(amount * 1.20);
+
+      // amount/physical/elemental/necrotic stay at 0 — this is deliberately
+      // NOT a direct hit on `target`. Every real hit (all three front-rank
+      // entries and everything they cascade into) is dealt entirely by
+      // _resolvePenetrationChain, triggered by ability.penetrationChain +
+      // _penetrationBreakdown below (see the "Penetration chain" hook in
+      // _applyAbilityToTarget).
       return {
         ...roll,
-        amount,
+        amount: 0, physical: 0, elemental: 0, necrotic: 0,
         isMagic: true,
-        splash: splash.length ? splash : undefined,
+        _penetrationBreakdown: { physical, elemental, necrotic },
       };
     },
-    description: "110% arcane stampede hitting all enemies. If primary has elemental T2: +20% damage. AOE targets with T2: 75% splash, others: 60%."
+    description: "Stampedes the front rank in 3 lines (slots 1/2/3), each fanning out 2 ranks back. Deals 100% weapon damage to each occupied front slot. Any overkill — or the WHOLE hit, if the slot is empty or the target is at Fire/Cold/Lightning T2+ — splits 50/50 into that line's two slots behind it, cascading one rank further the same way."
   },
 
   // Moved out of the dead Staff surplus block (below) — kept as-is for now,
@@ -7692,7 +7790,7 @@ Object.assign(RAW_SKILLS, {
     name: "Restoration Light",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.23",
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 15,
@@ -7700,23 +7798,49 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "ally",
-    tags: ["magic", "holy", "heal", "regen"],
+    // "spell" tag added — this is the actual reason it couldn't recast from
+    // Rune Channel before; the recast check gates on tags.includes('spell').
+    tags: ["magic", "spell", "holy", "heal", "regen"],
     cooldown: 3,
-    statusEffects: [{ id: "regen", turns: 2, tickHeal: 3 }],
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.restoration_light;
-      const wis = attacker?.totalStats?.WIS ?? attacker?.WIS ?? 0;
-      const healAmount = 10 + Math.floor(wis / 2);
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
+      // First skill on the new heal pipeline — calculateHealRoll (weapon die
+      // only, no STR/WIS, per explicit design decision) + applyHealModifiers
+      // (skillPct -> HealingPower buff -> crit). Proficiency and
+      // target.healingReceivedBonus still apply afterward, same as before,
+      // in the engine's own heal-application code — see project memory for
+      // the full pipeline writeup.
+      const roll = calculateHealRoll(attacker, ability);
+
+      // 150% is a first-guess placeholder, not a tuned number — this
+      // replaces a flat WIS-based formula with a weapon-die-based one for
+      // the first time, and the actual weapon damage tables aren't visible
+      // from here. Needs a live-testing pass to land on the right %.
+      const basePct = 150;
+      const scaledPct = basePct * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
+
+      const healAmount = Math.max(1, applyHealModifiers(roll.amount, attacker, {
+        ability, skillPct: scaledPct,
+        skillLabel: `${ability?.name || 'Skill'} healing (${basePct}%${powerNote})`,
+        isCrit: roll.isCrit, critMult: roll.critMult,
+      }));
+
+      // Both the instant heal and the Regen tick scale with power; the
+      // Regen's DURATION does not (matches every other recastable skill
+      // this pass — only magnitude scales, not turns). Regen's own tick is
+      // NOT crit-affected — only the instant portion crits.
+      const regenTick = Math.max(1, Math.floor(3 * powerScale));
+
       return {
         amount: healAmount,
         isHeal: true,
-        statusEffects,
+        isCrit: roll.isCrit,
+        statusEffects: [{ id: "regen", turns: 2, tickHeal: regenTick }],
       };
     },
-    description: "Restore moderate HP and grant regen for 2 turns."
+    description: "Heals 150% of your weapon roll and grants Regen (2 turns, 3 HP/turn)."
   },
 
   'curse_cinders': {
@@ -7724,7 +7848,8 @@ Object.assign(RAW_SKILLS, {
     name: "Curse of Cinders",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
@@ -7732,40 +7857,50 @@ Object.assign(RAW_SKILLS, {
     mpCost: 1,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "curse", "necrotic"],
+    tags: ["magic", "spell", "curse", "fire"],
     cooldown: 2,
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    buildupHint: { curse: 60 },
-    statusEffects: [{ id: "curse_cinders", turns: 3 }],
-    apply: (attacker, target, scene) => {
+    buildupHint: { curse: 50 },
+    apply: (attacker, target) => {
       const ability = SKILLS?.curse_cinders;
-      const meter = target?.weakness?.meters?.curse || 0;
-      if (meter < 100) {
-        scene?._log?.(`${target?.name || "The target"} is not Hexed; Curse of Cinders fails.`);
-        return { amount: 0, dealsDamage: false };
-      }
-      const intStat = attacker?.totalStats?.INT ?? attacker?.INT ?? 0;
-      const base = 6 + (intStat >> 3);
-      const amount = Math.max(1, applyDamageModifiers(base, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: "necrotic",
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect, sourceId: attacker?.id ?? effect.sourceId }))
-        : undefined;
+      const roll = calculateDamage(attacker, target, ability);
+
+      // Whole hit reflavored as Fire/Elemental regardless of the weapon's own
+      // physical/elemental split — a curse-fire bolt, not a physical staff swing.
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Permanent rider (Curse T1+ gate enforced by requiresWeakness above):
+      // overrides the target's own Fire-T1 "acting loses Fire buildup"
+      // penalty into a GAIN instead — see the per-action trigger in
+      // CombatScene.js. Only added once; recasting on an already-cursed
+      // target just deals damage again.
+      target.statusEffects = target.statusEffects || [];
+      const alreadyCindered = target.statusEffects.some(se => se?.id === 'curse_cinders');
+      const statusEffects = alreadyCindered ? undefined : [{
+        id: "curse_cinders", name: "Curse of Cinders", permanent: true,
+        onAct: { fireBuildupOverride: true },
+      }];
+
       return {
-        amount,
+        ...roll,
+        physical, elemental, necrotic, amount,
         isMagic: true,
-        element: "necrotic",
-        dealsDamage: true,
-        buildup: { curse: ability?.buildupHint?.curse ?? 60 },
+        element: 'fire',
+        buildup: { curse: ability?.buildupHint?.curse ?? 50 },
         statusEffects,
       };
     },
-    description: "Afflicts the target with Cinders; adds CURSE buildup and lingering burn."
+    description: "Deals 100% weapon damage as Fire, +50 Curse buildup. Requires target at least Hexed. Applies a permanent rider: while cursed, acting gains Fire buildup instead of losing it, scaling with Curse intensity — works regardless of the target's own Fire tier."
   },
 
   // ===============================
@@ -8256,55 +8391,68 @@ Object.assign(RAW_SKILLS, {
     name: "Arc Echo",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.21",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
     mpCost: 6,
+    cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "lightning", "amplify"],
+    tags: ["magic", "spell", "lightning", "elemental"],
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 2, buff: { repeatStrikeOnce: true, repeatPowerPct: 55 } },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.arc_echo;
+      const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'lightning',
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
 
+      // Tier and intensity bonuses combined additively into ONE skillPct
+      // (Category A — see feedback_additive_damage_bonuses) instead of two
+      // sequential multiplies, which compound instead of add.
       const meter = target?.weakness?.meters?.lightning || 0;
       const tier = target?.weakness?.tiers?.lightning || 0;
       const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier >= 1) {
-        amount = Math.floor(amount * (1 + 0.15 * tier));
-      }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
-      }
+      const tierPct = 15 * tier;
+      const intensityPct = 20 * Math.max(0, intensity - 1);
+      const basePct = 100;
+      const scaledPct = (basePct + tierPct + intensityPct) * powerScale;
+      const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
-      let repeatDamage = 0;
-      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
-        const pct = ability?.rewardIfWeak?.buff?.repeatPowerPct ?? 55;
-        repeatDamage = Math.max(1, Math.floor(amount * (pct / 100)));
-        amount += repeatDamage;
-      }
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: scaledPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${tierPct ? ` + ${tierPct}% tier` : ''}${intensityPct ? ` + ${intensityPct}% intensity` : ''}${powerNote})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Lightning T2+ (Shocked): guaranteed repeat at 55% power, using the
+      // real repeatChance/repeatScale mechanism (the old version declared
+      // repeatDamageFraction/extraHits — neither field was ever read
+      // anywhere in the engine, so the "echo" never actually happened; it
+      // just quietly folded a bonus number into the same hit instead).
+      // +5 Initiative on the same threshold, unchanged from before.
+      const repeatChance = tier >= 2 ? 1.0 : 0;
+      const initiativeGained = tier >= 2 ? 5 : 0;
 
       return {
         ...roll,
-        amount,
+        physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'lightning',
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        extraHits: repeatDamage ? [{ amount: repeatDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
+        repeatChance,
+        repeatScale: 0.55,
+        initiativeGained: initiativeGained || undefined,
       };
     },
-    description: "Synchronize with Shock to echo the discharge once at reduced power."
+    description: "Requires Lightning T1+. Deals 100% weapon damage as Lightning, +15% per tier and +20% per intensity step above 1. At Lightning T2+ (Shocked): guaranteed repeat at 55% power, and gain 5 Initiative."
   },
 
   'hemorrhage_rite': {
@@ -10290,14 +10438,17 @@ Object.assign(RAW_SKILLS, {
       const fireDmgOnHit = 2 * steps;
       const fireBuildupOnHit = 20 * steps;
 
-      // Apply buff to all allies including self
+      // Apply buff to all allies including self. Routed through
+      // scene._addStatusEffects (not a direct push) so a recast on an ally
+      // who already has the buff coalesces into one entry — keeping the
+      // stronger of the two onHit values — instead of stacking two live
+      // entries that both fire on every hit.
       const buff = { id: "blazing_fervor_buff", turns: 2, onHit: { fireDamage: fireDmgOnHit, fireBuildup: fireBuildupOnHit } };
       const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
       (allySlots || []).forEach(s => {
         const ally = s?.char;
         if (!ally || ally.status === 'incapacitated') return;
-        ally.statusEffects = ally.statusEffects || [];
-        ally.statusEffects.push({ ...buff });
+        scene?._addStatusEffects?.(ally, [{ ...buff }]);
       });
       scene?._log?.(`${attacker?.name || "The swordsman"} blazes with fervor (spent ${spend} initiative) — allies deal +${fireDmgOnHit} fire damage and +${fireBuildupOnHit} fire buildup on hit for 2 turns.`);
       return { amount: 0 };
@@ -10476,8 +10627,7 @@ Object.assign(RAW_SKILLS, {
         const enemy = s?.char;
         if (!enemy || enemy.status === 'incapacitated') return;
         if ((enemy?.weakness?.tiers?.disorient || 0) < 1) return;
-        enemy.statusEffects = enemy.statusEffects || [];
-        enemy.statusEffects.push({ id: "shaken_aim", turns: 1, mods: { Accuracy: -50 } });
+        scene?._addStatusEffects?.(enemy, [{ id: "shaken_aim", turns: 1, mods: { Accuracy: -50 } }]);
         affected++;
       });
       return {
@@ -11894,14 +12044,13 @@ Object.assign(RAW_SKILLS, {
           incoming.elemental = 0;
           incoming.necrotic = 0;
         }
-        owner.statusEffects = owner.statusEffects || [];
-        owner.statusEffects.push({
+        scene?._addStatusEffects?.(owner, [{
           id: "bedrock_guard_charge",
           name: "Bedrock Guard",
           turns: 1,
           nextHitOnly: true,
           onHit: { buildup: { cold: 100 } },
-        });
+        }]);
         scene?._log?.(`${owner.name} braces against the blast — the splash damage is completely negated! Their next attack carries a surge of cold.`);
       },
     },
@@ -12574,8 +12723,7 @@ Object.assign(RAW_SKILLS, {
         // families, so max 3 families x T2 x 5% = -30% cap), 2-turn debuff.
         const weakenPct = Math.min(30, tierSum * 5);
         if (weakenPct > 0) {
-          victim.statusEffects = victim.statusEffects || [];
-          victim.statusEffects.push({ id: "sacred_shockwave_weakened", turns: 2, mods: { AttackPower: -weakenPct } });
+          scene?._addStatusEffects?.(victim, [{ id: "sacred_shockwave_weakened", turns: 2, mods: { AttackPower: -weakenPct } }]);
         }
       };
 
