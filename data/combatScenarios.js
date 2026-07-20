@@ -31,7 +31,7 @@ export const COMBAT_SCENARIOS = {
     name: 'Animated Party Test',
     description: 'Six animated dummies demonstrating classic RPG roles.',
     longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger, rogue and wizard—showcases weakness synergies, payoffs and interlocking behaviour.',
-    portraitKey: 'dummy_party',
+    portraitKey: 'dummy_portrait_equipped_fighter',
     enemies: [
       { type: 'animated_fighter_dummy', slotId: 1, drops: [{ equip: 'head', droppable: true }] },
       { type: 'animated_healer_dummy',  slotId: 5, drops: [{ equip: 'head', droppable: true }] },
@@ -46,7 +46,7 @@ export const COMBAT_SCENARIOS = {
     name: 'Huntsman & Beasts',
     description: 'Coordinate against a huntsman commander and his beasts.',
     longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
-    portraitKey: 'hunter_portrait',
+    portraitKey: 'portrait_styx_commander',
     enemies: [
       { type: 'huntsman_commander', slotId: 8 },
       { type: 'beast_oskar', slotId: 2 },
@@ -58,7 +58,7 @@ export const COMBAT_SCENARIOS = {
     name: 'Elemental Duelists',
     description: 'Battle elite fire and ice duelists leveraging elemental reactions.',
     longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
-    portraitKey: 'elemental_duelists',
+    portraitKey: 'portrait_lesse_duelist_ice',
     enemies: [
       { type: 'fire_duelist', slotId: 2 },
       { type: 'ice_duelist', slotId: 3 }

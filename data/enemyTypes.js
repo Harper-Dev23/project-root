@@ -112,7 +112,7 @@ export const ENEMY_TYPES = {
   },
 
   huntsman_commander: {
-    skin: 'hunter_portrait',
+    skin: 'portrait_styx_commander',
     maxHP: 220,
     maxMP: 100,
     skills: ['huntsman_mark', 'huntsman_command', 'huntsman_trap_shot', 'huntsman_empower_pack'],
@@ -123,7 +123,7 @@ export const ENEMY_TYPES = {
 
 
   beast_oskar: {
-    skin: 'beast_portrait',
+    skin: 'portrait_oskar',
     maxHP: 260,
     maxMP: 60,
     skills: ['oskar_rending_bite', 'oskar_infectious_claw', 'oskar_maw_rip', 'oskar_rotting_maw'],
@@ -183,7 +183,7 @@ export const ENEMY_TYPES = {
   },
 
   beast_kiro: {
-    skin: 'beast_portrait',
+    skin: 'portrait_kiro',
     maxHP: 220,
     maxMP: 80,
     skills: ['kiro_toxic_spit', 'kiro_venomous_swipe', 'kiro_poison_cloud', 'kiro_corrosive_bite'],
@@ -194,7 +194,7 @@ export const ENEMY_TYPES = {
   },
 
   fire_duelist: {
-    skin: 'fire_duelist',
+    skin: 'portrait_lesse_duelist_fire',
     maxHP: 260,
     maxMP: 120,
     skills: ['fire_flame_slash', 'fire_heated_guard', 'fire_burst', 'fire_flare_wave'],
@@ -204,7 +204,7 @@ export const ENEMY_TYPES = {
   },
 
   ice_duelist: {
-    skin: 'ice_duelist',
+    skin: 'portrait_lesse_duelist_ice',
     maxHP: 260,
     maxMP: 120,
     skills: ['ice_frost_strike', 'ice_icy_guard', 'ice_freeze_point', 'ice_shard_storm'],

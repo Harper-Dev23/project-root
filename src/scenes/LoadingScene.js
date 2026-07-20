@@ -47,6 +47,11 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('dummy_portrait_equipped_rogue', 'assets/sprites/portraits/dummy_portrait_equipped_rogue.png');
     this.load.image('dummy_portrait_equipped_warlock', 'assets/sprites/portraits/dummy_portrait_equipped_warlock.png');
     this.load.image('dummy_portrait_equipped_wizard', 'assets/sprites/portraits/dummy_portrait_equipped_wizard.png');
+    this.load.image('portrait_kiro', 'assets/sprites/portraits/portrait_kiro.png');
+    this.load.image('portrait_oskar', 'assets/sprites/portraits/portrait_oskar.png');
+    this.load.image('portrait_styx_commander', 'assets/sprites/portraits/portrait_styx_commander.png');
+    this.load.image('portrait_lesse_duelist_fire', 'assets/sprites/portraits/portrait_lesse_duelist_fire.png');
+    this.load.image('portrait_lesse_duelist_ice', 'assets/sprites/portraits/portrait_lesse_duelist_ice.png');
     //Load UI frame
     this.load.image('ui_frame', 'assets/UIinterface/ui_frame.png');
 
