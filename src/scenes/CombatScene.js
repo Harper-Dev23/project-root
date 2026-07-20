@@ -7440,7 +7440,9 @@ export default class CombatScene extends Phaser.Scene {
     };
 
     if (!action) {
-      this._log(`${npc.name} hesitates.`);
+      // No valid action this pass (no legal target, everything on cooldown,
+      // etc.) — silent. This can fire once per exhausted action-type slot
+      // per turn, which reads as pure spam once the AI's actually working.
       finish(false);
       return;
     }

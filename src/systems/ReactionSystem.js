@@ -178,15 +178,7 @@ export default class ReactionSystem {
     }
 
     const st = this._state(owner);
-    if (!st || (st.triggersRemaining | 0) <= 0) {
-      // Diagnostic: only worth logging if they actually have something
-      // prepared (otherwise this fires on every single hit taken, which
-      // would be pure noise for a character with no reactions armed at all).
-      if (st?.prepared?.length) {
-        this.scene?._log?.(`${owner.name} has no reaction points left this round (refreshes on their next turn).`);
-      }
-      return;
-    }
+    if (!st || (st.triggersRemaining | 0) <= 0) return;
 
     // prepared pool → candidates (same as before)
     let pool = this._resolvePrepared(owner);
@@ -213,26 +205,7 @@ export default class ReactionSystem {
         .sort((a, b) => (b.trig.priority || 0) - (a.trig.priority || 0));
     }
 
-    // Diagnostic: if something was actually prepared and its trigger matches
-    // this event, but it still didn't qualify, say exactly why instead of
-    // silently doing nothing. This is the one gap that made "why isn't my
-    // reaction firing" impossible to debug from outside — every other bail-
-    // out above this point is either irrelevant (wrong event/team) or
-    // already visible another way, but a prepared-and-ready-looking reaction
-    // failing silently here was the confusing case.
-    if (!candidates.length) {
-      for (const id of pool) {
-        const s = SKILLS[id];
-        const trig = s && getTriggerForEvent(s, evt);
-        if (!trig) continue;
-        if (!DevFlags.isNoCooldownEnabled() && this.scene?._isSkillOnCooldown?.(owner, id)) {
-          this.scene?._log?.(`${owner.name}'s ${s.name} is on cooldown and can't trigger yet.`);
-        } else if (!this._meetsReqs(owner, s)) {
-          this.scene?._log?.(`${owner.name}'s ${s.name} can't trigger — ${this._reqFailureReason(owner, s)}.`);
-        }
-      }
-      return;
-    }
+    if (!candidates.length) return;
 
     const chosen = candidates[0].s;
 
@@ -245,10 +218,7 @@ export default class ReactionSystem {
         // (e.g. Read and React needing to confirm the hit was melee).
         sourceAbility: ability, sourceIntent: intent,
       });
-      if (!ok) {
-        this.scene?._log?.(`${owner.name}'s ${chosen.name} didn't trigger — its condition wasn't met.`);
-        return;
-      }
+      if (!ok) return;
     }
 
     // Execute
