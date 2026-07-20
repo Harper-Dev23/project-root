@@ -855,6 +855,77 @@ const NPC_ONLY_SKILLS = {
     apply: () => ({ amount: 11, consumeWeakness: ['expose'] })
   },
 
+  // Chad's signature — arms itself via the fighter_dummy AI profile (same
+  // idempotent-arm pattern berserker_boss uses for Blood Fury). Redesigned
+  // onto the new 'pre_hit' trigger (ReactionSystem.checkPreHit,
+  // CombatScene._applyAbilityToTarget) — fires BEFORE the target's hit is
+  // rolled at all, so this doesn't block/negate the hit, it substitutes
+  // itself as the actual target: the attack resolves fresh against Chad's
+  // own stats. Naturally only ever sees primary single-target resolution —
+  // splash/AoE instances never route through this checkpoint, so there's no
+  // separate "isSplash" flag to check here (unlike the old ally_hit version).
+  'fighter_guardians_stand': {
+    id: 'fighter_guardians_stand',
+    name: "Guardian's Stand",
+    type: 'enemy',
+    mechanic: 'reaction',
+    actionCost: 'reaction',
+    mpCost: 4,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: false,
+    reaction: {
+      trigger: 'pre_hit',
+      cooldownOn: 'trigger',
+      canTrigger: ({ owner, target, scene }) =>
+        scene?._getUnitColumn?.(owner) === scene?._getUnitColumn?.(target),
+      exec: ({ owner, scene }) => {
+        scene?._logLocal?.({ segments: [{ text: 'Chad! Chad! Chad!', color: '#ffd166' }] });
+        return { redirectTo: owner };
+      },
+    },
+    description: "Reaction: when an ally in your rank is targeted by a single-target attack, intercept it — the attack resolves against you instead."
+  },
+
+  // Chad's second signature — same initiative-spend-scales-the-effect shape
+  // as Stan's Mending Wave. MP restore is fixed at 25% (not spend-scaled,
+  // per the ask); the resist buff is what scales with spend.
+  'fighter_bulwark_call': {
+    id: 'fighter_bulwark_call',
+    name: 'Bulwark Call',
+    type: 'enemy',
+    actionCost: 'class',
+    mpCost: 6,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: false,
+    requiresInitiativeGauge: 30,
+    apply: (attacker, _target, scene) => {
+      const spend = Math.min(attacker?.initiativeGauge || 0, 60);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      // +10 all resists at the 30 minimum, up to +20 at the 60 cap.
+      const resistBonus = Math.floor(spend / 3);
+
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        scene?._addStatusEffects?.(ally, [{
+          id: 'bulwark_call', turns: 2,
+          mods: { PhysicalResist: resistBonus, ElementalResist: resistBonus, NecroticResist: resistBonus },
+        }]);
+        const mpRestore = Math.floor((ally.maxMP || 0) * 0.25);
+        if (mpRestore > 0) {
+          ally.currentMP = Math.min(ally.maxMP || 0, (ally.currentMP || 0) + mpRestore);
+        }
+      });
+
+      scene?._log?.(`${attacker?.name || 'Chad'} rallies the party — damage taken reduced, MP restored!`);
+      return { amount: 0 };
+    },
+    description: "Spends 30-60 Initiative to bolster the whole party: +10 to +20 all Resists for 2 turns, and restores 25% MP to everyone."
+  },
+
   'healer_heal': {
     id: 'healer_heal',
     name: 'Restore',
@@ -927,6 +998,55 @@ const NPC_ONLY_SKILLS = {
     apply: () => ({ amount: 3, buildup: { fire: 70 } })
   },
 
+  // Stan's signature — real heal pipeline (calculateHealRoll/
+  // applyHealModifiers, same functions Restoration Light uses), not the
+  // flat-formula healer_heal above. Spends 30-60 Initiative (gated via
+  // requiresInitiativeGauge, checked generically by the engine); bigger
+  // spend scales the heal up. Hits the whole party via splash, same shape
+  // ranger_volley/war_cry already use for their own AoE payloads.
+  'healer_mending_wave': {
+    id: 'healer_mending_wave',
+    name: 'Mending Wave',
+    type: 'enemy',
+    actionCost: 'class',
+    mpCost: 6,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'ally',
+    requiresInitiativeGauge: 30,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.healer_mending_wave;
+      // requiresInitiativeGauge (checked generically before apply() ever
+      // runs) already guarantees at least 30 here — just cap the spend.
+      const spend = Math.min(attacker?.initiativeGauge || 0, 60);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      // 100% at the 30 minimum, scaling up to 220% at the 60 cap.
+      const skillPct = 100 + Math.floor((spend - 30) * 4);
+
+      const roll = calculateHealRoll(attacker, ability);
+      const amount = Math.max(1, applyHealModifiers(roll.amount, attacker, {
+        ability, skillPct,
+        skillLabel: `${ability?.name || 'Skill'} healing (${skillPct}%)`,
+        isCrit: roll.isCrit, critMult: roll.critMult,
+      }));
+
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const others = (allySlots || [])
+        .map(s => s?.char)
+        .filter(ally => ally && ally !== target && ally.status !== 'incapacitated');
+
+      scene?._logLocal?.({ segments: [{ text: 'Stan! Stan! Stan!', color: '#ffd166' }] });
+      scene?._log?.(`${attacker?.name || 'Stan'} unleashes a wave of light, mending the whole party!`);
+
+      return {
+        amount, isHeal: true, isCrit: roll.isCrit,
+        splash: others.map(ally => ({ target: ally, amount, isHeal: true })),
+      };
+    },
+    description: "Spends 30-60 Initiative to heal the whole party at once — the more Initiative spent, the stronger the heal."
+  },
+
   'warlock_hex': {
     id: 'warlock_hex',
     name: 'Hex',
@@ -959,6 +1079,56 @@ const NPC_ONLY_SKILLS = {
       return { amount: dmg };
     }
   },
+
+  // Gary's second signature — costs HP instead of MP (canExecute enforces
+  // "only above 80% HP" so this can't be used recklessly into a losing
+  // position, despite the name). Requires target already Singed (Fire T1+).
+  'warlock_reckless_immolation': {
+    id: 'warlock_reckless_immolation',
+    name: 'Reckless Immolation',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 0,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'fire', tier: 1 },
+    canExecute: ({ user }) => {
+      const hpPct = (user?.currentHP || 0) / Math.max(1, user?.maxHP || 1);
+      return hpPct > 0.8 ? true : { ok: false, reason: `${user?.name || 'Gary'} needs more than 80% HP to risk this.` };
+    },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.warlock_reckless_immolation;
+      const hpCost = Math.max(1, Math.floor((attacker?.maxHP || 0) * 0.15));
+      attacker.currentHP = Math.max(1, (attacker.currentHP || 0) - hpCost);
+
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 130, skillLabel: `${ability?.name || 'Skill'} weapon damage (130%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      scene?._log?.(`${attacker?.name || 'Gary'} burns ${hpCost} of his own HP to fuel a reckless blast!`);
+      scene?._logLocal?.({ segments: [{ text: "Gary's so cool!", color: '#ffd166' }] });
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'fire',
+        buildup: { fire: 160 },
+      };
+    },
+    description: "Costs 15% of Gary's own max HP instead of MP (only usable above 80% HP). Requires target at least Singed. Deals 130% weapon damage as Fire and applies heavy Fire buildup."
+  },
+
   'warlock_dark_bolts': {
     id: 'warlock_dark_bolts',
     name: 'Dark Bolts',
@@ -990,6 +1160,53 @@ const NPC_ONLY_SKILLS = {
       scene?._log?.(`${target.name}'s curse deepens!`);
       return { amount: 0 };
     }
+  },
+
+  // Gary's signature — now functionally identical to the player's own
+  // curse_of_needles (dagger): same typed pipeline, same 110% skillPct, same
+  // requiresWeakness gate (target must already be at least Hexed), same
+  // permanent onHit rider, no self-applied curse buildup. Rebuilt here
+  // rather than reused directly only so enemyOnly/AI concerns stay separate
+  // from the shared player skill object. Gary establishes the curse via
+  // warlock_hex first (already in his kit, applies Curse buildup) — this
+  // skill extends/maintains it, it doesn't start it.
+  'warlock_curse_needles': {
+    id: 'warlock_curse_needles',
+    name: 'Curse of Needles',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 7,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresWeakness: { family: 'curse', tierAtLeast: 1 },
+    tags: ['melee', 'attack', 'curse'],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.warlock_curse_needles;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      target.statusEffects = target.statusEffects || [];
+      const alreadyCursed = target.statusEffects.some(se => se?.id === 'warlock_curse_needles');
+      const statusEffects = alreadyCursed ? undefined : [{
+        id: 'warlock_curse_needles', name: 'Curse of Needles', permanent: true,
+        onHit: { weaponDamageFlat: 2, curseScaled: true },
+      }];
+
+      return { ...roll, physical, elemental, necrotic, amount, statusEffects };
+    },
+    description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while cursed, amplified while Afflicted."
   },
 
   'ranger_quick_shot': {
@@ -1045,6 +1262,52 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
     apply: () => ({ amount: 9, consumeWeakness: ['expose'] })
+  },
+
+  // Doug's signature — needs BOTH triggers (himself hit directly, OR a
+  // same-rank ally hit) to cover "he or a same rank ally is the target".
+  // reaction.exec always runs regardless of which trigger fired it
+  // (_fireReaction reads reactSkill.reaction.exec unconditionally), so a
+  // primary `reaction.trigger` plus a secondary `triggers[]` entry is enough
+  // to register both without duplicating the executor.
+  'ranger_covering_shot': {
+    id: 'ranger_covering_shot',
+    name: 'Covering Shot',
+    type: 'enemy',
+    mechanic: 'reaction',
+    actionCost: 'reaction',
+    mpCost: 4,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: false,
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: ({ owner, target, scene, event, sourceAbility, sourceIntent }) => {
+        const isProjectile = (sourceIntent?.tags || []).includes('projectile') || (sourceAbility?.tags || []).includes('projectile');
+        if (!isProjectile) return false;
+        if (event === 'self_hit') return true;
+        return scene?._getUnitColumn?.(owner) === scene?._getUnitColumn?.(target);
+      },
+      exec: ({ owner, scene, incoming }) => {
+        if (Math.random() < 0.5) {
+          if (incoming) {
+            incoming.amount = 0;
+            incoming.physical = 0;
+            incoming.elemental = 0;
+            incoming.necrotic = 0;
+            incoming.buildup = null;
+            incoming.statusEffects = null;
+          }
+          scene?._log?.(`${owner?.name || 'Doug'} shoots the projectile out of the air!`);
+          scene?._logLocal?.({ segments: [{ text: 'Doug! Doug! Doug!', color: '#ffd166' }] });
+        } else {
+          scene?._log?.(`${owner?.name || 'Doug'} tries to intercept the shot, but misses!`);
+        }
+      },
+    },
+    triggers: [{ event: 'ally_hit' }],
+    description: "Reaction: when you or an ally in your rank is struck by a projectile, 50% chance to shoot it down entirely — no damage, no effects."
   },
 
   'rogue_poisoned_knife': {
@@ -1128,6 +1391,69 @@ const NPC_ONLY_SKILLS = {
     apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] })
   },
 
+  // Mo's signature — redesigned onto 'pre_hit' (see Guardian's Stand's
+  // comment for why that trigger exists), OPPOSITE spatial rule from it:
+  // only when the ally being targeted is in a rank BEHIND Mo's own. Now
+  // genuinely affects the incoming hit's own damage rather than debuffing
+  // the attacker's NEXT action — a scoped AttackPower debuff, applied right
+  // before apply()/calculateDamage() run and stripped immediately after by
+  // the caller (_applyAbilityToTarget), so it can't leak into a second
+  // attack this same turn. AttackPower specifically (not Accuracy) because
+  // it's a field the damage pipeline is already confirmed to read during
+  // this exact resolution — Accuracy's hit/miss timing relative to this
+  // checkpoint isn't established, so it wasn't a safe bet to build on.
+  'rogue_distracting_feint': {
+    id: 'rogue_distracting_feint',
+    name: 'Distracting Feint',
+    type: 'enemy',
+    mechanic: 'reaction',
+    actionCost: 'reaction',
+    mpCost: 3,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: false,
+    reaction: {
+      trigger: 'pre_hit',
+      cooldownOn: 'trigger',
+      canTrigger: ({ owner, target, scene }) => {
+        const rank = { front: 0, mid: 1, back: 2 };
+        const ownerRank = rank[scene?._getUnitColumn?.(owner)];
+        const targetRank = rank[scene?._getUnitColumn?.(target)];
+        return Number.isFinite(ownerRank) && Number.isFinite(targetRank) && targetRank > ownerRank;
+      },
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return null;
+        scene?._addStatusEffects?.(attacker, [{ id: 'distracting_feint_scoped', turns: 1, mods: { AttackPower: -50 } }]);
+        scene?._log?.(`${owner?.name || 'Mo'} darts into view, throwing off ${attacker.name}'s aim!`);
+        return { scopedDebuffId: 'distracting_feint_scoped' };
+      },
+    },
+    description: "Reaction: when an ally behind you is targeted, distract the attacker — this attack's damage is reduced by 50% AttackPower."
+  },
+
+  // Mo's third signature — bonus action, so it doesn't compete with his
+  // major/class-cost options; only usable once Gary's Curse of Needles
+  // rider is actually on the target (checked by id, not just Curse weakness
+  // tier, per the ask — "only when a target is affected by curse of
+  // needles"). Feeds the same Curse meter Gary's own kit builds/spends.
+  'rogue_curse_twist': {
+    id: 'rogue_curse_twist',
+    name: 'Curse Twist',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 3,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    canExecute: ({ target }) => {
+      const hasRider = Array.isArray(target?.statusEffects) && target.statusEffects.some(se => se?.id === 'warlock_curse_needles');
+      return hasRider ? true : { ok: false, reason: `${target?.name || 'Target'} isn't afflicted by Curse of Needles.` };
+    },
+    apply: () => ({ amount: 4, buildup: { curse: 50 } }),
+    description: "Bonus action. Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup."
+  },
+
   'wizard_arcane_bolt': {
     id: 'wizard_arcane_bolt',
     name: 'Arcane Bolt',
@@ -1177,6 +1503,79 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lightning', tier: 1 },
     apply: () => ({ amount: 12, consumeWeakness: ['lightning'] })
+  },
+
+  // Lenny's signature — two-phase channel. Phase 1 deals no damage, just
+  // applies a self status (turns:2, since _tickDownStatusDurations ticks
+  // down at the END of the casting turn — turns:1 would expire before
+  // Lenny's next turn ever started). Phase 2 is picked automatically and
+  // unconditionally by the wizard_dummy AI profile the moment the status is
+  // present, so the release is guaranteed the following turn.
+  'wizard_inferno_channel': {
+    id: 'wizard_inferno_channel',
+    name: 'Channel: Inferno',
+    type: 'enemy',
+    actionCost: 'major',
+    mpCost: 4,
+    cooldown: 5,
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: (attacker, _target, scene) => {
+      scene?._addStatusEffects?.(attacker, [{ id: 'channeling_inferno', turns: 2 }]);
+      scene?._log?.(`${attacker?.name || 'Lenny'} begins channeling a massive inferno...`);
+      return { amount: 0 };
+    },
+    description: "Begins channeling a massive Fire AoE — unleashed automatically on your next turn."
+  },
+
+  // The payoff — real typed pipeline (applyTypedDamageModifiers +
+  // skillConversion), the same functions/shape player fire spells use, so
+  // this is properly split into physical/elemental/necrotic and mitigated
+  // by each target's own resists rather than a flat legacy `amount`. Splash
+  // reuses the primary target's already-converted split (same convention
+  // berserker_disrupting_roar/bleeding_sweep use for their own party AoEs),
+  // not a per-target reroll.
+  'wizard_inferno_release': {
+    id: 'wizard_inferno_release',
+    name: 'Inferno',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 0,
+    cooldown: 0,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['aoe', 'fire'],
+    aoe: { shape: 'party', scale: 1 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.wizard_inferno_release;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 220, skillLabel: `${ability?.name || 'Skill'} weapon damage (220%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'fire',
+        buildup: { fire: 60 },
+        splash: others.map(t => ({
+          target: t, physical, elemental, necrotic, amount,
+          isMagic: true, element: 'fire', buildup: { fire: 60 },
+        })),
+      };
+    },
+    description: "Unleashes the channeled inferno — 220% weapon damage as Fire to the entire party."
   },
 
   // Encounter 4 - Huntsman & Beasts

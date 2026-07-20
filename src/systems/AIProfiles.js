@@ -182,7 +182,23 @@ export const AI_PROFILES = {
 
   fighter_dummy: {
     decide(npc, scene, enemies) {
-      const { foes } = buildTargetList(npc, scene, enemies);
+      // Guardian's Stand — armed once and left armed (idempotent, same
+      // pattern berserker_boss uses for Blood Fury), so it can fire off-turn
+      // via the 'ally_hit' reaction the moment it's needed.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'fighter_guardians_stand');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('fighter_guardians_stand')) {
+        scene.reactions.arm(npc, SKILLS.fighter_guardians_stand);
+      }
+
+      const { allies, foes } = buildTargetList(npc, scene, enemies);
+
+      // Bulwark Call — held back for when the party's actually hurting for
+      // HP or MP, same "sometimes" pacing Mending Wave uses.
+      const needsSupport = allies.some(a => hpRatio(a) < 0.8 || (a.currentMP || 0) < (a.maxMP || 1) * 0.5);
+      if (canUseSkill(npc, 'fighter_bulwark_call') && (npc.initiativeGauge || 0) >= 30 && needsSupport) {
+        return buildAction('fighter_bulwark_call', null);
+      }
+
       const executionTarget = highestWeakness(foes, 'expose', 2);
       if (canUseSkill(npc, 'fighter_executioner') && executionTarget) {
         return buildAction('fighter_executioner', executionTarget);
@@ -206,6 +222,17 @@ export const AI_PROFILES = {
   healer_dummy: {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);
+
+      // Mending Wave — Stan's signature, held back for when it actually
+      // matters (2+ allies meaningfully hurt) rather than spammed the moment
+      // Initiative allows, so it reads as a "sometimes" move worth a crowd
+      // reaction rather than a routine heal.
+      const hurtAllies = allies.filter(a => hpRatio(a) < 0.7);
+      if (canUseSkill(npc, 'healer_mending_wave') && (npc.initiativeGauge || 0) >= 30 && hurtAllies.length >= 2) {
+        const anchor = pickTarget(hurtAllies, { preferLowHP: true, noise: 1 }) || hurtAllies[0];
+        return buildAction('healer_mending_wave', anchor);
+      }
+
       const lowAlly = pickTarget(allies, { preferLowHP: true, noise: 1 });
       if (canUseSkill(npc, 'healer_heal') && lowAlly) {
         return buildAction('healer_heal', lowAlly);
@@ -231,6 +258,16 @@ export const AI_PROFILES = {
   warlock_dummy: {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Reckless Immolation — opportunistic HP-cost payoff. canExecute
+      // already enforces ">80% HP", checked again here so the AI doesn't
+      // attempt a cast that's just going to fizzle.
+      const singedTarget = highestWeakness(foes, 'fire', 1);
+      const garyHpPct = (npc.currentHP || 0) / Math.max(1, npc.maxHP || 1);
+      if (canUseSkill(npc, 'warlock_reckless_immolation') && garyHpPct > 0.8 && singedTarget) {
+        return buildAction('warlock_reckless_immolation', singedTarget);
+      }
+
       const cursed = highestWeakness(foes, 'curse', 2) || highestWeakness(foes, 'curse', 1);
       if (canUseSkill(npc, 'warlock_drain_life') && cursed) {
         return buildAction('warlock_drain_life', cursed);
@@ -241,13 +278,32 @@ export const AI_PROFILES = {
           return buildAction('warlock_curse_amplify', amplifyTarget);
         }
       }
-      if (canUseSkill(npc, 'warlock_dark_bolts')) {
-        const target = weakest(foes);
-        if (target) return buildAction('warlock_dark_bolts', target);
+      // Curse of Needles — Gary's signature, gated the same way the player
+      // version is (target must already be at least Hexed) — so the target
+      // picked here MUST already carry Curse T1+, never a fallback to
+      // "whoever's weakest," or the cast would just fizzle against the
+      // requiresWeakness gate. Prefers refreshing whoever already carries
+      // the rider (keeps the Curse meter topped up) over a fresh cursed
+      // target.
+      if (canUseSkill(npc, 'warlock_curse_needles')) {
+        const riderTarget = foes.find(f =>
+          (f?.weakness?.tiers?.curse || 0) >= 1 &&
+          Array.isArray(f?.statusEffects) && f.statusEffects.some(se => se?.id === 'warlock_curse_needles')
+        );
+        const focusTarget = riderTarget || highestWeakness(foes, 'curse', 1);
+        if (focusTarget) return buildAction('warlock_curse_needles', focusTarget);
       }
+      // Hex — establishes Curse buildup from scratch when nobody's cursed
+      // yet, so Curse of Needles has something to extend once it's off
+      // cooldown. Checked before Dark Bolts so curse actually gets started
+      // instead of being crowded out by plain filler damage.
       if (canUseSkill(npc, 'warlock_hex')) {
         const target = weakest(foes);
         if (target) return buildAction('warlock_hex', target);
+      }
+      if (canUseSkill(npc, 'warlock_dark_bolts')) {
+        const target = weakest(foes);
+        if (target) return buildAction('warlock_dark_bolts', target);
       }
       return null;
     }
@@ -255,6 +311,13 @@ export const AI_PROFILES = {
 
   ranger_dummy: {
     decide(npc, scene, enemies) {
+      // Covering Shot — armed once and left armed, same idempotent pattern
+      // as every other enemy reaction this pass.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'ranger_covering_shot');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('ranger_covering_shot')) {
+        scene.reactions.arm(npc, SKILLS.ranger_covering_shot);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
       const exposed = highestWeakness(foes, 'expose', 1);
       if (canUseSkill(npc, 'ranger_aimed_shot') && exposed) {
@@ -278,7 +341,23 @@ export const AI_PROFILES = {
 
   rogue_dummy: {
     decide(npc, scene, enemies) {
+      // Distracting Feint — armed once and left armed.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'rogue_distracting_feint');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('rogue_distracting_feint')) {
+        scene.reactions.arm(npc, SKILLS.rogue_distracting_feint);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Curse Twist — bonus action, high priority whenever a target already
+      // carries Gary's Curse of Needles rider. Costing only a bonus action
+      // means this doesn't compete with whatever Mo does with his major/
+      // class action the same turn.
+      const curseRiderTarget = foes.find(f => Array.isArray(f?.statusEffects) && f.statusEffects.some(se => se?.id === 'warlock_curse_needles'));
+      if (canUseSkill(npc, 'rogue_curse_twist') && curseRiderTarget) {
+        return buildAction('rogue_curse_twist', curseRiderTarget);
+      }
+
       const weaknessFamilies = ['expose', 'toxic', 'cold', 'fire', 'lacerate', 'disease', 'curse'];
       const finishingTarget = pickTarget(foes.filter(t => countWeaknessFamilies(t, weaknessFamilies, 1) >= 2), { preferLowHP: true, noise: 1 });
       if (canUseSkill(npc, 'rogue_finishing_strike') && finishingTarget) {
@@ -305,9 +384,21 @@ export const AI_PROFILES = {
   wizard_dummy: {
     decide(npc, scene, enemies) {
       const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Committed to the channeled Inferno the instant it's armed — always
+      // takes priority over everything else, guaranteeing the release
+      // actually happens the turn after Channel: Inferno is cast.
+      if (hasStatus(npc, 'channeling_inferno') && canUseSkill(npc, 'wizard_inferno_release')) {
+        const target = weakest(foes) || foes[0];
+        if (target) return buildAction('wizard_inferno_release', target);
+      }
+
       const charged = highestWeakness(foes, 'lightning', 1);
       if (canUseSkill(npc, 'wizard_overload') && charged) {
         return buildAction('wizard_overload', charged);
+      }
+      if (canUseSkill(npc, 'wizard_inferno_channel')) {
+        return buildAction('wizard_inferno_channel', null);
       }
       if (canUseSkill(npc, 'wizard_mana_shield') && !hasStatus(npc, 'wizard_mana_shield')) {
         return buildAction('wizard_mana_shield', npc);

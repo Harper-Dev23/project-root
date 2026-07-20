@@ -1,10 +1,11 @@
 export const COMBAT_SCENARIOS = {
   training_encounter_1: {
     name: 'Basic Training I',
-    description: 'Five stationary dummies for safe sparring.',
+    description: 'Six stationary dummies for safe sparring.',
     longDescription: 'Start with fundamentals against practice dummies that simply sway in place. Perfect for verifying positioning, targeting and basic skill flow with no incoming pressure.',
     portraitKey: 'dummy_portrait',
     enemies: [
+      { type: 'stationary_training_dummy', slotId: 2 },
       { type: 'stationary_training_dummy', slotId: 3 },
       { type: 'stationary_training_dummy', slotId: 4 },
       { type: 'stationary_training_dummy', slotId: 5 },
@@ -15,15 +16,16 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_2: {
     name: 'Basic Training II',
-    description: 'Reinforced dummies that shuffle around — practice range and AOE shapes.',
+    description: 'Six reinforced dummies that shuffle around — practice range and AOE shapes.',
     longDescription: 'These sturdier targets deal no damage but move erratically and dodge out of ground hazards, giving you a safe way to practice range, positioning, and AOE shapes before facing anything that hits back.',
     portraitKey: 'dummy_portrait',
     enemies: [
-      { type: 'mobile_training_dummy_elite', slotId: 4 },
-      { type: 'mobile_training_dummy_elite', slotId: 5 },
-      { type: 'mobile_training_dummy_elite', slotId: 6 },
-      { type: 'mobile_training_dummy_elite', slotId: 7 },
-      { type: 'mobile_training_dummy_elite', slotId: 8 }
+      { type: 'mobile_training_dummy_elite', slotId: 3, name: 'Dummy Lenny' },
+      { type: 'mobile_training_dummy_elite', slotId: 4, name: 'Dummy Gary' },
+      { type: 'mobile_training_dummy_elite', slotId: 5, name: 'Dummy Stan' },
+      { type: 'mobile_training_dummy_elite', slotId: 6, name: 'Dummy Doug' },
+      { type: 'mobile_training_dummy_elite', slotId: 7, name: 'Dummy Mo' },
+      { type: 'mobile_training_dummy_elite', slotId: 8, name: 'Dummy Chad' }
     ]
   },
 
@@ -32,13 +34,35 @@ export const COMBAT_SCENARIOS = {
     description: 'Six animated dummies demonstrating classic RPG roles.',
     longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger, rogue and wizard—showcases weakness synergies, payoffs and interlocking behaviour.',
     portraitKey: 'dummy_portrait_equipped_fighter',
+    // Same six dummies as encounter 2 (Lenny/Gary/Stan/Doug/Mo/Chad),
+    // repurposed and geared up — names carried over so the crowd (Local
+    // tab) can recognize them as the same characters growing into these
+    // roles, not a fresh anonymous roster.
     enemies: [
-      { type: 'animated_fighter_dummy', slotId: 1, drops: [{ equip: 'head', droppable: true }] },
-      { type: 'animated_healer_dummy',  slotId: 5, drops: [{ equip: 'head', droppable: true }] },
-      { type: 'animated_warlock_dummy', slotId: 7, drops: [{ equip: 'head', droppable: true }] },
-      { type: 'animated_ranger_dummy',  slotId: 6, drops: [{ equip: 'head', droppable: true }] },
-      { type: 'animated_rogue_dummy',   slotId: 2, drops: [{ equip: 'head', droppable: true }] },
-      { type: 'animated_wizard_dummy',  slotId: 8, drops: [{ equip: 'head', droppable: true }] }
+      { type: 'animated_fighter_dummy', slotId: 1, name: 'Chad the Unbreakable', drops: [
+        { equip: 'weaponMain', itemId: 'crude_sword_1h', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
+      { type: 'animated_healer_dummy',  slotId: 5, name: 'Stan, of the Light',   drops: [
+        { equip: 'weaponMain', itemId: 'crude_staff', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
+      { type: 'animated_warlock_dummy', slotId: 7, name: 'Gary the Grim',        drops: [
+        { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
+      { type: 'animated_ranger_dummy',  slotId: 6, name: 'Doug Longshot',        drops: [
+        { equip: 'weaponMain', itemId: 'crude_bow', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
+      { type: 'animated_rogue_dummy',   slotId: 2, name: 'Shifty-Eyed Mo',       drops: [
+        { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
+      { type: 'animated_wizard_dummy',  slotId: 8, name: 'Lenny the Magnificent', drops: [
+        { equip: 'weaponMain', itemId: 'crude_staff', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'head', droppable: true },
+      ] },
     ]
   },
 

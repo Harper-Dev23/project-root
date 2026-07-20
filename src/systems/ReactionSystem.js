@@ -343,6 +343,81 @@ export default class ReactionSystem {
     if (cd > 0) this.scene._startSkillCooldown?.(owner, skill.id, cd);
   }
 
+  // ---------- pre-hit reactions (redirect / scoped attacker debuffs) ------
+  // A SEPARATE resolution path from self_hit/ally_hit above, on purpose —
+  // those fire off `this.bus.emit(...)` AFTER a hit's damage is already
+  // computed, mutating a result object; there's no synchronous return value
+  // to the caller. Redirect and "weaken this specific hit before it rolls"
+  // both need an answer BEFORE calculateDamage() ever runs, so this is a
+  // direct method call (from CombatScene._applyAbilityToTarget, right before
+  // ability.apply()) that returns a real value instead. Deliberately kept
+  // separate from _fireReaction rather than merged into it — that function
+  // also carries self_hit-only concerns (legacy apply()-based reactions,
+  // counterattacks, DR/parry) that don't apply here, and forcing a shared
+  // path would make BOTH harder to follow for no real gain.
+  //
+  // Returns whatever the winning reaction's exec() returns (e.g.
+  // { redirectTo: unit } or { scopedDebuffId: 'some_status_id' }), or null
+  // if nothing fired. Only ever called for a REAL primary target — splash/
+  // AoE instances don't route through _applyAbilityToTarget again, so they
+  // never reach this check at all (redirect/pre-hit debuffs are scoped to
+  // primary single-target hits by construction, not by an extra flag).
+  checkPreHit(target, { attacker, ability, scene }) {
+    if (!target || target.status === 'incapacitated') return null;
+    if (!!attacker?.isEnemy === !!target?.isEnemy) return null; // hostile only
+    if (!isReactableAttackSource(ability, null)) return null;
+
+    const sideSlots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+    const teammates = (sideSlots || [])
+      .map(s => s?.char)
+      .filter(a => a && a.status !== 'incapacitated');
+
+    for (const owner of teammates) {
+      const st = this._state(owner);
+      if (!st || (st.triggersRemaining | 0) <= 0) continue;
+      if (Array.isArray(owner.statusEffects) && owner.statusEffects.some(se => se?.blocksAction)) continue;
+
+      const pool = this._resolvePrepared(owner);
+      const candidates = pool
+        .map(id => SKILLS[id])
+        .filter(s => s && getTriggerForEvent(s, 'pre_hit'))
+        .filter(s => this._meetsReqs(owner, s) && (DevFlags.isNoCooldownEnabled() || !scene?._isSkillOnCooldown?.(owner, s.id)))
+        .sort((a, b) => (b.reaction?.priority || 0) - (a.reaction?.priority || 0));
+
+      if (!candidates.length) continue;
+      const chosen = candidates[0];
+
+      const ok = typeof chosen.reaction?.canTrigger === 'function'
+        ? chosen.reaction.canTrigger({ owner, attacker, target, scene, event: 'pre_hit', sourceAbility: ability })
+        : true;
+      if (!ok) continue;
+
+      // Same cost/action/cooldown bookkeeping _fireReaction does for the
+      // event-bus path, minus the parts that don't apply here.
+      owner.actionsLeft = owner.actionsLeft || {};
+      owner.actionsLeft.reaction = Math.max(0, (owner.actionsLeft.reaction || 0) - 1);
+      const mpCost = Number.isFinite(chosen.mpCost) ? chosen.mpCost : 0;
+      if (mpCost > 0) {
+        owner.currentMP = Math.max(0, (owner.currentMP || 0) - mpCost);
+        scene?._log?.(`${owner.name} spends ${mpCost} MP on ${chosen.name}.`);
+      }
+
+      let outcome = null;
+      try {
+        outcome = chosen.reaction.exec?.({ owner, attacker, target, scene }) || null;
+      } catch (e) {
+        console.error('[Reaction Error: pre_hit exec()]', chosen.id, e);
+      }
+
+      if ((chosen.reaction.cooldownOn || 'trigger') === 'trigger') this._startCD(owner, chosen);
+      st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
+
+      return outcome;
+    }
+
+    return null;
+  }
+
   _resolvePrepared(owner) {
     const st = this._state(owner);
     return (st.prepared || []).map(x => x.id);

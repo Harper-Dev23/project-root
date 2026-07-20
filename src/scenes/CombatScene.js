@@ -23,6 +23,7 @@ import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
+import { getLocalChatScript } from '../systems/LocalChatScripts.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
 import ReactionSystem, { isReactableAttackSource } from '../systems/ReactionSystem.js';
@@ -246,6 +247,14 @@ export default class CombatScene extends Phaser.Scene {
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
     this.scenarioId = data.scenarioId || 'training_encounter_1';
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
+    this.localChatScript = getLocalChatScript(this.scenarioId);
+    this.enemiesDefeatedCount = 0;
+    this._postCombatDimmed = false;
+    // Round counter (1-indexed) + a free-form scratch bag scripts can use
+    // for their own state (e.g. "already said X this round") — see
+    // _buildLocalChatCtx and LocalChatScripts.js.
+    this.combatRound = 1;
+    this.localChatState = {};
 
     // Reset all per-combat state — Phaser reuses the same scene instance on
     // scene.start(), so the constructor only runs once. Everything that must
@@ -338,6 +347,7 @@ export default class CombatScene extends Phaser.Scene {
     this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
     this._highlightCurrentTurn();
     this._createCombatLog();
+    this._postLocalChatLines(this.localChatScript?.onCombatStart?.(this._buildLocalChatCtx()));
 
     // Systems
     this.bus = new EventBus();
@@ -400,37 +410,61 @@ export default class CombatScene extends Phaser.Scene {
       y: 460,
       width: 440,
       height: 250,
-      padding: 10
+      padding: 10,
+      // Top strip reserved for the Combat/Local tab buttons, bottom strip
+      // reserved for the Local tab's chat input — both carved out of the
+      // existing panel footprint rather than growing it, so this can't
+      // collide with whatever else is laid out around it.
+      tabBarHeight: 24,
+      inputBarHeight: 30,
     };
     this.combatLogConfig = config;
-    const { x, y, width, height, padding } = config;
+    const { x, y, width, height, padding, tabBarHeight, inputBarHeight } = config;
+    const scrollY = y + tabBarHeight;
+    const scrollHeight = height - tabBarHeight - inputBarHeight;
 
     // Background box
     const bg = createPanel(this, x, y, width, height, 'default')
       .setDepth(UI_DEPTH.overlay);
+    this.combatLogBg = bg;
 
 
 
-    // Mask for scroll area
+    // Mask for scroll area — shrunk to the middle strip only, so the tab
+    // buttons and chat input (top/bottom strips) never get clipped or
+    // treated as scrollable log content.
     const shape = this.make.graphics({ add: false });
     shape.fillStyle(0xffffff);
-    shape.fillRect(x, y, width, height);
+    shape.fillRect(x, scrollY, width, scrollHeight);
     const mask = shape.createGeometryMask();
 
-    this.combatLogContainer = this.add.container(x + padding, y + padding)
+    this.combatLogContainer = this.add.container(x + padding, scrollY + padding)
       .setDepth(UI_DEPTH.overlay);
     this.combatLogContainer.setMask(mask);
 
     this.combatLogMask = mask;
-    this.combatLogBaseY = y + padding;
+    this.combatLogBaseY = scrollY + padding;
     this.combatLogScroll = 0;
     this.combatLogContentHeight = 0;
 
-    this.combatLogBounds = new Phaser.Geom.Rectangle(x, y, width, height);
+    this.combatLogBounds = new Phaser.Geom.Rectangle(x, scrollY, width, scrollHeight);
     this.isHoveringCombatLog = false;
 
-    this.logEntries = [];
+    // Two independent message buckets — `combatEntries` is what _log() has
+    // always written to; `localEntries` is the new Local tab. `logEntries`
+    // stays a live pointer to whichever bucket is currently on screen, so
+    // every existing reader of this.logEntries (render, hover tooltips,
+    // scroll math) keeps working unmodified regardless of which tab is
+    // active — only the tab switch itself repoints it.
+    this.combatEntries = [];
+    this.localEntries = [];
+    this.logEntries = this.combatEntries;
+    this.activeCombatLogTab = 'combat';
+    this._combatLogTabScroll = { combat: 0, local: 0 };
     this.combatLogMaxEntries = 100;
+
+    this._createCombatLogTabs(x, y, padding, tabBarHeight);
+    this._createLocalChatInput(x, y, width, height, padding, inputBarHeight);
 
     this.input.on('gameout', () => {
       this.isHoveringCombatLog = false;
@@ -450,6 +484,117 @@ export default class CombatScene extends Phaser.Scene {
       }
     });
   }
+
+  // Tiny text-based tab bar — Combat / Local — living in the top strip
+  // carved out of the log panel. No heavier Button/UIButton chrome; this is
+  // meant to read as part of the panel, not a separate control.
+  _createCombatLogTabs(x, y, padding, tabBarHeight) {
+    const makeTab = (label, tab, offsetX) => {
+      const text = this.add.text(x + padding + offsetX, y + padding - 2, label, {
+        fontSize: '14px', fontFamily: 'Georgia', color: '#888888',
+      }).setDepth(UI_DEPTH.overlay + 1);
+      const underline = this.add.graphics().setDepth(UI_DEPTH.overlay + 1);
+      text.setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this._switchCombatLogTab(tab));
+      return { text, underline };
+    };
+
+    this.combatLogTabButtons = {
+      combat: makeTab('Combat', 'combat', 0),
+      local: makeTab('Local', 'local', 80),
+    };
+    this._updateCombatLogTabVisuals();
+  }
+
+  _updateCombatLogTabVisuals() {
+    const buttons = this.combatLogTabButtons;
+    if (!buttons) return;
+    for (const [tab, { text, underline }] of Object.entries(buttons)) {
+      const active = tab === this.activeCombatLogTab;
+      text.setStyle({ color: active ? '#ffffff' : '#888888' });
+      underline.clear();
+      if (active) {
+        underline.lineStyle(2, 0xb8922a, 1);
+        underline.lineBetween(text.x, text.y + 18, text.x + text.width, text.y + 18);
+      }
+    }
+  }
+
+  // Switches which bucket this.logEntries points at, restores that tab's own
+  // scroll position, and toggles the chat input's visibility. Both tabs
+  // share every other piece of log machinery (render/scroll/hover/mask).
+  _switchCombatLogTab(tab) {
+    if (tab === this.activeCombatLogTab || !this.combatLogTabButtons) return;
+    this._combatLogTabScroll[this.activeCombatLogTab] = this.combatLogScroll || 0;
+    this.activeCombatLogTab = tab;
+    this.logEntries = tab === 'local' ? this.localEntries : this.combatEntries;
+    this.combatLogScroll = this._combatLogTabScroll[tab] || 0;
+    this._updateCombatLogTabVisuals();
+    this._renderCombatLog();
+    this.localChatInputDom?.setVisible(tab === 'local');
+  }
+
+  // DOM <input> for the Local tab — same pattern CharacterCreationScene.js
+  // uses for its name field (Phaser's DOM plugin is already enabled for
+  // this project). Hidden until the Local tab is active.
+  _createLocalChatInput(x, y, width, height, padding, inputBarHeight) {
+    const cx = x + width / 2;
+    const cy = y + height - inputBarHeight / 2 - 4;
+    this.localChatInputDom = this.add.dom(cx, cy).createFromHTML(`
+      <input type="text" name="localChatInput" maxlength="200" placeholder="Say something..."
+        style="font-size:13px;padding:4px 8px;width:${width - padding * 2}px;
+               background-color:#1c1c1c;color:#dddddd;border:1px solid #555;box-sizing:border-box;">
+    `).setDepth(UI_DEPTH.overlay + 1).setVisible(false);
+
+    const inputNode = this.localChatInputDom.getChildByName('localChatInput');
+    inputNode?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this._submitLocalChatInput();
+    });
+  }
+
+  _submitLocalChatInput() {
+    const inputNode = this.localChatInputDom?.getChildByName('localChatInput');
+    const text = (inputNode?.value || '').trim();
+    if (!text) return;
+    inputNode.value = '';
+    this._logLocal({ segments: [{ text: `You: ${text}`, color: '#9fd8ff' }] });
+    this._maybeRespondLocal(text);
+  }
+
+  // Shared context shape for every LocalChatScripts.js hook — see that
+  // file's header comment for what each field means.
+  _buildLocalChatCtx(extra = {}) {
+    return {
+      scene: this, scenarioId: this.scenarioId,
+      round: this.combatRound, state: this.localChatState,
+      ...extra,
+    };
+  }
+
+  _postLocalChatLines(lines) {
+    if (!lines) return;
+    (Array.isArray(lines) ? lines : [lines]).forEach(line => {
+      this._logLocal({ segments: [{ text: line, color: '#c9a0ff' }] });
+    });
+  }
+
+  // Delegates to this encounter's LocalChatScripts.js entry (if any) —
+  // see that file for the per-scenario onPlayerInput hook shape.
+  _maybeRespondLocal(playerText) {
+    this._postLocalChatLines(this.localChatScript?.onPlayerInput?.(playerText, this._buildLocalChatCtx()));
+  }
+
+  // Local-tab counterpart to _log() — same normalize/cap/render pipeline,
+  // separate bucket so it never mixes with combat events.
+  _logLocal(entry, opts = {}) {
+    const normalized = this._normalizeLogEntry(entry, opts);
+    this.localEntries.push(normalized);
+    if (this.combatLogMaxEntries && this.localEntries.length > this.combatLogMaxEntries) {
+      const excess = this.localEntries.length - this.combatLogMaxEntries;
+      if (excess > 0) this.localEntries.splice(0, excess);
+    }
+    this._scheduleLogRender();
+  }
   _displayNameForSkill(user, skill) {
     const r = user?.race;
     if (skill.id === 'move_step') {
@@ -464,10 +609,14 @@ export default class CombatScene extends Phaser.Scene {
 
   _log(entry, opts = {}) {
     const normalized = this._normalizeLogEntry(entry, opts);
-    this.logEntries.push(normalized);
-    if (this.combatLogMaxEntries && this.logEntries.length > this.combatLogMaxEntries) {
-      const excess = this.logEntries.length - this.combatLogMaxEntries;
-      if (excess > 0) this.logEntries.splice(0, excess);
+    // Always targets the Combat bucket specifically (not this.logEntries,
+    // which may currently be pointed at the Local tab) — a real combat
+    // event firing while the player is on the Local tab must still land in
+    // Combat, ready to see next time they switch back.
+    this.combatEntries.push(normalized);
+    if (this.combatLogMaxEntries && this.combatEntries.length > this.combatLogMaxEntries) {
+      const excess = this.combatEntries.length - this.combatLogMaxEntries;
+      if (excess > 0) this.combatEntries.splice(0, excess);
     }
     this._scheduleLogRender();
   }
@@ -939,10 +1088,19 @@ export default class CombatScene extends Phaser.Scene {
     };
   }
 
-  _setCombatLogScroll(value) {
+  // Visible scrollable height — panel height minus padding AND the tab bar /
+  // chat input strips (both carved out of the same footprint). Shared by
+  // every scroll-math call site so they can't drift out of sync with
+  // _createCombatLog's own mask/container sizing.
+  _getCombatLogViewHeight() {
     const cfg = this.combatLogConfig || {};
     const pad = cfg.padding ?? 0;
-    const viewHeight = Math.max(0, (cfg.height ?? 0) - pad * 2);
+    const reserved = (cfg.tabBarHeight ?? 0) + (cfg.inputBarHeight ?? 0);
+    return Math.max(0, (cfg.height ?? 0) - pad * 2 - reserved);
+  }
+
+  _setCombatLogScroll(value) {
+    const viewHeight = this._getCombatLogViewHeight();
     const maxScroll = Math.max(0, (this.combatLogContentHeight || 0) - viewHeight);
     const clamped = Phaser.Math.Clamp(value, 0, maxScroll);
     if (clamped === this.combatLogScroll) return;
@@ -957,9 +1115,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _scrollCombatLogToBottom() {
-    const cfg = this.combatLogConfig || {};
-    const pad = cfg.padding ?? 0;
-    const viewHeight = Math.max(0, (cfg.height ?? 0) - pad * 2);
+    const viewHeight = this._getCombatLogViewHeight();
     const maxScroll = Math.max(0, (this.combatLogContentHeight || 0) - viewHeight);
     this._setCombatLogScroll(maxScroll);
   }
@@ -1319,7 +1475,7 @@ export default class CombatScene extends Phaser.Scene {
       const enemy = {
         ...template,                       // base stats / ai / sprites, etc.
         type: config.type,
-        name: template.name || config.type,
+        name: config.name || template.name || config.type,
         currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
         maxHP,
         currentMP: maxMP,
@@ -3551,6 +3707,13 @@ export default class CombatScene extends Phaser.Scene {
       this.enemyDiedThisTurn = true;
       const lacTier = unit?.weakness?.tiers?.lacerate || 0;
       this.killedEnemyLacerateTier = Math.max(this.killedEnemyLacerateTier || 0, lacTier);
+
+      this.enemiesDefeatedCount = (this.enemiesDefeatedCount || 0) + 1;
+      this._postLocalChatLines(this.localChatScript?.onEnemyDefeated?.(this._buildLocalChatCtx({
+        defeatedCount: this.enemiesDefeatedCount,
+        totalEnemies: this.scenarioData?.enemies?.length || 0,
+        enemy: unit,
+      })));
     }
 
     // Destroy lodge arrow sprites for this unit
@@ -3889,6 +4052,23 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // === Pre-hit reactions (redirect / scoped attacker debuff) =============
+    // Resolved BEFORE apply()/calculateDamage() ever run — see
+    // ReactionSystem.checkPreHit for why this can't reuse the self_hit/
+    // ally_hit bus-event path below (that one mutates an ALREADY-COMPUTED
+    // result; this needs to be able to change WHO the hit resolves against,
+    // which has to happen before the roll, not after). Only for a real
+    // primary target — options.isRepeat (recast) and movement skills skip it.
+    let preHitScopedDebuffId = null;
+    if (!isMovement && !options?.isRepeat && target) {
+      const outcome = this.reactions?.checkPreHit?.(target, { attacker: user, ability, scene: this });
+      if (outcome?.redirectTo && outcome.redirectTo !== target && outcome.redirectTo.status !== 'incapacitated') {
+        this._log(`${outcome.redirectTo.name} intercepts the attack meant for ${target.name}!`);
+        target = outcome.redirectTo;
+      }
+      if (outcome?.scopedDebuffId) preHitScopedDebuffId = outcome.scopedDebuffId;
+    }
+
     // Snapshot weakness tiers BEFORE any new buildup
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
 
@@ -3923,8 +4103,14 @@ export default class CombatScene extends Phaser.Scene {
     } catch (e) {
       console.error(`[Ability Error] ${ability.name}`, e);
       this._log(`⚠ ${ability.name} fizzled.`);
+      if (preHitScopedDebuffId) this._clearScopedStatus(user, preHitScopedDebuffId);
       return;
     }
+    // Scoped pre-hit debuff (e.g. Distracting Feint) only ever applies to
+    // THIS one hit — strip it now rather than letting it ride out its own
+    // `turns` naturally, which would only tick down at the end of user's
+    // whole turn and could leak into a second attack this same turn.
+    if (preHitScopedDebuffId) this._clearScopedStatus(user, preHitScopedDebuffId);
     // True no-op: some skills can only check an unmet condition from inside
     // apply() itself, once scene state is available (e.g. Momentum Strike
     // requiring movement this turn — the requiresWeakness/minCurseTier gates
@@ -4170,20 +4356,19 @@ export default class CombatScene extends Phaser.Scene {
           incomingMutable: resultMutable
         });
 
-        // Ally reactions (same column)
+        // Ally reactions — emitted for EVERY living teammate of the target,
+        // not just same-column ones; each reaction's own canTrigger decides
+        // which spatial relationship it actually cares about (e.g. Guardian's
+        // Stand wants same-column, Distracting Feint wants "target is in a
+        // rank behind me"). Broadened from same-column-only so a reaction
+        // needing a different spatial rule doesn't need its own emission path.
         try {
-          const sameColumnAllies = (typeof this._getAlliesInSameColumn === 'function')
-            ? this._getAlliesInSameColumn(target).filter(a =>
-              a !== target && a.alive !== false && a.status !== 'incapacitated'
-            )
-            : (this._getAllies?.(target) || []).filter(a =>
-              a !== target &&
-              (a.position || a.column) === (target.position || target.column) &&
-              a.alive !== false &&
-              a.status !== 'incapacitated'
-            );
+          const sideSlots = target?.isEnemy ? this.enemySlots : this.allySlots;
+          const teammatesOfTarget = (sideSlots || [])
+            .map(s => s?.char)
+            .filter(a => a && a !== target && a.status !== 'incapacitated');
 
-          for (const ally of sameColumnAllies) {
+          for (const ally of teammatesOfTarget) {
             this.bus?.emit('ally_hit', {
               attacker: user,
               target,
@@ -7484,6 +7669,7 @@ export default class CombatScene extends Phaser.Scene {
     // round-end, so a slot vacated mid-round gets one tick; a newly occupied
     // slot is skipped (the occupant's next turn will tick it instead).
     if (_isNewRound) {
+      this.combatRound = (this.combatRound || 1) + 1;
       const occupiedKeys = new Set(
         this.turnOrder.map(u => this._charSlotKey(u)).filter(Boolean)
       );
@@ -7527,8 +7713,9 @@ export default class CombatScene extends Phaser.Scene {
     // 5) Reset action economy for this actor
     char.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
     this.reactions?.onTurnStart(char);
-    // Turn separator in combat log
-    this.logEntries.push({ separator: true });
+    // Turn separator — always the Combat bucket specifically, never
+    // whichever tab happens to be active (same reasoning as _log()).
+    this.combatEntries.push({ separator: true });
     this._scheduleLogRender();
     // 6) Update highlights/UI shell
     this._highlightCurrentTurn();
@@ -7764,6 +7951,15 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
+  // Removes a single status effect by id immediately — for reaction-applied
+  // debuffs meant to scope to exactly one hit (see the pre-hit reaction
+  // cleanup in _applyAbilityToTarget), where waiting on the effect's own
+  // `turns` countdown would let it outlive the hit it was meant for.
+  _clearScopedStatus(char, id) {
+    if (!char || !id || !Array.isArray(char.statusEffects)) return;
+    char.statusEffects = char.statusEffects.filter(se => se?.id !== id);
+  }
+
   _addStatusEffects(target, effects = []) {
     if (!target || !Array.isArray(effects) || effects.length === 0) return;
     target.statusEffects = target.statusEffects || [];
@@ -7903,12 +8099,49 @@ export default class CombatScene extends Phaser.Scene {
     unit.mpBar = mpBar;
   }
 
-  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null, loot = [], leveledUpNames = []) {
+  // Shared by _showVictoryScreen/_showDefeatScreen: dims and input-blocks
+  // everything at battlefield depth (UI_OVERLAY and below — action menu,
+  // portraits, etc.), while lifting the combat log's own pieces just above
+  // the blocker so it stays visible AND interactive (tabs, scroll) through
+  // the rest of the post-combat screen. The victory/defeat panel itself
+  // renders even higher (2000+/3001+ below), so it's unaffected either way.
+  _dimBattlefieldForPostCombat() {
+    if (this._postCombatDimmed) return;
+    this._postCombatDimmed = true;
     const { width, height } = this.sys.game.canvas;
 
-    // Dark overlay
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
-      .setDepth(2000);
+    // Make sure inputs reach the topmost interactive object only — this is
+    // what lets an interactive-but-listenerless blocker rectangle actually
+    // swallow clicks aimed at whatever's beneath it.
+    this.input.topOnly = true;
+
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.85)
+      .setDepth(1500)
+      .setInteractive();
+
+    const logDepth = 1600;
+    this.combatLogBg?.setDepth(logDepth);
+    this.combatLogContainer?.setDepth(logDepth);
+    if (this.combatLogTabButtons) {
+      Object.values(this.combatLogTabButtons).forEach(({ text, underline }) => {
+        text.setDepth(logDepth + 1);
+        underline.setDepth(logDepth + 1);
+      });
+    }
+    this.localChatInputDom?.setDepth(logDepth + 1);
+  }
+
+  _showVictoryScreen(title = 'Victory!', xpSummary = [], progressReward = null, loot = [], leveledUpNames = []) {
+    // A beat of delay before the screen takes over, so the killing blow
+    // still reads before everything dims — the log (and its tabs) stay
+    // live throughout via _dimBattlefieldForPostCombat, so nothing here
+    // needs to render before then.
+    this.time.delayedCall(1000, () => this._renderVictoryScreen(title, xpSummary, progressReward, loot, leveledUpNames));
+  }
+
+  _renderVictoryScreen(title, xpSummary, progressReward, loot, leveledUpNames) {
+    this._dimBattlefieldForPostCombat();
+    const { width, height } = this.sys.game.canvas;
 
     // Victory title
     this.add.text(width / 2, height / 2 - 130, title, {
@@ -7983,15 +8216,15 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _showDefeatScreen(title = 'Defeat', subtitle = '', opts = {}) {
+    // Same beat-of-delay treatment as victory — see _showVictoryScreen.
+    this.time.delayedCall(1000, () => this._renderDefeatScreen(title, subtitle, opts));
+  }
+
+  _renderDefeatScreen(title, subtitle, opts = {}) {
     const { showRetry = this.isTraining, showExit = true } = opts;
     const { width, height } = this.sys.game.canvas;
 
-    // Make sure inputs reach the overlay even if other scenes are still interactive
-    this.input.topOnly = true;
-
-    // Dark overlay
-    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7)
-      .setDepth(3000);
+    this._dimBattlefieldForPostCombat();
 
     // Title
     this.add.text(width / 2, height / 2 - 100, title, {

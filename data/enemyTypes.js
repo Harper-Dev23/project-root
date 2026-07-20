@@ -1,8 +1,10 @@
 export const ENEMY_TYPES = {
   stationary_training_dummy: {
+    name: 'Training Dummy',
     skin: 'dummy_portrait',
     maxHP: 25,
     maxMP: 0,
+    baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
     skills: ['dummy_sway'],
     aiProfile: 'stationary_dummy',
     isEnemy: true,
@@ -13,8 +15,11 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait',
     maxHP: 40,
     maxMP: 0,
+    baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
     // Still deals no damage — the only new element vs the basic dummy is
-    // movement, to teach range/AOE shapes (Basic Training II).
+    // movement, to teach range/AOE shapes (Basic Training II). No typed
+    // damage pipeline needed since it never attacks — baseStats here just
+    // gives it real Evasion/Resist/etc. instead of an implicit zero.
     skills: ['dummy_sway', 'dummy_shuffle'],
     aiProfile: 'mobile_dummy',
     isEnemy: true,
@@ -51,11 +56,17 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // Encounter 3's six dummies — same average (8 across all 6 core stats,
+  // sum 48) but skewed per class archetype, matching how a real party
+  // member of that class would be built. Weapon (crude/common tier,
+  // soulbound) is equipped via combatScenarios.js's drops array, same
+  // fixed-item pattern berserker_boss uses for its own weapon.
   animated_fighter_dummy: {
     skin: 'dummy_portrait_equipped_fighter',
     maxHP: 180,
     maxMP: 60,
-    skills: ['fighter_heavy_slash', 'fighter_guarded_blow', 'fighter_taunt', 'fighter_executioner'],
+    baseStats: { STR: 10, DEX: 6, CON: 12, INT: 5, WIS: 6, CHA: 9 },
+    skills: ['fighter_heavy_slash', 'fighter_guarded_blow', 'fighter_taunt', 'fighter_executioner', 'fighter_guardians_stand', 'fighter_bulwark_call'],
     aiProfile: 'fighter_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -65,7 +76,8 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait_equipped_healer',
     maxHP: 140,
     maxMP: 120,
-    skills: ['healer_heal', 'healer_cleanse', 'healer_blessing', 'healer_flame_flick'],
+    baseStats: { STR: 5, DEX: 5, CON: 8, INT: 6, WIS: 14, CHA: 10 },
+    skills: ['healer_heal', 'healer_cleanse', 'healer_blessing', 'healer_flame_flick', 'healer_mending_wave'],
     aiProfile: 'healer_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -75,7 +87,8 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait_equipped_warlock',
     maxHP: 130,
     maxMP: 120,
-    skills: ['warlock_hex', 'warlock_dark_bolts', 'warlock_curse_amplify', 'warlock_drain_life'],
+    baseStats: { STR: 5, DEX: 6, CON: 7, INT: 9, WIS: 6, CHA: 15 },
+    skills: ['warlock_hex', 'warlock_dark_bolts', 'warlock_curse_amplify', 'warlock_drain_life', 'warlock_curse_needles', 'warlock_reckless_immolation'],
     aiProfile: 'warlock_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -85,7 +98,8 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait_equipped_ranger',
     maxHP: 150,
     maxMP: 80,
-    skills: ['ranger_quick_shot', 'ranger_frost_arrow', 'ranger_volley', 'ranger_aimed_shot'],
+    baseStats: { STR: 6, DEX: 16, CON: 7, INT: 6, WIS: 7, CHA: 6 },
+    skills: ['ranger_quick_shot', 'ranger_frost_arrow', 'ranger_volley', 'ranger_aimed_shot', 'ranger_covering_shot'],
     aiProfile: 'ranger_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -95,7 +109,8 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait_equipped_rogue',
     maxHP: 140,
     maxMP: 70,
-    skills: ['rogue_poisoned_knife', 'rogue_hamstring', 'rogue_evasion', 'rogue_sneak_attack', 'rogue_finishing_strike'],
+    baseStats: { STR: 5, DEX: 14, CON: 6, INT: 6, WIS: 6, CHA: 11 },
+    skills: ['rogue_poisoned_knife', 'rogue_hamstring', 'rogue_evasion', 'rogue_sneak_attack', 'rogue_finishing_strike', 'rogue_distracting_feint', 'rogue_curse_twist'],
     aiProfile: 'rogue_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -105,7 +120,8 @@ export const ENEMY_TYPES = {
     skin: 'dummy_portrait_equipped_wizard',
     maxHP: 130,
     maxMP: 110,
-    skills: ['wizard_arcane_bolt', 'wizard_static_field', 'wizard_mana_shield', 'wizard_overload'],
+    baseStats: { STR: 4, DEX: 6, CON: 7, INT: 16, WIS: 9, CHA: 6 },
+    skills: ['wizard_arcane_bolt', 'wizard_static_field', 'wizard_mana_shield', 'wizard_overload', 'wizard_inferno_channel', 'wizard_inferno_release'],
     aiProfile: 'wizard_dummy',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
