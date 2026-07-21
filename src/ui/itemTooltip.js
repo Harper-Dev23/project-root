@@ -90,6 +90,7 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
   const hasModifiers = (dmgFlat.min || 0) || (dmgFlat.max || 0) || dmgPercent || elemEntries.length
     || misc.mpPerTurn || misc.skillCostReductionPct || misc.globalDamagePercent || misc.elementalDamagePercent
     || misc.necroticDamagePercent || misc.healingPercent || misc.resilience || Object.keys(buildup).length
+    || misc.physicalBuildupPercent || misc.elementalBuildupPercent || misc.necroticBuildupPercent
     || misc.physToElemPercent || misc.physToNecroPercent || misc.elemToNecroPercent
     || misc.initBonusOnBattleStart || misc.shieldPctOnBattleStart
     || Object.keys(misc.physBuildupOnPhysDmg || {}).length || Object.keys(misc.elemBuildupOnElemDmg || {}).length
@@ -113,6 +114,9 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     if (misc.healingPercent) lines.push(`  • Healing: +${misc.healingPercent}%`);
     if (misc.resilience) lines.push(`  • Resilience: +${misc.resilience}`);
     Object.entries(buildup).forEach(([k, v]) => { if (v) lines.push(`  • +${v}% ${capitalize(k)} Buildup`); });
+    if (misc.physicalBuildupPercent) lines.push(`  • +${misc.physicalBuildupPercent}% Physical Buildup (Expose/Lacerate/Disorient)`);
+    if (misc.elementalBuildupPercent) lines.push(`  • +${misc.elementalBuildupPercent}% Elemental Buildup (Fire/Cold/Lightning)`);
+    if (misc.necroticBuildupPercent) lines.push(`  • +${misc.necroticBuildupPercent}% Necrotic Buildup (Toxic/Disease/Curse)`);
 
     // Jewelry
     if (misc.physToElemPercent) lines.push(`  • ${misc.physToElemPercent}% Physical → Elemental Conversion`);

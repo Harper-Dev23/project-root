@@ -68,9 +68,14 @@ export function getRacialTraits(race) {
   return traits[race] || [];
 }
 
-export function calculateDerivedStats(stats) {
+export function calculateDerivedStats(stats, { basePlayerHP = 0 } = {}) {
   // === Persistent, pre-combat derived snapshot ===
-  const maxHP = Math.max(1, (stats.CON || 0) * 5);
+  // basePlayerHP: a flat universal floor ONLY player call sites pass (10,
+  // see buildCharacter/rebuildCharacterStats/LevelUpOverlay's preview) —
+  // enemies (CombatScene.js's _placeEnemies) call this with no options,
+  // so they're unaffected and keep using their own hand-tuned flat maxHP
+  // template values instead of gaining an unintended flat bonus here too.
+  const maxHP = Math.max(1, basePlayerHP + (stats.CON || 0) * 2);
 
   // MaxMP = 2*INT + CHA + WIS (generous on purpose; rebalance later)
   const maxMP = Math.max(0, 2 * (stats.INT || 0) + (stats.CHA || 0) + (stats.WIS || 0));
@@ -134,7 +139,7 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
   const raceBonus = RACE_BONUSES[race] || {};
   const classBonus = CLASS_BONUSES[baseClass] || {};
   const totalStats = mergeStats(mergeStats({ ...stats }, raceBonus), classBonus);
-  const derived = calculateDerivedStats(totalStats);
+  const derived = calculateDerivedStats(totalStats, { basePlayerHP: 16 });
   const maxHP = derived.maxHP || 1;
   const maxMP = derived.maxMP || 0;
   // === Movement mapping -> skill ids (used by skills: [] below)
@@ -361,6 +366,9 @@ export function rebuildCharacterStats(character) {
     healingPercent: 0,
     resilience: 0,
     weaponBuildupPercent: {},
+    physicalBuildupPercent: 0,
+    elementalBuildupPercent: 0,
+    necroticBuildupPercent: 0,
     lifeStealPct: 0,
     // Jewelry passives
     physToElemPercent: 0,
@@ -413,6 +421,9 @@ export function rebuildCharacterStats(character) {
       if (misc.necroticDamagePercent) gearEffects.necroticDamagePercent += misc.necroticDamagePercent;
       if (misc.healingPercent) gearEffects.healingPercent += misc.healingPercent;
       if (misc.resilience) gearEffects.resilience += misc.resilience;
+      if (misc.physicalBuildupPercent) gearEffects.physicalBuildupPercent += misc.physicalBuildupPercent;
+      if (misc.elementalBuildupPercent) gearEffects.elementalBuildupPercent += misc.elementalBuildupPercent;
+      if (misc.necroticBuildupPercent) gearEffects.necroticBuildupPercent += misc.necroticBuildupPercent;
       // Jewelry misc mods
       if (misc.physToElemPercent) gearEffects.physToElemPercent += misc.physToElemPercent;
       if (misc.physToNecroPercent) gearEffects.physToNecroPercent += misc.physToNecroPercent;
@@ -463,7 +474,7 @@ export function rebuildCharacterStats(character) {
   const hpRatio = Math.max(0, Math.min(1, prevHP / Math.max(1, prevMaxHP)));
   const mpRatio = (prevMaxMP > 0) ? Math.max(0, Math.min(1, prevMP / prevMaxMP)) : 0;
 
-  const baseDerived = calculateDerivedStats(total);
+  const baseDerived = calculateDerivedStats(total, { basePlayerHP: 16 });
   const d = { ...baseDerived };
   for (const [k, v] of Object.entries(gearDerived)) {
     d[k] = (d[k] || 0) + v;

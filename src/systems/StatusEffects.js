@@ -80,6 +80,13 @@ export const StatusEffects = {
     description: 'Unable to reposition.',
     icon: 'IM'
   },
+  frost_numbed: {
+    id: 'frost_numbed',
+    name: 'Frost-Numbed',
+    isDebuff: true,
+    description: 'Bonus action is disabled this turn.',
+    icon: 'FN'
+  },
   glacial_scorch: {
     id: 'glacial_scorch',
     name: 'Trapped Fire',

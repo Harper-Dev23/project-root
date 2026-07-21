@@ -41,7 +41,7 @@ const STAT_LABELS = {
 const STAT_EFFECTS = {
   STR: 'Melee damage  ·  Crit chance',
   DEX: 'Accuracy +2/pt  ·  Crit chance',
-  CON: 'Max HP +5/pt  ·  Physical Resist',
+  CON: 'Max HP +2/pt  ·  Physical Resist',
   INT: 'Max MP +2/pt  ·  Crit chance',
   WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Necrotic Resist  ·  Crit Avoid',
   CHA: 'Max MP +1/pt  ·  Initiative  ·  Elemental Resist',
@@ -425,7 +425,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
     for (const [s, pts] of Object.entries(this._pending)) {
       hypo[s] = (hypo[s] || 0) + pts;
     }
-    const newDerived = calculateDerivedStats(hypo);
+    const newDerived = calculateDerivedStats(hypo, { basePlayerHP: 16 });
 
     for (const [key, ref] of Object.entries(this._previewTxts)) {
       const curVal = ref.curVal;

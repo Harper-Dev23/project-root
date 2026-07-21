@@ -1057,7 +1057,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 3, buildup: { curse: 80 } })
+    apply: () => ({ amount: 2, buildup: { curse: 80 } })
   },
   'warlock_drain_life': {
     id: 'warlock_drain_life',
@@ -1072,7 +1072,7 @@ const NPC_ONLY_SKILLS = {
     requiresWeakness: { family: 'curse', tier: 1 },
     apply: (user, target) => {
       const tier = target?.weakness?.tiers?.curse || 0;
-      const dmg = 5;
+      const dmg = 4;
       const heal = tier >= 2 ? 18 : 10;
       if (user) {
         user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
@@ -1111,7 +1111,7 @@ const NPC_ONLY_SKILLS = {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 130, skillLabel: `${ability?.name || 'Skill'} weapon damage (130%)`,
+          skillPct: 105, skillLabel: `${ability?.name || 'Skill'} weapon damage (105%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
@@ -1127,7 +1127,7 @@ const NPC_ONLY_SKILLS = {
         buildup: { fire: 160 },
       };
     },
-    description: "Costs 15% of Gary's own max HP instead of MP (only usable above 80% HP). Requires target at least Singed. Deals 130% weapon damage as Fire and applies heavy Fire buildup."
+    description: "Costs 15% of Gary's own max HP instead of MP (only usable above 80% HP). Requires target at least Singed. Deals 105% weapon damage as Fire and applies heavy Fire buildup."
   },
 
   'warlock_dark_bolts': {
@@ -1140,7 +1140,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { disease: 70 } })
+    apply: () => ({ amount: 3, buildup: { disease: 70 } })
   },
   'warlock_curse_amplify': {
     id: 'warlock_curse_amplify',
@@ -1219,7 +1219,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 5, buildup: { expose: 60 } })
+    apply: () => ({ amount: 4, buildup: { expose: 60 } })
   },
   'ranger_frost_arrow': {
     id: 'ranger_frost_arrow',
@@ -1231,7 +1231,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 5, buildup: { cold: 90 } })
+    apply: () => ({ amount: 4, buildup: { cold: 90 } })
   },
   'ranger_volley': {
     id: 'ranger_volley',
@@ -1246,8 +1246,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
       return {
-        amount: 4,
-        splash: foes.slice(1).map(t => ({ target: t, amount: 3 }))
+        amount: 3,
+        splash: foes.slice(1).map(t => ({ target: t, amount: 2 }))
       };
     }
   },
@@ -1262,7 +1262,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 9, consumeWeakness: ['expose'] })
+    apply: () => ({ amount: 7, consumeWeakness: ['expose'] })
   },
 
   // Doug's signature — needs BOTH triggers (himself hit directly, OR a
@@ -1465,7 +1465,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 5, buildup: { lightning: 60 } })
+    apply: () => ({ amount: 4, buildup: { lightning: 60 } })
   },
   'wizard_static_field': {
     id: 'wizard_static_field',
@@ -1477,7 +1477,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 5, buildup: { lightning: 90 } })
+    apply: () => ({ amount: 4, buildup: { lightning: 90 } })
   },
   'wizard_mana_shield': {
     id: 'wizard_mana_shield',
@@ -1504,7 +1504,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lightning', tier: 1 },
-    apply: () => ({ amount: 12, consumeWeakness: ['lightning'] })
+    apply: () => ({ amount: 9, consumeWeakness: ['lightning'] })
   },
 
   // Lenny's signature — two-phase channel. Phase 1 deals no damage, just
@@ -1558,7 +1558,7 @@ const NPC_ONLY_SKILLS = {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 220, skillLabel: `${ability?.name || 'Skill'} weapon damage (220%)`,
+          skillPct: 130, skillLabel: `${ability?.name || 'Skill'} weapon damage (130%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
@@ -1577,7 +1577,7 @@ const NPC_ONLY_SKILLS = {
         })),
       };
     },
-    description: "Unleashes the channeled inferno — 220% weapon damage as Fire to the entire party."
+    description: "Unleashes the channeled inferno — 130% weapon damage as Fire to the entire party."
   },
 
   // Encounter 4 - Huntsman & Beasts
@@ -7290,13 +7290,13 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "cold", "elemental"],
-    buildupHint: { cold: 65 },
+    buildupHint: { cold: 82 },
     // If target is at least Chilled (Cold T1): flat +20% damage and +20
     // additional Cold buildup — both flat now, replacing the old per-tier/
     // intensity-scaled formulas. Crossing Frostbitten (Cold T2) steals up to
     // 5 Initiative from the target (genuine theft, capped by what they
     // actually have — see stealInitiative in CombatScene.js).
-    rewardIfWeak: [{ family: "cold", tierAtLeast: 1, buff: { damagePct: 20, addBuildup: { cold: 20 } } }],
+    rewardIfWeak: [{ family: "cold", tierAtLeast: 1, buff: { damagePct: 20, addBuildup: { cold: 25 } } }],
     rewardIfTierCross: [{ family: "cold", tier: 2, stealInitiative: 5 }],
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.frost_swell;
@@ -7332,7 +7332,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const coldBuildup = Math.floor(((ability?.buildupHint?.cold ?? 65) + bonusBuildup) * powerScale);
+      const coldBuildup = Math.floor(((ability?.buildupHint?.cold ?? 82) + bonusBuildup) * powerScale);
 
       return {
         ...roll,
@@ -7344,7 +7344,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Cold, +65 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +20 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 5 Initiative from the target."
+    description: "Deals 100% weapon damage as Cold, +82 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +25 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 5 Initiative from the target."
   },
 
   'galvanic_touch': {
@@ -7363,7 +7363,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "lightning", "elemental"],
-    buildupHint: { lightning: 55 },
+    buildupHint: { lightning: 69 },
     apply: (attacker, target) => {
       const ability = SKILLS?.galvanic_touch;
       const roll = calculateDamage(attacker, target, ability);
@@ -7387,7 +7387,7 @@ Object.assign(RAW_SKILLS, {
 
       // +10 Lightning buildup per tier (T1 = +10, T2 = +20 total) — flat,
       // not intensity-scaled.
-      const lightningBuildup = (ability?.buildupHint?.lightning ?? 55) + 10 * lightningTier;
+      const lightningBuildup = (ability?.buildupHint?.lightning ?? 69) + 10 * lightningTier;
 
       // Small chance of an extra hit once at least Zapped (Lightning T1+),
       // scaling with the target's current meter — same meter-scaled-chance
@@ -7407,7 +7407,110 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Bonus action. Deals 80% weapon damage as Lightning, +55 Lightning buildup. If target is at least Zapped (Lightning T1+): +10 additional Lightning buildup per tier (up to +20 at T2), plus a small meter-scaled chance (up to 20%) of an extra hit carrying the same damage and buildup."
+    description: "Bonus action. Deals 80% weapon damage as Lightning, +69 Lightning buildup. If target is at least Zapped (Lightning T1+): +10 additional Lightning buildup per tier (up to +20 at T2), plus a small meter-scaled chance (up to 20%) of an extra hit carrying the same damage and buildup."
+  },
+
+  // Same formula/shape as Marked Cut (sword_1h) — see Vital Mark's (dagger)
+  // comment for the full rationale. Disorient instead of Lacerate here: a
+  // piercing arc that, once it truly shocks the target, leaves them reeling.
+  'thunder_mark': {
+    id: "thunder_mark",
+    name: "Thunder Mark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "lightning", "elemental"],
+    cooldown: 2,
+    buildupHint: { lightning: 85 },
+    rewardIfTierCross: [
+      { family: "lightning", tier: 1, debuff: { addBuildup: { disorient: 75 } } },
+      { family: "lightning", tier: 2, debuff: { addBuildup: { disorient: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.thunder_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        isMagic: true, element: 'lightning',
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage as Lightning. Applies Lightning buildup. Crossing a tier leaves them reeling from the shock (bonus Disorient)."
+  },
+
+  // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
+  // the full rationale. Disease instead of Lightning/Cold/Fire/Toxic/Curse/
+  // Expose/Disorient (everything else staff already covers): no plague/
+  // sickness spell existed on this weapon type yet. Reflavored as Necrotic
+  // via skillConversion, same as Cone of Blight — disease/toxic/curse are
+  // all necrotic-family for mitigation purposes, isMagic alone can't carry
+  // that (see Cone of Blight's own comment on the bug this avoids). Toxic
+  // secondary: once the sickness truly takes hold, it festers into poison.
+  'pestilent_word': {
+    id: "pestilent_word",
+    name: "Pestilent Word",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "disease", "necrotic"],
+    cooldown: 2,
+    buildupHint: { disease: 85 },
+    rewardIfTierCross: [
+      { family: "disease", tier: 1, debuff: { addBuildup: { toxic: 75 } } },
+      { family: "disease", tier: 2, debuff: { addBuildup: { toxic: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.pestilent_word;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        isMagic: true,
+        buildup: { disease: ability?.buildupHint?.disease ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
   },
 
   'kindling_rite': {
@@ -7426,7 +7529,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire", "elemental", "zone"],
-    buildupHint: { fire: 120 },
+    buildupHint: { fire: 150 },
     apply: (attacker, target, scene, opts = {}) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Kindling Rite requires an active runic zone." };
@@ -7472,7 +7575,7 @@ Object.assign(RAW_SKILLS, {
       zone.mods.kindlingRite = true; // legacy boolean — still read by the "active mod count" tint logic
       scene?._refreshRunicZoneSprite?.(attacker);
 
-      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 120) * powerScale);
+      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 150) * powerScale);
 
       return {
         ...roll,
@@ -7483,7 +7586,7 @@ Object.assign(RAW_SKILLS, {
         log: `The runic zone ignites with flames! (Kindling Rite ${stacksAfter}/3 stacks)`,
       };
     },
-    description: "Req zone. Deals 80% weapon damage as Fire, +120 Fire buildup. Modifies zone: stacks up to 3 times. Each stack: caster takes 80 Fire buildup/turn, caster deals +20% elemental damage. At max stacks: 240 Fire buildup/turn, +60% elemental damage."
+    description: "Req zone. Deals 80% weapon damage as Fire, +150 Fire buildup. Modifies zone: stacks up to 3 times. Each stack: caster takes 80 Fire buildup/turn, caster deals +20% elemental damage. At max stacks: 240 Fire buildup/turn, +60% elemental damage."
   },
 
   'cone_of_blight': {
@@ -7502,7 +7605,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "toxic", "aoe", "necrotic"],
-    buildupHint: { toxic: 90 },
+    buildupHint: { toxic: 113 },
     // "Small cone": only the front rank (1,2,3) and mid rank (4,5) are valid
     // primary targets — the back rank has nothing further behind it to cone
     // into. See aoeResolver.js's "smallCone" shape for the exact per-slot
@@ -7538,7 +7641,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const toxicBuildup = Math.floor((ability?.buildupHint?.toxic ?? 90) * powerScale);
+      const toxicBuildup = Math.floor((ability?.buildupHint?.toxic ?? 113) * powerScale);
 
       const SPLASH_SCALE = 0.70;
       const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
@@ -7561,7 +7664,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Deals 90% weapon damage as Necrotic + 90 Toxic buildup to a target in the front two ranks. Also hits the 1-2 slots directly behind it in a small cone, for 70% damage/buildup."
+    description: "Deals 90% weapon damage as Necrotic + 113 Toxic buildup to a target in the front two ranks. Also hits the 1-2 slots directly behind it in a small cone, for 70% damage/buildup."
   },
 
   'ward_weave': {
@@ -7613,7 +7716,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "disorient", "aoe"],
-    buildupHint: { disorient: 80 },
+    buildupHint: { disorient: 100 },
     // Fixed "back crescent" — always the back rank + mid rank {8,4,5,6},
     // regardless of which of those four is targeted. Same mechanic as
     // Sacred Shockwave's diamond, just a different fixed group — see
@@ -7654,7 +7757,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const disorientBuildup = Math.floor((ability?.buildupHint?.disorient ?? 80) * powerScale);
+      const disorientBuildup = Math.floor((ability?.buildupHint?.disorient ?? 100) * powerScale);
 
       const SPLASH_SCALE = 0.60;
       const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
@@ -7679,7 +7782,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Deals 85% weapon damage + 80 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
+    description: "Deals 85% weapon damage + 100 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
   },
 
   'rune_channel': {
@@ -7785,7 +7888,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire", "aoe", "elemental"],
     requiresWeakness: { family: "fire", tierAtLeast: 2 },
-    buildupHint: { fire: 60 },
+    buildupHint: { fire: 75 },
     // Diamond AOE — fixed centre-mass slots {2,4,5,7}, same shape (and same
     // targetSlots restriction) Sacred Shockwave uses. The primary target
     // must be one of the four diamond slots — otherwise the "diamond" would
@@ -7818,7 +7921,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 60) * powerScale);
+      const fireBuildup = Math.floor((ability?.buildupHint?.fire ?? 75) * powerScale);
 
       // Splash buildup now scales with the 80% damage split (previously
       // flat — every other AOE skill this pass scales buildup proportionally
@@ -7845,7 +7948,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Requires the target to already be Ablaze (Fire T2). Deals 140% weapon damage as Fire + 60 Fire buildup, plus a diamond AOE (fixed slots 2,4,5,7) at 80% damage/buildup to whoever else stands in that formation."
+    description: "Requires the target to already be Ablaze (Fire T2). Deals 140% weapon damage as Fire + 75 Fire buildup, plus a diamond AOE (fixed slots 2,4,5,7) at 80% damage/buildup to whoever else stands in that formation."
   },
 
   'toxic_bloom': {
@@ -7870,7 +7973,7 @@ Object.assign(RAW_SKILLS, {
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
 
-      const basePct = 110;
+      const basePct = 140;
       const scaledPct = basePct * powerScale;
       const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
@@ -7912,12 +8015,12 @@ Object.assign(RAW_SKILLS, {
       // below. Not powerScale-scaled: this is a real quantity actually
       // drained from the target, not a %-of-damage bonus.
       const adjacentSplash = resolveAOESplash(scene, target, { shape: 'adjacent' }).map(tgt => ({
-        target: tgt, amount: 0, buildup: { toxic: Math.floor(consumed * 0.50) }, tags: ability?.tags,
+        target: tgt, amount: 0, buildup: { toxic: Math.floor(consumed * 0.625) }, tags: ability?.tags,
       }));
 
       // Debuff, tiered by how much toxic was actually drained (per 100):
-      // 1/2/3/4 HP healed to whoever hits this target, per hit, for 3 turns
-      // — plus 10/15/20/25 Toxic buildup (also tiered) to the target AND
+      // 2/3/4/5 HP healed to whoever hits this target, per hit, for 3 turns
+      // — plus 12/18/24/30 Toxic buildup (also tiered) to the target AND
       // adjacent enemies on each of those hits. Uses the generic onHitBy
       // shape (see _processTargetHitRiders in CombatScene.js), so this now
       // correctly triggers on ANY hit the target takes — primary, AOE
@@ -7927,11 +8030,12 @@ Object.assign(RAW_SKILLS, {
       // StatusEffects.js as 'toxic_bloom_debuff' / display name "Toxic
       // Bloom" — no "rider" in anything user-facing.
       const tier = Math.min(4, Math.floor(consumed / 100));
-      const tierBuildup = 5 + tier * 5; // tier 1→10, 2→15, 3→20, 4→25
+      const tierHeal = tier + 1; // tier 1→2, 2→3, 3→4, 4→5
+      const tierBuildup = 6 * (tier + 1); // tier 1→12, 2→18, 3→24, 4→30
       const statusEffects = tier > 0
         ? [{
           id: 'toxic_bloom_debuff', turns: 3,
-          onHitBy: { healAttacker: tier, buildup: { toxic: tierBuildup }, buildupAdjacent: { toxic: tierBuildup } },
+          onHitBy: { healAttacker: tierHeal, buildup: { toxic: tierBuildup }, buildupAdjacent: { toxic: tierBuildup } },
         }]
         : undefined;
 
@@ -7944,7 +8048,7 @@ Object.assign(RAW_SKILLS, {
         log: consumed > 0 ? `Toxic Bloom consumes ${consumed} toxic and spreads it to adjacent enemies!` : undefined,
       };
     },
-    description: "Deals 110% weapon damage as Necrotic. Consumes up to 400 Toxic buildup from the target, proliferating half of it to adjacent enemies. Based on toxic consumed (per 100, up to 4): applies a 3-turn debuff — whoever hits this target heals 1/2/3/4 HP per hit and deals 10/15/20/25 Toxic buildup to the target and adjacent enemies per hit."
+    description: "Deals 140% weapon damage as Necrotic. Consumes up to 400 Toxic buildup from the target, proliferating 62.5% of it to adjacent enemies. Based on toxic consumed (per 100, up to 4): applies a 3-turn debuff — whoever hits this target heals 2/3/4/5 HP per hit and deals 12/18/24/30 Toxic buildup to the target and adjacent enemies per hit."
   },
 
   'mana_fountain': {
@@ -8006,8 +8110,8 @@ Object.assign(RAW_SKILLS, {
       // Consumes up to 400 current Disorient for bonus damage (excess
       // beyond 400 stays on the target, not wasted — same "don't consume
       // past what's actually used" rule as Toxic Bloom's clean-increment
-      // fix): +2% per 10 consumed, capped at +80% (400/10×2), folded
-      // directly into skillPct (Category A, additive with the base 130% —
+      // fix): +2.5% per 10 consumed, capped at +100% (400/10×2.5), folded
+      // directly into skillPct (Category A, additive with the base 165% —
       // see feedback_additive_damage_bonuses) rather than a separate
       // post-hoc add. This does NOT have its own repeat mechanic — no
       // repeatChance here, per explicit design: it's only ever repeated via
@@ -8020,8 +8124,8 @@ Object.assign(RAW_SKILLS, {
       // around.
       const currentDisorient = target?.weakness?.meters?.disorient || 0;
       const consumed = Math.min(400, currentDisorient);
-      const bonusPct = (consumed / 10) * 2;
-      const basePct = 130;
+      const bonusPct = (consumed / 10) * 2.5;
+      const basePct = 165;
       const scaledPct = (basePct + bonusPct) * powerScale;
       const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
@@ -8056,7 +8160,7 @@ Object.assign(RAW_SKILLS, {
         log: consumed > 0 ? `Silencing Shockwave consumes ${consumed} disorient for bonus damage!` : undefined,
       };
     },
-    description: "Requires Disorient T2 (Silenced). Deals 130% weapon damage — converts to Necrotic if the target is below 20% max MP. Consumes up to 400 Disorient buildup for bonus damage (+2% per 10 consumed, up to +80%); any excess beyond 400 is left on the target."
+    description: "Requires Disorient T2 (Silenced). Deals 165% weapon damage — converts to Necrotic if the target is below 20% max MP. Consumes up to 400 Disorient buildup for bonus damage (+2.5% per 10 consumed, up to +100%); any excess beyond 400 is left on the target."
   },
 
   'curse_suppression': {
@@ -8081,14 +8185,14 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, target) => {
       const currentCurse = target?.weakness?.meters?.curse || 0;
       const curseRemoved = Math.min(400, currentCurse);
-      // +1 Resilience per 10 curse removed (up to +40 at the 400 cap) — a
+      // +1 Resilience per 8 curse removed (up to +50 at the 400 cap) — a
       // flat reduction to ALL incoming weakness buildup, same real stat WIS
       // derives permanently (see CharacterBuilder.js), just granted
       // temporarily here via mods.Resilience (now summed by
       // _sumStatusEffectMods alongside the character's own permanent
       // value — see CombatLogic.js). Replaces the old BuildupReceived %
       // mod entirely, per explicit request.
-      const resilienceGain = Math.floor(curseRemoved / 10);
+      const resilienceGain = Math.floor(curseRemoved / 8);
       if (target?.weakness?.meters != null) {
         target.weakness.meters.curse = Math.max(0, currentCurse - curseRemoved);
         target.weakness.tiers.curse = weaknessTierFromMeter(target.weakness.meters.curse);
@@ -8103,7 +8207,7 @@ Object.assign(RAW_SKILLS, {
         log: `${curseRemoved} curse suppressed — ${target?.name ?? 'ally'} gains +${resilienceGain} Resilience!`,
       };
     },
-    description: "Bonus action. Requires the target (self or ally) to have Curse T1+. Removes up to 400 Curse buildup, granting +1 Resilience per 10 removed (up to +40) for 3 turns."
+    description: "Bonus action. Requires the target (self or ally) to have Curse T1+. Removes up to 400 Curse buildup, granting +1 Resilience per 8 removed (up to +50) for 3 turns."
   },
 
   'arcane_avalanche': {
@@ -8261,7 +8365,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["magic", "spell", "curse", "fire"],
     cooldown: 2,
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    buildupHint: { curse: 50 },
+    buildupHint: { curse: 63 },
     apply: (attacker, target) => {
       const ability = SKILLS?.curse_cinders;
       const roll = calculateDamage(attacker, target, ability);
@@ -8297,11 +8401,11 @@ Object.assign(RAW_SKILLS, {
         physical, elemental, necrotic, amount,
         isMagic: true,
         element: 'fire',
-        buildup: { curse: ability?.buildupHint?.curse ?? 50 },
+        buildup: { curse: ability?.buildupHint?.curse ?? 63 },
         statusEffects,
       };
     },
-    description: "Deals 100% weapon damage as Fire, +50 Curse buildup. Requires target at least Hexed. Applies a permanent rider: while cursed, acting gains Fire buildup instead of losing it, scaling with Curse intensity — works regardless of the target's own Fire tier."
+    description: "Deals 100% weapon damage as Fire, +63 Curse buildup. Requires target at least Hexed. Applies a permanent rider: while cursed, acting gains Fire buildup instead of losing it, scaling with Curse intensity — works regardless of the target's own Fire tier."
   },
 
   // ===============================
@@ -8323,7 +8427,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "expose"],
     emitTagsOnUse: ["spell"],
-    buildupHint: { expose: 50 },
+    buildupHint: { expose: 63 },
     apply: (attacker, target) => {
       const ability = SKILLS?.sigil_mark;
       const roll = calculateDamage(attacker, target, ability);
@@ -8337,7 +8441,7 @@ Object.assign(RAW_SKILLS, {
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       const meter = target?.weakness?.meters?.expose || 0;
       const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      let buildup = ability?.buildupHint?.expose ?? 50;
+      let buildup = ability?.buildupHint?.expose ?? 63;
       if (exposeTier >= 1) {
         amount = Math.floor(amount * (1 + 0.08 * exposeTier));
         buildup += Math.max(5, Math.floor(6 * intensity));
@@ -8367,8 +8471,8 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse"],
-    buildupHint: { curse: 70 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { curse: 25 } } },
+    buildupHint: { curse: 88 },
+    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { curse: 32 } } },
     apply: (attacker, target) => {
       const ability = SKILLS?.hex_bind;
       const roll = calculateDamage(attacker, target, ability);
@@ -8380,7 +8484,7 @@ Object.assign(RAW_SKILLS, {
       }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let buildup = ability?.buildupHint?.curse ?? 70;
+      let buildup = ability?.buildupHint?.curse ?? 88;
       if (exposeTier >= 1) {
         amount = Math.floor(amount * (1 + 0.1 * exposeTier));
         buildup += ability?.rewardIfWeak?.buff?.addBuildup?.curse ?? 25;
@@ -8397,108 +8501,6 @@ Object.assign(RAW_SKILLS, {
     description: "A constricting hex that lingers; Exposed targets suffer stronger binding."
   },
 
-  'frost_swell': {
-    id: "frost_swell",
-    name: "Frost Swell",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["magic", "spell", "cold"],
-    buildupHint: { cold: 65 },
-    rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.frost_swell;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'cold',
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-
-      const coldTier = target?.weakness?.tiers?.cold || 0;
-      const meter = target?.weakness?.meters?.cold || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      let buildup = ability?.buildupHint?.cold ?? 65;
-      if (coldTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * coldTier));
-        buildup += Math.max(5, Math.floor(6 * intensity));
-      }
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: 'cold',
-        buildup: { cold: buildup },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A wave of chill; crossing Cold T1 briefly slows the target."
-  },
-
-  'galvanic_touch': {
-    id: "galvanic_touch",
-    name: "Galvanic Touch",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["magic", "spell", "lightning"],
-    buildupHint: { lightning: 55 },
-    rewardIfWeak: { family: "lightning", tierAtLeast: 1, buff: { chanceExtraHitPct: 25 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.galvanic_touch;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'lightning',
-        isMagic: true,
-        skipGearMultiplier: true,
-      }));
-
-      const lightningTier = target?.weakness?.tiers?.lightning || 0;
-      let buildup = ability?.buildupHint?.lightning ?? 55;
-      if (lightningTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * lightningTier));
-        buildup += 10 * lightningTier;
-      }
-
-      let extraDamage = 0;
-      if (lightningTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 1)) {
-        const pct = ability?.rewardIfWeak?.buff?.chanceExtraHitPct ?? 25;
-        extraDamage = Math.max(1, Math.floor(amount * (pct / 100)));
-        amount += extraDamage;
-      }
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: 'lightning',
-        buildup: { lightning: buildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        extraHits: extraDamage ? [{ amount: extraDamage, element: 'lightning', isMagic: true, repeat: true }] : undefined,
-      };
-    },
-    description: "Channel an arc through the focus; Shocked targets may suffer an extra jolt."
-  },
-
   'miasma_trace': {
     id: "miasma_trace",
     name: "Miasma Trace",
@@ -8513,8 +8515,8 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "toxic"],
-    buildupHint: { toxic: 60 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
+    buildupHint: { toxic: 75 },
+    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 25 } } },
     apply: (attacker, target) => {
       const ability = SKILLS?.miasma_trace;
       const roll = calculateDamage(attacker, target, ability);
@@ -8526,7 +8528,7 @@ Object.assign(RAW_SKILLS, {
       }));
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let buildup = ability?.buildupHint?.toxic ?? 60;
+      let buildup = ability?.buildupHint?.toxic ?? 75;
       if (exposeTier >= 1) {
         amount = Math.floor(amount * (1 + 0.1 * exposeTier));
         buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
@@ -8558,7 +8560,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "expose", "proliferate", "aoe"],
     aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 40 },
+    buildupHint: { expose: 50 },
     proliferateWeakness: { families: ["expose"], to: "column", ratio: 0.5, maxTargets: 1 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.rune_diffusion;
@@ -8570,7 +8572,7 @@ Object.assign(RAW_SKILLS, {
         skipGearMultiplier: true,
       }));
 
-      const baseBuildup = ability?.buildupHint?.expose ?? 40;
+      const baseBuildup = ability?.buildupHint?.expose ?? 50;
       const spreadMeta = [];
       const splash = [];
 
@@ -9643,7 +9645,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
     cooldown: 2,
-    buildupHint: { expose: 70 },
+    buildupHint: { expose: 88 },
     // Declarative — the engine's generic tier-cross reward system applies this
     // itself using the REAL post-buildup tiers (see Pressure Point for the
     // full rationale on why this can't be safely self-computed in apply()).
@@ -9665,7 +9667,7 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const exposeBuildup = ability?.buildupHint?.expose ?? 70;
+      const exposeBuildup = ability?.buildupHint?.expose ?? 88;
       return {
         ...roll,
         physical, elemental, necrotic, amount,
@@ -9674,6 +9676,100 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Deals 100% weapon damage."
+  },
+
+  // Same formula/shape as Marked Cut (sword_1h): weapon damage + a primary
+  // family's buildup, and a BONUS buildup in a SECOND family on actually
+  // crossing a tier of the first — via the generic rewardIfTierCross engine
+  // (real post-buildup tier snapshot, not a self-predicted guess; see Marked
+  // Cut's own comment for why that matters). Toxic instead of Lacerate here:
+  // a dagger finds the weak point and lets poison seep into it, rather than
+  // tearing it open further.
+  'vital_mark': {
+    id: "vital_mark",
+    name: "Vital Mark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 85 },
+    rewardIfTierCross: [
+      { family: "expose", tier: 1, debuff: { addBuildup: { toxic: 75 } } },
+      { family: "expose", tier: 2, debuff: { addBuildup: { toxic: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.vital_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Expose. Crossing a tier lets poison seep into the wound (bonus Toxic)."
+  },
+
+  // Same formula/shape as Marked Cut — see Vital Mark's comment above for the
+  // full rationale. Fire instead of Expose: dagger had no Fire skill at all
+  // until now. Bonus action, matching Needle Feint's role as a quick setup
+  // move — a fire opener meant to go out early and set up whatever's next,
+  // not a big committed major-action strike. Disorient secondary (not
+  // Expose, to stay distinct from Vital Mark right above): once they're
+  // truly burning, the pain leaves them reeling.
+  'ember_strike': {
+    id: "ember_strike",
+    name: "Ember Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 10,
+    actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire"],
+    cooldown: 2,
+    buildupHint: { fire: 85 },
+    rewardIfTierCross: [
+      { family: "fire", tier: 1, debuff: { addBuildup: { disorient: 75 } } },
+      { family: "fire", tier: 2, debuff: { addBuildup: { disorient: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ember_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { fire: ability?.buildupHint?.fire ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Bonus action. Deals 100% weapon damage. Applies Fire. Crossing a tier leaves them reeling from the burn (bonus Disorient)."
   },
 
   'needle_venom': {
@@ -9695,13 +9791,13 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "toxic", "necrotic"],
     cooldown: 2,
-    buildupHint: { toxic: 90 },
+    buildupHint: { toxic: 113 },
     // Tiered: Exposed (T1) only adds bonus Toxic buildup, no damage. Flayed (T2)
     // is the only tier that adds damage. apply() reads these values directly so
     // the tooltip and the real effect can never drift out of sync.
     rewardIfWeak: [
-      { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 30 } } },
-      { family: "expose", tierAtLeast: 2, buff: { damagePct: 20, addBuildup: { toxic: 30 } } },
+      { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 38 } } },
+      { family: "expose", tierAtLeast: 2, buff: { damagePct: 20, addBuildup: { toxic: 38 } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.needle_venom;
@@ -9721,7 +9817,7 @@ Object.assign(RAW_SKILLS, {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100 + dmgPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
-      let toxicBuildup = ability?.buildupHint?.toxic ?? 90;
+      let toxicBuildup = ability?.buildupHint?.toxic ?? 113;
       if (activeRule) {
         toxicBuildup += activeRule.buff?.addBuildup?.toxic || 0;
       }
@@ -9757,7 +9853,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "fire"],
     cooldown: 3,
-    buildupHint: { expose: 100 },
+    buildupHint: { expose: 125 },
     // Declarative — the engine's generic tier-cross reward system (in
     // CombatScene, right after the REAL buildup application) detects the
     // cross and applies this itself. This used to be self-computed inline in
@@ -9773,7 +9869,7 @@ Object.assign(RAW_SKILLS, {
       debuff: {
         statusId: "pressure_point_ignition",
         permanent: true,
-        onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 80 } },
+        onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 100 } },
       },
     }],
     apply: (attacker, target) => {
@@ -9789,7 +9885,7 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const exposeBuildup = ability?.buildupHint?.expose ?? 100;
+      const exposeBuildup = ability?.buildupHint?.expose ?? 125;
       return {
         ...roll,
         physical, elemental, necrotic, amount,
@@ -9816,11 +9912,11 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse"],
     cooldown: 2,
-    buildupHint: { curse: 90 },
+    buildupHint: { curse: 113 },
     // Current-tier check, not a tier-cross — fires whenever the target is
     // already Dazed or worse, no crossing required.
     rewardIfWeak: [
-      { family: "disorient", tierAtLeast: 1, buff: { addBuildup: { curse: 40 } } },
+      { family: "disorient", tierAtLeast: 1, buff: { addBuildup: { curse: 50 } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.ghoststep;
@@ -9837,7 +9933,7 @@ Object.assign(RAW_SKILLS, {
       const amount = Math.max(1, physical + elemental + necrotic);
       const disorientTier = target?.weakness?.tiers?.disorient || 0;
       const rule = findRewardIfWeakRule(ability, disorientTier);
-      let curseBuildup = ability?.buildupHint?.curse ?? 90;
+      let curseBuildup = ability?.buildupHint?.curse ?? 113;
       if (rule) curseBuildup += rule.buff?.addBuildup?.curse || 0;
       return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: curseBuildup } };
     },
@@ -9861,7 +9957,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
     cooldown: 3,
-    buildupHint: { curse: 60 },
+    buildupHint: { curse: 75 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.hex_stitch;
       const roll = calculateDamage(attacker, target, ability);
@@ -9875,7 +9971,7 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const primaryCurse = ability?.buildupHint?.curse ?? 60;
+      const primaryCurse = ability?.buildupHint?.curse ?? 75;
       const splashCurse = Math.floor(primaryCurse * 0.50);
       const toxicMeter = target?.weakness?.meters?.toxic || target?.currentStats?.toxic || 0;
       const repeatChance = Math.min(0.50, toxicMeter / 1000);
@@ -9909,7 +10005,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning"],
     cooldown: 2,
-    buildupHint: { lightning: 60 },
+    buildupHint: { lightning: 75 },
     // Declarative so the tooltip can show it and apply() reads the same
     // numbers instead of duplicating them inline.
     rewardIfWeak: [
@@ -9943,7 +10039,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 75 },
         repeatChance,
       };
     },
@@ -9974,9 +10070,9 @@ Object.assign(RAW_SKILLS, {
         if (!char || char.status === 'incapacitated') return;
         totalDisease += char?.weakness?.meters?.disease || 0;
       });
-      // mpGain scales 1 MP per 100 total enemy Disease, floored at 2 and capped
-      // at 8 (so it takes 800+ combined enemy Disease to hit the ceiling).
-      const mpGain = Math.max(2, Math.min(8, Math.floor(totalDisease / 100)));
+      // mpGain scales 1 MP per 80 total enemy Disease, floored at 2 and capped
+      // at 8 (so it takes 640+ combined enemy Disease to hit the ceiling).
+      const mpGain = Math.max(2, Math.min(8, Math.floor(totalDisease / 80)));
       // Self-cleanse scales WITH mpGain (not a flat amount) — 50 self-Disease
       // purged per MP gained, so it rides the same 2-8 range: 100 at minimum,
       // up to 400 at the mpGain=8 ceiling.
@@ -10000,7 +10096,7 @@ Object.assign(RAW_SKILLS, {
 
       return { amount: 0 };
     },
-    description: "Reads total Disease across all living enemies: 100 Disease = 1 MP restored (minimum 2, maximum 8). Purges your own Disease at 50 per MP gained (minimum 100, maximum 400)."
+    description: "Reads total Disease across all living enemies: 80 Disease = 1 MP restored (minimum 2, maximum 8). Purges your own Disease at 50 per MP gained (minimum 100, maximum 400)."
   },
 
   'poison_extraction': {
@@ -10039,7 +10135,7 @@ Object.assign(RAW_SKILLS, {
         target.weakness.meters.toxic = Math.max(0, toxicMeter - consumed);
         target.weakness.tiers.toxic = weaknessTierFromMeter(target.weakness.meters.toxic);
       }
-      const mpTable = [2, 4, 6, 8, 10];
+      const mpTable = [3, 5, 8, 10, 13];
       const mpGain = mpTable[band];
 
       // Party-wide: every living character on the attacker's own side gets
@@ -10066,7 +10162,7 @@ Object.assign(RAW_SKILLS, {
 
       return { amount: 0 };
     },
-    description: "Requires at least 50 Toxic on the target. Consumes up to 250 Toxic buildup, in 50-point steps based on their current meter. Restores 2/4/6/8/10 MP to your entire party, scaling with how much was consumed."
+    description: "Requires at least 50 Toxic on the target. Consumes up to 250 Toxic buildup, in 50-point steps based on their current meter. Restores 3/5/8/10/13 MP to your entire party, scaling with how much was consumed."
   },
 
   // -------- Payoff --------
@@ -10233,7 +10329,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
     cooldown: 3,
-    buildupHint: { expose: 50 },
+    buildupHint: { expose: 63 },
     // Bonus crit chance vs an Exposed target — a per-ability rule (see
     // critChanceIfWeak in CombatLogic.js's calculateDamage), not the global
     // Expose T2 crit bonus every attack already gets.
@@ -10264,7 +10360,7 @@ Object.assign(RAW_SKILLS, {
         elemental,
         necrotic,
         amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 50 },
+        buildup: { expose: ability?.buildupHint?.expose ?? 63 },
       };
     },
     description: "Deals 115% weapon damage. Stronger if the target is Raw or Dazed. Grants initiative on crit."
@@ -10335,7 +10431,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "lightning"],
     cooldown: 4,
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
-    buildupHint: { disorient: 40 },
+    buildupHint: { disorient: 50 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.flash_overload;
       const roll = calculateDamage(attacker, target, ability);
@@ -10357,7 +10453,7 @@ Object.assign(RAW_SKILLS, {
       // repeat at Lightning T2 re-fans it too (same generic repeat/splash
       // mechanism Hex Stitch's curse splash uses), hitting every other enemy
       // with it twice instead of just once on the initial cast.
-      const disorientAmt = ability?.buildupHint?.disorient ?? 40;
+      const disorientAmt = ability?.buildupHint?.disorient ?? 50;
       const enemySlots = attacker?.isEnemy ? scene?.allySlots : scene?.enemySlots;
       const splash = (enemySlots || [])
         .map(s => s?.char)
@@ -10465,7 +10561,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
     cooldown: 2,
-    buildupHint: { expose: 80 },
+    buildupHint: { expose: 85 },
     // Bonus Lacerate on ACTUALLY crossing an Expose tier — routed through the
     // generic rewardIfTierCross engine (CombatScene.js), which snapshots
     // tiers before/after the REAL buildup application (post Hunter's Mark,
@@ -10475,8 +10571,8 @@ Object.assign(RAW_SKILLS, {
     // amplified or reduced before landing could silently cross (or fail to
     // cross) a tier the ability itself never actually saw happen.
     rewardIfTierCross: [
-      { family: "expose", tier: 1, debuff: { addBuildup: { lacerate: 60 } } },
-      { family: "expose", tier: 2, debuff: { addBuildup: { lacerate: 120 } } },
+      { family: "expose", tier: 1, debuff: { addBuildup: { lacerate: 75 } } },
+      { family: "expose", tier: 2, debuff: { addBuildup: { lacerate: 150 } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.marked_cut;
@@ -10494,7 +10590,7 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         physical, elemental, necrotic,
         amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 80 },
+        buildup: { expose: ability?.buildupHint?.expose ?? 85 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
@@ -10517,7 +10613,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "defensive"],
     cooldown: 3,
-    buildupHint: { cold: 70 },
+    buildupHint: { cold: 88 },
     // Self PhysicalResist on ACTUALLY crossing EITHER Cold tier — routed
     // through the generic rewardIfTierCross engine (same fix as Marked
     // Cut/Pressure Point/Needle Feint) instead of predicting the cross here
@@ -10547,11 +10643,57 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         physical, elemental, necrotic,
         amount,
-        buildup: { cold: ability?.buildupHint?.cold ?? 70 },
+        buildup: { cold: ability?.buildupHint?.cold ?? 88 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
     description: "Deals 100% weapon damage. Applies Cold. Reaching Chilled or Frostbitten grants +15% Physical Resist for 1 turn."
+  },
+
+  // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
+  // the full rationale. Lightning instead of Expose/Cold: sword_1h's only
+  // two buildup-applying skills so far were Expose (Marked Cut) and Cold
+  // (Guarded Slash above) — no elemental-storm flavor yet despite Blazing
+  // Fervor already dipping into Fire on this weapon type. Expose secondary:
+  // once the target's truly shocked, the follow-through finds them wide open.
+  'storm_cut': {
+    id: "storm_cut",
+    name: "Storm Cut",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lightning", "elemental"],
+    cooldown: 2,
+    buildupHint: { lightning: 85 },
+    rewardIfTierCross: [
+      { family: "lightning", tier: 1, debuff: { addBuildup: { expose: 75 } } },
+      { family: "lightning", tier: 2, debuff: { addBuildup: { expose: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.storm_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Lightning. Crossing a tier catches them wide open from the shock (bonus Expose)."
   },
 
   'rally_blow': {
@@ -10639,7 +10781,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "necrotic"],
     cooldown: 3,
-    buildupHint: { expose: 90 },
+    buildupHint: { expose: 113 },
     // Builds Rhythm if the target is at least Flayed — reuses the rewardIfWeak
     // convention (grantsRhythm instead of damagePct/addBuildup) so the
     // tooltip shows it and apply() reads the same condition instead of a
@@ -10678,7 +10820,7 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         physical, elemental, necrotic,
         amount,
-        buildup: { expose: ability?.buildupHint?.expose ?? 90 },
+        buildup: { expose: ability?.buildupHint?.expose ?? 113 },
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
@@ -10877,21 +11019,24 @@ Object.assign(RAW_SKILLS, {
     requiresWeakness: { family: "expose", tierAtLeast: 1 },
     // Declarative so the tooltip can show the real rate/cap and apply() reads
     // the same numbers instead of duplicating them inline.
-    consumeWeaknessBonus: { family: "expose", pctPer100: 20, maxConsume: 400 },
+    consumeWeaknessBonus: { family: "expose", pctPer100: 25, maxConsume: 400 },
     apply: (attacker, target) => {
       const ability = SKILLS?.power_stab;
       const roll = calculateDamage(attacker, target, ability);
 
-      // Base 120% weapon damage + up to +80% from consumed Expose — these two
-      // are ADDITIVE percentages of the same base (120% + 80% = 200% total
+      // Base 150% weapon damage + up to +100% from consumed Expose — these two
+      // are ADDITIVE percentages of the same base (150% + 100% = 250% total
       // at the cap), not sequential multipliers, so they're combined into ONE
       // skillPct below instead of two chained multiplies (which would compound
-      // to 216% instead of the intended 200% at the cap).
+      // higher than the intended 250% at the cap).
       const cfg = ability.consumeWeaknessBonus;
       const currentMeter = target?.weakness?.meters?.[cfg.family] || 0;
-      const consumed = Math.min(cfg.maxConsume, currentMeter);
+      // Consumes only whole 100-increments (same rule as Toxic Bloom) — a
+      // target sitting on 350 only has 300 drained, leaving the leftover 50
+      // behind rather than destroying it for no extra bonusPct.
+      const consumed = Math.min(cfg.maxConsume, Math.floor(currentMeter / 100) * 100);
       const bonusPct = Math.floor(consumed / 100) * cfg.pctPer100;
-      const basePct = 120;
+      const basePct = 150;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -10910,14 +11055,14 @@ Object.assign(RAW_SKILLS, {
 
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Crit reapplies 50 Expose — was reading roll.crit, a field that
+      // Crit reapplies 63 Expose — was reading roll.crit, a field that
       // doesn't exist on calculateDamage()'s return (the real field is
       // isCrit), so this never actually fired before.
-      const buildup = roll.isCrit ? { expose: 50 } : undefined;
+      const buildup = roll.isCrit ? { expose: 63 } : undefined;
 
       return { ...roll, physical, elemental, necrotic, amount, buildup };
     },
-    description: "Deals 120% weapon damage. Consumes up to 400 Expose for +20% damage per 100 consumed (up to +80%). Crits reapply 50 Expose."
+    description: "Deals 150% weapon damage. Consumes up to 400 Expose for +25% damage per 100 consumed (up to +100%). Crits reapply 63 Expose."
   },
 
   'glacial_strike': {
@@ -10942,14 +11087,18 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 130, isCrit: roll.isCrit, critMult: roll.critMult }
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 160, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const statusEffects = [];
 
-      // Cold only immobilizes once it reaches the 400 threshold — below that,
-      // the skill still fires (T2 = 200+ is enough to use it) but does not
-      // consume or immobilize.
+      // Cold only locks the target's bonus action once it reaches the 400
+      // threshold — below that, the skill still fires (T2 = 200+ is enough
+      // to use it) but does not consume or lock anything. Frost-Numbed
+      // (turns:1) is checked once at the start of the target's own next
+      // turn (see the actionsLeft reset in _advanceTurn/_takeEnemyTurn),
+      // so it fires exactly once, then expires — same timing model as
+      // Trapped Fire below.
       const coldMeter = target?.weakness?.meters?.cold || 0;
       let consumedCold = 0;
       if (coldMeter >= 400) {
@@ -10958,7 +11107,7 @@ Object.assign(RAW_SKILLS, {
           target.weakness.meters.cold = Math.max(0, coldMeter - consumedCold);
           if (target.weakness.tiers) target.weakness.tiers.cold = weaknessTierFromMeter(target.weakness.meters.cold);
         }
-        statusEffects.push({ id: "immobilized", turns: 1 });
+        statusEffects.push({ id: "frost_numbed", turns: 1 });
       }
 
       // Fire T2+: consume up to 400 fire, independent of the cold threshold above.
@@ -10967,23 +11116,28 @@ Object.assign(RAW_SKILLS, {
       let consumedFire = 0;
       if (hasFireT2) {
         const currentFire = target?.weakness?.meters?.fire || 0;
-        consumedFire = Math.min(400, currentFire);
+        // Consumes only whole 100-increments (same rule as Toxic Bloom) — a
+        // target sitting on 350 fire only has 300 drained, leaving the
+        // leftover 50 behind rather than destroying it for no extra `steps`
+        // (the buildup.cold conversion below is per-point anyway, but the
+        // vuln/resist/delayed-burn rider effects are all step-based).
+        consumedFire = Math.min(400, Math.floor(currentFire / 100) * 100);
         if (target?.weakness?.meters) {
           target.weakness.meters.fire = Math.max(0, currentFire - consumedFire);
           if (target.weakness.tiers) target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
         }
         // Added afterward — this cold does NOT count toward this cast's own 400 threshold above.
-        buildup.cold = Math.floor(consumedFire * 0.5);
+        buildup.cold = Math.floor(consumedFire * 0.625);
         const steps = Math.floor(consumedFire / 100);
         if (steps > 0) {
           statusEffects.push({
             id: "glacial_scorch",
             turns: 1,
-            fireBuildupMul: 1 + steps * 0.1,
+            fireBuildupMul: 1 + steps * 0.125,
             // General elemental vulnerability (not fire-only) — reuses the same
             // Resist-as-mitigation-points convention as torn_defenses/rallied_vulnerability.
-            mods: { ElementalResist: -(steps * 10) },
-            onTurnEndOnce: { damage: steps * 10, isMagic: true },
+            mods: { ElementalResist: -(steps * 13) },
+            onTurnEndOnce: { damage: steps * 13, isMagic: true },
           });
         }
       }
@@ -10994,11 +11148,11 @@ Object.assign(RAW_SKILLS, {
         statusEffects: statusEffects.length ? statusEffects : undefined,
         buildup: Object.keys(buildup).length ? buildup : undefined,
         log: `${attacker?.name || "The swordsman"} strikes with glacial force!`
-          + (consumedCold ? ` The frost locks ${target?.name || 'the target'} in place!` : "")
+          + (consumedCold ? ` The frost numbs ${target?.name || 'the target'}'s reflexes!` : "")
           + (consumedFire ? " Trapped fire will flare at the end of their next turn." : ""),
       };
     },
-    description: "Deals 130% weapon damage. If the target has 400+ Cold, consumes it to immobilize them for 1 turn. If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 50% consumed, increases Fire buildup taken by 10% per 100 consumed, and makes the target vulnerable to all Elemental damage by 10% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 10 damage per 100 consumed."
+    description: "Deals 160% weapon damage. If the target has 400+ Cold, consumes it to disable their bonus action for their next turn (Frost-Numbed). If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 62.5% consumed, increases Fire buildup taken by 12.5% per 100 consumed, and makes the target vulnerable to all Elemental damage by 13% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 13 damage per 100 consumed."
   },
 
   'taunting_cry': {
@@ -11244,37 +11398,43 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 125, isCrit: roll.isCrit, critMult: roll.critMult }
+        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 155, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
       const currentLacerate = target?.weakness?.meters?.lacerate || 0;
-      const consumed = Math.min(400, currentLacerate);
+      // Consumes only whole 100-increments (same rule as Toxic Bloom) — a
+      // target sitting on 350 only has 300 drained, leaving the leftover 50
+      // behind rather than destroying it for no extra pdrReduction.
+      const consumed = Math.min(400, Math.floor(currentLacerate / 100) * 100);
       if (consumed > 0 && target?.weakness?.meters) {
         target.weakness.meters.lacerate = Math.max(0, currentLacerate - consumed);
         if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
       }
-      const pdrReduction = Math.floor(consumed / 100) * 10;
+      const steps = Math.floor(consumed / 100);
+      const pdrReduction = steps * 13;
       const statusEffects = [];
       if (pdrReduction > 0) {
         statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction } });
       }
-      if (consumed >= 200) {
-        // Lacerate-buildup vulnerability, not a resist debuff — target takes
-        // +50% Lacerate buildup from any source for 2 turns. Uses the same
-        // generic <family>BuildupMul enforcement added for Glacial Strike's
-        // Trapped Fire (_applyWeaknessBuildup in CombatScene.js).
-        statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1.5 });
+      // Lacerate-buildup vulnerability now scales continuously with steps
+      // instead of a flat +50% at the 200 breakpoint — +25% per 100 past
+      // 100, capping at +100% (double) at the full 400 consumed. Uses the
+      // same generic <family>BuildupMul enforcement added for Glacial
+      // Strike's Trapped Fire (_applyWeaknessBuildup in CombatScene.js).
+      const lacerateVulnPct = steps >= 2 ? steps * 25 : 0;
+      if (lacerateVulnPct > 0) {
+        statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1 + lacerateVulnPct / 100 });
       }
       return {
         ...roll, physical, elemental, necrotic, amount,
         statusEffects: statusEffects.length ? statusEffects : undefined,
         log: consumed > 0
-          ? `${attacker?.name || "The swordsman"} shatters armor — -${pdrReduction}% PDR${consumed >= 200 ? ", +50% Lacerate buildup taken" : ""}.`
+          ? `${attacker?.name || "The swordsman"} shatters armor — -${pdrReduction}% PDR${lacerateVulnPct > 0 ? `, +${lacerateVulnPct}% Lacerate buildup taken` : ""}.`
           : undefined,
       };
     },
-    description: "125% damage; consume up to 400 lacerate for -10% PDR per 100 for 3 turns. 200+ consumed also makes the target take +50% Lacerate buildup for 2 turns."
+    description: "155% damage; consume up to 400 lacerate for -13% PDR per 100 for 3 turns. 200+ consumed also makes the target take extra Lacerate buildup for 2 turns, scaling from +50% at 200 up to +100% at 400."
   },
 
   // --- Sword (1h) Reactions ---
@@ -12310,16 +12470,16 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    buildupHint: { disorient: 80 },
+    buildupHint: { disorient: 100 },
     // Zone: brownish tint (element: 'physical'); enemies standing in it take
-    // +50 disorient buildup at the end of their own turn, for 3 turns.
+    // +63 disorient buildup at the end of their own turn, for 3 turns.
     slotEffect: {
       id: "quake_mark_zone",
       isQuakeZone: true,
       element: "physical",
       tickPctMaxHP: 0.0,
       turns: 3,
-      buildupFamilies: { disorient: 50 },
+      buildupFamilies: { disorient: 63 },
     },
     apply: (attacker, target) => {
       const ability = SKILLS?.quake_mark;
@@ -12336,7 +12496,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const buildupVal = ability?.buildupHint?.disorient ?? 80;
+      const buildupVal = ability?.buildupHint?.disorient ?? 100;
       // Spread slotEffect from definition so buildupFamilies is preserved
       const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       return {
@@ -12346,7 +12506,101 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Deals 90% weapon damage, smashing the ground and applying Disorient on hit. Leaves a trembling zone for 3 turns — enemies standing in it suffer +50 Disorient buildup at the end of their turn."
+    description: "Deals 90% weapon damage, smashing the ground and applying Disorient on hit. Leaves a trembling zone for 3 turns — enemies standing in it suffer +63 Disorient buildup at the end of their turn."
+  },
+
+  // Same formula/shape as Marked Cut (sword_1h) — see Vital Mark's (dagger)
+  // comment for the full rationale. Disorient instead of Lacerate here: a
+  // heavy blow that cracks the target's guard open, and once it's truly
+  // gone, leaves them reeling. Also mace's first Expose-buildup skill —
+  // every other mace skill so far builds Disorient/Cold/Disease/Fire/
+  // Lightning, never Expose.
+  'crushing_mark': {
+    id: "crushing_mark",
+    name: "Crushing Mark",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 85 },
+    rewardIfTierCross: [
+      { family: "expose", tier: 1, debuff: { addBuildup: { disorient: 75 } } },
+      { family: "expose", tier: 2, debuff: { addBuildup: { disorient: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.crushing_mark;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { expose: ability?.buildupHint?.expose ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Expose. Crossing a tier leaves them reeling from the blow (bonus Disorient)."
+  },
+
+  // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
+  // the full rationale. Toxic instead of Disorient/Cold/Disease/Fire/
+  // Lightning/Expose (everything else mace already covers): an extension of
+  // mace's existing plague/disease motif (Fel Chant, Plague Slam) into a
+  // second necrotic-family flavor. No skillConversion — stays a plain
+  // physical crush, same as every other mace skill; the buildup carries the
+  // Toxic theming, not the damage type. Curse secondary: once the poison
+  // truly rots them, it festers into something worse.
+  'rotcrusher': {
+    id: "rotcrusher",
+    name: "Rotcrusher",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "STR",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "toxic"],
+    cooldown: 2,
+    buildupHint: { toxic: 85 },
+    rewardIfTierCross: [
+      { family: "toxic", tier: 1, debuff: { addBuildup: { curse: 75 } } },
+      { family: "toxic", tier: 2, debuff: { addBuildup: { curse: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.rotcrusher;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { toxic: ability?.buildupHint?.toxic ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Toxic. Crossing a tier festers the poison into something worse (bonus Curse)."
   },
 
   'ringing_blow': {
@@ -12365,7 +12619,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient"],
     cooldown: 2,
-    buildupHint: { disorient: 60 },
+    buildupHint: { disorient: 75 },
     // Was `physVulnPct` — didn't match the field CombatScene.js's
     // rewardIfTierCross consumer and the tooltip's buffToText() both actually
     // read (`physicalVulnPct`), so this debuff never applied in combat and
@@ -12401,7 +12655,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 60 },
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 75 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
@@ -12476,9 +12730,9 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 3,
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
-    buildupHint: { cold: 80 },
+    buildupHint: { cold: 100 },
     // immobilizes: true — stub, requires CombatScene support to enforce
-    slotEffect: { id: "frozen_quake_zone", isQuakeZone: true, element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 50 }, immobilizes: true },
+    slotEffect: { id: "frozen_quake_zone", isQuakeZone: true, element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 63 }, immobilizes: true },
     apply: (attacker, target) => {
       const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
@@ -12500,7 +12754,7 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const baseBuildup = ability?.buildupHint?.cold ?? 80;
+      const baseBuildup = ability?.buildupHint?.cold ?? 100;
 
       // Lightning synergy: if the target is ALSO already Zapped (Lightning
       // T1+) at cast time, the resulting zone additionally makes anyone
@@ -12521,7 +12775,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Requires Cold T1. Deals 95% weapon damage, smashing a frost crack beneath a single foe and leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +50 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
+    description: "Requires Cold T1. Deals 95% weapon damage, smashing a frost crack beneath a single foe and leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +63 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
   },
 
   'fel_chant': {
@@ -12539,7 +12793,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "stance", "disease"],
     cooldown: 3,
-    buildupHint: { disease: 50 },
+    buildupHint: { disease: 63 },
     // guardDiseaseTierPct scales the guard % by the ATTACKER's own Disease
     // tier (25% vs Diseased/T1, 50% vs Plagued/T2) — implemented generically
     // in _processGuardStatusEffects (CombatScene.js). guardHits limits it to
@@ -12548,12 +12802,12 @@ Object.assign(RAW_SKILLS, {
     // falls back to title-casing the id when there's no STATUS_ICON_LIBRARY
     // entry, so leaving the old id here would've still shown "Iron Chant" on
     // buffed allies even after the skill's own display name changed.
-    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 50 } } },
+    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 63 } } },
     apply: () => {
       const ability = SKILLS?.fel_chant;
       const effect = ability?.teamBuff?.effect ? {
         ...ability.teamBuff.effect,
-        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 50 }
+        retaliateBuildup: { disease: ability?.buildupHint?.disease ?? 63 }
       } : undefined;
       return {
         amount: 0,
@@ -12584,7 +12838,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "fire"],
     emitTagsOnUse: ["swing"],
     cooldown: 2,
-    buildupHint: { fire: 70 },
+    buildupHint: { fire: 88 },
     apply: (attacker, target) => {
       const ability = SKILLS?.searing_clout;
       const roll = calculateDamage(attacker, target, ability);
@@ -12617,7 +12871,7 @@ Object.assign(RAW_SKILLS, {
         physical, elemental, necrotic, amount,
         isMagic: true,
         element: "fire",
-        buildup: { fire: ability?.buildupHint?.fire ?? 70 },
+        buildup: { fire: ability?.buildupHint?.fire ?? 88 },
       };
     },
     description: "Deals 100% weapon damage, +15% against a Singed (Fire T1) target (+30% instead if Ablaze, Fire T2). Builds Fire."
@@ -12653,7 +12907,7 @@ Object.assign(RAW_SKILLS, {
     // this consumption (unlike Power Stab's consumeWeaknessBonus, which this
     // deliberately does NOT reuse: that field's generic tooltip text always
     // reads "+X% damage per 100 consumed," which would misdescribe this).
-    consumeDisorientForDrain: { maxConsume: 400, drainPctPer100: 5 },
+    consumeDisorientForDrain: { maxConsume: 400, drainPctPer100: 6 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.gravity_slam;
       const roll = calculateDamage(attacker, target, ability);
@@ -12661,11 +12915,11 @@ Object.assign(RAW_SKILLS, {
       const meter = target?.weakness?.meters?.disorient || 0;
       const intensity = weaknessIntensityMult(meter) || 1;
 
-      // 130% base (Disorient T2 is required to even cast this now, so no
+      // 160% base (Disorient T2 is required to even cast this now, so no
       // more tier branching) + an overflow bonus (+10% per intensity point
       // above 1.0) — Category A, combined additively. The Disorient
       // consumption below is a pure resource drain, not a damage source.
-      const basePct = 130;
+      const basePct = 160;
       const overflowPct = intensity > 1 ? Math.round((intensity - 1) * 10) : 0;
       const skillPct = basePct + overflowPct;
 
@@ -12681,12 +12935,15 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Consume up to 400 Disorient buildup, draining 5% of the target's
-      // CURRENT MP per 100 consumed (up to 20% at the cap) — a scaling
+      // Consume up to 400 Disorient buildup, draining 6% of the target's
+      // CURRENT MP per 100 consumed (up to 24% at the cap) — a scaling
       // version of the skill's old flat 20% drain, now tied to how much
       // Disorient is actually available to consume.
       const cfg = ability.consumeDisorientForDrain;
-      const consumed = Math.min(cfg.maxConsume, meter);
+      // Consumes only whole 100-increments (same rule as Toxic Bloom) — a
+      // target sitting on 350 only has 300 drained, leaving the leftover 50
+      // behind rather than destroying it for no extra drainPct.
+      const consumed = Math.min(cfg.maxConsume, Math.floor(meter / 100) * 100);
       let manaDrained = 0;
       if (consumed > 0 && target?.weakness?.meters) {
         target.weakness.meters.disorient = Math.max(0, meter - consumed);
@@ -12718,7 +12975,7 @@ Object.assign(RAW_SKILLS, {
         manaDrained: manaDrained > 0 ? manaDrained : undefined,
       };
     },
-    description: "Requires Concussed (Disorient T2). Deals 130% weapon damage, +10% per intensity point of overflow. Consumes up to 400 Disorient, draining 5% of the target's current MP per 100 consumed (up to 20%). Extends every active quake zone by 1 turn. Spends 20 Initiative."
+    description: "Requires Concussed (Disorient T2). Deals 160% weapon damage, +10% per intensity point of overflow. Consumes up to 400 Disorient, draining 6% of the target's current MP per 100 consumed (up to 24%). Extends every active quake zone by 1 turn. Spends 20 Initiative."
   },
 
   'miasma_crush': {
@@ -13289,7 +13546,7 @@ Object.assign(RAW_SKILLS, {
     // Was 310 — a stray leftover test value (every other mace skill's
     // buildupHint sits in the 40-100 range, and this is the free/basic-tier
     // poke, so it should be at the low end, not far above the paid skills).
-    buildupHint: { disorient: 40 },
+    buildupHint: { disorient: 50 },
     apply: (attacker, target) => {
       const ability = SKILLS?.bonecrusher;
       const roll = calculateDamage(attacker, target, ability);
@@ -13318,7 +13575,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 40 },
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 50 },
       };
     },
     description: "Deals 100% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 190% against a foe weak from all three. Builds Disorient."
@@ -13341,8 +13598,8 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disease", "terrain"],
     emitTagsOnUse: ["smash"],
     cooldown: 3,
-    buildupHint: { disease: 80 },
-    // Zone: enemies standing in it take +50 Disease buildup at the end of
+    buildupHint: { disease: 100 },
+    // Zone: enemies standing in it take +63 Disease buildup at the end of
     // their own turn, for 3 turns — same shape as Quake Mark's zone, just
     // Disease-flavored instead of Disorient. Additionally, if an occupant is
     // Ablaze (Fire T2) at the moment the zone ticks, they combust for Fire
@@ -13356,7 +13613,7 @@ Object.assign(RAW_SKILLS, {
       element: "disease",
       tickPctMaxHP: 0.0,
       turns: 3,
-      buildupFamilies: { disease: 50 },
+      buildupFamilies: { disease: 63 },
       fireBurnProc: { perHundredDisease: 2 },
     },
     apply: (attacker, target) => {
@@ -13374,7 +13631,7 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const buildupVal = ability?.buildupHint?.disease ?? 80;
+      const buildupVal = ability?.buildupHint?.disease ?? 100;
       const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       return {
         ...roll,
@@ -13383,7 +13640,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Deals 90% weapon damage, smashing the ground and applying Disease on hit. Leaves a festering zone for 3 turns — enemies standing in it suffer +50 Disease buildup at the end of their turn. If an occupant is Ablaze (Fire T2), they also combust for 2 per 100 Disease buildup, scaled by their Fire intensity — read live when the zone triggers."
+    description: "Deals 90% weapon damage, smashing the ground and applying Disease on hit. Leaves a festering zone for 3 turns — enemies standing in it suffer +63 Disease buildup at the end of their turn. If an occupant is Ablaze (Fire T2), they also combust for 2 per 100 Disease buildup, scaled by their Fire intensity — read live when the zone triggers."
   },
 
   'earthshatter': {
@@ -13454,7 +13711,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning", "holy", "terrain"],
     cooldown: 2,
-    buildupHint: { lightning: 40 },
+    buildupHint: { lightning: 50 },
     // Zone spawned only if target has lightning t1+: yellow tint, attackers hitting enemies in it gain 2 MP
     slotEffect: {
       id: "sanctified_quake_zone",
@@ -13491,7 +13748,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { lightning: ability?.buildupHint?.lightning ?? 40 },
+        buildup: { lightning: ability?.buildupHint?.lightning ?? 50 },
         slotEffect,
       };
     },
@@ -13575,7 +13832,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "disorient"],
     emitTagsOnUse: ["smash"],
     cooldown: 2,
-    buildupHint: { disorient: 80 },
+    buildupHint: { disorient: 100 },
     // Restores MP on crossing Disorient tier thresholds — healMP handled by rewardIfTierCross pipeline
     rewardIfTierCross: [
       { family: "disorient", tier: 1, healMP: 2 },
@@ -13597,7 +13854,7 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll,
         physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 80 },
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 100 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
@@ -14670,7 +14927,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "cold"],
     cooldown: 4,
-    buildupHint: { cold: 60 },
+    buildupHint: { cold: 75 },
     apply: (attacker, target) => {
       const ability = SKILLS?.frostlash;
       const roll = calculateDamage(attacker, target, ability);
@@ -14686,7 +14943,7 @@ Object.assign(RAW_SKILLS, {
         amount,
         isMagic: true,
         element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+        buildup: { cold: ability?.buildupHint?.cold ?? 75 },
       };
     },
     description: "A chilling strike that builds Cold on the enemy."
@@ -14772,8 +15029,8 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["magic", "spell", "cold", "terrain"],
     cooldown: 3,
-    buildupHint: { cold: 60 },
-    slotEffect: { id: "ice_slick", element: "cold", buildup: 15, tickPctMaxHP: 0.0, turns: 2 },
+    buildupHint: { cold: 75 },
+    slotEffect: { id: "ice_slick", element: "cold", buildup: 19, tickPctMaxHP: 0.0, turns: 2 },
     apply: (attacker, target) => {
       const ability = SKILLS?.glacier_wall;
       const roll = calculateDamage(attacker, target, ability);
@@ -14790,7 +15047,7 @@ Object.assign(RAW_SKILLS, {
         amount,
         isMagic: true,
         element: "cold",
-        buildup: { cold: ability?.buildupHint?.cold ?? 60 },
+        buildup: { cold: ability?.buildupHint?.cold ?? 75 },
         slotEffect,
       };
     },

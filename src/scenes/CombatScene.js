@@ -38,7 +38,7 @@ import {
 
 // Combat logic
 import {
-  rollToHit, computeHitChance, getLastDamageBreakdown,
+  rollToHit, computeHitChance, getLastDamageBreakdown, _resetDamageBreakdown,
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
@@ -49,6 +49,14 @@ import {
 
 
 
+
+// Weakness family -> armor buildup% category (physical/elemental/necrotic),
+// mirroring the PhysicalResist/ElementalResist/NecroticResist mitigation split.
+const WeaknessBuildupCategory = {
+  expose: 'physical', lacerate: 'physical', disorient: 'physical',
+  fire: 'elemental', cold: 'elemental', lightning: 'elemental',
+  toxic: 'necrotic', disease: 'necrotic', curse: 'necrotic',
+};
 
 // Helper: Get safe Items.js data from equipped gear
 function getEquippedItemData(equipped) {
@@ -1799,6 +1807,21 @@ export default class CombatScene extends Phaser.Scene {
     // ===== Right column (original list) =====
     const resilience = char?.resilience ?? char?.gearEffects?.resilience ?? 0;
 
+    // Weakness-family buildup% (gear-derived): per-family weapon suffix +
+    // matching armor category affix (physical/elemental/necrotic), combined
+    // additively — same formula _applyWeaknessBuildup uses in combat, so the
+    // single highest number shown here matches what actually applies.
+    const geForBuildup = char?.gearEffects || {};
+    const buildupPctByFamily = {};
+    for (const fam of Object.keys(WeaknessBuildupCategory)) {
+      const weaponPct = geForBuildup.weaponBuildupPercent?.[fam] || 0;
+      const armorPct = geForBuildup[`${WeaknessBuildupCategory[fam]}BuildupPercent`] || 0;
+      buildupPctByFamily[fam] = weaponPct + armorPct;
+    }
+    const maxBuildupPct = Math.max(0, ...Object.values(buildupPctByFamily));
+    const buildupTooltipLines = Object.entries(buildupPctByFamily)
+      .map(([fam, pct]) => `${fam.charAt(0).toUpperCase() + fam.slice(1)}: +${pct}%`);
+
     const critInfo = (() => {
       const w = char?.weakness;
       let line = '-';
@@ -1890,6 +1913,11 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true, desc: 'Lowers the attacker\'s chance to hit this character. On a landed hit, it also partially resists being crit (half value).' },
       { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}`, desc: 'Fills each turn, primarily from Charisma. Spent as a resource by some skills for bonus effects. Initiative sets turn order at the start of battle.' },
       { label: 'Lifesteal:', value: `${lifeStealPct}%`, desc: 'Heals this character for a % of damage dealt — from gear.' },
+      {
+        label: 'Buildup%:', value: `+${maxBuildupPct}%`,
+        desc: 'Highest weakness-buildup bonus across all 9 families (weapon suffix + armor affix, combined). Hover for the full breakdown.',
+        descLines: ['Highest gear buildup% bonus across all 9 weakness families:', '', ...buildupTooltipLines],
+      },
     ];
 
     // ===== Middle column — paired counterparts, aligned by index to the
@@ -1908,6 +1936,7 @@ export default class CombatScene extends Phaser.Scene {
           : 'Flat MP restored at the start of this character\'s turn — from gear and Intelligence (+1 per 5 INT).',
       },
       { label: 'Crit Vuln.:', value: critInfo.line, valueColor: critInfo.color, valueBold: critInfo.bold, desc: 'Bonus crit chance and crit damage attackers get against this character — raised by Expose T2.' },
+      null,
       null,
       null,
       null,
@@ -1936,11 +1965,11 @@ export default class CombatScene extends Phaser.Scene {
       this.characterInfoPanel.add(labelText);
       this._charInfoBodyGroup.push(labelText);
 
-      if (row.desc) {
+      if (row.desc || row.descLines) {
         const showTip = (pointer) => {
           this.tooltip?.show(pointer.worldX, pointer.worldY, {
             title: row.label.replace(/:$/, ''),
-            lines: [row.desc]
+            lines: row.descLines || [row.desc]
           });
         };
         const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
@@ -1974,11 +2003,11 @@ export default class CombatScene extends Phaser.Scene {
       this.characterInfoPanel.add(labelText);
       this._charInfoBodyGroup.push(labelText);
 
-      if (row.desc) {
+      if (row.desc || row.descLines) {
         const showTip = (pointer) => {
           this.tooltip?.show(pointer.worldX, pointer.worldY, {
             title: row.label.replace(/:$/, ''),
-            lines: [row.desc]
+            lines: row.descLines || [row.desc]
           });
         };
         const moveTip = (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY);
@@ -2063,7 +2092,7 @@ export default class CombatScene extends Phaser.Scene {
     const statRows = [
       { label: 'STR:', value: `${stats.STR ?? 0}`, desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT).' },
       { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT).' },
-      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+5 Max HP and +0.5 Physical Resist per point.' },
+      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+2 Max HP and +0.5 Physical Resist per point.' },
       { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point, +1 MP regen per turn per 5 points. Feeds Crit Chance (with STR/DEX).' },
       { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point.' },
       { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP, +1 Initiative per point (sets turn order and Initiative Gauge regen), +0.5 Elemental Resist, +0.5 Necrotic Resist per point.' },
@@ -3864,6 +3893,16 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
+    // Reset the shared breakdown log ONCE here, at the top of every real
+    // ability resolution — not just inside calculateDamage()/calculateHealRoll()
+    // (which already do their own reset, redundantly). A flat/legacy skill
+    // that never calls either of those (most current enemy skills — see
+    // project_npc_logic_modernization) never pushes anything to this log at
+    // all, so without this its damage tooltip would show whatever was left
+    // over from the last REAL typed hit (often a player's), not "no formula
+    // available". This makes an empty log the correct, honest default.
+    try { _resetDamageBreakdown(); } catch { }
+
     // ===== Resource gate =====
     // A recast (options.isRepeat — e.g. Rune Channel's spell echo calling
     // this function again at reduced power) is a free automatic proc, not a
@@ -5808,14 +5847,17 @@ export default class CombatScene extends Phaser.Scene {
 
       const w = target.weakness;
 
-      if (ctx?.user?.gearEffects?.weaponBuildupPercent) {
-        const bonus = ctx.user.gearEffects.weaponBuildupPercent[key] || 0;
+      if (ctx?.user?.gearEffects) {
+        const category = WeaknessBuildupCategory[key];
+        const weaponBonus = ctx.user.gearEffects.weaponBuildupPercent?.[key] || 0;
+        const armorBonus = category ? (ctx.user.gearEffects[`${category}BuildupPercent`] || 0) : 0;
+        const bonus = weaponBonus + armorBonus;
         if (bonus) {
           const before = amt;
           amt = Math.max(0, Math.floor(amt * (1 + bonus / 100)));
           if (amt !== before) {
             const userName = ctx?.user?.name || 'Weapon';
-            this._log(`${userName}'s weapon empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
+            this._log(`${userName}'s gear empowers ${key} buildup: ${before} → ${amt} (+${bonus}%).`);
           }
         }
       }
@@ -7714,6 +7756,13 @@ export default class CombatScene extends Phaser.Scene {
 
     // 5) Reset action economy for this actor
     char.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
+    // Frost-Numbed (Glacial Strike): bonus action disabled for this whole
+    // turn — checked here, once, right after the reset, rather than gating
+    // every bonus-action use site individually.
+    if ((char?.statusEffects || []).some(se => se?.id === 'frost_numbed' && ((se.turns || 0) > 0 || se.permanent))) {
+      char.actionsLeft.bonus = 0;
+      this._log(`${char.name} is Frost-Numbed — bonus action disabled this turn.`);
+    }
     this.reactions?.onTurnStart(char);
     // Turn separator — always the Combat bucket specifically, never
     // whichever tab happens to be active (same reasoning as _log()).

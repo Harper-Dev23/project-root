@@ -8,12 +8,18 @@ const hpRatio = unit => {
 const randRange = (min = 0, max = 1) => min + Math.random() * (max - min);
 const hasStatus = (unit, id) => Array.isArray(unit?.statusEffects) && unit.statusEffects.some(se => se?.id === id);
 
-function meetsWeaknessRequirement(target, requirement) {
+function meetsWeaknessRequirement(user, target, requirement) {
   if (!requirement) return true;
   const reqs = Array.isArray(requirement) ? requirement : [requirement];
   for (const req of reqs) {
     if (!req?.family) continue;
-    const tiers = target?.weakness?.tiers || {};
+    // req.on === 'self' checks the ACTING unit's own weakness, not the
+    // target's (e.g. a skill gated on the caster's own Fire tier) — this
+    // was always checking `target` regardless, silently wrong for any
+    // skill using that field (none of the currently-flagged fizzles hit
+    // this specifically, found auditing the surrounding checks).
+    const location = req.on === 'self' ? user : target;
+    const tiers = location?.weakness?.tiers || {};
     const minTier = req.tierAtLeast ?? req.tier ?? 1;
     if ((tiers[req.family] || 0) < minTier) return false;
   }
@@ -56,9 +62,9 @@ function targetWeight(target, ability, opts = {}) {
   return Math.max(0.1, 1 + noise + hpBias + weaknessBias + markBias + allyBias);
 }
 
-function pickTargetFrom(list, ability, opts = {}) {
+function pickTargetFrom(user, list, ability, opts = {}) {
   const requirement = opts.requirement ?? ability?.requiresWeakness;
-  const candidates = (list || []).filter(u => isAlive(u) && meetsWeaknessRequirement(u, requirement));
+  const candidates = (list || []).filter(u => isAlive(u) && meetsWeaknessRequirement(user, u, requirement));
   if (!candidates.length) return null;
   return weightedPick(candidates, t => targetWeight(t, ability, opts));
 }
@@ -105,16 +111,39 @@ export function chooseNPCAction(npc, enemies, scene = null) {
     if (type === 'reaction') continue;
     if (!canAfford(npc, ability)) continue;
 
+    // Generic Initiative Gauge gate (e.g. Bulwark Call, Mending Wave) — the
+    // same check _applyAbilityToTarget enforces downstream. Without this,
+    // this fallback picker would happily "choose" one of these skills any
+    // time it's off cooldown and affordable, only for it to fizzle the
+    // moment it's actually cast — repeatedly, since AI_PROFILES.decide()
+    // returning null for one action slot is exactly when this fallback runs.
+    if (Number.isFinite(ability.requiresInitiativeGauge) && ability.requiresInitiativeGauge > 0) {
+      if ((npc.initiativeGauge || 0) < ability.requiresInitiativeGauge) continue;
+    }
+
     let target = null;
     if (ability.requiresTarget) {
       const poolList = ability.targetRequirement === 'ally' ? allies : livingEnemies;
-      target = pickTargetFrom(poolList, ability, { preferLowHP: ability.targetRequirement !== 'ally' ? true : undefined });
+      target = pickTargetFrom(npc, poolList, ability, { preferLowHP: ability.targetRequirement !== 'ally' ? true : undefined });
       if (!target && ability.targetRequirement === 'ally') {
-        target = pickTargetFrom(poolList, ability, { preferLowHP: true }); // heal something if requirement missed
+        target = pickTargetFrom(npc, poolList, ability, { preferLowHP: true }); // heal something if requirement missed
       }
     }
 
     if (ability.requiresTarget && !target) continue;
+
+    // canExecute — custom gates a declarative field can't express (e.g.
+    // Finishing Strike's "target has 2+ weakness families", Reckless
+    // Immolation's ">80% own HP"). Same check _executeSkill/
+    // _applyAbilityToTarget run before actually casting — this fallback
+    // picker needs it too, or it'll "choose" a skill that's just going to
+    // fizzle downstream.
+    if (typeof ability.canExecute === 'function') {
+      const verdict = ability.canExecute({ user: npc, target, scene }) ?? true;
+      const failed = (typeof verdict === 'object') ? (verdict.ok === false) : (verdict === false);
+      if (failed) continue;
+    }
+
     candidates.push({ type, skill: id, target, weight: abilityWeight(ability, target) });
   }
 

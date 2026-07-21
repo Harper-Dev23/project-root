@@ -7,6 +7,7 @@ const STATUS_ICON_LIBRARY = {
   snared: { glyph: 'SN', name: 'Snared', fg: '#f5d7a1', bg: '#2f2415', border: '#a0783d', description: 'Movement is heavily hindered.' },
   rooted: { glyph: 'RT', name: 'Rooted', fg: '#c7f0c2', bg: '#233122', border: '#649c5a', description: 'Locked in place.' },
   immobilized: { glyph: 'IM', name: 'Immobilized', fg: '#d6cff6', bg: '#2d2744', border: '#6d5fa3', description: 'Unable to reposition.' },
+  frost_numbed: { glyph: 'FN', name: 'Frost-Numbed', fg: '#cfeeff', bg: '#132a38', border: '#5fa0c8', description: 'Bonus action is disabled this turn.' },
   stunned: { glyph: 'ST', name: 'Stunned', fg: '#ffe0e0', bg: '#3d1f1f', border: '#b25d5d', description: 'Skips actions while stunned.' },
   stealth: { glyph: 'SH', name: 'Stealth', fg: '#d7f0ff', bg: '#14202b', border: '#5f90b3', description: 'Harder to target while hidden.' },
   rogue_evasion: { glyph: 'EV', name: 'Evasion', fg: '#d6ffe0', bg: '#10241a', border: '#4c9a63', description: 'Greatly improved dodge chance.' },

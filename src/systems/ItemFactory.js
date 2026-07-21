@@ -235,7 +235,27 @@ const ARMOR_PREFIX_POOL = [
   // needs to carry more of the "resisting weakness" weight than before.
   makeMiscArmorPrefix({ key: 'Stalwart', tier: 3, prop: 'resilience', range: [3, 6] }),
   makeMiscArmorPrefix({ key: 'Unyielding', tier: 2, prop: 'resilience', range: [8, 14] }),
-  makeMiscArmorPrefix({ key: 'Job\u2019s', tier: 1, prop: 'resilience', range: [18, 25] })
+  makeMiscArmorPrefix({ key: 'Job\u2019s', tier: 1, prop: 'resilience', range: [18, 25] }),
+
+  // Buildup % by damage-type CATEGORY (physical/elemental/necrotic) \u2014 the
+  // armor-side counterpart to the weapon suffixes' per-FAMILY buildup% above.
+  // Broader (any family in that category) but smaller (3-11%, vs. weapons'
+  // 9-50%) \u2014 same category split calculateDerivedStats/mitigation already use
+  // (physical: expose/lacerate/disorient, elemental: fire/cold/lightning,
+  // necrotic: toxic/disease/curse). Consumed by _applyWeaknessBuildup
+  // (CombatScene.js), combined ADDITIVELY with the weapon per-family bonus
+  // into one multiplier \u2014 same-stage gear bonuses, not sequential stages.
+  makeMiscArmorPrefix({ key: 'Forceful', tier: 3, prop: 'physicalBuildupPercent', range: [3, 5] }),
+  makeMiscArmorPrefix({ key: 'Brutal', tier: 2, prop: 'physicalBuildupPercent', range: [6, 8] }),
+  makeMiscArmorPrefix({ key: 'Titan\u2019s', tier: 1, prop: 'physicalBuildupPercent', range: [9, 11] }),
+
+  makeMiscArmorPrefix({ key: 'Charged', tier: 3, prop: 'elementalBuildupPercent', range: [3, 5] }),
+  makeMiscArmorPrefix({ key: 'Volatile', tier: 2, prop: 'elementalBuildupPercent', range: [6, 8] }),
+  makeMiscArmorPrefix({ key: 'Zephyr\u2019s', tier: 1, prop: 'elementalBuildupPercent', range: [9, 11] }),
+
+  makeMiscArmorPrefix({ key: 'Festering', tier: 3, prop: 'necroticBuildupPercent', range: [3, 5] }),
+  makeMiscArmorPrefix({ key: 'Corrupting', tier: 2, prop: 'necroticBuildupPercent', range: [6, 8] }),
+  makeMiscArmorPrefix({ key: 'Mordecai\u2019s', tier: 1, prop: 'necroticBuildupPercent', range: [9, 11] })
 ];
 
 const ARMOR_SUFFIX_POOL = [
@@ -318,51 +338,55 @@ const WEAPON_PREFIX_POOL = [
   makeWeaponElementPercentPrefix({ key: 'Sanctified', tier: 1, prop: 'healingPercent', range: [7, 10] }),
 ];
 
+// Three evenly-spaced tiers spanning the full 9%-50% range (was 5-15%,
+// bumped per explicit request for "more powerful access to buildup on
+// weapons") — tier 3 (common) 9-22%, tier 2 (mid) 23-36%, tier 1 (best)
+// 37-50%. Same family/name assignments as before, only the ranges changed.
 const WEAPON_SUFFIX_POOL = [
   // Fire buildup
-  makeBuildupSuffix({ key: 'of Sparks', tier: 3, family: 'fire', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Flames', tier: 2, family: 'fire', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Inferno', tier: 1, family: 'fire', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Sparks', tier: 3, family: 'fire', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Flames', tier: 2, family: 'fire', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Inferno', tier: 1, family: 'fire', range: [37, 50] }),
 
   // Cold buildup
-  makeBuildupSuffix({ key: 'of Chill', tier: 3, family: 'cold', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Frost', tier: 2, family: 'cold', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Blizzard', tier: 1, family: 'cold', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Chill', tier: 3, family: 'cold', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Frost', tier: 2, family: 'cold', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Blizzard', tier: 1, family: 'cold', range: [37, 50] }),
 
   // Lightning buildup
-  makeBuildupSuffix({ key: 'of Static', tier: 3, family: 'lightning', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Storms', tier: 2, family: 'lightning', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Tempest', tier: 1, family: 'lightning', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Static', tier: 3, family: 'lightning', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Storms', tier: 2, family: 'lightning', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Tempest', tier: 1, family: 'lightning', range: [37, 50] }),
 
   // Lacerate buildup
-  makeBuildupSuffix({ key: 'of Scratches', tier: 3, family: 'lacerate', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Wounds', tier: 2, family: 'lacerate', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Hemorrhage', tier: 1, family: 'lacerate', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Scratches', tier: 3, family: 'lacerate', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Wounds', tier: 2, family: 'lacerate', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Hemorrhage', tier: 1, family: 'lacerate', range: [37, 50] }),
 
   // Expose buildup
-  makeBuildupSuffix({ key: 'of Bruises', tier: 3, family: 'expose', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Flaying', tier: 2, family: 'expose', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Ruin', tier: 1, family: 'expose', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Bruises', tier: 3, family: 'expose', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Flaying', tier: 2, family: 'expose', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Ruin', tier: 1, family: 'expose', range: [37, 50] }),
 
   // Disorient buildup
-  makeBuildupSuffix({ key: 'of Echoes', tier: 3, family: 'disorient', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Daze', tier: 2, family: 'disorient', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Concussion', tier: 1, family: 'disorient', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Echoes', tier: 3, family: 'disorient', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Daze', tier: 2, family: 'disorient', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Concussion', tier: 1, family: 'disorient', range: [37, 50] }),
 
   // Disease buildup
-  makeBuildupSuffix({ key: 'of Rot', tier: 3, family: 'disease', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Plague', tier: 2, family: 'disease', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Pestilence', tier: 1, family: 'disease', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Rot', tier: 3, family: 'disease', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Plague', tier: 2, family: 'disease', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Pestilence', tier: 1, family: 'disease', range: [37, 50] }),
 
   // Curse buildup
-  makeBuildupSuffix({ key: 'of Whispers', tier: 3, family: 'curse', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Hexes', tier: 2, family: 'curse', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Affliction', tier: 1, family: 'curse', range: [11, 15] }),
+  makeBuildupSuffix({ key: 'of Whispers', tier: 3, family: 'curse', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Hexes', tier: 2, family: 'curse', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Affliction', tier: 1, family: 'curse', range: [37, 50] }),
 
   // Toxic buildup
-  makeBuildupSuffix({ key: 'of Venom', tier: 3, family: 'toxic', range: [5, 7] }),
-  makeBuildupSuffix({ key: 'of Toxins', tier: 2, family: 'toxic', range: [8, 10] }),
-  makeBuildupSuffix({ key: 'of Envenoming', tier: 1, family: 'toxic', range: [11, 15] })
+  makeBuildupSuffix({ key: 'of Venom', tier: 3, family: 'toxic', range: [9, 22] }),
+  makeBuildupSuffix({ key: 'of Toxins', tier: 2, family: 'toxic', range: [23, 36] }),
+  makeBuildupSuffix({ key: 'of Envenoming', tier: 1, family: 'toxic', range: [37, 50] })
 ];
 
 function getAffixPoolsFor(base) {
@@ -467,6 +491,9 @@ function buildInstanceModifiers(prefixes, suffixes) {
       healingPercent: 0,
       resilience: 0,
       buildupPercent: {},
+      physicalBuildupPercent: 0,
+      elementalBuildupPercent: 0,
+      necroticBuildupPercent: 0,
       // Jewelry: damage conversion (%)
       physToElemPercent: 0,
       physToNecroPercent: 0,
@@ -533,6 +560,9 @@ function buildInstanceModifiers(prefixes, suffixes) {
       if (misc.necroticDamagePercent) mods.misc.necroticDamagePercent += misc.necroticDamagePercent;
       if (misc.healingPercent) mods.misc.healingPercent += misc.healingPercent;
       if (misc.resilience) mods.misc.resilience += misc.resilience;
+      if (misc.physicalBuildupPercent) mods.misc.physicalBuildupPercent += misc.physicalBuildupPercent;
+      if (misc.elementalBuildupPercent) mods.misc.elementalBuildupPercent += misc.elementalBuildupPercent;
+      if (misc.necroticBuildupPercent) mods.misc.necroticBuildupPercent += misc.necroticBuildupPercent;
       if (misc.buildupPercent) {
         for (const [fam, v] of Object.entries(misc.buildupPercent)) {
           mods.misc.buildupPercent[fam] = (mods.misc.buildupPercent[fam] || 0) + v;
@@ -806,6 +836,9 @@ export function getItemComputedData(itemRef) {
       necroticDamagePercent: misc.necroticDamagePercent || 0,
       healingPercent: misc.healingPercent || 0,
       resilience: misc.resilience || 0,
+      physicalBuildupPercent: misc.physicalBuildupPercent || 0,
+      elementalBuildupPercent: misc.elementalBuildupPercent || 0,
+      necroticBuildupPercent: misc.necroticBuildupPercent || 0,
       // Jewelry
       physToElemPercent: misc.physToElemPercent || 0,
       physToNecroPercent: misc.physToNecroPercent || 0,
