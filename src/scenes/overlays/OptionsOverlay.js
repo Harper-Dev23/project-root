@@ -4,6 +4,7 @@ import { setupSceneCursor } from '../../ui/cursor.js';
 import { AudioSettings } from '../../systems/AudioSettings.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { DevFlags } from '../../systems/DevFlags.js';
+import { MENU_THEME } from '../../ui/styles.js';
 
 const TAB_NAMES = ['Audio', 'Graphics', 'Gameplay', 'Hotkeys', 'Cheats'];
 
@@ -19,8 +20,8 @@ export default class OptionsOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Options',
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_stony_background'
     });
 
     this._depth  = frame.depth;
@@ -117,7 +118,7 @@ export default class OptionsOverlay extends Phaser.Scene {
     const left     = x + 40;
     const contentY = y + 120;
 
-    const sectionStyle = { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' };
+    const sectionStyle = { fontSize: '18px', color: MENU_THEME.accentHover, fontStyle: 'bold' };
     const itemStyle    = { fontSize: '15px', color: '#d0d0d0' };
     const noteStyle    = { fontSize: '13px', color: '#999999' };
 

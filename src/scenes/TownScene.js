@@ -12,6 +12,7 @@ import { DevFlags } from '../systems/DevFlags.js';
 import { describeModifiers } from '../systems/HuntModifiers.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 import { buildItemTooltipLines } from '../ui/itemTooltip.js';
+import { createTextBanner } from '../ui/DialogBox.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -2116,11 +2117,12 @@ export default class TownScene extends Phaser.Scene {
           this._addElderLoreToLayout(layout, 'bonepile');
         } else if (tribe) {
           // Tribe chosen, no pending flags — show allegiance reminder.
-          const pledgeTxt = this.add.text(640, 340,
-            `You are pledged to the ${TRIBE_DISPLAY_NAMES[tribe]}.\n\nVisit your lodge and tribe vendor\nto see what awaits you.`,
-            { fontSize: '16px', color: '#aaddaa', align: 'center', wordWrap: { width: 500 } }
-          ).setOrigin(0.5).setDepth(12);
-          layout.add(pledgeTxt);
+          const { container: pledgeBox } = createTextBanner(this, {
+            x: 640, y: 300, width: 560,
+            body: `You are pledged to the ${TRIBE_DISPLAY_NAMES[tribe]}.\n\nVisit your lodge and tribe vendor\nto see what awaits you.`,
+            color: '#aaddaa',
+          });
+          layout.add(pledgeBox);
         }
         // If no flag and no tribe: choice hasn't unlocked yet — just floor flavour.
       }
@@ -2137,28 +2139,29 @@ export default class TownScene extends Phaser.Scene {
           GameState.save('autosave');
           this._buildQuestFlags();
 
-          const historicText = this.add.text(640, 235,
-            '"Ah. You carry it.\n\n' +
-            'That blade is not simply a weapon. It is a record. Every cut it has made,\n' +
-            'every hand that has held it — all of it is written in the metal, in a language\n' +
-            'older than the tribes themselves. We call items like this Historic.\n\n' +
-            'Historic weapons are alive with memory. They grow with the hunter who carries\n' +
-            'them — not in the way of experience, but in the way of a bond. Use it. Let it\n' +
-            'witness your hunts. In time it will reveal what it truly is, and what it can become.\n\n' +
-            'Inspect it again. You will be able to read it now."',
-            {
-              fontSize: '14px', color: '#ddccaa', align: 'center',
-              fontStyle: 'italic', wordWrap: { width: 680 }, lineSpacing: 4,
-            }
-          ).setOrigin(0.5, 0).setDepth(12);
-          layout.add(historicText);
+          const { container: historicBox } = createTextBanner(this, {
+            x: 640, y: 220, width: 700,
+            title: 'Elder Varek speaks of the Bloodthirster',
+            body:
+              '"Ah. You carry it.\n\n' +
+              'That blade is not simply a weapon. It is a record. Every cut it has made,\n' +
+              'every hand that has held it — all of it is written in the metal, in a language\n' +
+              'older than the tribes themselves. We call items like this Historic.\n\n' +
+              'Historic weapons are alive with memory. They grow with the hunter who carries\n' +
+              'them — not in the way of experience, but in the way of a bond. Use it. Let it\n' +
+              'witness your hunts. In time it will reveal what it truly is, and what it can become.\n\n' +
+              'Inspect it again. You will be able to read it now."',
+            fontSize: '14px', color: '#ddccaa', fontStyle: 'italic',
+          });
+          layout.add(historicBox);
 
         } else if (alreadyExplained) {
-          const reminderText = this.add.text(640, 350,
-            '"The Bloodthirster grows with use. Keep hunting. Keep reading it."',
-            { fontSize: '15px', color: '#aabbaa', align: 'center', fontStyle: 'italic', wordWrap: { width: 600 } }
-          ).setOrigin(0.5).setDepth(12);
-          layout.add(reminderText);
+          const { container: reminderBox } = createTextBanner(this, {
+            x: 640, y: 300, width: 600,
+            body: '"The Bloodthirster grows with use. Keep hunting. Keep reading it."',
+            fontSize: '15px', color: '#aabbaa', fontStyle: 'italic',
+          });
+          layout.add(reminderBox);
         }
         // If neither flag: just the generic floor 2 flavour.
       }
@@ -2180,10 +2183,12 @@ export default class TownScene extends Phaser.Scene {
       ? '"The four great tribes await your pledge. Do not rush this decision.\nVisit the lodges — let them speak for themselves — then return."'
       : '"The four great tribes await your pledge.\nYour allegiance will shape every door that opens — and every one that closes."';
 
-    const elderQuote = this.add.text(640, 268, quoteText,
-      { fontSize: '14px', color: '#ccddcc', align: 'center', fontStyle: 'italic', wordWrap: { width: 560 } }
-    ).setOrigin(0.5).setDepth(12);
-    layout.add(elderQuote);
+    const { container: elderQuoteBox } = createTextBanner(this, {
+      x: 640, y: 235, width: 620,
+      body: quoteText,
+      fontSize: '14px', color: '#ccddcc', fontStyle: 'italic',
+    });
+    layout.add(elderQuoteBox);
 
     const tribes = [
       { id: 'styx',   name: 'Styx',   desc: 'Shadows & poison\nPatient and deadly.' },
@@ -2265,16 +2270,13 @@ export default class TownScene extends Phaser.Scene {
     const cfg = lore[topic];
     if (!cfg) return;
 
-    const title = this.add.text(640, 260, cfg.title, {
-      fontSize: '16px', color: '#ffddaa', fontStyle: 'bold', align: 'center'
-    }).setOrigin(0.5).setDepth(12);
-
-    const body = this.add.text(640, 310, cfg.body, {
-      fontSize: '14px', color: cfg.color, align: 'center',
-      fontStyle: 'italic', wordWrap: { width: 560 }
-    }).setOrigin(0.5, 0).setDepth(12);
-
-    layout.add([title, body]);
+    const { container: loreBox } = createTextBanner(this, {
+      x: 640, y: 230, width: 620,
+      title: cfg.title,
+      body: cfg.body,
+      fontSize: '14px', color: cfg.color, fontStyle: 'italic',
+    });
+    layout.add(loreBox);
   }
 
   /**

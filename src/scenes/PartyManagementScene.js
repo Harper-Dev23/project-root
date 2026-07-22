@@ -3,16 +3,20 @@
 import GameState from '../systems/GameState.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
+import { MENU_THEME } from '../ui/styles.js';
+import { setupSceneCursor } from '../ui/cursor.js';
 
 // ===== Central UI frame geometry =====
-// Screen is 1280x720; you said side panels are 180px each; top/bottom ≈ 14px.
-const LEFT_MARGIN = 180;
-const RIGHT_MARGIN = 180;
-const TOP_MARGIN = 14;
-const BOTTOM_MARGIN = 14;
+// Screen is 1280x720. Used to be inset 180px/14px to sit between the (dimmed,
+// unusable) persistent side panels — now spans the full screen like every
+// other menu (see OverlayFrame.js), so all margins are 0.
+const LEFT_MARGIN = 0;
+const RIGHT_MARGIN = 0;
+const TOP_MARGIN = 0;
+const BOTTOM_MARGIN = 0;
 
-const CENTER_W = 1280 - LEFT_MARGIN - RIGHT_MARGIN; // 920 (≈922)
-const CENTER_H = 720 - TOP_MARGIN - BOTTOM_MARGIN;  // 692
+const CENTER_W = 1280 - LEFT_MARGIN - RIGHT_MARGIN; // 1280
+const CENTER_H = 720 - TOP_MARGIN - BOTTOM_MARGIN;  // 720
 
 
 // Top-right info label inside inner UI frame
@@ -114,23 +118,29 @@ export default class PartyManagementScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    setupSceneCursor(this);
 
-    // Make this modal and block clicks to TownScene
+    // Make this modal and block clicks to TownScene AND the persistent
+    // UIScene (side-panel/HUD buttons) — previously only TownScene was
+    // disabled, leaving UIScene's buttons clickable underneath.
     this.scene.bringToTop();
     this.input.setTopOnly(true);
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = false;
+    const ui = this.scene.get('UIScene');
+    if (ui?.input) ui.input.enabled = false;
 
     SoundManager.init(this);
 
     this.input.keyboard?.once('keydown-ESC', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
 
-    const panelW = 920;
-    const panelH = 692;
+    const panelW = CENTER_W;
+    const panelH = CENTER_H;
     const panelX = (width - panelW) / 2;
     const panelY = (height - panelH) / 2;
 
-    // Dark dimmer — full-screen, closes on click
+    // Dark dimmer — sits below the (now full-screen, near-opaque) panel;
+    // harmless to leave since the panel covers it entirely.
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
       .setDepth(1000)
       .setInteractive()
@@ -142,22 +152,11 @@ export default class PartyManagementScene extends Phaser.Scene {
       .setDepth(1001)
       .setInteractive();
 
-    // Parchment background image
-    if (this.textures.exists('menu_parchment_background')) {
-      this.add.image(width / 2, height / 2, 'menu_parchment_background')
-        .setDisplaySize(panelW, panelH)
-        .setDepth(1001);
-    }
-
-    // Panel border
-    createPanel(this, panelX, panelY, panelW, panelH,
-      this.textures.exists('menu_parchment_background')
-        ? { fill: 0x000000, fillAlpha: 0, stroke: 0x5a4a3a, strokeWidth: 2, radius: 6, cornerSize: 0 }
-        : 'default'
-    ).setDepth(1001);
+    // Panel border — silver/gray/white theme, replacing the old parchment texture
+    createPanel(this, panelX, panelY, panelW, panelH, 'silverMenu').setDepth(1001);
 
     // Header
-    this.add.text(width / 2, panelY + 24, 'Party Management', { fontSize: '32px', color: '#fff' })
+    this.add.text(width / 2, panelY + 24, 'Party Management', { fontSize: '32px', color: MENU_THEME.titleColor })
       .setOrigin(0.5).setDepth(1002);
 
     // Close [X] — positioned inside the panel top-right, matching other overlays
@@ -317,8 +316,12 @@ export default class PartyManagementScene extends Phaser.Scene {
       img.setDepth(1005);
 
       // interactive using default geometry (HITBOX_O* compensates during drag)
+      // — no `cursor: 'pointer'` override: that's Phaser's own native cursor
+      // config, which fights with this scene's custom hover-image cursor
+      // (setupSceneCursor above, wired to gameobjectover/out) now that it's
+      // actually set up for this scene.
       if (img.setInteractive) {
-        img.setInteractive({ cursor: 'pointer' });
+        img.setInteractive();
       } else {
         img.setInteractive(new Phaser.Geom.Circle(0, 0, W / 2), Phaser.Geom.Circle.Contains);
       }
@@ -623,6 +626,7 @@ export default class PartyManagementScene extends Phaser.Scene {
     // so its 'wake' event never fires. We must call it explicitly here.
     town?._refreshQuestFlags?.();
     const ui = this.scene.get('UIScene');
+    if (ui?.input) ui.input.enabled = true;
     ui?.refreshUI?.();
     this.scene.stop('PartyManagementScene');
   }
@@ -630,5 +634,7 @@ export default class PartyManagementScene extends Phaser.Scene {
   shutdown() {
     const town = this.scene.get('TownScene');
     if (town?.input) town.input.enabled = true;
+    const ui = this.scene.get('UIScene');
+    if (ui?.input) ui.input.enabled = true;
   }
 }

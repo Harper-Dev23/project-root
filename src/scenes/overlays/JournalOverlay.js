@@ -821,8 +821,8 @@ export default class JournalOverlay extends Phaser.Scene {
 
         const frame = createOverlayFrame(this, {
             title: 'Journal',
+            fullscreen: true,
             onClose: () => this._close(),
-            bgImage: 'menu_parchment_background'
         });
 
         this.overlay = new JournalOverlayView(this, frame.bounds, {

@@ -2,6 +2,9 @@ import GameState from '../../systems/GameState.js';
 import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { MENU_THEME } from '../../ui/styles.js';
+import { getEffectivePDR, getEffectiveEDR, getEffectiveNDR } from '../../systems/CombatLogic.js';
+import { WeaknessBuildupCategory } from '../../systems/StatusEffects.js';
 
 export default class CharacterListOverlay extends Phaser.Scene {
   constructor() {
@@ -24,8 +27,8 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Current Party',
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_parchment_background'
     });
 
     this.frame = frame;
@@ -117,7 +120,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
     this.tabButtons.forEach(({ key, label, text }) => {
       const active = this.activeTab === key;
       text.setText(active ? `[ ${label} ]` : label);
-      text.setStyle({ color: active ? '#ffffaa' : '#aaaaaa' });
+      text.setStyle({ color: active ? MENU_THEME.accentHover : '#aaaaaa' });
     });
   }
 
@@ -184,7 +187,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
       const nameText = this.add.text(listLeft + 16, y, `${char.name} (Lv ${char.level})`, {
         fontSize: '18px',
-        color: isSelected ? '#ffffaa' : '#ffffff'
+        color: isSelected ? MENU_THEME.accentHover : '#ffffff'
       }).setDepth(this.contentDepth);
 
       const xpText = this.add.text(listLeft + 16, y + 18,
@@ -421,10 +424,13 @@ export default class CharacterListOverlay extends Phaser.Scene {
     cursorY = this._writeSection(0, cursorY, 'Vitals', vitals, scrollWidth);
 
     const resilience = character.resilience ?? character.derived?.Resilience ?? '—';
+    const lifeStealPct = Math.round((character.gearEffects?.lifeStealPct ?? 0) * 100);
     const combat = [
       `Accuracy: ${character.derived?.Accuracy ?? '—'}`,
       `Evasion: ${character.derived?.Evasion ?? '—'}`,
-      `Resilience: ${resilience}`
+      `Crit Chance: ${character.derived?.CritChance ?? '—'}`,
+      `Resilience: ${resilience}`,
+      `Lifesteal: ${lifeStealPct}%`
     ];
     cursorY = this._writeSection(0, cursorY, 'Combat', combat, scrollWidth);
 
@@ -435,9 +441,32 @@ export default class CharacterListOverlay extends Phaser.Scene {
     ];
     cursorY = this._writeSection(0, cursorY, 'Resistances', resistances, scrollWidth);
 
+    // % of incoming damage actually prevented (resist points + any passive
+    // gear/status DR) and % bonus to this character's own outgoing damage —
+    // same formulas the combat character-info panel uses (PDR/EDR/NDR,
+    // PD/ED/ND), just read at baseline (no active combat buffs/weakness).
+    const ge = character.gearEffects || {};
+    const mitigation = [
+      `PDR / EDR / NDR: ${getEffectivePDR(character)}% / ${getEffectiveEDR(character)}% / ${getEffectiveNDR(character)}%`,
+      `Outgoing Dmg (P/E/N): ${ge.globalDamagePercent || 0}% / ${(ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0)}% / ${(ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0)}%`,
+    ];
+    cursorY = this._writeSection(0, cursorY, 'Mitigation & Damage', mitigation, scrollWidth);
+
+    // Highest gear buildup% per weakness family (weapon suffix + armor
+    // affix, combined additively) — same values as the combat panel's
+    // Buildup% row, just spelled out per-family here instead of a hover tooltip.
+    const buildupLines = Object.keys(WeaknessBuildupCategory).map(fam => {
+      const weaponPct = ge.weaponBuildupPercent?.[fam] || 0;
+      const armorPct = ge[`${WeaknessBuildupCategory[fam]}BuildupPercent`] || 0;
+      const label = fam.charAt(0).toUpperCase() + fam.slice(1);
+      return `${label}: +${weaponPct + armorPct}%`;
+    });
+    cursorY = this._writeSection(0, cursorY, 'Buildup Bonuses', buildupLines, scrollWidth);
+
     const healing = [
       `Healing Given: ${Math.round((character.healing?.given ?? 0) * 100)}%`,
-      `Healing Received: ${Math.round((character.healing?.received ?? 0) * 100)}%`
+      `Healing Received: ${Math.round((character.healing?.received ?? 0) * 100)}%`,
+      `MP per Turn: +${ge.mpPerTurn || 0}`
     ];
     cursorY = this._writeSection(0, cursorY, 'Support', healing, scrollWidth);
 
@@ -448,7 +477,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
   _writeSection(x, startY, title, lines, width) {
     const titleText = this.add.text(x, startY, title, {
       fontSize: '18px',
-      color: '#ffffaa',
+      color: MENU_THEME.accentHover,
       fontStyle: 'bold'
     }).setDepth(this.contentDepth);
     this.detailContainer?.add(titleText);

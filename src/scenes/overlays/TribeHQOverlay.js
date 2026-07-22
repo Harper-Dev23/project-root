@@ -11,7 +11,7 @@ import { getPartiesForTribe } from '../../../data/tribeHuntingParties.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
 import GameState from '../../systems/GameState.js';
 import { Items } from '../../../data/items.js';
-import { getRarityColor } from '../../ui/styles.js';
+import { getRarityColor, MENU_THEME } from '../../ui/styles.js';
 import {
   SLOT_LABELS, PARTY_STASH_CAP,
   getPartyGear, getPartyGearScore, getHuntPointMultiplier,
@@ -52,8 +52,8 @@ export default class TribeHQOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title:   `${this._tribeName} Headquarters`,
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_stony_background',
     });
 
     this._depth      = frame.depth;
@@ -93,7 +93,7 @@ export default class TribeHQOverlay extends Phaser.Scene {
       }).setDepth(d),
 
       this.add.text(l, b.y + 118, 'Hunting Parties', {
-        fontSize: '15px', color: '#ffffaa', fontStyle: 'bold',
+        fontSize: '15px', color: MENU_THEME.accentHover, fontStyle: 'bold',
       }).setDepth(d),
     );
   }

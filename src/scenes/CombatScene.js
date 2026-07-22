@@ -34,6 +34,7 @@ import {
   makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult,
   WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
   WeaknessAliases, familyIntensityMult, familyStartConsume,
+  WeaknessBuildupCategory,
 } from '../systems/StatusEffects.js';
 
 // Combat logic
@@ -49,14 +50,6 @@ import {
 
 
 
-
-// Weakness family -> armor buildup% category (physical/elemental/necrotic),
-// mirroring the PhysicalResist/ElementalResist/NecroticResist mitigation split.
-const WeaknessBuildupCategory = {
-  expose: 'physical', lacerate: 'physical', disorient: 'physical',
-  fire: 'elemental', cold: 'elemental', lightning: 'elemental',
-  toxic: 'necrotic', disease: 'necrotic', curse: 'necrotic',
-};
 
 // Helper: Get safe Items.js data from equipped gear
 function getEquippedItemData(equipped) {

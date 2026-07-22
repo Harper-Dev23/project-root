@@ -49,6 +49,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'The Sacred Hunt',
+      treatAsLocation: true,
       onClose: () => this._close(),
       bgImage: 'menu_parchment_background',
     });

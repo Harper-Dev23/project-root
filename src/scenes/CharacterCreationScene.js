@@ -280,9 +280,15 @@ export default class CharacterCreationScene extends Phaser.Scene {
       stats: { ...this.baseStats }
     });
 
+    // Evasion and Stun Chance used to live here, but neither actually
+    // changes with core-stat allocation: Evasion's base is always 0 (only
+    // gear/buffs/weaknesses grant it at runtime — see CharacterBuilder.js),
+    // and StunChance isn't a field calculateDerivedStats even returns
+    // anymore. Swapped for Crit Chance and Physical Resist, which do move
+    // with STR/DEX/INT and CON respectively.
     const d = tempChar.derived;
     this.previewText.setText(
-      `HP: ${d.maxHP}   MP: ${d.maxMP}   Acc: ${d.Accuracy}   Eva: ${d.Evasion}   Stun: ${d.StunChance}`
+      `HP: ${d.maxHP}   MP: ${d.maxMP}   Acc: ${d.Accuracy}   Crit: ${d.CritChance}%   PhysRes: ${d.PhysicalResist}`
     );
   }
 

@@ -1,6 +1,6 @@
 import GameState from '../systems/GameState.js';
 import StatusBar from '../ui/StatusBar.js';
-import { COLORS, DEPTH } from '../ui/styles.js';
+import { COLORS, DEPTH, MENU_THEME } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
@@ -217,6 +217,12 @@ export default class UIScene extends Phaser.Scene {
   }
 
   buildUI(width, height) {
+    // Kill any leftover tweens (e.g. the infinite-repeat alert-dot pulse on
+    // Quest/Tribes) BEFORE wiping the display list — a tween still targeting
+    // an object this removeAll() is about to destroy can otherwise keep
+    // ticking against a dead object for a frame, which is the most likely
+    // source of a stray/duplicate-looking dot after a rebuild.
+    this.tweens.killAll();
     this.children.removeAll(true);
     const leftPanelWidth = 180;
     const rightPanelWidth = 180;
@@ -326,6 +332,10 @@ export default class UIScene extends Phaser.Scene {
         this.rightPanel.add(dot);
       }
     });
+
+    // Match each freshly-built button's interactivity to the panel's
+    // current visibility — see toggleRightPanel()/_setRightPanelChildrenInteractive.
+    this._setRightPanelChildrenInteractive(this.rightPanelVisible);
 
     // === DIALOGUE BAR (fixed 180px margins) ===
     const DIALOG_LEFT_MARGIN = 180;
@@ -517,7 +527,7 @@ export default class UIScene extends Phaser.Scene {
       color: '#ffffff'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setScrollFactor(0).setDepth(1001)
       .on('pointerdown', () => { SoundManager.play('select'); action(); })
-      .on('pointerover', () => btn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => btn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
     return btn;
   }
@@ -533,9 +543,23 @@ export default class UIScene extends Phaser.Scene {
     this.toastTimer?.remove();
     this.toastTimer = null;
     this.toastText?.destroy();
+    this.toastBg?.destroy();
+
+    // Faded backing box (silver theme) — toasts used to be bare floating
+    // text with no background at all, same "clashes with whatever's behind
+    // it" problem as TownScene's other ad-hoc text. Sized dynamically per
+    // message in showToast() below, since a plain Rectangle (unlike
+    // createPanel's Graphics) supports resizing after creation.
+    this.toastBg = this.add.rectangle(width / 2, 64, 10, 10, MENU_THEME.panelFill, 0.92)
+      .setStrokeStyle(2, MENU_THEME.panelStroke, 0.9)
+      .setDepth(DEPTH.UI_OVERLAY - 1)
+      .setScrollFactor(0)
+      .setAlpha(0)
+      .setVisible(false);
+
     this.toastText = this.add.text(width / 2, 64, '', {
       fontSize: '20px',
-      color: '#ffddaa',
+      color: MENU_THEME.titleColor,
       fontStyle: 'bold',
       fontFamily: 'Georgia'
     })
@@ -552,14 +576,22 @@ export default class UIScene extends Phaser.Scene {
     this.toastText.setText(message)
       .setVisible(true)
       .setAlpha(1);
+
+    const PAD_X = 24, PAD_Y = 14;
+    this.toastBg
+      ?.setSize(this.toastText.width + PAD_X * 2, this.toastText.height + PAD_Y * 2)
+      .setPosition(this.toastText.x, this.toastText.y)
+      .setVisible(true)
+      .setAlpha(1);
+
     this.toastTimer = this.time.addEvent({
       delay: 2200,
       callback: () => {
         this.tweens.add({
-          targets: this.toastText,
+          targets: [this.toastText, this.toastBg].filter(Boolean),
           alpha: 0,
           duration: 400,
-          onComplete: () => this.toastText.setVisible(false)
+          onComplete: () => { this.toastText.setVisible(false); this.toastBg?.setVisible(false); }
         });
       }
     });
@@ -600,7 +632,7 @@ export default class UIScene extends Phaser.Scene {
     }).setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this._confirmExitToMainMenu())
-      .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => yesBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
 
     const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
@@ -611,7 +643,7 @@ export default class UIScene extends Phaser.Scene {
       .on('pointerdown', () => {
         this.cleanupPopup();
       })
-      .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => noBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
 
     this.modalPanelGroup.add([panel, title, yesBtn, noBtn]);
@@ -729,7 +761,7 @@ export default class UIScene extends Phaser.Scene {
         .on('pointerdown', () => {
           performSave(slotName);
         })
-        .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
+        .on('pointerover', () => yesBtn.setStyle({ color: MENU_THEME.accentHover }))
         .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
 
       const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
@@ -742,7 +774,7 @@ export default class UIScene extends Phaser.Scene {
           this.overwriteConfirmGroup?.removeAll(true);
           this.overwriteConfirmGroup = null;
         })
-        .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
+        .on('pointerover', () => noBtn.setStyle({ color: MENU_THEME.accentHover }))
         .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
 
       this.overwriteConfirmGroup.add([dim, confirmPanel, prompt, yesBtn, noBtn]);
@@ -761,13 +793,13 @@ export default class UIScene extends Phaser.Scene {
           performSave(nm);
         }
       })
-      .on('pointerover', () => saveBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => saveBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => saveBtn.setStyle({ color: '#ffffff' }));
 
     const cancelBtn = this.add.text(w / 2 + 80, h / 2 - 100, '[ Cancel ]', { fontSize: '18px', color: '#ffffff' })
       .setOrigin(0.5).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanupPopup())
-      .on('pointerover', () => cancelBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => cancelBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => cancelBtn.setStyle({ color: '#ffffff' }));
 
     this.modalPanelGroup.add([saveBtn, cancelBtn]);
@@ -845,7 +877,7 @@ export default class UIScene extends Phaser.Scene {
             setInputValue(sl);
             showOverwriteConfirm(sl);
           })
-          .on('pointerover', () => overwriteBtn.setStyle({ color: '#ffffaa' }))
+          .on('pointerover', () => overwriteBtn.setStyle({ color: MENU_THEME.accentHover }))
           .on('pointerout', () => overwriteBtn.setStyle({ color: '#ffcc66' }));
 
         slotsContainer.add([slotText, overwriteBtn]);
@@ -969,7 +1001,7 @@ export default class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.cleanupPopup())
-      .on('pointerover', () => cancelBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => cancelBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => cancelBtn.setStyle({ color: '#ffffff' }));
 
     this.modalPanelGroup.add(cancelBtn);
@@ -1005,8 +1037,9 @@ export default class UIScene extends Phaser.Scene {
     this.popupGroup = this.add.container(0, 0).setDepth(DEPTH.MENU).setScrollFactor(0);
     this.popupButtons = [];
 
-    // Dark background overlay
-    const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7)
+    // Dark background overlay — fully opaque so TownScene and the persistent
+    // side panels behind it are completely blacked out, not just dimmed.
+    const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 1)
       .setOrigin(0.5)
       .setInteractive();
 
@@ -1120,7 +1153,7 @@ export default class UIScene extends Phaser.Scene {
               fightButton._startScenario();
             });
           })
-          .on('pointerover', () => optionText.setStyle({ color: '#ffffaa' }))
+          .on('pointerover', () => optionText.setStyle({ color: MENU_THEME.accentHover }))
           .on('pointerout',  () => optionText.setStyle({ color: '#cccccc' }));
       }
 
@@ -1144,7 +1177,7 @@ export default class UIScene extends Phaser.Scene {
     }).setOrigin(0, 0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { this.cleanupPopup(); })
-      .on('pointerover', () => exitButton.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => exitButton.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout',  () => exitButton.setStyle({ color: '#cccccc' }));
 
     this.popupButtons.push(exitButton);
@@ -1203,7 +1236,7 @@ export default class UIScene extends Phaser.Scene {
         this.cleanupPopup();
         this.createLoadSlotPopup(); // reopen list after delete
       })
-      .on('pointerover', () => yesBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => yesBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
 
     const noBtn = this.add.text(w / 2 + 60, h / 2 + 35, '[ No ]', {
@@ -1215,7 +1248,7 @@ export default class UIScene extends Phaser.Scene {
         this.cleanupPopup();
         this.createLoadSlotPopup(); // go back to list
       })
-      .on('pointerover', () => noBtn.setStyle({ color: '#ffffaa' }))
+      .on('pointerover', () => noBtn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
 
     this.modalPanelGroup.add([dim, panel, title, yesBtn, noBtn]);
@@ -1235,7 +1268,20 @@ export default class UIScene extends Phaser.Scene {
 
     if (this.rightPanel) {
       this.rightPanel.setVisible(this.rightPanelVisible);
+      this._setRightPanelChildrenInteractive(this.rightPanelVisible);
     }
+  }
+
+  // Phaser containers do NOT cascade setVisible(false) to their children's
+  // own interactivity — a hidden container's buttons stay fully clickable
+  // (just invisible) unless each child's input is explicitly toggled too.
+  // This is the actual cause of "menu buttons still clickable while hidden"
+  // — most noticeable after a rebuild (e.g. closing Party Management calls
+  // refreshUI(), which creates a brand new rightPanel via buildUI()).
+  _setRightPanelChildrenInteractive(enabled) {
+    this.rightPanel?.list.forEach(child => {
+      if (child.input) child.input.enabled = enabled;
+    });
   }
 
 }

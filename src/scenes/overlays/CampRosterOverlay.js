@@ -13,6 +13,7 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { Items } from '../../../data/items.js';
 import { isItemInstance } from '../../systems/ItemFactory.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { MENU_THEME } from '../../ui/styles.js';
 
 export default class CampRosterOverlay extends Phaser.Scene {
   constructor() {
@@ -38,8 +39,8 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title:   'Camp Nehemiah — Character Roster',
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_parchment_background',
     });
 
     this.frame        = frame;
@@ -106,7 +107,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
     (this.tabObjects || []).forEach(({ key, label, text }) => {
       const active = this.activeTab === key;
       text.setText(active ? `[ ${label} ]` : label);
-      text.setStyle({ color: active ? '#ffffaa' : '#aaaaaa' });
+      text.setStyle({ color: active ? MENU_THEME.accentHover : '#aaaaaa' });
     });
   }
 
@@ -157,7 +158,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
       const nameText = this.add.text(listLeft + 10, y + 2,
         `${char.name}  (Lv ${char.level}  ${char.baseClass})`, {
-        fontSize: '15px', color: isSelected ? '#ffffaa' : '#eeeeee',
+        fontSize: '15px', color: isSelected ? MENU_THEME.accentHover : '#eeeeee',
       }).setDepth(this.contentDepth);
 
       // Party status badge
@@ -349,7 +350,7 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
   _writeSection(startY, title, lines, width) {
     const titleTxt = this.add.text(0, startY, title, {
-      fontSize: '15px', color: '#ffffaa', fontStyle: 'bold',
+      fontSize: '15px', color: MENU_THEME.accentHover, fontStyle: 'bold',
     }).setDepth(this.contentDepth);
     this.detailContainer.add(titleTxt);
     let curY = startY + titleTxt.height + 4;

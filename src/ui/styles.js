@@ -108,6 +108,24 @@ export const SPACING = {
 };
 
 
+// ---- Menu Theme ------------------------------------------------
+// Single place to tweak the full-screen menu redesign (Character/Party/
+// Inventory/Skills/Map/Quest/Tribes/Journal/Options) — silver/dark-gray/
+// light-gray/white, replacing the old parchment/stony texture panels.
+// Change a value here and every menu that reads it (OverlayFrame.js's
+// 'silverMenu' panel style + title color, plus the accentHover swap below)
+// picks it up automatically — this is the "try a couple things" knob.
+export const MENU_THEME = {
+  panelFill:   0x2a2a2e,   // dark charcoal-gray panel body
+  panelStroke: 0xb0b4bc,   // light silver-gray border
+  panelCorner: 0xd8dce2,   // near-white silver corner ornament
+  titleColor:  '#e8eaf0',  // near-white cool silver title text
+  // Current muted-yellow hover accent — kept at its existing value so this
+  // refactor is a no-visual-change pass; edit this one line to try a new
+  // accent color everywhere it's used (menu launch buttons, list rows, etc.)
+  accentHover: '#ffffaa',
+};
+
 // ---- Panel Styles --------------------------------------------
 // Used by GamePanel.js. Pass a key name or a custom config object to createPanel().
 export const PANEL_STYLES = {
@@ -143,6 +161,17 @@ export const PANEL_STYLES = {
     cornerSize:  6,
     cornerColor: 0xc8a84a,
     cornerAlpha: 0.7,
+  },
+  // Full-screen menu redesign — silver/gray/white, see MENU_THEME above.
+  silverMenu: {
+    fill:        MENU_THEME.panelFill,
+    fillAlpha:   0.96,
+    stroke:      MENU_THEME.panelStroke,
+    strokeWidth: 2,
+    radius:      6,
+    cornerSize:  10,
+    cornerColor: MENU_THEME.panelCorner,
+    cornerAlpha: 0.9,
   },
 };
 

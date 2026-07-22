@@ -490,6 +490,16 @@ export const WeaknessAliases = {
   poison: 'toxic',
 };
 
+// Weakness family -> armor buildup% category (physical/elemental/necrotic),
+// mirroring the PhysicalResist/ElementalResist/NecroticResist mitigation
+// split. Shared between CombatScene.js's char-info panel and
+// CharacterListOverlay.js's out-of-combat character sheet.
+export const WeaknessBuildupCategory = {
+  expose: 'physical', lacerate: 'physical', disorient: 'physical',
+  fire: 'elemental', cold: 'elemental', lightning: 'elemental',
+  toxic: 'necrotic', disease: 'necrotic', curse: 'necrotic',
+};
+
 /** Map any input key (legacy or modern) to a canonical ID */
 export function getFamilyId(key) {
   if (!key) return key;

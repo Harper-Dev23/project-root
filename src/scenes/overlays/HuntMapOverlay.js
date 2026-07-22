@@ -23,6 +23,7 @@ export default class HuntMapOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Choose Where to Hunt',
+      treatAsLocation: true,
       onClose: () => this._close(),
       bgImage: 'menu_parchment_background',
     });

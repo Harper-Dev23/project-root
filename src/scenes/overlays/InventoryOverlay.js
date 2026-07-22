@@ -15,7 +15,6 @@ export default class InventoryOverlay extends Phaser.Scene {
   constructor() {
     super({ key: 'InventoryOverlay' });
     this.selectedCharIndex = 0;
-    this.firstOpen = true;
     this.currentGlobalCategory = 'all';
     this.currentPersonalCategory = 'all';
     this.currentWeaponType = 'Any';
@@ -64,8 +63,8 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title: 'Inventory',
+      fullscreen: true,
       onClose: () => this._handleClose(),
-      bgImage: 'menu_parchment_background'
     });
 
     const safeWidth = frame.bounds.width;
@@ -81,16 +80,20 @@ export default class InventoryOverlay extends Phaser.Scene {
       { fontSize: '13px', color: '#ffddaa' }
     ).setOrigin(1, 0).setDepth(contentDepth + 1);
 
-    const globalListWidth = (safeWidth - 100) - 150;
-    const globalListLeft = (180 + 100) + (safeWidth - 100) - globalListWidth;
+    // Personal (equipped-gear) column stays a fixed ~223px wide starting at
+    // pMaskX (192, see below) — it's a bounded item list, not something that
+    // should stretch across the whole screen. The global list starts right
+    // after it and stretches to fill whatever's left of the now-full-screen
+    // panel, down to a 40px right margin.
+    //
+    // Was `globalListWidth = (safeWidth - 100) - 150` / `globalListLeft =
+    // (180 + 100) + (safeWidth - 100) - globalListWidth` — that formula
+    // algebraically cancels safeWidth out to a hardcoded constant (430)
+    // regardless of the actual panel width, which produced a huge dead gap
+    // on the left once the overlay went full-screen.
+    const globalListLeft = 192 + 223 + 15;
+    const globalListWidth = Math.max(200, (frame.bounds.x + safeWidth) - globalListLeft - 40);
 
-    if (this.firstOpen) {
-      frame.panel.setAlpha(0);
-      this.tweens.add({ targets: frame.panel, alpha: 0.95, duration: 200 });
-      this.firstOpen = false;
-    }
-
-    frame.dimmer.setAlpha(0.65);
 
     // Clamp selectedCharIndex in case party shrank
     if (this.selectedCharIndex >= GameState.party.length) this.selectedCharIndex = 0;
@@ -144,6 +147,24 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     // EQUIPPED GEAR
     let equipY = 140;
+
+    // Selected character's portrait, beside (left of) the Equipped section —
+    // same portraitKey/fallback convention as CharacterListOverlay.
+    const PORTRAIT_BOX = 72;
+    const portraitX = 120, portraitY = equipY;
+    const portraitKey = char.skin || `${(char.race || 'Human').toLowerCase()}_portrait_1`;
+    const availablePortraitKey = this.textures.exists(portraitKey)
+      ? portraitKey
+      : (this.textures.exists('dummy_portrait') ? 'dummy_portrait' : null);
+    this.add.rectangle(portraitX + PORTRAIT_BOX / 2, portraitY + PORTRAIT_BOX / 2, PORTRAIT_BOX, PORTRAIT_BOX, 0x000000, 0.35)
+      .setStrokeStyle(1, 0x6a7080).setDepth(contentDepth);
+    if (availablePortraitKey) {
+      const portrait = this.add.image(portraitX + PORTRAIT_BOX / 2, portraitY + PORTRAIT_BOX / 2, availablePortraitKey)
+        .setDepth(contentDepth);
+      const scale = Math.min((PORTRAIT_BOX - 6) / portrait.width, (PORTRAIT_BOX - 6) / portrait.height);
+      portrait.setScale(scale);
+    }
+
     this.add.text(200, equipY, 'Equipped:', { fontSize: '18px', color: '#ffffff' }).setDepth(contentDepth);
     equipY += 20;
 
@@ -662,14 +683,6 @@ export default class InventoryOverlay extends Phaser.Scene {
       if (this._onWheel) this.input.off('wheel', this._onWheel, this);
       this._onWheel = null;
     });
-
-
-    // EXIT BUTTON
-    this.add.text(640, 720 - 40, '[ Close Inventory ]', {
-      fontSize: '20px',
-      color: '#ff8888'
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this._handleClose()).setDepth(contentDepth);
   }
 
   _isPointerWithinArea(pointer, area) {

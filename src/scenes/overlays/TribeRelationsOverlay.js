@@ -41,8 +41,8 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title:   'Tribe Relations',
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_parchment_background',
     });
 
     const { bounds, depth } = frame;

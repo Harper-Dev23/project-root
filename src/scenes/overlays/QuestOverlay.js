@@ -83,8 +83,8 @@ export default class QuestOverlay extends Phaser.Scene {
 
     const frame = createOverlayFrame(this, {
       title:   'Quest Log',
+      fullscreen: true,
       onClose: () => this._close(),
-      bgImage: 'menu_parchment_background',
     });
 
     const { bounds, depth } = frame;
