@@ -1561,6 +1561,26 @@ export default class CombatScene extends Phaser.Scene {
         enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + (statDerived.MpRegenPerTurn || 0);
       }
 
+      // Flat "natural" derived-stat bonus baked directly into the template —
+      // e.g. Mo's 20 base Evasion, Chad's 30% PDR, Gary's 30% NDR, Lenny's
+      // 30% EDR — distinct from anything baseStats/gear would grant, so a
+      // player can identify "this enemy resists physical, go find a weakness
+      // that doesn't" instead of every enemy having a flat, uniform profile.
+      // Applied additively on top of the zero-baseline + statDerived above.
+      // Resilience isn't one of enemy.derived's fields (it lives in
+      // gearEffects.resilience, read by the weakness-buildup reduction at
+      // ~line 5893) so it's special-cased to route there instead.
+      if (template.derivedBonus) {
+        for (const [key, val] of Object.entries(template.derivedBonus)) {
+          if (!Number.isFinite(val)) continue;
+          if (key === 'Resilience') {
+            enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + val;
+          } else if (key in enemy.derived) {
+            enemy.derived[key] += val;
+          }
+        }
+      }
+
       // Find target slot
       const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
       if (!slot) {
@@ -2616,10 +2636,6 @@ export default class CombatScene extends Phaser.Scene {
     // (20px from the 1280-wide canvas edge), so only the container x moves.
     const PANEL_WIDTH = 135;
     const PANEL_X = 1260 - PANEL_WIDTH;
-    const MAX_NAME_CHARS = 10;
-    const truncateName = (name) => (
-      name && name.length > MAX_NAME_CHARS ? `${name.slice(0, MAX_NAME_CHARS - 1)}…` : (name || '')
-    );
 
     // UI container (excluding the toggle)
     this.turnOrderUI = this.add.container(PANEL_X, 20).setDepth(UI_DEPTH.overlay);
@@ -2628,18 +2644,10 @@ export default class CombatScene extends Phaser.Scene {
     this.turnOrderContent = this.add.container(0, 0);
     const bg = createPanel(this, 0, 0, PANEL_WIDTH, 300, 'default');
     this.turnOrderContent.add(bg);
+    this._turnOrderBg = bg;
 
     this.turnOrderEntries = [];
-
-    const allUnits = this.turnOrder;
-    allUnits.forEach((unit, i) => {
-      const icon = this.add.text(10, 10 + i * 24, `${i + 1}. ${truncateName(unit.name)}`, {
-        fontSize: '14px',
-        color: '#ffffff'
-      });
-      this.turnOrderContent.add(icon);
-      this.turnOrderEntries.push(icon);
-    });
+    this._refreshTurnOrderUI();
 
     // Add content to UI container
     this.turnOrderUI.add(this.turnOrderContent);
@@ -2656,6 +2664,36 @@ export default class CombatScene extends Phaser.Scene {
       this.turnOrderVisible = !this.turnOrderVisible;
       this.turnOrderContent.setVisible(this.turnOrderVisible);
       toggleBtn.setText(this.turnOrderVisible ? '▼' : '▲');
+    });
+  }
+
+  // Rebuilds the turn-order text list from the CURRENT this.turnOrder array.
+  // Previously this list was only ever built once, at combat start
+  // (_createTurnOrderUI) — a unit dying calls _onUnitKnockedOut, which
+  // splices it out of this.turnOrder, but nothing ever removed its stale
+  // entry from the on-screen list or re-numbered/re-indexed the rest, so the
+  // displayed order (and the "current turn" highlight, which indexes this
+  // list positionally against this.currentTurnIndex) drifted out of sync
+  // with the real turn order the moment anyone died. Called once at setup
+  // and again every time _onUnitKnockedOut removes a unit.
+  _refreshTurnOrderUI() {
+    if (!this.turnOrderContent) return;
+    const MAX_NAME_CHARS = 10;
+    const truncateName = (name) => (
+      name && name.length > MAX_NAME_CHARS ? `${name.slice(0, MAX_NAME_CHARS - 1)}…` : (name || '')
+    );
+
+    (this.turnOrderEntries || []).forEach(entry => entry?.destroy());
+    this.turnOrderEntries = [];
+
+    const allUnits = this.turnOrder || [];
+    allUnits.forEach((unit, i) => {
+      const icon = this.add.text(10, 10 + i * 24, `${i + 1}. ${truncateName(unit.name)}`, {
+        fontSize: '14px',
+        color: i === this.currentTurnIndex ? '#00ff00' : '#ffffff'
+      });
+      this.turnOrderContent.add(icon);
+      this.turnOrderEntries.push(icon);
     });
   }
 
@@ -3731,6 +3769,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this.currentTurnIndex >= this.turnOrder.length) {
       this.currentTurnIndex = 0;
     }
+    this._refreshTurnOrderUI?.();
 
     if (!this.koArea) this.koArea = [];
     this.koArea.push(unit);
@@ -4243,7 +4282,13 @@ export default class CombatScene extends Phaser.Scene {
 
     // Propagate helpful flags for downstream filters
     const hasAttackTag = (intent.tags || []).includes('attack') || (ability.tags || []).includes('attack');
-    const isWeaponSource = ability.type === 'weapon' || hasAttackTag;
+    // Enemy skills use type:'enemy' and never carry a tags array (unlike
+    // player weapon skills), so without this branch NO enemy ability was
+    // ever hit-rolled — every attack auto-hit regardless of Accuracy/
+    // Evasion/debuffs like Taunting Cry's shaken_aim. Any enemy-authored
+    // skill actually aimed at the opposing side counts as an attack source.
+    const isEnemyOffensiveSkill = ability.type === 'enemy' && ability.targetRequirement === 'enemy';
+    const isWeaponSource = ability.type === 'weapon' || hasAttackTag || isEnemyOffensiveSkill;
     if (resultMutable.isMagic) {
       intent.tags = Array.from(new Set([...(intent.tags || []), 'magic']));
     }

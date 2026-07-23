@@ -440,6 +440,18 @@ function pickUnique(arr, n, rng) {
     const def = pool.splice(idx, 1)[0];
     if (!def) continue;
     out.push(def.roll(rng));
+    // Every affix def carries a `family` — the underlying stat it modifies
+    // (e.g. 'weaponPercent', 'maxHP', 'PhysicalResist') — shared across its
+    // 3 tiers (Sanctified/Covenant/Elijah's all family:'maxHP'). Splicing
+    // out only the exact def picked above still left the OTHER tiers of the
+    // same family in the pool, so a single item could roll e.g. both a T3
+    // and a T2 weapon damage% affix together. Strip every remaining pool
+    // entry that shares this family so each one can only appear once total.
+    if (def.family) {
+      for (let j = pool.length - 1; j >= 0; j--) {
+        if (pool[j].family === def.family) pool.splice(j, 1);
+      }
+    }
   }
   return out;
 }

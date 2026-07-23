@@ -215,13 +215,13 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_styx_leader',
-        label:       'Meet the Styx Tactician',
+        label:       "Meet Cade, the Styx Tactician",
         description: (pm) =>
           pm.hasQuestFlag('styx_leader_handin')
             ? 'Return to the Styx lodge to collect your reward.'
             : pm.hasQuestFlag('styx_leader_challenge')
-              ? 'The Tactician is waiting. Return to the Styx lodge.'
-              : 'The Styx leader wants to size up your party. Visit the Styx lodge before the next trial.',
+              ? 'Cade is waiting. Return to the Styx lodge.'
+              : 'Cade, the Styx Tactician, wants to size up your party. Visit the Styx lodge before the next trial.',
         isActive:   (pm) => pm.hasQuestFlag('styx_leader_brief') || pm.hasQuestFlag('styx_leader_challenge') || pm.hasQuestFlag('styx_leader_handin'),
         isComplete: (pm) => !pm.hasQuestFlag('styx_leader_brief') && !pm.hasQuestFlag('styx_leader_challenge') && !pm.hasQuestFlag('styx_leader_handin') && sc(pm, 'training_encounter_4'),
       },

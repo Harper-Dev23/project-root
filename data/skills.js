@@ -1585,17 +1585,30 @@ const NPC_ONLY_SKILLS = {
     id: 'huntsman_mark',
     name: "Huntmaster's Mark",
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 4,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (user, target) => ({
-      amount: 3,
-      buildup: { expose: 80 },
-      statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
-    })
+    tags: ['ranged', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.huntsman_mark;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 35, skillLabel: `${ability?.name || 'Skill'} weapon damage (35%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        // +50% buildup across encounter 4 (was 80).
+        buildup: { expose: 120 },
+        statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
+      };
+    }
   },
   'huntsman_command': {
     id: 'huntsman_command',
@@ -1616,13 +1629,29 @@ const NPC_ONLY_SKILLS = {
     id: 'huntsman_trap_shot',
     name: 'Trap Shot',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 6,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 7, buildup: { lacerate: 90 }, statusEffects: [{ id: 'snared', turns: 2 }] })
+    tags: ['ranged', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.huntsman_trap_shot;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 80, skillLabel: `${ability?.name || 'Skill'} weapon damage (80%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        // +50% buildup across encounter 4 (was 90).
+        buildup: { lacerate: 135 }, statusEffects: [{ id: 'snared', turns: 2 }]
+      };
+    }
   },
   'huntsman_empower_pack': {
     id: 'huntsman_empower_pack',
@@ -1650,35 +1679,98 @@ const NPC_ONLY_SKILLS = {
     }
   },
 
+  // Huntsman's initiative spender — "calls in" a coordinated burst against
+  // the marked target. Spend-scaled like fighter_bulwark_call: minimum 30 to
+  // use at all, up to 60 spent for the full bonus.
+  'huntsman_coordinated_volley': {
+    id: 'huntsman_coordinated_volley',
+    name: 'Coordinated Volley',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'class',
+    mpCost: 6,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresInitiativeGauge: 30,
+    tags: ['ranged', 'attack'],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.huntsman_coordinated_volley;
+      const spend = Math.min(attacker?.initiativeGauge || 0, 60);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      // 100% at the 30 minimum, up to 130% at the 60 cap.
+      const skillPct = 100 + Math.floor(spend / 2);
+
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      scene?._log?.(`${attacker?.name || 'The huntsman'} whistles — the beasts converge for a coordinated strike!`);
+      // +50% buildup across encounter 4 (was 80).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 120 } };
+    },
+    description: "Spend 30-60 initiative: deals 100-130% weapon damage (scaling with spend) and applies Expose buildup."
+  },
+
   'oskar_rending_bite': {
     id: 'oskar_rending_bite',
     name: 'Rending Bite',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 7, buildup: { lacerate: 90 } })
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.oskar_rending_bite;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +50% buildup across encounter 4 (was 90).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 135 } };
+    }
   },
   'oskar_infectious_claw': {
     id: 'oskar_infectious_claw',
     name: 'Infectious Claw',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 4,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (_user, target) => {
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.oskar_infectious_claw;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
-      return { amount: 5, buildup: { disease: hasLac ? 140 : 80 } };
+      // +50% buildup across encounter 4 (was 140/80).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: hasLac ? 210 : 120 } };
     }
   },
   'oskar_maw_rip': {
     id: 'oskar_maw_rip',
     name: 'Maw Rip',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 8,
     cooldown: 2,
@@ -1686,12 +1778,24 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lacerate', tier: 1 },
-    apply: () => ({ amount: 11, consumeWeakness: ['lacerate'] })
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.oskar_maw_rip;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 140, skillLabel: `${ability?.name || 'Skill'} weapon damage (140%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['lacerate'] };
+    }
   },
   'oskar_rotting_maw': {
     id: 'oskar_rotting_maw',
     name: 'Rotting Maw',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 10,
     cooldown: 3,
@@ -1699,43 +1803,124 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'disease', tier: 2 },
-    apply: (_user, target) => {
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.oskar_rotting_maw;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 115, skillLabel: `${ability?.name || 'Skill'} weapon damage (115%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       if (target?.weakness) {
         const val = target.weakness.meters?.disease || 0;
         target.weakness.meters.disease = 0;
         target.weakness.tiers.disease = 0;
         target.weakness.meters.toxic = (target.weakness.meters.toxic || 0) + val;
       }
-      return { amount: 9 };
+      return { ...roll, physical, elemental, necrotic, amount };
     }
+  },
+
+  // Oskar's reaction — snaps back on reflex when struck. Armed idempotently
+  // by the oskar_beast AI profile, same pattern fighter_dummy uses for
+  // Guardian's Stand; the actual counter-hit is fired via a delayed
+  // _applyAbilityToTarget call, same mechanism Riposte/Cover Strike use.
+  'oskar_reflex_bite': {
+    id: 'oskar_reflex_bite',
+    name: 'Reflex Bite',
+    type: 'enemy',
+    mechanic: 'reaction',
+    typedDamage: true,
+    actionCost: 'reaction',
+    mpCost: 3,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.oskar_reflex_bite;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 70, skillLabel: `${ability?.name || 'Skill'} weapon damage (70%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +50% buildup across encounter 4 (was 60).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 90 } };
+    },
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: () => true,
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return;
+        const ability = SKILLS?.oskar_reflex_bite;
+        scene?._log?.(`${owner?.name || 'Oskar'} snaps back on reflex!`);
+        scene.time?.delayedCall(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, ability, { isReaction: true, tags: ability?.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: when struck, bite back at the attacker for 70% weapon damage and apply Lacerate buildup."
   },
 
   'kiro_toxic_spit': {
     id: 'kiro_toxic_spit',
     name: 'Toxic Spit',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 4,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { toxic: 90 } })
+    tags: ['ranged', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.kiro_toxic_spit;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +50% buildup across encounter 4 (was 90).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 135 } };
+    }
   },
   'kiro_venomous_swipe': {
     id: 'kiro_venomous_swipe',
     name: 'Venomous Swipe',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 6, buildup: { disease: 90 } })
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.kiro_venomous_swipe;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +50% buildup across encounter 4 (was 90).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: 135 } };
+    }
   },
   'kiro_poison_cloud': {
     id: 'kiro_poison_cloud',
     name: 'Poison Cloud',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 8,
     cooldown: 2,
@@ -1743,12 +1928,36 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'toxic', tier: 1 },
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    tags: ['ranged', 'attack', 'aoe'],
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.kiro_poison_cloud;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 45, skillLabel: `${ability?.name || 'Skill'} weapon damage (45%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const SPLASH_SCALE = 0.65;
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      const splash = foes.map(t => {
+        const splashPhysical = Math.floor(physical * SPLASH_SCALE);
+        const splashElemental = Math.floor(elemental * SPLASH_SCALE);
+        const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        const splashAmount = Math.max(1, splashPhysical + splashElemental + splashNecrotic);
+        return {
+          target: t, amount: splashAmount,
+          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
+          // +50% buildup across encounter 4 (was 60).
+          buildup: { toxic: 90 }, tags: ability?.tags,
+        };
+      });
+
       return {
-        amount: 3,
+        ...roll, physical, elemental, necrotic, amount,
         consumeWeakness: ['toxic'],
-        splash: foes.map(t => ({ target: t, amount: 2, buildup: { toxic: 60 } }))
+        splash: splash.length ? splash : undefined,
       };
     }
   },
@@ -1756,6 +1965,7 @@ const NPC_ONLY_SKILLS = {
     id: 'kiro_corrosive_bite',
     name: 'Corrosive Bite',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 8,
     cooldown: 2,
@@ -1763,13 +1973,66 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'toxic', tier: 2 },
-    apply: (_user, target) => {
-      const payload = { amount: 10, consumeWeakness: ['toxic'] };
+    tags: ['melee', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.kiro_corrosive_bite;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 145, skillLabel: `${ability?.name || 'Skill'} weapon damage (145%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const payload = { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['toxic'] };
       if ((target?.weakness?.tiers?.disease || 0) >= 1) {
-        payload.buildup = { curse: 80 };
+        // +50% buildup across encounter 4 (was 80).
+        payload.buildup = { curse: 120 };
       }
       return payload;
     }
+  },
+
+  // Kiro's reaction — venom-spit counter when struck. Same idempotent-arm +
+  // delayed _applyAbilityToTarget pattern as Oskar's Reflex Bite.
+  'kiro_venom_reflex': {
+    id: 'kiro_venom_reflex',
+    name: 'Venom Reflex',
+    type: 'enemy',
+    mechanic: 'reaction',
+    typedDamage: true,
+    actionCost: 'reaction',
+    mpCost: 3,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'attack'],
+    apply: (user, target) => {
+      const ability = SKILLS?.kiro_venom_reflex;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +50% buildup across encounter 4 (was 70).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 105 } };
+    },
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: () => true,
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return;
+        const ability = SKILLS?.kiro_venom_reflex;
+        scene?._log?.(`${owner?.name || 'Kiro'} spits venom in reflex!`);
+        scene.time?.delayedCall(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, ability, { isReaction: true, tags: ability?.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: when struck, spit venom back at the attacker for 55% weapon damage and apply Toxic buildup."
   },
 
   // Encounter 5 - Elemental Duelists

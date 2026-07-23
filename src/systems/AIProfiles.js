@@ -446,6 +446,12 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('huntsman_mark', target);
       }
+      // Coordinated Volley — the initiative-spend finisher. Held for a
+      // marked target once there's enough gauge banked, same priority slot
+      // Bulwark Call occupies in fighter_dummy.
+      if (canUseSkill(npc, 'huntsman_coordinated_volley') && (npc.initiativeGauge || 0) >= 30 && marked) {
+        return buildAction('huntsman_coordinated_volley', marked);
+      }
       if (canUseSkill(npc, 'huntsman_command')) {
         const beasts = allies.filter(a => a !== npc && a.tags?.includes('beast'));
         const beast = firstAlive(beasts);
@@ -458,11 +464,25 @@ export const AI_PROFILES = {
         const target = marked || weakest(foes);
         if (target) return buildAction('huntsman_trap_shot', target);
       }
+      // Out of MP for everything above — a real (0-cost) weapon attack
+      // instead of falling through to the generic fallback picker.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = marked || weakest(foes);
+        if (target) return buildAction('basic_attack', target);
+      }
       return null;
     }
   },
   oskar_beast: {
     decide(npc, scene, enemies) {
+      // Reflex Bite — armed once and left armed (idempotent, same pattern
+      // fighter_dummy uses for Guardian's Stand), fires off-turn via
+      // 'self_hit' the moment Oskar is struck.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'oskar_reflex_bite');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('oskar_reflex_bite')) {
+        scene.reactions.arm(npc, SKILLS.oskar_reflex_bite);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
       const lacTarget = highestWeakness(foes, 'lacerate', 1);
       if (canUseSkill(npc, 'oskar_maw_rip') && lacTarget && hasAnyWeakness(lacTarget, ['lacerate'], 2)) {
@@ -480,12 +500,24 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('oskar_infectious_claw', target);
       }
+      // Out of MP for everything above — a real (0-cost) weapon attack
+      // instead of falling through to the generic fallback picker.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = weakest(foes);
+        if (target) return buildAction('basic_attack', target);
+      }
       return null;
     }
   },
 
   kiro_beast: {
     decide(npc, scene, enemies) {
+      // Venom Reflex — same idempotent-arm pattern as Oskar's Reflex Bite.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'kiro_venom_reflex');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('kiro_venom_reflex')) {
+        scene.reactions.arm(npc, SKILLS.kiro_venom_reflex);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
       const toxicTarget = highestWeakness(foes, 'toxic', 2);
       if (canUseSkill(npc, 'kiro_corrosive_bite') && toxicTarget) {
@@ -502,6 +534,12 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'kiro_venomous_swipe')) {
         const target = weakest(foes);
         if (target) return buildAction('kiro_venomous_swipe', target);
+      }
+      // Out of MP for everything above — a real (0-cost) weapon attack
+      // instead of falling through to the generic fallback picker.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = weakest(foes);
+        if (target) return buildAction('basic_attack', target);
       }
       return null;
     }

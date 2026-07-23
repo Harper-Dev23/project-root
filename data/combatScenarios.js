@@ -72,9 +72,27 @@ export const COMBAT_SCENARIOS = {
     longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
     portraitKey: 'portrait_styx_commander',
     enemies: [
-      { type: 'huntsman_commander', slotId: 8 },
-      { type: 'beast_oskar', slotId: 2 },
-      { type: 'beast_kiro', slotId: 3 }
+      // Fixed/soulbound weapons (droppable: false, same convention as the
+      // other training_encounter_N enemies) — give calculateDamage() real
+      // weapon dice to roll now that these three are on the typed pipeline
+      // instead of flat `amount` numbers.
+      { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: [
+        { equip: 'weaponMain', itemId: 'crude_bow', rarity: 'common', rollAffixes: false, droppable: false },
+        // Fixed uncommon ("green") armor set, soulbound — same convention as
+        // berserker_boss's gear (training_encounter_6): rarity fixed rather
+        // than left to the normal random roll, none of it drops on defeat.
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ] },
+      { type: 'beast_oskar', slotId: 2, drops: [
+        { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
+      ] },
+      { type: 'beast_kiro', slotId: 3, drops: [
+        { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
+      ] }
     ]
   },
 

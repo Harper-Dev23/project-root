@@ -114,6 +114,15 @@ export const SoundManager = {
     if (!cfg || !_scene?.sound) return;
     if (!_scene.cache.audio.has(cfg.key)) return;
 
+    // Already playing this exact track — don't restart it. Matters for
+    // callers that re-trigger playMusic on every visit to a location (e.g. a
+    // player's chosen tribe HQ) rather than once per scene load; without
+    // this, walking in and out would restart the song with a fresh fade-in
+    // every single time instead of just letting it keep playing.
+    if (_currentMusic?.key === cfg.key && _currentMusic.isPlaying) {
+      return _currentMusic;
+    }
+
     if (_currentMusic) {
       _currentMusic.stop();
       _currentMusic.destroy();

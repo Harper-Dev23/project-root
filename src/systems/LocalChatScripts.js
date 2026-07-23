@@ -73,6 +73,16 @@ export const LOCAL_CHAT_SCRIPTS = {
     onCombatStart() {
       return 'A few from the crowd turn to watch you.';
     },
+    // Anonymous constructs with no reason to understand chat — a random one
+    // just echoes back confusion. Throttled once per round, matching
+    // training_encounter_1's onPlayerInput, so spamming the tab doesn't spam
+    // the reply back.
+    onPlayerInput(_text, ctx) {
+      if (ctx.state.confusedRound === ctx.round) return null;
+      ctx.state.confusedRound = ctx.round;
+      const dummy = pick(['Lenny', 'Gary', 'Stan', 'Doug', 'Mo', 'Chad']);
+      return `Dummy ${dummy}: ??`;
+    },
     onEnemyDefeated() {
       return pick([
         'The crowd cheers half-heartedly.',
@@ -95,6 +105,21 @@ export const LOCAL_CHAT_SCRIPTS = {
     onCombatStart() {
       return ['The crowd watches eagerly.', 'Wren is watching from the edge of the pit.'];
     },
+    // Same six constructs as encounter 2, but geared up and named now — a
+    // random one replies in-character instead of the flat "??" gag, since
+    // they're meant to read as actual personalities by this point.
+    onPlayerInput(_text, ctx) {
+      if (ctx.state.replyRound === ctx.round) return null;
+      ctx.state.replyRound = ctx.round;
+      return pick([
+        'Chad the Unbreakable grunts, unimpressed.',
+        "Stan, of the Light offers a small, knowing smile.",
+        'Gary the Grim mutters something about doom.',
+        "Doug Longshot doesn't even glance up from aiming.",
+        "Shifty-Eyed Mo's eyes dart toward you, then away.",
+        'Lenny the Magnificent strikes a dramatic pose.',
+      ]);
+    },
     onEnemyDefeated() {
       return pick([
         "Wren's eyes narrow, just slightly.",
@@ -103,6 +128,15 @@ export const LOCAL_CHAT_SCRIPTS = {
         'Her arms cross. She says nothing.',
         'She looks away for a moment, jaw tight.',
       ]);
+    },
+  },
+
+  // Unlike Wren, Cade isn't an observer here — she's the huntsman_commander
+  // enemy herself, leading Oskar and Kiro directly (see her lodge briefing,
+  // TownScene.js BRIEF_TEXT.styx: "My hunters will test you").
+  training_encounter_4: {
+    onCombatStart() {
+      return 'Cade signals Oskar and Kiro forward, calm and unhurried.';
     },
   },
 };

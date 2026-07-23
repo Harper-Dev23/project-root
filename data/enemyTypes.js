@@ -66,6 +66,9 @@ export const ENEMY_TYPES = {
     maxHP: 135,
     maxMP: 60,
     baseStats: { STR: 10, DEX: 6, CON: 12, INT: 5, WIS: 6, CHA: 9 },
+    // Chad — natural 30% Physical Damage Reduction (Expose/Lacerate/Disorient
+    // buildup is the intended way through it, not raw physical damage).
+    derivedBonus: { PhysicalResist: 30 },
     // dummy_sway (also encounters 1/2's whole kit) is the no-MP fallback —
     // fighter_dummy's AI profile reaches for it once nothing else is
     // affordable, instead of falling through to the generic fallback picker
@@ -81,6 +84,9 @@ export const ENEMY_TYPES = {
     maxHP: 105,
     maxMP: 120,
     baseStats: { STR: 5, DEX: 5, CON: 8, INT: 6, WIS: 14, CHA: 10 },
+    // Stan — +4 flat MP/turn on top of his already-high WIS/CHA regen, same
+    // mechanism berserker_boss's mpRegenPerTurn uses.
+    mpRegenPerTurn: 4,
     skills: ['healer_heal', 'healer_cleanse', 'healer_blessing', 'healer_flame_flick', 'healer_mending_wave', 'dummy_sway'],
     aiProfile: 'healer_dummy',
     isEnemy: true,
@@ -92,6 +98,9 @@ export const ENEMY_TYPES = {
     maxHP: 98,
     maxMP: 120,
     baseStats: { STR: 5, DEX: 6, CON: 7, INT: 9, WIS: 6, CHA: 15 },
+    // Gary — natural 30% Necrotic Damage Reduction (his own curse/necrotic
+    // kit shouldn't be the thing that also punches through his own defense).
+    derivedBonus: { NecroticResist: 30 },
     skills: ['warlock_hex', 'warlock_dark_bolts', 'warlock_curse_amplify', 'warlock_drain_life', 'warlock_curse_needles', 'warlock_reckless_immolation', 'dummy_sway'],
     aiProfile: 'warlock_dummy',
     isEnemy: true,
@@ -103,6 +112,8 @@ export const ENEMY_TYPES = {
     maxHP: 113,
     maxMP: 80,
     baseStats: { STR: 6, DEX: 16, CON: 7, INT: 6, WIS: 7, CHA: 6 },
+    // Doug — sharp-eyed marksman, +20 natural Accuracy on top of his DEX.
+    derivedBonus: { Accuracy: 20 },
     skills: ['ranger_quick_shot', 'ranger_frost_arrow', 'ranger_volley', 'ranger_aimed_shot', 'ranger_covering_shot', 'dummy_sway'],
     aiProfile: 'ranger_dummy',
     isEnemy: true,
@@ -114,6 +125,9 @@ export const ENEMY_TYPES = {
     maxHP: 105,
     maxMP: 70,
     baseStats: { STR: 5, DEX: 14, CON: 6, INT: 6, WIS: 6, CHA: 11 },
+    // Mo — +20 natural base Evasion, on top of (and stacking with) his own
+    // rogue_evasion buff skill.
+    derivedBonus: { Evasion: 20 },
     skills: ['rogue_poisoned_knife', 'rogue_hamstring', 'rogue_evasion', 'rogue_sneak_attack', 'rogue_finishing_strike', 'rogue_distracting_feint', 'rogue_curse_twist', 'dummy_sway'],
     aiProfile: 'rogue_dummy',
     isEnemy: true,
@@ -125,6 +139,9 @@ export const ENEMY_TYPES = {
     maxHP: 98,
     maxMP: 110,
     baseStats: { STR: 4, DEX: 6, CON: 7, INT: 16, WIS: 9, CHA: 6 },
+    // Lenny — natural 30% Elemental Damage Reduction (Fire/Cold/Lightning
+    // buildup is the intended way through his own elemental kit's defense).
+    derivedBonus: { ElementalResist: 30 },
     skills: ['wizard_arcane_bolt', 'wizard_static_field', 'wizard_mana_shield', 'wizard_overload', 'wizard_inferno_channel', 'wizard_inferno_release', 'dummy_sway'],
     aiProfile: 'wizard_dummy',
     isEnemy: true,
@@ -133,9 +150,18 @@ export const ENEMY_TYPES = {
 
   huntsman_commander: {
     skin: 'portrait_styx_commander',
-    maxHP: 220,
+    // +50% HP across the board for this encounter's three enemies.
+    maxHP: 330,
     maxMP: 100,
-    skills: ['huntsman_mark', 'huntsman_command', 'huntsman_trap_shot', 'huntsman_empower_pack'],
+    // Ranged marksman spread — DEX drives Accuracy, CHA feeds Initiative/gauge
+    // regen for Coordinated Volley's initiative-spend gate. Run through
+    // calculateDerivedStats() same as every stat-bearing enemy (_placeEnemies).
+    baseStats: { STR: 8, DEX: 14, CON: 10, INT: 5, WIS: 6, CHA: 12 },
+    // Natural 20% Elemental Damage Reduction — on top of (not from) his
+    // equipped green armor set below, same "baked-in" convention as the
+    // other encounter 3/4 enemies' derivedBonus fields.
+    derivedBonus: { ElementalResist: 20 },
+    skills: ['huntsman_mark', 'huntsman_command', 'huntsman_trap_shot', 'huntsman_empower_pack', 'huntsman_coordinated_volley', 'basic_attack'],
     aiProfile: 'huntsman',
     isEnemy: true,
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
@@ -144,9 +170,16 @@ export const ENEMY_TYPES = {
 
   beast_oskar: {
     skin: 'portrait_oskar',
-    maxHP: 260,
+    // +50% HP, same as the other two encounter-4 enemies.
+    maxHP: 390,
     maxMP: 60,
-    skills: ['oskar_rending_bite', 'oskar_infectious_claw', 'oskar_maw_rip', 'oskar_rotting_maw'],
+    // Brute spread — STR drives weapon damage, CON its own tankiness.
+    baseStats: { STR: 16, DEX: 8, CON: 14, INT: 3, WIS: 5, CHA: 4 },
+    // Thicker natural hide than Kiro — modest 20% PDR, distinct from Chad's
+    // dedicated 30% tank profile in encounter 3. Plus 25 flat Resilience
+    // (reduces incoming weakness buildup toward every family).
+    derivedBonus: { PhysicalResist: 20, Resilience: 25 },
+    skills: ['oskar_rending_bite', 'oskar_infectious_claw', 'oskar_maw_rip', 'oskar_rotting_maw', 'oskar_reflex_bite', 'basic_attack'],
     aiProfile: 'oskar_beast',
     isEnemy: true,
     tags: ['beast'],
@@ -204,9 +237,16 @@ export const ENEMY_TYPES = {
 
   beast_kiro: {
     skin: 'portrait_kiro',
-    maxHP: 220,
+    // +50% HP, same as the other two encounter-4 enemies.
+    maxHP: 330,
     maxMP: 80,
-    skills: ['kiro_toxic_spit', 'kiro_venomous_swipe', 'kiro_poison_cloud', 'kiro_corrosive_bite'],
+    // A little more finesse/WIS than Oskar — the "venom-spewer" side of the
+    // pack, still STR-driven for weapon damage like every other beast/dummy.
+    baseStats: { STR: 10, DEX: 10, CON: 12, INT: 6, WIS: 10, CHA: 4 },
+    // More evasive than Oskar — slippery instead of tanky. Plus natural 20%
+    // Necrotic Damage Reduction (his own toxic/disease kit's family).
+    derivedBonus: { Evasion: 20, NecroticResist: 20 },
+    skills: ['kiro_toxic_spit', 'kiro_venomous_swipe', 'kiro_poison_cloud', 'kiro_corrosive_bite', 'kiro_venom_reflex', 'basic_attack'],
     aiProfile: 'kiro_beast',
     isEnemy: true,
     tags: ['beast'],

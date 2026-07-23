@@ -68,30 +68,29 @@ const PRE_CHOICE_LODGE_TEXT = {
 
 // Items each tribe vendor sells, purchasable with 1 Tribe Ticket each.
 // Add more as content expands — these are starter placeholders.
+// Outdated stock removed (common-rarity crude starter weapon + the two
+// common consumables) — these vendors now sell only their tribe's uncommon
+// jewelry, the actual reason to visit.
 const TRIBE_VENDOR_INVENTORY = {
   styx: [
-    'crude_dagger', 'healing_potion', 'mana_potion',
     // Amulets
     'styx_amulet_initiative', 'styx_amulet_cooldown', 'styx_amulet_shield',
     // Rings
     'styx_ring_triage', 'styx_ring_remedy', 'styx_ring_weather',
   ],
   zafaar: [
-    'crude_sword_1h', 'healing_potion', 'mana_potion',
     // Amulets
     'zafaar_amulet_disorient', 'zafaar_amulet_lacerate', 'zafaar_amulet_expose',
     // Rings
     'zafaar_ring_double_damage', 'zafaar_ring_half_damage', 'zafaar_ring_heal_proc',
   ],
   elseth: [
-    'crude_spear_1h', 'healing_potion', 'mana_potion',
     // Amulets
     'elseth_amulet_phys_to_elem', 'elseth_amulet_phys_to_necro', 'elseth_amulet_elem_to_necro',
     // Rings
     'elseth_ring_elem_proc', 'elseth_ring_necro_proc', 'elseth_ring_phys_proc',
   ],
   lesse: [
-    'crude_dagger', 'healing_potion', 'mana_potion',
     // Amulets
     'lesse_amulet_cold', 'lesse_amulet_fire', 'lesse_amulet_lightning',
     // Rings
@@ -117,6 +116,20 @@ const TRIBE_DISPLAY_NAMES = {
   zafaar: 'Zafaar',
   elseth: 'Elseth',
   lesse:  "Le'sse",
+};
+
+// Music that plays once a tribe becomes the player's chosen HQ, whenever
+// they enter that tribe's lodge or leader hut (gated on
+// ProgressionManager.getTribe() === tribeId, NOT on merely visiting —
+// previously fairySong played for anyone just scouting the Elseth lodge
+// before choosing a tribe at all). Only 'fairySong' exists right now, reused
+// across all four as a placeholder — swap individual entries here once
+// Styx/Zafaar/Le'sse get their own dedicated tracks.
+const TRIBE_HQ_MUSIC = {
+  elseth: 'fairySong',
+  styx:   'fairySong',
+  zafaar: 'fairySong',
+  lesse:  'fairySong',
 };
 
 // Tribe vendor NPC key → tribe ID mapping, so we know which inventory to show.
@@ -1728,7 +1741,9 @@ export default class TownScene extends Phaser.Scene {
   _enterGenericLodge(titleText, bgColor, baseFlavorText, tribeId = null, lodgeFlagId = null, bgImage = null) {
     this._hideExteriorsAndOtherInteriors();
 
-    if (tribeId === 'elseth') SoundManager.playMusic('fairySong');
+    if (tribeId && ProgressionManager.getTribe() === tribeId) {
+      SoundManager.playMusic(TRIBE_HQ_MUSIC[tribeId]);
+    }
 
     if (!this.lodgeGroups) this.lodgeGroups = {};
 
@@ -2442,7 +2457,9 @@ export default class TownScene extends Phaser.Scene {
     const TRIBE_KEY = { Elseth: 'elseth', Styx: 'styx', "Le'sse": 'lesse', Zafaar: 'zafaar' };
     const tribeId       = TRIBE_KEY[tribe] ?? tribe.toLowerCase();
 
-    if (tribeId === 'elseth') SoundManager.playMusic('fairySong');
+    if (tribeId && ProgressionManager.getTribe() === tribeId) {
+      SoundManager.playMusic(TRIBE_HQ_MUSIC[tribeId]);
+    }
 
     const briefFlag     = `${tribeId}_leader_brief`;
     const challengeFlag = `${tribeId}_leader_challenge`;
@@ -2501,7 +2518,8 @@ export default class TownScene extends Phaser.Scene {
         'Real weapons. Real coordination. We\'ll see what you\'re made of."',
       styx:
         '"You handled the basics. Strength is the easy part."\n\n' +
-        'The hunter does not look up from the map spread across the table.\n\n' +
+        'The hunter does not look up from the map spread across the table — Cade,\n' +
+        'the Styx Tactician, tracing a route with one finger.\n\n' +
         '"Mettle, now — that takes coordination. Moving together,\n' +
         'covering flanks, reading what the other is going to do\n' +
         'before they do it. My hunters will test you.\n' +
@@ -2532,7 +2550,7 @@ export default class TownScene extends Phaser.Scene {
         'She gestures toward a small chest near the door.\n\n' +
         '"Take what\'s in there. You earned it."',
       styx:
-        'The hunter looks up from her map for the first time.\n\n' +
+        'Cade looks up from her map for the first time.\n\n' +
         '"Your flanks held. You moved together." She taps the map.\n\n' +
         '"I\'ve seen trained hunters fall apart under that kind of pressure."\n\n' +
         'She stands.\n\n' +
