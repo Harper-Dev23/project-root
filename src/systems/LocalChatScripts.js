@@ -93,11 +93,11 @@ export const LOCAL_CHAT_SCRIPTS = {
   // encounter's dummies still need their own stat/skill pass first.
   training_encounter_3: {
     onCombatStart() {
-      return 'The crowd watches eagerly.';
+      return ['The crowd watches eagerly.', 'Wren is watching from the edge of the pit.'];
     },
     onEnemyDefeated() {
       return pick([
-        "The Animancer's eyes narrow, just slightly.",
+        "Wren's eyes narrow, just slightly.",
         'She frowns, watching in silence.',
         'The Animancer shakes her head.',
         'Her arms cross. She says nothing.',

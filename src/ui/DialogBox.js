@@ -24,6 +24,7 @@ import { MENU_THEME } from './styles.js';
  * @param {string} [opts.fontSize='15px']
  * @param {string} [opts.color=MENU_THEME.titleColor]
  * @param {string} [opts.fontStyle='normal']
+ * @param {string} [opts.titleColor=MENU_THEME.titleColor]  Override for the banner header text specifically.
  * @param {number} [opts.depth=12]
  * @returns {{ container: Phaser.GameObjects.Container, height: number }}
  */
@@ -36,10 +37,12 @@ export function createTextBanner(scene, {
   fontSize = '15px',
   color = MENU_THEME.titleColor,
   fontStyle = 'normal',
+  titleColor = MENU_THEME.titleColor,
+  titleFontSize = '17px',
   depth = 12,
 } = {}) {
   const PAD = 18;
-  const BANNER_H = title ? 36 : 0;
+  const BANNER_H = title ? 44 : 0;
 
   // Measure the body text first so the panel can be sized to fit it exactly
   // — every call site here has wildly different content length (a one-line
@@ -65,8 +68,8 @@ export function createTextBanner(scene, {
     const bannerRule = scene.add.rectangle(x, y + BANNER_H, width - 20, 2, MENU_THEME.panelStroke, 0.8)
       .setDepth(depth + 1);
     const titleText = scene.add.text(x, y + BANNER_H / 2, title, {
-      fontSize: '17px',
-      color: MENU_THEME.titleColor,
+      fontSize: titleFontSize,
+      color: titleColor,
       fontStyle: 'bold',
       fontFamily: 'Georgia',
     }).setOrigin(0.5).setDepth(depth + 1);

@@ -139,9 +139,12 @@ export default class PartyManagementScene extends Phaser.Scene {
     const panelX = (width - panelW) / 2;
     const panelY = (height - panelH) / 2;
 
-    // Dark dimmer — sits below the (now full-screen, near-opaque) panel;
-    // harmless to leave since the panel covers it entirely.
-    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.75)
+    // Fully opaque — matches OverlayFrame.js's dimmer (this scene doesn't use
+    // that shared helper, so it didn't automatically pick up that fix). Was
+    // 0.75 — combined with the silverMenu panel's own 0.96 fillAlpha on top,
+    // that let faint background elements (bright UIScene text, etc.) bleed
+    // through, the one place this was still visible after the redesign.
+    this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 1)
       .setDepth(1000)
       .setInteractive()
       .on('pointerdown', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });

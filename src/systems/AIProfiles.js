@@ -215,6 +215,14 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('fighter_heavy_slash', target);
       }
+      // Out of MP/actions for everything above (or no valid target) — fall
+      // back to a harmless Sway instead of falling through to the generic
+      // chooseNPCAction picker, which was trying (and failing) real skills
+      // and spamming "lacks the MP" in the log every turn. Same fallback the
+      // encounters 1/2 dummy profiles already use.
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
+      }
       return null;
     }
   },
@@ -250,6 +258,9 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'healer_flame_flick')) {
         const enemy = weakest(foes);
         if (enemy) return buildAction('healer_flame_flick', enemy);
+      }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
       }
       return null;
     }
@@ -305,6 +316,9 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('warlock_dark_bolts', target);
       }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
+      }
       return null;
     }
   },
@@ -334,6 +348,9 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'ranger_quick_shot')) {
         const target = weakest(foes);
         if (target) return buildAction('ranger_quick_shot', target);
+      }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
       }
       return null;
     }
@@ -378,6 +395,9 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'rogue_evasion')) {
         return buildAction('rogue_evasion', npc);
       }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
+      }
       return null;
     }
   },
@@ -410,6 +430,9 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'wizard_arcane_bolt')) {
         const target = weakest(foes);
         if (target) return buildAction('wizard_arcane_bolt', target);
+      }
+      if (canUseSkill(npc, 'dummy_sway')) {
+        return buildAction('dummy_sway', null);
       }
       return null;
     }

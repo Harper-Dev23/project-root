@@ -147,13 +147,14 @@ export default class UIScene extends Phaser.Scene {
       return;
     }
 
-    // Show base elements
+    // Show base elements. Used to append a literal "(Enter / Close)" /
+    // "(Close)" hint to the message text itself — same color as the body,
+    // not actually clickable, so it read as a second (broken-looking) close
+    // affordance sitting right next to the real, working [ Close ] button.
+    // The real Enter/Close buttons below already say what they do.
     this.bottomBar.setVisible(true);
     this.bottomText
-      .setText(
-        message +
-        (this.currentEnterAction ? '\n\n(Enter / Close)' : '\n\n(Close)')
-      )
+      .setText(message)
       .setVisible(true);
 
     // Buttons: Enter only if there is a callback
@@ -850,7 +851,13 @@ export default class UIScene extends Phaser.Scene {
 
 
     if (slots.length === 0) {
-      const emptyText = this.add.text(0, listTop + listHeight / 2, 'No existing saves', {
+      // Was `listTop` — never declared anywhere in this function, so this
+      // threw a ReferenceError and killed the rest of createSaveSlotPopup()
+      // (including the Cancel button below) whenever there were no save
+      // slots yet. slotsContainer's own children use container-local
+      // coordinates (it's already positioned at listX/listY), so this
+      // centers within listWidth/listHeight instead.
+      const emptyText = this.add.text(listWidth / 2, listHeight / 2, 'No existing saves', {
         fontSize: '16px',
         color: '#cccccc'
       }).setOrigin(0.5);
@@ -959,7 +966,10 @@ export default class UIScene extends Phaser.Scene {
     });
 
     if (slots.length === 0) {
-      const emptyText = this.add.text(0, listTop + listHeight / 2, 'No saved games found', {
+      // Same fix as createSaveSlotPopup — `listTop` was never declared,
+      // ReferenceError killed the rest of the function (Cancel button
+      // included) whenever there were no saves to list.
+      const emptyText = this.add.text(listWidth / 2, listHeight / 2, 'No saved games found', {
         fontSize: '18px',
         color: '#cccccc'
       }).setOrigin(0.5);
@@ -1149,8 +1159,16 @@ export default class UIScene extends Phaser.Scene {
             fightButton.setInteractive({ useHandCursor: true });
             fightButton.removeAllListeners('pointerdown');
             fightButton.on('pointerdown', () => {
-              this.cleanupPopup();
+              // Start the scene transition FIRST, and delay tearing down this
+              // popup's fully-opaque overlay by a beat — Phaser scene starts
+              // (game.scene.start('LoadingScene', ...) under the hood) don't
+              // take effect until the next update tick, so destroying the
+              // overlay synchronously here left a 1-frame gap where TownScene
+              // was briefly visible underneath before LoadingScene painted
+              // over it. Keeping the overlay up a little longer costs
+              // nothing since we're navigating away regardless.
               fightButton._startScenario();
+              this.time.delayedCall(100, () => this.cleanupPopup());
             });
           })
           .on('pointerover', () => optionText.setStyle({ color: MENU_THEME.accentHover }))

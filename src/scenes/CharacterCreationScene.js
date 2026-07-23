@@ -9,7 +9,21 @@ import {
   RACE_BONUSES,
   CLASS_BONUSES
 } from '../systems/CharacterBuilder.js';
+import { getClassSkillsFor } from '../../data/skills.js';
 
+
+// Short, per-stat blurbs shown beside the +/- controls — condensed versions
+// of the same effects listed in the combat character-info panel's stat
+// tooltips (CombatScene.js), kept brief since there's only ~340px of row
+// width to work with here.
+const STAT_DESCRIPTIONS = {
+  STR: 'Weapon damage; feeds Crit Chance',
+  DEX: 'Accuracy; feeds Crit Chance',
+  CON: 'Max HP, Physical Resist',
+  INT: 'Max MP, MP regen; feeds Crit Chance',
+  WIS: 'Max MP, Elemental Resist, Resilience',
+  CHA: 'Max MP, Initiative, Elemental/Necrotic Resist',
+};
 
 export default class CharacterCreationScene extends Phaser.Scene {
   constructor() {
@@ -109,6 +123,14 @@ export default class CharacterCreationScene extends Phaser.Scene {
       const btn = new UIButton(this, raceX, y, race, () => {
         this.selectedRace = race;
         this.updateStatDisplay();
+        // Reset before rebuilding portraits — showPortraitOptions only fills
+        // in a default skin when selectedSkin is falsy (`this.selectedSkin
+        // || race_portrait_1`). Without clearing it here first, switching
+        // race without manually clicking a new portrait left selectedSkin
+        // stuck on whatever race was selected FIRST (Human, the initial
+        // default) — race/stats updated correctly, but the character got
+        // built with a mismatched portrait.
+        this.selectedSkin = null;
         this.showPortraitOptions(race);
         this.updateButtonHighlights();
       }, 110, 32);
@@ -136,10 +158,12 @@ export default class CharacterCreationScene extends Phaser.Scene {
         this.selectedClass = cls;
         this.updateStatDisplay();
         this.updateButtonHighlights();
+        this.updateClassSkillText();
       }, 140, 32);
       this.add.existing(btn);
       this.classButtons.push({ cls, btn });
     });
+    this.updateClassSkillText();
 
 
     /* -------------------------------------------------------
@@ -184,6 +208,13 @@ export default class CharacterCreationScene extends Phaser.Scene {
         }
       }, 32, 32);
       this.add.existing(plusBtn);
+
+      // brief description — same row, to the right of the plus button
+      this.add.text(statXPlus + 36, y, STAT_DESCRIPTIONS[key] || '', {
+        fontSize: '13px',
+        color: '#999999',
+        wordWrap: { width: width - (statXPlus + 36) - 20 },
+      }).setOrigin(0, 0.5);
     });
 
     /* -------------------------------------------------------
@@ -224,6 +255,13 @@ export default class CharacterCreationScene extends Phaser.Scene {
         ProgressionManager.clearQuestFlag('orientation_bonfire');
         ProgressionManager.setQuestFlag('orientation_elder');
       }
+
+      // Was missing everywhere else this same clearQuestFlag/setQuestFlag
+      // pattern happens (Elder's Tower, vendor row, etc. all save right
+      // after) — without it, the flag flip only ever lived in memory, so a
+      // reload before any LATER autosave fired left "Create a Character"
+      // still active even with a full party already made.
+      GameState.save('autosave');
 
       this.scene.wake('UIScene');
       this.scene.wake('TownScene');
@@ -330,9 +368,12 @@ export default class CharacterCreationScene extends Phaser.Scene {
 
     const desc = descriptions[race.toLowerCase()] || "A mysterious people.";
 
-    this.raceDescriptionText = this.add.text(240, baseY + 120, desc, {
-      fontSize: '16px',
-      color: '#cccccc',
+    // Bumped up 20px (was baseY + 120) to leave room below for the class
+    // unique-skill text; font/color bumped a step for both to read more
+    // clearly against the background.
+    this.raceDescriptionText = this.add.text(240, baseY + 100, desc, {
+      fontSize: '18px',
+      color: '#ffddaa',
       align: 'center',
       wordWrap: { width: 300 }
     }).setOrigin(0.5);
@@ -340,6 +381,34 @@ export default class CharacterCreationScene extends Phaser.Scene {
     // Default to first if undefined
     this.selectedSkin = this.selectedSkin || `${race.toLowerCase()}_portrait_1`;
     this.highlightSelectedSkin();
+  }
+
+  // Shows the one unique skill each class grants (getClassSkillsFor,
+  // data/skills.js) beneath the race flavor text — only rendered once a
+  // class is selected (selectedClass always has a value here, defaulting to
+  // 'Beggar', same convention as the always-preselected race above).
+  updateClassSkillText() {
+    if (this.classSkillText) {
+      this.classSkillText.destroy();
+      this.classSkillText = null;
+    }
+    if (!this.selectedClass) return;
+
+    const [skill] = getClassSkillsFor({ baseClass: this.selectedClass });
+    if (!skill) return;
+
+    // Descriptions are already written as "ClassName: effect" — strip the
+    // redundant class-name prefix since it's shown right above already.
+    const desc = (skill.description || '').replace(
+      new RegExp(`^${this.selectedClass}:\\s*`, 'i'), ''
+    );
+
+    this.classSkillText = this.add.text(240, 660, `${skill.name}: ${desc}`, {
+      fontSize: '18px',
+      color: '#ffddaa',
+      align: 'center',
+      wordWrap: { width: 300 }
+    }).setOrigin(0.5);
   }
 
   selectPortrait(icon) {

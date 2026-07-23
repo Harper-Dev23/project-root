@@ -1,6 +1,7 @@
 // Core state & UI
 import GameState from '../systems/GameState.js';
 import { COLORS, UI_DEPTH, CLASS_COLORS, RARITY_COLORS } from '../ui/styles.js';
+import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
@@ -2250,56 +2251,15 @@ export default class CombatScene extends Phaser.Scene {
       return { title: `?? [${rarityLabel}]`, titleColor: color, lines };
     }
 
-    // Allied — full reveal
-    const view = getItemComputedData(inst);
-    const lines = [`${rarityLabel} · ${slotLabel} ${typeLabel}`];
-
-    const bonuses = view?.bonuses || {};
-    const bonusStr = Object.entries(bonuses)
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${k} +${v}`)
-      .join('  ');
-    if (bonusStr) { lines.push(''); lines.push(bonusStr); }
-
-    const affixNames = [...(inst.prefixes || []), ...(inst.suffixes || [])];
-    if (affixNames.length) { lines.push(''); lines.push(affixNames.join(', ')); }
-
-    // Show static description only for items without a rolled fixed affix or
-    // granted skills (those show concrete values/names via the blocks below).
-    if (base.description && !inst.fixedAffixValue && !view?.grantsSkills?.length) {
-      lines.push(''); lines.push(base.description);
-    }
-
-    // Misc mods (includes jewelry fixed-affix rolled values)
-    const misc = view?._miscMods || {};
-    if (misc.physToElemPercent)  lines.push(`${misc.physToElemPercent}% Physical → Elemental Conversion`);
-    if (misc.physToNecroPercent) lines.push(`${misc.physToNecroPercent}% Physical → Necrotic Conversion`);
-    if (misc.elemToNecroPercent) lines.push(`${misc.elemToNecroPercent}% Elemental → Necrotic Conversion`);
-    if (misc.initBonusOnBattleStart) lines.push(`+${misc.initBonusOnBattleStart} Initiative at Battle Start`);
-    if (misc.shieldPctOnBattleStart) lines.push(`+${misc.shieldPctOnBattleStart}% Shield at Battle Start`);
-    Object.entries(misc.physBuildupOnPhysDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Phys Dmg → ${fam} Buildup`);
-    });
-    Object.entries(misc.elemBuildupOnElemDmg || {}).forEach(([fam, pct]) => {
-      if (pct) lines.push(`${pct}% Elem Dmg → ${fam} Buildup`);
-    });
-    if (misc.procDoubleDamage)    lines.push(`${misc.procDoubleDamage}% Chance: Double Damage`);
-    if (misc.procHalfDamageTaken) lines.push(`${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
-    if (misc.procHealOnHeal)      lines.push(`${misc.procHealOnHeal}% Chance: Double Heal`);
-    if (misc.procPhysFlat)        lines.push(`${misc.procPhysFlat}% Chance: +20 Physical Damage`);
-    if (misc.procElemFlat)        lines.push(`${misc.procElemFlat}% Chance: +20 Elemental Damage`);
-    if (misc.procNecroFlat)       lines.push(`${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
-
-    // Granted skills
-    if (view?.grantsSkills?.length) {
-      const names = view.grantsSkills.map(id =>
-        id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-      );
-      if (lines.length) lines.push('');
-      lines.push(`Grants: ${names.join(', ')}`);
-    }
-
-    return { title: base.name, titleColor: color, lines };
+    // Allied — full reveal. Used to be a hand-rolled subset (flat stat
+    // bonuses + a handful of jewelry procs, but none of the actual
+    // damage/modifier info — Min/Max Damage, Local Weapon Damage%, buildup%,
+    // resilience, healing%, etc.) — a FOURTH independently-drifted copy of
+    // the same tooltip InventoryOverlay/StashOverlay/TownScene already
+    // consolidated onto buildItemTooltipLines. Routed through that shared
+    // builder instead so combat shows the exact same modifier breakdown as
+    // everywhere else.
+    return buildItemTooltipLines(inst, { rarityColors: RARITY_COLORS });
   }
 
   /** Entry point for (re)building the body based on active tab */

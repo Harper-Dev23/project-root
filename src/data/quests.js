@@ -44,7 +44,7 @@ export const QUEST_LINES = [
       {
         id:          'prologue_create_character',
         label:       'Create a Character',
-        description: 'Visit the bonfire at the heart of camp. A hunter must have hunters.',
+        description: 'Visit the bonfire at the heart of camp. A hunt must have hunters.',
         isActive:   (pm) => pm.hasQuestFlag('orientation_bonfire'),
         isComplete: (pm) => !pm.hasQuestFlag('orientation_bonfire'),
       },
@@ -203,13 +203,13 @@ export const QUEST_LINES = [
       //    Handin flag   (gold ★)   → return to collect reward (Complete button)
       {
         id:          'bas_elseth_leader',
-        label:       'Answer the Elseth Animancer\'s Call',
+        label:       "Answer Wren the Animancer's Call",
         description: (pm) =>
           pm.hasQuestFlag('elseth_leader_handin')
             ? 'Return to the Elseth lodge to collect your reward.'
             : pm.hasQuestFlag('elseth_leader_challenge')
-              ? 'The Animancer is waiting. Return to the Elseth lodge.'
-              : 'The Elseth leader has taken notice of your party. Visit the Elseth lodge before the next trial.',
+              ? 'Wren is waiting. Return to the Elseth lodge.'
+              : 'Wren, the Elseth Animancer, has taken notice of your party. Visit the Elseth lodge before the next trial.',
         isActive:   (pm) => pm.hasQuestFlag('elseth_leader_brief') || pm.hasQuestFlag('elseth_leader_challenge') || pm.hasQuestFlag('elseth_leader_handin'),
         isComplete: (pm) => !pm.hasQuestFlag('elseth_leader_brief') && !pm.hasQuestFlag('elseth_leader_challenge') && !pm.hasQuestFlag('elseth_leader_handin') && sc(pm, 'training_encounter_3'),
       },
@@ -433,8 +433,17 @@ export function getQuestState(quest, pm) {
 
   const states = quest.steps.map(s => getStepState(s, pm));
 
-  if (states.every(s => s === 'completed'))              return 'completed';
-  if (states.some(s => s === 'active' || s === 'completed')) return 'active';
-  if (quest.isAvailable(pm))                             return 'available';
+  // Was `states.some(active || completed) -> 'active'`, checked before this
+  // — that treated "some steps completed, nothing currently active, the
+  // rest still upcoming/not yet unlocked" (e.g. Blood and Soil between
+  // finishing the tribe-vendor step and one of the four leader-brief flags
+  // actually firing) as still "Active", even though there's nothing for the
+  // player to act on right now. Checking active FIRST, then falling back to
+  // completed-if-any, puts that gap in the Completed section instead —
+  // nothing left to do currently reads the same as fully done, and a
+  // genuinely-in-progress quest (an actual active step) is unaffected.
+  if (states.some(s => s === 'active'))    return 'active';
+  if (states.some(s => s === 'completed')) return 'completed';
+  if (quest.isAvailable(pm))               return 'available';
   return 'locked';
 }

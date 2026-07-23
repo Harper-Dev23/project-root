@@ -58,7 +58,13 @@ export default class MainMenuScene extends Phaser.Scene {
     });
 
     this.createMenuButton('⚙️ Settings', width / 2, height / 2 + 100, () => {
-      console.log('Settings - Coming soon');
+      // Reuse the same OptionsOverlay every other Settings entry point uses —
+      // launched (not started) so it opens on top of the main menu instead
+      // of replacing it.
+      if (!this.scene.isActive('OptionsOverlay')) {
+        this.scene.launch('OptionsOverlay');
+      }
+      this.scene.bringToTop('OptionsOverlay');
     });
 
     this.createMenuButton('❌ Exit', width / 2, height / 2 + 160, () => {

@@ -766,10 +766,19 @@ export default class TownScene extends Phaser.Scene {
     // Auto-transition challenge → handin for all tribe leaders.
     // This runs every time flags are refreshed (e.g. on wake from combat), so the ★
     // appears on the exterior map the moment the player returns — no lodge entry required.
+    // Both auto-transitions below used to run with no GameState.save() at
+    // all, unlike every other quest-flag mutation in this file (Elder's
+    // Tower, vendor row, etc. all save immediately after) — since
+    // _buildQuestFlags() runs on every scene wake, a reload right after
+    // returning from a challenge encounter (or after clearing S6) could
+    // silently lose the auto-transition and revert to the prior state.
+    let questFlagsChanged = false;
+
     ['elseth', 'styx', 'lesse', 'zafaar'].forEach(tribe => {
       if (ProgressionManager.hasQuestFlag(`${tribe}_leader_challenge`)) {
         ProgressionManager.clearQuestFlag(`${tribe}_leader_challenge`);
         ProgressionManager.setQuestFlag(`${tribe}_leader_handin`);
+        questFlagsChanged = true;
       }
     });
 
@@ -781,7 +790,10 @@ export default class TownScene extends Phaser.Scene {
       !ProgressionManager.hasQuestFlag('awakening_complete')
     ) {
       ProgressionManager.setQuestFlag('samuel_awakening');
+      questFlagsChanged = true;
     }
+
+    if (questFlagsChanged) GameState.save('autosave');
 
     // Check if the combat pit marker should now appear based on cleared flags
     ProgressionManager.refreshCombatPitFlag();
@@ -833,7 +845,7 @@ export default class TownScene extends Phaser.Scene {
     if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
   }
 
-  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, titleColor = '#ffddaa', flavorColor = '#dddddd', exitText = '[ Exit ]', onExit }) {
+  _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, titleColor = '#ffddaa', flavorColor = '#dddddd', exitText = '[ Exit ]', onExit, useHeaderBanner = true }) {
     const PANEL_W = 915, PANEL_H = 685;
     const blocker = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
       .setOrigin(0.5)
@@ -859,29 +871,48 @@ export default class TownScene extends Phaser.Scene {
       cornerAlpha: 0.9,
     }).setDepth(0);
 
-    const title = this.add.text(640, 120, titleText, {
-      fontSize: '28px',
-      color: titleColor,
-      fontFamily: 'Georgia',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
+    // Title + flavor text grouped into ONE faded box with a banner header —
+    // used to be two bare floating this.add.text calls with no background,
+    // hard to read against whatever bg/bgImage sits behind them. Every other
+    // piece of content added on top of this layout (by each screen's own
+    // caller) gets its OWN separate createTextBanner box instead of sharing
+    // this one, same as Elders' Tower's converted texts.
+    //
+    // useHeaderBanner: false — Vendor Row / Tribe Vendor Row opt out: they
+    // already have their own inner createPanel('menu') panel with title/
+    // currency/body right below this one, so a second decorative header
+    // here just reads as visual clutter. Falls back to a single plain title
+    // line, same as before this whole redesign — those screens never really
+    // used flavorText anyway (both pass '' or null).
+    let titleBox;
+    if (useHeaderBanner) {
+      ({ container: titleBox } = createTextBanner(this, {
+        x: 640, y: 85, width: 640,
+        title: titleText, titleColor, titleFontSize: '26px',
+        body: flavorText, color: flavorColor, fontSize: '16px',
+      }));
+    } else {
+      titleBox = this.add.text(640, 120, titleText, {
+        fontSize: '28px',
+        color: titleColor,
+        fontFamily: 'Georgia',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+    }
 
-    const flavor = this.add.text(640, 200, flavorText, {
-      fontSize: '18px',
-      color: flavorColor,
-      fontFamily: 'Georgia',
-      align: 'center',
-      wordWrap: { width: 600 }
-    }).setOrigin(0.5);
-
+    // Deeper red + bold + a stroke for more visual weight — was too thin/
+    // light a pink to "pop" against some interiors (e.g. Zafaar Lodge).
     const exitBtn = this.add.text(640, 620, exitText, {
-      fontSize: '20px',
-      color: '#ff8888'
+      fontSize: '22px',
+      color: '#dd2222',
+      fontStyle: 'bold',
+      stroke: '#3a0808',
+      strokeThickness: 3,
     }).setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { SoundManager.play('handsClick'); onExit(); });
 
-    const items = [blocker, ...(bgImg ? [bgImg] : []), bg, title, flavor, exitBtn];
+    const items = [blocker, ...(bgImg ? [bgImg] : []), bg, titleBox, exitBtn];
     return this.add.container(0, 0, items).setDepth(11);
   }
 
@@ -1112,7 +1143,8 @@ export default class TownScene extends Phaser.Scene {
       bgImage: 'menu_stony_background',
       titleColor: '#2a1800',
       exitText: '[ Exit Market ]',
-      onExit: () => this.leaveVendorRow()
+      onExit: () => this.leaveVendorRow(),
+      useHeaderBanner: false,
     });
 
     // Vendor list container
@@ -2197,6 +2229,12 @@ export default class TownScene extends Phaser.Scene {
       { id: 'lesse',  name: "Le'sse", desc: 'Spirit & mind\nMagic runs deep.' },
     ];
 
+    // Gated until the player has actually visited all four lodges (each
+    // lodge clears its own lodge_X flag on first entry — see
+    // _enterGenericLodge) — pledging used to be allowed at any time, letting
+    // the player commit to a tribe sight-unseen.
+    const lodgesRemaining = LODGE_FLAGS.some(f => ProgressionManager.hasQuestFlag(f));
+
     // 2×2 grid of choice buttons centered in the tower panel.
     tribes.forEach((t, i) => {
       const col = i % 2;
@@ -2206,20 +2244,32 @@ export default class TownScene extends Phaser.Scene {
 
       const btn = this.add.text(x, y, `[ ${t.name} ]\n${t.desc}`, {
         fontSize: '14px',
-        color: '#cccccc',
+        color: lodgesRemaining ? '#666666' : '#cccccc',
         backgroundColor: '#2a2a2a',
         padding: { x: 14, y: 8 },
         align: 'center',
       }).setOrigin(0.5).setDepth(12)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => btn.setStyle({ color: '#ffffaa', backgroundColor: '#3a3a2a' }))
-        .on('pointerout',  () => btn.setStyle({ color: '#cccccc', backgroundColor: '#2a2a2a' }))
-        .on('pointerdown', () => {
+        .setInteractive({ useHandCursor: !lodgesRemaining });
+
+      if (lodgesRemaining) {
+        btn.on('pointerover', (pointer) => {
+          // Tooltip.show expects an array ([title, ...bodyLines]) or an
+          // {title, lines} object — a bare string matches neither branch
+          // and would render nothing.
+          this.tooltip?.show(pointer.worldX, pointer.worldY, ['Visit the four lodges first.']);
+        });
+        btn.on('pointermove', (pointer) => this.tooltip?.reposition(pointer.worldX, pointer.worldY));
+        btn.on('pointerout', () => this.tooltip?.hide());
+      } else {
+        btn.on('pointerover', () => btn.setStyle({ color: '#ffffaa', backgroundColor: '#3a3a2a' }));
+        btn.on('pointerout',  () => btn.setStyle({ color: '#cccccc', backgroundColor: '#2a2a2a' }));
+        btn.on('pointerdown', () => {
           this.scene.get('UIScene')?.showConfirmationDialogue(
             `Pledge your allegiance to the ${t.name}?\n\nThis cannot be undone. Your tribe defines you.`,
             () => this._pledgeTribe(t.id, t.name)
           );
         });
+      }
 
       layout.add(btn);
     });
@@ -2440,8 +2490,10 @@ export default class TownScene extends Phaser.Scene {
     // ── Flavor text per phase ─────────────────────────────────────────────────
     const BRIEF_TEXT = {
       elseth:
-        'A slight smirk crosses her face as you enter.\n' +
-        'In the corner, a training dummy flickers with pale green light.\n\n' +
+        'A woman near the back of the hall looks up as you enter — Wren, the Elseth\n' +
+        'Animancer, sharp-eyed and unhurried, her fingers trailing faint green light.\n\n' +
+        'A slight smirk crosses her face.\n' +
+        'In the corner, a training dummy flickers with that same pale green light.\n\n' +
         '"I animate those constructs in the pit. Call it a hobby — or a warning."\n\n' +
         'She waves a hand and the dummy\'s arm jerks upright.\n\n' +
         '"I\'ve been watching your form. Sloppy, but there\'s something there.\n' +
@@ -2474,7 +2526,7 @@ export default class TownScene extends Phaser.Scene {
 
     const HANDIN_TEXT = {
       elseth:
-        'She looks up from the flickering dummy. A slight nod.\n\n' +
+        'Wren looks up from the flickering dummy. A slight nod.\n\n' +
         '"Better than expected. You followed them into a corner\n' +
         'and kept the pressure. That\'s what I was watching for."\n\n' +
         'She gestures toward a small chest near the door.\n\n' +
@@ -2600,6 +2652,7 @@ export default class TownScene extends Phaser.Scene {
     // only after all gate flags for the next scenario are cleared.
     if (ProgressionManager.hasQuestFlag('combat_pit')) {
       ProgressionManager.clearQuestFlag('combat_pit');
+      GameState.save('autosave');
       this._buildQuestFlags();
     }
 
@@ -2848,7 +2901,8 @@ export default class TownScene extends Phaser.Scene {
       onExit: () => {
         this.tribeVendorGroup.setVisible(false);
         this._showExterior();
-      }
+      },
+      useHeaderBanner: false,
     });
 
     // Vendor List
