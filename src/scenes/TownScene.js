@@ -2526,7 +2526,8 @@ export default class TownScene extends Phaser.Scene {
         'See if your party can keep pace."',
       lesse:
         'Two figures sit motionless near the far wall,\n' +
-        'eyes closed, breathing in perfect unison.\n\n' +
+        'eyes closed, breathing in perfect unison — Ember and Rime,\n' +
+        'twins, one radiating a faint heat-shimmer, the other a thin frost.\n\n' +
         'The elder speaks without turning.\n\n' +
         '"You have shown you can fight. But have you faced\n' +
         'those who bend the elements to their will?\n' +
@@ -2535,7 +2536,7 @@ export default class TownScene extends Phaser.Scene {
       zafaar:
         'The Zafaar champion stands with his back to the door,\n' +
         'arms crossed, a massive weapon leaning against the wall beside him.\n\n' +
-        '"I heard you put down the Le\'sse duelists.\n' +
+        '"I heard you put down Ember and Rime, the Le\'sse duelists.\n' +
         'Good. Means you\'re worth something."\n\n' +
         'He turns, eyes fixed on you.\n\n' +
         '"My fighters will be waiting for you in the pit.\n' +
@@ -2556,7 +2557,7 @@ export default class TownScene extends Phaser.Scene {
         'She stands.\n\n' +
         '"Consider this a debt repaid."',
       lesse:
-        'The two figures open their eyes in unison.\n\n' +
+        'Ember and Rime open their eyes in unison.\n\n' +
         'The elder turns slowly.\n\n' +
         '"You moved with the current, not against it.\n' +
         'There is wisdom in how you resisted."\n\n' +

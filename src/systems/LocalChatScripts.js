@@ -31,6 +31,20 @@
 //     ctx.totalEnemies is the encounter's starting enemy count; ctx.enemy is
 //     the unit that just went down.
 //
+//   onInitiativeAbilityUsed(ctx) -> string | string[] | null
+//     Called whenever ANY unit (either side) successfully uses an ability
+//     gated by requiresInitiativeGauge (i.e. it had enough gauge and is
+//     actually executing, not fizzling) — CombatScene.js's generic Initiative
+//     Gauge gate in _applyAbilityToTarget. ctx.user is the caster, ctx.ability
+//     is the skill definition (check ctx.ability.id to react to a specific
+//     one). Filter on ctx.user yourself (e.g. ctx.user.isEnemy, or a specific
+//     type/name) — this fires for players too if nothing filters it out.
+//
+//   onCrit(ctx) -> string | string[] | null
+//     Called whenever a hit in the primary single-target damage path lands a
+//     critical. ctx.user/ctx.target/ctx.ability as above. Splash/DOT/repeat
+//     hits don't go through this specific path — primary hits only.
+//
 // ctx shape (all hooks): { scene, scenarioId, round, state, ...hook-specific }
 //   scene/scenarioId — as above.
 //   round            — 1-indexed, bumped whenever turn order wraps back to
@@ -44,6 +58,7 @@
 //                       whatever this script needs to remember between
 //                       calls (last-triggered round, a line index, etc.).
 //   defeatedCount/totalEnemies/enemy — only set for onEnemyDefeated.
+//   user/target/ability — only set for onInitiativeAbilityUsed/onCrit.
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -137,6 +152,77 @@ export const LOCAL_CHAT_SCRIPTS = {
   training_encounter_4: {
     onCombatStart() {
       return 'Cade signals Oskar and Kiro forward, calm and unhurried.';
+    },
+    // Cade comments on losing a beast while she's still standing; if she's
+    // already down herself, the surviving beast reacts on its own instead.
+    onEnemyDefeated(ctx) {
+      const enemy = ctx.enemy;
+      if (enemy?.type === 'huntsman_commander') return null; // Cade herself falls — no self-commentary
+      if (!enemy?.tags?.includes('beast')) return null;
+
+      const enemies = ctx.scene?.enemies || [];
+      const cade = enemies.find(e => e?.type === 'huntsman_commander');
+      if (cade && cade.status !== 'incapacitated') {
+        return pick([
+          `${enemy.name} falls. Cade's jaw tightens, but she doesn't stop moving.`,
+          `Cade barely glances at ${enemy.name}'s fall — already recalculating.`,
+          `"Predictable," Cade mutters, watching ${enemy.name} go down.`,
+        ]);
+      }
+
+      const survivor = enemies.find(e => e?.tags?.includes('beast') && e !== enemy && e.status !== 'incapacitated');
+      if (survivor) {
+        return pick([
+          `${survivor.name} roars, baring its teeth.`,
+          `${survivor.name} hisses, hackles raised.`,
+        ]);
+      }
+      return null;
+    },
+    // Cade reacting to her own or the beasts' initiative-gauge spenders.
+    onInitiativeAbilityUsed(ctx) {
+      if (!ctx.user?.isEnemy) return null;
+      const enemies = ctx.scene?.enemies || [];
+      const cade = enemies.find(e => e?.type === 'huntsman_commander');
+      if (!cade || cade.status === 'incapacitated') return null;
+
+      if (ctx.ability?.id === 'huntsman_coordinated_volley') {
+        return 'Cade whistles sharply — a coordinated strike, timed perfectly.';
+      }
+      if (ctx.ability?.id === 'kiro_molt') {
+        return `Cade nods as ${ctx.user?.name || 'Kiro'} sheds his skin. "Good. Keep moving."`;
+      }
+      return null;
+    },
+    // Cade reacting to a beast landing a crit.
+    onCrit(ctx) {
+      if (!ctx.user?.tags?.includes('beast')) return null;
+      const enemies = ctx.scene?.enemies || [];
+      const cade = enemies.find(e => e?.type === 'huntsman_commander');
+      if (!cade || cade.status === 'incapacitated') return null;
+
+      return pick([
+        'Cade allows herself a small, satisfied nod.',
+        '"That\'s the one," Cade murmurs.',
+      ]);
+    },
+  },
+
+  training_encounter_5: {
+    onCombatStart() {
+      return 'Ember and Rime take their positions, moving as one.';
+    },
+    // Whichever twin dies, the survivor's reaction ties directly into the
+    // enrage mechanic itself (enrageOnAllyDeath, enemyTypes.js) — this is
+    // narration for a real mechanical state change, not just flavor.
+    onEnemyDefeated(ctx) {
+      if (ctx.enemy?.type === 'fire_duelist') {
+        return 'Rime\'s eyes go cold with fury at Ember\'s fall.';
+      }
+      if (ctx.enemy?.type === 'ice_duelist') {
+        return 'Ember roars, grief turning instantly to rage at Rime\'s fall.';
+      }
+      return null;
     },
   },
 };

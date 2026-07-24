@@ -262,7 +262,7 @@ export const WeaknessV3 = {
 
         // NEW: flat drain from the Initiative Gauge at start of turn
         // actual drain = floor(gaugeStartDrainBase * I_cold), clamped by gaugeStartDrainCap
-        gaugeStartDrainBase: 8,
+        gaugeStartDrainBase: 4,
         gaugeStartDrainCap: 35
       }
     },

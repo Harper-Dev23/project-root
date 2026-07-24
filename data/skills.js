@@ -1604,8 +1604,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
-        // +50% buildup across encounter 4 (was 80).
-        buildup: { expose: 120 },
+        // +50% then another +25% buildup across encounter 4 (was 80, then 120).
+        buildup: { expose: 150 },
         statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
       };
     }
@@ -1648,8 +1648,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
-        // +50% buildup across encounter 4 (was 90).
-        buildup: { lacerate: 135 }, statusEffects: [{ id: 'snared', turns: 2 }]
+        // +50% then another +25% buildup across encounter 4 (was 90, then 135).
+        buildup: { lacerate: 169 }, statusEffects: [{ id: 'snared', turns: 2 }]
       };
     }
   },
@@ -1711,8 +1711,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
 
       scene?._log?.(`${attacker?.name || 'The huntsman'} whistles — the beasts converge for a coordinated strike!`);
-      // +50% buildup across encounter 4 (was 80).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 120 } };
+      // +50% then another +25% buildup across encounter 4 (was 80, then 120).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 150 } };
     },
     description: "Spend 30-60 initiative: deals 100-130% weapon damage (scaling with spend) and applies Expose buildup."
   },
@@ -1737,8 +1737,8 @@ const NPC_ONLY_SKILLS = {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      // +50% buildup across encounter 4 (was 90).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 135 } };
+      // +50% then another +25% buildup across encounter 4 (was 90, then 135).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 169 } };
     }
   },
   'oskar_infectious_claw': {
@@ -1762,8 +1762,8 @@ const NPC_ONLY_SKILLS = {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
-      // +50% buildup across encounter 4 (was 140/80).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: hasLac ? 210 : 120 } };
+      // +50% then another +25% buildup across encounter 4 (was 140/80, then 210/120).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: hasLac ? 263 : 150 } };
     }
   },
   'oskar_maw_rip': {
@@ -1849,8 +1849,8 @@ const NPC_ONLY_SKILLS = {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 70, skillLabel: `${ability?.name || 'Skill'} weapon damage (70%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      // +50% buildup across encounter 4 (was 60).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 90 } };
+      // +50% then another +25% buildup across encounter 4 (was 60, then 90).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 113 } };
     },
     reaction: {
       trigger: 'self_hit',
@@ -1888,8 +1888,8 @@ const NPC_ONLY_SKILLS = {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      // +50% buildup across encounter 4 (was 90).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 135 } };
+      // +50% then another +25% buildup across encounter 4 (was 90, then 135).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 169 } };
     }
   },
   'kiro_venomous_swipe': {
@@ -1912,8 +1912,8 @@ const NPC_ONLY_SKILLS = {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      // +50% buildup across encounter 4 (was 90).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: 135 } };
+      // +50% then another +25% buildup across encounter 4 (was 90, then 135).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: 169 } };
     }
   },
   'kiro_poison_cloud': {
@@ -1949,8 +1949,8 @@ const NPC_ONLY_SKILLS = {
         return {
           target: t, amount: splashAmount,
           physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
-          // +50% buildup across encounter 4 (was 60).
-          buildup: { toxic: 90 }, tags: ability?.tags,
+          // +50% then another +25% buildup across encounter 4 (was 60, then 90).
+          buildup: { toxic: 113 }, tags: ability?.tags,
         };
       });
 
@@ -1985,8 +1985,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       const payload = { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['toxic'] };
       if ((target?.weakness?.tiers?.disease || 0) >= 1) {
-        // +50% buildup across encounter 4 (was 80).
-        payload.buildup = { curse: 120 };
+        // +50% then another +25% buildup across encounter 4 (was 80, then 120).
+        payload.buildup = { curse: 150 };
       }
       return payload;
     }
@@ -2016,8 +2016,8 @@ const NPC_ONLY_SKILLS = {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      // +50% buildup across encounter 4 (was 70).
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 105 } };
+      // +50% then another +25% buildup across encounter 4 (was 70, then 105).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 131 } };
     },
     reaction: {
       trigger: 'self_hit',
@@ -2035,17 +2035,83 @@ const NPC_ONLY_SKILLS = {
     description: "Reaction: when struck, spit venom back at the attacker for 55% weapon damage and apply Toxic buildup."
   },
 
-  // Encounter 5 - Elemental Duelists
+  // Kiro's initiative spender — sheds his skin to regenerate HP. Same
+  // spend/scaling shape as huntsman_coordinated_volley (30 minimum, up to 60
+  // spent for the full bonus), just a self-heal instead of a damage burst.
+  'kiro_molt': {
+    id: 'kiro_molt',
+    name: 'Molt',
+    type: 'enemy',
+    actionCost: 'class',
+    mpCost: 0,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: false,
+    // Lowered 30→20 (and the spend cap 60→40 below) — his low CHA already
+    // meant slow gauge regen, and Cold's own gauge-drain (T1 regen penalty,
+    // T2 flat start-of-turn drain) made 30 rarely reachable in practice.
+    requiresInitiativeGauge: 20,
+    apply: (attacker, _target, scene) => {
+      const spend = Math.min(attacker?.initiativeGauge || 0, 40);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      // Same 15-30% HP range as before, rescaled onto the new 20-40 spend
+      // window (0.75 = 15/20, so spend=20 -> 15%, spend=40 -> 30%).
+      const healPct = Math.floor(spend * 0.75);
+      const maxHP = attacker.maxHP || 0;
+      const healAmt = Math.floor(maxHP * (healPct / 100));
+      const before = attacker.currentHP || 0;
+      attacker.currentHP = Math.min(maxHP, before + healAmt);
+      const actualHealed = attacker.currentHP - before;
+
+      scene?._log?.(`${attacker?.name || 'Kiro'} sheds his old skin, regenerating ${actualHealed} HP!`);
+      scene?._showFloatingNumber?.(actualHealed, attacker, /*isHeal=*/true, /*isCrit=*/false);
+      scene?._updateHealthBars?.();
+      scene?._updateHPMPBars?.();
+
+      return { amount: 0 };
+    },
+    description: "Spend 20-40 initiative: shed your skin to regenerate 15-30% max HP (scaling with spend)."
+  },
+
+  // Encounter 5 - Elemental Duelists (Ember/fire, Rime/ice) — full v3.23
+  // typed-pipeline pass, same standard as encounter 4. All damage converts
+  // fully phys→elemental (skillConversion: {physToElemPct:100}) since these
+  // are cast spells, not physical sword swings, unlike Oskar/Kiro's kit.
   'fire_flame_slash': {
     id: 'fire_flame_slash',
     name: 'Flame Slash',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 7, buildup: { fire: 100 } })
+    tags: ['melee', 'attack', 'fire'],
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.fire_flame_slash;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +40% buildup, matching encounter 4's own harder-than-before pass (was 100).
+      const result = { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'fire', buildup: { fire: 140 } };
+
+      // Enraged: her regular go-to move becomes a full-field AOE instead of
+      // single-target — the "abilities gain a different effect" ask, not
+      // just the separate enrage-exclusive ultimate.
+      if ((user?.statusEffects || []).some(se => se?.id === 'duelist_fury')) {
+        const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+        result.splash = foes.map(t => ({
+          target: t, amount, physical, elemental, necrotic,
+          buildup: { fire: 140 }, tags: ability?.tags,
+        }));
+      }
+      return result;
+    }
   },
   'fire_heated_guard': {
     id: 'fire_heated_guard',
@@ -2053,42 +2119,87 @@ const NPC_ONLY_SKILLS = {
     type: 'enemy',
     actionCost: 'bonus',
     mpCost: 4,
-    cooldown: 2,
+    cooldown: 1,
     enemyOnly: true,
     requiresTarget: false,
     apply: (user) => ({
       amount: 0,
-      statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 }, data: { retaliateFire: true } }]
+      statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 } }]
     })
   },
   'fire_burst': {
     id: 'fire_burst',
     name: 'Fire Burst',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 10,
-    cooldown: 2,
+    cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'fire', tier: 2 },
-    apply: () => ({ amount: 11, consumeWeakness: ['fire'] })
+    tags: ['melee', 'attack', 'fire'],
+    apply: (user, target) => {
+      const ability = SKILLS?.fire_burst;
+      // Thermal Shock: bonus damage if the target is ALSO chilled — the
+      // "coordinate Fire and Cold buildup" payoff the encounter's own
+      // longDescription already advertised but never actually implemented.
+      const hasCold = (target?.weakness?.tiers?.cold || 0) >= 1;
+      const skillPct = 130 + (hasCold ? 30 : 0);
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%${hasCold ? ' incl. Thermal Shock' : ''})`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'fire', consumeWeakness: ['fire'] };
+    },
+    description: "Requires target at Fire T2. Deals 130% weapon damage as Fire, +30% more (Thermal Shock) if the target is also at least Chilled."
   },
   'fire_flare_wave': {
     id: 'fire_flare_wave',
     name: 'Flare Wave',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 12,
-    cooldown: 3,
+    cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    tags: ['ranged', 'attack', 'aoe', 'fire'],
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.fire_flare_wave;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const SPLASH_SCALE = 0.8;
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      const splash = foes.map(t => {
+        const splashPhysical = Math.floor(physical * SPLASH_SCALE);
+        const splashElemental = Math.floor(elemental * SPLASH_SCALE);
+        const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        const splashAmount = Math.max(1, splashPhysical + splashElemental + splashNecrotic);
+        return {
+          target: t, amount: splashAmount,
+          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
+          // +40% buildup, matching encounter 4's pass (was 60).
+          buildup: { fire: 85 }, tags: ability?.tags,
+        };
+      });
+
       return {
-        amount: 6,
-        splash: foes.map(t => ({ target: t, amount: 5, buildup: { fire: 60 } }))
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'fire',
+        buildup: { fire: 85 },
+        splash: splash.length ? splash : undefined,
       };
     }
   },
@@ -2097,13 +2208,37 @@ const NPC_ONLY_SKILLS = {
     id: 'ice_frost_strike',
     name: 'Frost Strike',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 7, buildup: { cold: 100 } })
+    tags: ['melee', 'attack', 'cold'],
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.ice_frost_strike;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // +40% buildup, matching encounter 4's own harder-than-before pass (was 100).
+      const result = { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'cold', buildup: { cold: 140 } };
+
+      // Enraged: same "regular ability becomes full-field AOE" treatment as
+      // Ember's Flame Slash.
+      if ((user?.statusEffects || []).some(se => se?.id === 'duelist_fury')) {
+        const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+        result.splash = foes.map(t => ({
+          target: t, amount, physical, elemental, necrotic,
+          buildup: { cold: 140 }, tags: ability?.tags,
+        }));
+      }
+      return result;
+    }
   },
   'ice_icy_guard': {
     id: 'ice_icy_guard',
@@ -2111,41 +2246,346 @@ const NPC_ONLY_SKILLS = {
     type: 'enemy',
     actionCost: 'bonus',
     mpCost: 4,
-    cooldown: 2,
+    cooldown: 1,
     enemyOnly: true,
     requiresTarget: false,
-    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 }, data: { retaliateCold: true } }] })
+    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 } }] })
   },
   'ice_freeze_point': {
     id: 'ice_freeze_point',
     name: 'Freeze Point',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 10,
-    cooldown: 2,
+    cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'cold', tier: 2 },
-    apply: () => ({ amount: 11, consumeWeakness: ['cold'], statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }] })
+    tags: ['melee', 'attack', 'cold'],
+    apply: (user, target) => {
+      const ability = SKILLS?.ice_freeze_point;
+      // Thermal Shock: bonus damage if the target is ALSO singed.
+      const hasFire = (target?.weakness?.tiers?.fire || 0) >= 1;
+      const skillPct = 130 + (hasFire ? 30 : 0);
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%${hasFire ? ' incl. Thermal Shock' : ''})`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'cold',
+        consumeWeakness: ['cold'],
+        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }],
+      };
+    },
+    description: "Requires target at Cold T2. Deals 130% weapon damage as Cold, +30% more (Thermal Shock) if the target is also at least Singed. Applies Frozen (skip next action)."
   },
   'ice_shard_storm': {
     id: 'ice_shard_storm',
     name: 'Shard Storm',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 12,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'attack', 'aoe', 'cold'],
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.ice_shard_storm;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      const SPLASH_SCALE = 0.8;
+      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      const splash = foes.map(t => {
+        const splashPhysical = Math.floor(physical * SPLASH_SCALE);
+        const splashElemental = Math.floor(elemental * SPLASH_SCALE);
+        const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        const splashAmount = Math.max(1, splashPhysical + splashElemental + splashNecrotic);
+        return {
+          target: t, amount: splashAmount,
+          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
+          // +40% buildup, matching encounter 4's pass (was 50).
+          buildup: { cold: 70 }, tags: ability?.tags,
+        };
+      });
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'cold',
+        buildup: { cold: 70 },
+        splash: splash.length ? splash : undefined,
+      };
+    }
+  },
+
+  // Defensive self-wards — Ember hardens against Fire, Rime against Cold:
+  // +20% Elemental Resist (the only damage-side lever the engine has that
+  // isn't per-element) PLUS a genuine per-family incoming-buildup reduction
+  // (fireBuildupMul/coldBuildupMul < 1, the same generic vulnerability
+  // mechanism Wind Exposed/Trapped Fire use to INCREASE it — see
+  // CombatScene.js's generic buildupMul reader) so each is specifically
+  // harder to set ablaze/freeze, not just take less raw damage.
+  'ember_fire_ward': {
+    id: 'ember_fire_ward',
+    name: "Ember's Ward",
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 5,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: () => ({
+      amount: 0,
+      statusEffects: [{ id: 'ember_fire_ward', turns: 2, mods: { ElementalResist: 20 }, fireBuildupMul: 0.5 }]
+    }),
+    description: "Self-buff: +20% Elemental Resist and half incoming Fire buildup for 2 turns."
+  },
+  'rime_cold_ward': {
+    id: 'rime_cold_ward',
+    name: "Rime's Ward",
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 5,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: false,
+    apply: () => ({
+      amount: 0,
+      statusEffects: [{ id: 'rime_cold_ward', turns: 2, mods: { ElementalResist: 20 }, coldBuildupMul: 0.5 }]
+    }),
+    description: "Self-buff: +20% Elemental Resist and half incoming Cold buildup for 2 turns."
+  },
+
+  // Ember's initiative spender — same spend/scaling shape as
+  // huntsman_coordinated_volley, tuned for Ember's own lower CHA/gauge regen
+  // (25 minimum, up to 50 spent for the full bonus).
+  'ember_inferno_surge': {
+    id: 'ember_inferno_surge',
+    name: 'Inferno Surge',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'class',
+    mpCost: 8,
     cooldown: 3,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    requiresInitiativeGauge: 25,
+    tags: ['melee', 'attack', 'fire'],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.ember_inferno_surge;
+      const spend = Math.min(attacker?.initiativeGauge || 0, 50);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      // 125% at the 25 minimum, up to 150% at the 50 cap.
+      const skillPct = 100 + spend;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      scene?._log?.(`${attacker?.name || 'Ember'} erupts in a surge of flame!`);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'fire', buildup: { fire: 160 } };
+    },
+    description: "Spend 25-50 initiative: deal 125-150% weapon damage as Fire (scaling with spend) and apply heavy Fire buildup."
+  },
+
+  // Rime's initiative spender — mirrors Inferno Surge exactly.
+  'rime_absolute_zero': {
+    id: 'rime_absolute_zero',
+    name: 'Absolute Zero',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'class',
+    mpCost: 8,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    requiresInitiativeGauge: 25,
+    tags: ['melee', 'attack', 'cold'],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.rime_absolute_zero;
+      const spend = Math.min(attacker?.initiativeGauge || 0, 50);
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      const skillPct = 100 + spend;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      scene?._log?.(`${attacker?.name || 'Rime'} exhales a wave of absolute cold!`);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'cold', buildup: { cold: 160 } };
+    },
+    description: "Spend 25-50 initiative: deal 125-150% weapon damage as Cold (scaling with spend) and apply heavy Cold buildup."
+  },
+
+  // Ember's reaction — replaces the old heated_guard `data:{retaliateFire:true}`
+  // field, which was declared but never actually read/enforced anywhere
+  // (same "declared but unenforced" bug class as Glacial Strike's old status
+  // fields). Armed idempotently by the fire_duelist AI profile; only
+  // triggers a real counter-hit while Heated Guard is actually up.
+  'ember_flame_retaliation': {
+    id: 'ember_flame_retaliation',
+    name: 'Flame Retaliation',
+    type: 'enemy',
+    mechanic: 'reaction',
+    typedDamage: true,
+    actionCost: 'reaction',
+    mpCost: 0,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'fire'],
+    apply: (user, target) => {
+      const ability = SKILLS?.ember_flame_retaliation;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 60, skillLabel: `${ability?.name || 'Skill'} weapon damage (60%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'fire', buildup: { fire: 70 } };
+    },
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: ({ owner }) => (owner?.statusEffects || []).some(se => se?.id === 'heated_guard'),
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return;
+        const ability = SKILLS?.ember_flame_retaliation;
+        scene?._log?.(`${owner?.name || 'Ember'}'s guard flares back in retaliation!`);
+        scene.time?.delayedCall(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, ability, { isReaction: true, tags: ability?.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: while Heated Guard is active, retaliate against an attacker for 60% weapon damage as Fire."
+  },
+
+  // Rime's reaction — mirrors Flame Retaliation, gated on Icy Guard.
+  'rime_frost_retaliation': {
+    id: 'rime_frost_retaliation',
+    name: 'Frost Retaliation',
+    type: 'enemy',
+    mechanic: 'reaction',
+    typedDamage: true,
+    actionCost: 'reaction',
+    mpCost: 0,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'cold'],
+    apply: (user, target) => {
+      const ability = SKILLS?.rime_frost_retaliation;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 60, skillLabel: `${ability?.name || 'Skill'} weapon damage (60%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'cold', buildup: { cold: 70 } };
+    },
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: ({ owner }) => (owner?.statusEffects || []).some(se => se?.id === 'icy_guard'),
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return;
+        const ability = SKILLS?.rime_frost_retaliation;
+        scene?._log?.(`${owner?.name || 'Rime'}'s guard bites back in retaliation!`);
+        scene.time?.delayedCall(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, ability, { isReaction: true, tags: ability?.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: while Icy Guard is active, retaliate against an attacker for 60% weapon damage as Cold."
+  },
+
+  // Enrage-exclusive ultimates — unlocked onto the survivor's skills array
+  // by enrageOnAllyDeath (enemyTypes.js templates) the moment their twin
+  // falls. canExecute is declarative/defensive here; the REAL gate that
+  // matters is each AI profile's own hasStatus('duelist_fury') check, since
+  // canExecute is only enforced by the legacy _executeSkill path, not the
+  // one AI/normal actions actually use (_applyAbilityToTarget).
+  'ember_wildfire_unleashed': {
+    id: 'ember_wildfire_unleashed',
+    name: 'Wildfire Unleashed',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 10,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'fire'],
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'duelist_fury')
+      ? true : { ok: false, reason: `${user?.name || 'Ember'} isn't enraged yet.` },
+    apply: (user, target) => {
+      const ability = SKILLS?.ember_wildfire_unleashed;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 180, skillLabel: `${ability?.name || 'Skill'} weapon damage (180%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: 'fire', buildup: { fire: 200 }, consumeWeakness: ['fire'] };
+    },
+    description: "Enraged only. Deals 180% weapon damage as Fire and applies massive Fire buildup."
+  },
+  'rime_eternal_frost': {
+    id: 'rime_eternal_frost',
+    name: 'Eternal Frost',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 10,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'cold'],
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'duelist_fury')
+      ? true : { ok: false, reason: `${user?.name || 'Rime'} isn't enraged yet.` },
+    apply: (user, target) => {
+      const ability = SKILLS?.rime_eternal_frost;
+      const roll = calculateDamage(user, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 180, skillLabel: `${ability?.name || 'Skill'} weapon damage (180%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       return {
-        amount: 5,
-        splash: foes.map(t => ({ target: t, amount: 4, buildup: { cold: 50 } }))
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'cold',
+        buildup: { cold: 200 }, consumeWeakness: ['cold'],
+        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }],
       };
-    }
+    },
+    description: "Enraged only. Deals 180% weapon damage as Cold, applies massive Cold buildup, and Freezes the target (skip next action)."
   },
 
   // Encounter 6 - Berserker Boss
@@ -7788,7 +8228,8 @@ Object.assign(RAW_SKILLS, {
     requiredValue: 13,
     actionCost: "major",
     mpCost: 5,
-    cooldown: 3,
+    // No cooldown — requiring an active runic zone (below) plus the MP cost
+    // is already enough of a natural downside per the user's call.
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire", "elemental", "zone"],
@@ -11220,7 +11661,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "buff", "fire"],
-    cooldown: 6,
+    cooldown: 2,
     // Spending initiative is this skill's whole job — below the minimum
     // spend tier, it has nothing to do, so it should fizzle instead of
     // silently firing for free. Checked generically in _applyAbilityToTarget.

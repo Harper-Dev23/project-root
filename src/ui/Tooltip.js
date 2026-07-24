@@ -83,21 +83,59 @@ export default class Tooltip {
     this.bodyContainer.removeAll(true);
   }
 
-  // Render body lines as stacked Text objects. Each entry may be a plain
-  // string (uses the default muted color) or { text, color } for a per-line
-  // override. Returns the total content width/height for background sizing.
+  // Render body lines as stacked Text objects. Each entry may be:
+  //  - a plain string (default muted color)
+  //  - { text, color } for a single-color line
+  //  - { segments: [{ text, color }, ...] } for a SINGLE row made of multiple
+  //    differently-colored runs placed side by side (e.g. a damage formula's
+  //    "12 ×1.50 +3 fire ×1.10 gear" where each token means something
+  //    different) — same side-by-side placement idea CombatScene's own log
+  //    segments use, just simpler: wraps at segment boundaries only (each
+  //    segment is already a short atomic token, not a paragraph needing
+  //    per-word wrap).
+  // Returns the total content width/height for background sizing.
   _renderBodyLines(lines = []) {
     this._clearBodyLines();
     let y = 0;
     let maxW = 0;
+    const wrapWidth = 320;
+    const segGap = 4;
+
     for (const entry of lines) {
+      const segments = Array.isArray(entry?.segments) ? entry.segments : null;
+
+      if (segments) {
+        let x = 0;
+        let rowH = 0;
+        for (const seg of segments) {
+          const segColor = seg?.color != null ? seg.color : (FONTS.muted?.color || '#dddddd');
+          const txt = this.scene.add.text(0, 0, seg?.text ?? '', {
+            ...FONTS.muted,
+            color: this._toCss(segColor)
+          }).setOrigin(0, 0).setDepth(this.topDepth);
+
+          if (x > 0 && x + txt.width > wrapWidth) {
+            x = 0;
+            y += rowH;
+            rowH = 0;
+          }
+          txt.setPosition(x, y);
+          this.bodyContainer.add(txt);
+          x += txt.width + segGap;
+          rowH = Math.max(rowH, txt.height);
+          maxW = Math.max(maxW, x - segGap);
+        }
+        y += rowH;
+        continue;
+      }
+
       const isObj = entry && typeof entry === 'object';
       const text = isObj ? (entry.text ?? '') : String(entry ?? '');
       const color = isObj && entry.color != null ? entry.color : (FONTS.muted?.color || '#dddddd');
       const txt = this.scene.add.text(0, y, text, {
         ...FONTS.muted,
         color: this._toCss(color),
-        wordWrap: { width: 320 }
+        wordWrap: { width: wrapWidth }
       }).setOrigin(0, 0).setDepth(this.topDepth);
       this.bodyContainer.add(txt);
       y += txt.height;

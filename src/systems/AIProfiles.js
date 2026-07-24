@@ -518,6 +518,12 @@ export const AI_PROFILES = {
         scene.reactions.arm(npc, SKILLS.kiro_venom_reflex);
       }
 
+      // Molt — held back for when he's actually hurt, same "sometimes"
+      // pacing Mending Wave/Bulwark Call use for their own initiative spends.
+      if (canUseSkill(npc, 'kiro_molt') && (npc.initiativeGauge || 0) >= 20 && hpRatio(npc) < 0.6) {
+        return buildAction('kiro_molt', null);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
       const toxicTarget = highestWeakness(foes, 'toxic', 2);
       if (canUseSkill(npc, 'kiro_corrosive_bite') && toxicTarget) {
@@ -547,10 +553,35 @@ export const AI_PROFILES = {
 
   fire_duelist: {
     decide(npc, scene, enemies) {
+      // Flame Retaliation — armed once and left armed (idempotent, same
+      // pattern fighter_dummy uses for Guardian's Stand); only actually
+      // fires while Heated Guard is up (checked in the reaction's own
+      // canTrigger), so arming it early is harmless.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'ember_flame_retaliation');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('ember_flame_retaliation')) {
+        scene.reactions.arm(npc, SKILLS.ember_flame_retaliation);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Enraged (Rime already down) — Wildfire Unleashed takes priority
+      // over everything else once it's actually usable (unlocked onto
+      // npc.skills by enrageOnAllyDeath in CombatScene.js).
+      if (hasStatus(npc, 'duelist_fury') && canUseSkill(npc, 'ember_wildfire_unleashed')) {
+        const target = weakest(foes);
+        if (target) return buildAction('ember_wildfire_unleashed', target);
+      }
+
       const fireCharged = highestWeakness(foes, 'fire', 2);
       if (canUseSkill(npc, 'fire_burst') && fireCharged) {
         return buildAction('fire_burst', fireCharged);
+      }
+      if (canUseSkill(npc, 'ember_inferno_surge') && (npc.initiativeGauge || 0) >= 25) {
+        const target = weakest(foes);
+        if (target) return buildAction('ember_inferno_surge', target);
+      }
+      if (canUseSkill(npc, 'ember_fire_ward') && !hasStatus(npc, 'ember_fire_ward')) {
+        return buildAction('ember_fire_ward', null);
       }
       if (canUseSkill(npc, 'fire_heated_guard') && !hasStatus(npc, 'heated_guard')) {
         return buildAction('fire_heated_guard', npc);
@@ -563,16 +594,42 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('fire_flame_slash', target);
       }
+      // Out of MP for everything above — a real (0-cost) weapon attack
+      // instead of falling through to the generic fallback picker.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = weakest(foes);
+        if (target) return buildAction('basic_attack', target);
+      }
       return null;
     }
   },
 
   ice_duelist: {
     decide(npc, scene, enemies) {
+      // Frost Retaliation — same idempotent-arm pattern as Ember's.
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'rime_frost_retaliation');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('rime_frost_retaliation')) {
+        scene.reactions.arm(npc, SKILLS.rime_frost_retaliation);
+      }
+
       const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Enraged (Ember already down) — Eternal Frost takes priority.
+      if (hasStatus(npc, 'duelist_fury') && canUseSkill(npc, 'rime_eternal_frost')) {
+        const target = weakest(foes);
+        if (target) return buildAction('rime_eternal_frost', target);
+      }
+
       const frozen = highestWeakness(foes, 'cold', 2);
       if (canUseSkill(npc, 'ice_freeze_point') && frozen) {
         return buildAction('ice_freeze_point', frozen);
+      }
+      if (canUseSkill(npc, 'rime_absolute_zero') && (npc.initiativeGauge || 0) >= 25) {
+        const target = weakest(foes);
+        if (target) return buildAction('rime_absolute_zero', target);
+      }
+      if (canUseSkill(npc, 'rime_cold_ward') && !hasStatus(npc, 'rime_cold_ward')) {
+        return buildAction('rime_cold_ward', null);
       }
       if (canUseSkill(npc, 'ice_icy_guard') && !hasStatus(npc, 'icy_guard')) {
         return buildAction('ice_icy_guard', npc);
@@ -584,6 +641,12 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'ice_frost_strike')) {
         const target = weakest(foes);
         if (target) return buildAction('ice_frost_strike', target);
+      }
+      // Out of MP for everything above — a real (0-cost) weapon attack
+      // instead of falling through to the generic fallback picker.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = weakest(foes);
+        if (target) return buildAction('basic_attack', target);
       }
       return null;
     }

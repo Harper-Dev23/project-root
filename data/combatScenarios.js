@@ -87,10 +87,14 @@ export const COMBAT_SCENARIOS = {
         { equip: 'gloves', rarity: 'uncommon', droppable: false },
         { equip: 'boots', rarity: 'uncommon', droppable: false },
       ] },
-      { type: 'beast_oskar', slotId: 2, drops: [
+      // name overrides added — neither had one before, so both were
+      // displaying their raw type string ("beast_oskar"/"beast_kiro") in
+      // combat despite the encounter's own longDescription already calling
+      // them "Oskar the ripper"/"Kiro the venom-spewer".
+      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: [
         { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
       ] },
-      { type: 'beast_kiro', slotId: 3, drops: [
+      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: [
         { equip: 'weaponMain', itemId: 'crude_dagger', rarity: 'common', rollAffixes: false, droppable: false },
       ] }
     ]
@@ -102,8 +106,26 @@ export const COMBAT_SCENARIOS = {
     longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
     portraitKey: 'portrait_lesse_duelist_ice',
     enemies: [
-      { type: 'fire_duelist', slotId: 2 },
-      { type: 'ice_duelist', slotId: 3 }
+      // Fixed/soulbound weapon (common, real weapon dice for the typed
+      // pipeline) plus a full soulbound RARE ("blue") armor set — same
+      // convention as berserker_boss/Cade's gear, rarity fixed rather than
+      // left to the normal random roll, none of it drops on defeat.
+      { type: 'fire_duelist', slotId: 2, name: 'Ember', drops: [
+        { equip: 'weaponMain', itemId: 'crude_sword_1h', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'rare', droppable: false },
+        { equip: 'head', rarity: 'rare', droppable: false },
+        { equip: 'legs', rarity: 'rare', droppable: false },
+        { equip: 'gloves', rarity: 'rare', droppable: false },
+        { equip: 'boots', rarity: 'rare', droppable: false },
+      ] },
+      { type: 'ice_duelist', slotId: 3, name: 'Rime', drops: [
+        { equip: 'weaponMain', itemId: 'crude_sword_1h', rarity: 'common', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'rare', droppable: false },
+        { equip: 'head', rarity: 'rare', droppable: false },
+        { equip: 'legs', rarity: 'rare', droppable: false },
+        { equip: 'gloves', rarity: 'rare', droppable: false },
+        { equip: 'boots', rarity: 'rare', droppable: false },
+      ] }
     ]
   },
 

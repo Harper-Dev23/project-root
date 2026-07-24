@@ -227,13 +227,13 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_lesse_leader',
-        label:       "Heed Le'sse's Mystics",
+        label:       "Face Ember and Rime",
         description: (pm) =>
           pm.hasQuestFlag('lesse_leader_handin')
             ? "Return to the Le'sse lodge to collect your reward."
             : pm.hasQuestFlag('lesse_leader_challenge')
-              ? "The elders are waiting. Return to the Le'sse lodge."
-              : "Le'sse's elders have opened their doors. Visit before the next trial.",
+              ? "Ember and Rime are waiting. Return to the Le'sse lodge."
+              : "Ember and Rime, twin elemental duelists of the Le'sse, have taken notice of your party. Visit the Le'sse lodge before the next trial.",
         isActive:   (pm) => pm.hasQuestFlag('lesse_leader_brief') || pm.hasQuestFlag('lesse_leader_challenge') || pm.hasQuestFlag('lesse_leader_handin'),
         isComplete: (pm) => !pm.hasQuestFlag('lesse_leader_brief') && !pm.hasQuestFlag('lesse_leader_challenge') && !pm.hasQuestFlag('lesse_leader_handin') && sc(pm, 'training_encounter_5'),
       },

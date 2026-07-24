@@ -240,37 +240,78 @@ export const ENEMY_TYPES = {
     // +50% HP, same as the other two encounter-4 enemies.
     maxHP: 330,
     maxMP: 80,
-    // A little more finesse/WIS than Oskar — the "venom-spewer" side of the
-    // pack, still STR-driven for weapon damage like every other beast/dummy.
-    baseStats: { STR: 10, DEX: 10, CON: 12, INT: 6, WIS: 10, CHA: 4 },
+    // WIS 10→6, CHA 4→8 (same total) — his old very-low CHA meant Molt's
+    // initiative-gauge gain was too slow to ever reach 30, especially once
+    // Cold (which also drains the gauge) got involved; bumping CHA (and
+    // lowering Molt's own gauge requirement below) fixes that.
+    baseStats: { STR: 10, DEX: 10, CON: 12, INT: 6, WIS: 6, CHA: 8 },
     // More evasive than Oskar — slippery instead of tanky. Plus natural 20%
-    // Necrotic Damage Reduction (his own toxic/disease kit's family).
-    derivedBonus: { Evasion: 20, NecroticResist: 20 },
-    skills: ['kiro_toxic_spit', 'kiro_venomous_swipe', 'kiro_poison_cloud', 'kiro_corrosive_bite', 'kiro_venom_reflex', 'basic_attack'],
+    // Necrotic Damage Reduction (his own toxic/disease kit's family). Bumped
+    // 20→25 Evasion — he was the most vulnerable of the three.
+    derivedBonus: { Evasion: 25, NecroticResist: 20 },
+    skills: ['kiro_toxic_spit', 'kiro_venomous_swipe', 'kiro_poison_cloud', 'kiro_corrosive_bite', 'kiro_venom_reflex', 'kiro_molt', 'basic_attack'],
     aiProfile: 'kiro_beast',
     isEnemy: true,
     tags: ['beast'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // Encounter 5 needs to be harder than encounter 4 despite having only 2
+  // bodies (vs. 3) — HP pushed well past a flat scale-up of the old 260, and
+  // each duelist gets a real kit: typed damage, an initiative spender, a real
+  // reaction (replacing the old dead retaliateFire/retaliateCold data flags,
+  // never actually enforced anywhere), and an ENRAGE that fires the moment
+  // their twin goes down (see enrageOnAllyDeath, read generically by
+  // _onUnitKnockedOut in CombatScene.js).
   fire_duelist: {
     skin: 'portrait_lesse_duelist_fire',
-    maxHP: 260,
-    maxMP: 120,
-    skills: ['fire_flame_slash', 'fire_heated_guard', 'fire_burst', 'fire_flare_wave'],
+    maxHP: 420,
+    maxMP: 130,
+    // Aggressive glass-cannon spread — STR for weapon damage, CHA for
+    // Initiative/gauge regen (Inferno Surge's spend gate).
+    baseStats: { STR: 14, DEX: 10, CON: 10, INT: 6, WIS: 4, CHA: 12 },
+    // Fire resists Elemental broadly (his own family), plus real Resilience
+    // like every other encounter-4/5 named enemy now gets.
+    derivedBonus: { ElementalResist: 20, Resilience: 20 },
+    skills: ['fire_flame_slash', 'fire_heated_guard', 'fire_burst', 'fire_flare_wave', 'ember_fire_ward', 'ember_inferno_surge', 'ember_flame_retaliation', 'basic_attack'],
     aiProfile: 'fire_duelist',
     isEnemy: true,
+    tags: ['duelist'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+    // If Rime falls first, Ember enrages: a bigger permanent buff (Resilience
+    // 20+20=40 total, since duelist_fury's mods add to the base derivedBonus
+    // rather than replacing it), an unlocked stronger finisher
+    // (ember_wildfire_unleashed), AND her regular Flame Slash starts hitting
+    // the whole field instead of one target (checked directly in its own
+    // apply()) — the enrage touches her existing kit, not just a bolted-on
+    // extra move.
+    enrageOnAllyDeath: {
+      statusId: 'duelist_fury',
+      mods: { AttackPower: 30, CritChance: 15, Resilience: 20 },
+      unlockSkills: ['ember_wildfire_unleashed'],
+    },
   },
 
   ice_duelist: {
     skin: 'portrait_lesse_duelist_ice',
-    maxHP: 260,
-    maxMP: 120,
-    skills: ['ice_frost_strike', 'ice_icy_guard', 'ice_freeze_point', 'ice_shard_storm'],
+    maxHP: 420,
+    maxMP: 130,
+    // Controlled/defensive spread — DEX for Accuracy, WIS for Initiative
+    // (via CharacterBuilder's derived formula) and MP.
+    baseStats: { STR: 10, DEX: 14, CON: 10, INT: 6, WIS: 12, CHA: 4 },
+    // Ice resists Physical broadly (frozen carapace), plus real Resilience.
+    derivedBonus: { PhysicalResist: 20, Resilience: 20 },
+    skills: ['ice_frost_strike', 'ice_icy_guard', 'ice_freeze_point', 'ice_shard_storm', 'rime_cold_ward', 'rime_absolute_zero', 'rime_frost_retaliation', 'basic_attack'],
     aiProfile: 'ice_duelist',
     isEnemy: true,
+    tags: ['duelist'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+    // If Ember falls first, Rime enrages the same way, in kind.
+    enrageOnAllyDeath: {
+      statusId: 'duelist_fury',
+      mods: { AttackPower: 30, CritChance: 15, Resilience: 20 },
+      unlockSkills: ['rime_eternal_frost'],
+    },
   },
 
   berserker_boss: {

@@ -190,6 +190,62 @@ const LOG_COLORS = {
 
 const LOG_LINE_HEIGHT = 18;
 
+// Color scheme for the damage-breakdown tooltip (hover a log line's damage
+// number). Reuses the same color language the log LINE itself already uses
+// (LOG_COLORS.crit for "(CRIT!)", LOG_COLORS.keyword for "(splash)") so the
+// tooltip reads as an extension of the log rather than a separate unstyled
+// block. The headline number and crit/reduction/type info get real color;
+// pure bookkeeping (source/target/formula/MP) stays muted so it doesn't
+// compete for attention against the numbers that actually matter.
+const DAMAGE_TOOLTIP_COLORS = {
+  muted: '#999999',
+  physical: '#dddddd',
+  elemental: '#f0a050',
+  necrotic: '#9b6bd9',
+  reduction: '#e0685f',
+  chance: '#7ec8e3',
+  // Specific elements — same hex values as itemTooltip.js's TYPE_COLORS, so
+  // a fire flat-damage line reads as the same color everywhere in the UI.
+  fire: '#D24E35',
+  cold: '#3BA3D9',
+  lightning: '#E6C447',
+  // Generic multiplicative buffs that aren't crit and aren't tied to a
+  // specific element (gear damage%, Proficiency, skill%, "Generic increased
+  // damage") — a distinct green so "this is a buff scaling the hit" reads
+  // differently from "this is raw typed damage".
+  buff: '#7fd88f',
+};
+
+// Resolves a formula-breakdown token's color from its structural role
+// (kind: 'base' | 'crit' | 'convert' | 'flat' | 'mult') plus its label text,
+// used to color-code CombatScene's damage-tooltip "Formula:" line token by
+// token instead of one flat color for the whole line.
+function _formulaPartColor(kind, label) {
+  const C = DAMAGE_TOOLTIP_COLORS;
+  if (kind === 'base') return C.physical;
+  if (kind === 'crit') return LOG_COLORS.crit;
+
+  const l = (label || '').toLowerCase();
+  if (kind === 'convert') {
+    // Conversion is named "from→to" — color by the DESTINATION type, since
+    // that's what the damage becomes.
+    if (l.includes('necro')) return C.necrotic;
+    if (l.includes('ele')) return C.elemental;
+    return C.muted;
+  }
+
+  // flat or mult — match a specific element by name in the label first...
+  if (l.includes('fire')) return C.fire;
+  if (l.includes('cold')) return C.cold;
+  if (l.includes('lightning')) return C.lightning;
+  if (l.includes('necro')) return C.necrotic;
+  if (l.includes('elemental')) return C.elemental;
+  // ...an unlabeled flat rider (e.g. a named weapon-damage rider) reads as
+  // physical; an unlabeled multiplier (gear/proficiency/skill%/generic buffs)
+  // reads as a generic buff.
+  return kind === 'flat' ? C.physical : C.buff;
+}
+
 // ── Enemy loot helpers ────────────────────────────────────────────────────────
 // RARITY_COLORS is imported from styles.js — the single shared source (see
 // that file's comment). Don't redefine it here again.
@@ -934,62 +990,80 @@ export default class CombatScene extends Phaser.Scene {
     isSplash,
     typeBreakdown
   }) {
+    const C = DAMAGE_TOOLTIP_COLORS;
     const lines = [];
     const title = `${ability?.name || ability?.id || 'Damage'} Breakdown`;
 
     const actorName = user?.name || 'Source';
     const targetName = target?.name || 'Target';
-    lines.push(`Source: ${actorName}`);
-    lines.push(`Target: ${targetName}`);
+    lines.push({ text: `Source: ${actorName}`, color: C.muted });
+    lines.push({ text: `Target: ${targetName}`, color: C.muted });
 
     // Prefer the precise typed physical/elemental/necrotic mix (from
     // _resolveMitigation's typed branch) over the old isMagic boolean, which
     // could only ever say "Magic" or "Physical" and collapsed elemental and
     // necrotic into the same label. Falls back to isMagic for legacy/scalar
     // hits that never had a typed breakdown computed.
-    const typeLabel = (() => {
+    const typeInfo = (() => {
       if (!typeBreakdown) return null;
       const { physDmg = 0, elemDmg = 0, necrDmg = 0 } = typeBreakdown;
       const total = physDmg + elemDmg + necrDmg;
       if (total <= 0) return null;
       const parts = [];
-      if (physDmg > 0) parts.push(['Physical', physDmg]);
-      if (elemDmg > 0) parts.push(['Elemental', elemDmg]);
-      if (necrDmg > 0) parts.push(['Necrotic', necrDmg]);
-      if (parts.length === 1) return parts[0][0];
-      return parts.map(([name, amt]) => `${name} ${Math.round(amt / total * 100)}%`).join(' / ');
+      if (physDmg > 0) parts.push(['Physical', physDmg, C.physical]);
+      if (elemDmg > 0) parts.push(['Elemental', elemDmg, C.elemental]);
+      if (necrDmg > 0) parts.push(['Necrotic', necrDmg, C.necrotic]);
+      if (parts.length === 1) return { text: parts[0][0], color: parts[0][2] };
+      // Mixed types — no single dominant color reads honestly, so the line
+      // stays neutral; each type's own % still tells the story.
+      return {
+        text: parts.map(([name, amt]) => `${name} ${Math.round(amt / total * 100)}%`).join(' / '),
+        color: C.muted,
+      };
     })();
-    if (typeLabel) {
-      lines.push(`Type: ${typeLabel}`);
+    if (typeInfo) {
+      lines.push({ text: `Type: ${typeInfo.text}`, color: typeInfo.color });
     } else if (isMagic != null) {
-      lines.push(`Type: ${isMagic ? 'Magic' : 'Physical'}`);
+      lines.push({ text: `Type: ${isMagic ? 'Magic' : 'Physical'}`, color: isMagic ? C.elemental : C.physical });
     }
 
-    lines.push(`Final Damage: ${amount}`);
+    // Final Damage is the headline number — same orange the log line's own
+    // damage segment uses (LOG_COLORS.damage), so the tooltip's most
+    // important line visually matches what's already on screen.
+    lines.push({ text: `Final Damage: ${amount}`, color: LOG_COLORS.damage });
     if (raw != null && raw !== amount) {
       const blockedText = blocked > 0 ? ` (blocked ${blocked})` : '';
-      lines.push(`Raw Damage: ${raw}${blockedText}`);
+      lines.push({ text: `Raw Damage: ${raw}${blockedText}`, color: C.muted });
     }
 
     if (dr && Math.abs(dr) > 0.0001) {
       const pct = Math.round(dr * 100);
       const blockedText = blocked > 0 ? ` (blocked ${blocked})` : '';
-      lines.push(`Damage Reduction: ${pct}%${blockedText}`);
+      lines.push({ text: `Damage Reduction: ${pct}%${blockedText}`, color: C.reduction });
     }
 
     if (Array.isArray(formulaParts) && formulaParts.length) {
-      lines.push(`Formula: ${formulaParts.join(' ')}`);
+      // Each formula token is individually colored by its structural role
+      // (base/crit/conversion/flat/multiplier — see _formulaPartColor) —
+      // rendered as one row of side-by-side colored segments (Tooltip.js's
+      // _renderBodyLines segments support) rather than one flat-colored
+      // string, so the formula itself shows WHERE each part of the final
+      // number came from, not just the number.
+      const segs = formulaParts.map(p => (
+        typeof p === 'string' ? { text: p, color: C.muted } : p
+      ));
+      lines.push({ segments: [{ text: 'Formula: ', color: C.muted }, ...segs] });
     }
 
     if (hitChance != null) {
-      lines.push(`Hit Chance: ${Math.round(hitChance)}%`);
+      lines.push({ text: `Hit Chance: ${Math.round(hitChance)}%`, color: C.chance });
     }
 
     if (critPct != null) {
-      lines.push(`Crit Chance: ${Math.round(critPct)}%`);
+      lines.push({ text: `Crit Chance: ${Math.round(critPct)}%`, color: LOG_COLORS.crit });
     }
     if (isCrit) {
-      lines.push('Critical Hit!');
+      lines.push({ text: 'Critical Hit!', color: LOG_COLORS.crit });
     }
 
     if (typeof mpCost === 'number' && mpCost > 0) {
@@ -1003,11 +1077,11 @@ export default class CombatScene extends Phaser.Scene {
         const mult = penalty.mult ? ` ×${penalty.mult.toFixed(2)}` : '';
         mpLine += ` (penalty ${penalty.before} → ${penalty.after}${mult})`;
       }
-      lines.push(mpLine);
+      lines.push({ text: mpLine, color: C.muted });
     }
 
     if (isSplash) {
-      lines.push('Splash damage instance');
+      lines.push({ text: 'Splash damage instance', color: LOG_COLORS.keyword });
     }
 
     return {
@@ -3734,6 +3808,30 @@ export default class CombatScene extends Phaser.Scene {
         totalEnemies: this.scenarioData?.enemies?.length || 0,
         enemy: unit,
       })));
+
+      // Enrage-on-ally-death — generic, template-declared (enemyTypes.js's
+      // `enrageOnAllyDeath: { statusId, mods, unlockSkills }`), not
+      // hardcoded to any one encounter. When an enemy dies, any other still-
+      // living enemy whose OWN template declares this gets a permanent
+      // status buff and/or newly unlocked skill ids pushed onto its live
+      // `skills` array (AIProfiles.js's canUseSkill/buildAction read SKILLS
+      // by id directly, not list membership, so this alone is enough to
+      // make the new ability usable — no extra wiring needed per-encounter).
+      const survivors = (this.enemies || []).filter(e => e && e !== unit && e.status !== 'incapacitated');
+      for (const ally of survivors) {
+        const cfg = ENEMY_TYPES[ally.type]?.enrageOnAllyDeath;
+        if (!cfg) continue;
+        if (cfg.statusId) {
+          this._addStatusEffects(ally, [{ id: cfg.statusId, permanent: true, mods: cfg.mods || {} }]);
+        }
+        if (Array.isArray(cfg.unlockSkills)) {
+          ally.skills = ally.skills || [];
+          for (const sid of cfg.unlockSkills) {
+            if (!ally.skills.includes(sid)) ally.skills.push(sid);
+          }
+        }
+        this._log(`${ally.name} is enraged by ${unit.name}'s fall!`);
+      }
     }
 
     // Destroy lodge arrow sprites for this unit
@@ -3933,6 +4031,11 @@ export default class CombatScene extends Phaser.Scene {
         this._log(`${ability.name} fizzles: ${user?.name || 'user'} lacks the Initiative Gauge (needs ${ability.requiresInitiativeGauge}).`);
         return; // no costs, no cooldown, no on-act triggers
       }
+      // Local-tab hook — an encounter's script can react to its own units'
+      // initiative-gauge spenders (e.g. Cade commenting on Coordinated
+      // Volley/Molt). No-op unless this scenario's LocalChatScripts.js entry
+      // defines onInitiativeAbilityUsed.
+      this._postLocalChatLines(this.localChatScript?.onInitiativeAbilityUsed?.(this._buildLocalChatCtx({ user, ability })));
     }
 
     // --- Generic weakness-tier requirement gate (e.g. Heartpiercer needing
@@ -4688,54 +4791,13 @@ export default class CombatScene extends Phaser.Scene {
           // Fervor's fire rider, are handled earlier still, added directly
           // into dmg alongside Curse of Needles/Pressure Point Ignition.)
 
-          if (target.currentHP <= 0 && target.status !== 'incapacitated') {
-            target.status = 'incapacitated';
-
-            // Capture slot key BEFORE _onUnitKnockedOut clears target._slot,
-            // then apply any tile/slot effect right now so it fires even on a killing blow
-            // (avoids the combatEnded early-return skipping it below).
-            const _deathSlotKey = this._charSlotKey(target);
-            if (result?.slotEffect && _deathSlotKey != null) {
-              this.slotEffects = this.slotEffects || {};
-              this.slotEffects[_deathSlotKey] = this.slotEffects[_deathSlotKey] || [];
-              this.slotEffects[_deathSlotKey].push({ ...result.slotEffect });
-              this._refreshGroundSprites(_deathSlotKey);
-              this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
-              // Null out so the normal step (5) below doesn't double-apply
-              result = { ...result, slotEffect: undefined };
-            }
-
-            this._onUnitKnockedOut(target);
-            if (this.combatEnded) return; // battle ended; stop here
-
-            // onKill: effects that fire when this hit kills the target
-            if (result?.onKill) {
-              const ok = result.onKill;
-
-              // disorientAll: apply N disorient buildup to every remaining living enemy
-              if ((ok.disorientAll || 0) > 0) {
-                const side = target.isEnemy ? this.enemySlots : this.allySlots;
-                const living = (side || []).filter(s => s?.char && s.char.status !== 'incapacitated' && s.char !== target);
-                living.forEach(s => {
-                  this._applyWeaknessBuildup(s.char, { disorient: ok.disorientAll }, { user });
-                });
-                if (living.length > 0) this._log(`Sandstorm — ${ok.disorientAll} disorient sweeps the remaining enemies!`);
-              }
-
-              // initiativeGained: add to attacker's initiative gauge
-              if ((ok.initiativeGained || 0) > 0) {
-                user.initiative = (user.initiative || 0) + ok.initiativeGained;
-                this._log(`${user?.name ?? 'The slinger'} reads the opening — +${ok.initiativeGained} initiative!`);
-              }
-
-              // resetBonusAction: restore the attacker's bonus action point
-              if (ok.resetBonusAction && user?.actionsLeft) {
-                user.actionsLeft.bonus = 1;
-                this._log(`${user?.name ?? 'The slinger'}'s bonus action resets!`);
-              }
-            }
-          }
-
+          // Damage number + combat-log line — emitted BEFORE the death/
+          // combat-end handling below. This used to run AFTER that block,
+          // so a killing blow (which can set this.combatEnded and hit the
+          // early `return` a few lines down) skipped logging its own damage
+          // entirely — the deciding hit of the fight was the one hit that
+          // never showed a number. Same fix shape as the slot-effect log
+          // right below, which had to move earlier for the same reason.
           this._showFloatingNumber?.(dmg, target, false, isCrit);
 
           const bd = getLastDamageBreakdown?.() || null;
@@ -4748,20 +4810,20 @@ export default class CombatScene extends Phaser.Scene {
             let baseShown = false;
             for (const e of bd) {
               if (e.label === 'base' && !baseShown) {
-                formulaParts.push(String(e.value));
+                formulaParts.push({ text: String(e.value), color: _formulaPartColor('base', e.label) });
                 baseShown = true;
               } else if (e.label === 'crit') {
                 const m = (e.mult != null) ? e.mult : (e.to && e.from ? (e.to / e.from) : 1.5);
-                formulaParts.push(`×${(+m).toFixed(2)}`);
+                formulaParts.push({ text: `×${(+m).toFixed(2)}`, color: _formulaPartColor('crit', e.label) });
               } else if (e.label && e.convert != null) {
                 // Redistribution between typed buckets, not new damage — shown
                 // in parens so it doesn't read as an addition to the total
                 // (e.g. "(3 phys→ele)", not "+3 phys→ele").
-                formulaParts.push(`(${e.convert} ${e.label})`);
+                formulaParts.push({ text: `(${e.convert} ${e.label})`, color: _formulaPartColor('convert', e.label) });
               } else if (e.label && e.flat) {
-                formulaParts.push(`+${e.flat} ${e.label}`);
+                formulaParts.push({ text: `+${e.flat} ${e.label}`, color: _formulaPartColor('flat', e.label) });
               } else if (e.label && e.mult && e.from != null && e.to != null) {
-                formulaParts.push(`×${(e.mult).toFixed(2)} ${e.label}`);
+                formulaParts.push({ text: `×${(e.mult).toFixed(2)} ${e.label}`, color: _formulaPartColor('mult', e.label) });
               }
 
             }
@@ -4813,6 +4875,61 @@ export default class CombatScene extends Phaser.Scene {
           damageSegments.push({ text: '.', color: LOG_COLORS.default });
           this._log({ segments: damageSegments });
 
+          // Local-tab hook — an encounter's script can react to its own
+          // units landing a crit (e.g. Cade reacting to a beast's crit).
+          // No-op unless this scenario's LocalChatScripts.js entry defines
+          // onCrit.
+          if (isCrit) {
+            this._postLocalChatLines(this.localChatScript?.onCrit?.(this._buildLocalChatCtx({ user, target, ability })));
+          }
+
+          if (target.currentHP <= 0 && target.status !== 'incapacitated') {
+            target.status = 'incapacitated';
+
+            // Capture slot key BEFORE _onUnitKnockedOut clears target._slot,
+            // then apply any tile/slot effect right now so it fires even on a killing blow
+            // (avoids the combatEnded early-return skipping it below).
+            const _deathSlotKey = this._charSlotKey(target);
+            if (result?.slotEffect && _deathSlotKey != null) {
+              this.slotEffects = this.slotEffects || {};
+              this.slotEffects[_deathSlotKey] = this.slotEffects[_deathSlotKey] || [];
+              this.slotEffects[_deathSlotKey].push({ ...result.slotEffect });
+              this._refreshGroundSprites(_deathSlotKey);
+              this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+              // Null out so the normal step (5) below doesn't double-apply
+              result = { ...result, slotEffect: undefined };
+            }
+
+            this._onUnitKnockedOut(target);
+            if (this.combatEnded) return; // battle ended; stop here
+
+            // onKill: effects that fire when this hit kills the target
+            if (result?.onKill) {
+              const ok = result.onKill;
+
+              // disorientAll: apply N disorient buildup to every remaining living enemy
+              if ((ok.disorientAll || 0) > 0) {
+                const side = target.isEnemy ? this.enemySlots : this.allySlots;
+                const living = (side || []).filter(s => s?.char && s.char.status !== 'incapacitated' && s.char !== target);
+                living.forEach(s => {
+                  this._applyWeaknessBuildup(s.char, { disorient: ok.disorientAll }, { user });
+                });
+                if (living.length > 0) this._log(`Sandstorm — ${ok.disorientAll} disorient sweeps the remaining enemies!`);
+              }
+
+              // initiativeGained: add to attacker's initiative gauge
+              if ((ok.initiativeGained || 0) > 0) {
+                user.initiative = (user.initiative || 0) + ok.initiativeGained;
+                this._log(`${user?.name ?? 'The slinger'} reads the opening — +${ok.initiativeGained} initiative!`);
+              }
+
+              // resetBonusAction: restore the attacker's bonus action point
+              if (ok.resetBonusAction && user?.actionsLeft) {
+                user.actionsLeft.bonus = 1;
+                this._log(`${user?.name ?? 'The slinger'}'s bonus action resets!`);
+              }
+            }
+          }
         }
       }
 
