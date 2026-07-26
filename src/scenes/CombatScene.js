@@ -4208,6 +4208,28 @@ export default class CombatScene extends Phaser.Scene {
       if (outcome?.scopedDebuffId) preHitScopedDebuffId = outcome.scopedDebuffId;
     }
 
+    // Ally "used a projectile skill" reaction trigger (e.g. Volley) — a
+    // friendly-side counterpart to self_hit/ally_hit below: those fire when
+    // someone gets HIT by a hostile action, this fires when a TEAMMATE lands
+    // a successful cast of their own projectile-tagged skill, regardless of
+    // whether it hits or misses (that's resolved later, this is about the
+    // ally having USED it). Only real primary casts reach here — every
+    // fizzle gate above this point already returned early, and recasts
+    // (options.isRepeat) / movement don't count as a fresh "use".
+    if (!isMovement && !options?.isRepeat && (ability?.tags || []).includes('projectile')) {
+      try {
+        const sideSlots = user?.isEnemy ? this.enemySlots : this.allySlots;
+        const teammatesOfUser = (sideSlots || [])
+          .map(s => s?.char)
+          .filter(a => a && a !== user && a.status !== 'incapacitated');
+        for (const ally of teammatesOfUser) {
+          this.bus?.emit('ally_projectile_used', { user, target, ability, ally });
+        }
+      } catch (e) {
+        console.error('[ally_projectile_used emit error]', e);
+      }
+    }
+
     // Snapshot weakness tiers BEFORE any new buildup
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
 

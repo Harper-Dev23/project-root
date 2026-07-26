@@ -14317,12 +14317,20 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage (125% vs a Chilled target, 175% vs Frostbitten). Applies Cold. 50% chance to repeat at 50% damage if the target is Shocked (Lightning T2) — a 25% average damage increase while Shocked."
   },
 
+  // Simplified from the original "copy and refire the ally's own skill"
+  // design (too complex to balance) — now a flat, self-contained payoff:
+  // once armed, the next time ANY ally lands a bow/sling/gun (projectile-
+  // tagged) skill, this archer fires 2 arrows of their own at that ally's
+  // target, each at 35% weapon damage with 50 buildup to a random PHYSICAL
+  // weakness family. Wired through the engine's 'ally_projectile_used' bus
+  // event (CombatScene.js) + ReactionSystem._onAllyProjectileUsed, a
+  // friendly-side counterpart to the hostile-only self_hit/ally_hit pair.
   'volley': {
     id: "volley",
     name: "Volley",
     type: "weapon",
     mechanic: "reaction",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 14,
@@ -14333,14 +14341,56 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "reaction"],
     apply: (attacker) => {
-      attacker.statusEffects = attacker.statusEffects || [];
-      attacker.statusEffects.push({ id: 'volley_armed', turns: 1, onAllyProjectile: { copyCount: 2, effectiveness: 0.35 } });
-      return {
-        amount: 0,
-        log: `${attacker?.name ?? 'Archer'} readies Volley — will echo the next ally projectile twice at 35%. (Echo trigger: TODO)`,
-      };
+      return { armReaction: true, consumeOn: 'trigger', log: `${attacker?.name ?? 'Archer'} readies Volley.` };
     },
-    description: "Bonus: arm Volley — next ally bow/sling/gun skill copied twice at 35%. (Ally-projectile event hookup: TODO)"
+    reaction: {
+      trigger: 'ally_projectile_used',
+      cooldownOn: 'trigger',
+      exec: ({ owner, target, scene }) => {
+        if (!owner || !target) return;
+        const arrow = SKILLS?.volley_arrow;
+        if (!arrow) return;
+        scene?._log?.(`${owner.name} looses Volley — two arrows streak toward ${target.name}!`);
+        const fire = () => {
+          if (!owner || owner.status === 'incapacitated') return;
+          if (!target || target.status === 'incapacitated') return;
+          scene._applyAbilityToTarget(owner, target, arrow, { isReaction: true, tags: arrow.tags || [] });
+        };
+        scene.time?.delayedCall(50, fire);
+        scene.time?.delayedCall(150, fire);
+      },
+    },
+    description: "Bonus: ready Volley. The next time an ally lands a bow/sling/gun skill, fire 2 arrows at their target — each dealing 35% weapon damage and applying 50 buildup to a random physical weakness (Expose/Lacerate/Disorient)."
+  },
+
+  // Not player-selectable (no entry in any class's skill list) — purely the
+  // per-arrow payload Volley's reaction.exec fires twice. Kept as its own
+  // skill (rather than reusing volley's own `apply`) because `apply` is
+  // already spoken for by the arming cast (returns { armReaction:true }) —
+  // same reason Cover Strike/Riposte fire `basic_attack` instead of
+  // themselves from their own exec().
+  'volley_arrow': {
+    id: "volley_arrow",
+    name: "Volley",
+    type: "weapon",
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.volley_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 35, skillLabel: `${ability?.name || 'Volley'} weapon damage (35%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const physicalFamilies = ['expose', 'lacerate', 'disorient'];
+      const fam = physicalFamilies[Math.floor(Math.random() * physicalFamilies.length)];
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { [fam]: 50 } };
+    },
+    description: "Deals 35% weapon damage and applies 50 buildup to a random physical weakness (Expose/Lacerate/Disorient)."
   },
 
   'hunters_mark': {

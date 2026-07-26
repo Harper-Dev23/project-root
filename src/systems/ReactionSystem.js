@@ -73,6 +73,13 @@ export default class ReactionSystem {
   install() {
     this.bus?.on?.('self_hit', payload => this._onEvent('self_hit', payload));
     this.bus?.on?.('ally_hit', payload => this._onEvent('ally_hit', payload));
+    // Friendly-side trigger (e.g. Volley) — a teammate USED a projectile
+    // skill, as opposed to self_hit/ally_hit's "someone got HIT". Kept as
+    // its own handler rather than folded into _onEvent since that one's
+    // hostile-teams check (`!!attacker?.isEnemy === !!owner?.isEnemy`
+    // returning early) is specifically wrong here: attacker and reactor are
+    // on the SAME side by construction for this event.
+    this.bus?.on?.('ally_projectile_used', payload => this._onAllyProjectileUsed(payload));
   }
 
 
@@ -148,6 +155,54 @@ export default class ReactionSystem {
 
   _onSelfHit(payload) {
     this._onEvent('self_hit', payload);
+  }
+
+  // Friendly counterpart to _onEvent — reactor (`ally`) and the skill's
+  // user are teammates by construction (see the emission-side gate in
+  // CombatScene.js), so there's no hostile-teams check here at all, unlike
+  // _onEvent's very first real check.
+  _onAllyProjectileUsed({ user, target, ability, ally }) {
+    if (!ally || ally.status === 'incapacitated') return;
+    if (Array.isArray(ally.statusEffects) && ally.statusEffects.some(se => se?.blocksAction)) return;
+
+    const st = this._state(ally);
+    if (!st || (st.triggersRemaining | 0) <= 0) return;
+
+    const pool = this._resolvePrepared(ally);
+    const candidates = pool
+      .map(id => SKILLS[id])
+      .filter(Boolean)
+      .map(s => ({ s, trig: getTriggerForEvent(s, 'ally_projectile_used') }))
+      .filter(x =>
+        x.trig &&
+        this._meetsReqs(ally, x.s) &&
+        (DevFlags.isNoCooldownEnabled() || !this.scene?._isSkillOnCooldown?.(ally, x.s.id))
+      )
+      .sort((a, b) => (b.trig.priority || 0) - (a.trig.priority || 0));
+
+    if (!candidates.length) return;
+    const chosen = candidates[0].s;
+
+    if (typeof chosen?.reaction?.canTrigger === 'function') {
+      const ok = chosen.reaction.canTrigger({
+        owner: ally, attacker: user, target, scene: this.scene,
+        event: 'ally_projectile_used', sourceAbility: ability,
+      });
+      if (!ok) return;
+    }
+
+    this._fireReaction({
+      owner: ally,
+      attacker: user,
+      target,
+      reactSkill: chosen,
+      evt: 'ally_projectile_used',
+      incomingMutable: null,
+      sourceAbility: ability,
+      sourceIntent: null,
+    });
+
+    st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
   }
 
 
@@ -241,7 +296,7 @@ export default class ReactionSystem {
     st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
   }
 
-  _fireReaction({ owner, attacker, reactSkill, evt, incomingMutable, sourceAbility, sourceIntent }) {
+  _fireReaction({ owner, attacker, target, reactSkill, evt, incomingMutable, sourceAbility, sourceIntent }) {
     const cooldownOn = reactSkill?.reaction?.cooldownOn || 'trigger';
 
     // Reaction action point + MP cost are both paid HERE, at trigger time —
@@ -266,6 +321,7 @@ export default class ReactionSystem {
         reactSkill.reaction.exec({
           owner,
           attacker,
+          target,
           scene: this.scene,
           incoming: incomingMutable,
           event: evt,
