@@ -1376,6 +1376,11 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Immediately re-sync any occupancy-continuous zone effect (e.g. Frozen
+    // Quake's elemental vulnerability) against the DESTINATION tile — same
+    // "no delay" standard the immobilize check just above already has.
+    this._syncZoneElementalVuln(unit);
+
     return true;
   }
 
@@ -4896,6 +4901,7 @@ export default class CombatScene extends Phaser.Scene {
               this.slotEffects[_deathSlotKey].push({ ...result.slotEffect });
               this._refreshGroundSprites(_deathSlotKey);
               this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+              this._syncZoneElementalVuln(target);
               // Null out so the normal step (5) below doesn't double-apply
               result = { ...result, slotEffect: undefined };
             }
@@ -5101,6 +5107,11 @@ export default class CombatScene extends Phaser.Scene {
         this.slotEffects[sid].push({ ...result.slotEffect });
         this._refreshGroundSprites(sid);
         this._log(`${target.name}'s tile is affected by ${result.slotEffect.id} for ${result.slotEffect.turns} turns.`);
+        // Sync any occupancy-continuous effect (e.g. Frozen Quake's
+        // elemental vulnerability) immediately, the same instant the zone
+        // appears under them — not just at their next turn boundary. Same
+        // "no delay" standard immobilize already has.
+        this._syncZoneElementalVuln(target);
       }
     }
 
@@ -6257,18 +6268,6 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
 
-      // Elemental vulnerability while standing in the zone (e.g. Frozen
-      // Quake's Lightning synergy: if the target was already Zapped when the
-      // zone was cast, it also makes anyone standing in it take +20%
-      // elemental damage). Refreshed every tick via _addStatusEffects'
-      // same-id coalescing, so it naturally lapses within a turn of leaving.
-      if (!died && eff.elementalVulnPct > 0) {
-        this._addStatusEffects(char, [{
-          id: 'zone_elemental_vuln', turns: 1,
-          mods: { ElementalResist: -eff.elementalVulnPct },
-        }]);
-      }
-
       if (opts.skipTurnDecrement) {
         stillActive.push(eff);
         continue;
@@ -6279,7 +6278,58 @@ export default class CombatScene extends Phaser.Scene {
     }
     this.slotEffects[slotKey] = stillActive;
     this._refreshGroundSprites(slotKey);
+    this._syncZoneElementalVuln(char);
     return { died };
+  }
+
+  // Keeps a character's `zone_elemental_vuln` status in sync with whether
+  // they're CURRENTLY standing on a tile with an active elementalVulnPct
+  // zone (e.g. Frozen Quake's Lightning synergy) — granted as `permanent`
+  // (no turns countdown at all) rather than a turn-based grant, and
+  // explicitly stripped the moment they no longer qualify. This is
+  // deliberately the same shape as how immobilize already works
+  // (_moveUnitToSlot checks the zone's own live state at the moment of
+  // movement, not a per-character status with its own expiry) — the
+  // skill's own description says the zone simply "makes anyone standing in
+  // it take +20% elemental damage," with no turn-based qualifier at all
+  // (contrast the Cold buildup line right next to it, which explicitly DOES
+  // say "at the end of their turn") — a continuous property of occupancy,
+  // not a periodic tick. A turns-based grant here was tried first and had
+  // two real bugs in a row (destroyed itself same-tick; only reinforced at
+  // one end of the turn instead of both), which is exactly the class of bug
+  // a live occupancy check has no way to have. Called at BOTH ends of every
+  // character's turn (_applySlotEffectsTick above, and
+  // _applySlotEffectsStartOfTurn below) so a mid-turn move in or out of the
+  // zone is corrected within that same turn, same as immobilize already is.
+  _syncZoneElementalVuln(char) {
+    if (!char) return;
+    const slotKey = this._charSlotKey(char);
+    const effects = slotKey ? (this.slotEffects?.[slotKey] || []) : [];
+    const vulnEff = effects.find(e => e?.elementalVulnPct > 0);
+    if (vulnEff) {
+      this._addStatusEffects(char, [{
+        id: 'zone_elemental_vuln', permanent: true,
+        mods: { ElementalResist: -vulnEff.elementalVulnPct },
+      }]);
+    } else {
+      this._clearScopedStatus(char, 'zone_elemental_vuln');
+    }
+  }
+
+  // Re-applies a hazard zone's occupant-affecting effects at the START of
+  // the occupant's OWN turn — a deliberate exception to the normal "zones
+  // tick at end-of-turn so the occupant gets a full turn to escape first"
+  // convention (_applySlotEffectsTick above). That convention is right for
+  // most zones, but a genuine TRAP zone (e.g. Frozen Quake — immobilizes,
+  // then punishes) is supposed to prevent escape, not grant a free turn
+  // before it starts affecting anyone. Immobilize itself needs no help here
+  // — it's already a live check against the zone's own active `turns` count
+  // at movement-attempt time (_moveUnitToSlot). The elemental-vulnerability
+  // side is now ALSO a live, continuous sync (_syncZoneElementalVuln) rather
+  // than a one-time reinforcement, so this runs unconditionally for anyone
+  // standing on a zoned tile, not gated behind a per-zone opt-in flag.
+  _applySlotEffectsStartOfTurn(char) {
+    this._syncZoneElementalVuln(char);
   }
 
   // ---------- Slot key helpers ----------
@@ -7624,7 +7674,16 @@ export default class CombatScene extends Phaser.Scene {
     const ensureTargetIfNeeded = (skillId, givenTarget) => {
       const ability = SKILLS[skillId];
       if (!ability) return null;
-      if (!ability.requiresTarget) return null; // movement / self skills usually false
+      // Movement / self-buff skills usually declare requiresTarget:false —
+      // but that doesn't mean "no target at all," it means "no OPPOSING
+      // target is required." AI profiles (fire_heated_guard, ice_icy_guard,
+      // ember_fire_ward, etc.) already correctly pass the NPC itself as
+      // `action.target` for exactly this case; this used to unconditionally
+      // discard that and return null regardless, which made EVERY enemy
+      // self-buff routed through this path a silent no-op the whole way
+      // down to _addStatusEffects(target, ...) (which itself no-ops on a
+      // null target) — a real, pre-existing bug, not just the new wards.
+      if (!ability.requiresTarget) return givenTarget || null;
 
       // Taunted: force target to whoever taunted this NPC
       const tauntEffect = (npc?.statusEffects || []).find(se => se?.id === 'taunted' && (se.turns || 0) > 0);
@@ -7847,6 +7906,11 @@ export default class CombatScene extends Phaser.Scene {
         this._refreshGroundSprites(key);
       }
     }
+
+    // Trap zones (Frozen Quake, etc. — see the function's own comment)
+    // reinforce their affliction right as this character's own turn begins,
+    // before _startTurnStatusEffects/_startTurnWeakness run.
+    this._applySlotEffectsStartOfTurn(char);
 
     const se = this._startTurnStatusEffects(char);    // NEW
     if (this.combatEnded || se.died) return;

@@ -125,11 +125,6 @@ export const StatusEffects = {
     name: 'Steady Breath',
     icon: 'B'
   },
-  eagle_focus: {
-    id: 'eagle_focus',
-    name: 'Eagle Focus',
-    icon: 'E'
-  },
   steady_aim: {
     id: 'steady_aim',
     name: 'Steady Aim',

@@ -581,7 +581,7 @@ export const AI_PROFILES = {
         if (target) return buildAction('ember_inferno_surge', target);
       }
       if (canUseSkill(npc, 'ember_fire_ward') && !hasStatus(npc, 'ember_fire_ward')) {
-        return buildAction('ember_fire_ward', null);
+        return buildAction('ember_fire_ward', npc);
       }
       if (canUseSkill(npc, 'fire_heated_guard') && !hasStatus(npc, 'heated_guard')) {
         return buildAction('fire_heated_guard', npc);
@@ -629,7 +629,7 @@ export const AI_PROFILES = {
         if (target) return buildAction('rime_absolute_zero', target);
       }
       if (canUseSkill(npc, 'rime_cold_ward') && !hasStatus(npc, 'rime_cold_ward')) {
-        return buildAction('rime_cold_ward', null);
+        return buildAction('rime_cold_ward', npc);
       }
       if (canUseSkill(npc, 'ice_icy_guard') && !hasStatus(npc, 'icy_guard')) {
         return buildAction('ice_icy_guard', npc);

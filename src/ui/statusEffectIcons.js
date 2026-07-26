@@ -27,7 +27,6 @@ const STATUS_ICON_LIBRARY = {
   ward_focus: { glyph: 'WD', name: 'Ward Focus', fg: '#f1e4ff', bg: '#281c34', border: '#8d6bc3', description: 'Sharpened magical wards.' },
   steady_breath: { glyph: 'SB', name: 'Steady Breath', fg: '#e6f3ff', bg: '#202e38', border: '#6aa8d2', description: 'Controlled breathing for focus.' },
   steady_aim: { glyph: 'SA', name: 'Steady Aim', fg: '#fce6c9', bg: '#2f2618', border: '#c08c49', description: 'Lined up for a precise shot.' },
-  eagle_focus: { glyph: 'EF', name: 'Eagle Focus', fg: '#d9f2ff', bg: '#142631', border: '#6fa8d2', description: 'Eyes locked onto a target.' },
   focus_meditation: { glyph: 'FM', name: 'Focus Meditation', fg: '#e9e1ff', bg: '#241d35', border: '#8a6dc0', description: 'Calming mind and restoring mana.' },
   roaring_focus: { glyph: 'RF', name: 'Roaring Focus', fg: '#ffe6c9', bg: '#352218', border: '#c27a46', description: 'Ferocity channeled into focus.' },
   whip_rhythm: { glyph: 'WR', name: 'Whip Rhythm', fg: '#f7e4ff', bg: '#2a1b33', border: '#a16cc9', description: 'Combo rhythm building power.' },

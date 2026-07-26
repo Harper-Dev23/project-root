@@ -5416,634 +5416,6 @@ Object.assign(RAW_SKILLS, {
     description: "A trick shot — REMOVED."
   */
   // ===============================
-  // v3.21 - Bow (2h) (13)
-  // ===============================
-
-  // -------- Generation (7) --------
-  'pinning_shot': {
-    id: "pinning_shot",
-    name: "Pinning Shot",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "expose"],
-    emitTagsOnUse: ["projectile"],
-    buildupHint: { expose: 60 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.pinning_shot;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const meter = target?.weakness?.meters?.expose || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      let buildup = ability?.buildupHint?.expose ?? 60;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.08 * exposeTier));
-        buildup += Math.max(5, Math.floor(6 * intensity));
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: buildup },
-      };
-    },
-    description: "A precise shaft that opens the target's guard and builds Expose."
-  },
-
-  'barbed_arrow': {
-    id: "barbed_arrow",
-    name: "Barbed Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "lacerate"],
-    emitTagsOnUse: ["projectile"],
-    buildupHint: { lacerate: 700 }, //testing
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 25 } } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.barbed_arrow;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let buildup = ability?.buildupHint?.lacerate ?? 700; //testing
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
-        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.lacerate ?? 25;
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { lacerate: buildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "Barbed head tears flesh, seeding Bleed-worse on an Exposed foe."
-  },
-
-  'tainted_arrow': {
-    id: "tainted_arrow",
-    name: "Tainted Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 3,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "toxic"],
-    emitTagsOnUse: ["projectile"],
-    buildupHint: { toxic: 60 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 1, buff: { addBuildup: { toxic: 20 } } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.tainted_arrow;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      let buildup = ability?.buildupHint?.toxic ?? 60;
-      if (exposeTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.1 * exposeTier));
-        buildup += ability?.rewardIfWeak?.buff?.addBuildup?.toxic ?? 20;
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { toxic: buildup },
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "A resin-coated tip that poisons the wound; Exposed targets take more buildup."
-  },
-
-  'frosthead_arrow': {
-    id: "frosthead_arrow",
-    name: "Frosthead Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "INT",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "cold"],
-    emitTagsOnUse: ["projectile"],
-    buildupHint: { cold: 60 },
-    rewardIfTierCross: [{ family: "cold", tier: 1, debuff: { speedDownPct: 10, turns: 1 } }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.frosthead_arrow;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'cold',
-        skipGearMultiplier: true,
-      }));
-
-      const coldTier = target?.weakness?.tiers?.cold || 0;
-      const meter = target?.weakness?.meters?.cold || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      let buildup = ability?.buildupHint?.cold ?? 60;
-      if (coldTier >= 1) {
-        amount = Math.floor(amount * (1 + 0.12 * coldTier));
-        buildup += Math.max(4, Math.floor(6 * intensity));
-      }
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: 'cold',
-        buildup: { cold: buildup },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A chilled arrow; crossing Cold T1 briefly slows the target."
-  },
-
-  'marking_volley': {
-    id: "marking_volley",
-    name: "Marking Volley",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "expose", "aoe"],
-    emitTagsOnUse: ["projectile"],
-    aoe: { shape: "column", scale: 1 },
-    buildupHint: { expose: 40 },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.marking_volley;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const baseBuildup = ability?.buildupHint?.expose ?? 40;
-      const splash = [];
-
-      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const neighbors = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const splashAmount = Math.max(1, Math.floor(amount * 0.75));
-          const splashBuildup = Math.max(1, Math.floor(baseBuildup * 0.7));
-          neighbors.forEach(char => {
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              buildup: { expose: splashBuildup },
-              tags: ability?.tags,
-            });
-          });
-        }
-      }
-
-      return {
-        ...roll,
-        amount,
-        buildup: { expose: baseBuildup },
-        splash: splash.length ? splash : undefined,
-      };
-    },
-    description: "Loose several shafts to lightly Expose every foe down the line."
-  },
-
-  'lodging_arrow': {
-    id: "lodging_arrow",
-    name: "Lodging Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "lodge"],
-    emitTagsOnUse: ["projectile", "lodge"],
-    buildupHint: { lodged: 90 },
-    statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.lodging_arrow;
-      const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : undefined;
-
-      return {
-        ...roll,
-        amount,
-        buildup: { lodged: ability?.buildupHint?.lodged ?? 90 },
-        statusEffects,
-      };
-    },
-    description: "A broadhead designed to stick; leaves an arrow lodged in the target."
-  },
-
-  'eagle_focus': {
-    id: "eagle_focus",
-    name: "Eagle Focus",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 0,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["support", "mp", "stance"],
-    statusEffects: [{ id: "eagle_focus", turns: 1, mpRestoreFlat: 2, nextProjectileAccPct: 10 }],
-    apply: (attacker) => {
-      const ability = SKILLS?.eagle_focus;
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : [];
-
-      return {
-        amount: 0,
-        statusEffects,
-      };
-    },
-    description: "Steady your aim-restore a little MP and line up your next shot."
-  },
-
-  // -------- Payoff (6) --------
-  'shaft_splinter': {
-    id: "shaft_splinter",
-    name: "Shaft Splinter",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "consume"],
-    requiresWeakness: { family: "lodged", tierAtLeast: 1 },
-    consumeWeakness: ["lodged"],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.shaft_splinter;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const meter = target?.weakness?.meters?.lodged || 0;
-      const tier = target?.weakness?.tiers?.lodged || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      const burst = Math.max(0, Math.floor((meter / 12) + (tier * 8) + Math.max(0, intensity - 1) * 8));
-      amount += burst;
-
-      return {
-        ...roll,
-        amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        log: burst ? `${attacker?.name || 'The archer'} splinters the lodged arrow for +${burst} damage.` : undefined,
-      };
-    },
-    description: "Strike the embedded arrow to splinter it internally for burst damage."
-  },
-
-  'ice_lance': {
-    id: "ice_lance",
-    name: "Ice Lance",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "INT",
-    requiredValue: 14,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "cold", "amplify"],
-    requiresWeakness: { family: "cold", tierAtLeast: 1 },
-    rewardIfWeak: { family: "cold", tierAtLeast: 2, buff: { armorDownPct: 12, turns: 2 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.ice_lance;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        element: 'cold',
-        skipGearMultiplier: true,
-      }));
-
-      const meter = target?.weakness?.meters?.cold || 0;
-      const tier = target?.weakness?.tiers?.cold || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier >= 1) {
-        amount = Math.floor(amount * (1 + 0.15 * tier));
-      }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
-      }
-
-      return {
-        ...roll,
-        amount,
-        isMagic: true,
-        element: 'cold',
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "A condensed shard of frost; at higher Cold tiers, it fractures armor."
-  },
-
-  'skull_pierce': {
-    id: "skull_pierce",
-    name: "Skull Pierce",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "STR",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "disorient", "finisher"],
-    requiresWeakness: { family: "disorient", tierAtLeast: 1 },
-    rewardIfWeak: { family: "disorient", tierAtLeast: 2, buff: { damagePct: 18 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.skull_pierce;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const meter = target?.weakness?.meters?.disorient || 0;
-      const tier = target?.weakness?.tiers?.disorient || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (tier >= 1) {
-        amount = Math.floor(amount * (1 + 0.18 * tier));
-      }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
-      }
-      if (tier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
-        const bonus = ability?.rewardIfWeak?.buff?.damagePct ?? 18;
-        amount = Math.floor(amount * (1 + bonus / 100));
-      }
-
-      return {
-        ...roll,
-        amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "A temple-seeking shot that thrives on a rattled foe."
-  },
-
-  'toxin_burst': {
-    id: "toxin_burst",
-    name: "Toxin Burst",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 15,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "toxic", "consume"],
-    requiresWeakness: { family: "toxic", tierAtLeast: 1 },
-    consumeWeakness: ["toxic"],
-    rewardIfWeak: { family: "toxic", tierAtLeast: 2, buff: { extraRapidTicks: 1 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.toxin_burst;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const meter = target?.weakness?.meters?.toxic || 0;
-      const tier = target?.weakness?.tiers?.toxic || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      const burst = Math.max(0, Math.floor((meter / 13) + (tier * 5) + Math.max(0, intensity - 1) * 6));
-      amount += burst;
-
-      return {
-        ...roll,
-        amount,
-        consumeWeakness: ability?.consumeWeakness ? [...ability.consumeWeakness] : undefined,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-        log: burst ? `${attacker?.name || 'The archer'} detonates the poison for +${burst} damage.` : undefined,
-      };
-    },
-    description: "Rupture the poisoned wound to force rapid ticks; adds an extra tick at higher tiers."
-  },
-
-  'perfect_release': {
-    id: "perfect_release",
-    name: "Perfect Release",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "finisher"],
-    requiresWeakness: { family: "expose", tierAtLeast: 1 },
-    rewardIfWeak: { family: "expose", tierAtLeast: 2, buff: { critMultBonus: 0.4 } },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.perfect_release;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const meter = target?.weakness?.meters?.expose || 0;
-      const intensity = Math.max(1, weaknessIntensityMult(meter) || 1);
-      if (exposeTier > 1) {
-        amount = Math.floor(amount * (1 + 0.25 * (exposeTier - 1)));
-      }
-      if (intensity > 1) {
-        amount = Math.floor(amount * (1 + Math.max(0, intensity - 1) * 0.2));
-      }
-      if (exposeTier >= (ability?.rewardIfWeak?.tierAtLeast ?? 2)) {
-        const critBonus = ability?.rewardIfWeak?.buff?.critMultBonus ?? 0.4;
-        amount = Math.floor(amount * (1 + critBonus));
-      }
-
-      return {
-        ...roll,
-        amount,
-        rewardIfWeak: cloneRewardStruct(ability?.rewardIfWeak),
-      };
-    },
-    description: "A perfect draw and loose through a narrow opening; deadlier at deeper Expose."
-  },
-
-  'weakpoint_cascade': {
-    id: "weakpoint_cascade",
-    name: "Weakpoint Cascade",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 6,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "proliferate", "aoe"],
-    emitTagsOnUse: ["projectile"],
-    aoe: { shape: "column", scale: 1 },
-    proliferateWeakness: { families: ["expose", "disorient", "cold", "toxic", "lacerate", "lodged"], to: "column", ratio: 0.4, maxTargets: 2 },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.weakpoint_cascade;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability,
-        tags: ability?.tags,
-        skipGearMultiplier: true,
-      }));
-
-      const splash = [];
-      const spreadMeta = [];
-
-      if (scene && target && typeof scene._getUnitColumn === 'function' && typeof scene._getColumnBySlotId === 'function') {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const others = sideSlots
-            ?.filter(slot => slot?.char && slot.char !== target && slot.char.status !== 'incapacitated' && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char) || [];
-          const splashAmount = Math.max(1, Math.floor(amount * 0.8));
-          const families = ability?.proliferateWeakness?.families || [];
-          let chosenFamily = null;
-          let bestTier = -1;
-          let bestMeter = 0;
-          families.forEach(fam => {
-            const tier = target?.weakness?.tiers?.[fam] || 0;
-            const meter = target?.weakness?.meters?.[fam] || 0;
-            if (tier > bestTier || (tier === bestTier && meter > bestMeter)) {
-              bestTier = tier;
-              bestMeter = meter;
-              chosenFamily = fam;
-            }
-          });
-          if (bestTier <= 0) {
-            chosenFamily = null;
-            bestMeter = 0;
-          }
-
-          const maxTargets = ability?.proliferateWeakness?.maxTargets ?? 2;
-          const ratio = ability?.proliferateWeakness?.ratio ?? 0.4;
-
-          others.forEach((char, idx) => {
-            splash.push({
-              target: char,
-              amount: splashAmount,
-              tags: ability?.tags,
-            });
-
-            if (idx < maxTargets && chosenFamily && bestMeter > 0) {
-              const transfer = Math.max(0, Math.floor(bestMeter * ratio));
-              if (transfer > 0) {
-                char.weakness = char.weakness || { meters: {}, tiers: {} };
-                char.weakness.meters = char.weakness.meters || {};
-                char.weakness.tiers = char.weakness.tiers || {};
-                char.weakness.meters[chosenFamily] = (char.weakness.meters[chosenFamily] || 0) + transfer;
-                char.weakness.tiers[chosenFamily] = weaknessTierFromMeter(char.weakness.meters[chosenFamily]);
-                spreadMeta.push({ targetId: char.id || char.name, family: chosenFamily, amount: transfer });
-              }
-            }
-          });
-        }
-      }
-
-      return {
-        ...roll,
-        amount,
-        splash: splash.length ? splash : undefined,
-        proliferatedWeakness: spreadMeta.length ? spreadMeta : undefined,
-      };
-    },
-    description: "A trick sequence that threads multiple foes, spreading the primary target's condition."
-  },
-
-  // ===============================
   // v3.21 - Gun (2h) (13)
   // ===============================
 
@@ -13435,7 +12807,15 @@ Object.assign(RAW_SKILLS, {
     cooldown: 3,
     requiresWeakness: { family: "cold", tierAtLeast: 1 },
     buildupHint: { cold: 100 },
-    // immobilizes: true — stub, requires CombatScene support to enforce
+    // immobilizes: true — enforced generically, a live check against this
+    // zone's own active state at movement-attempt time (_moveUnitToSlot),
+    // not a per-turn status grant. elementalVulnPct (below, set only when
+    // the Lightning synergy condition is met) works the same way now — see
+    // _syncZoneElementalVuln's comment (CombatScene.js) for why this needs
+    // to be a continuous, occupancy-based sync rather than a turn-based
+    // status grant, matching the description's own wording exactly
+    // ("makes anyone standing in it take +20% elemental damage" — no
+    // turn-based qualifier, unlike the Cold buildup line right next to it).
     slotEffect: { id: "frozen_quake_zone", isQuakeZone: true, element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 63 }, immobilizes: true },
     apply: (attacker, target) => {
       const ability = SKILLS?.frozen_quake;
@@ -14815,7 +14195,8 @@ Object.assign(RAW_SKILLS, {
     name: "Lodge Arrow",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 10,
@@ -14824,24 +14205,52 @@ Object.assign(RAW_SKILLS, {
     cooldown: 1,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "lodge"],
-    apply: (attacker, target) => {
+    tags: ["ranged", "attack", "projectile", "lodge"],
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.lodge_arrow;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.75);
-      const baseDamage = Math.max(1, roll.amount);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 75, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      // `amount` here IS the real, actual raw damage this hit deals — post
+      // skillPct, post crit, post AttackPower buffs — pre-target-mitigation
+      // (that happens later, generically, in CombatScene.js) and pre any
+      // Tier-3 riders like Lightning Jolt (also added later, by the engine,
+      // AFTER this function returns — so it's automatically excluded here,
+      // nothing to manually subtract).
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // The lodge banks 70% of THAT real number — not a separately
+      // recomputed roll. If this cast crits or a buff is active, the lodge
+      // is bigger too; it's simply a fraction of whatever actually landed.
+      // Kept as a direct statusEffects.push (not _addStatusEffects) since
+      // multiple lodges must each stay their own entry with their own
+      // baseDamage/scalingBonus — same convention every other lodge-
+      // generating skill (Barbed Shaft, etc.) already uses; dislodgeLodges
+      // (top of this file) reads them generically, re-mitigated against
+      // the target's CURRENT resistances only once it's actually popped.
+      const baseDamage = Math.max(1, Math.floor(amount * 0.70));
       target.statusEffects = target.statusEffects || [];
       target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10 });
       const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
+
+      // Draw the actual arrow sprite (fx_lodge_arrow) stuck in the target —
+      // _refreshLodgeSprites already existed and already handles staggering
+      // multiple arrows around the portrait with a jittered angle/radius,
+      // but it was previously only ever called from the DISLODGE side
+      // (dislodgeLodges, on remove) — nothing called it on ADD, so no arrow
+      // ever actually appeared when a lodge landed. Generic for any
+      // lodge-count on this character, not bow-specific.
+      scene?._refreshLodgeSprites?.(target);
+
       return {
-        ...roll, amount,
+        ...roll, physical, elemental, necrotic, amount,
         log: `${attacker?.name ?? 'Archer'} lodges an arrow in ${target?.name ?? 'the target'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
       };
     },
-    description: "75% damage — lodges a scaling arrow (+10% per additional lodge on dislodge)."
+    description: "Deals 75% weapon damage. Lodges an arrow worth 70% of the damage dealt — +10% more per additional lodge already on the target when it's eventually dislodged."
   },
 
   'frost_pin': {
@@ -14849,7 +14258,8 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Pin",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
+    typedDamage: true,
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 12,
@@ -14858,25 +14268,53 @@ Object.assign(RAW_SKILLS, {
     cooldown: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "cold", "buildup"],
-    buildupHint: { family: "cold", amount: 80 },
+    tags: ["ranged", "attack", "projectile", "cold"],
+    // Flat {family: amount} shape — the OLD {family:"cold", amount:80} shape
+    // rendered as garbage in the tooltip (skillTooltip.js does
+    // Object.entries(buildupHint), which expects the family name as the KEY).
+    buildupHint: { cold: 80 },
     apply: (attacker, target) => {
       const ability = SKILLS?.frost_pin;
+      // Bonus scales off the target's EXISTING Cold tier, checked BEFORE
+      // this hit's own buildup below is applied — not a self-predicted
+      // "would MY buildup cross a new tier" check like the old version had
+      // (the exact self-predicted-crossing bug rewardIfTierCross exists to
+      // avoid elsewhere, e.g. Marked Cut). rewardIfTierCross itself doesn't
+      // fit here though — that engine grants a SEPARATE bonus reward after
+      // a real post-buildup tier snapshot, it can't retroactively amplify
+      // the CURRENT hit's own damage. Reading the pre-existing tier instead
+      // sidesteps prediction entirely, same idea as the Thermal Shock check
+      // on fire_burst/ice_freeze_point.
+      const coldTier = target?.weakness?.tiers?.cold || 0;
+      let skillPct = 100;
+      if (coldTier >= 1) skillPct = 125;
+      if (coldTier >= 2) skillPct = 175; // T1 +25%, T2 an ADDITIONAL +50% on top
+
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: "cold", skipGearMultiplier: true,
-      }));
-      const coldBuildup = 80;
-      const prevTier = target?.weakness?.tiers?.cold || 0;
-      const newTier = weaknessTierFromMeter((target?.weakness?.meters?.cold || 0) + coldBuildup);
-      if (newTier > prevTier) {
-        if (newTier >= 1) amount = Math.floor(amount * 1.25);
-        if (newTier >= 2) amount = Math.floor(amount * 1.50);
-      }
-      // Lightning T2 10% repeat chance — repeat mechanic not yet implemented, noted as TODO
-      return { ...roll, amount, element: "cold", buildup: { cold: coldBuildup } };
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Lightning T2 (Shocked): 50% chance to repeat this hit at 50% damage —
+      // expected value is repeatChance × repeatScale = 0.25, a 25% average
+      // damage increase while Shocked, matching Boulder Toss's own identical
+      // Shocked-repeat numbers (same generic repeatChance/repeatScale
+      // mechanism, handled centrally by the engine; nothing else to wire up
+      // here). Was left as a 10%/50% TODO placeholder originally (only a 5%
+      // average increase); tuned to the requested 25%.
+      const lightningTier = target?.weakness?.tiers?.lightning || 0;
+      const repeatChance = lightningTier >= 2 ? 0.50 : 0;
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        buildup: { cold: 80 },
+        repeatChance, repeatScale: 0.5,
+      };
     },
-    description: "100% cold + 80 cold buildup. Tier cross: T1 +25%, T2 additional +50%. (Lightning T2 10% repeat: TODO)"
+    description: "Deals 100% weapon damage (125% vs a Chilled target, 175% vs Frostbitten). Applies Cold. 50% chance to repeat at 50% damage if the target is Shocked (Lightning T2) — a 25% average damage increase while Shocked."
   },
 
   'volley': {
@@ -15025,6 +14463,103 @@ Object.assign(RAW_SKILLS, {
     description: "FREE: restore 2 MP per lodge dislodged this turn (reads scene.lodgesDislodgedThisTurn)."
   },
 
+  // Same underlying shape as sword_1h/dagger/staff/mace_2h's own pairs
+  // (e.g. sword_1h's Marked Cut/Storm Cut, dagger's Vital Mark/Ember
+  // Strike): weapon damage + a primary family's buildup, and a BONUS
+  // buildup in a SECOND family on actually crossing a tier of the first —
+  // via the generic rewardIfTierCross engine (real post-buildup tier
+  // snapshot, not a self-predicted guess, unlike Frost Pin above, which
+  // still has the old self-predicted-crossing bug those other weapons'
+  // pairs were built specifically to avoid). Disorient primary: bow had no
+  // Disorient-buildup skill yet. Stays pure physical damage (no
+  // skillConversion) — same convention as every other weapon's pair below
+  // a magic-only weapon type (staff); a blunt/concussive arrowhead, not a
+  // spell.
+  'staggering_point': {
+    id: "staggering_point",
+    name: "Staggering Point",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 4,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "disorient"],
+    buildupHint: { disorient: 85 },
+    rewardIfTierCross: [
+      { family: "disorient", tier: 1, debuff: { addBuildup: { expose: 75 } } },
+      { family: "disorient", tier: 2, debuff: { addBuildup: { expose: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.staggering_point;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
+  },
+
+  // Same shape as Staggering Point above. Curse primary: bow had no
+  // Curse-buildup skill yet — a hunter's old ritual arrowhead, marked for
+  // something worse than a clean kill. Toxic secondary hasn't been used as
+  // a REWARD family anywhere else yet either (only ever a primary), fitting
+  // the "the curse festers into poison" idea.
+  'hexpoint_arrow': {
+    id: "hexpoint_arrow",
+    name: "Hexpoint Arrow",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 5,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "curse"],
+    buildupHint: { curse: 85 },
+    rewardIfTierCross: [
+      { family: "curse", tier: 1, debuff: { addBuildup: { toxic: 75 } } },
+      { family: "curse", tier: 2, debuff: { addBuildup: { toxic: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hexpoint_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { curse: ability?.buildupHint?.curse ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Curse. Crossing a tier also festers into sickness (bonus Toxic)."
+  },
+
   // -------- Payoff --------
 
   'piercing_release': {
@@ -15052,6 +14587,14 @@ Object.assign(RAW_SKILLS, {
       }));
       const { totalDamage, lacerateBuildup, dislodged } = dislodgeLodges(target, scene);
       amount += totalDamage;
+      // Same treatment as Lightning Jolt (CombatLogic.js) — a bonus damage
+      // source that's computed independently of this cast's own modifiers
+      // (each lodge's damage was frozen at lodge-creation time, see
+      // lodge_arrow) still gets its own visible line in the tooltip Formula
+      // instead of silently vanishing into Raw Damage.
+      if (totalDamage > 0) {
+        try { _pushBreakdown({ label: 'Lodge dislodge', flat: totalDamage }); } catch { }
+      }
       const exposeGain = dislodged * 35;
       const lacerateGain = (lacerateBuildup || 0) + dislodged * 35;
       return {
