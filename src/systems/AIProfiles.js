@@ -128,58 +128,6 @@ export const AI_PROFILES = {
     }
   },
 
-  warmup_dummy: {
-    decide(npc, scene, enemies) {
-      const { foes } = buildTargetList(npc, scene, enemies);
-      const target = weakest(foes);
-      if (!target) return null;
-      const hpPct = hpRatio(npc);
-      if (canUseSkill(npc, 'warmup_patch') && hpPct <= 0.6) {
-        return buildAction('warmup_patch', npc);
-      }
-      if (canUseSkill(npc, 'warmup_swing')) {
-        return buildAction('warmup_swing', target);
-      }
-      if (canUseSkill(npc, 'dummy_sway')) {
-        return buildAction('dummy_sway', null);
-      }
-      return null;
-    }
-  },
-
-  defensive_dummy: {
-    decide(npc, scene, enemies) {
-      const { allies, foes } = buildTargetList(npc, scene, enemies);
-      const allyToHeal = pickTarget(allies, { preferLowHP: true, noise: 1 });
-      if (canUseSkill(npc, 'defender_small_heal') && allyToHeal) {
-        return buildAction('defender_small_heal', allyToHeal);
-      }
-      if (canUseSkill(npc, 'defender_guard_raise') && !hasStatus(npc, 'defender_guard')) {
-        return buildAction('defender_guard_raise', npc);
-      }
-      const exposedTarget = highestWeakness(foes, 'expose', 1) || weakest(foes);
-      if (canUseSkill(npc, 'defender_taunt') && exposedTarget) {
-        return buildAction('defender_taunt', exposedTarget);
-      }
-      return null;
-    }
-  },
-
-  offensive_dummy: {
-    decide(npc, scene, enemies) {
-      const { foes } = buildTargetList(npc, scene, enemies);
-      const target = weakest(foes);
-      if (!target) return null;
-      if (canUseSkill(npc, 'offender_expose_strike')) {
-        return buildAction('offender_expose_strike', target);
-      }
-      if (canUseSkill(npc, 'dummy_shuffle') && Math.random() < 0.45) {
-        return buildAction('dummy_shuffle', null);
-      }
-      return null;
-    }
-  },
-
   fighter_dummy: {
     decide(npc, scene, enemies) {
       // Guardian's Stand — armed once and left armed (idempotent, same

@@ -508,7 +508,10 @@ export function rebuildCharacterStats(character) {
       necroticDamagePercent: gearEffects.necroticDamagePercent,
       healingPercent: gearEffects.healingPercent,
       resilience: gearEffects.resilience,
-      weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent }
+      weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent },
+      physicalBuildupPercent: gearEffects.physicalBuildupPercent,
+      elementalBuildupPercent: gearEffects.elementalBuildupPercent,
+      necroticBuildupPercent: gearEffects.necroticBuildupPercent
     }
   };
 
@@ -521,6 +524,21 @@ export function rebuildCharacterStats(character) {
     healingPercent: gearEffects.healingPercent,
     resilience: gearEffects.resilience,
     weaponBuildupPercent: { ...gearEffects.weaponBuildupPercent },
+    // Armor's category-level buildup% affixes (physical/elemental/necrotic —
+    // see ItemFactory.js's Forceful/Charged/Festering-style prefixes) were
+    // being correctly accumulated into the LOCAL gearEffects variable above
+    // (lines ~424-426) but never copied onto the character's real, read
+    // gearEffects object — every consumer (this panel's Buildup% row AND
+    // _applyWeaknessBuildup's real combat gear-bonus check, both in
+    // CombatScene.js) reads character.gearEffects directly, so the bonus
+    // silently evaluated to 0 everywhere despite rolling correctly on gear
+    // and showing correctly in the item's OWN tooltip. weaponBuildupPercent
+    // (the sibling per-family bonus, from weapon suffixes) was NOT missing —
+    // that's why weapon-based buildup% bonuses worked while armor-based
+    // physical/elemental/necrotic ones silently did nothing.
+    physicalBuildupPercent: gearEffects.physicalBuildupPercent,
+    elementalBuildupPercent: gearEffects.elementalBuildupPercent,
+    necroticBuildupPercent: gearEffects.necroticBuildupPercent,
     lifeStealPct: gearEffects.lifeStealPct,
     // Jewelry passives — read by CombatScene for battle-start effects and proc rolls
     physToElemPercent: gearEffects.physToElemPercent,

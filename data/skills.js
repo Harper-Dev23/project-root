@@ -52,9 +52,14 @@ export function applyRhythmStack(char) {
 /**
  * dislodgeLodges(target, scene, count?)
  * Removes up to `count` lodged arrows from target.statusEffects and returns damage/effects.
- * Each lodge has an optional scalingBonus (e.g. 0.10 = +10% per additional lodge on target).
- * Only the lodge with that field benefits from it — other lodges deal flat baseDamage.
- * Hunter's Mark on target amplifies all lodge damage by +25%.
+ * Each lodge has an optional scalingBonus (e.g. 0.10 = +10% per additional lodge on target)
+ * for its own baseDamage, and an optional lacerateScalingBonus for its own lacerateOnDislodge
+ * — both scale off the TOTAL lodge count present at pop time, mixed types included (e.g. a
+ * Lodge Arrow lodge counts toward a Barbed Shaft lodge's own scaling, and vice versa).
+ * Hunter's Mark on target amplifies all lodge damage by its own LodgeDamage% mod.
+ * lacerateBuildup is returned raw (NOT mark-amplified here) — callers feed it through their
+ * own result.buildup like any other buildup source, which is where Hunter's Mark's separate
+ * BuildupReceived% mod applies generically (_applyWeaknessBuildup, CombatScene.js).
  */
 function dislodgeLodges(target, scene, count = Infinity) {
   if (!target) return { totalDamage: 0, lacerateBuildup: 0, dislodged: 0 };
@@ -64,7 +69,10 @@ function dislodgeLodges(target, scene, count = Infinity) {
 
   const totalLodges = allLodges.length;
   const huntersMark = (target.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
-  const markBonus = huntersMark ? 1.25 : 1.0;
+  // Was hardcoded to a flat 1.25 regardless of what the mark's own
+  // mods.LodgeDamage actually said — the field was rolled/stored but never
+  // read, so editing it would have silently done nothing. Reads it live now.
+  const markBonus = huntersMark ? 1 + ((huntersMark.mods?.LodgeDamage || 0) / 100) : 1.0;
 
   let totalDamage = 0;
   let lacerateBuildup = 0;
@@ -72,7 +80,10 @@ function dislodgeLodges(target, scene, count = Infinity) {
     const additionalLodges = totalLodges - 1;
     const scale = lodge.scalingBonus ? (1 + lodge.scalingBonus * additionalLodges) : 1;
     totalDamage += Math.floor((lodge.baseDamage || 0) * scale * markBonus);
-    if (lodge.lacerateOnDislodge) lacerateBuildup += lodge.lacerateOnDislodge;
+    if (lodge.lacerateOnDislodge) {
+      const lacScale = lodge.lacerateScalingBonus ? (1 + lodge.lacerateScalingBonus * additionalLodges) : 1;
+      lacerateBuildup += Math.floor(lodge.lacerateOnDislodge * lacScale);
+    }
   }
 
   const removeSet = new Set(toRemove);
@@ -194,6 +205,7 @@ export function getWeaponSkillsFor(char) {
     if (skill.type !== 'weapon') continue;
     if (skill.enemyOnly) continue;
     if (skill.disabled) continue;
+    if (skill.hidden) continue;
 
     // ? Unify stat key case
     const statKey = skill.requiredStat?.toUpperCase();
@@ -261,6 +273,7 @@ export function getReactionSkillsFor(char) {
     if (!s || s.mechanic !== 'reaction') continue;
     if (s.enemyOnly) continue;
     if (s.disabled) continue;
+    if (s.hidden) continue;
 
     // stat gate
     if (s.requiredStat && !DevFlags.isBreakthroughEnabled()) {
@@ -705,98 +718,6 @@ const NPC_ONLY_SKILLS = {
     }
   },
 
-  // Encounter 1 - Warm-up Duel
-  'warmup_swing': {
-    id: 'warmup_swing',
-    name: 'Practice Swing',
-    type: 'enemy',
-    actionCost: 'major',
-    mpCost: 4,
-    enemyOnly: true,
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    apply: () => ({ amount: 12 })
-  },
-  'warmup_patch': {
-    id: 'warmup_patch',
-    name: 'Patch Scratches',
-    type: 'enemy',
-    actionCost: 'class',
-    mpCost: 5,
-    cooldown: 1,
-    enemyOnly: true,
-    requiresTarget: false,
-    apply: (user) => {
-      if (!user) return { amount: 0 };
-      const heal = Math.max(3, Math.floor((user.maxHP || 40) * 0.15));
-      user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
-      return { amount: 0 };
-    }
-  },
-
-  // Encounter 2 - Defensive Trial
-  'defender_guard_raise': {
-    id: 'defender_guard_raise',
-    name: 'Raise Shield',
-    type: 'enemy',
-    actionCost: 'bonus',
-    mpCost: 4,
-    cooldown: 2,
-    enemyOnly: true,
-    requiresTarget: false,
-    apply: (user) => ({
-      amount: 0,
-      statusEffects: [{ id: 'defender_guard', turns: 2, mods: { PhysicalResist: 20 } }]
-    })
-  },
-  'defender_taunt': {
-    id: 'defender_taunt',
-    name: 'Challenge Cry',
-    type: 'enemy',
-    actionCost: 'major',
-    mpCost: 5,
-    cooldown: 1,
-    enemyOnly: true,
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    apply: (user, target, scene) => {
-      scene?._log?.(`${user.name} challenges ${target?.name}.`);
-      return {
-        amount: 6,
-        statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null } }],
-        buildup: { expose: 60 }
-      };
-    }
-  },
-  'offender_expose_strike': {
-    id: 'offender_expose_strike',
-    name: 'Stinging Strike',
-    type: 'enemy',
-    actionCost: 'major',
-    mpCost: 6,
-    enemyOnly: true,
-    requiresTarget: true,
-    targetRequirement: 'enemy',
-    apply: () => ({ amount: 14, buildup: { expose: 70 } })
-  },
-  'defender_small_heal': {
-    id: 'defender_small_heal',
-    name: 'Training Mend',
-    type: 'enemy',
-    actionCost: 'class',
-    mpCost: 8,
-    cooldown: 2,
-    enemyOnly: true,
-    requiresTarget: true,
-    targetRequirement: 'ally',
-    apply: (_user, target) => {
-      if (!target) return { amount: 0 };
-      const heal = Math.max(6, Math.floor((target.maxHP || 40) * 0.2));
-      target.currentHP = Math.min(target.maxHP || heal, (target.currentHP || 0) + heal);
-      return { amount: 0 };
-    }
-  },
-
   // Encounter 3 - Animated Party Test
   'fighter_heavy_slash': {
     id: 'fighter_heavy_slash',
@@ -807,7 +728,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 6, buildup: { expose: 90 } })
+    apply: () => ({ amount: 6, buildup: { expose: 90 } }),
+    description: "Deals 6 damage and applies 90 Expose buildup."
   },
   'fighter_guarded_blow': {
     id: 'fighter_guarded_blow',
@@ -819,11 +741,18 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (user, target) => ({
-      amount: 3,
-      buildup: { cold: 60 },
-      statusEffects: [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 } }]
-    })
+    // Guard buff was returned via statusEffects, which the engine ALWAYS
+    // applies to the TARGET (see _applyAbilityToTarget's
+    // `this._addStatusEffects(target, result.statusEffects)`) — meaning this
+    // was actually granting +15 Physical Resist to whoever got hit, not the
+    // fighter bracing itself. Applied directly to `user` instead, via the
+    // same scene._addStatusEffects(char, effects) pattern fighter_bulwark_call
+    // already uses for its own party-wide buff below.
+    apply: (user, target, scene) => {
+      scene?._addStatusEffects?.(user, [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 } }]);
+      return { amount: 3, buildup: { cold: 60 } };
+    },
+    description: "Deals 3 damage and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
   },
   'fighter_taunt': {
     id: 'fighter_taunt',
@@ -839,7 +768,8 @@ const NPC_ONLY_SKILLS = {
     apply: (user, target, scene) => {
       scene?._log?.(`${user.name} taunts ${target?.name}!`);
       return { amount: 0, statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null } }] };
-    }
+    },
+    description: "Requires the target to be Exposed (T1+). Forces them to attack you on their next turn — no damage of its own."
   },
   'fighter_executioner': {
     id: 'fighter_executioner',
@@ -852,7 +782,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 2 },
-    apply: () => ({ amount: 11, consumeWeakness: ['expose'] })
+    apply: () => ({ amount: 11, consumeWeakness: ['expose'] }),
+    description: "Requires the target to be Flayed (Expose T2+). Deals 11 damage and consumes their Expose buildup."
   },
 
   // Chad's signature — arms itself via the fighter_dummy AI profile (same
@@ -941,7 +872,8 @@ const NPC_ONLY_SKILLS = {
       const heal = Math.max(14, Math.floor((target.maxHP || 50) * 0.35));
       target.currentHP = Math.min(target.maxHP || heal, (target.currentHP || 0) + heal);
       return { amount: 0 };
-    }
+    },
+    description: "Restores 35% of an ally's max HP (minimum 14)."
   },
   'healer_cleanse': {
     id: 'healer_cleanse',
@@ -969,7 +901,8 @@ const NPC_ONLY_SKILLS = {
         target.currentMP = Math.min(target.maxMP || 0, (target.currentMP || 0) + 4);
       }
       return { amount: 0 };
-    }
+    },
+    description: "Clears an ally's Curse, Disease, and Toxic buildup entirely. Restores 4 MP if anything was cleansed."
   },
   'healer_blessing': {
     id: 'healer_blessing',
@@ -984,7 +917,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, target) => ({
       amount: 0,
       statusEffects: [{ id: 'healer_blessing', turns: 3, mods: { Accuracy: 10 }, data: { mpRegen: 2 } }]
-    })
+    }),
+    description: "Grants an ally +10 Accuracy for 3 turns."
   },
   'healer_flame_flick': {
     id: 'healer_flame_flick',
@@ -996,7 +930,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 3, buildup: { fire: 70 } })
+    apply: () => ({ amount: 3, buildup: { fire: 70 } }),
+    description: "Deals 3 damage and applies 70 Fire buildup."
   },
 
   // Stan's signature — real heal pipeline (calculateHealRoll/
@@ -1057,7 +992,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 2, buildup: { curse: 80 } })
+    apply: () => ({ amount: 2, buildup: { curse: 80 } }),
+    description: "Deals 2 damage and applies 80 Curse buildup."
   },
   'warlock_drain_life': {
     id: 'warlock_drain_life',
@@ -1078,7 +1014,8 @@ const NPC_ONLY_SKILLS = {
         user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
       }
       return { amount: dmg };
-    }
+    },
+    description: "Requires the target to be Cursed (T1+). Deals 4 damage and heals Gary for 10 — 18 if the target is Afflicted (Curse T2+)."
   },
 
   // Gary's second signature — costs HP instead of MP (canExecute enforces
@@ -1140,7 +1077,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 3, buildup: { disease: 70 } })
+    apply: () => ({ amount: 3, buildup: { disease: 70 } }),
+    description: "Deals 3 damage and applies 70 Disease buildup."
   },
   'warlock_curse_amplify': {
     id: 'warlock_curse_amplify',
@@ -1160,7 +1098,8 @@ const NPC_ONLY_SKILLS = {
       w.meters.curse = meter * 2;
       scene?._log?.(`${target.name}'s curse deepens!`);
       return { amount: 0 };
-    }
+    },
+    description: "Requires the target to be Cursed (T1+). Doubles their current Curse buildup meter. No damage of its own."
   },
 
   // Gary's signature — now functionally identical to the player's own
@@ -1219,7 +1158,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { expose: 60 } })
+    apply: () => ({ amount: 4, buildup: { expose: 60 } }),
+    description: "Deals 4 damage and applies 60 Expose buildup."
   },
   'ranger_frost_arrow': {
     id: 'ranger_frost_arrow',
@@ -1231,7 +1171,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { cold: 90 } })
+    apply: () => ({ amount: 4, buildup: { cold: 90 } }),
+    description: "Deals 4 damage and applies 90 Cold buildup."
   },
   'ranger_volley': {
     id: 'ranger_volley',
@@ -1249,7 +1190,8 @@ const NPC_ONLY_SKILLS = {
         amount: 3,
         splash: foes.slice(1).map(t => ({ target: t, amount: 2 }))
       };
-    }
+    },
+    description: "Deals 3 damage to the target and 2 damage to every other party member."
   },
   'ranger_aimed_shot': {
     id: 'ranger_aimed_shot',
@@ -1262,7 +1204,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 7, consumeWeakness: ['expose'] })
+    apply: () => ({ amount: 7, consumeWeakness: ['expose'] }),
+    description: "Requires the target to be Exposed (T1+). Deals 7 damage and consumes their Expose buildup."
   },
 
   // Doug's signature — needs BOTH triggers (himself hit directly, OR a
@@ -1328,7 +1271,8 @@ const NPC_ONLY_SKILLS = {
         base.buildup.toxic += 40;
       }
       return base;
-    }
+    },
+    description: "Deals 3 damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+)."
   },
   'rogue_hamstring': {
     id: 'rogue_hamstring',
@@ -1340,7 +1284,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] })
+    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] }),
+    description: "Deals 5 damage and applies 80 Lacerate buildup. Slows the target (-10 Initiative for 2 turns)."
   },
   'rogue_evasion': {
     id: 'rogue_evasion',
@@ -1358,7 +1303,8 @@ const NPC_ONLY_SKILLS = {
         user.currentMP = Math.min(user.maxMP || 0, (user.currentMP || 0) + 3);
       }
       return { amount: 0, statusEffects: [{ id: 'rogue_evasion', turns: 1, mods: { Evasion: 20 } }] };
-    }
+    },
+    description: "Grants +20 Evasion for 1 turn. Also restores 3 MP if any party member is Cursed or Poisoned (Toxic T1+)."
   },
   'rogue_sneak_attack': {
     id: 'rogue_sneak_attack',
@@ -1371,7 +1317,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 9 })
+    apply: () => ({ amount: 9 }),
+    description: "Requires the target to be Exposed (T1+). Deals 9 damage."
   },
   'rogue_finishing_strike': {
     id: 'rogue_finishing_strike',
@@ -1390,7 +1337,8 @@ const NPC_ONLY_SKILLS = {
       const count = families.reduce((n, fam) => n + ((tiers[fam] || 0) >= 1 ? 1 : 0), 0);
       return count >= 2 ? true : { ok: false, reason: `${target.name} lacks layered weaknesses.` };
     },
-    apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] })
+    apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] }),
+    description: "Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 13 damage and consumes their Expose and Toxic buildup."
   },
 
   // Mo's signature — redesigned onto 'pre_hit' (see Guardian's Stand's
@@ -1465,7 +1413,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { lightning: 60 } })
+    apply: () => ({ amount: 4, buildup: { lightning: 60 } }),
+    description: "Deals 4 damage and applies 60 Lightning buildup."
   },
   'wizard_static_field': {
     id: 'wizard_static_field',
@@ -1477,7 +1426,8 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: () => ({ amount: 4, buildup: { lightning: 90 } })
+    apply: () => ({ amount: 4, buildup: { lightning: 90 } }),
+    description: "Deals 4 damage and applies 90 Lightning buildup."
   },
   'wizard_mana_shield': {
     id: 'wizard_mana_shield',
@@ -1491,7 +1441,8 @@ const NPC_ONLY_SKILLS = {
     apply: (user) => ({
       amount: 0,
       statusEffects: [{ id: 'wizard_mana_shield', turns: 2, mods: { ElementalResist: 20 } }]
-    })
+    }),
+    description: "Grants +20 Elemental Resist for 2 turns."
   },
   'wizard_overload': {
     id: 'wizard_overload',
@@ -1504,7 +1455,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lightning', tier: 1 },
-    apply: () => ({ amount: 9, consumeWeakness: ['lightning'] })
+    apply: () => ({ amount: 9, consumeWeakness: ['lightning'] }),
+    description: "Requires the target to be Zapped (Lightning T1+). Deals 9 damage and consumes their Lightning buildup."
   },
 
   // Lenny's signature — two-phase channel. Phase 1 deals no damage, just
@@ -1608,7 +1560,8 @@ const NPC_ONLY_SKILLS = {
         buildup: { expose: 150 },
         statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
       };
-    }
+    },
+    description: "Deals 35% weapon damage and applies 150 Expose buildup. Marks the target for 3 turns, making allies more likely to focus their attacks on it."
   },
   'huntsman_command': {
     id: 'huntsman_command',
@@ -1623,7 +1576,8 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, beast) => ({
       amount: 0,
       statusEffects: [{ id: 'commanded', turns: 1, mods: { Initiative: 15, Accuracy: 10 } }]
-    })
+    }),
+    description: "Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn."
   },
   'huntsman_trap_shot': {
     id: 'huntsman_trap_shot',
@@ -1649,9 +1603,10 @@ const NPC_ONLY_SKILLS = {
       return {
         ...roll, physical, elemental, necrotic, amount,
         // +50% then another +25% buildup across encounter 4 (was 90, then 135).
-        buildup: { lacerate: 169 }, statusEffects: [{ id: 'snared', turns: 2 }]
+        buildup: { lacerate: 169 }, statusEffects: [{ id: 'immobilized', turns: 2 }]
       };
-    }
+    },
+    description: "Deals 80% weapon damage and applies 169 Lacerate buildup. Immobilizes the target for 2 turns."
   },
   'huntsman_empower_pack': {
     id: 'huntsman_empower_pack',
@@ -1676,7 +1631,8 @@ const NPC_ONLY_SKILLS = {
         beast.statusEffects.push({ id: 'empowered_pack', turns: 2, mods: { Initiative: 20, Accuracy: 10 } });
       }
       return { amount: 0 };
-    }
+    },
+    description: "Requires the target to have at least 2 active weaknesses (Expose/Lacerate/Disease/Toxic). Grants every beast ally +20 Initiative and +10 Accuracy for 2 turns."
   },
 
   // Huntsman's initiative spender — "calls in" a coordinated burst against
@@ -1739,7 +1695,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 90, then 135).
       return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 169 } };
-    }
+    },
+    description: "Deals 90% weapon damage and applies 169 Lacerate buildup."
   },
   'oskar_infectious_claw': {
     id: 'oskar_infectious_claw',
@@ -1764,7 +1721,8 @@ const NPC_ONLY_SKILLS = {
       const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
       // +50% then another +25% buildup across encounter 4 (was 140/80, then 210/120).
       return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: hasLac ? 263 : 150 } };
-    }
+    },
+    description: "Deals 65% weapon damage and applies 150 Disease buildup — 263 if the target is already Lacerated (T1+)."
   },
   'oskar_maw_rip': {
     id: 'oskar_maw_rip',
@@ -1789,7 +1747,8 @@ const NPC_ONLY_SKILLS = {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['lacerate'] };
-    }
+    },
+    description: "Requires the target to be Lacerated (T1+). Deals 140% weapon damage and consumes their Lacerate buildup."
   },
   'oskar_rotting_maw': {
     id: 'oskar_rotting_maw',
@@ -1820,7 +1779,8 @@ const NPC_ONLY_SKILLS = {
         target.weakness.meters.toxic = (target.weakness.meters.toxic || 0) + val;
       }
       return { ...roll, physical, elemental, necrotic, amount };
-    }
+    },
+    description: "Requires the target to be Plagued (Disease T2+). Deals 115% weapon damage and converts their entire Disease buildup into Toxic buildup."
   },
 
   // Oskar's reaction — snaps back on reflex when struck. Armed idempotently
@@ -1890,7 +1850,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 90, then 135).
       return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic: 169 } };
-    }
+    },
+    description: "Deals 55% weapon damage and applies 169 Toxic buildup."
   },
   'kiro_venomous_swipe': {
     id: 'kiro_venomous_swipe',
@@ -1914,7 +1875,8 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 90, then 135).
       return { ...roll, physical, elemental, necrotic, amount, buildup: { disease: 169 } };
-    }
+    },
+    description: "Deals 85% weapon damage and applies 169 Disease buildup."
   },
   'kiro_poison_cloud': {
     id: 'kiro_poison_cloud',
@@ -1959,7 +1921,8 @@ const NPC_ONLY_SKILLS = {
         consumeWeakness: ['toxic'],
         splash: splash.length ? splash : undefined,
       };
-    }
+    },
+    description: "Requires the target to be Poisoned (Toxic T1+). Deals 45% weapon damage and consumes their Toxic buildup, plus 65% damage and 113 Toxic buildup to every other party member."
   },
   'kiro_corrosive_bite': {
     id: 'kiro_corrosive_bite',
@@ -1989,7 +1952,8 @@ const NPC_ONLY_SKILLS = {
         payload.buildup = { curse: 150 };
       }
       return payload;
-    }
+    },
+    description: "Requires the target to be Envenomed (Toxic T2+). Deals 145% weapon damage and consumes their Toxic buildup — also applies 150 Curse buildup if they're Sickened (Disease T1+)."
   },
 
   // Kiro's reaction — venom-spit counter when struck. Same idempotent-arm +
@@ -2111,7 +2075,8 @@ const NPC_ONLY_SKILLS = {
         }));
       }
       return result;
-    }
+    },
+    description: "Deals 100% weapon damage as Fire and applies 140 Fire buildup. While Enraged, strikes the entire enemy party instead of a single target."
   },
   'fire_heated_guard': {
     id: 'fire_heated_guard',
@@ -2125,7 +2090,8 @@ const NPC_ONLY_SKILLS = {
     apply: (user) => ({
       amount: 0,
       statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 } }]
-    })
+    }),
+    description: "Grants +15 Physical Resist for 2 turns."
   },
   'fire_burst': {
     id: 'fire_burst',
@@ -2201,7 +2167,8 @@ const NPC_ONLY_SKILLS = {
         buildup: { fire: 85 },
         splash: splash.length ? splash : undefined,
       };
-    }
+    },
+    description: "Deals 90% weapon damage as Fire and applies 85 Fire buildup to the target, plus 80% damage and 85 Fire buildup to every other party member."
   },
 
   'ice_frost_strike': {
@@ -2238,7 +2205,8 @@ const NPC_ONLY_SKILLS = {
         }));
       }
       return result;
-    }
+    },
+    description: "Deals 100% weapon damage as Cold and applies 140 Cold buildup. While Enraged, strikes the entire enemy party instead of a single target."
   },
   'ice_icy_guard': {
     id: 'ice_icy_guard',
@@ -2249,7 +2217,8 @@ const NPC_ONLY_SKILLS = {
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: false,
-    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 } }] })
+    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 } }] }),
+    description: "Grants +15 Physical Resist for 2 turns."
   },
   'ice_freeze_point': {
     id: 'ice_freeze_point',
@@ -2328,7 +2297,8 @@ const NPC_ONLY_SKILLS = {
         buildup: { cold: 70 },
         splash: splash.length ? splash : undefined,
       };
-    }
+    },
+    description: "Deals 90% weapon damage as Cold and applies 70 Cold buildup to the target, plus 80% damage and 70 Cold buildup to every other party member."
   },
 
   // Defensive self-wards — Ember hardens against Fire, Rime against Cold:
@@ -2632,7 +2602,8 @@ const NPC_ONLY_SKILLS = {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       return { ...roll, amount, buildup: { expose: 90, lacerate: 80 } };
-    }
+    },
+    description: "Deals weapon damage and applies 90 Expose and 80 Lacerate buildup."
   },
   'berserker_disrupting_roar': {
     id: 'berserker_disrupting_roar',
@@ -2709,19 +2680,21 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack', 'cold'],
-    apply: (attacker, target) => {
+    // Guard buff was returned via statusEffects, which the engine ALWAYS
+    // applies to the TARGET (see fighter_guarded_blow's fix above, same
+    // exact bug) — meaning this was granting +15 Physical Resist to whoever
+    // got hit, not the berserker bracing itself. Applied directly to
+    // `attacker` instead.
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_guarded_fury;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      return {
-        ...roll,
-        amount,
-        buildup: { cold: 70 },
-        statusEffects: [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]
-      };
-    }
+      scene?._addStatusEffects?.(attacker, [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]);
+      return { ...roll, amount, buildup: { cold: 70 } };
+    },
+    description: "Deals weapon damage and applies 70 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
   },
   'berserker_battle_frenzy': {
     id: 'berserker_battle_frenzy',
@@ -2735,7 +2708,8 @@ const NPC_ONLY_SKILLS = {
     apply: (user) => ({
       amount: 0,
       statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 10 } }]
-    })
+    }),
+    description: "Grants +30 Initiative and +10 Accuracy for 2 turns."
   },
   'berserker_death_spiral': {
     id: 'berserker_death_spiral',
@@ -2759,7 +2733,8 @@ const NPC_ONLY_SKILLS = {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       return { ...roll, amount, consumeWeakness: ['expose', 'lacerate'] };
-    }
+    },
+    description: "Requires the target to be both Exposed and Lacerated (T1+ each). Deals heavy weapon damage and consumes both their Expose and Lacerate buildup."
   },
   'berserker_unstoppable_rush': {
     id: 'berserker_unstoppable_rush',
@@ -2784,7 +2759,8 @@ const NPC_ONLY_SKILLS = {
       }));
       if (disorientStacks >= 1) amount += 3 * disorientStacks;
       return { ...roll, amount };
-    }
+    },
+    description: "Spends up to 50 Initiative to charge in. Deals heavy weapon damage, +3 more per Disorient tier the target has."
   },
   'berserker_blood_fury': {
     id: 'berserker_blood_fury',
@@ -5689,7 +5665,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["projectile", "attack", "lodge"],
     emitTagsOnUse: ["projectile", "lodge"],
     buildupHint: { lodged: 90 },
-    statusEffects: [{ id: "lodged", turns: 2, stacks: 1 }],
+    statusEffects: [{ id: "lodged", turns: 2, stackable: true }],
     apply: (attacker, target) => {
       const ability = SKILLS?.lodging_slug;
       const roll = calculateDamage(attacker, target, ability);
@@ -14233,7 +14209,13 @@ Object.assign(RAW_SKILLS, {
       // the target's CURRENT resistances only once it's actually popped.
       const baseDamage = Math.max(1, Math.floor(amount * 0.70));
       target.statusEffects = target.statusEffects || [];
-      target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10 });
+      // stackable:true is purely a DISPLAY grouping flag, read only by
+      // combineStatusEffects (statusEffectIcons.js) to collapse same-id
+      // entries into one icon with an "x{count}" badge — it does NOT affect
+      // this raw push or dislodgeLodges' own per-entry accounting, which
+      // still reads each lodge's own baseDamage/scalingBonus individually.
+      // Without it, every stacked lodge rendered as its own separate icon.
+      target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10, stackable: true });
       const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
 
       // Draw the actual arrow sprite (fx_lodge_arrow) stuck in the target —
@@ -14373,6 +14355,12 @@ Object.assign(RAW_SKILLS, {
     id: "volley_arrow",
     name: "Volley",
     type: "weapon",
+    // Not player-selectable — see the comment on this entry above. Without
+    // this, getWeaponSkillsFor's blanket type:'weapon' scan (gated only on
+    // enemyOnly/disabled/stat/weapon-requirement, none of which this skill
+    // sets) surfaced it in the Weapon Skills menu under the name "Volley",
+    // reading as if the reaction itself had leaked into the wrong submenu.
+    hidden: true,
     typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -14398,7 +14386,7 @@ Object.assign(RAW_SKILLS, {
     name: "Hunter's Mark",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 13,
@@ -14417,7 +14405,12 @@ Object.assign(RAW_SKILLS, {
         log: `${attacker?.name ?? 'Archer'} marks ${target?.name ?? 'the target'} — +50% buildup received, +25% lodge damage.`,
       };
     },
-    description: "Bonus: Hunter's Mark 2 turns — +25% lodge damage (wired in dislodgeLodges) + +50% buildup received (BuildupReceived: TODO)."
+    // Both mods confirmed wired and read live: BuildupReceived by
+    // _applyWeaknessBuildup (CombatScene.js), LodgeDamage by dislodgeLodges
+    // (top of this file — was hardcoded to a flat 1.25 ignoring this field
+    // entirely until now). Previous description's "BuildupReceived: TODO"
+    // was stale — that part was already working, just never noted as such.
+    description: "Bonus: marks the target for 2 turns — all buildup it receives is increased 50%, and any lodge dislodged from it deals 25% more damage."
   },
 
   'barbed_shaft': {
@@ -14425,36 +14418,60 @@ Object.assign(RAW_SKILLS, {
     name: "Barbed Shaft",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "major",
     mpCost: 4,
     cooldown: 2,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "lodge", "lacerate"],
-    apply: (attacker, target) => {
-      const hasLodge = (target?.statusEffects || []).some(se => se?.id === 'lodged');
-      if (!hasLodge) {
-        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: barbed shaft requires a lodge already in target.` };
-      }
+    tags: ["ranged", "attack", "projectile", "lodge", "lacerate"],
+    apply: (attacker, target, scene) => {
+      // No lodge prerequisite — functions the same way Lodge Arrow does
+      // (immediate hit + places its own lodge), not a "consume an existing
+      // lodge" finisher like Piercing Release.
       const ability = SKILLS?.barbed_shaft;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 0.75);
-      const baseDamage = Math.max(1, Math.floor(roll.amount * 0.25));
-      target.statusEffects.push({ id: 'lodged', baseDamage, lacerateOnDislodge: 100 });
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 75, skillLabel: `${ability?.name || 'Skill'} weapon damage (75%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // Banks 25% of the REAL, already-computed hit (post skillPct/crit/buffs)
+      // — same "no separate recompute" philosophy Lodge Arrow's own final
+      // design uses (see its comments above), applied consistently here.
+      const baseDamage = Math.max(1, Math.floor(amount * 0.25));
+      target.statusEffects.push({
+        id: 'lodged', baseDamage, lacerateOnDislodge: 100,
+        // lacerateScalingBonus: +10% per OTHER lodge present at dislodge time
+        // (any type — Lodge Arrow lodges count too, dislodgeLodges' totalLodges
+        // is a mixed count), same convention/magnitude as baseDamage's own
+        // scalingBonus elsewhere. The raw lacerateOnDislodge total dislodgeLodges
+        // returns is NOT mark-amplified there — it flows through THIS skill's own
+        // result.buildup like any other buildup source, so Hunter's Mark's
+        // BuildupReceived% mod applies to it automatically and generically
+        // (_applyWeaknessBuildup, CombatScene.js) with no special-casing needed.
+        lacerateScalingBonus: 0.10,
+        stackable: true,
+        // Deep red hue — visually distinguishes a barbed lodge from a plain
+        // Lodge Arrow one on the portrait (see _refreshLodgeSprites,
+        // CombatScene.js, which reads this generically for any lodge).
+        tint: 0xaa2020,
+      });
+      // fx_lodge_arrow was never drawn on ADD for this skill either (same gap
+      // Lodge Arrow had before its own fix) — refreshed here now too.
+      scene?._refreshLodgeSprites?.(target);
       const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
       return {
-        ...roll, amount,
-        log: `${attacker?.name ?? 'Archer'} drives a barbed shaft in (${lodgeCount} lodges — applies 100 lacerate on dislodge).`,
+        ...roll, physical, elemental, necrotic, amount,
+        log: `${attacker?.name ?? 'Archer'} drives a barbed shaft in (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''} on target).`,
       };
     },
-    description: "Req 1+ lodge. 75% damage. Adds barbed lodge (25% damage + 100 lacerate on dislodge — no scalingBonus)."
+    description: "Deals 75% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
   },
 
   'snipe_pose': {
@@ -14462,7 +14479,7 @@ Object.assign(RAW_SKILLS, {
     name: "Snipe Pose",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "INT",
     requiredValue: 13,
@@ -14475,13 +14492,23 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker) => {
       attacker.statusEffects = attacker.statusEffects || [];
       attacker.statusEffects = attacker.statusEffects.filter(se => se?.id !== 'snipe_pose');
-      attacker.statusEffects.push({ id: 'snipe_pose', turns: 1, bonusDmgPct: 50, exposeBuildup: 80 });
+      // mods.AttackPower (not a bespoke bonusDmgPct field) so this reads
+      // through the SAME generic Category-A pool applyDamageModifiers/
+      // applyTypedDamageModifiers already sum every active AttackPower
+      // source into (Rhythm, War Cry, etc. — see CombatLogic.js's "Combat
+      // buffs (Category A)" step, comment: "two +20% buffs = +40% total, not
+      // 1.2×1.2"). This makes it combine ADDITIVELY with Rhythm instead of
+      // multiplying on top of an already-fully-buffed number, and it makes
+      // the bonus show up in the damage tooltip's own "Generic increased
+      // damage" breakdown line — same one Rhythm already produces — for
+      // free, with no separate tooltip wiring needed.
+      attacker.statusEffects.push({ id: 'snipe_pose', turns: 1, mods: { AttackPower: 50 }, exposeBuildup: 80 });
       return {
         amount: 0,
-        log: `${attacker?.name ?? 'Archer'} takes careful aim — next attack +50% damage and +80 expose.`,
+        log: `${attacker?.name ?? 'Archer'} takes careful aim — next attack +50% increased damage and +80 expose.`,
       };
     },
-    description: "Bonus: next attack +50% damage +80 expose buildup (consumed on hit via CombatScene Snipe Pose hook)."
+    description: "Bonus: take aim. Your next attack deals 50% increased damage and applies 80 extra Expose buildup."
   },
 
   'scavenge_arrows': {
@@ -14489,7 +14516,7 @@ Object.assign(RAW_SKILLS, {
     name: "Scavenge Arrows",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 11,
@@ -14502,15 +14529,19 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, _target, scene) => {
       const count = scene?.lodgesDislodgedThisTurn || 0;
       if (count === 0) {
-        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: no lodges dislodged this turn.` };
+        // fizzle:true — was missing before, so failing this gate (can't be a
+        // declarative field, it reads scene state) still burned the 3-turn
+        // cooldown for a free skill that did nothing. Same "no costs, no
+        // cooldown" convention every other fizzle in this file follows.
+        return { amount: 0, fizzle: true, log: `${attacker?.name ?? 'Archer'}: no lodges dislodged this turn.` };
       }
-      const mpGain = count * 2;
+      const mpGain = count * 4;
       return {
         amount: 0, mpGain,
         log: `${attacker?.name ?? 'Archer'} scavenges ${count} arrow${count !== 1 ? 's' : ''}, restoring ${mpGain} MP.`,
       };
     },
-    description: "FREE: restore 2 MP per lodge dislodged this turn (reads scene.lodgesDislodgedThisTurn)."
+    description: "Free. Requires at least one lodge dislodged this turn. Restores 4 MP per lodge dislodged."
   },
 
   // Same underlying shape as sword_1h/dagger/staff/mace_2h's own pairs

@@ -14,7 +14,7 @@ import { setupSceneCursor, setCursor } from '../ui/cursor.js';
 // Data
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
-import { Items } from '../../data/items.js';
+import { Items, RARITY_ORDER } from '../../data/items.js';
 import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack } from '../../data/skills.js';
 
 // Character / Items / AI systems
@@ -23,6 +23,7 @@ import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
+import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
@@ -58,6 +59,15 @@ function getEquippedItemData(equipped) {
   const id = isItemInstance(equipped) ? equipped.id : equipped;
   return Items[id] || null;
 }
+
+// Which equipment slots each Identify tonic's `category` covers — see the
+// combat-utility consumables in data/items.js (identify_weapon_tonic etc).
+// Sever items don't need this: each one already targets exactly one slot.
+const ITEM_CATEGORY_SLOTS = {
+  weapon: ['weaponMain', 'weaponOff'],
+  armor: ['head', 'chest', 'legs', 'gloves', 'boots'],
+  jewelry: ['ring', 'amulet'],
+};
 
 function calculateEffectiveResourceCost(user, baseCost, resource, opts = {}) {
   let cost = Math.max(0, baseCost | 0);
@@ -1780,6 +1790,35 @@ export default class CombatScene extends Phaser.Scene {
       // gate, so enemy casters (e.g. animated_healer/warlock_dummy) benefit too.
       if (misc.mpPerTurn) enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + misc.mpPerTurn;
       if (misc.skillCostReductionPct) enemy.gearEffects.skillCostReductionPct = (enemy.gearEffects.skillCostReductionPct || 0) + misc.skillCostReductionPct;
+      // Armor's category-level buildup% affixes (physical/elemental/necrotic
+      // — Forceful/Charged/Festering-style prefixes, ItemFactory.js) were
+      // missing from this block entirely, unlike the player-side equivalent
+      // in CharacterBuilder.js's rebuildCharacterStats (which at least
+      // computed them before dropping them at the final assignment — see
+      // [[project_armor_buildup_pct_dropped_bug]]). Both the panel's
+      // Buildup% row and _applyWeaknessBuildup's real gear-bonus check read
+      // char.gearEffects[`${category}BuildupPercent`] identically for allies
+      // and enemies, so this was silently a no-op for every enemy the whole
+      // time — nothing to do with which side is being displayed.
+      if (misc.physicalBuildupPercent) enemy.gearEffects.physicalBuildupPercent = (enemy.gearEffects.physicalBuildupPercent || 0) + misc.physicalBuildupPercent;
+      if (misc.elementalBuildupPercent) enemy.gearEffects.elementalBuildupPercent = (enemy.gearEffects.elementalBuildupPercent || 0) + misc.elementalBuildupPercent;
+      if (misc.necroticBuildupPercent) enemy.gearEffects.necroticBuildupPercent = (enemy.gearEffects.necroticBuildupPercent || 0) + misc.necroticBuildupPercent;
+    }
+
+    // Weapon-suffix buildup% (e.g. "of Sparks" +fire buildup, per-family —
+    // sibling to the armor category-level bonus above) lives on
+    // view._weaponMods.buildupPercent, never read here at all before now —
+    // an enemy's weapon (equipped through this same isWeaponSlot branch)
+    // could roll this affix but it would never apply, matching the exact
+    // gap CharacterBuilder.js's comment on weaponBuildupPercent describes
+    // for the player side (that one WAS wired; this enemy-side mirror
+    // wasn't).
+    if (view?._weaponMods?.buildupPercent) {
+      enemy.gearEffects = enemy.gearEffects || {};
+      enemy.gearEffects.weaponBuildupPercent = enemy.gearEffects.weaponBuildupPercent || {};
+      for (const [fam, amt] of Object.entries(view._weaponMods.buildupPercent)) {
+        enemy.gearEffects.weaponBuildupPercent[fam] = (enemy.gearEffects.weaponBuildupPercent[fam] || 0) + amt;
+      }
     }
 
     if (isWeaponSlot) {
@@ -2283,7 +2322,7 @@ export default class CombatScene extends Phaser.Scene {
       let label;
       if (!inst) {
         label = `${labelMap[slot]}: —`;
-      } else if (char.isEnemy) {
+      } else if (char.isEnemy && !inst._identified) {
         const rarityLabel = rarity ? rarity.charAt(0).toUpperCase() + rarity.slice(1) : '?';
         // _droppable is set by _equipEnemyItem (defaults false) — some
         // bosses (e.g. Berserker's Bloodthirster + full armor set) are
@@ -2293,9 +2332,13 @@ export default class CombatScene extends Phaser.Scene {
         const lockIcon = inst._droppable === false ? ' 🔒' : '';
         label = `${labelMap[slot]}: [${rarityLabel}]${lockIcon}`;
       } else {
-        // Allied gear: show base item name only (affixes revealed in tooltip on hover)
+        // Allied gear, OR an enemy slot revealed by an Identify tonic
+        // (inst._identified) — show the real base item name. Enemy rows
+        // still keep the lock icon since revealing identity doesn't unbind
+        // the item (see _useCombatItem's 'identify' branch).
         const baseName = base?.name || inst.id;
-        label = `${labelMap[slot]}: ${baseName}`;
+        const lockIcon = (char.isEnemy && inst._droppable === false) ? ' 🔒' : '';
+        label = `${labelMap[slot]}: ${baseName}${lockIcon}`;
       }
 
       const t = this.add.text(rightX, startY + i * 18, label, {
@@ -2335,7 +2378,7 @@ export default class CombatScene extends Phaser.Scene {
     const slotLabel = base.slot ? (base.slot.charAt(0).toUpperCase() + base.slot.slice(1)) : '';
     const typeLabel = base.type === 'armor' ? 'Armor' : base.type === 'weapon' ? 'Weapon' : 'Item';
 
-    if (isEnemy) {
+    if (isEnemy && !inst._identified) {
       const affixCount = (inst.prefixes?.length || 0) + (inst.suffixes?.length || 0);
       const lines = [`${rarityLabel} ${slotLabel} ${typeLabel} — unrevealed`, ''];
       for (let a = 0; a < affixCount; a++) lines.push('?? ??');
@@ -3388,9 +3431,104 @@ export default class CombatScene extends Phaser.Scene {
           .filter(s => s.type === 'special')
           .map(s => ({ ...SKILLS[s.id] || s, id: s.id }));
 
+      case 'items':
+        return this._getCombatUsableItemAbilities(char);
+
       default:
         return [];
     }
+  }
+
+  // Consumables with a `combatUse` field (Identify tonics, Sever chants —
+  // see data/items.js) rendered as skill-shaped buttons so the existing
+  // submenu/targeting UI (_openSubmenu, _useAbility, _enterTargetingMode)
+  // can display and dispatch them without any changes of its own. Reads the
+  // GLOBAL inventory (GameState.inventory), same as every other consumable —
+  // there's no per-character inventory concept for these.
+  _getCombatUsableItemAbilities(char) {
+    if (char?.isEnemy) return [];
+    const counts = new Map();
+    for (const inst of (GameState.inventory || [])) {
+      if (!isItemInstance(inst)) continue;
+      const base = Items[inst.id];
+      if (!base?.combatUse) continue;
+      counts.set(inst.id, (counts.get(inst.id) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([id, count]) => {
+      const base = Items[id];
+      return {
+        id,
+        name: count > 1 ? `${base.name} x${count}` : base.name,
+        description: base.description,
+        itemUse: base.combatUse,
+        actionCost: 'bonus',
+        mechanic: 'item',
+        requiresTarget: true,
+        targetRequirement: 'enemy',
+        tags: ['item'],
+      };
+    });
+  }
+
+  // Dispatch for a single Identify/Sever use — see the `ability.itemUse`
+  // branch at the top of _applyAbilityToTarget. `ability.id` here is the
+  // ITEM id (identify_weapon_tonic, sever_head, etc), not a SKILLS key.
+  // Deliberately fizzles (no action spent, no item consumed) if there's
+  // nothing eligible to affect — mirrors the same "no costs, no cooldown"
+  // convention used by every other fizzle gate in this file (e.g.
+  // requiresWeakness above).
+  _useCombatItem(user, target, ability) {
+    const cfg = ability?.itemUse;
+    if (!cfg || !user || !target) return;
+
+    const inst = (GameState.inventory || []).find(it => isItemInstance(it) && it.id === ability.id);
+    if (!inst) {
+      this._log(`${user.name} doesn't have ${ability.name} anymore.`);
+      return;
+    }
+
+    // Log/message text uses the item's TRUE base name — ability.name carries
+    // a "x{count}" stack-size suffix (baked in by _getCombatUsableItemAbilities
+    // purely for the menu button label) which read as "used it twice" if
+    // reused verbatim here, even though exactly one copy is ever consumed.
+    const itemName = Items[ability.id]?.name || ability.name;
+
+    const rarityRank = (r) => Math.max(0, RARITY_ORDER.indexOf(r));
+    const maxRank = rarityRank(cfg.maxRarity || 'epic');
+
+    if (cfg.kind === 'identify') {
+      const slots = ITEM_CATEGORY_SLOTS[cfg.category] || [];
+      const eligible = slots.filter(slot => {
+        const eq = target.equipment?.[slot];
+        return isItemInstance(eq) && !eq._identified && rarityRank(eq.rarity) <= maxRank;
+      });
+      if (!eligible.length) {
+        this._log(`${itemName} fizzles — nothing eligible in ${target.name}'s ${cfg.category} slots.`);
+        return;
+      }
+      this._spendBonusActionAndItem(user, inst);
+      for (const slot of eligible) target.equipment[slot]._identified = true;
+      this._log(`${user.name} uses ${itemName} — reveals ${target.name}'s ${cfg.category}!`);
+      return;
+    }
+
+    if (cfg.kind === 'sever') {
+      const eq = target.equipment?.[cfg.slot];
+      if (!isItemInstance(eq) || eq._droppable || rarityRank(eq.rarity) > maxRank) {
+        this._log(`${itemName} fizzles — nothing eligible in ${target.name}'s ${cfg.slot} slot.`);
+        return;
+      }
+      this._spendBonusActionAndItem(user, inst);
+      eq._droppable = true;
+      this._log(`${user.name} uses ${itemName} — severs the soul-bond on ${target.name}'s ${cfg.slot}!`);
+      return;
+    }
+  }
+
+  _spendBonusActionAndItem(user, inst) {
+    user.actionsLeft = user.actionsLeft || {};
+    user.actionsLeft.bonus = Math.max(0, (user.actionsLeft.bonus || 0) - 1);
+    InventorySystem.removeGlobalItem(inst);
   }
 
 
@@ -3988,6 +4126,26 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _applyAbilityToTarget(user, target, ability, intentOverride = null, options = {}) {
+    // Consumable combat items (Identify tonics / Sever chants) — a
+    // deliberately SEPARATE, much smaller path than the ~1300 lines below,
+    // which are all built around the assumption that `ability` is a
+    // SKILLS[id] combat-formula object (MP gate, cooldown, weakness-tier
+    // gates, typed-damage pipeline, recast/repeat mechanics, etc). An item
+    // has none of that — it just spends a bonus action, consumes one copy
+    // of itself from the global inventory, and applies its identify/sever
+    // effect. Routing it through the skill pipeline below would mean either
+    // faking up a fake skill object and hoping none of those gates misfire
+    // on undefined fields, or (this) a small dedicated handler that only
+    // reuses the same action-economy shape.
+    if (ability?.itemUse) {
+      this._useCombatItem(user, target, ability);
+      this._updateHealthBars?.();
+      this._updateHPMPBars?.();
+      this._updateActionLights?.();
+      if (!this._currentChar?.()?.isEnemy) this._buildActionMenuRoot?.();
+      return;
+    }
+
     // Reset the shared breakdown log ONCE here, at the top of every real
     // ability resolution — not just inside calculateDamage()/calculateHealRoll()
     // (which already do their own reset, redundantly). A flat/legacy skill
@@ -4393,12 +4551,19 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Snipe Pose: consumed on first attack — amplify amount and inject expose buildup
+    // Snipe Pose: consumed on first attack — inject expose buildup.
+    // Its damage bonus is NO LONGER applied here — it's mods.AttackPower on
+    // the status itself now, already read (and already summed additively
+    // with Rhythm/War Cry/etc.) by applyDamageModifiers/applyTypedDamageModifiers
+    // during ability.apply() above, before this code ever runs. Re-multiplying
+    // result.amount here would have double-counted it on top of that. This
+    // block now only handles the parts that AREN'T generic stat mods: the
+    // bonus Expose buildup, and consuming (removing) the status after the
+    // first qualifying hit so it doesn't linger for a 2nd action this turn.
     if ((result?.amount || 0) > 0 && !isMovement) {
       const snipeIdx = (user?.statusEffects || []).findIndex(se => se?.id === 'snipe_pose' && (se.turns || 0) > 0);
       if (snipeIdx !== -1) {
         const sp = user.statusEffects[snipeIdx];
-        result.amount = Math.floor(result.amount * (1 + (sp.bonusDmgPct ?? 50) / 100));
         result.buildup = result.buildup || {};
         result.buildup.expose = (result.buildup.expose || 0) + (sp.exposeBuildup ?? 80);
         user.statusEffects.splice(snipeIdx, 1);
@@ -6655,7 +6820,8 @@ export default class CombatScene extends Phaser.Scene {
     this.lodgeSprites[key] = [];
 
     // Count lodged stacks
-    const stacks = (char.statusEffects || []).filter(e => e.id === 'lodged').length;
+    const lodges = (char.statusEffects || []).filter(e => e.id === 'lodged');
+    const stacks = lodges.length;
     if (stacks === 0) return;
 
     // Find where this character is rendered (icon lives at 0,0 inside the slot container)
@@ -6679,6 +6845,13 @@ export default class CombatScene extends Phaser.Scene {
         .setAlpha(0.92)
         .setDepth(1)          // depth 1: above bg (-1), behind slot containers (depth 2)
         .setRotation(angle);  // arrow points outward, shaft passes through center
+
+      // Optional per-lodge tint (e.g. Barbed Shaft's deep-red hue) so
+      // different lodge variants are visually distinguishable at a glance —
+      // generic field, read here, set by whichever skill wants a distinct
+      // look; untinted (Lodge Arrow) keeps its original appearance.
+      const tint = lodges[i]?.tint;
+      if (tint != null) sprite.setTint(tint);
 
       this.lodgeSprites[key].push(sprite);
     }

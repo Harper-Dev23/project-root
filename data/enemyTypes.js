@@ -26,36 +26,6 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
-  training_warmup_dummy: {
-    skin: 'dummy_portrait',
-    maxHP: 90,
-    maxMP: 30,
-    skills: ['dummy_sway', 'warmup_swing', 'warmup_patch'],
-    aiProfile: 'warmup_dummy',
-    isEnemy: true,
-    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
-  },
-
-  training_defender_dummy: {
-    skin: 'dummy_portrait',
-    maxHP: 110,
-    maxMP: 40,
-    skills: ['defender_guard_raise', 'defender_taunt', 'defender_small_heal'],
-    aiProfile: 'defensive_dummy',
-    isEnemy: true,
-    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
-  },
-
-  training_offender_dummy: {
-    skin: 'dummy_portrait',
-    maxHP: 85,
-    maxMP: 30,
-    skills: ['offender_expose_strike', 'dummy_shuffle'],
-    aiProfile: 'offensive_dummy',
-    isEnemy: true,
-    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
-  },
-
   // Encounter 3's six dummies — same average (8 across all 6 core stats,
   // sum 48) but skewed per class archetype, matching how a real party
   // member of that class would be built. Weapon (crude/common tier,

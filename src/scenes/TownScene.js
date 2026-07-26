@@ -1556,6 +1556,14 @@ export default class TownScene extends Phaser.Scene {
       })
       .filter(entry => {
         if (!entry.base) return false;
+        // 'consumable' items (potions, and now the Whispering Cloth's combat
+        // utility tonics/chants) belong under the "Items" tab — the tab key
+        // is 'item' (singular) while the actual item.type is 'consumable',
+        // so a plain equality check here always excluded them. Pre-existing
+        // gap (healing_potion/mana_potion had the same bug at whatever
+        // vendor sells them), fixed here since it directly affects browsing
+        // the new items.
+        if (filterType === 'item') return entry.base.type === 'item' || entry.base.type === 'consumable';
         return filterType === 'all' || entry.base.type === filterType;
       })
       .forEach(entry => {
@@ -1700,11 +1708,20 @@ export default class TownScene extends Phaser.Scene {
         ]
       },
       whispercloth: {
-        displayName: "Whispercloth Tent",
+        displayName: "Whispering Cloth",
         inventory: [
-          { id: "silk_patch", cost: 28, desc: "Armor repair." },
-          { id: "quiet_hood", cost: 110, desc: "Stealth / evasion boost." },
-          { id: "muffled_wrap", cost: 65, desc: "Reduces noise (future stealth system)." }
+          { id: "identify_weapon_tonic", cost: 0, desc: "Combat: reveal an enemy's weapon (up to Epic). Free for testing." },
+          { id: "identify_armor_tonic", cost: 0, desc: "Combat: reveal an enemy's armor (up to Epic). Free for testing." },
+          { id: "identify_jewelry_tonic", cost: 0, desc: "Combat: reveal an enemy's jewelry (up to Epic). Free for testing." },
+          { id: "sever_weaponMain", cost: 0, desc: "Combat: sever an enemy's main-hand weapon (up to Epic). Free for testing." },
+          { id: "sever_weaponOff", cost: 0, desc: "Combat: sever an enemy's off-hand item (up to Epic). Free for testing." },
+          { id: "sever_head", cost: 0, desc: "Combat: sever an enemy's head slot (up to Epic). Free for testing." },
+          { id: "sever_chest", cost: 0, desc: "Combat: sever an enemy's chest slot (up to Epic). Free for testing." },
+          { id: "sever_legs", cost: 0, desc: "Combat: sever an enemy's leg slot (up to Epic). Free for testing." },
+          { id: "sever_gloves", cost: 0, desc: "Combat: sever an enemy's glove slot (up to Epic). Free for testing." },
+          { id: "sever_boots", cost: 0, desc: "Combat: sever an enemy's boot slot (up to Epic). Free for testing." },
+          { id: "sever_ring", cost: 0, desc: "Combat: sever an enemy's ring slot (up to Epic). Free for testing." },
+          { id: "sever_amulet", cost: 0, desc: "Combat: sever an enemy's amulet slot (up to Epic). Free for testing." }
         ]
       },
 

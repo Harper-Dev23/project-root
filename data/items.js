@@ -1,5 +1,10 @@
+// Canonical rarity ordering, low to high — the numeric-comparison source of
+// truth (see RARITY_COLORS in styles.js for the matching color map; keep
+// both in sync if a tier is ever added/renamed).
+export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'historic'];
+
 export const Items = {
-  
+
   healing_potion: {
     id: 'healing_potion',
     name: 'Healing Potion',
@@ -571,6 +576,114 @@ export const Items = {
     type: 'huntPlan',
     rarity: 'common',
     description: 'A loadout plan chosen before departing on a Hunt. Its modifiers come from rolled affixes — higher rarity means more of them.',
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // === Combat Utility Consumables (Identify / Sever) ===
+  // Usable ONLY in combat (bonus action, no MP, any enemy is a valid target —
+  // see CombatScene._useCombatItem, the dispatch point for `combatUse`).
+  // `combatUse.maxRarity` is a hard gate against RARITY_ORDER: fizzles (no
+  // action or item spent) if the targeted slot's item is above that tier —
+  // these are free-for-testing utility items, not meant to touch Legendary/
+  // Historic gear. Free (cost: 0) at the Whispering Cloth vendor.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  identify_weapon_tonic: {
+    id: 'identify_weapon_tonic',
+    name: 'Weapon-Reading Tonic',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'identify', category: 'weapon', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s weapon (up to Epic) for the rest of the fight. Does not unbind it.',
+  },
+  identify_armor_tonic: {
+    id: 'identify_armor_tonic',
+    name: 'Armor-Reading Tonic',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'identify', category: 'armor', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s armor pieces (up to Epic) for the rest of the fight. Does not unbind them.',
+  },
+  identify_jewelry_tonic: {
+    id: 'identify_jewelry_tonic',
+    name: 'Jewelry-Reading Tonic',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'identify', category: 'jewelry', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s ring and amulet (up to Epic) for the rest of the fight. Does not unbind them.',
+  },
+
+  sever_weaponMain: {
+    id: 'sever_weaponMain',
+    name: 'Severing Chant: Main Hand',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'weaponMain', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s main-hand weapon (up to Epic), turning it into normal loot.',
+  },
+  sever_weaponOff: {
+    id: 'sever_weaponOff',
+    name: 'Severing Chant: Off Hand',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'weaponOff', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s off-hand item (up to Epic), turning it into normal loot.',
+  },
+  sever_head: {
+    id: 'sever_head',
+    name: 'Severing Chant: Head',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'head', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s head slot (up to Epic), turning it into normal loot.',
+  },
+  sever_chest: {
+    id: 'sever_chest',
+    name: 'Severing Chant: Chest',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'chest', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s chest slot (up to Epic), turning it into normal loot.',
+  },
+  sever_legs: {
+    id: 'sever_legs',
+    name: 'Severing Chant: Legs',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'legs', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s leg slot (up to Epic), turning it into normal loot.',
+  },
+  sever_gloves: {
+    id: 'sever_gloves',
+    name: 'Severing Chant: Gloves',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'gloves', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s glove slot (up to Epic), turning it into normal loot.',
+  },
+  sever_boots: {
+    id: 'sever_boots',
+    name: 'Severing Chant: Boots',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'boots', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s boot slot (up to Epic), turning it into normal loot.',
+  },
+  sever_ring: {
+    id: 'sever_ring',
+    name: 'Severing Chant: Ring',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'ring', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s ring slot (up to Epic), turning it into normal loot.',
+  },
+  sever_amulet: {
+    id: 'sever_amulet',
+    name: 'Severing Chant: Amulet',
+    type: 'consumable',
+    rarity: 'common',
+    combatUse: { kind: 'sever', slot: 'amulet', maxRarity: 'epic' },
+    description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s amulet slot (up to Epic), turning it into normal loot.',
   },
 
 };
