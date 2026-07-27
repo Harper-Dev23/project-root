@@ -14208,29 +14208,36 @@ Object.assign(RAW_SKILLS, {
       // (top of this file) reads them generically, re-mitigated against
       // the target's CURRENT resistances only once it's actually popped.
       const baseDamage = Math.max(1, Math.floor(amount * 0.70));
-      target.statusEffects = target.statusEffects || [];
-      // stackable:true is purely a DISPLAY grouping flag, read only by
-      // combineStatusEffects (statusEffectIcons.js) to collapse same-id
-      // entries into one icon with an "x{count}" badge — it does NOT affect
-      // this raw push or dislodgeLodges' own per-entry accounting, which
-      // still reads each lodge's own baseDamage/scalingBonus individually.
-      // Without it, every stacked lodge rendered as its own separate icon.
-      target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10, stackable: true });
-      const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
 
-      // Draw the actual arrow sprite (fx_lodge_arrow) stuck in the target —
-      // _refreshLodgeSprites already existed and already handles staggering
-      // multiple arrows around the portrait with a jittered angle/radius,
-      // but it was previously only ever called from the DISLODGE side
-      // (dislodgeLodges, on remove) — nothing called it on ADD, so no arrow
-      // ever actually appeared when a lodge landed. Generic for any
-      // lodge-count on this character, not bow-specific.
-      scene?._refreshLodgeSprites?.(target);
+      // Deferred to onHitLanded (only runs if this shot's own hit-roll
+      // actually connects) — pushing the lodge here unconditionally meant a
+      // MISSED Lodge Arrow still stuck an arrow in the target for real.
+      const onHitLanded = () => {
+        target.statusEffects = target.statusEffects || [];
+        // stackable:true is purely a DISPLAY grouping flag, read only by
+        // combineStatusEffects (statusEffectIcons.js) to collapse same-id
+        // entries into one icon with an "x{count}" badge — it does NOT affect
+        // this raw push or dislodgeLodges' own per-entry accounting, which
+        // still reads each lodge's own baseDamage/scalingBonus individually.
+        // Without it, every stacked lodge rendered as its own separate icon.
+        target.statusEffects.push({ id: 'lodged', baseDamage, scalingBonus: 0.10, stackable: true });
+        const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
 
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        log: `${attacker?.name ?? 'Archer'} lodges an arrow in ${target?.name ?? 'the target'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
+        // Draw the actual arrow sprite (fx_lodge_arrow) stuck in the target —
+        // _refreshLodgeSprites already existed and already handles staggering
+        // multiple arrows around the portrait with a jittered angle/radius,
+        // but it was previously only ever called from the DISLODGE side
+        // (dislodgeLodges, on remove) — nothing called it on ADD, so no arrow
+        // ever actually appeared when a lodge landed. Generic for any
+        // lodge-count on this character, not bow-specific.
+        scene?._refreshLodgeSprites?.(target);
+
+        return {
+          log: `${attacker?.name ?? 'Archer'} lodges an arrow in ${target?.name ?? 'the target'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
+        };
       };
+
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
     description: "Deals 75% weapon damage. Lodges an arrow worth 70% of the damage dealt — +10% more per additional lodge already on the target when it's eventually dislodged."
   },
@@ -14445,31 +14452,39 @@ Object.assign(RAW_SKILLS, {
       // — same "no separate recompute" philosophy Lodge Arrow's own final
       // design uses (see its comments above), applied consistently here.
       const baseDamage = Math.max(1, Math.floor(amount * 0.25));
-      target.statusEffects.push({
-        id: 'lodged', baseDamage, lacerateOnDislodge: 100,
-        // lacerateScalingBonus: +10% per OTHER lodge present at dislodge time
-        // (any type — Lodge Arrow lodges count too, dislodgeLodges' totalLodges
-        // is a mixed count), same convention/magnitude as baseDamage's own
-        // scalingBonus elsewhere. The raw lacerateOnDislodge total dislodgeLodges
-        // returns is NOT mark-amplified there — it flows through THIS skill's own
-        // result.buildup like any other buildup source, so Hunter's Mark's
-        // BuildupReceived% mod applies to it automatically and generically
-        // (_applyWeaknessBuildup, CombatScene.js) with no special-casing needed.
-        lacerateScalingBonus: 0.10,
-        stackable: true,
-        // Deep red hue — visually distinguishes a barbed lodge from a plain
-        // Lodge Arrow one on the portrait (see _refreshLodgeSprites,
-        // CombatScene.js, which reads this generically for any lodge).
-        tint: 0xaa2020,
-      });
-      // fx_lodge_arrow was never drawn on ADD for this skill either (same gap
-      // Lodge Arrow had before its own fix) — refreshed here now too.
-      scene?._refreshLodgeSprites?.(target);
-      const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        log: `${attacker?.name ?? 'Archer'} drives a barbed shaft in (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''} on target).`,
+
+      // Deferred to onHitLanded (only runs if this shot's own hit-roll
+      // actually connects) — same fix as Lodge Arrow's identical bug: pushing
+      // the lodge unconditionally meant a MISSED Barbed Shaft still stuck one
+      // in the target for real.
+      const onHitLanded = () => {
+        target.statusEffects.push({
+          id: 'lodged', baseDamage, lacerateOnDislodge: 100,
+          // lacerateScalingBonus: +10% per OTHER lodge present at dislodge time
+          // (any type — Lodge Arrow lodges count too, dislodgeLodges' totalLodges
+          // is a mixed count), same convention/magnitude as baseDamage's own
+          // scalingBonus elsewhere. The raw lacerateOnDislodge total dislodgeLodges
+          // returns is NOT mark-amplified there — it flows through THIS skill's own
+          // result.buildup like any other buildup source, so Hunter's Mark's
+          // BuildupReceived% mod applies to it automatically and generically
+          // (_applyWeaknessBuildup, CombatScene.js) with no special-casing needed.
+          lacerateScalingBonus: 0.10,
+          stackable: true,
+          // Deep red hue — visually distinguishes a barbed lodge from a plain
+          // Lodge Arrow one on the portrait (see _refreshLodgeSprites,
+          // CombatScene.js, which reads this generically for any lodge).
+          tint: 0xaa2020,
+        });
+        // fx_lodge_arrow was never drawn on ADD for this skill either (same gap
+        // Lodge Arrow had before its own fix) — refreshed here now too.
+        scene?._refreshLodgeSprites?.(target);
+        const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
+        return {
+          log: `${attacker?.name ?? 'Archer'} drives a barbed shaft in (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''} on target).`,
+        };
       };
+
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
     description: "Deals 75% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
   },
@@ -14648,43 +14663,66 @@ Object.assign(RAW_SKILLS, {
     name: "Piercing Release",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
     mpCost: 7,
     cooldown: 4,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "dislodge"],
+    tags: ["ranged", "attack", "projectile", "dislodge"],
     apply: (attacker, target, scene) => {
       const lodgeCount = (target?.statusEffects || []).filter(se => se?.id === 'lodged').length;
-      if (lodgeCount === 0) return { amount: 0, log: `${target?.name ?? 'Target'} has no lodges.` };
+      if (lodgeCount === 0) {
+        // fizzle:true — was missing before, so failing this in-apply() gate
+        // still spent MP/cooldown/the action for nothing.
+        return { amount: 0, fizzle: true, log: `${target?.name ?? 'Target'} has no lodges.` };
+      }
       const ability = SKILLS?.piercing_release;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const { totalDamage, lacerateBuildup, dislodged } = dislodgeLodges(target, scene);
-      amount += totalDamage;
-      // Same treatment as Lightning Jolt (CombatLogic.js) — a bonus damage
-      // source that's computed independently of this cast's own modifiers
-      // (each lodge's damage was frozen at lodge-creation time, see
-      // lodge_arrow) still gets its own visible line in the tooltip Formula
-      // instead of silently vanishing into Raw Damage.
-      if (totalDamage > 0) {
-        try { _pushBreakdown({ label: 'Lodge dislodge', flat: totalDamage }); } catch { }
-      }
-      const exposeGain = dislodged * 35;
-      const lacerateGain = (lacerateBuildup || 0) + dislodged * 35;
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Popping the lodges is deferred to onHitLanded (CombatScene.js — only
+      // invoked if this shot's own hit-roll actually lands) instead of
+      // happening right here. dislodgeLodges() MUTATES target.statusEffects
+      // for real — calling it unconditionally inside apply() (which runs
+      // BEFORE the engine's hit-roll) meant a miss still popped every lodge,
+      // just with the damage zeroed out afterward. The lodges themselves
+      // were already gone regardless.
+      const onHitLanded = () => {
+        const { totalDamage, lacerateBuildup, dislodged } = dislodgeLodges(target, scene);
+        // Dislodge payout stays isolated from the CASTER's own gear%/
+        // conversion (each lodge's damage was frozen at lodge-creation time,
+        // possibly by a different character) — returned as physicalRiderDamage,
+        // added generically AFTER gear conversion (CombatScene.js), same
+        // treatment Lightning Jolt gets. Still gets its own visible Formula-
+        // line entry via _pushBreakdown, same as before.
+        if (totalDamage > 0) {
+          try { _pushBreakdown({ label: 'Lodge dislodge', flat: totalDamage }); } catch { }
+        }
+        const exposeGain = dislodged * 35;
+        const lacerateGain = (lacerateBuildup || 0) + dislodged * 35;
+        return {
+          physicalRiderDamage: totalDamage,
+          buildup: { expose: exposeGain, lacerate: lacerateGain },
+          log: `${attacker?.name ?? 'Archer'} releases all — ${dislodged} arrow${dislodged !== 1 ? 's' : ''} dislodged for ${totalDamage} bonus damage!`,
+        };
+      };
+
       return {
-        ...roll, amount,
-        buildup: { expose: exposeGain, lacerate: lacerateGain },
-        log: `${attacker?.name ?? 'Archer'} releases all — ${dislodged} arrow${dislodged !== 1 ? 's' : ''} dislodged for ${totalDamage} bonus damage!`,
+        ...roll, physical, elemental, necrotic, amount,
+        onHitLanded,
       };
     },
-    description: "100% + dislodge ALL lodges (each lodge uses its own scalingBonus). 35 expose + 35 lacerate per lodge dislodged."
+    description: "Requires at least one lodge. Deals 100% weapon damage and dislodges every lodge on the target for bonus damage, plus 35 Expose and 35 Lacerate buildup per lodge dislodged."
   },
 
   'frost_shatter': {
@@ -14692,40 +14730,49 @@ Object.assign(RAW_SKILLS, {
     name: "Frost Shatter",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
     mpCost: 9,
     cooldown: 6,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "consume", "cold", "expose"],
+    // Declarative gate (was a manual in-apply() check returning a non-fizzle
+    // no-op that still spent MP/cooldown/action) — the engine checks this
+    // BEFORE apply() ever runs, so failing it now costs nothing at all.
+    requiresWeakness: { family: "cold", tier: 2 },
+    tags: ["ranged", "attack", "projectile", "consume", "cold", "expose"],
     apply: (attacker, target) => {
-      if ((target?.weakness?.tiers?.cold || 0) < 2) {
-        return { amount: 0, log: `${target?.name ?? 'Target'} needs cold T2 (Frostbitten).` };
-      }
       const ability = SKILLS?.frost_shatter;
+      // Capped at 400 — the damage bonus and Expose conversion below both
+      // scale off this capped value, not however high the meter actually
+      // built up to.
+      const consumedCold = Math.min(target?.weakness?.meters?.cold || 0, 400);
+      // +2% weapon damage per 10 consumed (was a flat +1 damage per 10,
+      // uncapped) — up to +80% at the 400 cap, on top of the base 120%.
+      const skillPct = 120 + Math.floor(consumedCold / 10) * 2;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: "cold", skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.20);
-      const consumedCold = target?.weakness?.meters?.cold || 0;
-      amount += Math.floor(consumedCold / 10);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       const exposeBuildup = Math.floor(consumedCold * 0.50);
-      if (target?.weakness?.meters) {
-        target.weakness.meters.cold = 0;
-        if (target.weakness.tiers) target.weakness.tiers.cold = 0;
-      }
       return {
-        ...roll, amount, element: "cold",
+        ...roll, physical, elemental, necrotic, amount,
         buildup: { expose: exposeBuildup },
-        log: `${attacker?.name ?? 'Archer'} shatters ${consumedCold} cold — +${Math.floor(consumedCold / 10)} damage, ${exposeBuildup} expose!`,
+        // Generic engine mechanism (CombatScene.js) — zeroes the target's
+        // Cold meter/tier for real. Reads consumedCold above BEFORE this
+        // runs, so the capture and the actual consumption can't drift apart.
+        consumeWeakness: ['cold'],
+        log: `${attacker?.name ?? 'Archer'} shatters ${consumedCold} cold — ${skillPct}% damage, ${exposeBuildup} expose!`,
       };
     },
-    description: "Req cold T2. 120% cold + consume all cold (+1 dmg/10). Converts 50% cold into expose buildup."
+    description: "Requires the target to be Frostbitten (Cold T2+). Deals 120% weapon damage as Cold, +2% more per 10 Cold buildup consumed (capped at 400 consumed, up to +80%). Consumes all Cold buildup and converts up to half of the consumed amount into Expose buildup."
   },
 
   'hail_of_arrows': {
@@ -14733,38 +14780,53 @@ Object.assign(RAW_SKILLS, {
     name: "Hail of Arrows",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
     mpCost: 8,
     cooldown: 5,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "aoe"],
+    tags: ["ranged", "attack", "projectile", "aoe"],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.hail_of_arrows;
+      // One shared roll (crit etc.) for the whole cast — every recipient's
+      // own skillPct is applied on top of it individually below, same
+      // "single dice roll, per-target scaling" precedent fire_flare_wave/
+      // ice_shard_storm's splash already use.
       const roll = calculateDamage(attacker, target, ability);
-      const calcAmount = (tgt) => {
-        let a = Math.max(1, applyDamageModifiers(roll.amount, attacker, tgt, {
-          ability, tags: ability?.tags, skipGearMultiplier: true,
-        }));
-        a = Math.floor(a * 0.90);
+      const calcHit = (tgt, silent) => {
+        // Each recipient computes their OWN bonus off THEIR OWN weakness
+        // tiers — not the primary target's — so a target with no weaknesses
+        // in a mixed-AOE hit takes less than one that's Exposed and Singed.
+        // Any active tier counts (T1+), not just T2.
         let mul = 1.0;
         const t = tgt?.weakness?.tiers || {};
-        if ((t.expose || 0) >= 2 || (t.lacerate || 0) >= 2) mul += 0.20;
-        if ((t.fire || 0) >= 2 || (t.cold || 0) >= 2 || (t.lightning || 0) >= 2) mul += 0.20;
-        if ((t.toxic || 0) >= 2 || (t.disease || 0) >= 2 || (t.curse || 0) >= 2) mul += 0.20;
-        return Math.floor(a * mul);
+        if ((t.expose || 0) >= 1 || (t.lacerate || 0) >= 1 || (t.disorient || 0) >= 1) mul += 0.20;
+        if ((t.fire || 0) >= 1 || (t.cold || 0) >= 1 || (t.lightning || 0) >= 1) mul += 0.20;
+        if ((t.toxic || 0) >= 1 || (t.disease || 0) >= 1 || (t.curse || 0) >= 1) mul += 0.20;
+        const skillPct = 90 * mul;
+        const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+          { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+          attacker, tgt,
+          { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult, silent }
+        );
+        const amount = Math.max(1, physical + elemental + necrotic);
+        return { physical, elemental, necrotic, amount };
       };
-      const amount = calcAmount(target);
-      const splash = resolveAOESplash(scene, target, { shape: "adjacent" }).map(tgt => ({
-        target: tgt, amount: calcAmount(tgt), tags: ability?.tags,
+      const primary = calcHit(target, false);
+      // smallCone: hits the target plus the 1-2 slots directly behind it in
+      // the next column back (see SMALL_CONE_MAP, aoeResolver.js) — was
+      // "adjacent" (same-column neighbors), the wrong shape for this skill.
+      const splash = resolveAOESplash(scene, target, { shape: "smallCone" }).map(tgt => ({
+        target: tgt, ...calcHit(tgt, true), tags: ability?.tags,
       }));
-      return { ...roll, amount, splash: splash.length ? splash : undefined };
+      return { ...roll, ...primary, splash: splash.length ? splash : undefined };
     },
-    description: "90% to primary + adjacent. +20% per family with T2 weakness (physical/elemental/necrotic). Max +60% at all three T2."
+    description: "Small cone: hits the target and the 1-2 slots directly behind it. Each recipient deals 90% weapon damage independently, +20% more per weakness category they personally have (Physical/Elemental/Necrotic, any tier) — up to 150% with all three."
   },
 
   'barbed_bloom': {
@@ -14772,41 +14834,62 @@ Object.assign(RAW_SKILLS, {
     name: "Barbed Bloom",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
     mpCost: 7,
     cooldown: 5,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "aoe", "lacerate", "necrotic"],
+    // Declarative gate (was a manual in-apply() check that still spent
+    // MP/cooldown/action on a non-fizzle no-op) — free fizzle now.
+    requiresWeakness: { family: "lacerate", tier: 1 },
+    tags: ["ranged", "attack", "projectile", "aoe", "lacerate", "necrotic"],
     apply: (attacker, target, scene) => {
-      if ((target?.weakness?.tiers?.lacerate || 0) < 1) {
-        return { amount: 0, log: `${target?.name ?? 'Target'} has no lacerate buildup.` };
-      }
       const ability = SKILLS?.barbed_bloom;
+      // Capped at 400 (same convention as Frost Shatter) — +10% weapon
+      // damage per 100 Lacerate on the target, up to +40% at the cap. This
+      // now scales the PRIMARY hit itself, not just the splash (see below).
+      const lacMeter = Math.min(target?.weakness?.meters?.lacerate || 0, 400);
+      const skillPct = 100 + Math.floor(lacMeter / 100) * 10;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const lacMeter = target?.weakness?.meters?.lacerate || 0;
-      const aoeBonus = Math.floor(lacMeter / 100) * 10;
-      const aoeDmg = Math.floor(amount * 0.70 * (1 + aoeBonus / 100));
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Splash is 70% of THIS primary hit's own final typed breakdown — not
+      // a separately-rolled 70% weapon-damage calc — so it automatically
+      // reflects the same Lacerate bonus (and any crit/buffs) the primary
+      // got, per-component, same "single roll, per-target scaling" splash
+      // precedent fire_flare_wave/ice_shard_storm already use.
+      const SPLASH_SCALE = 0.70;
       const necroSpread = {
         toxic:   Math.floor((target?.weakness?.meters?.toxic   || 0) * 0.25),
         disease: Math.floor((target?.weakness?.meters?.disease || 0) * 0.25),
         curse:   Math.floor((target?.weakness?.meters?.curse   || 0) * 0.25),
       };
       const hasNecro = Object.values(necroSpread).some(v => v > 0);
-      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => ({
-        target: tgt, amount: aoeDmg, tags: ability?.tags,
-        buildup: hasNecro ? { ...necroSpread } : undefined,
-      }));
-      return { ...roll, amount, splash: splash.length ? splash : undefined };
+      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => {
+        const splashPhysical = Math.floor(physical * SPLASH_SCALE);
+        const splashElemental = Math.floor(elemental * SPLASH_SCALE);
+        const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
+        return {
+          target: tgt,
+          amount: Math.max(1, splashPhysical + splashElemental + splashNecrotic),
+          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
+          tags: ability?.tags,
+          buildup: hasNecro ? { ...necroSpread } : undefined,
+        };
+      });
+      return { ...roll, physical, elemental, necrotic, amount, splash: splash.length ? splash : undefined };
     },
-    description: "Req lacerate T1. 100% primary + column AOE (70% + 10% per 100 lacerate). Spreads 75% of primary's necrotic buildups."
+    description: "Requires the target to be Bleeding (Lacerate T1+). Deals 100% weapon damage, +10% per 100 Lacerate on the target (capped at 400, up to +40%). Splashes 70% of that same hit to the rest of the target's rank, and spreads 25% of the target's Toxic/Disease/Curse buildup to them too. Does not consume any weakness."
   },
 
   'hunters_finish': {
@@ -14814,47 +14897,91 @@ Object.assign(RAW_SKILLS, {
     name: "Hunter's Finish",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "WIS",
     requiredValue: 16,
     actionCost: ["major", "bonus"],
-    mpCost: 10,
-    cooldown: 8,
+    // Cost/cooldown toned down along with dropping the old hard dual-
+    // requirement gate (was 10/8) — this skill no longer requires anything
+    // to be present on the target at all, Hunter's Mark is now an optional
+    // bonus rather than a prerequisite, and it no longer touches lodges.
+    mpCost: 8,
+    cooldown: 6,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "consume", "finisher"],
+    tags: ["ranged", "attack", "projectile", "consume", "finisher"],
     apply: (attacker, target, scene) => {
-      const hasMark  = (target?.statusEffects || []).some(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
-      const hasLodge = (target?.statusEffects || []).some(se => se?.id === 'lodged');
-      if (!hasMark || !hasLodge) {
-        return { amount: 0, log: `Hunter's Finish requires both Hunter's Mark and at least 1 lodge on target.` };
-      }
       const ability = SKILLS?.hunters_finish;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.50);
-      const fireMeter  = target?.weakness?.meters?.fire      || 0;
-      const coldMeter  = target?.weakness?.meters?.cold      || 0;
-      const lightMeter = target?.weakness?.meters?.lightning || 0;
-      const elemBonus  = Math.floor(fireMeter / 10) + Math.floor(coldMeter / 10) + Math.floor(lightMeter / 10);
-      amount += elemBonus;
-      if (target?.weakness?.meters) {
-        target.weakness.meters.fire = 0; target.weakness.meters.cold = 0; target.weakness.meters.lightning = 0;
-        if (target.weakness.tiers) {
-          target.weakness.tiers.fire = 0; target.weakness.tiers.cold = 0; target.weakness.tiers.lightning = 0;
+
+      const w = target?.weakness;
+      // Each family capped individually at 400 (Frost Shatter/Barbed Bloom
+      // convention) before summing for the damage bonus below — the actual
+      // meter clear a few lines down still consumes the FULL amount
+      // regardless of this cap, same "cap only bounds the bonus" pattern.
+      const fireConsumed = Math.min(w?.meters?.fire || 0, 400);
+      const coldConsumed = Math.min(w?.meters?.cold || 0, 400);
+      const lightConsumed = Math.min(w?.meters?.lightning || 0, 400);
+      const totalConsumed = fireConsumed + coldConsumed + lightConsumed;
+      // +2% weapon damage per 10 elemental consumed (was a flat +1 damage
+      // per 10, uncapped).
+      const skillPct = 150 + Math.floor(totalConsumed / 10) * 2;
+
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Deferred to onHitLanded (only runs if this shot's own hit-roll
+      // actually connects) — the meter-clear and Hunter's Mark reapply both
+      // mutate real state; doing them unconditionally here meant a MISSED
+      // Hunter's Finish still wiped the target's elemental buildup and
+      // consumed the mark for real.
+      const onHitLanded = () => {
+        // Consume all 3 elemental meters now, in full — the 400 cap above
+        // only bounds the damage bonus, not how much actually clears. Done
+        // BEFORE any Hunter's Mark reapply below (not via the generic
+        // consumeWeakness result field, which applies generically even
+        // later than this — too late, it would wipe out the reapplied
+        // buildup the mark grants).
+        if (w?.meters) {
+          w.meters.fire = 0; w.meters.cold = 0; w.meters.lightning = 0;
+          if (w.tiers) { w.tiers.fire = 0; w.tiers.cold = 0; w.tiers.lightning = 0; }
         }
-      }
-      const { dislodged } = dislodgeLodges(target, scene);
-      target.statusEffects = (target.statusEffects || []).filter(se => se?.id !== 'hunters_mark');
-      return {
-        ...roll, amount,
-        log: `Hunter's Finish — ${dislodged} lodges, ${fireMeter + coldMeter + lightMeter} elemental consumed (+${elemBonus} damage)!`,
+
+        // Hunter's Mark synergy — optional now, not a requirement, and this
+        // skill no longer touches lodges at all. If the mark is active,
+        // reapply HALF of each family's own capped-consumed amount as fresh
+        // buildup, then consume the mark. Called directly via
+        // scene._applyWeaknessBuildup (not result.buildup/consumeWeakness —
+        // those apply generically, elsewhere) specifically so the mark's
+        // own BuildupReceived% bonus reads correctly while it's still
+        // active, right before it's removed.
+        const mark = (target?.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
+        let markLog = '';
+        if (mark) {
+          const reapply = {
+            fire: Math.floor(fireConsumed * 0.5),
+            cold: Math.floor(coldConsumed * 0.5),
+            lightning: Math.floor(lightConsumed * 0.5),
+          };
+          scene?._applyWeaknessBuildup?.(target, reapply, { user: attacker, ability });
+          target.statusEffects = target.statusEffects.filter(se => se !== mark);
+          markLog = ` Hunter's Mark consumed — reapplies half the buildup!`;
+        }
+
+        return {
+          log: `Hunter's Finish — ${totalConsumed} elemental consumed (${skillPct}% damage).${markLog}`,
+        };
       };
+
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Req Hunter's Mark + 1 lodge + costs major+bonus. 150% + consume all elemental. Clears lodges and mark."
+    description: "Deals 150% weapon damage, +2% more per 10 elemental buildup consumed (each of Fire/Cold/Lightning capped at 400 for this bonus). Consumes all elemental buildup on the target. If Hunter's Mark is active, consumes it too and reapplies half the consumed buildup as fresh buildup, boosted by the mark's own bonus."
   },
 
   'farsight_volley': {
@@ -14862,52 +14989,82 @@ Object.assign(RAW_SKILLS, {
     name: "Farsight Volley",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "CHA",
     requiredValue: 15,
     actionCost: "major",
     mpCost: 8,
     cooldown: 6,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "aoe", "mana"],
+    // Restricts which enemy slots are even selectable in the first place
+    // (existing generic mechanism, read by _enterTargetingMode) — the
+    // player can no longer pick a non-back-rank enemy at all, rather than
+    // picking one and having it silently fizzle after the fact.
+    targetColumns: ["back"],
+    tags: ["ranged", "attack", "projectile", "aoe", "mana"],
     apply: (attacker, target, scene) => {
-      // Gate: player must target a backline enemy (slots 6, 7, 8 = 'back' column)
+      // Defensive fallback only — normal play can't reach this anymore
+      // (targetColumns above already restricts targeting), but any other
+      // call path still gets a clean, free fizzle instead of a silent
+      // non-effect that still spends resources.
       const targetCol = scene?._getColumnBySlotId?.(target?._slot?.slotId);
       if (targetCol !== 'back') {
-        return { amount: 0, log: `${attacker?.name ?? 'Archer'}: Farsight Volley only targets the back rank.` };
+        return { amount: 0, fizzle: true, log: `${attacker?.name ?? 'Archer'}: Farsight Volley only targets the back rank.` };
       }
       const ability = SKILLS?.farsight_volley;
       const roll = calculateDamage(attacker, target, ability);
-      const calcAmt = (tgt) => Math.max(1, Math.floor(applyDamageModifiers(roll.amount, attacker, tgt, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }) * 0.85));
+      const calcHit = (tgt, silent) => {
+        const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+          { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+          attacker, tgt,
+          { ability, tags: ability?.tags, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult, silent }
+        );
+        return { physical, elemental, necrotic, amount: Math.max(1, physical + elemental + necrotic) };
+      };
+      const primary = calcHit(target, false);
       // Hit all enemies in the same rank (same column = same depth) as the target
       const others = resolveAOESplash(scene, target, { shape: "column" });
-      let totalMpGain = 0;
-      for (const tgt of [target, ...others]) {
-        const disorient = tgt?.weakness?.meters?.disorient || 0;
-        const drained = Math.floor(disorient / 50);
-        if (drained > 0) {
-          totalMpGain += drained;
-          if (tgt.currentMP != null) tgt.currentMP = Math.max(0, tgt.currentMP - drained);
-          if (tgt?.weakness?.meters) {
-            tgt.weakness.meters.disorient = 0;
-            if (tgt.weakness.tiers) tgt.weakness.tiers.disorient = 0;
+      const splash = others.map(tgt => ({ target: tgt, ...calcHit(tgt, true), tags: ability?.tags }));
+
+      // MP drain deferred to onHitLanded (CombatScene.js — only runs if this
+      // shot's own hit-roll actually connects). The OLD version mutated
+      // tgt.currentMP/weakness.meters directly inside apply(), which runs
+      // BEFORE the hit-roll — same class of bug Piercing Release's lodge
+      // dislodge had, meaning a miss still drained MP for real.
+      const onHitLanded = () => {
+        let totalMpGain = 0;
+        for (const tgt of [target, ...others]) {
+          const disorient = tgt?.weakness?.meters?.disorient || 0;
+          // Capped at 200 for the drain calc (max 4 MP per target) — a
+          // target's meter still fully clears when it drains at all, same
+          // as before, just bounded going into the drain math itself.
+          const drainedMeter = Math.min(disorient, 200);
+          const drained = Math.floor(drainedMeter / 50);
+          if (drained > 0) {
+            totalMpGain += drained;
+            if (tgt.currentMP != null) tgt.currentMP = Math.max(0, tgt.currentMP - drained);
+            if (tgt?.weakness?.meters) {
+              tgt.weakness.meters.disorient = 0;
+              if (tgt.weakness.tiers) tgt.weakness.tiers.disorient = 0;
+            }
           }
         }
-      }
-      const amount = calcAmt(target);
-      const splash = others.map(tgt => ({ target: tgt, amount: calcAmt(tgt), tags: ability?.tags }));
-      return {
-        ...roll, amount,
-        splash: splash.length ? splash : undefined,
-        mpGain: totalMpGain || undefined,
-        log: totalMpGain > 0 ? `${attacker?.name ?? 'Archer'} volleys the back rank — drains ${totalMpGain} MP from disoriented foes!` : undefined,
+        // mpGain is read generically by the engine and added straight to
+        // the attacker's own currentMP — the same number subtracted from
+        // targets above, so drained-from-enemies always equals gained-by-
+        // caster, 1:1.
+        return {
+          mpGain: totalMpGain || undefined,
+          log: totalMpGain > 0 ? `${attacker?.name ?? 'Archer'} volleys the back rank — drains ${totalMpGain} MP from disoriented foes!` : undefined,
+        };
       };
+
+      return { ...roll, ...primary, splash: splash.length ? splash : undefined, onHitLanded };
     },
-    description: "Target a back-rank enemy — 85% to all back-rank enemies. Drains 1 MP per 50 disorient from each and restores to you."
+    description: "Requires targeting a back-rank enemy. Deals 85% weapon damage to it and every other back-rank enemy. Drains 1 MP per 50 Disorient buildup from each (capped at 200 buildup per target, max 4 MP each) and restores the total to you."
   },
 
   'quivering_burst': {
@@ -14915,46 +15072,81 @@ Object.assign(RAW_SKILLS, {
     name: "Quivering Burst",
     type: "weapon",
     mechanic: "active",
-    versionTag: "v3.22",
+    versionTag: "v3.23",
     requiredWeapon: ["bow"],
     requiredStat: "INT",
     requiredValue: 15,
     actionCost: "major",
     mpCost: 9,
     cooldown: 6,
+    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["ranged", "attack", "aoe", "lightning", "dislodge"],
-    buildupHint: { family: "toxic", amount: 40 },
+    tags: ["ranged", "attack", "projectile", "lightning"],
     apply: (attacker, target, scene) => {
-      const lodgeCount = (target?.statusEffects || []).filter(se => se?.id === 'lodged').length;
-      if (lodgeCount < 2 || (target?.weakness?.tiers?.lightning || 0) < 2) {
-        return { amount: 0, log: `Quivering Burst requires 2+ lodges and lightning T2 on target.` };
-      }
       const ability = SKILLS?.quivering_burst;
       const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, element: "lightning", skipGearMultiplier: true,
-      }));
-      amount = Math.floor(amount * 1.10);
-      const { totalDamage, dislodged } = dislodgeLodges(target, scene);
-      amount += totalDamage;
-      const toxicBuildup = ability?.buildupHint?.amount ?? 40;
-      const lightMeter   = target?.weakness?.meters?.lightning || 0;
-      const repeatChance = Math.min(0.60, lightMeter / 1000);
-      const aoeDmg = Math.floor(amount * 0.65);
-      const splash = resolveAOESplash(scene, target, { shape: "adjacent" }).map(tgt => ({
-        target: tgt, amount: aoeDmg, tags: ability?.tags,
-        buildup: { toxic: toxicBuildup },
-      }));
-      return {
-        ...roll, amount, element: "lightning",
-        buildup: { toxic: toxicBuildup },
-        splash: splash.length ? splash : undefined,
-        log: `${attacker?.name ?? 'Archer'} electrifies ${dislodged} lodges! ${aoeDmg} AOE, ${Math.round(repeatChance * 100)}% repeat. (Repeat trigger: TODO)`,
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`, isCrit: roll.isCrit, critMult: roll.critMult, skillConversion: { physToElemPct: 100 } }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Arcing repeat — same meter-scaled chance formula the staff and
+      // dagger's own lightning skills already use (chance ramps smoothly
+      // with the target's CURRENT lightning meter, capped — not a tier
+      // threshold). Doesn't consume any of that meter itself.
+      //
+      // This can't be the generic repeatChance/repeatScale engine mechanic
+      // (that only ever re-hits the SAME target) — an arc needs to spread
+      // to OTHER nearby targets instead, so it's rolled and resolved by
+      // hand here, deferred to onHitLanded (only runs if this shot's own
+      // hit-roll connects) via the same real _applyDirectResult path
+      // splash/repeats already use internally — full mitigation, reactions,
+      // floating numbers, all of it, nothing bypassed.
+      const lightMeter = target?.weakness?.meters?.lightning || 0;
+      const arcChance = Math.min(0.60, lightMeter / 1000);
+      const ARC_SCALE = 0.60;
+      const onHitLanded = (liveResult) => {
+        if (Math.random() >= arcChance) return {};
+        // Basis is the CORE hit — post-gear-conversion, but BEFORE Jolt (a
+        // target-side trigger effect, not part of the hit's own
+        // composition) — same snapshot the generic repeatChance/repeatScale
+        // mechanic already uses (_buildRepeatPayload, CombatScene.js). Reads
+        // liveResult (the engine's own resultMutable, passed into this
+        // callback) rather than the physical/elemental/necrotic closed over
+        // above, since THOSE are from before gear-conversion ran.
+        const core = liveResult?._coreBreakdown;
+        const baseP = core?.physical ?? physical;
+        const baseE = core?.elemental ?? elemental;
+        const baseN = core?.necrotic ?? necrotic;
+
+        const nearby = resolveAOESplash(scene, target, { shape: "adjacent" });
+        // Re-hits the original target (a normal repeat) plus any nearby
+        // enemy with an active Lightning tier ("Jolted or Shocked" — any
+        // tier, not specifically Shocked/T2).
+        const arcTargets = [target, ...nearby.filter(t => (t?.weakness?.tiers?.lightning || 0) >= 1)];
+
+        arcTargets.forEach((t, i) => {
+          scene.time?.delayedCall(80 * (i + 1), () => {
+            if (scene.combatEnded || t.status === 'incapacitated') return;
+            const p = Math.floor(baseP * ARC_SCALE);
+            const e = Math.floor(baseE * ARC_SCALE);
+            const n = Math.floor(baseN * ARC_SCALE);
+            scene._applyDirectResult(attacker, t, {
+              amount: Math.max(1, p + e + n),
+              physical: p, elemental: e, necrotic: n,
+              isMagic: true, element: 'lightning',
+            }, { isSplash: true, ability });
+          });
+        });
+        return { log: `${attacker?.name ?? 'Archer'}'s shot arcs${arcTargets.length > 1 ? ` — hits ${arcTargets.length} targets` : ''}!` };
       };
+
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Req 2+ lodges + lightning T2. 110% lightning + dislodge all + 65% adjacent AOE + 40 toxic. Repeat chance = lightning/1000 capped at 60% (TODO)."
+    description: "Deals 110% weapon damage as Lightning. Chance to arc — scaling with the target's own Lightning buildup, up to 60% at 1000+ — repeating 60% damage against the target again, plus any nearby enemy with an active Lightning weakness. Does not consume the target's Lightning buildup."
   },
 
   // --- Gun (2h) ---

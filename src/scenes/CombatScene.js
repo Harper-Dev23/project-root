@@ -4632,6 +4632,46 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Skill-provided "only if this hit actually lands" callback — for
+    // effects that mutate REAL game state (e.g. Piercing Release popping
+    // lodges off the target) and must NOT happen on a miss. apply() runs
+    // BEFORE the hit-roll above, so a skill that mutated state directly
+    // inside apply() would do so unconditionally, miss or not — this lets a
+    // skill defer that mutation until we actually know the outcome. The
+    // callback owns its own formula entirely (buildup amounts, breakdown
+    // pushes, etc.); the engine only decides WHETHER to invoke it.
+    if (!missed && typeof resultMutable?.onHitLanded === 'function') {
+      try {
+        // Passes the live resultMutable through so a callback that needs to
+        // scale off "the real hit" (e.g. an arc/repeat effect) can read
+        // resultMutable._coreBreakdown — post-gear-conversion, but before
+        // Jolt — the exact same basis the generic repeatChance/repeatScale
+        // mechanism already uses (_buildRepeatPayload above). Without this,
+        // a callback could only see whatever pre-gear-conversion numbers it
+        // closed over back inside apply(), silently missing the caster's
+        // own gear%/conversion bonuses.
+        Object.assign(resultMutable, resultMutable.onHitLanded(resultMutable) || {});
+      } catch (e) {
+        console.error('[onHitLanded error]', ability?.id, e);
+      }
+    }
+
+    // Generic post-gear-conversion physical rider — same treatment as
+    // Lightning Jolt above, for skill-authored bonus damage that must stay
+    // untouched by the CASTER's own gear%/conversion. Placed here (after the
+    // hit-roll/onHitLanded above) so it naturally no-ops on a miss too, since
+    // onHitLanded never ran to populate it. First user: Piercing Release's
+    // lodge-dislodge payout, frozen on the lodge at PLACEMENT time (possibly
+    // a different character's stats) — should only be affected by the
+    // TARGET's mitigation when popped, never by whoever holds the bow at
+    // dislodge time. Physical-only for now (no skill needs elemental/
+    // necrotic riders yet); extend the same way Jolt's own field would be if
+    // that ever changes.
+    if (ability?.typedDamage && resultMutable && !resultMutable.isHeal && (resultMutable.physicalRiderDamage || 0) > 0) {
+      resultMutable.physical = (resultMutable.physical || 0) + resultMutable.physicalRiderDamage;
+      resultMutable.amount = (resultMutable.amount || 0) + resultMutable.physicalRiderDamage;
+    }
+
     const isHealResult = resultMutable?.isHeal === true;
 
     const rawDamage = Math.max(0, Number(resultMutable.amount || 0));
@@ -5249,8 +5289,13 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // (3) Consume weaknesses
-    if (Array.isArray(result?.consumeWeakness)) {
+    // (3) Consume weaknesses — gated on !missed: this result field survives
+    // the miss-reset above untouched (only amount/ignoreDR/isHeal/buildup/
+    // splash get cleared on a miss), so without this check a missed attack
+    // still fully consumed the target's weakness meter for real. Affects
+    // any skill using consumeWeakness (Frost Shatter, oskar_maw_rip,
+    // rogue_finishing_strike, kiro_poison_cloud, kiro_corrosive_bite, etc).
+    if (!missed && Array.isArray(result?.consumeWeakness)) {
       let lodgeConsumed = false;
       for (const fam of result.consumeWeakness) {
         // Clear traditional weakness meter if present
