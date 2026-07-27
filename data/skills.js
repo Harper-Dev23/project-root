@@ -1,6 +1,6 @@
 ﻿// @ts-nocheck
 // data/skills.js
-import { calculateDamage, calculateDualWieldDamage } from '../src/systems/CombatLogic.js';
+import { calculateDamage } from '../src/systems/CombatLogic.js';
 import { calculateFireballDamage } from '../src/systems/CombatLogic.js';
 import { Items } from './items.js';
 import {
@@ -53,19 +53,23 @@ export function applyRhythmStack(char) {
  * dislodgeLodges(target, scene, count?)
  * Removes up to `count` lodged arrows from target.statusEffects and returns damage/effects.
  * Each lodge has an optional scalingBonus (e.g. 0.10 = +10% per additional lodge on target)
- * for its own baseDamage, and an optional lacerateScalingBonus for its own lacerateOnDislodge
- * — both scale off the TOTAL lodge count present at pop time, mixed types included (e.g. a
- * Lodge Arrow lodge counts toward a Barbed Shaft lodge's own scaling, and vice versa).
- * Hunter's Mark on target amplifies all lodge damage by its own LodgeDamage% mod.
- * lacerateBuildup is returned raw (NOT mark-amplified here) — callers feed it through their
- * own result.buildup like any other buildup source, which is where Hunter's Mark's separate
- * BuildupReceived% mod applies generically (_applyWeaknessBuildup, CombatScene.js).
+ * for its own baseDamage, and an optional { buildupOnDislodge: { family, amount },
+ * buildupScalingBonus } pair for a buildup family it grants on pop (family is generic — any
+ * lodge can name ANY weakness family here, e.g. Barbed Shaft names lacerate, a lightning-lodge
+ * names lightning). Both damage and buildup scaling read off the TOTAL lodge count present at
+ * pop time, mixed types included (e.g. a Lodge Arrow lodge counts toward a Barbed Shaft lodge's
+ * own scaling, and vice versa).
+ * Hunter's Mark on target amplifies all lodge DAMAGE by its own LodgeDamage% mod. The returned
+ * `buildup` map is raw (NOT mark-amplified here, and NOT summed per-family across dislodge
+ * calls beyond this one pop) — callers feed it through their own result.buildup like any other
+ * buildup source, which is where Hunter's Mark's separate BuildupReceived% mod applies
+ * generically (_applyWeaknessBuildup, CombatScene.js).
  */
 function dislodgeLodges(target, scene, count = Infinity) {
-  if (!target) return { totalDamage: 0, lacerateBuildup: 0, dislodged: 0 };
+  if (!target) return { totalDamage: 0, buildup: {}, dislodged: 0 };
   const allLodges = (target.statusEffects || []).filter(se => se?.id === 'lodged');
   const toRemove = isFinite(count) ? allLodges.slice(0, count) : allLodges;
-  if (toRemove.length === 0) return { totalDamage: 0, lacerateBuildup: 0, dislodged: 0 };
+  if (toRemove.length === 0) return { totalDamage: 0, buildup: {}, dislodged: 0 };
 
   const totalLodges = allLodges.length;
   const huntersMark = (target.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
@@ -75,14 +79,15 @@ function dislodgeLodges(target, scene, count = Infinity) {
   const markBonus = huntersMark ? 1 + ((huntersMark.mods?.LodgeDamage || 0) / 100) : 1.0;
 
   let totalDamage = 0;
-  let lacerateBuildup = 0;
+  const buildup = {};
   for (const lodge of toRemove) {
     const additionalLodges = totalLodges - 1;
     const scale = lodge.scalingBonus ? (1 + lodge.scalingBonus * additionalLodges) : 1;
     totalDamage += Math.floor((lodge.baseDamage || 0) * scale * markBonus);
-    if (lodge.lacerateOnDislodge) {
-      const lacScale = lodge.lacerateScalingBonus ? (1 + lodge.lacerateScalingBonus * additionalLodges) : 1;
-      lacerateBuildup += Math.floor(lodge.lacerateOnDislodge * lacScale);
+    const bo = lodge.buildupOnDislodge;
+    if (bo?.family && bo?.amount) {
+      const buScale = lodge.buildupScalingBonus ? (1 + lodge.buildupScalingBonus * additionalLodges) : 1;
+      buildup[bo.family] = (buildup[bo.family] || 0) + Math.floor(bo.amount * buScale);
     }
   }
 
@@ -92,7 +97,19 @@ function dislodgeLodges(target, scene, count = Infinity) {
     scene.lodgesDislodgedThisTurn = (scene.lodgesDislodgedThisTurn || 0) + toRemove.length;
     scene._refreshLodgeSprites?.(target);
   }
-  return { totalDamage, lacerateBuildup, dislodged: toRemove.length };
+  return { totalDamage, buildup, dislodged: toRemove.length };
+}
+
+// Shared by hail_of_arrows and its own hail_of_arrows_shot sub-skill —
+// each recipient's own weakness-category bonus, off THEIR OWN weakness
+// tiers (any active tier counts, not just T2).
+function hailOfArrowsMult(tgt) {
+  let mul = 1.0;
+  const t = tgt?.weakness?.tiers || {};
+  if ((t.expose || 0) >= 1 || (t.lacerate || 0) >= 1 || (t.disorient || 0) >= 1) mul += 0.20;
+  if ((t.fire || 0) >= 1 || (t.cold || 0) >= 1 || (t.lightning || 0) >= 1) mul += 0.20;
+  if ((t.toxic || 0) >= 1 || (t.disease || 0) >= 1 || (t.curse || 0) >= 1) mul += 0.20;
+  return mul;
 }
 
 /** Returns the active runic_zone statusEffect on a character, or undefined. */
@@ -322,21 +339,12 @@ const RAW_SKILLS = {
     targetRequirement: 'enemy',
     targetColumns: ['front', 'mid', 'back'],
     cooldown: 0,
+    // calculateDamage() now detects and folds in dual-wielding
+    // automatically (see CombatLogic.js) — no need to branch on it here.
     apply: (attacker, target) => {
-      const mainWeapon = attacker.equipment?.weaponMain ? Items[attacker.equipment.weaponMain] : null;
-      const offWeapon = attacker.equipment?.weaponOff ? Items[attacker.equipment.weaponOff] : null;
-      const mainIsTwoHand = mainWeapon?.hands === 2;
-
-
-      if (offWeapon && offWeapon.weaponType !== 'shield' && !mainIsTwoHand) {
-        const result = calculateDualWieldDamage(attacker, target);
-        const amount = applyDamageModifiers(result.amount, attacker, target);
-        return { ...result, amount };
-      } else {
-        const r = calculateDamage(attacker, target);
-        const amount = applyDamageModifiers(r.amount, attacker, target);
-        return { ...r, amount };
-      }
+      const r = calculateDamage(attacker, target);
+      const amount = applyDamageModifiers(r.amount, attacker, target);
+      return { ...r, amount };
     },
     description: 'A quick physical strike.',
   },
@@ -14306,6 +14314,103 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage (125% vs a Chilled target, 175% vs Frostbitten). Applies Cold. 50% chance to repeat at 50% damage if the target is Shocked (Lightning T2) — a 25% average damage increase while Shocked."
   },
 
+  // Same underlying shape as sword_1h/dagger/staff/mace_2h's own pairs
+  // (e.g. sword_1h's Marked Cut/Storm Cut, dagger's Vital Mark/Ember
+  // Strike): weapon damage + a primary family's buildup, and a BONUS
+  // buildup in a SECOND family on actually crossing a tier of the first —
+  // via the generic rewardIfTierCross engine (real post-buildup tier
+  // snapshot, not a self-predicted guess, unlike Frost Pin above, which
+  // still has the old self-predicted-crossing bug those other weapons'
+  // pairs were built specifically to avoid). Disorient primary: bow had no
+  // Disorient-buildup skill yet. Stays pure physical damage (no
+  // skillConversion) — same convention as every other weapon's pair below
+  // a magic-only weapon type (staff); a blunt/concussive arrowhead, not a
+  // spell.
+  'staggering_point': {
+    id: "staggering_point",
+    name: "Staggering Point",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 4,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "disorient"],
+    buildupHint: { disorient: 85 },
+    rewardIfTierCross: [
+      { family: "disorient", tier: 1, debuff: { addBuildup: { expose: 75 } } },
+      { family: "disorient", tier: 2, debuff: { addBuildup: { expose: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.staggering_point;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { disorient: ability?.buildupHint?.disorient ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
+  },
+
+  // Same shape as Staggering Point above. Curse primary: bow had no
+  // Curse-buildup skill yet — a hunter's old ritual arrowhead, marked for
+  // something worse than a clean kill. Toxic secondary hasn't been used as
+  // a REWARD family anywhere else yet either (only ever a primary), fitting
+  // the "the curse festers into poison" idea.
+  'hexpoint_arrow': {
+    id: "hexpoint_arrow",
+    name: "Hexpoint Arrow",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 5,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "curse"],
+    buildupHint: { curse: 85 },
+    rewardIfTierCross: [
+      { family: "curse", tier: 1, debuff: { addBuildup: { toxic: 75 } } },
+      { family: "curse", tier: 2, debuff: { addBuildup: { toxic: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hexpoint_arrow;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll,
+        physical, elemental, necrotic, amount,
+        buildup: { curse: ability?.buildupHint?.curse ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage. Applies Curse. Crossing a tier also festers into sickness (bonus Toxic)."
+  },
+
   // Simplified from the original "copy and refire the ally's own skill"
   // design (too complex to balance) — now a flat, self-contained payoff:
   // once armed, the next time ANY ally lands a bow/sling/gun (projectile-
@@ -14459,16 +14564,19 @@ Object.assign(RAW_SKILLS, {
       // in the target for real.
       const onHitLanded = () => {
         target.statusEffects.push({
-          id: 'lodged', baseDamage, lacerateOnDislodge: 100,
-          // lacerateScalingBonus: +10% per OTHER lodge present at dislodge time
-          // (any type — Lodge Arrow lodges count too, dislodgeLodges' totalLodges
-          // is a mixed count), same convention/magnitude as baseDamage's own
-          // scalingBonus elsewhere. The raw lacerateOnDislodge total dislodgeLodges
-          // returns is NOT mark-amplified there — it flows through THIS skill's own
-          // result.buildup like any other buildup source, so Hunter's Mark's
-          // BuildupReceived% mod applies to it automatically and generically
+          id: 'lodged', baseDamage,
+          // buildupOnDislodge/buildupScalingBonus: generic dislodgeLodges
+          // fields (any family, not just lacerate) — +10% per OTHER lodge
+          // present at dislodge time (any type — Lodge Arrow lodges count
+          // too, dislodgeLodges' totalLodges is a mixed count), same
+          // convention/magnitude as baseDamage's own scalingBonus elsewhere.
+          // The raw amount dislodgeLodges returns is NOT mark-amplified
+          // there — it flows through THIS skill's own result.buildup like
+          // any other buildup source, so Hunter's Mark's BuildupReceived%
+          // mod applies to it automatically and generically
           // (_applyWeaknessBuildup, CombatScene.js) with no special-casing needed.
-          lacerateScalingBonus: 0.10,
+          buildupOnDislodge: { family: 'lacerate', amount: 100 },
+          buildupScalingBonus: 0.10,
           stackable: true,
           // Deep red hue — visually distinguishes a barbed lodge from a plain
           // Lodge Arrow one on the portrait (see _refreshLodgeSprites,
@@ -14487,6 +14595,65 @@ Object.assign(RAW_SKILLS, {
       return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
     description: "Deals 75% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
+  },
+
+  // Same shape as Barbed Shaft, re-themed to Lightning — a charged
+  // arrowhead instead of a barbed one. Uses the same generic
+  // buildupOnDislodge/buildupScalingBonus fields dislodgeLodges reads for
+  // ANY family, so this needed zero engine changes beyond what Barbed
+  // Shaft's own conversion already generalized.
+  'storm_barb': {
+    id: "storm_barb",
+    name: "Storm Barb",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["bow"],
+    requiredStat: "DEX",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 4,
+    cooldown: 2,
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "lodge", "lightning"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.storm_barb;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 75, skillLabel: `${ability?.name || 'Skill'} weapon damage (75%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const baseDamage = Math.max(1, Math.floor(amount * 0.25));
+
+      // Deferred to onHitLanded (only runs if this shot's own hit-roll
+      // actually connects) — same fix as Lodge Arrow/Barbed Shaft's
+      // identical bug: pushing the lodge unconditionally meant a MISSED
+      // shot still stuck one in the target for real.
+      const onHitLanded = () => {
+        target.statusEffects.push({
+          id: 'lodged', baseDamage,
+          buildupOnDislodge: { family: 'lightning', amount: 100 },
+          buildupScalingBonus: 0.10,
+          stackable: true,
+          // Gold hue — visually distinguishes a storm barb from a plain
+          // Lodge Arrow (untinted) or a Barbed Shaft (deep red) lodge on
+          // the portrait (see _refreshLodgeSprites, CombatScene.js).
+          tint: 0xe6c447,
+        });
+        scene?._refreshLodgeSprites?.(target);
+        const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
+        return {
+          log: `${attacker?.name ?? 'Archer'} drives a storm barb in (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''} on target).`,
+        };
+      };
+
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
+    },
+    description: "Deals 75% weapon damage and drives in a charged lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lightning buildup — +10% more per other lodge on the target at that moment."
   },
 
   'snipe_pose': {
@@ -14559,103 +14726,6 @@ Object.assign(RAW_SKILLS, {
     description: "Free. Requires at least one lodge dislodged this turn. Restores 4 MP per lodge dislodged."
   },
 
-  // Same underlying shape as sword_1h/dagger/staff/mace_2h's own pairs
-  // (e.g. sword_1h's Marked Cut/Storm Cut, dagger's Vital Mark/Ember
-  // Strike): weapon damage + a primary family's buildup, and a BONUS
-  // buildup in a SECOND family on actually crossing a tier of the first —
-  // via the generic rewardIfTierCross engine (real post-buildup tier
-  // snapshot, not a self-predicted guess, unlike Frost Pin above, which
-  // still has the old self-predicted-crossing bug those other weapons'
-  // pairs were built specifically to avoid). Disorient primary: bow had no
-  // Disorient-buildup skill yet. Stays pure physical damage (no
-  // skillConversion) — same convention as every other weapon's pair below
-  // a magic-only weapon type (staff); a blunt/concussive arrowhead, not a
-  // spell.
-  'staggering_point': {
-    id: "staggering_point",
-    name: "Staggering Point",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 4,
-    cooldown: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["ranged", "attack", "projectile", "disorient"],
-    buildupHint: { disorient: 85 },
-    rewardIfTierCross: [
-      { family: "disorient", tier: 1, debuff: { addBuildup: { expose: 75 } } },
-      { family: "disorient", tier: 2, debuff: { addBuildup: { expose: 150 } } },
-    ],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.staggering_point;
-      const roll = calculateDamage(attacker, target, ability);
-      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      return {
-        ...roll,
-        physical, elemental, necrotic, amount,
-        buildup: { disorient: ability?.buildupHint?.disorient ?? 85 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "Deals 100% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
-  },
-
-  // Same shape as Staggering Point above. Curse primary: bow had no
-  // Curse-buildup skill yet — a hunter's old ritual arrowhead, marked for
-  // something worse than a clean kill. Toxic secondary hasn't been used as
-  // a REWARD family anywhere else yet either (only ever a primary), fitting
-  // the "the curse festers into poison" idea.
-  'hexpoint_arrow': {
-    id: "hexpoint_arrow",
-    name: "Hexpoint Arrow",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 5,
-    cooldown: 2,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["ranged", "attack", "projectile", "curse"],
-    buildupHint: { curse: 85 },
-    rewardIfTierCross: [
-      { family: "curse", tier: 1, debuff: { addBuildup: { toxic: 75 } } },
-      { family: "curse", tier: 2, debuff: { addBuildup: { toxic: 150 } } },
-    ],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.hexpoint_arrow;
-      const roll = calculateDamage(attacker, target, ability);
-      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      return {
-        ...roll,
-        physical, elemental, necrotic, amount,
-        buildup: { curse: ability?.buildupHint?.curse ?? 85 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "Deals 100% weapon damage. Applies Curse. Crossing a tier also festers into sickness (bonus Toxic)."
-  },
-
   // -------- Payoff --------
 
   'piercing_release': {
@@ -14698,7 +14768,7 @@ Object.assign(RAW_SKILLS, {
       // just with the damage zeroed out afterward. The lodges themselves
       // were already gone regardless.
       const onHitLanded = () => {
-        const { totalDamage, lacerateBuildup, dislodged } = dislodgeLodges(target, scene);
+        const { totalDamage, buildup, dislodged } = dislodgeLodges(target, scene);
         // Dislodge payout stays isolated from the CASTER's own gear%/
         // conversion (each lodge's damage was frozen at lodge-creation time,
         // possibly by a different character) — returned as physicalRiderDamage,
@@ -14708,11 +14778,17 @@ Object.assign(RAW_SKILLS, {
         if (totalDamage > 0) {
           try { _pushBreakdown({ label: 'Lodge dislodge', flat: totalDamage }); } catch { }
         }
-        const exposeGain = dislodged * 35;
-        const lacerateGain = (lacerateBuildup || 0) + dislodged * 35;
+        // Piercing Release's own flat per-lodge bonuses, added on top of
+        // whatever each individual lodge's own buildupOnDislodge already
+        // contributed (e.g. Barbed Shaft's lacerate, a lightning-lodge's
+        // lightning) — merged, not overwritten, so mixed lodge types on the
+        // same target all pay out together.
+        const finalBuildup = { ...buildup };
+        finalBuildup.expose = (finalBuildup.expose || 0) + dislodged * 35;
+        finalBuildup.lacerate = (finalBuildup.lacerate || 0) + dislodged * 35;
         return {
           physicalRiderDamage: totalDamage,
-          buildup: { expose: exposeGain, lacerate: lacerateGain },
+          buildup: finalBuildup,
           log: `${attacker?.name ?? 'Archer'} releases all — ${dislodged} arrow${dislodged !== 1 ? 's' : ''} dislodged for ${totalDamage} bonus damage!`,
         };
       };
@@ -14793,40 +14869,65 @@ Object.assign(RAW_SKILLS, {
     tags: ["ranged", "attack", "projectile", "aoe"],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.hail_of_arrows;
-      // One shared roll (crit etc.) for the whole cast — every recipient's
-      // own skillPct is applied on top of it individually below, same
-      // "single dice roll, per-target scaling" precedent fire_flare_wave/
-      // ice_shard_storm's splash already use.
       const roll = calculateDamage(attacker, target, ability);
-      const calcHit = (tgt, silent) => {
-        // Each recipient computes their OWN bonus off THEIR OWN weakness
-        // tiers — not the primary target's — so a target with no weaknesses
-        // in a mixed-AOE hit takes less than one that's Exposed and Singed.
-        // Any active tier counts (T1+), not just T2.
-        let mul = 1.0;
-        const t = tgt?.weakness?.tiers || {};
-        if ((t.expose || 0) >= 1 || (t.lacerate || 0) >= 1 || (t.disorient || 0) >= 1) mul += 0.20;
-        if ((t.fire || 0) >= 1 || (t.cold || 0) >= 1 || (t.lightning || 0) >= 1) mul += 0.20;
-        if ((t.toxic || 0) >= 1 || (t.disease || 0) >= 1 || (t.curse || 0) >= 1) mul += 0.20;
-        const skillPct = 90 * mul;
-        const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-          { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-          attacker, tgt,
-          { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult, silent }
-        );
-        const amount = Math.max(1, physical + elemental + necrotic);
-        return { physical, elemental, necrotic, amount };
-      };
-      const primary = calcHit(target, false);
-      // smallCone: hits the target plus the 1-2 slots directly behind it in
-      // the next column back (see SMALL_CONE_MAP, aoeResolver.js) — was
-      // "adjacent" (same-column neighbors), the wrong shape for this skill.
-      const splash = resolveAOESplash(scene, target, { shape: "smallCone" }).map(tgt => ({
-        target: tgt, ...calcHit(tgt, true), tags: ability?.tags,
-      }));
-      return { ...roll, ...primary, splash: splash.length ? splash : undefined };
+      const skillPct = 90 * hailOfArrowsMult(target);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // smallCone: the 1-2 slots directly behind the target in the next
+      // column back (see SMALL_CONE_MAP, aoeResolver.js). Each is fired as
+      // its own genuinely INDEPENDENT shot — a real _applyAbilityToTarget
+      // cast with its own hit-roll — not shared-hit-roll splash, same
+      // architecture Volley's two arrows use. This is "arrows raining down"
+      // (each can individually hit or miss), not "one hit splashing
+      // outward" — unlike the primary target here, which still resolves
+      // through the NORMAL pipeline's own hit-roll unaffected by any of this.
+      const others = resolveAOESplash(scene, target, { shape: "smallCone" });
+      const shot = SKILLS?.hail_of_arrows_shot;
+      others.forEach((tgt, i) => {
+        scene.time?.delayedCall(60 * (i + 1), () => {
+          if (scene.combatEnded || tgt.status === 'incapacitated') return;
+          scene._applyAbilityToTarget(attacker, tgt, shot, { isReaction: true, tags: shot?.tags || [] });
+        });
+      });
+
+      return { ...roll, physical, elemental, necrotic, amount };
     },
-    description: "Small cone: hits the target and the 1-2 slots directly behind it. Each recipient deals 90% weapon damage independently, +20% more per weakness category they personally have (Physical/Elemental/Necrotic, any tier) — up to 150% with all three."
+    description: "Small cone: fires an arrow at the target and 1-2 more at the slots directly behind it. Every recipient deals 90% weapon damage, +20% more per weakness category they personally have (Physical/Elemental/Necrotic, any tier) — up to 150% with all three."
+  },
+
+  // Not player-selectable — the independent per-target shot Hail of Arrows
+  // fires at each OTHER cone recipient (see above). Can't reuse
+  // hail_of_arrows' own apply() (already spoken for by the primary cast,
+  // same reason volley_arrow exists separately from volley) — each of these
+  // needs its own real hit-roll, which only a genuine separate
+  // _applyAbilityToTarget cast provides.
+  'hail_of_arrows_shot': {
+    id: "hail_of_arrows_shot",
+    name: "Hail of Arrows",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hail_of_arrows_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      const skillPct = 90 * hailOfArrowsMult(target);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
+    },
+    description: "Deals 90% weapon damage, +20% more per weakness category the target has (Physical/Elemental/Necrotic, any tier)."
   },
 
   'barbed_bloom': {
@@ -14996,7 +15097,6 @@ Object.assign(RAW_SKILLS, {
     actionCost: "major",
     mpCost: 8,
     cooldown: 6,
-    typedDamage: true,
     requiresTarget: true,
     targetRequirement: "enemy",
     // Restricts which enemy slots are even selectable in the first place
@@ -15004,7 +15104,11 @@ Object.assign(RAW_SKILLS, {
     // player can no longer pick a non-back-rank enemy at all, rather than
     // picking one and having it silently fizzle after the fact.
     targetColumns: ["back"],
-    tags: ["ranged", "attack", "projectile", "aoe", "mana"],
+    // No 'attack'/'ranged'/'projectile' here — this cast itself never deals
+    // damage (see apply() below), so it shouldn't roll its own hit/miss or
+    // show a damage breakdown of its own; every real hit comes from the
+    // independent farsight_volley_shot casts this fires off.
+    tags: ["support", "aoe", "mana"],
     apply: (attacker, target, scene) => {
       // Defensive fallback only — normal play can't reach this anymore
       // (targetColumns above already restricts targeting), but any other
@@ -15014,57 +15118,89 @@ Object.assign(RAW_SKILLS, {
       if (targetCol !== 'back') {
         return { amount: 0, fizzle: true, log: `${attacker?.name ?? 'Archer'}: Farsight Volley only targets the back rank.` };
       }
-      const ability = SKILLS?.farsight_volley;
-      const roll = calculateDamage(attacker, target, ability);
-      const calcHit = (tgt, silent) => {
-        const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-          { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-          attacker, tgt,
-          { ability, tags: ability?.tags, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult, silent }
-        );
-        return { physical, elemental, necrotic, amount: Math.max(1, physical + elemental + necrotic) };
-      };
-      const primary = calcHit(target, false);
-      // Hit all enemies in the same rank (same column = same depth) as the target
-      const others = resolveAOESplash(scene, target, { shape: "column" });
-      const splash = others.map(tgt => ({ target: tgt, ...calcHit(tgt, true), tags: ability?.tags }));
 
-      // MP drain deferred to onHitLanded (CombatScene.js — only runs if this
-      // shot's own hit-roll actually connects). The OLD version mutated
-      // tgt.currentMP/weakness.meters directly inside apply(), which runs
-      // BEFORE the hit-roll — same class of bug Piercing Release's lodge
-      // dislodge had, meaning a miss still drained MP for real.
+      // The clicked target is purely a formality — required so the ability
+      // has SOME target to satisfy requiresTarget/targetColumns, but Farsight
+      // Volley doesn't favor it over the rest of the back rank in any way.
+      // Every back-rank enemy (this one included) is hit as a genuinely
+      // independent shot — its own real _applyAbilityToTarget cast, own
+      // hit-roll, own damage breakdown — same architecture Hail of Arrows
+      // and Volley use, NOT a single hit-roll gating a shared splash. This
+      // wrapper cast itself deals no damage and shows no breakdown of its own.
+      const sideSlots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const backRank = (sideSlots || [])
+        .map(s => s?.char)
+        .filter(c => c && c.status !== 'incapacitated' && scene?._getColumnBySlotId?.(c._slot?.slotId) === 'back');
+
+      const shot = SKILLS?.farsight_volley_shot;
+      backRank.forEach((tgt, i) => {
+        scene.time?.delayedCall(60 * (i + 1), () => {
+          if (scene.combatEnded || tgt.status === 'incapacitated') return;
+          scene._applyAbilityToTarget(attacker, tgt, shot, { isReaction: true, tags: shot?.tags || [] });
+        });
+      });
+
+      return { amount: 0 };
+    },
+    description: "Requires targeting a back-rank enemy. Fires an independent arrow at every back-rank enemy. Every arrow deals 85% weapon damage and drains 1 MP per 50 Disorient buildup on that target (capped at 200 buildup, max 4 MP), restoring it to you."
+  },
+
+  // Not player-selectable — the independent per-target shot Farsight Volley
+  // fires at EVERY back-rank enemy, including the one clicked (see above).
+  // Can't reuse farsight_volley's own apply() (already spoken for by the
+  // wrapper cast, same reason volley_arrow/hail_of_arrows_shot exist
+  // separately) — each shot needs its own real hit-roll and its own MP
+  // drain gated on THAT shot actually landing.
+  'farsight_volley_shot': {
+    id: "farsight_volley_shot",
+    name: "Farsight Volley",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.farsight_volley_shot;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // MP drain deferred to onHitLanded (only runs if THIS shot's own
+      // hit-roll actually connects) — mutating target.currentMP/weakness
+      // unconditionally inside apply() would drain MP even on a miss, same
+      // class of bug Piercing Release's lodge dislodge had.
       const onHitLanded = () => {
-        let totalMpGain = 0;
-        for (const tgt of [target, ...others]) {
-          const disorient = tgt?.weakness?.meters?.disorient || 0;
-          // Capped at 200 for the drain calc (max 4 MP per target) — a
-          // target's meter still fully clears when it drains at all, same
-          // as before, just bounded going into the drain math itself.
-          const drainedMeter = Math.min(disorient, 200);
-          const drained = Math.floor(drainedMeter / 50);
-          if (drained > 0) {
-            totalMpGain += drained;
-            if (tgt.currentMP != null) tgt.currentMP = Math.max(0, tgt.currentMP - drained);
-            if (tgt?.weakness?.meters) {
-              tgt.weakness.meters.disorient = 0;
-              if (tgt.weakness.tiers) tgt.weakness.tiers.disorient = 0;
-            }
-          }
+        const disorient = target?.weakness?.meters?.disorient || 0;
+        // Capped at 200 for the drain calc (max 4 MP) — the meter still
+        // fully clears when it drains at all, same as before, just bounded
+        // going into the drain math itself.
+        const drainedMeter = Math.min(disorient, 200);
+        const drained = Math.floor(drainedMeter / 50);
+        if (drained <= 0) return {};
+        target.currentMP = Math.max(0, (target.currentMP || 0) - drained);
+        if (target?.weakness?.meters) {
+          target.weakness.meters.disorient = 0;
+          if (target.weakness.tiers) target.weakness.tiers.disorient = 0;
         }
         // mpGain is read generically by the engine and added straight to
         // the attacker's own currentMP — the same number subtracted from
-        // targets above, so drained-from-enemies always equals gained-by-
-        // caster, 1:1.
+        // this target above. Each shot pays out separately, but they all
+        // sum onto the same caster over the course of the volley, so
+        // drained-from-enemies still always equals gained-by-caster, 1:1.
         return {
-          mpGain: totalMpGain || undefined,
-          log: totalMpGain > 0 ? `${attacker?.name ?? 'Archer'} volleys the back rank — drains ${totalMpGain} MP from disoriented foes!` : undefined,
+          mpGain: drained,
+          log: `${attacker?.name ?? 'Archer'} drains ${drained} MP from ${target?.name ?? 'the target'}!`,
         };
       };
 
-      return { ...roll, ...primary, splash: splash.length ? splash : undefined, onHitLanded };
+      return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Requires targeting a back-rank enemy. Deals 85% weapon damage to it and every other back-rank enemy. Drains 1 MP per 50 Disorient buildup from each (capped at 200 buildup per target, max 4 MP each) and restores the total to you."
+    description: "Deals 85% weapon damage. Drains 1 MP per 50 Disorient buildup on the target (capped at 200 buildup, max 4 MP) and restores it to you."
   },
 
   'quivering_burst': {
@@ -15146,7 +15282,60 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Deals 110% weapon damage as Lightning. Chance to arc — scaling with the target's own Lightning buildup, up to 60% at 1000+ — repeating 60% damage against the target again, plus any nearby enemy with an active Lightning weakness. Does not consume the target's Lightning buildup."
+    description: "Deals 110% weapon damage as Lightning. Chance to arc, equal to the target's own Lightning buildup ÷ 1000 — repeats 60% damage against the target again, plus any nearby enemy with an active Lightning weakness. Does not consume the target's Lightning buildup."
+  },
+
+  // Bow's initiative spender — modeled directly on blazing_fervor (sword_1h):
+  // same discrete 3-tier spend (10/20/30, picks the HIGHEST tier the current
+  // gauge can afford, not a player choice), same per-step scaling shape,
+  // same bonus/cooldown, applied to the whole party (self included) via
+  // scene._addStatusEffects so a recast on an already-buffed ally coalesces
+  // to the stronger value instead of stacking two live entries. Party-wide
+  // Accuracy instead of fire damage/buildup on hit. No existing bow skill
+  // spent Initiative at all before this.
+  'trueshot_call': {
+    id: "trueshot_call",
+    name: "Trueshot Call",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["bow"],
+    requiredStat: "CHA",
+    requiredValue: 15,
+    actionCost: "bonus",
+    mpCost: 6,
+    cooldown: 2,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff"],
+    // Spending initiative is this skill's whole job — below the minimum
+    // spend tier, it has nothing to do, so it should fizzle instead of
+    // silently firing for free. Checked generically in _applyAbilityToTarget.
+    requiresInitiativeGauge: 10,
+    apply: (attacker, _target, scene) => {
+      // Three tiers (10/20/30), spends the HIGHEST tier the current gauge
+      // can fully afford — same automatic-pick shape blazing_fervor uses,
+      // not a player choice.
+      const gauge = attacker?.initiativeGauge || 0;
+      const spend = gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+
+      // +10 Accuracy per 10 initiative spent — 10/20/30 spend gives
+      // +10/+20/+30 Accuracy.
+      const steps = spend / 10;
+      const accBonus = 10 * steps;
+
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        scene?._addStatusEffects?.(ally, [{ id: 'trueshot_call', turns: 2, mods: { Accuracy: accBonus } }]);
+      });
+
+      scene?._log?.(`${attacker?.name || 'The archer'} calls a true shot (spent ${spend} initiative) — allies gain +${accBonus} Accuracy for 2 turns.`);
+      return { amount: 0 };
+    },
+    description: "Spend initiative (10/20/30, based on current gauge) to rally allies' aim: +10 Accuracy per 10 initiative spent, for 2 turns."
   },
 
   // --- Gun (2h) ---

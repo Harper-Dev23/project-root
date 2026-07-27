@@ -13,7 +13,9 @@
       "Bash(xargs wc:*)",
       "Bash(node --experimental-vm-modules \"C:\\\\Users\\\\eddie\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-eddie-Desktop-project-root\\\\56281333-f89c-49f1-b2ea-5fe573830462\\\\scratchpad\\\\check_esm.cjs\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\data\\\\skills.js\")",
       "Bash(node --experimental-vm-modules \"C:\\\\Users\\\\eddie\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-eddie-Desktop-project-root\\\\56281333-f89c-49f1-b2ea-5fe573830462\\\\scratchpad\\\\check_esm.cjs\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\data\\\\skills.js\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\src\\\\scenes\\\\CombatScene.js\")",
-      "Bash(awk '/_applyDirectResult\\\\\\(user, target, payload, opts = \\\\{\\\\}\\\\\\) \\\\{/,0' \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\src\\\\scenes\\\\CombatScene.js\")"
+      "Bash(awk '/_applyDirectResult\\\\\\(user, target, payload, opts = \\\\{\\\\}\\\\\\) \\\\{/,0' \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\src\\\\scenes\\\\CombatScene.js\")",
+      "Bash(node --experimental-vm-modules \"C:\\\\Users\\\\eddie\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-eddie-Desktop-project-root\\\\56281333-f89c-49f1-b2ea-5fe573830462\\\\scratchpad\\\\check_esm.cjs\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\src\\\\systems\\\\CombatLogic.js\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\data\\\\skills.js\")",
+      "Bash(node --experimental-vm-modules \"C:\\\\Users\\\\eddie\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-eddie-Desktop-project-root\\\\56281333-f89c-49f1-b2ea-5fe573830462\\\\scratchpad\\\\check_esm.cjs\" \"c:\\\\Users\\\\eddie\\\\Desktop\\\\project-root\\\\src\\\\systems\\\\CombatLogic.js\")"
     ]
   }
 }

@@ -13,6 +13,7 @@ const STATUS_ICON_LIBRARY = {
   healer_blessing: { glyph: 'BL', name: 'Blessing', fg: '#f4e6ff', bg: '#2e1a3a', border: '#a36fd6', description: 'Sacred boon improving accuracy and mana.' },
   commanded: { glyph: 'CM', name: 'Commanded', fg: '#ffeab3', bg: '#2c2314', border: '#b58a33', description: 'Acting under an ally command.' },
   battle_frenzy: { glyph: 'BF', name: 'Battle Frenzy', fg: '#ffd6a3', bg: '#3a2411', border: '#c77232', description: 'Heightened speed and ferocity.' },
+  trueshot_call: { glyph: 'TS', name: 'Trueshot', fg: '#e1f0ff', bg: '#16283a', border: '#5f8fc2', description: 'Aim steadied by a rallying call — increased Accuracy.' },
   huntsman_marked: { glyph: 'MK', name: 'Marked', fg: '#ffe28a', bg: '#31220d', border: '#b9912f', description: 'Easier target for ranged focus.' },
   empowered_pack: { glyph: 'PK', name: 'Pack Bond', fg: '#e1ffd6', bg: '#1b2916', border: '#6aa85c', description: 'Bolstered by nearby allies.' },
   fighter_guard: { glyph: 'FG', name: 'Fighter Guard', fg: '#ffe0ba', bg: '#2f2315', border: '#c08c49', description: 'Bracing against incoming blows.' },

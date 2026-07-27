@@ -2120,11 +2120,11 @@ export default class TownScene extends Phaser.Scene {
       // Floor navigation
       const navButtons = [];
       if (floor > 1) {
-        navButtons.push(this._buildSmallButton(450, 520, '⬆ Floor ' + (floor - 1),
+        navButtons.push(this._buildSmallButton(450, 520, '⬇ Floor ' + (floor - 1),
           () => this._enterEldersTower(floor - 1)));
       }
       if (floor < 3) {
-        navButtons.push(this._buildSmallButton(830, 520, '⬇ Floor ' + (floor + 1), () => {
+        navButtons.push(this._buildSmallButton(830, 520, '⬆ Floor ' + (floor + 1), () => {
           if (floor === 2) {
             this.scene.get('UIScene')?.showDialogue("The elders forbid entry to the top floor.");
           } else {

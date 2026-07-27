@@ -473,25 +473,77 @@ function applyCurseWeaponRiders(target) {
 // --------------------------------------------------
 export function calculateDamage(attacker, target, ability = null) {
   try { _resetDamageBreakdown(); } catch { }
-  let min = 1, max = 2;
-  const weaponData = getEquippedWeaponData(attacker, 'weaponMain');
-  if (weaponData?.damage) { min = weaponData.damage.min; max = weaponData.damage.max; }
-  const weaponMods = weaponData?._weaponMods || {};
-  const localDamageMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
 
-  // Local weapon damage% scales the WEAPON's own dice roll — same "local"
-  // modifier PoE uses on weapon prefixes, treated as part of the weapon's own
-  // damage rather than a combat-stage buff. It was already applied to weapon
-  // elemental flats below, but not to the physical die roll itself, so a
-  // weapon with local% but no elemental flat got no benefit from it at all.
-  const dieRoll = Phaser.Math.Between(min, max);
-  const scaledDieRoll = Math.floor(dieRoll * localDamageMult);
+  // Dual-wield: fold the off-hand weapon's own roll into the base weapon
+  // damage so EVERY skill gets this "for free" — previously only
+  // basic_attack's own separate calculateDualWieldDamage() helper did this;
+  // every other skill in the game (Power Stab, Marked Cut, every named
+  // ability across every weapon type) called this function directly and
+  // only ever read weaponMain, so a dual-wielder's off-hand contributed
+  // NOTHING outside plain Basic Attack.
+  //
+  // Deliberately minimal: only the piece that's actually weapon-specific
+  // (dice roll + STR + local% + elemental flats — i.e. exactly the "weapon
+  // damage" a skill's own skillPct later multiplies) is rolled per weapon
+  // and combined here, each at 75%. Nothing else about this function
+  // changes — same order, same stages: crit chance/roll, gear%, jewelry
+  // conversion, weakness pipeline, and proficiency all still run exactly
+  // once, straight after this, on the combined total, completely unchanged
+  // from before dual-wielding existed.
+  function rollWeaponSwing(slot) {
+    const wd = getEquippedWeaponData(attacker, slot);
+    let wMin = 1, wMax = 2;
+    if (wd?.damage) { wMin = wd.damage.min; wMax = wd.damage.max; }
+    const wMods = wd?._weaponMods || {};
+    const wLocalMult = 1 + ((wMods.localDamagePercent || 0) / 100);
 
-  // STR scaling — a character-level bonus, not part of "the weapon's own"
-  // damage, so it's added AFTER local% rather than being scaled by it.
-  const strengthMod = Math.floor((attacker.totalStats?.STR || 0) / 5);
-  let baseDamage = scaledDieRoll + strengthMod;
-  try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
+    const wDieRoll = Phaser.Math.Between(wMin, wMax);
+    const physicalRoll = Math.floor(wDieRoll * wLocalMult) + Math.floor((attacker.totalStats?.STR || 0) / 5);
+
+    const elementalRolls = {};
+    for (const [element, range] of Object.entries(wMods.elementalFlat || {})) {
+      if (!range) continue;
+      const minFlat = range.min || 0;
+      const maxFlat = range.max || 0;
+      if (minFlat === 0 && maxFlat === 0) continue;
+      const rolled = Phaser.Math.Between(minFlat, maxFlat);
+      const scaled = Math.max(0, Math.floor(rolled * wLocalMult));
+      if (scaled > 0) elementalRolls[element] = scaled;
+    }
+    return { weaponData: wd, physicalRoll, elementalRolls };
+  }
+
+  const mainWeaponData = getEquippedWeaponData(attacker, 'weaponMain');
+  const offWeaponData = getEquippedWeaponData(attacker, 'weaponOff');
+  const mainIsTwoHand = mainWeaponData?.hands === 2;
+  const dualWielding = !!(offWeaponData && offWeaponData.weaponType !== 'shield' && !mainIsTwoHand);
+
+  const mainSwing = rollWeaponSwing('weaponMain');
+  const weaponData = mainWeaponData;
+  let baseDamage;
+  const elementalRolls = {};
+
+  if (dualWielding) {
+    const offSwing = rollWeaponSwing('weaponOff');
+    const scale = 0.75;
+    baseDamage = Math.floor(mainSwing.physicalRoll * scale) + Math.floor(offSwing.physicalRoll * scale);
+    for (const [el, amt] of Object.entries(mainSwing.elementalRolls)) {
+      elementalRolls[el] = (elementalRolls[el] || 0) + Math.floor(amt * scale);
+    }
+    for (const [el, amt] of Object.entries(offSwing.elementalRolls)) {
+      elementalRolls[el] = (elementalRolls[el] || 0) + Math.floor(amt * scale);
+    }
+    try {
+      const mainElemTotal = Object.values(mainSwing.elementalRolls).reduce((a, b) => a + Math.floor(b * scale), 0);
+      const offElemTotal = Object.values(offSwing.elementalRolls).reduce((a, b) => a + Math.floor(b * scale), 0);
+      _pushBreakdown({ label: 'Dual Main', flat: Math.floor(mainSwing.physicalRoll * scale) + mainElemTotal });
+      _pushBreakdown({ label: 'Dual Off', flat: Math.floor(offSwing.physicalRoll * scale) + offElemTotal });
+    } catch { }
+  } else {
+    baseDamage = mainSwing.physicalRoll;
+    Object.assign(elementalRolls, mainSwing.elementalRolls);
+    try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
+  }
 
   // Tier-1 "+X weapon damage" riders (e.g. Curse of Needles) — baked in here,
   // before gear/skill%/buffs/crit, so they ride the whole multiplicative stack.
@@ -577,23 +629,14 @@ export function calculateDamage(attacker, target, ability = null) {
   let elemental = 0;
   let necrotic = 0;
 
-  // Weapon elemental flat adds. Flay/Curse/AttackPower amps are NOT applied here —
-  // they're applied once by the calling skill's own applyDamageModifiers() pass
-  // over the full returned amount (physical+elemental+necrotic combined). Doing it
-  // here too used to double-apply Flay T2 (and Curse T2/AttackPower) on top of the
-  // elemental portion — it silently didn't matter while the Flay tier check was
-  // reading a dead key, but became a real double-count once that key was fixed.
-  for (const [element, range] of Object.entries(weaponMods.elementalFlat || {})) {
-    if (!range) continue;
-    const minFlat = range.min || 0;
-    const maxFlat = range.max || 0;
-    if (minFlat === 0 && maxFlat === 0) continue;
-
-    const rollFn = Phaser?.Math?.Between
-      ? Phaser.Math.Between
-      : ((lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1)));
-    const rolled = rollFn(minFlat, maxFlat);
-    let scaled = Math.max(0, Math.floor(rolled * localDamageMult));
+  // Weapon elemental flat adds — already rolled (and, if dual-wielding,
+  // combined at 75%/75%) up in rollWeaponSwing/elementalRolls above; this
+  // just applies the gear elemental% multiplier per element, unchanged from
+  // before. Flay/Curse/AttackPower amps are NOT applied here — they're
+  // applied once by the calling skill's own applyDamageModifiers() pass
+  // over the full returned amount (physical+elemental+necrotic combined).
+  for (const [element, rolledAmt] of Object.entries(elementalRolls)) {
+    let scaled = rolledAmt;
     if (scaled <= 0) continue;
 
     const elementMult = ability?.typedDamage ? 1 : getAttackerDamageMultiplier(attacker, { element });
@@ -804,54 +847,9 @@ export function applyHealModifiers(baseAmount, attacker, opts = {}) {
 }
 
 
-export function calculateDualWieldDamage(attacker, target) {
-  try { _resetDamageBreakdown(); } catch { }
-
-  let totalPhysical = 0, totalElemental = 0, totalNecrotic = 0;
-  let isCrit = false;
-
-  const mainWeaponData = getEquippedWeaponData(attacker, 'weaponMain');
-  const offWeaponData = getEquippedWeaponData(attacker, 'weaponOff');
-  const mainIsTwoHand = mainWeaponData?.hands === 2;
-  const offUsable = !!(offWeaponData && offWeaponData.weaponType !== 'shield' && !mainIsTwoHand);
-
-  // --- Main hand swing ---
-  const mainResult = calculateDamage(attacker, target);
-  const mainScale = offUsable ? 0.75 : 1.0;
-  const mainP = Math.floor((mainResult.physical || 0) * mainScale);
-  const mainE = Math.floor((mainResult.elemental || 0) * mainScale);
-  const mainN = Math.floor((mainResult.necrotic || 0) * mainScale);
-  totalPhysical += mainP;
-  totalElemental += mainE;
-  totalNecrotic += mainN;
-  if (mainResult.isCrit) isCrit = true;
-
-  // --- Offhand swing (if valid) ---
-  if (offUsable) {
-    const originalMain = attacker.equipment.weaponMain;
-    attacker.equipment.weaponMain = attacker.equipment.weaponOff;
-    const offResult = calculateDamage(attacker, target);
-    attacker.equipment.weaponMain = originalMain;
-
-    const offP = Math.floor((offResult.physical || 0) * 0.75);
-    const offE = Math.floor((offResult.elemental || 0) * 0.75);
-    const offN = Math.floor((offResult.necrotic || 0) * 0.75);
-    totalPhysical += offP;
-    totalElemental += offE;
-    totalNecrotic += offN;
-    if (offResult.isCrit) isCrit = true;
-
-    try {
-      _pushBreakdown({ label: 'Dual Main', flat: mainP + mainE + mainN });
-      _pushBreakdown({ label: 'Dual Off', flat: offP + offE + offN });
-    } catch { }
-  } else {
-    try { _pushBreakdown({ label: 'Dual Main', flat: mainP + mainE + mainN }); } catch { }
-  }
-
-  const amount = totalPhysical + totalElemental + totalNecrotic;
-  return { physical: totalPhysical, elemental: totalElemental, necrotic: totalNecrotic, amount, isCrit };
-}
+// calculateDualWieldDamage was removed — calculateDamage() above now
+// detects and folds in dual-wielding automatically for every caller, so a
+// separate function only basic_attack ever called is no longer needed.
 
 // Fire spell — pure elemental; returns typed split
 export function calculateFireballDamage(attacker, target) {
