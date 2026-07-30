@@ -40,6 +40,11 @@ export function _sumStatusEffectMods(char) {
     // same thing on top for a few turns instead of only ever being a
     // permanent gear/stat value.
     Resilience: 0,
+    // Temporary bonus lifesteal (percentage POINTS, e.g. 10 = +0.10), read
+    // alongside gearEffects.lifeStealPct at the one real lifesteal
+    // application site (_applyAbilityToTarget, CombatScene.js). First use:
+    // the berserker's Bloodrite self-buff.
+    LifeStealPct: 0,
   };
   const list = Array.isArray(char?.statusEffects) ? char.statusEffects : [];
   for (const se of list) {
@@ -205,8 +210,9 @@ export function applyExposeCritBonuses(attacker, target, baseCritChance, baseCri
   if (!w) return { critChance: baseCritChance, critMult: baseCritMult };
   if ((w.tiers.expose | 0) < 2) return { critChance: baseCritChance, critMult: baseCritMult };
   const m = w.meters.expose | 0;
-  const addChance = WeaknessV3.families.expose.t2.critChanceBonus * weaknessIntensityMult(m);
-  const addMult = WeaknessV3.families.expose.t2.critDamageBonus * weaknessIntensityMult(m);
+  const t2cfg = WeaknessV3.families.expose.t2;
+  const addChance = Math.min(t2cfg.critChanceBonus * weaknessIntensityMult(m), t2cfg.critChanceBonusCap ?? Infinity);
+  const addMult = Math.min(t2cfg.critDamageBonus * weaknessIntensityMult(m), t2cfg.critDamageBonusCap ?? Infinity);
   const finalChance = clamp(Math.floor(baseCritChance + (addChance * 100)), 0, 100);
   const finalMult = baseCritMult + addMult;
   return { critChance: finalChance, critMult: finalMult };
@@ -254,7 +260,8 @@ export function getDamageReductionFraction(target, opts = {}) {
     const w = target?.weakness;
     if (w && (w.tiers?.expose | 0) >= 1) {
       const I = familyIntensityMult('expose', w.meters?.expose | 0);
-      const sub = (WeaknessV3?.families?.expose?.t1?.physDRPen ?? 0) * I;
+      const t1cfg = WeaknessV3?.families?.expose?.t1;
+      const sub = Math.min((t1cfg?.physDRPen ?? 0) * I, t1cfg?.physDRPenCap ?? Infinity);
       dr -= sub;
     }
   }
@@ -305,7 +312,8 @@ export function applyExposePreDamage({ user, target, resultMutable, intent, isWe
   // T1 Expose: subtract additive PDR points
   if ((tiers.expose | 0) >= 1) {
     const I = familyIntensityMult('expose', meters.expose | 0);
-    const sub = (WeaknessV3?.families?.expose?.t1?.physDRPen ?? 0) * I;   // e.g. 0.10
+    const t1cfg = WeaknessV3?.families?.expose?.t1;
+    const sub = Math.min((t1cfg?.physDRPen ?? 0) * I, t1cfg?.physDRPenCap ?? Infinity);   // e.g. 0.10
     const dr0 = Number(resultMutable.damageReduction ?? 0);
     const dr1 = dr0 - sub;
     resultMutable.damageReduction = (dr1 > 0.95 ? 0.95 : dr1);
@@ -498,7 +506,7 @@ export function calculateDamage(attacker, target, ability = null) {
     const wLocalMult = 1 + ((wMods.localDamagePercent || 0) / 100);
 
     const wDieRoll = Phaser.Math.Between(wMin, wMax);
-    const physicalRoll = Math.floor(wDieRoll * wLocalMult) + Math.floor((attacker.totalStats?.STR || 0) / 5);
+    const physicalRoll = Math.floor(wDieRoll * wLocalMult);
 
     const elementalRolls = {};
     for (const [element, range] of Object.entries(wMods.elementalFlat || {})) {
@@ -534,15 +542,30 @@ export function calculateDamage(attacker, target, ability = null) {
       elementalRolls[el] = (elementalRolls[el] || 0) + Math.floor(amt * scale);
     }
     try {
-      const mainElemTotal = Object.values(mainSwing.elementalRolls).reduce((a, b) => a + Math.floor(b * scale), 0);
-      const offElemTotal = Object.values(offSwing.elementalRolls).reduce((a, b) => a + Math.floor(b * scale), 0);
-      _pushBreakdown({ label: 'Dual Main', flat: Math.floor(mainSwing.physicalRoll * scale) + mainElemTotal });
-      _pushBreakdown({ label: 'Dual Off', flat: Math.floor(offSwing.physicalRoll * scale) + offElemTotal });
+      // Physical-only here — each weapon's elemental flat contribution is
+      // already folded into elementalRolls above and gets its own "${element}
+      // flat" breakdown line further down. Including it here too would show
+      // it twice in the tooltip (it was previously double-counted in the
+      // displayed breakdown, though not in the actual damage total, which
+      // only ever summed elementalRolls once).
+      _pushBreakdown({ label: 'Dual Main', flat: Math.floor(mainSwing.physicalRoll * scale) });
+      _pushBreakdown({ label: 'Dual Off', flat: Math.floor(offSwing.physicalRoll * scale) });
     } catch { }
   } else {
     baseDamage = mainSwing.physicalRoll;
     Object.assign(elementalRolls, mainSwing.elementalRolls);
     try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
+  }
+
+  // STR bonus is a character stat, not a per-weapon roll — added once per
+  // attack regardless of hand count. Previously lived inside rollWeaponSwing
+  // itself, which (post dual-wield split) meant a dual-wielder's two swing
+  // rolls each added their own copy, netting 1.5x the STR bonus (0.75+0.75)
+  // of a single-wielder's 1x. Applied once here, after the per-weapon dice
+  // are already combined, so 1H/2H/dual-wield all get the same STR value.
+  const strBonus = Math.floor((attacker.totalStats?.STR || 0) / 5);
+  if (strBonus > 0) {
+    baseDamage += strBonus;
   }
 
   // Tier-1 "+X weapon damage" riders (e.g. Curse of Needles) — baked in here,
@@ -728,6 +751,19 @@ export function calculateDamage(attacker, target, ability = null) {
     try { _pushBreakdown({ label: 'crit', from: prevSum, mult: critBundle.critMult, to: physical + elemental + necrotic }); } catch { }
   }
 
+  {
+    // Legacy skills have no separate Tier-2-rider stage the way the typed
+    // pipeline does (see applyTypedDamageModifiers) — both proc groups are
+    // applied together here, AFTER the (also legacy-only) crit multiply just
+    // above, so neither is crittable for legacy skills. Typed skills get the
+    // flat procs earlier instead (Tier-2 stage, before crit/buffs) — see
+    // applyJewelryFlatProcs' own comment.
+    const flat = applyJewelryFlatProcs(physical, elemental, necrotic, attacker);
+    physical = flat.physical; elemental = flat.elemental; necrotic = flat.necrotic;
+    const proc = applyJewelryDamageProcs(physical, elemental, necrotic, attacker);
+    physical = proc.physical; elemental = proc.elemental; necrotic = proc.necrotic;
+  }
+
   // Lightning jolts: added AFTER crit, deliberately non-crittable (a rider on
   // the hit, not part of the base swing that gets amplified).
   const { joltTotal } = applyLightningJolt(target);
@@ -743,12 +779,16 @@ export function calculateDamage(attacker, target, ability = null) {
 // chance is tangled up with target-hostile mechanics (Expose T2's crit
 // bonus, target Evasion partially resisting crit, accuracy-overflow
 // converting to crit) that make no sense against a friendly heal target and
-// were explicitly excluded per design discussion. A heal's base roll is
-// JUST the weapon's own die (local% included, same as damage) — no STR, no
-// WIS, kept deliberately simple per explicit request; Proficiency (the
-// caster's own highest-core-stat bonus) still applies, but separately,
-// later, in the engine's existing heal-application code, same as before.
-// Crit chance is JUST the caster's own base CritChance + weapon crit affix.
+// were explicitly excluded per design discussion. A heal's base roll is the
+// weapon's own die (local% included, same as damage) plus a WIS bonus
+// (Math.floor(WIS/5), added 2026-07 — same divisor as STR's role in
+// calculateDamage()'s rollWeaponSwing, so a healer's WIS does for healing
+// what a fighter's STR does for weapon damage). Originally excluded WIS
+// entirely "per explicit request" for simplicity; revisited and reversed.
+// Proficiency (the caster's own highest-core-stat bonus) still applies, but
+// separately, later, in the engine's existing heal-application code, same
+// as before. Crit chance is JUST the caster's own base CritChance + weapon
+// crit affix.
 // --------------------------------------------------
 export function calculateHealRoll(attacker, ability = null) {
   // Resets the SAME shared module-level breakdown log calculateDamage()
@@ -766,8 +806,12 @@ export function calculateHealRoll(attacker, ability = null) {
   const localHealMult = 1 + ((weaponMods.localDamagePercent || 0) / 100);
 
   const dieRoll = Phaser.Math.Between(min, max);
-  const baseAmount = Math.floor(dieRoll * localHealMult);
-  try { _pushBreakdown({ label: 'base', value: baseAmount }); } catch { }
+  const wisBonus = Math.floor((attacker?.totalStats?.WIS || 0) / 5);
+  const baseAmount = Math.floor(dieRoll * localHealMult) + wisBonus;
+  try { _pushBreakdown({ label: 'base', value: Math.floor(dieRoll * localHealMult) }); } catch { }
+  if (wisBonus > 0) {
+    try { _pushBreakdown({ label: 'WIS bonus', flat: wisBonus }); } catch { }
+  }
 
   const weaponCrit = weaponData?._derivedMods?.CritChance || 0;
   const effDerived = getEffectiveDerived(attacker) || {};
@@ -841,6 +885,20 @@ export function applyHealModifiers(baseAmount, attacker, opts = {}) {
     const prev = amount;
     amount *= mult;
     try { _pushBreakdown({ label: 'gear healing', mult, from: Math.round(prev), to: Math.round(amount) }); } catch { }
+  }
+
+  // Zafaar ring proc (procHealOnHeal, gearEffects) — chance to double the
+  // heal. Same "declared but unenforced" gap as the damage-side ring procs
+  // (see applyJewelryDamageProcs) — rolled and displayed in the tooltip but
+  // never actually read anywhere until now.
+  const healProcChance = attacker?.gearEffects?.procHealOnHeal || 0;
+  if (healProcChance > 0) {
+    const healRoll = Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : Math.floor(Math.random() * 100) + 1;
+    if (healRoll <= healProcChance) {
+      const prev = amount;
+      amount *= 2;
+      try { _pushBreakdown({ label: 'ring proc: double heal', mult: 2, from: Math.round(prev), to: Math.round(amount) }); } catch { }
+    }
   }
 
   return Math.max(0, Math.floor(amount));
@@ -1043,6 +1101,77 @@ function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = ''
   return { physical, elemental, necrotic };
 }
 
+// Tribe-ring jewelry effects — previously rolled correctly (ItemFactory.js),
+// aggregated correctly into gearEffects (CharacterBuilder.js), and even
+// displayed correctly in tooltips (itemTooltip.js), but never actually READ
+// anywhere in combat: a classic "declared but unenforced" field. Whole-hit,
+// last stage before the non-amplifiable Jolt rider — same treatment as crit.
+// Covers two different mechanics off the same rings:
+//   - Le'sse ring skills (Elemental Overload/Raw Force/Sever Spirit) set a
+//     one-turn combatMods flag that collapses the ENTIRE hit into one type.
+//   - Zafaar/Elseth ring affixes (gearEffects.procX) are chance-per-hit: a
+//     flat +20 of one type, or a straight damage double.
+// Elseth ring flat-damage procs (procPhysFlat/procElemFlat/procNecroFlat) —
+// a Tier-2-style rider: needs to land AFTER the skill's own weapon% (a big
+// skillPct shouldn't touch a flat +20) but BEFORE combat buffs/crit (so both
+// of those still amplify it, same treatment Blazing Fervor's onHit fire
+// rider gets — see applyTypedDamageModifiers' own Tier-2 comment). For typed
+// skills this is called from THAT function's Tier-2 stage, not from
+// applyGearConversionAndPercent (which runs after crit/buffs have already
+// resolved — the wrong stage for this). Legacy skills have no equivalent
+// staged pipeline, so calculateDamage() calls this once itself, at the very
+// end (see that function).
+function applyJewelryFlatProcs(physical, elemental, necrotic, attacker, opts = {}) {
+  const silent = !!opts.silent;
+  const ge = attacker?.gearEffects || {};
+  const roll = () => (Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : Math.floor(Math.random() * 100) + 1);
+  const PROC_FLAT = 20;
+
+  if ((ge.procPhysFlat || 0) > 0 && roll() <= ge.procPhysFlat) {
+    physical += PROC_FLAT;
+    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 physical', flat: PROC_FLAT }); } catch { } }
+  }
+  if ((ge.procElemFlat || 0) > 0 && roll() <= ge.procElemFlat) {
+    elemental += PROC_FLAT;
+    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 elemental', flat: PROC_FLAT }); } catch { } }
+  }
+  if ((ge.procNecroFlat || 0) > 0 && roll() <= ge.procNecroFlat) {
+    necrotic += PROC_FLAT;
+    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 necrotic', flat: PROC_FLAT }); } catch { } }
+  }
+
+  return { physical, elemental, necrotic };
+}
+
+// Le'sse ring type-override + Zafaar procDoubleDamage — both deliberately
+// stay a LAST-stage, whole-hit effect (after skill%, buffs, crit, gear%):
+// the type-override is "the entire hit is now type X" and the double-damage
+// proc is meant to double the fully-resolved final number, not just the
+// weapon-swing portion. Last stage before the non-amplifiable Jolt rider —
+// same treatment as crit.
+function applyJewelryDamageProcs(physical, elemental, necrotic, attacker, opts = {}) {
+  const silent = !!opts.silent;
+  const cm = attacker?.combatMods || {};
+  if (cm._damageConvertToElem || cm._damageConvertToPhys || cm._damageConvertToNecro) {
+    const total = physical + elemental + necrotic;
+    physical = 0; elemental = 0; necrotic = 0;
+    if (cm._damageConvertToPhys) physical = total;
+    else if (cm._damageConvertToNecro) necrotic = total;
+    else elemental = total;
+    if (!silent) { try { if (total > 0) _pushBreakdown({ label: 'ring: type override', convert: total }); } catch { } }
+  }
+
+  const ge = attacker?.gearEffects || {};
+  const roll = () => (Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : Math.floor(Math.random() * 100) + 1);
+  if ((ge.procDoubleDamage || 0) > 0 && roll() <= ge.procDoubleDamage) {
+    const prev = physical + elemental + necrotic;
+    physical *= 2; elemental *= 2; necrotic *= 2;
+    if (!silent) { try { _pushBreakdown({ label: 'ring proc: double damage', mult: 2, from: prev, to: physical + elemental + necrotic }); } catch { } }
+  }
+
+  return { physical, elemental, necrotic };
+}
+
 // --------------------------------------------------
 // applyTypedDamageModifiers — the typed-pipeline "finalize" step. Order matters
 // here and is deliberate (2026-07 pipeline reorder, see project_damage_pipeline_reorder
@@ -1127,6 +1256,17 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
       elemental += proc.fireDamage;
       try { _pushBreakdown({ label: se.name || 'Fire rider', flat: proc.fireDamage }); } catch { }
     }
+  }
+
+  // Elseth ring flat-damage procs (procPhysFlat/procElemFlat/procNecroFlat) —
+  // same Tier-2 rider treatment as the fire-rider loop just above: gear-
+  // sourced instead of statusEffects-sourced, otherwise identical placement
+  // rationale. See applyJewelryFlatProcs' own comment for why this can't
+  // live in applyGearConversionAndPercent (too late — crit/buffs already
+  // resolved by the time that runs).
+  {
+    const flat = applyJewelryFlatProcs(physical, elemental, necrotic, attacker, { silent: !!opts.silent });
+    physical = flat.physical; elemental = flat.elemental; necrotic = flat.necrotic;
   }
 
   // 3) Combat buffs (Category A) — AttackPower status mods, summed across every
@@ -1284,6 +1424,12 @@ export function applyGearConversionAndPercent(breakdown, attacker, opts = {}) {
   physical = Math.max(0, Math.floor(physical));
   elemental = Math.max(0, Math.floor(elemental));
   necrotic = Math.max(0, Math.floor(necrotic));
+
+  {
+    const proc = applyJewelryDamageProcs(physical, elemental, necrotic, attacker, { silent });
+    physical = proc.physical; elemental = proc.elemental; necrotic = proc.necrotic;
+  }
+
   return { physical, elemental, necrotic, amount: physical + elemental + necrotic };
 }
 

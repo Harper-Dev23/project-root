@@ -45,6 +45,15 @@
 //     critical. ctx.user/ctx.target/ctx.ability as above. Splash/DOT/repeat
 //     hits don't go through this specific path — primary hits only.
 //
+//   onAbilityUsed(ctx) -> string | string[] | null
+//     Called whenever ANY unit (either side) successfully uses ANY ability —
+//     broader than onInitiativeAbilityUsed (not limited to
+//     requiresInitiativeGauge skills). ctx.user/ctx.target/ctx.ability as
+//     above; check ctx.ability.id to react to a specific skill. There's no
+//     dedicated "HP threshold crossed" hook — just read
+//     ctx.user.currentHP/ctx.user.maxHP yourself from inside this (or
+//     onCrit) and throttle via ctx.state so it only fires once per combat.
+//
 // ctx shape (all hooks): { scene, scenarioId, round, state, ...hook-specific }
 //   scene/scenarioId — as above.
 //   round            — 1-indexed, bumped whenever turn order wraps back to
@@ -58,7 +67,7 @@
 //                       whatever this script needs to remember between
 //                       calls (last-triggered round, a line index, etc.).
 //   defeatedCount/totalEnemies/enemy — only set for onEnemyDefeated.
-//   user/target/ability — only set for onInitiativeAbilityUsed/onCrit.
+//   user/target/ability — only set for onInitiativeAbilityUsed/onCrit/onAbilityUsed.
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -223,6 +232,47 @@ export const LOCAL_CHAT_SCRIPTS = {
         return 'Ember roars, grief turning instantly to rage at Rime\'s fall.';
       }
       return null;
+    },
+  },
+
+  // The Berserker himself, reacting to his own crits/signature abilities and
+  // to actually being hurt — see project_encounter6_new_skills_planned
+  // memory for the design behind Reckless Harvest/Bloodrite/Unstoppable
+  // Rush's glare. No dedicated "HP threshold" hook exists — the <50% line is
+  // just checked from inside onCrit/onAbilityUsed and throttled via
+  // ctx.state so it only ever fires once per combat.
+  training_encounter_6: {
+    onCombatStart() {
+      return 'The Berserker rolls his shoulders, Bloodthirster dragging a groove in the dirt.';
+    },
+    onCrit(ctx) {
+      if (ctx.user?.type !== 'berserker_boss') return null;
+      return pick([
+        'The Berserker laughs — a wet, ugly sound.',
+        '"THERE it is," the Berserker roars.',
+        'The crowd flinches at the impact.',
+      ]);
+    },
+    onAbilityUsed(ctx) {
+      if (ctx.user?.type !== 'berserker_boss') return null;
+      const lines = [];
+      if (ctx.ability?.id === 'berserker_death_spiral') {
+        lines.push('The Berserker spins into the finishing blow, blood already running down his own arm.');
+      } else if (ctx.ability?.id === 'berserker_reckless_harvest') {
+        lines.push('The Berserker tears at his own wound, grinning through the pain.');
+      } else if (ctx.ability?.id === 'berserker_bloodrite') {
+        lines.push('The Berserker howls something old and wordless — his wounds start to close.');
+      } else if (ctx.ability?.id === 'berserker_unstoppable_rush') {
+        lines.push(`The Berserker fixes his glare on ${ctx.target?.name || 'his prey'}. "Don’t. Move."`);
+      }
+      // Once-per-combat low-HP line, checked opportunistically off whatever
+      // ability just fired rather than a dedicated threshold-crossed event.
+      const ratio = (ctx.user.maxHP | 0) > 0 ? (ctx.user.currentHP | 0) / ctx.user.maxHP : 1;
+      if (!ctx.state.berserkerLowHPSaid && ratio < 0.5) {
+        ctx.state.berserkerLowHPSaid = true;
+        lines.push('The Berserker staggers, blood-slick and snarling — and keeps coming anyway.');
+      }
+      return lines.length ? lines : null;
     },
   },
 };

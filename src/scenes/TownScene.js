@@ -1039,6 +1039,11 @@ export default class TownScene extends Phaser.Scene {
           this.samuelInteriorGroup.destroy(true);
           this.samuelInteriorGroup = null;
         }
+        // This button exits straight back to the exterior without going
+        // through leaveSamuelTent() (like the [Exit] button does), so the
+        // mourneTheme music kept playing under the town scene — stop it
+        // here too, same as every other "leave the tent" path does.
+        SoundManager.stopMusic();
         this._showExterior();
       });
 
@@ -1797,7 +1802,11 @@ export default class TownScene extends Phaser.Scene {
       bgColor,
       bgImage,
       onExit: () => {
-        if (tribeId === 'elseth') SoundManager.stopMusic();
+        // Was elseth-only (leftover from whenever this was first wired up) —
+        // but TRIBE_HQ_MUSIC plays for ANY tribe's own lodge (see the
+        // playMusic call above), so every tribe's lodge left its music
+        // running on exit except Elseth's.
+        SoundManager.stopMusic();
         group.setVisible(false);
         this._showExterior();
       }
@@ -2601,7 +2610,10 @@ export default class TownScene extends Phaser.Scene {
       bgColor: colors[tribe] || 0x222222,
       bgImage:  interiorImages[tribe] ?? null,
       onExit: () => {
-        if (tribeId === 'elseth') SoundManager.stopMusic();
+        // Same elseth-only leftover as _enterGenericLodge's onExit — music
+        // plays for any tribe's own leader hut, so it needs to stop for all
+        // of them, not just Elseth.
+        SoundManager.stopMusic();
         this.leaderGroups[tribe].setVisible(false);
         this._showExterior();
       },
@@ -2670,6 +2682,10 @@ export default class TownScene extends Phaser.Scene {
           this.leaderGroups[tribe].destroy(true);
           delete this.leaderGroups[tribe];
         }
+        // This button exits straight back to the exterior without going
+        // through onExit (same bug as Samuel's Collect Reward button) —
+        // stop the music here too.
+        SoundManager.stopMusic();
         this._showExterior();
       });
 

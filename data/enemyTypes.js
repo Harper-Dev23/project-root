@@ -286,17 +286,29 @@ export const ENEMY_TYPES = {
 
   berserker_boss: {
     skin: 'berserker_portrait',
-    maxHP: 420,
+    // Was 420, then 650 — user playtested 650/-20% and still found the fight
+    // resolving too fast in both directions (easy wins and near-wipes).
+    // Raised again so it buys more turns of real counterplay instead of a
+    // burst-then-grind pattern (see project_encounter6_rework memory).
+    maxHP: 850,
     maxMP: 150,
     // Flat per-turn MP regen (see _placeEnemies in CombatScene.js) — his
     // whole kit costs MP with no free option otherwise, so he'd eventually
     // run dry and stop acting entirely without this. Stacks additively with
     // the INT-derived regen from baseStats below (small, ~+1 at INT 8).
     mpRegenPerTurn: 12,
-    // Blunt overall damage dial — every ability he has deals 80% damage,
-    // without touching his base stats or Bloodthirster. A quick lever while
-    // he's still overtuned post-stat-rework, not a real balance pass.
-    damageMultiplierPct: -20,
+    // Blunt overall damage dial — every ability he has deals damage at this
+    // discount, without touching his base stats or Bloodthirster. Was -20%;
+    // user playtested it and still got one-shot on a crit combo (Death
+    // Spiral — see its own noCrit fix in CombatLogic.js), so trimmed further.
+    damageMultiplierPct: -40,
+    // Every other named/boss-tier enemy in encounters 3-5 has a derivedBonus
+    // granting extra resists/Resilience on top of their base stats (see
+    // huntsman_commander, beast_oskar, the duelists, etc.) — the berserker
+    // was the one boss missing this entirely. Numbers match beast_oskar's
+    // own brute-archetype spread, bumped slightly for being a solo final
+    // boss rather than one of three.
+    derivedBonus: { PhysicalResist: 20, Resilience: 30 },
     // Core stats — run through the same calculateDerivedStats() players use
     // (see _placeEnemies), so these actually drive his weapon damage
     // (STR), HP (CON), Initiative/gauge regen (CHA), MP (INT/WIS/CHA),
@@ -314,7 +326,9 @@ export const ENEMY_TYPES = {
       'berserker_battle_frenzy',
       'berserker_death_spiral',
       'berserker_unstoppable_rush',
-      'berserker_blood_fury'
+      'berserker_blood_fury',
+      'berserker_reckless_harvest',
+      'berserker_bloodrite'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,

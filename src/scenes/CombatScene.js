@@ -47,6 +47,7 @@ import {
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
   getProficiencyBreakdown, getProficiencyMultiplier,
   applyGearConversionAndPercent, applyLightningJolt,
+  calculateHealRoll, applyHealModifiers,
 } from '../systems/CombatLogic.js';
 
 
@@ -385,6 +386,22 @@ export default class CombatScene extends Phaser.Scene {
         u._weaknessDerived.maxHPDown = 0;
         u._weaknessDerived.evasionDown = 0;
         u._weaknessDerived.initiativeSlow = 0;
+      }
+      // Styx amulets, rolled/aggregated correctly but never read anywhere —
+      // "of the First Strike" (bonus starting Initiative) and "of the Ward"
+      // (a one-time shield worth a % of max HP, absorbed before HP in
+      // _resolveMitigation's two call sites below).
+      const initBonus = u?.gearEffects?.initBonusOnBattleStart || 0;
+      if (initBonus > 0) {
+        u.initiativeGauge = Math.min(u.initiativeGaugeMax, u.initiativeGauge + initBonus);
+      }
+      const shieldPct = u?.gearEffects?.shieldPctOnBattleStart || 0;
+      u.shieldHP = shieldPct > 0 ? Math.floor((u.maxHP || 0) * shieldPct / 100) : 0;
+      if (u.shieldHP > 0) {
+        // Lasts 2 turns even if not fully consumed — ticked down by the
+        // normal status-duration system (_tickDownStatusDurations), which
+        // clears shieldHP when this expires (see that function's own hook).
+        u.statusEffects.push({ id: 'ward_shield_timer', turns: 2 });
       }
     }
 
@@ -1937,7 +1954,15 @@ export default class CombatScene extends Phaser.Scene {
     const dispHP = Math.min(char.currentHP | 0, effMaxHP);
 
     // ===== Right column (original list) =====
-    const resilience = char?.resilience ?? char?.gearEffects?.resilience ?? 0;
+    // Matches the real mitigation formula (see _applyWeaknessBuildup,
+    // ~line 6280) — base (gear/WIS) PLUS any status-effect Resilience mod
+    // (e.g. encounter 5's enrageOnAllyDeath buff). Previously only read the
+    // base value, so a temporary/permanent Resilience buff from a status
+    // effect affected real buildup mitigation in combat but never showed up
+    // here — the panel silently under-reported it.
+    const baseResilience = char?.resilience ?? char?.gearEffects?.resilience ?? 0;
+    const statusResilience = _sumStatusEffectMods?.(char)?.Resilience || 0;
+    const resilience = baseResilience + statusResilience;
 
     // Weakness-family buildup% (gear-derived): per-family weapon suffix +
     // matching armor category affix (physical/elemental/necrotic), combined
@@ -2040,7 +2065,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'H.Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
       { label: 'CostX:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ff6666' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
       { label: 'Crit%:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
-      { label: 'Resilience:', value: `${resilience}`, desc: 'Flat reduction applied to incoming buildup toward every weakness family. Comes from Wisdom and gear.' },
+      { label: 'Resilience:', value: `${resilience}`, desc: '% reduction to all incoming buildup, toward every weakness family (100 Resilience = 50% reduction). Comes from Wisdom and gear.' },
       { label: 'Accuracy:', value: `${effAcc}`, valueColor: accColor, valueBold: effAcc !== baseAcc, desc: 'Raises this character\'s chance to land a hit. Any excess beyond what\'s needed to reach 100% hit chance instead adds to Crit Chance (half value).' },
       { label: 'Evasion:', value: `${evEff}`, valueColor: evColor, valueBold: true, desc: 'Lowers the attacker\'s chance to hit this character. On a landed hit, it also partially resists being crit (half value).' },
       { label: 'Init Gauge:', value: `${char.initiativeGauge ?? 0}/${char.initiativeGaugeMax ?? 100}`, desc: 'Fills each turn, primarily from Charisma. Spent as a resource by some skills for bonus effects. Initiative sets turn order at the start of battle.' },
@@ -2226,7 +2251,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT).' },
       { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+2 Max HP and +0.5 Physical Resist per point.' },
       { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point, +1 MP regen per turn per 5 points. Feeds Crit Chance (with STR/DEX).' },
-      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point.' },
+      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point. +1 healing per 5 points.' },
       { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP, +1 Initiative per point (sets turn order and Initiative Gauge regen), +0.5 Elemental Resist, +0.5 Necrotic Resist per point.' },
     ];
 
@@ -3693,6 +3718,7 @@ export default class CombatScene extends Phaser.Scene {
     this.allSlots.forEach(slot => {
       if (slot.char) {
         slot.char.hpBar?.updateCurrent(slot.char.currentHP);
+        slot.char.hpBar?.setShield?.(slot.char.shieldHP || 0);
         slot.char.mpBar?.updateCurrent(slot.char.currentMP);
       }
     });
@@ -4081,6 +4107,46 @@ export default class CombatScene extends Phaser.Scene {
   //                       splash/repeat behavior)
   // Returns { dmg, blocked, dr, physDmg, elemDmg, necrDmg } — the typed
   // sub-amounts are only meaningful in typed mode, undefined otherwise.
+  // Zafaar ring proc (procHalfDamageTaken, gearEffects) — target-side chance
+  // to halve incoming damage after DR. Same "declared but unenforced" gap as
+  // the other ring procs (see CombatLogic.js's applyJewelryDamageProcs) —
+  // rolled and shown in the tooltip but never read anywhere until now.
+  // Checked once here since every damage instance (primary/splash/repeat,
+  // typed or legacy) funnels through this one mitigation resolver.
+  _rollProcHalfDamageTaken(target) {
+    const chance = target?.gearEffects?.procHalfDamageTaken || 0;
+    if (chance <= 0) return false;
+    return Phaser.Math.Between(1, 100) <= chance;
+  }
+
+  // Styx "of the Ward" amulet — a one-time shield (target.shieldHP, set at
+  // battle start — see the turnOrder setup loop in create()) that absorbs
+  // damage before it touches HP. Rolled/aggregated correctly but never read
+  // anywhere until now — same gap as the ring procs above. Shared by both
+  // places damage actually reduces currentHP (this function's caller in
+  // _applyAbilityToTarget, and _applyDirectResult's splash/repeat path) so
+  // they can't drift. Called AFTER full mitigation/DR, so the shield soaks
+  // the same final number the target would otherwise have taken.
+  _absorbShieldDamage(target, dmg) {
+    if (!target || dmg <= 0) return dmg;
+    const shield = target.shieldHP || 0;
+    if (shield <= 0) return dmg;
+    const absorbed = Math.min(shield, dmg);
+    target.shieldHP = shield - absorbed;
+    const shattered = target.shieldHP <= 0;
+    this._log(`${target.name}'s ward absorbs ${absorbed} damage${shattered ? ' and shatters' : ''}.`);
+    // Fully consumed before its 2-turn timer ran out — drop the timer too so
+    // it doesn't linger as a "ward active" status icon with nothing left.
+    if (shattered && Array.isArray(target.statusEffects)) {
+      const idx = target.statusEffects.findIndex(se => se?.id === 'ward_shield_timer');
+      if (idx !== -1) {
+        target.statusEffects.splice(idx, 1);
+        this._refreshStatusEffectIcons?.(target);
+      }
+    }
+    return dmg - absorbed;
+  }
+
   _resolveMitigation(target, opts = {}) {
     const { physical, elemental, necrotic, raw, ignoreDR, damageReduction, isMagic } = opts;
     const hasTyped = physical != null || elemental != null || necrotic != null;
@@ -4108,9 +4174,15 @@ export default class CombatScene extends Phaser.Scene {
 
       // Minimum-1 floor per typed component — a small flat bonus (e.g. a
       // weapon's +1 necrotic affix) shouldn't be fully erased by even 1% resist.
-      const physDmg = p > 0 ? Math.max(1, Math.floor(p * (1 - physDR))) : 0;
-      const elemDmg = e > 0 ? Math.max(1, Math.floor(e * (1 - elemDR))) : 0;
-      const necrDmg = n > 0 ? Math.max(1, Math.floor(n * (1 - necrDR))) : 0;
+      let physDmg = p > 0 ? Math.max(1, Math.floor(p * (1 - physDR))) : 0;
+      let elemDmg = e > 0 ? Math.max(1, Math.floor(e * (1 - elemDR))) : 0;
+      let necrDmg = n > 0 ? Math.max(1, Math.floor(n * (1 - necrDR))) : 0;
+      if (this._rollProcHalfDamageTaken(target)) {
+        physDmg = Math.floor(physDmg / 2);
+        elemDmg = Math.floor(elemDmg / 2);
+        necrDmg = Math.floor(necrDmg / 2);
+        try { this._log?.(`${target?.name || 'Target'}'s ring wards off half the blow!`); } catch { }
+      }
       const dmg = physDmg + elemDmg + necrDmg;
       const blocked = raw - dmg;
       const dr = raw > 0 ? Math.max(0, 1 - (dmg / raw)) : 0;
@@ -4120,7 +4192,11 @@ export default class CombatScene extends Phaser.Scene {
     const dr = ignoreDR ? 0 : (damageReduction != null
       ? Phaser.Math.Clamp(damageReduction, -0.95, 0.95)
       : Phaser.Math.Clamp(getDamageReductionFraction(target, { isMagic: !!isMagic, applyExpose: false }), -0.95, 0.95));
-    const dmg = Math.max(0, Math.floor(raw * (1 - dr)));
+    let dmg = Math.max(0, Math.floor(raw * (1 - dr)));
+    if (this._rollProcHalfDamageTaken(target)) {
+      dmg = Math.floor(dmg / 2);
+      try { this._log?.(`${target?.name || 'Target'}'s ring wards off half the blow!`); } catch { }
+    }
     const blocked = raw - dmg;
     return { dmg, blocked, dr };
   }
@@ -4527,6 +4603,11 @@ export default class CombatScene extends Phaser.Scene {
 
     if (options.logUsage !== false) {
       this._logAbilityUseEntry(user, ability, target);
+      // Local-tab hook — fires for ANY successfully-executed ability, both
+      // sides (unlike onInitiativeAbilityUsed, which only covers
+      // requiresInitiativeGauge-gated skills). An encounter's script filters
+      // by ctx.user/ctx.ability.id itself, same pattern as onCrit.
+      this._postLocalChatLines(this.localChatScript?.onAbilityUsed?.(this._buildLocalChatCtx({ user, ability, target })));
     }
 
     // Kindling Rite zone mod: +20%/stack elemental (fire/cold/lightning)
@@ -5006,10 +5087,59 @@ export default class CombatScene extends Phaser.Scene {
         }
 
         if (dealsDamage || dmg > 0) {
+          dmg = this._absorbShieldDamage(target, dmg);
           target.currentHP = Math.max(0, target.currentHP - dmg);
 
-          // Lifesteal: heal attacker for % of actual damage dealt
-          const lifeStealPct = user?.gearEffects?.lifeStealPct || user?.lifeStealPct || 0;
+          // Zafaar/Le'sse amulets — a % of the damage just dealt converts
+          // into bonus buildup. Zafaar: any physical damage -> a declared
+          // physical family (disorient/lacerate/expose). Le'sse: a SPECIFIC
+          // element's damage (identified via the ability's own tags, same
+          // convention every elemental skill already uses) -> that same
+          // element's buildup family. Rolled/aggregated correctly but never
+          // read anywhere until now — same gap as every other jewelry stat
+          // audited this pass.
+          //
+          // Source: result._coreBreakdown when available (typed-pipeline
+          // skills — set in this function right after gear conversion/gear%
+          // resolve, BEFORE Jolt or any T3 rider is folded in — see that
+          // snapshot's own comment above). This is "the hit itself" the way
+          // the amulet's own description reads ("X% Phys/Elem Dmg ->
+          // Buildup") — not the post-mitigation dealt amount, and
+          // deliberately excludes Jolt/riders, which are separate procs
+          // triggered BY the hit rather than part of its own composition.
+          // Falls back to the post-mitigation typed split (or the flat
+          // isMagic-gated dmg) for legacy skills, which never get a
+          // _coreBreakdown snapshot.
+          if (dmg > 0 && target?.weakness) {
+            const coreBd = result?._coreBreakdown;
+            const physPct = user?.gearEffects?.physBuildupOnPhysDmg || {};
+            const physSrc = coreBd ? (coreBd.physical || 0)
+              : typeBreakdown ? (typeBreakdown.physDmg || 0)
+              : (!result?.isMagic ? dmg : 0);
+            if (physSrc > 0) {
+              for (const [fam, pct] of Object.entries(physPct)) {
+                const bonus = Math.floor(physSrc * pct / 100);
+                if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
+              }
+            }
+            const elemPct = user?.gearEffects?.elemBuildupOnElemDmg || {};
+            const elemSrc = coreBd ? (coreBd.elemental || 0)
+              : typeBreakdown ? (typeBreakdown.elemDmg || 0)
+              : (result?.isMagic ? dmg : 0);
+            if (elemSrc > 0) {
+              for (const [fam, pct] of Object.entries(elemPct)) {
+                if (!ability?.tags?.includes(fam)) continue;
+                const bonus = Math.floor(elemSrc * pct / 100);
+                if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
+              }
+            }
+          }
+
+          // Lifesteal: heal attacker for % of actual damage dealt. Bonus
+          // lifesteal from a temporary status effect (e.g. the berserker's
+          // Bloodrite) stacks additively on top of the permanent gear value.
+          const bonusLifeStealPct = (_sumStatusEffectMods(user)?.LifeStealPct || 0) / 100;
+          const lifeStealPct = (user?.gearEffects?.lifeStealPct || user?.lifeStealPct || 0) + bonusLifeStealPct;
           if (lifeStealPct > 0 && dmg > 0 && user?.currentHP != null && user?.maxHP != null) {
             const healed = Math.max(1, Math.ceil(dmg * lifeStealPct));
             user.currentHP = Math.min(user.maxHP, user.currentHP + healed);
@@ -5685,6 +5815,7 @@ export default class CombatScene extends Phaser.Scene {
           this._log({ segments: healSegments });
         }
       } else {
+        amt = this._absorbShieldDamage(target, amt);
         const before = target.currentHP | 0;
         const after = Math.max(0, before - Math.max(0, amt));
         const dealt = before - after;
@@ -5692,6 +5823,30 @@ export default class CombatScene extends Phaser.Scene {
         resultInfo.hpBefore = before;
         resultInfo.dealt = dealt;
         this._showFloatingNumber?.(dealt, target, /*isHeal=*/false, /*isCrit=*/false);
+
+        // Zafaar/Le'sse amulets — same rider as the primary-hit path in
+        // _applyAbilityToTarget (see its own comment for the full
+        // rationale); needed here too since splash/repeat/volley hits all
+        // flow through this function instead of that one.
+        if (dealt > 0 && target?.weakness) {
+          const physPct = user?.gearEffects?.physBuildupOnPhysDmg || {};
+          const physSrc = directTypeBreakdown ? (directTypeBreakdown.physDmg || 0) : (!payload.isMagic ? dealt : 0);
+          if (physSrc > 0) {
+            for (const [fam, pct] of Object.entries(physPct)) {
+              const bonus = Math.floor(physSrc * pct / 100);
+              if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
+            }
+          }
+          const elemPct = user?.gearEffects?.elemBuildupOnElemDmg || {};
+          const elemSrc = directTypeBreakdown ? (directTypeBreakdown.elemDmg || 0) : (payload.isMagic ? dealt : 0);
+          if (elemSrc > 0) {
+            for (const [fam, pct] of Object.entries(elemPct)) {
+              if (!opts?.ability?.tags?.includes(fam)) continue;
+              const bonus = Math.floor(elemSrc * pct / 100);
+              if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
+            }
+          }
+        }
 
         const isMagic = !!payload.isMagic;
         const typeText = isMagic ? ' magic' : '';
@@ -5869,6 +6024,73 @@ export default class CombatScene extends Phaser.Scene {
   // Glacial Strike's Trapped Fire uses this (`se.onTurnEndOnce`); consumed and
   // removed the first time it fires, regardless of the status's own turns left.
   _applyEndOfTurnProcs(char) {
+    // Ward Weave: end-of-turn party heal — redesigned from a flat 15%
+    // damage-reduction guard (see _processGuardStatusEffects, which no
+    // longer grants anything for this mod) into an actual AoE heal, per
+    // user request. Recurring every turn the runic zone's wardWeave mod is
+    // active, NOT a one-shot — kept separate from the onTurnEndOnce loop
+    // below, which removes its own effect once it fires. One shared heal
+    // roll (real pipeline: calculateHealRoll + applyHealModifiers, so it
+    // benefits from the caster's WIS/gear healingPercent/Proficiency same as
+    // any other heal) applied to the whole living party, still gated behind
+    // the existing 3-Initiative/turn drain (_startTurnStatusEffects).
+    const wardZone = (char?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.wardWeave);
+    if (wardZone && char?.status !== 'incapacitated') {
+      const allies = (this.turnOrder || []).filter(u => !u.isEnemy && u.status !== 'incapacitated');
+      if (allies.length > 0) {
+        const roll = calculateHealRoll(char, null);
+        const healAmount = Math.max(1, applyHealModifiers(roll.amount, char, {
+          skillPct: 50, skillLabel: 'Ward Weave healing (50%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }));
+        for (const ally of allies) {
+          const before = ally.currentHP | 0;
+          const maxHP = ally.maxHP | 0;
+          const after = Math.min(maxHP || before, before + healAmount);
+          const healed = after - before;
+          ally.currentHP = after;
+          if (healed > 0) this._showFloatingNumber?.(healed, ally, true, !!roll.isCrit);
+        }
+        this._log(`${char.name}'s ward weave mends the party for ${healAmount} HP.`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+      }
+    }
+
+    // Berserker's Unstoppable Rush "glare" — target has until the end of
+    // THIS turn (their own next turn since being marked) to move, or they
+    // eat a big physical punish. One-shot: resolves and removes itself here
+    // either way, deliberately independent of the quake-zone/slotEffects
+    // ground-hazard system (see the skill's own comment, data/skills.js).
+    // currentActorMovedThisTurn is a scene-level flag scoped to whoever's
+    // turn is currently ending (set true by _moveUnitToSlot, reset false at
+    // the start of each new actor's turn) — since this function runs for
+    // `char` right as THEIR OWN turn ends, it correctly reflects whether
+    // THEY moved this turn, not some other unit.
+    if (Array.isArray(char?.statusEffects)) {
+      const glareIdx = char.statusEffects.findIndex(se => se?.id === 'berserker_glare' && (se.turns || 0) > 0);
+      if (glareIdx !== -1) {
+        const moved = !!this.currentActorMovedThisTurn;
+        char.statusEffects.splice(glareIdx, 1);
+        if (!moved && char.status !== 'incapacitated') {
+          const dr = getDamageReductionFraction(char, { isMagic: false });
+          const raw = Math.max(1, Math.floor((char.maxHP || 0) * 0.35));
+          const dealt = Math.max(1, Math.floor(raw * (1 - dr)));
+          const before = char.currentHP | 0;
+          const after = Math.max(0, before - dealt);
+          char.currentHP = after;
+          this._showFloatingNumber?.(dealt, char, false, false);
+          this._log(`${char.name} freezes under the Berserker's glare and is crushed for ${dealt} damage!`);
+          this._updateHealthBars?.(); this._updateHPMPBars?.();
+          if (after === 0 && char.status !== 'incapacitated') {
+            char.status = 'incapacitated';
+            this._onUnitKnockedOut?.(char);
+          }
+        } else if (moved) {
+          this._log(`${char.name} breaks the Berserker's glare by moving.`);
+        }
+      }
+    }
+
     if (!Array.isArray(char?.statusEffects)) return;
     for (let i = char.statusEffects.length - 1; i >= 0; i--) {
       const se = char.statusEffects[i];
@@ -6028,9 +6250,9 @@ export default class CombatScene extends Phaser.Scene {
     // Remove exhausted guard effects (reverse order keeps indices stable)
     for (let i = toRemove.length - 1; i >= 0; i--) list.splice(toRemove[i], 1);
 
-    // wardWeave: runic zone mod grants a flat 15% damage reduction as guard
-    const wardZone = list.find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.wardWeave);
-    if (wardZone) totalGuard += 0.15;
+    // wardWeave used to grant a flat 15% damage-reduction guard here —
+    // redesigned into an end-of-turn party heal instead (see
+    // _applyEndOfTurnProcs), so this no longer contributes any guard.
 
     return Math.min(0.95, totalGuard);
   }
@@ -6275,14 +6497,27 @@ export default class CombatScene extends Phaser.Scene {
       // rider hook above.
 
       // Apply — permanent gear/stat Resilience plus any temporary status-
-      // effect Resilience (e.g. Curse Suppression's ward), both flat
-      // reductions to this same incoming buildup.
+      // effect Resilience (e.g. Curse Suppression's ward), both feeding the
+      // same percentage curve below.
       const baseResilience = target?.gearEffects?.resilience ?? target?.resilience ?? 0;
       const statusResilience = _sumStatusEffectMods(target)?.Resilience || 0;
       const resilience = baseResilience + statusResilience;
       if (resilience > 0) {
         const before = amt;
-        amt = Math.max(0, amt - resilience);
+        // Percentage-based mitigation curve — was a flat `amt - resilience`,
+        // which let the same Resilience value completely negate a small
+        // buildup hit (20 Resilience vs a 25 hit: -80%) while barely
+        // touching a large one (20 vs 200: -10%) — too strong at the low
+        // end AND too weak at the high end off the same stat. Converting
+        // Resilience into a MITIGATION PERCENTAGE instead (K=100 tuned so
+        // Resilience 100 = exactly 50% reduction) fixes both at once: that
+        // same percentage applies uniformly regardless of hit size, so a
+        // small hit is meaningfully softened but never zeroed out, and a
+        // large hit — which the old flat number barely dented — now takes a
+        // real proportional cut too.
+        const RESILIENCE_K = 100;
+        const mitigationPct = resilience / (resilience + RESILIENCE_K);
+        amt = Math.max(0, Math.floor(amt * (1 - mitigationPct)));
         if (amt !== before) {
           this._log(`${target.name}'s resilience reduces ${key} buildup: ${before} → ${amt}.`);
         }
@@ -6729,7 +6964,7 @@ export default class CombatScene extends Phaser.Scene {
   // stack-count-aware line for it instead, since its numbers now scale.
   static RUNIC_ZONE_MOD_INFO = {
     kindlingRite: { label: 'Kindling Rite', desc: '+20%/stack elemental damage dealt, 80/stack Fire buildup/turn to caster (max 3 stacks)' },
-    wardWeave: { label: 'Ward Weave', desc: '-15% damage taken, drains 3 Initiative/turn (replaces MP regen)' },
+    wardWeave: { label: 'Ward Weave', desc: 'Heals the whole party for a basic amount at the end of your turn, drains 3 Initiative/turn (replaces MP regen)' },
     runeChannel: { label: 'Rune Channel', desc: '25% chance to recast spells at 60% power, 80 Lightning buildup + 1 lightning damage on cast/recast' },
   };
 
@@ -8066,6 +8301,18 @@ export default class CombatScene extends Phaser.Scene {
       // tick centralized cooldowns for the actor who just acted
       this._tickCooldownsEndOfTurn(previousChar);
 
+      // Le'sse ring skills (Elemental Overload/Raw Force/Sever Spirit) set a
+      // one-turn damage-type-override flag on combatMods (consumed by
+      // applyJewelryDamageProcs, CombatLogic.js) — clear it here so it only
+      // lasts the turn it was cast on, same as every other "this turn" combat
+      // mod. combatMods itself is otherwise long-lived (reset once per full
+      // character rebuild, not per turn), so nothing else clears these.
+      if (previousChar.combatMods) {
+        previousChar.combatMods._damageConvertToElem = false;
+        previousChar.combatMods._damageConvertToPhys = false;
+        previousChar.combatMods._damageConvertToNecro = false;
+      }
+
       // Ground/hazard zone tick (e.g. Frozen Quake) — moved here from start-
       // of-turn (2026-07): the occupant now gets their own full turn to move
       // out of a hazard zone before it can hit them, instead of being ticked
@@ -8243,6 +8490,12 @@ export default class CombatScene extends Phaser.Scene {
             // so a zone that simply ran out of turns left an orphaned ground
             // sprite on screen indefinitely instead of disappearing.
             if (st.id === 'runic_zone') this._refreshRunicZoneSprite?.(char);
+            // Styx "of the Ward" amulet's shield lasts 2 turns even if not
+            // fully consumed — clear whatever's left when this timer runs out.
+            if (st.id === 'ward_shield_timer' && (char.shieldHP || 0) > 0) {
+              char.shieldHP = 0;
+              this._updateHealthBars?.(); this._updateHPMPBars?.();
+            }
           }
         }
       }

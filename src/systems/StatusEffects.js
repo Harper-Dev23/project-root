@@ -330,11 +330,21 @@ export const WeaknessV3 = {
       baseDecay: 35,
       t1: {
         physDRPen: 0.10,        // fraction of defender DR ignored (scales with intensity)
+        physDRPenCap: 0.20,     // was uncapped — at max intensity (2.5x) this scaled to
+                                // -25% PDR; capped at same convention Cold/Toxic/Disorient
+                                // already use for their own intensity-scaled effects.
         physBuildupAmp: 0.15,   // extra physical-family buildup taken (Disorient/Lacerate)
       },
       t2: {
         critChanceBonus: 0.15,  // extra absolute crit chance (scales with intensity)
+        critChanceBonusCap: 0.25,  // was uncapped — scaled to +37.5% crit chance at max
+                                    // intensity, stacking with T1's PDR loss above on the
+                                    // same heavily-Exposed target. Softened per user report
+                                    // (encounter 6 Death Spiral one-shot investigation).
         critDamageBonus: 0.25,  // extra crit damage multiplier
+        critDamageBonusCap: 0.35,  // was uncapped — scaled to +0.625 (1.5x crit -> ~2.13x)
+                                    // at max intensity. Capped so the worst case is 1.5x ->
+                                    // 1.85x instead.
       },
     },
 

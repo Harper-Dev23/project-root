@@ -392,21 +392,21 @@ export const Items = {
     id: 'zafaar_amulet_disorient',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Disorientation', family: 'physBuildupOnPhysDmg', buildupTarget: 'disorient', range: [25, 35] },
+    fixedAffix: { key: 'of Disorientation', family: 'physBuildupOnPhysDmg', buildupTarget: 'disorient', range: [65, 85] },
   },
 
   zafaar_amulet_lacerate: {
     id: 'zafaar_amulet_lacerate',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Lacerations', family: 'physBuildupOnPhysDmg', buildupTarget: 'lacerate', range: [25, 35] },
+    fixedAffix: { key: 'of Lacerations', family: 'physBuildupOnPhysDmg', buildupTarget: 'lacerate', range: [65, 85] },
   },
 
   zafaar_amulet_expose: {
     id: 'zafaar_amulet_expose',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Exposure', family: 'physBuildupOnPhysDmg', buildupTarget: 'expose', range: [25, 35] },
+    fixedAffix: { key: 'of Exposure', family: 'physBuildupOnPhysDmg', buildupTarget: 'expose', range: [65, 85] },
   },
 
   // ── LE'SSE AMULETS ────────────────────────────────────────────────────────
@@ -415,21 +415,21 @@ export const Items = {
     id: 'lesse_amulet_cold',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Frost', family: 'elemBuildupOnElemDmg', buildupTarget: 'cold', range: [25, 35] },
+    fixedAffix: { key: 'of Frost', family: 'elemBuildupOnElemDmg', buildupTarget: 'cold', range: [65, 85] },
   },
 
   lesse_amulet_fire: {
     id: 'lesse_amulet_fire',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Embers', family: 'elemBuildupOnElemDmg', buildupTarget: 'fire', range: [25, 35] },
+    fixedAffix: { key: 'of Embers', family: 'elemBuildupOnElemDmg', buildupTarget: 'fire', range: [65, 85] },
   },
 
   lesse_amulet_lightning: {
     id: 'lesse_amulet_lightning',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Storms', family: 'elemBuildupOnElemDmg', buildupTarget: 'lightning', range: [25, 35] },
+    fixedAffix: { key: 'of Storms', family: 'elemBuildupOnElemDmg', buildupTarget: 'lightning', range: [65, 85] },
   },
 
   // ── ZAFAAR RINGS ──────────────────────────────────────────────────────────
@@ -438,21 +438,21 @@ export const Items = {
     id: 'zafaar_ring_double_damage',
     name: 'Zafaar Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Doubling', family: 'procDoubleDamage', range: [1, 2] },
+    fixedAffix: { key: 'of Doubling', family: 'procDoubleDamage', range: [3, 5] },
   },
 
   zafaar_ring_half_damage: {
     id: 'zafaar_ring_half_damage',
     name: 'Zafaar Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Warding', family: 'procHalfDamageTaken', range: [1, 2] },
+    fixedAffix: { key: 'of Warding', family: 'procHalfDamageTaken', range: [3, 5] },
   },
 
   zafaar_ring_heal_proc: {
     id: 'zafaar_ring_heal_proc',
     name: 'Zafaar Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Mending', family: 'procHealOnHeal', range: [1, 2] },
+    fixedAffix: { key: 'of Mending', family: 'procHealOnHeal', range: [3, 5] },
   },
 
   // ── ELSETH RINGS ──────────────────────────────────────────────────────────
@@ -461,21 +461,21 @@ export const Items = {
     id: 'elseth_ring_elem_proc',
     name: 'Elseth Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'elseth', bonuses: {},
-    fixedAffix: { key: 'of Elemental Burst', family: 'procElemFlat', range: [1, 2] },
+    fixedAffix: { key: 'of Elemental Burst', family: 'procElemFlat', range: [3, 5] },
   },
 
   elseth_ring_necro_proc: {
     id: 'elseth_ring_necro_proc',
     name: 'Elseth Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'elseth', bonuses: {},
-    fixedAffix: { key: 'of Necrotic Burst', family: 'procNecroFlat', range: [1, 2] },
+    fixedAffix: { key: 'of Necrotic Burst', family: 'procNecroFlat', range: [3, 5] },
   },
 
   elseth_ring_phys_proc: {
     id: 'elseth_ring_phys_proc',
     name: 'Elseth Band',
     type: 'armor', slot: 'ring', rarity: 'uncommon', unique: true, tribe: 'elseth', bonuses: {},
-    fixedAffix: { key: 'of Force Burst', family: 'procPhysFlat', range: [1, 2] },
+    fixedAffix: { key: 'of Force Burst', family: 'procPhysFlat', range: [3, 5] },
   },
 
   // ── STYX RINGS ────────────────────────────────────────────────────────────

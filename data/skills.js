@@ -330,6 +330,7 @@ const RAW_SKILLS = {
     id: 'basic_attack',
     name: 'Basic Attack',
     type: 'weapon',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 0,
     hpCost: 0,
@@ -338,13 +339,29 @@ const RAW_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     targetColumns: ['front', 'mid', 'back'],
+    tags: ['melee', 'attack'],
     cooldown: 0,
-    // calculateDamage() now detects and folds in dual-wielding
-    // automatically (see CombatLogic.js) — no need to branch on it here.
+    // Migrated to the typed pipeline (2026-07) for tooltip/architecture
+    // consistency with the rest of the game — this was the single most-used
+    // legacy-path skill left (gear% applied early instead of the very last
+    // stage like every typed skill), which is exactly what made its
+    // tooltip read differently from any modernized ability even though the
+    // final damage number was always correct either way. calculateDamage()
+    // still detects and folds in dual-wielding automatically regardless.
     apply: (attacker, target) => {
-      const r = calculateDamage(attacker, target);
-      const amount = applyDamageModifiers(r.amount, attacker, target);
-      return { ...r, amount };
+      const ability = SKILLS?.basic_attack;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: 'Basic Attack weapon damage (100%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
     },
     description: 'A quick physical strike.',
   },
@@ -1518,7 +1535,7 @@ const NPC_ONLY_SKILLS = {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 130, skillLabel: `${ability?.name || 'Skill'} weapon damage (130%)`,
+          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
@@ -1537,7 +1554,7 @@ const NPC_ONLY_SKILLS = {
         })),
       };
     },
-    description: "Unleashes the channeled inferno — 130% weapon damage as Fire to the entire party."
+    description: "Unleashes the channeled inferno — 110% weapon damage as Fire to the entire party."
   },
 
   // Encounter 4 - Huntsman & Beasts
@@ -2609,7 +2626,7 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      return { ...roll, amount, buildup: { expose: 90, lacerate: 80 } };
+      return { ...roll, amount, buildup: { expose: 110, lacerate: 100 } };
     },
     description: "Deals weapon damage and applies 90 Expose and 80 Lacerate buildup."
   },
@@ -2617,7 +2634,12 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_disrupting_roar',
     name: 'Disrupting Roar',
     type: 'enemy',
-    actionCost: 'class',
+    // Was 'class' — moved to 'bonus' (same pool as Bleeding Sweep below) so
+    // the two full-party AoEs can no longer both fire in the same turn; they
+    // used to sit on separate action pools (class + major) and the AI would
+    // happily use both back to back, hitting the whole party twice at full
+    // splash in one turn. See project_encounter6_rework memory.
+    actionCost: 'bonus',
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
@@ -2637,21 +2659,28 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
+      // 70% splash — matches the convention every other AoE in the game
+      // uses (Barbed Bloom, etc.). Was a flat 100% copy of the primary's
+      // own hit to the ENTIRE party, no discount at all — a big piece of
+      // why this fight could nearly wipe a party in one turn.
+      const splashAmount = Math.max(1, Math.floor(amount * 0.70));
       const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
       return {
         ...roll,
         amount,
-        buildup: { disorient: 80 },
-        splash: others.map(t => ({ target: t, amount, buildup: { disorient: 80 } })),
+        buildup: { disorient: 100 },
+        splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { disorient: 100 } })),
       };
     },
-    description: "Roars, disorienting the whole party. Deals damage and builds Disorient on every foe."
+    description: "Roars, disorienting the whole party. Deals damage to the primary target and 70% of that to the rest, building Disorient on every foe."
   },
   'berserker_bleeding_sweep': {
     id: 'berserker_bleeding_sweep',
     name: 'Bleeding Sweep',
     type: 'enemy',
-    actionCost: 'major',
+    // Was 'major' — see berserker_disrupting_roar's comment above for why
+    // this now shares the bonus-action pool with it.
+    actionCost: 'bonus',
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
@@ -2667,27 +2696,35 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
+      // 70% splash — see berserker_disrupting_roar's comment above.
+      const splashAmount = Math.max(1, Math.floor(amount * 0.70));
       const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
       return {
         ...roll,
         amount,
-        buildup: { lacerate: 90 },
-        splash: others.map(t => ({ target: t, amount, buildup: { lacerate: 90 } })),
+        buildup: { lacerate: 110 },
+        splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { lacerate: 110 } })),
       };
     },
-    description: "A wide, bleeding sweep across the whole party."
+    description: "A wide, bleeding sweep — full damage to the primary target, 70% of that to the rest of the party."
   },
   'berserker_guarded_fury': {
     id: 'berserker_guarded_fury',
     name: 'Guarded Fury',
     type: 'enemy',
-    actionCost: 'bonus',
+    // Was 'bonus' — moved to 'major' so he has a second real major-action
+    // option now that Unstoppable Rush no longer costs an action at all
+    // (see its own comment below).
+    actionCost: 'major',
     mpCost: 5,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    tags: ['melee', 'attack', 'cold'],
+    // Was 'cold' buildup — switched to 'disorient', matching his other
+    // physical-family-focused abilities (Crushing Blow/Bleeding Sweep/Blood
+    // Fury) instead of being his kit's one lone elemental outlier.
+    tags: ['melee', 'attack', 'disorient'],
     // Guard buff was returned via statusEffects, which the engine ALWAYS
     // applies to the TARGET (see fighter_guarded_blow's fix above, same
     // exact bug) — meaning this was granting +15 Physical Resist to whoever
@@ -2700,9 +2737,9 @@ const NPC_ONLY_SKILLS = {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
       scene?._addStatusEffects?.(attacker, [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]);
-      return { ...roll, amount, buildup: { cold: 70 } };
+      return { ...roll, amount, buildup: { disorient: 90 } };
     },
-    description: "Deals weapon damage and applies 70 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
+    description: "Deals weapon damage and applies 90 Disorient buildup, while bracing itself for 2 turns (+15 Physical Resist)."
   },
   'berserker_battle_frenzy': {
     id: 'berserker_battle_frenzy',
@@ -2730,45 +2767,60 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack', 'finisher'],
+    // Was T1+ each — raised to T2+ each, a real commitment to build toward
+    // rather than an easy early-fight gate.
     requiresWeakness: [
-      { family: 'expose', tier: 1 },
-      { family: 'lacerate', tier: 1 }
+      { family: 'expose', tier: 2 },
+      { family: 'lacerate', tier: 2 }
     ],
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_death_spiral;
       const roll = calculateDamage(attacker, target, ability);
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
+      // He cuts himself open finishing the spiral — self-Lacerate buildup so
+      // Reckless Harvest (his own self-Lacerate-consume skill) has real fuel
+      // to work with across the fight instead of depending entirely on the
+      // party's own Lacerate hits landing on him.
+      scene?._applyWeaknessBuildup?.(attacker, { lacerate: 150 }, { user: attacker });
       return { ...roll, amount, consumeWeakness: ['expose', 'lacerate'] };
     },
-    description: "Requires the target to be both Exposed and Lacerated (T1+ each). Deals heavy weapon damage and consumes both their Expose and Lacerate buildup."
+    description: "Requires the target to be both Exposed and Lacerated (T2+ each). Deals heavy weapon damage, consumes both their Expose and Lacerate buildup, and cuts himself for 150 Lacerate buildup."
   },
   'berserker_unstoppable_rush': {
     id: 'berserker_unstoppable_rush',
     name: 'Unstoppable Rush',
     type: 'enemy',
-    actionCost: 'major',
-    mpCost: 10,
+    // Full redesign — was a major-action damage rush, now a genuinely FREE
+    // tactical threat: no action-economy cost at all, gated purely on
+    // Initiative via requiresInitiativeGauge (the same generic engine gate
+    // Coordinated Volley/Blazing Fervor use — also fires the
+    // onInitiativeAbilityUsed local-chat hook for free). Deals no direct
+    // damage; marks a target instead, resolved at the END of THEIR next
+    // turn (see the berserker_glare handling in _applyEndOfTurnProcs,
+    // CombatScene.js) — functionally similar in spirit to a hazard-zone
+    // punish but deliberately built independent of the quake-zone/
+    // slotEffects ground-hazard system (no shared tags/references).
+    actionCost: 'free',
+    requiresInitiativeGauge: 50,
+    mpCost: 0,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    tags: ['melee', 'attack'],
+    tags: ['tactical'],
     apply: (attacker, target) => {
-      const ability = SKILLS?.berserker_unstoppable_rush;
       if (attacker) {
         attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - 50);
       }
-      const disorientStacks = target?.weakness?.tiers?.disorient || 0;
-      const roll = calculateDamage(attacker, target, ability);
-      let amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      if (disorientStacks >= 1) amount += 3 * disorientStacks;
-      return { ...roll, amount };
+      return {
+        amount: 0,
+        statusEffects: [{ id: 'berserker_glare', turns: 2 }],
+        log: `${attacker?.name || 'The Berserker'} fixes a murderous glare on ${target?.name || 'the target'}.`,
+      };
     },
-    description: "Spends up to 50 Initiative to charge in. Deals heavy weapon damage, +3 more per Disorient tier the target has."
+    description: "Free action — costs no action economy, only 50 Initiative. Marks a target: if they don't move by the end of their own next turn, they take a massive chunk of physical damage."
   },
   'berserker_blood_fury': {
     id: 'berserker_blood_fury',
@@ -2804,9 +2856,66 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      return { ...roll, amount, buildup: { expose: 60, disorient: 60 } };
+      return { ...roll, amount, buildup: { expose: 80, disorient: 80 } };
     },
     description: "Reaction: lashes back at whoever strikes him, dealing damage and building Expose and Disorient."
+  },
+  'berserker_reckless_harvest': {
+    id: 'berserker_reckless_harvest',
+    name: 'Reckless Harvest',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 0,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'self',
+    tags: ['self'],
+    // Reactive to being hit, per explicit design choice — only meaningful
+    // once the party's own Lacerate hits have landed on HIM (requiresWeakness
+    // supports checking the caster's own weakness via on:'self'). Death
+    // Spiral also seeds a real chunk of self-Lacerate on its own use now, so
+    // this has fuel to work with even against an all-caster party eventually.
+    requiresWeakness: [{ family: 'lacerate', tier: 1, on: 'self' }],
+    apply: (attacker, _target, scene) => {
+      const meter = Math.min(400, attacker?.weakness?.meters?.lacerate || 0);
+      // +5% AttackPower per 50 consumed, capped at +40% (400 consumed).
+      const atkPowerPct = Math.floor(meter / 50) * 5;
+      // "Power AND health" — self-damage proportional to what he harvested,
+      // not an either/or choice (an AI can't meaningfully pick between two
+      // payout modes).
+      const selfDamage = Math.max(1, Math.floor(meter * 0.05));
+      if (attacker?.weakness?.meters) {
+        attacker.weakness.meters.lacerate = 0;
+        if (attacker.weakness.tiers) attacker.weakness.tiers.lacerate = 0;
+      }
+      attacker.currentHP = Math.max(0, (attacker.currentHP || 0) - selfDamage);
+      scene?._showFloatingNumber?.(selfDamage, attacker, false, false);
+      scene?._updateHealthBars?.(); scene?._updateHPMPBars?.();
+      scene?._addStatusEffects?.(attacker, [{ id: 'reckless_harvest_buff', turns: 3, mods: { AttackPower: atkPowerPct } }]);
+      return {
+        amount: 0,
+        log: `${attacker?.name || 'The Berserker'} tears at his own wounds, harvesting ${meter} Lacerate for +${atkPowerPct}% power (${selfDamage} self-damage).`,
+      };
+    },
+    description: "Requires the Berserker himself to be Lacerated (T1+). Consumes his own Lacerate buildup (up to 400) for +5% AttackPower per 50 consumed (max +40%, 3 turns), at a cost of self-damage equal to 5% of what was consumed."
+  },
+  'berserker_bloodrite': {
+    id: 'berserker_bloodrite',
+    name: 'Bloodrite',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 4,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'self',
+    tags: ['self'],
+    apply: (attacker, _target, scene) => {
+      scene?._addStatusEffects?.(attacker, [{ id: 'bloodrite_buff', turns: 2, mods: { LifeStealPct: 10 } }]);
+      return { amount: 0, log: `${attacker?.name || 'The Berserker'} howls a bloodrite — his wounds will mend faster.` };
+    },
+    description: "Grants +10% Lifesteal for 2 turns, doubling his Bloodthirster's own 10% while active."
   }
 };
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
@@ -7752,12 +7861,16 @@ Object.assign(RAW_SKILLS, {
       zone.mods.wardWeave = true;
       // Implemented in CombatScene.js: _startTurnStatusEffects drains 3
       // Initiative/turn (replacing the zone's normal MP restore) while this
-      // mod is active, and _processGuardStatusEffects grants a flat 15%
-      // damage-reduction guard on every hit taken.
+      // mod is active, and _applyEndOfTurnProcs heals the whole party for
+      // 50% weapon-die healing (real heal pipeline — calculateHealRoll/
+      // applyHealModifiers, so it benefits from WIS/gear/Proficiency same as
+      // any other heal) at the end of the caster's turn. Was a flat 15%
+      // damage-reduction guard instead — redesigned into an actual AoE heal
+      // per user request.
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Protective wards weave through the runic circle!" };
     },
-    description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), caster takes 15% less damage while in zone."
+    description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), heals the whole party for 50% weapon-die healing at the end of your turn while active."
   },
 
   'silence_crescent': {
@@ -7854,7 +7967,7 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
-    actionCost: "major",
+    actionCost: "bonus",
     mpCost: 6,
     cooldown: 5,
     requiresTarget: false,
@@ -8371,7 +8484,7 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.restoration_light;
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       // First skill on the new heal pipeline — calculateHealRoll (weapon die
-      // only, no STR/WIS, per explicit design decision) + applyHealModifiers
+      // + WIS bonus, see calculateHealRoll's own comment) + applyHealModifiers
       // (skillPct -> HealingPower buff -> crit). Proficiency and
       // target.healingReceivedBonus still apply afterward, same as before,
       // in the engine's own heal-application code — see project memory for
@@ -8396,7 +8509,17 @@ Object.assign(RAW_SKILLS, {
       // Regen's DURATION does not (matches every other recastable skill
       // this pass — only magnitude scales, not turns). Regen's own tick is
       // NOT crit-affected — only the instant portion crits.
-      const regenTick = Math.max(1, Math.floor(3 * powerScale));
+      //
+      // Was a flat "3, x powerScale" number completely disconnected from the
+      // caster's own roll — investing in a bigger staff or more WIS did
+      // nothing for it. Now 35% of that same base roll (roll.amount — the
+      // weapon die + WIS bonus, pre-skillPct/pre-crit), so it scales with
+      // the same formula as the instant heal instead of being a hardcoded
+      // constant. Deliberately NOT run back through applyHealModifiers a
+      // second time (would double-push gear%/HealingPower breakdown lines
+      // onto the same tooltip) and deliberately excludes crit, matching the
+      // existing "regen isn't crit-affected" design above.
+      const regenTick = Math.max(1, Math.floor(roll.amount * 0.35 * powerScale));
 
       return {
         amount: healAmount,
@@ -14184,7 +14307,7 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 10,
-    actionCost: "major",
+    actionCost: "bonus",
     mpCost: 3,
     cooldown: 1,
     requiresTarget: true,

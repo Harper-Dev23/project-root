@@ -616,12 +616,28 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'berserker_death_spiral') && heavyTarget) {
         return buildAction('berserker_death_spiral', heavyTarget);
       }
-      if (canUseSkill(npc, 'berserker_battle_frenzy') && !hasStatus(npc, 'battle_frenzy')) {
-        return buildAction('berserker_battle_frenzy', npc);
-      }
+      // Free action (no action-economy cost, just Initiative — see the
+      // skill's own comment in skills.js) — checked early since it stacks on
+      // top of whatever else he does this turn instead of competing with it.
       if (canUseSkill(npc, 'berserker_unstoppable_rush') && (npc.initiativeGauge || 0) >= 50) {
         const target = weakest(foes);
         if (target) return buildAction('berserker_unstoppable_rush', target);
+      }
+      // Bonus pool now has 5 competitors (Roar/Sweep/Frenzy/Harvest/Bloodrite)
+      // for one use per turn — priority order below is deliberate: self-buffs
+      // and payoffs first (Frenzy if not active, Harvest whenever he has fuel,
+      // Bloodrite only when actually hurting), AOE pressure after.
+      if (canUseSkill(npc, 'berserker_battle_frenzy') && !hasStatus(npc, 'battle_frenzy')) {
+        return buildAction('berserker_battle_frenzy', npc);
+      }
+      if (canUseSkill(npc, 'berserker_reckless_harvest') && hasAnyWeakness(npc, ['lacerate'], 1)) {
+        return buildAction('berserker_reckless_harvest', npc);
+      }
+      // Held for when he's actually hurting — same "sometimes" pacing
+      // Bulwark Call/Mending Wave use — rather than firing on cooldown
+      // regardless of need.
+      if (canUseSkill(npc, 'berserker_bloodrite') && hpRatio(npc) < 0.6) {
+        return buildAction('berserker_bloodrite', npc);
       }
       // Both AOE moves now need a real primary target (see their definitions
       // in skills.js for why) — picked the same way every other single-target
@@ -638,6 +654,8 @@ export const AI_PROFILES = {
         const target = weakest(foes);
         if (target) return buildAction('berserker_crushing_blow', target);
       }
+      // Now a major action (was bonus) — a second real major-action option
+      // alongside Crushing Blow now that Unstoppable Rush costs no action.
       if (canUseSkill(npc, 'berserker_guarded_fury')) {
         const target = weakest(foes);
         if (target) return buildAction('berserker_guarded_fury', target);

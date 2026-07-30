@@ -21,7 +21,7 @@ const STAT_DESCRIPTIONS = {
   DEX: 'Accuracy; feeds Crit Chance',
   CON: 'Max HP, Physical Resist',
   INT: 'Max MP, MP regen; feeds Crit Chance',
-  WIS: 'Max MP, Elemental Resist, Resilience',
+  WIS: 'Max MP, Elemental Resist, Resilience, Healing',
   CHA: 'Max MP, Initiative, Elemental/Necrotic Resist',
 };
 

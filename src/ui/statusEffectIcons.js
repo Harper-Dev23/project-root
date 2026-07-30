@@ -24,6 +24,7 @@ const STATUS_ICON_LIBRARY = {
   braced: { glyph: 'BR', name: 'Braced', fg: '#e6f1ff', bg: '#1e2533', border: '#6a88b8', description: 'Guarding against the next strike.' },
   lockstep: { glyph: 'LS', name: 'Lockstep', fg: '#eaf0ff', bg: '#1e2231', border: '#6d87c2', description: 'Synchronized defense with allies.' },
   ward_focus: { glyph: 'WD', name: 'Ward Focus', fg: '#f1e4ff', bg: '#281c34', border: '#8d6bc3', description: 'Sharpened magical wards.' },
+  ward_shield_timer: { glyph: 'SH', name: 'Warded', fg: '#cdeeff', bg: '#123244', border: '#66ccff', description: 'A shield absorbs damage before HP — fades after 2 turns even if not fully spent.' },
   steady_breath: { glyph: 'SB', name: 'Steady Breath', fg: '#e6f3ff', bg: '#202e38', border: '#6aa8d2', description: 'Controlled breathing for focus.' },
   steady_aim: { glyph: 'SA', name: 'Steady Aim', fg: '#fce6c9', bg: '#2f2618', border: '#c08c49', description: 'Lined up for a precise shot.' },
   focus_meditation: { glyph: 'FM', name: 'Focus Meditation', fg: '#e9e1ff', bg: '#241d35', border: '#8a6dc0', description: 'Calming mind and restoring mana.' },

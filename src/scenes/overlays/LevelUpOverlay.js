@@ -43,7 +43,7 @@ const STAT_EFFECTS = {
   DEX: 'Accuracy +2/pt  ·  Crit chance',
   CON: 'Max HP +2/pt  ·  Physical Resist',
   INT: 'Max MP +2/pt  ·  Crit chance',
-  WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Necrotic Resist  ·  Crit Avoid',
+  WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Necrotic Resist  ·  Crit Avoid  ·  Healing',
   CHA: 'Max MP +1/pt  ·  Initiative  ·  Elemental Resist',
 };
 
