@@ -3,6 +3,16 @@ import { COLORS, FONTS } from './styles.js';
 const CONTAINER_PADDING = 24;
 const CONTENT_TOP_OFFSET = CONTAINER_PADDING + 110;
 
+// **bold**/_italic_ inline formatting — was only ever applied to plain
+// paragraph lines; list items pushed their raw text into listBuffer without
+// ever passing through here, so "- **Vendors** - exchange..." rendered with
+// the literal asterisks still showing instead of bold text.
+function formatInline(text) {
+    return text
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/_(.+?)_/g, '<em>$1</em>');
+}
+
 function simpleMarkdownToHtml(markdown = '') {
     const lines = markdown.split(/\r?\n/);
     const html = [];
@@ -23,30 +33,27 @@ function simpleMarkdownToHtml(markdown = '') {
         }
         if (line.startsWith('### ')) {
             flushList();
-            html.push(`<h3>${line.slice(4)}</h3>`);
+            html.push(`<h3>${formatInline(line.slice(4))}</h3>`);
             continue;
         }
         if (line.startsWith('## ')) {
             flushList();
-            html.push(`<h2>${line.slice(3)}</h2>`);
+            html.push(`<h2>${formatInline(line.slice(3))}</h2>`);
             continue;
         }
         if (line.startsWith('# ')) {
             flushList();
-            html.push(`<h1>${line.slice(2)}</h1>`);
+            html.push(`<h1>${formatInline(line.slice(2))}</h1>`);
             continue;
         }
         if (/^[-*] /.test(line)) {
             const item = line.replace(/^[-*]\s+/, '');
-            listBuffer.push(item);
+            listBuffer.push(formatInline(item));
             continue;
         }
 
-        const formatted = line
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/_(.+?)_/g, '<em>$1</em>');
         flushList();
-        html.push(`<p>${formatted}</p>`);
+        html.push(`<p>${formatInline(line)}</p>`);
     }
 
     flushList();
@@ -137,10 +144,26 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         this.scrollContainer.add([this.titleText, this.metaText, this.tagContainer]);
         this.add([this.background, this.scrollContainer]);
 
-        this.setInteractive(new Phaser.Geom.Rectangle(0, 0, width, height), Phaser.Geom.Rectangle.Contains);
-        this.on('wheel', (pointer, dx, dy) => {
-            this.scrollBy(dy);
-        });
+        // Was this.setInteractive(new Phaser.Geom.Rectangle(...), Rectangle.Contains)
+        // + this.on('wheel', ...) directly on the CONTAINER — found (via a real
+        // headless-browser click sweep, not just code reading) to hit-test as
+        // if it covered nearly the ENTIRE screen regardless of this container's
+        // real (x, y, width, height), silently swallowing clicks meant for the
+        // category tabs and anything else that happened to render earlier in
+        // the display list underneath its true footprint. Same bug, same fix,
+        // as JournalTree's own wheel listener: move it to the SCENE's global
+        // input and bounds-check the pointer manually instead of relying on a
+        // Container's own explicit-shape hit area.
+        this._onWheel = (pointer, _gameObjects, _dx, dy) => {
+            const matrix = this.getWorldTransformMatrix?.();
+            if (!matrix) return;
+            const mx = pointer.worldX;
+            const my = pointer.worldY;
+            if (mx >= matrix.tx && mx <= matrix.tx + width && my >= matrix.ty && my <= matrix.ty + height) {
+                this.scrollBy(dy);
+            }
+        };
+        scene.input.on('wheel', this._onWheel);
 
         scene.add.existing(this);
 
@@ -151,6 +174,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
 
     destroy(fromScene) {
         this.scene?.events?.off('postupdate', this._syncMaskPosition);
+        this.scene?.input?.off('wheel', this._onWheel);
         this.scrollContainer?.clearMask?.();
         this.maskRect?.destroy();
         this.maskGfx?.destroy();

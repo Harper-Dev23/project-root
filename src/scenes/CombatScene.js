@@ -3617,6 +3617,15 @@ export default class CombatScene extends Phaser.Scene {
     if (ability.requiresTarget) {
       // Position-targeting for movement/reposition skills
       if (ability.targetRequirement === 'position') {
+        // Re-clicking the SAME movement skill while its own highlights are
+        // already showing cancels it instead of just re-entering (which
+        // would silently clear and re-highlight the identical slots, no
+        // visible change — reported as "can't reclick to uncheck the
+        // highlight lights").
+        if (this._posTargetAbilityId === ability.id) {
+          this._exitPositionTargeting();
+          return;
+        }
         this._enterPositionTargeting(actor, ability);
         return;
       }
@@ -4260,6 +4269,20 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // --- Generic column/row requirement gate (e.g. Blockade: front row
+    // only, Hide: back row only) — a deliberately simple first test case
+    // for a real targeting/positioning-restriction system, not built out
+    // any further than this single check yet. See the matching party-wide
+    // enemy-targeting filter in _takeEnemyTurn_viaLogic for Blockade's
+    // "wall" half.
+    if (ability?.requiresColumn) {
+      const col = this._getUnitColumn(user);
+      if (col !== ability.requiresColumn) {
+        this._log(`${ability.name} fizzles: ${user?.name || 'user'} must be in the ${ability.requiresColumn} row.`);
+        return; // no costs, no cooldown, no on-act triggers
+      }
+    }
+
     // --- Generic Initiative Gauge requirement gate (e.g. Blazing Fervor,
     // whose entire purpose is spending the gauge — below the minimum spend
     // tier there's nothing for it to do, so it should fizzle rather than
@@ -4468,15 +4491,26 @@ export default class CombatScene extends Phaser.Scene {
     const prevTiers = { ...(target?.weakness?.tiers || {}) };
 
     // Snapshot every target-side "reacts when hit" rider (onNextDamageTaken/
-    // onHitBy/nextHitBuildup — see _processTargetHitRiders) BEFORE this
-    // ability runs. If THIS very hit is the one that applies a rider (e.g.
-    // Pressure Point itself crossing Flayed, or Toxic Bloom applying its own
-    // aura), it must NOT also be the hit that triggers/consumes it — only
-    // riders that existed before this cast are eligible. By object
-    // reference, not id, so a skill that reapplies the same-id rider this
-    // same cast is still correctly excluded.
+    // onHitBy/nextHitBuildup/guardianWatch/data.vulnerableToId — see
+    // _processTargetHitRiders) BEFORE this ability runs. If THIS very hit is
+    // the one that applies a rider (e.g. Pressure Point itself crossing
+    // Flayed, or Toxic Bloom applying its own aura), it must NOT also be the
+    // hit that triggers/consumes it — only riders that existed before this
+    // cast are eligible. By object reference, not id, so a skill that
+    // reapplies the same-id rider this same cast is still correctly
+    // excluded.
+    //
+    // guardianWatch/vulnerableToId were added to _processTargetHitRiders
+    // after this filter was originally written and this list was never
+    // updated to match — Watch Over's status silently never qualified for
+    // ANY hit here (found via a real playthrough: the ally got attacked
+    // repeatedly, but the ward never extended and the attacker was never
+    // marked — _processTargetHitRiders's own per-status loop skips
+    // anything not in this Set, full stop).
     const preHitRiderRefs = new Set(
-      (target?.statusEffects || []).filter(se => se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup)
+      (target?.statusEffects || []).filter(se =>
+        se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup || se?.guardianWatch || se?.data?.vulnerableToId
+      )
     );
 
     // Curse riders no longer need a "before hit" snapshot: their Tier-1 bonus
@@ -4649,6 +4683,28 @@ export default class CombatScene extends Phaser.Scene {
         result.buildup.expose = (result.buildup.expose || 0) + (sp.exposeBuildup ?? 80);
         user.statusEffects.splice(snipeIdx, 1);
         this._log(`${user?.name ?? 'Attacker'} channels their Snipe Pose!`);
+      }
+    }
+
+    // Hide's "sneak attack" reward (Beggar), generic enough for future
+    // reuse: if the user carries a status with sneakAttackBonus (Accuracy
+    // points) and this is a hostile action against the opposing side,
+    // grant that bonus RIGHT NOW so it's active in time for the hit roll
+    // below — found via a real playthrough report that the original design
+    // (wait for the status to naturally tick to 0 in
+    // _tickDownStatusDurations, which only fires at the OWNER'S OWN
+    // turn-END) meant the reward could never actually be present for the
+    // very attack it was supposed to reward: ticking is one full cycle
+    // behind whenever the character can next act. This fires on the SAME
+    // attack that ends the sneaking status — breaksOnAttack (further down
+    // this function) still clears both the original status and this
+    // one-shot bonus afterward, hit or miss.
+    if (target && user.isEnemy !== target.isEnemy) {
+      const sneakSrc = (user.statusEffects || []).find(se => Number.isFinite(se?.sneakAttackBonus));
+      if (sneakSrc) {
+        this._addStatusEffects?.(user, [{
+          id: 'sneak_attack_bonus', turns: 1, mods: { Accuracy: sneakSrc.sneakAttackBonus }, breaksOnAttack: true,
+        }]);
       }
     }
 
@@ -5009,7 +5065,7 @@ export default class CombatScene extends Phaser.Scene {
         // reflects any onNextDamageTaken bonus as part of the final hit.
         if (raw > 0) {
           const { bonusDamage } = this._processTargetHitRiders(target, user, {
-            rawDamage: raw, ignoreDR, preHitRiderRefs,
+            rawDamage: raw, mitigatedDamage: dmg, ignoreDR, preHitRiderRefs,
           });
           dmg += bonusDamage;
         }
@@ -5565,6 +5621,18 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // breaksOnAttack (Hide/Beggar): the instant the character takes a
+    // hostile action against the opposing side, their stealth ends.
+    // Checked broadly against "the target is on the opposing side" rather
+    // than a specific 'attack' tag, since not every skill carries one
+    // consistently (see project_npc_logic_modernization). Fires here,
+    // right after cost/cooldown consumption, so a fizzled cast never
+    // breaks it — only an ability that actually executed does.
+    if (target && user.isEnemy !== target.isEnemy) {
+      const breaking = (user.statusEffects || []).filter(se => se?.breaksOnAttack);
+      breaking.forEach(se => this._clearScopedStatus(user, se.id));
+    }
+
     // ---- Volley reaction: allies with volley_armed echo this ranged skill ----
     // Scalable: any skill with the 'ranged' tag triggers this. The volley copy fires
     // _applyDirectResult directly (bypasses gates/costs/cooldowns) at reduced effectiveness.
@@ -5764,18 +5832,23 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       // Target-side "reacts when hit" riders (onNextDamageTaken/onHitBy/
-      // nextHitBuildup) — same consolidated function the primary-hit path
-      // uses (see _processTargetHitRiders's header comment). Previously
-      // NONE of these three ever fired for a splash or repeat hit at all —
-      // this is the actual fix for that. Snapshotting here (rather than
-      // just reusing whatever's currently on the target) still correctly
+      // nextHitBuildup/guardianWatch/data.vulnerableToId) — same
+      // consolidated function the primary-hit path uses (see
+      // _processTargetHitRiders's header comment). Previously NONE of the
+      // original three ever fired for a splash or repeat hit at all — this
+      // is the actual fix for that. Snapshotting here (rather than just
+      // reusing whatever's currently on the target) still correctly
       // excludes a rider THIS SAME payload might apply via its own
-      // statusEffects, applied later in this function.
+      // statusEffects, applied later in this function. Kept in sync with
+      // the primary-hit path's identical filter above (see its comment for
+      // why guardianWatch/vulnerableToId had to be added here too).
       const preHitRiderRefs = new Set(
-        (target?.statusEffects || []).filter(se => se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup)
+        (target?.statusEffects || []).filter(se =>
+          se?.onNextDamageTaken || se?.onHitBy || se?.nextHitBuildup || se?.guardianWatch || se?.data?.vulnerableToId
+        )
       );
       const { bonusDamage } = this._processTargetHitRiders(target, user, {
-        rawDamage: rawAmt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs,
+        rawDamage: rawAmt, mitigatedDamage: amt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs,
       });
       amt += bonusDamage;
       resultInfo.mitigatedAmount = amt;
@@ -6268,7 +6341,7 @@ export default class CombatScene extends Phaser.Scene {
    * heal aura, and Bedrock Guard's nextHitBuildup retaliation ALL silently
    * did nothing when the target was hit by AOE splash or a repeat, since
    * _applyDirectResult never checked any of them. This is the single place
-   * that needs updating if a fourth shape is ever added — no per-skill
+   * that needs updating if another shape is ever added — no per-skill
    * wiring required elsewhere.
    *
    * Shapes handled:
@@ -6280,6 +6353,14 @@ export default class CombatScene extends Phaser.Scene {
    *     Bloom's aura)
    *   - nextHitBuildup (+ optional nextHitOnly) — buildup applied TO THE
    *     ATTACKER; consumed only if nextHitOnly is set. (Bedrock Guard)
+   *   - guardianWatch: { guardianId, guardianName, extendTurns, markTurns,
+   *     markMult } — PERSISTENT, on the WARDED character: extends its own
+   *     turns and marks the attacker vulnerable via data.vulnerableToId
+   *     below. (Shepherd's Watch Over)
+   *   - data.vulnerableToId / data.vulnerableMult — PERSISTENT, generic
+   *     source-scoped vulnerability: adds a %-of-raw-damage bonus ONLY when
+   *     `attacker.id` matches vulnerableToId. (currently only produced by
+   *     guardianWatch, kept generic for reuse)
    *
    * opts.preHitRiderRefs — a Set of status-effect object references
    * snapshotted BEFORE this ability's own apply() ran — ensures a rider a
@@ -6288,11 +6369,20 @@ export default class CombatScene extends Phaser.Scene {
    * pattern, generalized). Pass null to process everything currently on
    * the target (no snapshot available/needed).
    *
+   * opts.mitigatedDamage — the hit's damage AFTER the target's own
+   * Resistance/DR has already been subtracted (both call sites compute
+   * this before calling in). Defaults to rawDamage if omitted. Any rider
+   * that scales a bonus off the hit's SIZE (not a fixed separate damage
+   * type of its own, like Ignition's elemental burst) should scale off
+   * THIS, not rawDamage — bonusDamage gets folded in AFTER mitigation has
+   * already run, so a bonus computed from the pre-mitigation raw hit would
+   * bypass the target's defenses entirely once added back in.
+   *
    * Returns { bonusDamage } — additional damage the CALLER must fold into
    * the hit before final HP subtraction (onNextDamageTaken only).
    */
   _processTargetHitRiders(target, attacker, opts = {}) {
-    const { rawDamage = 0, ignoreDR = false, preHitRiderRefs = null } = opts;
+    const { rawDamage = 0, mitigatedDamage = rawDamage, ignoreDR = false, preHitRiderRefs = null } = opts;
     let bonusDamage = 0;
     const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
     const toRemove = [];
@@ -6304,6 +6394,14 @@ export default class CombatScene extends Phaser.Scene {
       // object (only StatusEffects.js's registry has display names) — look
       // it up fresh here instead of falling back to the raw id in logs.
       const displayName = StatusEffects?.[se.id]?.name || se.id || 'effect';
+
+      // breaksOnHitTaken (Hide/Beggar): ends the instant the character takes
+      // ANY damage (primary, splash, or repeat — this function is the
+      // single choke point all three route through) — no reward, unlike
+      // surviving to natural expiry (see onExpire in _tickDownStatusDurations).
+      if (se.breaksOnHitTaken && rawDamage > 0) {
+        toRemove.push(i);
+      }
 
       if (se.onNextDamageTaken && rawDamage > 0) {
         const ign = se.onNextDamageTaken;
@@ -6339,6 +6437,65 @@ export default class CombatScene extends Phaser.Scene {
           this._log(`${target?.name ?? 'Target'}'s ${displayName} retaliates with buildup on ${attacker?.name}.`);
         }
         if (se.nextHitOnly) toRemove.push(i);
+      }
+
+      // guardianWatch — PERSISTENT (Shepherd's Watch Over): when the warded
+      // ally takes a hit, the ward's own duration is bumped up ONCE (the
+      // protection was clearly needed) and the ATTACKING enemy is marked
+      // vulnerable to bonus damage specifically from the guardian who cast
+      // it — see the generic data.vulnerableToId rider just below, which
+      // actually pays that bonus out.
+      //
+      // gw.extended caps the duration bump to the FIRST qualifying hit only
+      // — without it, a target hit multiple times in the same enemy turn
+      // (or across several turns while still under 2/3 max) would re-trigger
+      // Math.max(se.turns, gw.extendTurns) every time, which can't grow
+      // PAST extendTurns but WOULD keep resetting the countdown back up to
+      // it indefinitely as long as the ally kept getting focused — reported
+      // by the user as "not sure it's ticking down correctly." One genuine
+      // extension per cast is the intended behavior, not a renewable ward.
+      // The attacker-marking half is deliberately NOT capped the same way —
+      // every enemy who strikes the ward while it's up earns the mark, not
+      // just the first.
+      if (se.guardianWatch && rawDamage > 0) {
+        const gw = se.guardianWatch;
+        if (Number.isFinite(gw.extendTurns) && !gw.extended) {
+          se.turns = Math.max(se.turns || 0, gw.extendTurns);
+          gw.extended = true;
+        }
+        if (attacker && gw.guardianId) {
+          this._addStatusEffects?.(attacker, [{
+            id: 'shepherd_mark', turns: gw.markTurns ?? 2,
+            data: { vulnerableToId: gw.guardianId, vulnerableMult: gw.markMult ?? 0.2 },
+          }]);
+          this._log(`${attacker?.name ?? 'The attacker'} is marked — ${gw.guardianName || 'the guardian'} will punish this strike.`);
+        }
+      }
+
+      // Generic source-scoped vulnerability — currently only produced by
+      // guardianWatch above, kept generic (keyed on the attacker's own id,
+      // not a specific skill) in case a future skill wants the same "extra
+      // damage from ONE specific attacker" shape without inventing its own
+      // rider.
+      //
+      // Mechanically different from onNextDamageTaken above on PURPOSE, not
+      // by oversight: Ignition is a separate fire-typed proc bolted onto
+      // whatever hit triggered it, so it needs (and gets) its own dedicated
+      // elemDR roll against a fixed element. This rider instead represents
+      // "this attacker's hits against you land harder" — a straight percent
+      // bonus on the SAME hit that already happened, not a distinct damage
+      // instance — so it has no element of its own and is scaled off
+      // mitigatedDamage (the hit's already-mitigated total) rather than
+      // rawDamage + a fresh separate resist roll. Folding a % of raw damage
+      // in AFTER the target's DR had already run would bypass Resistance
+      // entirely, which is the bug this replaced.
+      if (se.data?.vulnerableToId && mitigatedDamage > 0 && attacker?.id === se.data.vulnerableToId) {
+        const mult = Number.isFinite(se.data.vulnerableMult) ? se.data.vulnerableMult : 0.2;
+        const bonus = Math.floor(mitigatedDamage * mult);
+        if (bonus > 0) {
+          bonusDamage += bonus;
+          this._log(`${target?.name ?? 'Target'} reels — +${bonus} damage (${Math.round(mult * 100)}% Shepherd's Mark)!`);
+        }
       }
     }
 
@@ -6405,6 +6562,33 @@ export default class CombatScene extends Phaser.Scene {
 
   _applyWeaknessBuildup(target, buildupMap, ctx) {
     if (!target?.weakness) return;
+
+    // Transpose Fire/Lightning/Cold (Performer): redirects EVERY family
+    // this hit would apply into one element, even physical/necrotic —
+    // summed BEFORE any of the per-family gear/mark/vulnerability scaling
+    // below runs, so that scaling still applies correctly to the single
+    // redirected family. One-shot: consumed on the first call attributed
+    // to this attacker that has ANY buildup to redirect, which in practice
+    // means their next attack — but since this is the single real choke
+    // point every buildup application already funnels through (splash,
+    // repeat, DOT ticks, retaliation procs, not just a fresh primary hit),
+    // an unrelated proc firing first could theoretically eat the charge
+    // instead of the intended next attack. Known, accepted tradeoff for a
+    // first pass.
+    const attacker = ctx?.user;
+    if (attacker && Array.isArray(attacker.statusEffects)) {
+      const idx = attacker.statusEffects.findIndex(se => se?.transposeBuildupTo);
+      if (idx !== -1) {
+        const toFamily = attacker.statusEffects[idx].transposeBuildupTo;
+        const total = Object.values(buildupMap || {}).reduce((sum, v) => sum + Math.max(0, Math.floor(v || 0)), 0);
+        attacker.statusEffects.splice(idx, 1);
+        if (total > 0) {
+          buildupMap = { [toFamily]: total };
+          this._log(`${attacker.name}'s buildup twists into pure ${toFamily}!`);
+        }
+      }
+    }
+
     const famKey = (k) => (k in target.weakness.meters) ? k : (WeaknessAliases[k] || k);
 
     // BEFORE snapshot for logging
@@ -7841,6 +8025,33 @@ export default class CombatScene extends Phaser.Scene {
       .filter(s => this._getColumnBySlotId(s.slotId) === col && s.char && s.char.status !== 'incapacitated')
       .map(s => s.char);
   }
+
+  // Central chokepoint for "which of npc's foes are currently valid attack
+  // targets," factoring in any active targeting restriction (currently just
+  // Blockade's front-row wall, data.enemyTargetingLocksFront). Falls back to
+  // the unfiltered list if a restriction would leave zero valid targets, so
+  // a wall can never strand an attacker with nothing to hit.
+  //
+  // Any ability that builds its OWN multi-target splash list (e.g. an
+  // AOE that "hits the entire party") MUST call this instead of reading
+  // scene.turnOrder/allySlots/enemySlots directly — that's exactly how
+  // Volley, Inferno Release, Poison Cloud, Flame Slash, Flare Wave, Frost
+  // Strike, Shard Storm, Disrupting Roar, and Bleeding Sweep all bypassed
+  // Blockade's wall entirely despite their PRIMARY target correctly
+  // respecting it: the primary came from the AI's own filtered candidate
+  // list (see _takeEnemyTurn_viaLogic, which now just calls this same
+  // function), but each skill's splash re-queried the raw roster itself.
+  _getTargetableEnemiesFor(npc) {
+    const isEnemyNpc = !!npc?.isEnemy;
+    const raw = (this.turnOrder || []).filter(u => u && u.isEnemy !== isEnemyNpc && u.status !== 'incapacitated');
+    const wallActive = raw.some(u =>
+      Array.isArray(u.statusEffects) && u.statusEffects.some(se => se?.data?.enemyTargetingLocksFront)
+    );
+    if (!wallActive) return raw;
+    const frontOnly = raw.filter(u => this._getUnitColumn(u) === 'front');
+    return frontOnly.length ? frontOnly : raw;
+  }
+
   // === Movement used by movement skills ===================================
   // delta: -1 = toward FRONT (advance), +1 = toward BACK (retreat). Magnitude = steps.
   moveBySlots(user, delta) {
@@ -7940,6 +8151,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Track what we touched so we can restore cleanly
     this._posTargets = reachable;
+    this._posTargetAbilityId = ability.id;
 
     // Highlight + click to select
     reachable.forEach(slot => {
@@ -7974,6 +8186,26 @@ export default class CombatScene extends Phaser.Scene {
 
   // Keep this, but make sure it restores default strokes
   _exitTargetingMode() {
+    // Movement targeting (Move Step/Dash) leaves its own state in
+    // _posTargets, and _clearSlotHighlights() deliberately keeps
+    // REAPPLYING the green reachable-slot highlight for as long as
+    // _posTargets is still set (see that function's own comment) — it has
+    // no other way to know a highlighted slot is a movement target rather
+    // than something to reset. Only _exitPositionTargeting() used to clear
+    // it, so any OTHER path that ends targeting (e.g. the action menu's
+    // "Back" button, which calls _buildActionMenuRoot -> here, not
+    // _exitPositionTargeting specifically) left it stuck — the green
+    // squares kept reappearing forever, and the stale pointerdown
+    // listeners on those slots meant the movement skill couldn't be
+    // re-armed cleanly either. Clearing it here too makes every exit path
+    // correctly clean up position-targeting, not just the one call site
+    // that happened to remember to.
+    if (this._posTargets) {
+      this._posTargets.forEach(slot => slot.removeAllListeners('pointerdown'));
+      this._posTargets = null;
+    }
+    this._posTargetAbilityId = null;
+
     // Clear targetingAbility FIRST — _clearSlotHighlights() below reads it to
     // decide whether occupied-but-idle slots should stay visible (targeting)
     // or declutter-hide again (not targeting). Calling it while
@@ -8236,7 +8468,11 @@ export default class CombatScene extends Phaser.Scene {
 
   /** Ask the external logic for an action */
   _takeEnemyTurn_viaLogic(npc) {
-    const enemies = GameState.party.filter(p => !p.isEnemy && p.status !== 'incapacitated');
+    // Single source of truth for targeting restrictions (Blockade's wall,
+    // etc.) — see _getTargetableEnemiesFor's own header comment. Every
+    // AOE/splash skill that builds its own multi-target list must call the
+    // same function, or it silently bypasses whatever this returns.
+    const enemies = this._getTargetableEnemiesFor(npc);
 
     const hasActionsRemaining = () => {
       const pool = npc.actionsLeft || {};
@@ -8495,6 +8731,15 @@ export default class CombatScene extends Phaser.Scene {
             if (st.id === 'ward_shield_timer' && (char.shieldHP || 0) > 0) {
               char.shieldHP = 0;
               this._updateHealthBars?.(); this._updateHPMPBars?.();
+            }
+            // Generic "survived to natural expiry" reward (Hide/Beggar): only
+            // fires here, on the real turn-countdown path — NOT when a
+            // status is cleared early via _clearScopedStatus (breaksOnAttack/
+            // breaksOnHitTaken), so getting hit or attacking during Hide
+            // correctly forfeits the reward instead of still granting it.
+            if (st.onExpire) {
+              this._addStatusEffects?.(char, [st.onExpire]);
+              this._log(`${char.name} reaps the reward of going unnoticed.`);
             }
           }
         }

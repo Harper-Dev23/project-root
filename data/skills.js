@@ -13,6 +13,16 @@ import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
 
 
+// Transpose Fire/Lightning/Cold (Performer class skills) share one
+// cooldown across all 3 distinct skill ids — see stampTransposeCooldowns.
+const TRANSPOSE_COOLDOWN = 3;
+const stampTransposeCooldowns = (user) => {
+  user.cooldowns = user.cooldowns || {};
+  user.cooldowns.transpose_fire = TRANSPOSE_COOLDOWN;
+  user.cooldowns.transpose_lightning = TRANSPOSE_COOLDOWN;
+  user.cooldowns.transpose_cold = TRANSPOSE_COOLDOWN;
+};
+
 const cloneBuffStruct = (buff) => (buff ? { ...buff } : undefined);
 const cloneRewardStruct = (reward) => (reward ? {
   ...reward,
@@ -264,7 +274,7 @@ export function getClassSkillsFor(char) {
     acolyte: ['blessing'],
     shepherd: ['watch_over'],
     grunt: ['blockade'],
-    performer: ['musical_memory'],
+    performer: ['transpose_fire', 'transpose_lightning', 'transpose_cold'],
     scholar: ['meditate']
   }[base] || [];
 
@@ -367,8 +377,16 @@ const RAW_SKILLS = {
   },
 
   // --- Class Skills ---------------------------------------------------------
+  // All six were pure stubs until this pass: each set a dead field
+  // (user.hidden, target.blessing, ally.guardedBy, user.blockade,
+  // ally.musicalMemory, user.statuses['dazed']) that nothing anywhere in
+  // combat logic ever read. Rewired onto the same real status-effect system
+  // (scene._addStatusEffects + the tracked mod keys in
+  // CombatLogic._sumStatusEffectMods) that fighter_bulwark_call/
+  // healer_blessing already use — these now actually do something in a
+  // fight instead of silently no-oping.
   'meditate': {
-    id: 'meditate', // avoid collision with 'meditate' if you already used it anywhere
+    id: 'meditate',
     name: 'Meditate',
     type: 'class',
     actionCost: 'class',
@@ -376,23 +394,42 @@ const RAW_SKILLS = {
     hpCost: 0,
     requiresTarget: false,
     cooldown: 2,
-    description: 'Regain a chunk of MP and clear minor mind effects.',
-    apply: (user) => {
-      // Simple, safe baseline: restore 20% MP (min 1 if you have MP at all)
-      const maxMP = user.maxMP || user.derivedStats?.maxMP || 0;
-      if (maxMP > 0) {
-        const gain = Math.max(1, Math.floor(maxMP * 0.2));
-        user.currentMP = Math.min(maxMP, (user.currentMP || 0) + gain);
-      }
-      // If you track status flags, clear some here (example only):
-      if (user.statuses) {
-        delete user.statuses['dazed'];
-        delete user.statuses['silenced'];
-      }
-      return { log: `${user.name} meditates and regains focus.` };
+    description: 'Scholar: restore a bonus action and shake off any real crowd-control (skip-your-turn or movement-locking effects).',
+    apply: (user, _target, scene) => {
+      user.actionsLeft = user.actionsLeft || {};
+      user.actionsLeft.bonus = (user.actionsLeft.bonus || 0) + 1;
+
+      // The only real crowd-control this engine enforces is (a) blocksAction
+      // (skip your whole turn — currently only 'frozen') and (b) the
+      // 'immobilized' id (blocks repositioning specifically). Everything
+      // else with a CC-sounding name (stunned, rooted) is a dead icon entry
+      // no skill ever actually applies — nothing to clear there.
+      const blocked = (user.statusEffects || []).filter(se => se?.blocksAction || se?.id === 'immobilized');
+      blocked.forEach(se => scene?._clearScopedStatus?.(user, se.id));
+
+      const parts = [`${user.name} meditates, ready to act again.`, 'Bonus action restored.'];
+      if (blocked.length) parts.push(`Shakes off ${blocked.length === 1 ? 'a binding effect' : 'binding effects'}.`);
+      scene?._log?.(parts.join(' '));
+      return { amount: 0 };
     }
   },
 
+  // Usable only from the back row (requiresColumn — see the matching gate
+  // in CombatScene._applyAbilityToTarget). Ends immediately with NO reward
+  // if the Beggar takes any damage (breaksOnHitTaken, including AOE
+  // splash). If instead the Beggar ATTACKS while still hidden (never having
+  // been hit), that very attack gets +15 Accuracy via sneakAttackBonus —
+  // CombatScene._applyAbilityToTarget grants it just before the hit roll,
+  // specifically so it lands on the attack that breaks stealth rather than
+  // some later one. (A first version tried granting the bonus only when
+  // Hide's OWN timer naturally ticked to 0 via _tickDownStatusDurations —
+  // found via a real playthrough that this never actually worked, since
+  // that tick only fires at the OWNER'S OWN turn-end, always one full cycle
+  // behind whenever the character could next act — the reward was never
+  // present in time for the attack it was meant to reward.) onExpire below
+  // is a fallback for the character never attacking at all while hidden —
+  // grants the same bonus for whatever attack comes after Hide naturally
+  // times out. Repositioning is safe — nothing here hooks movement at all.
   'hide': {
     id: 'hide',
     name: 'Hide',
@@ -401,12 +438,20 @@ const RAW_SKILLS = {
     mpCost: 0,
     hpCost: 0,
     requiresTarget: false,
+    requiresColumn: 'back',
     cooldown: 3,
-    description: 'Beggar: become harder to hit for a short time.',
-    apply: (user) => {
-      // Keep it minimal: mark a simple flag you can key off in your hit calc.
-      user.hidden = { turns: 2 }; // your combat loop should decrement this each round
-      return { log: `${user.name} melts into the shadows.` };
+    description: 'Beggar: vanish into the crowd (back row only) — +35 Evasion, lasting through the enemy\'s next turn and into yours. Ends instantly if you\'re hit. Your next attack while still hidden gets +15 Accuracy (and ends Hide).',
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{
+        id: 'hide', turns: 2,
+        mods: { Evasion: 35 },
+        breaksOnAttack: true,
+        breaksOnHitTaken: true,
+        sneakAttackBonus: 15,
+        onExpire: { id: 'hide_reward', turns: 3, mods: { Accuracy: 15 }, breaksOnAttack: true },
+      }]);
+      scene?._log?.(`${user.name} melts into the shadows.`);
+      return { amount: 0 };
     }
   },
 
@@ -420,14 +465,31 @@ const RAW_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'ally',
     cooldown: 3,
-    description: 'Acolyte: buff a single ally with modest accuracy/damage.',
-    apply: (user, target) => {
-      if (!target) return { log: `${user.name} tries to bless, but finds no target.` };
-      target.blessing = { turns: 3, acc: 0.1, dmg: 0.1 };
-      return { log: `${user.name} blesses ${target.name}.` };
+    description: 'Acolyte: bless an ally with +10 Accuracy and +10% damage for 3 turns.',
+    apply: (user, target, scene) => {
+      if (!target) return { amount: 0, log: `${user.name} tries to bless, but finds no target.` };
+      scene?._addStatusEffects?.(target, [{ id: 'blessing', turns: 3, mods: { Accuracy: 10, AttackPower: 10 } }]);
+      scene?._log?.(`${user.name} blesses ${target.name}.`);
+      return { amount: 0 };
     }
   },
 
+  // guardianWatch is a 4th _processTargetHitRiders shape (see that function
+  // in CombatScene.js): when the warded ally takes a hit, the ward's own
+  // duration is bumped up and the ATTACKER is marked vulnerable to bonus
+  // damage specifically from this Shepherd (via the generic
+  // data.vulnerableToId rider, also handled there).
+  //
+  // turns:2, not 1 — _tickDownStatusDurations ticks a status down once on
+  // its OWNER'S OWN turn-end, not once per full round. A turns:1 status
+  // applied to a character during (or before) their own turn dies at the
+  // end of THAT SAME turn, before the enemy ever gets to act against it —
+  // found via a real playthrough report (cast Watch Over on an ally who
+  // hadn't acted yet, then Blockade on self; both vanished the instant that
+  // turn ended, never surviving to the enemy's turn at all). turns:2 is the
+  // established convention for "protect through the next enemy turn"
+  // elsewhere (fighter_guard/heated_guard/icy_guard all use it for the same
+  // reason).
   'watch_over': {
     id: 'watch_over',
     name: 'Watch Over',
@@ -438,14 +500,31 @@ const RAW_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'ally',
     cooldown: 3,
-    description: 'Shepherd: guard an ally, redirecting some damage for a turn.',
-    apply: (user, ally) => {
-      if (!ally) return { log: `${user.name} looks for someone to guard.` };
-      ally.guardedBy = { id: user.id, turns: 1, reduction: 0.3 }; // you redirect/mitigate in your damage resolver
-      return { log: `${user.name} watches over ${ally.name}.` };
+    description: 'Shepherd: guard an ally with +10 to all Resists for 2 turns (extends to 3 turns the first time they take a hit — only the first hit extends it). Anyone who strikes them while warded is marked for 2 turns: your own attacks against that enemy deal +20% bonus damage (added to that same hit, not a separate damage type).',
+    apply: (user, ally, scene) => {
+      if (!ally) return { amount: 0, log: `${user.name} looks for someone to guard.` };
+      scene?._addStatusEffects?.(ally, [{
+        id: 'watch_over', turns: 2,
+        mods: { PhysicalResist: 10, ElementalResist: 10, NecroticResist: 10 },
+        guardianWatch: { guardianId: user.id, guardianName: user.name, extendTurns: 3, markTurns: 2, markMult: 0.2 },
+      }]);
+      scene?._log?.(`${user.name} watches over ${ally.name}.`);
+      return { amount: 0 };
     }
   },
 
+  // Usable only from the front row (requiresColumn:'front'), and its
+  // enemyTargetingLocksFront data flag is read by
+  // CombatScene._takeEnemyTurn_viaLogic to restrict ALL enemy targeting to
+  // front-row characters for its duration — a deliberately simple first
+  // test case for a real targeting-restriction system (not built out
+  // further than this single flag yet).
+  //
+  // turns:2, not 1 — see watch_over's comment above for why a self-buff
+  // meant to protect against the very next enemy turn needs 2, not 1
+  // (_tickDownStatusDurations ticks on the OWNER's own turn-end, so
+  // turns:1 dies at the end of the SAME turn it was cast, before the enemy
+  // ever acts).
   'blockade': {
     id: 'blockade',
     name: 'Blockade',
@@ -454,30 +533,80 @@ const RAW_SKILLS = {
     mpCost: 0,
     hpCost: 0,
     requiresTarget: false,
+    requiresColumn: 'front',
     cooldown: 3,
-    description: 'Grunt: hunker down; raise physical resistance for a turn.',
-    apply: (user) => {
-      user.blockade = { turns: 1, physRes: 0.25 };
-      return { log: `${user.name} forms a blockade.` };
+    description: 'Grunt: form a wall (front row only) — +25 to all Resists for yourself, and for 2 turns no enemy can target anyone outside the front row.',
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{
+        id: 'blockade', turns: 2,
+        mods: { PhysicalResist: 25, ElementalResist: 25, NecroticResist: 25 },
+        data: { enemyTargetingLocksFront: true },
+      }]);
+      scene?._log?.(`${user.name} forms a blockade — enemies must go through the front line.`);
+      return { amount: 0 };
     }
   },
 
-  'musical_memory': {
-    id: 'musical_memory',
-    name: 'Musical Memory',
+  // Replaces the old flat "Musical Memory" crit buff with 3 real spells —
+  // Performer now gets all 3 as separate class-skill slots (getClassSkillsFor
+  // already supports more than one id per class). They share ONE cooldown
+  // (each apply() stamps all three cooldown keys, not just its own) so
+  // using one doesn't leave the other two instantly available. The actual
+  // conversion — redirecting the attacker's next buildup-applying hit into
+  // one family, even physical/necrotic — happens in
+  // CombatScene._applyWeaknessBuildup via the transposeBuildupTo rider;
+  // this is a one-shot consumed on the first hit that has ANY buildup to
+  // redirect (a pure damage hit with zero buildup component won't consume
+  // it, and won't be spent on other characters' unrelated procs, either).
+  'transpose_fire': {
+    id: 'transpose_fire',
+    name: 'Transpose: Fire',
     type: 'class',
     actionCost: 'class',
-    mpCost: 0,
+    mpCost: 6,
     hpCost: 0,
     requiresTarget: false,
-    cooldown: 3,
-    description: 'Performer: rally the party; small crit buff for 2 turns.',
-    apply: (user) => {
-      (user.team || []).forEach(ally => {
-        if (!ally) return;
-        ally.musicalMemory = { turns: 2, crit: 0.05 };
-      });
-      return { log: `${user.name} plays a stirring motif.` };
+    cooldown: TRANSPOSE_COOLDOWN,
+    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Fire buildup. Shares a cooldown with Transpose Lightning/Cold.',
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_fire', turns: 3, transposeBuildupTo: 'fire' }]);
+      stampTransposeCooldowns(user);
+      scene?._log?.(`${user.name} hums a searing refrain.`);
+      return { amount: 0 };
+    }
+  },
+  'transpose_lightning': {
+    id: 'transpose_lightning',
+    name: 'Transpose: Lightning',
+    type: 'class',
+    actionCost: 'class',
+    mpCost: 6,
+    hpCost: 0,
+    requiresTarget: false,
+    cooldown: TRANSPOSE_COOLDOWN,
+    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Lightning buildup. Shares a cooldown with Transpose Fire/Cold.',
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_lightning', turns: 3, transposeBuildupTo: 'lightning' }]);
+      stampTransposeCooldowns(user);
+      scene?._log?.(`${user.name} hums a crackling refrain.`);
+      return { amount: 0 };
+    }
+  },
+  'transpose_cold': {
+    id: 'transpose_cold',
+    name: 'Transpose: Cold',
+    type: 'class',
+    actionCost: 'class',
+    mpCost: 6,
+    hpCost: 0,
+    requiresTarget: false,
+    cooldown: TRANSPOSE_COOLDOWN,
+    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Cold buildup. Shares a cooldown with Transpose Fire/Lightning.',
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_cold', turns: 3, transposeBuildupTo: 'cold' }]);
+      stampTransposeCooldowns(user);
+      scene?._log?.(`${user.name} hums a chilling refrain.`);
+      return { amount: 0 };
     }
   },
 
@@ -929,9 +1058,12 @@ const NPC_ONLY_SKILLS = {
     },
     description: "Clears an ally's Curse, Disease, and Toxic buildup entirely. Restores 4 MP if anything was cleansed."
   },
+  // Display name changed from "Blessing" to avoid colliding with the
+  // player Acolyte's own class skill of the same original name — same
+  // effect, just no longer reads as the same ability in combat logs/UI.
   'healer_blessing': {
     id: 'healer_blessing',
-    name: 'Blessing',
+    name: 'Sacred Ward',
     type: 'enemy',
     actionCost: 'bonus',
     mpCost: 6,
@@ -1209,11 +1341,15 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
-    apply: (_user, _target, scene) => {
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated') || [];
+    apply: (user, target, scene) => {
+      // Was scene.turnOrder?.filter(...).slice(1) — silently bypassed
+      // Blockade's wall (see CombatScene._getTargetableEnemiesFor) since it
+      // read the raw roster directly instead of the same filtered candidate
+      // list the AI's own primary-target selection already respects.
+      const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
       return {
         amount: 3,
-        splash: foes.slice(1).map(t => ({ target: t, amount: 2 }))
+        splash: foes.map(t => ({ target: t, amount: 2 }))
       };
     },
     description: "Deals 3 damage to the target and 2 damage to every other party member."
@@ -1542,7 +1678,9 @@ const NPC_ONLY_SKILLS = {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const others = (scene?._getTargetableEnemiesFor?.(attacker) || []).filter(u => u !== target);
 
       return {
         ...roll, physical, elemental, necrotic, amount,
@@ -1927,7 +2065,9 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
 
       const SPLASH_SCALE = 0.65;
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
       const splash = foes.map(t => {
         const splashPhysical = Math.floor(physical * SPLASH_SCALE);
         const splashElemental = Math.floor(elemental * SPLASH_SCALE);
@@ -2093,7 +2233,9 @@ const NPC_ONLY_SKILLS = {
       // single-target — the "abilities gain a different effect" ask, not
       // just the separate enrage-exclusive ultimate.
       if ((user?.statusEffects || []).some(se => se?.id === 'duelist_fury')) {
-        const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+        // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's
+        // wall (see CombatScene._getTargetableEnemiesFor).
+        const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
         result.splash = foes.map(t => ({
           target: t, amount, physical, elemental, necrotic,
           buildup: { fire: 140 }, tags: ability?.tags,
@@ -2172,7 +2314,9 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
 
       const SPLASH_SCALE = 0.8;
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
       const splash = foes.map(t => {
         const splashPhysical = Math.floor(physical * SPLASH_SCALE);
         const splashElemental = Math.floor(elemental * SPLASH_SCALE);
@@ -2223,7 +2367,9 @@ const NPC_ONLY_SKILLS = {
       // Enraged: same "regular ability becomes full-field AOE" treatment as
       // Ember's Flame Slash.
       if ((user?.statusEffects || []).some(se => se?.id === 'duelist_fury')) {
-        const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+        // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's
+        // wall (see CombatScene._getTargetableEnemiesFor).
+        const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
         result.splash = foes.map(t => ({
           target: t, amount, physical, elemental, necrotic,
           buildup: { cold: 140 }, tags: ability?.tags,
@@ -2302,7 +2448,9 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
 
       const SPLASH_SCALE = 0.8;
-      const foes = scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
       const splash = foes.map(t => {
         const splashPhysical = Math.floor(physical * SPLASH_SCALE);
         const splashElemental = Math.floor(elemental * SPLASH_SCALE);
@@ -2664,7 +2812,9 @@ const NPC_ONLY_SKILLS = {
       // own hit to the ENTIRE party, no discount at all — a big piece of
       // why this fight could nearly wipe a party in one turn.
       const splashAmount = Math.max(1, Math.floor(amount * 0.70));
-      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const others = (scene?._getTargetableEnemiesFor?.(attacker) || []).filter(u => u !== target);
       return {
         ...roll,
         amount,
@@ -2698,7 +2848,9 @@ const NPC_ONLY_SKILLS = {
       }));
       // 70% splash — see berserker_disrupting_roar's comment above.
       const splashAmount = Math.max(1, Math.floor(amount * 0.70));
-      const others = (scene?.turnOrder?.filter(u => !u.isEnemy && u.status !== 'incapacitated' && u !== target)) || [];
+      // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
+      // (see CombatScene._getTargetableEnemiesFor).
+      const others = (scene?._getTargetableEnemiesFor?.(attacker) || []).filter(u => u !== target);
       return {
         ...roll,
         amount,
@@ -7681,6 +7833,59 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
   },
 
+  // Staff's own projectile skill — same shape as Ghost Step/Dagger Throw
+  // (weapon damage + a rewardIfWeak current-tier check), 'projectile'-
+  // tagged so it can trigger an ally's armed Volley reaction the same way
+  // bow/sling already do. Builds Expose, which no staff skill uses yet
+  // (frost_swell/galvanic_touch/thunder_mark/pestilent_word/kindling_rite/
+  // cone_of_blight/silence_crescent/curse_cinders cover cold/lightning/
+  // disease/fire/toxic/disorient/curse — Expose was the one fully unused
+  // family left). Left as plain typed damage (no isMagic/skillConversion),
+  // same as Ghost Step — the buildup family doesn't need to match the
+  // damage type. rewardIfWeak checks Curse specifically since it's one of
+  // staff's own established families (curse_cinders, hex_stitch elsewhere).
+  'arcane_needle': {
+    id: "arcane_needle",
+    name: "Arcane Needle",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["magic", "spell", "projectile", "expose"],
+    cooldown: 2,
+    buildupHint: { expose: 85 },
+    rewardIfWeak: [
+      { family: "curse", tierAtLeast: 1, buff: { addBuildup: { expose: 40 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arcane_needle;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const rule = findRewardIfWeakRule(ability, curseTier);
+      let exposeBuildup = ability?.buildupHint?.expose ?? 85;
+      if (rule) exposeBuildup += rule.buff?.addBuildup?.expose || 0;
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: exposeBuildup } };
+    },
+    description: "A needle-thin bolt of force — deals 100% weapon damage and applies Expose buildup. If the target is already Cursed, applies even more."
+  },
+
   'kindling_rite': {
     id: "kindling_rite",
     name: "Kindling Rite",
@@ -10123,6 +10328,60 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage."
   },
 
+  // Dagger's own projectile skill — same shape as Ghost Step right above
+  // (weapon damage + a rewardIfWeak current-tier check, not a tier-cross),
+  // but 'projectile'-tagged so it can trigger an ally's armed Volley
+  // reaction (CombatScene.js's ally_projectile_used bus event already
+  // fires for ANY 'projectile'-tagged skill regardless of weapon — bow and
+  // sling already carry it, this is dagger's first). Builds Lacerate,
+  // which no other dagger skill uses yet (vital_mark/pressure_point/
+  // ghoststep/etc. cover expose/curse/toxic/lightning/disorient/fire —
+  // Lacerate was the one fully unused family left, and fits a thrown-blade
+  // bleeding wound thematically). rewardIfWeak checks Expose specifically
+  // because it's dagger's own most-built family (vital_mark, pressure_point,
+  // silent_order) — throwing after either of those already landed pays off.
+  'dagger_throw': {
+    id: "dagger_throw",
+    name: "Dagger Throw",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "lacerate"],
+    cooldown: 2,
+    buildupHint: { lacerate: 113 },
+    rewardIfWeak: [
+      { family: "expose", tierAtLeast: 1, buff: { addBuildup: { lacerate: 50 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.dagger_throw;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const exposeTier = target?.weakness?.tiers?.expose || 0;
+      const rule = findRewardIfWeakRule(ability, exposeTier);
+      let lacerateBuildup = ability?.buildupHint?.lacerate ?? 113;
+      if (rule) lacerateBuildup += rule.buff?.addBuildup?.lacerate || 0;
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: lacerateBuildup } };
+    },
+    description: "Hurls your dagger at the target — deals 100% weapon damage and applies Lacerate buildup. If the target is already Exposed, applies even more."
+  },
+
   // -------- Escalation --------
   'hex_stitch': {
     id: "hex_stitch",
@@ -11621,12 +11880,19 @@ Object.assign(RAW_SKILLS, {
   },
 
   // --- Sword (1h) Reactions ---
+  // Disabled by explicit user request — believed to no longer belong in
+  // the current sword_1h kit (sword_1h's reaction trio is the last one in
+  // the file still at v3.21/v3.22, never modernized alongside everything
+  // else). Kept in the file (not deleted) so it can be restored if that
+  // turns out to be wrong. See read_and_react below for the still-live
+  // self_hit sword reaction.
   'cover_strike': {
     id: "cover_strike",
     name: "Cover Strike",
     type: "weapon",
     mechanic: "reaction",
     versionTag: "v3.21",
+    disabled: true,
     actionCost: "reaction",
     requiredStat: "DEX",
     requiredValue: 16,
@@ -11659,12 +11925,16 @@ Object.assign(RAW_SKILLS, {
     description: "Arm yourself to strike back when an ally in your rank is attacked."
   },
 
+  // Disabled by explicit user request — same reasoning as cover_strike
+  // above. read_and_react (v3.22) is the currently-live self_hit reaction
+  // for sword_1h.
   'riposte': {
     id: "riposte",
     name: "Riposte",
     type: "weapon",
     mechanic: "reaction",
     versionTag: "v3.21",
+    disabled: true,
     actionCost: "reaction",
     requiredStat: "DEX",
     requiredValue: 15,
@@ -14536,12 +14806,15 @@ Object.assign(RAW_SKILLS, {
 
   // Simplified from the original "copy and refire the ally's own skill"
   // design (too complex to balance) — now a flat, self-contained payoff:
-  // once armed, the next time ANY ally lands a bow/sling/gun (projectile-
-  // tagged) skill, this archer fires 2 arrows of their own at that ally's
-  // target, each at 35% weapon damage with 50 buildup to a random PHYSICAL
-  // weakness family. Wired through the engine's 'ally_projectile_used' bus
-  // event (CombatScene.js) + ReactionSystem._onAllyProjectileUsed, a
-  // friendly-side counterpart to the hostile-only self_hit/ally_hit pair.
+  // once armed, the next time ANY ally lands ANY 'projectile'-tagged skill
+  // (not weapon-restricted — the trigger below already just checks the tag,
+  // see CombatScene.js's ally_projectile_used emission — bow, sling, and
+  // now dagger's Dagger Throw and staff's Arcane Needle all qualify), this
+  // archer fires 2 arrows of their own at that ally's target, each at 35%
+  // weapon damage with 50 buildup to a random PHYSICAL weakness family.
+  // Wired through the engine's 'ally_projectile_used' bus event
+  // (CombatScene.js) + ReactionSystem._onAllyProjectileUsed, a friendly-
+  // side counterpart to the hostile-only self_hit/ally_hit pair.
   'volley': {
     id: "volley",
     name: "Volley",
@@ -14577,7 +14850,7 @@ Object.assign(RAW_SKILLS, {
         scene.time?.delayedCall(150, fire);
       },
     },
-    description: "Bonus: ready Volley. The next time an ally lands a bow/sling/gun skill, fire 2 arrows at their target — each dealing 35% weapon damage and applying 50 buildup to a random physical weakness (Expose/Lacerate/Disorient)."
+    description: "Bonus: ready Volley. The next time an ally lands any projectile skill, fire 2 arrows at their target — each dealing 35% weapon damage and applying 50 buildup to a random physical weakness (Expose/Lacerate/Disorient)."
   },
 
   // Not player-selectable (no entry in any class's skill list) — purely the

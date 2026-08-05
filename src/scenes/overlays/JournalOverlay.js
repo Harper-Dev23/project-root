@@ -136,8 +136,16 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         this.tabContainer = scene.add.container(20, TOP_BAR_HEIGHT - TAB_HEIGHT);
         this._buildTabs();
 
+        // Width was 200px, right up against bounds.width-40 — the close
+        // button's own left edge sits around bounds.right-38, leaving only
+        // a couple pixels of clearance. DOM elements always render above
+        // the canvas regardless of Phaser depth (see _buildTabs' own
+        // comment on this same constraint), so at that gap the search box
+        // could win the stacking fight and swallow clicks meant for close.
+        // Shrunk to 160px (anchor unchanged, so the tab row's own width
+        // budget below is unaffected) for a real ~40px margin instead.
         this.searchDom = scene.add.dom(bounds.width - 240, TOP_BAR_HEIGHT / 2).createFromHTML(`
-      <input type="text" placeholder="Search journal" style="width:200px;padding:6px 10px;border-radius:6px;border:1px solid #666;background:${this.darkMode ? '#1f1f1f' : '#ffffff'};color:${this.darkMode ? '#f8f8f8' : '#1a1a1a'};">
+      <input type="text" placeholder="Search journal" style="width:160px;padding:6px 10px;border-radius:6px;border:1px solid #666;background:${this.darkMode ? '#1f1f1f' : '#ffffff'};color:${this.darkMode ? '#f8f8f8' : '#1a1a1a'};">
     `);
         this.searchDom.setOrigin(0, 0.5);
         this.searchDom.setDepth(this.baseDepth + 1);
@@ -149,7 +157,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         });
         const searchNode = this.searchDom.node;
         if (searchNode) {
-            searchNode.style.width = '200px';
+            searchNode.style.width = '160px';
             searchNode.style.height = '32px';
             searchNode.style.position = 'absolute';
             searchNode.style.display = 'flex';
@@ -305,9 +313,13 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
                 .setStrokeStyle(1, 0x444444, 0.4)
                 .setInteractive({ useHandCursor: true });
 
+            // pointerdown only — was ALSO bound to pointerup, firing
+            // showCategory (and its _refreshTree/_highlightTabs/
+            // setLastCategory chain) twice per click. Every other
+            // clickable element in this overlay (filter chips, entry
+            // rows) already only binds pointerdown.
             const activate = () => this.showCategory(tab.id);
             bg.on('pointerdown', activate);
-            bg.on('pointerup', activate);
             bg.on('pointerover', () => {
                 if (this.currentCategory === tab.id) return;
                 bg.setFillStyle(0x222222, 0.4);
@@ -368,12 +380,15 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const keyboard = this.scene.input?.keyboard;
         if (!keyboard) return;
 
-        const onClose = () => {
-            if (this._isSearchFocused()) {
-                this.searchDom?.node?.blur?.();
-            }
-            this.close();
-        };
+        // Note: while the search <input> is focused, its own keydown handler
+        // (see _buildUI's _searchKeyHandler) calls stopPropagation() on
+        // every key — Escape there just clears/blurs the search box and
+        // never reaches this scene-level listener at all, so onClose only
+        // ever fires from a real "close the Journal" press. That's the
+        // correct behavior (Escape-while-searching shouldn't also close the
+        // whole overlay), it just means _isSearchFocused() has nothing left
+        // to do here — kept as a no-op guard removed rather than dead code.
+        const onClose = () => this.close();
 
         keyboard.on('keydown-ESC', onClose, this);
         keyboard.on('keydown-B', onClose, this);
@@ -405,11 +420,6 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         }
     }
 
-    _isSearchFocused() {
-        const node = this.searchDom?.node;
-        if (!node || typeof document === 'undefined') return false;
-        return document.activeElement === node;
-    }
 
     destroy(fromScene) {
         this.unsubSeen?.();

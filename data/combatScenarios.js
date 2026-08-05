@@ -30,9 +30,9 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_3: {
-    name: 'Animated Party Test',
-    description: 'Six animated dummies demonstrating classic RPG roles.',
-    longDescription: 'A coordinated team of training constructs—fighter, healer, warlock, ranger, rogue and wizard—showcases weakness synergies, payoffs and interlocking behaviour.',
+    name: 'The Animated Six',
+    description: 'Chad, Stan, Gary, Doug, Mo, and Lenny — six animated constructs covering every classic RPG role, with real tactics instead of scripted swings.',
+    longDescription: 'Six training constructs animated into distinct classes: Chad tanks and can redirect a blow onto himself, Stan channels genuine healing magic across the party, Gary and Lenny fight with the same layered tactics a real caster would use, and Doug and Mo react the instant an ally is struck — Mo with a curse that saps your next attack. Expect real synergy and payoffs, not six copies of the same dummy.',
     portraitKey: 'dummy_portrait_equipped_fighter',
     // Same six dummies as encounter 2 (Lenny/Gary/Stan/Doug/Mo/Chad),
     // repurposed and geared up — names carried over so the crowd (Local
@@ -130,13 +130,16 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_6: {
-    name: 'Berserker Boss',
-    description: 'A relentless foe with wide coverage and reactionary strikes.',
-    longDescription: 'The berserker stresses every system: high initiative generation, layered weaknesses and punishing reactions. Survive the rush, manage his initiative and plan around Death Spiral.',
+    name: 'Gorrek',
+    description: 'Gorrek — a relentless berserker who punishes hesitation and tears open his own wounds for power.',
+    // Rewritten alongside this session's kit expansion — the old text
+    // predated Unstoppable Rush's glare redesign and Reckless
+    // Harvest/Bloodrite entirely.
+    longDescription: "Gorrek fights on a hair trigger: initiative builds fast, his glare punishes anyone who stands still, and he'll tear open his own wounds for a burst of power if you let his bleeding go unchecked. Survive the opening rush, watch for Death Spiral once he's built Expose and Lacerate, and don't ignore his glare.",
     portraitKey: 'berserker_portrait',
     enemies: [
       {
-        type: 'berserker_boss', slotId: 2,
+        type: 'berserker_boss', slotId: 2, name: 'Gorrek',
         drops: [
           // Historic/soulbound — not a random loot drop. rarity/rollAffixes
           // set explicitly so _equipEnemyItem's normal random-rarity roll
