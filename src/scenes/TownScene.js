@@ -1777,6 +1777,21 @@ export default class TownScene extends Phaser.Scene {
       ProgressionManager.clearQuestFlag(lodgeFlagId);
       GameState.save('autosave');
       this._buildQuestFlags();
+
+      // Bust the cached Elder's Tower floor-1 panel — its tribe-pledge
+      // buttons bake in a `lodgesRemaining` snapshot at BUILD time
+      // (_addTribeChoiceToLayout) and _enterEldersTower only ever rebuilds
+      // when this.eldersTowerGroups[1] is missing. Without this, visiting
+      // the 4th/last lodge cleared the flag correctly, but the tower panel
+      // — if the player had opened it earlier in this same TownScene
+      // session — kept showing the buttons greyed out until something else
+      // (e.g. the scene 'wake' event from entering/leaving combat) happened
+      // to bust the cache as a side effect. Same cache-bust pattern
+      // _enterLeaderHut already uses for its own leaderGroups cache.
+      if (this.eldersTowerGroups?.[1]) {
+        this.eldersTowerGroups[1].destroy(true);
+        delete this.eldersTowerGroups[1];
+      }
     }
 
     // Use cached layout if available (only cached post-choice).

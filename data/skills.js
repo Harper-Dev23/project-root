@@ -394,7 +394,7 @@ const RAW_SKILLS = {
     hpCost: 0,
     requiresTarget: false,
     cooldown: 2,
-    description: 'Scholar: restore a bonus action and shake off any real crowd-control (skip-your-turn or movement-locking effects).',
+    description: 'Scholar: restore a bonus action and shake off crowd-control effects.',
     apply: (user, _target, scene) => {
       user.actionsLeft = user.actionsLeft || {};
       user.actionsLeft.bonus = (user.actionsLeft.bonus || 0) + 1;
@@ -440,7 +440,7 @@ const RAW_SKILLS = {
     requiresTarget: false,
     requiresColumn: 'back',
     cooldown: 3,
-    description: 'Beggar: vanish into the crowd (back row only) — +35 Evasion, lasting through the enemy\'s next turn and into yours. Ends instantly if you\'re hit. Your next attack while still hidden gets +15 Accuracy (and ends Hide).',
+    description: 'Beggar: vanish into the crowd (back row only) for heavy Evasion. Ends if you\'re hit; attack while still hidden for bonus Accuracy.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{
         id: 'hide', turns: 2,
@@ -500,7 +500,7 @@ const RAW_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'ally',
     cooldown: 3,
-    description: 'Shepherd: guard an ally with +10 to all Resists for 2 turns (extends to 3 turns the first time they take a hit — only the first hit extends it). Anyone who strikes them while warded is marked for 2 turns: your own attacks against that enemy deal +20% bonus damage (added to that same hit, not a separate damage type).',
+    description: 'Shepherd: guard an ally, boosting their Resists. The ward holds longer if they\'re struck, and attackers take bonus damage from you.',
     apply: (user, ally, scene) => {
       if (!ally) return { amount: 0, log: `${user.name} looks for someone to guard.` };
       scene?._addStatusEffects?.(ally, [{
@@ -535,7 +535,7 @@ const RAW_SKILLS = {
     requiresTarget: false,
     requiresColumn: 'front',
     cooldown: 3,
-    description: 'Grunt: form a wall (front row only) — +25 to all Resists for yourself, and for 2 turns no enemy can target anyone outside the front row.',
+    description: 'Grunt: form a wall (front row only), boosting your own Resists and forcing enemies to target the front row.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{
         id: 'blockade', turns: 2,
@@ -567,7 +567,7 @@ const RAW_SKILLS = {
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
-    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Fire buildup. Shares a cooldown with Transpose Lightning/Cold.',
+    description: 'Performer: your next hit converts all its buildup into pure Fire. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{ id: 'transpose_fire', turns: 3, transposeBuildupTo: 'fire' }]);
       stampTransposeCooldowns(user);
@@ -584,7 +584,7 @@ const RAW_SKILLS = {
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
-    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Lightning buildup. Shares a cooldown with Transpose Fire/Cold.',
+    description: 'Performer: your next hit converts all its buildup into pure Lightning. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{ id: 'transpose_lightning', turns: 3, transposeBuildupTo: 'lightning' }]);
       stampTransposeCooldowns(user);
@@ -601,7 +601,7 @@ const RAW_SKILLS = {
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
-    description: 'Performer: your next hit converts ALL buildup it would apply — even physical or necrotic — into pure Cold buildup. Shares a cooldown with Transpose Fire/Lightning.',
+    description: 'Performer: your next hit converts all its buildup into pure Cold. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{ id: 'transpose_cold', turns: 3, transposeBuildupTo: 'cold' }]);
       stampTransposeCooldowns(user);
