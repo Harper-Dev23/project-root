@@ -89,6 +89,27 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('fx_runic_zone_addition_2', 'assets/sprites/fx_runic_zone_addition_2.png');
     this.load.image('fx_runic_zone_addition_3', 'assets/sprites/fx_runic_zone_addition_3.png');
 
+    // Generic tintable attack VFX (see project_weapon_vfx_systematic_plan
+    // memory) — projectiles fly attacker->target (_playProjectileVFX),
+    // hits pop at the target (_playMeleeImpactVFX), inflict is reserved for
+    // pure status-application skills, not yet wired to any weapon pass.
+    this.load.image('fx_proj_ball', 'assets/sprites/fx_proj_ball_generic.png');
+    this.load.image('fx_proj_bolt', 'assets/sprites/fx_proj_bolt_generic.png');
+    this.load.image('fx_proj_lance', 'assets/sprites/fx_proj_lance_generic.png');
+    this.load.image('fx_proj_star', 'assets/sprites/fx_proj_star_generic.png');
+    this.load.image('fx_hit_slash', 'assets/sprites/fx_hit_slash_generic.png');
+    this.load.image('fx_hit_blunt', 'assets/sprites/fx_hit_blunt_generic.png');
+    this.load.image('fx_hit_blunt_alt', 'assets/sprites/fx_hit_blunt_alt_generic.png');
+    this.load.image('fx_hit_puncture', 'assets/sprites/fx_hit_puncture_generic.png');
+    this.load.image('fx_hit_claw', 'assets/sprites/fx_hit_claw_generic.png');
+    this.load.image('fx_hit_bite', 'assets/sprites/fx_hit_bite_generic.png');
+    this.load.image('fx_hit_cloud', 'assets/sprites/fx_hit_cloud_generic.png');
+    this.load.image('fx_hit_engulf', 'assets/sprites/fx_hit_engulf_generic.png');
+    this.load.image('fx_hit_explosion', 'assets/sprites/fx_hit_explosion_generic.png');
+    this.load.image('fx_inflict_confuse', 'assets/sprites/fx_inflict_confuse_generic.png');
+    this.load.image('fx_inflict_leer', 'assets/sprites/fx_inflict_leer_generic.png');
+    this.load.image('fx_inflict_weak', 'assets/sprites/fx_inflict_weak_generic.png');
+
     // Interior backgrounds
     this.load.image('zafaar_interior', 'assets/interiors/zafaar_interior.png');
     this.load.image('styx_interior',   'assets/interiors/styx_interior.png');

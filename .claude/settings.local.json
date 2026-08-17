@@ -22,7 +22,10 @@
       "Bash(awk 'NR>=2600 && NR<=2810 && /buildup: \\\\{/' data/skills.js)",
       "Bash(node --experimental-vm-modules \"C:/Users/eddie/AppData/Local/Temp/claude/c--Users-eddie-Desktop-project-root/56281333-f89c-49f1-b2ea-5fe573830462/scratchpad/check_esm.cjs\" data/skills.js data/enemyTypes.js src/systems/CombatLogic.js)",
       "Bash(node --experimental-vm-modules \"C:/Users/eddie/AppData/Local/Temp/claude/c--Users-eddie-Desktop-project-root/56281333-f89c-49f1-b2ea-5fe573830462/scratchpad/check_esm.cjs\" data/skills.js src/systems/CombatLogic.js)",
-      "Bash(awk 'NR>=4150 && NR<=4235 && /^\\\\s{2}[a-zA-Z_]+\\\\\\(/' src/scenes/CombatScene.js)"
+      "Bash(awk 'NR>=4150 && NR<=4235 && /^\\\\s{2}[a-zA-Z_]+\\\\\\(/' src/scenes/CombatScene.js)",
+      "Bash(node -e \"require\\('playwright'\\); console.log\\('playwright OK'\\)\")",
+      "Bash(node -e \"const {chromium} = require\\('playwright'\\); console.log\\(typeof chromium\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

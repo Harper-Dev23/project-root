@@ -1847,6 +1847,12 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack'],
+    // buildupHint added — the actual buildup object is only built at runtime
+    // inside apply(), so it's invisible to CombatScene._dominantBuildupFamily
+    // (which reads this static field to pick attack-VFX tint) without this.
+    // Same convention every player skill already uses; enemy skills never
+    // had it wired before. See project_weapon_vfx_systematic_plan.
+    buildupHint: { lacerate: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.oskar_rending_bite;
       const roll = calculateDamage(user, target, ability);
@@ -1872,6 +1878,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { disease: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.oskar_infectious_claw;
       const roll = calculateDamage(user, target, ability);
@@ -1900,6 +1908,8 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'lacerate', tier: 1 },
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { lacerate: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.oskar_maw_rip;
       const roll = calculateDamage(user, target, ability);
@@ -1926,6 +1936,9 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'disease', tier: 2 },
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above. Toxic, not
+    // disease, since that's the family this skill actually leaves behind.
+    buildupHint: { toxic: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.oskar_rotting_maw;
       const roll = calculateDamage(user, target, ability);
@@ -1963,6 +1976,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { lacerate: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.oskar_reflex_bite;
       const roll = calculateDamage(user, target, ability);
@@ -2002,6 +2017,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['ranged', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { toxic: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.kiro_toxic_spit;
       const roll = calculateDamage(user, target, ability);
@@ -2027,6 +2044,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { disease: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.kiro_venomous_swipe;
       const roll = calculateDamage(user, target, ability);
@@ -2054,6 +2073,8 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'toxic', tier: 1 },
     tags: ['ranged', 'attack', 'aoe'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { toxic: 1 },
     apply: (user, target, scene) => {
       const ability = SKILLS?.kiro_poison_cloud;
       const roll = calculateDamage(user, target, ability);
@@ -2102,6 +2123,10 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'toxic', tier: 2 },
     tags: ['melee', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above. Toxic
+    // (the required/consumed family) rather than the conditional curse
+    // bonus, since toxic is what this skill is always about.
+    buildupHint: { toxic: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.kiro_corrosive_bite;
       const roll = calculateDamage(user, target, ability);
@@ -2136,6 +2161,8 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     tags: ['ranged', 'attack'],
+    // buildupHint added — see oskar_rending_bite's comment above.
+    buildupHint: { toxic: 1 },
     apply: (user, target) => {
       const ability = SKILLS?.kiro_venom_reflex;
       const roll = calculateDamage(user, target, ability);
@@ -7609,7 +7636,13 @@ Object.assign(RAW_SKILLS, {
     cooldown: 2,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "cold", "elemental"],
+    // 'projectile' added — staff is a ranged weapon and this (like every
+    // other real staff attack spell) is cast AT the target, not swung in
+    // melee, but none of them carried the tag that actually matters for
+    // that (ally_projectile_used/Volley, and CombatScene VFX dispatch) —
+    // same gap Boulder Toss had, just found across the whole weapon this
+    // time instead of one skill. See project_weapon_vfx_systematic_plan.
+    tags: ["magic", "spell", "cold", "elemental", "projectile"],
     buildupHint: { cold: 82 },
     // If target is at least Chilled (Cold T1): flat +20% damage and +20
     // additional Cold buildup — both flat now, replacing the old per-tier/
@@ -7682,7 +7715,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 1,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "lightning", "elemental"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "lightning", "elemental", "projectile"],
     buildupHint: { lightning: 69 },
     apply: (attacker, target) => {
       const ability = SKILLS?.galvanic_touch;
@@ -7747,7 +7781,8 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "lightning", "elemental"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "lightning", "elemental", "projectile"],
     cooldown: 2,
     buildupHint: { lightning: 85 },
     rewardIfTierCross: [
@@ -7801,7 +7836,8 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "disease", "necrotic"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "disease", "necrotic", "projectile"],
     cooldown: 2,
     buildupHint: { disease: 85 },
     rewardIfTierCross: [
@@ -7902,7 +7938,8 @@ Object.assign(RAW_SKILLS, {
     // is already enough of a natural downside per the user's call.
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "fire", "elemental", "zone"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "fire", "elemental", "zone", "projectile"],
     buildupHint: { fire: 150 },
     apply: (attacker, target, scene, opts = {}) => {
       const zone = getRunicZone(attacker);
@@ -7978,7 +8015,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "toxic", "aoe", "necrotic"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "toxic", "aoe", "necrotic", "projectile"],
     buildupHint: { toxic: 113 },
     // "Small cone": only the front rank (1,2,3) and mid rank (4,5) are valid
     // primary targets — the back rank has nothing further behind it to cone
@@ -8093,7 +8131,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "disorient", "aoe"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "disorient", "aoe", "projectile"],
     buildupHint: { disorient: 100 },
     // Fixed "back crescent" — always the back rank + mid rank {8,4,5,6},
     // regardless of which of those four is targeted. Same mechanic as
@@ -8264,7 +8303,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "fire", "aoe", "elemental"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "fire", "aoe", "elemental", "projectile"],
     requiresWeakness: { family: "fire", tierAtLeast: 2 },
     buildupHint: { fire: 75 },
     // Diamond AOE — fixed centre-mass slots {2,4,5,7}, same shape (and same
@@ -8344,7 +8384,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "toxic", "consume", "aoe", "necrotic"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "toxic", "consume", "aoe", "necrotic", "projectile"],
     requiresWeakness: { family: "toxic", tierAtLeast: 1 },
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.toxic_bloom;
@@ -8478,7 +8519,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "disorient", "consume"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "disorient", "consume", "projectile"],
     requiresWeakness: { family: "disorient", tierAtLeast: 2 },
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.silencing_shockwave;
@@ -8603,7 +8645,8 @@ Object.assign(RAW_SKILLS, {
     cooldown: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "aoe"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "aoe", "projectile"],
     // Fixed front-rank entry — the player must click one of the three front
     // slots, but ALL THREE fire regardless of which specific one was
     // clicked (same "fixed formation, restricted click" pattern Sacred
@@ -8750,7 +8793,8 @@ Object.assign(RAW_SKILLS, {
     mpCost: 1,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["magic", "spell", "curse", "fire"],
+    // 'projectile' added — see frost_swell's comment above.
+    tags: ["magic", "spell", "curse", "fire", "projectile"],
     cooldown: 2,
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
     buildupHint: { curse: 63 },
@@ -13701,8 +13745,16 @@ Object.assign(RAW_SKILLS, {
     mpCost: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["attack", "blunt"],
-    emitTagsOnUse: ["throw"],
+    // Added 'projectile' — the skill is literally named "Boulder Toss" and
+    // already had emitTagsOnUse:['throw'], but that field is never actually
+    // read anywhere in the engine (confirmed: 0 consumers across src/,
+    // despite 92 skills declaring it — a much bigger dead-field finding,
+    // out of scope here, flagged separately). The REAL tag any system
+    // checks (ally_projectile_used/Volley, and this skill's own VFX
+    // dispatch in CombatScene._playMaceVFX) is `tags`, so a thrown mace
+    // skill needs 'projectile' here specifically to actually behave like
+    // one — it didn't before this fix.
+    tags: ["attack", "blunt", "projectile"],
     cooldown: 3,
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.boulder_toss;

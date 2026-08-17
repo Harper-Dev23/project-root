@@ -4767,6 +4767,11 @@ export default class CombatScene extends Phaser.Scene {
         resultMutable.buildup = null;
         resultMutable.splash = null;
       }
+      // Brief attack VFX (currently just bow's arrow flight) — fire-and-
+      // forget, purely visual. Placed right after the hit roll so it knows
+      // hit vs miss, but doesn't touch resultMutable or gate anything below
+      // it — damage still resolves synchronously exactly as before.
+      this._playAttackVFX?.(attacker, target, { missed, ability, isCrit: resultMutable?.isCrit === true });
     }
 
     // Skill-provided "only if this hit actually lands" callback — for
@@ -5797,6 +5802,16 @@ export default class CombatScene extends Phaser.Scene {
           incomingMutable: payload,
         });
       }
+    }
+
+    // Brief attack VFX for splash/AOE/volley-copy hits too — without this,
+    // an AOE like Barbed Bloom only showed its arrow on the PRIMARY target;
+    // every other target hit by the same splash got no visual at all. No
+    // "missed" concept here (splash is a guaranteed portion of an already-
+    // landed primary hit), and purely fire-and-forget same as the primary
+    // path — doesn't touch payload or gate anything below it.
+    if (!isHeal && isSplashOrAoe && (payload.amount | 0) > 0) {
+      this._playAttackVFX?.(user, target, { missed: false, ability: opts?.ability || null, isCrit: payload?.isCrit === true });
     }
 
     // Damage / heal — read fresh; a reaction's exec above may have zeroed
@@ -7269,6 +7284,345 @@ export default class CombatScene extends Phaser.Scene {
     });
 
     this.runicZoneSprites[ownerKey] = sprites;
+  }
+
+  // ---------- Brief attack "cut-in" VFX (Pokémon-style, a few hundred ms) ----------
+  // Reusable across ALL weapon types, not just bow — this is the shared
+  // palette + lookup every future _play*VFX helper should read from instead
+  // of hardcoding colors per skill id. A skill's own buildupHint already
+  // declares which weakness family (if any) it's flavored as; we just look
+  // up that family's color. Physical-flavored families (lacerate/expose/
+  // disorient) get physical-ish tones since there's no dedicated "physical"
+  // weakness family; necrotic families get sickly tones.
+  static WEAKNESS_VFX_TINTS = {
+    fire: 0xff6633,
+    cold: 0x99ddff,
+    lightning: 0xffee66,
+    disorient: 0xccff66,
+    lacerate: 0xcc3344,
+    expose: 0xffcc88,
+    toxic: 0x66cc66,
+    disease: 0x99aa55,
+    curse: 0xaa66ff,
+  };
+
+  // Picks the LARGEST buildupHint entry as "what this skill is really
+  // about" — most skills only declare one family anyway; the few with two
+  // (e.g. frost_shatter: cold+expose) still get a single coherent tint
+  // instead of no tint at all. Falls back to scanning the skill's own tags
+  // for a family name when buildupHint is empty (several dagger skills —
+  // heartpiercer, venom_bloom, curse_of_needles, vein_tap — declare their
+  // family only via tags, e.g. tags:["toxic","necrotic"], with no
+  // buildupHint at all) — still fully data-driven, no per-skill hardcoding.
+  _dominantBuildupFamily(ability) {
+    const hint = ability?.buildupHint;
+    if (hint) {
+      const entries = Object.entries(hint).filter(([, v]) => (v || 0) > 0);
+      if (entries.length) {
+        entries.sort((a, b) => b[1] - a[1]);
+        return entries[0][0];
+      }
+    }
+    const tags = ability?.tags;
+    if (Array.isArray(tags)) {
+      const match = tags.find(t => CombatScene.WEAKNESS_VFX_TINTS[t] != null);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  _tintForAbility(ability) {
+    const family = this._dominantBuildupFamily(ability);
+    return family ? CombatScene.WEAKNESS_VFX_TINTS[family] : null;
+  }
+
+  // Per-shape landing sound — every impact used to play the same 'hitHurt'
+  // regardless of weapon/texture, the ONE sound nearly every combat hit in
+  // the game used. These reuse SFX that were already loaded via
+  // AUDIO_MANIFEST but never actually played anywhere (see
+  // project_bow_vfx_and_animation_system: "~17 of 18 loaded SFX had never
+  // been played"). Shape-keyed (not family-keyed) since shape is already the
+  // hand-curated axis every weapon's texture lookup uses (DAGGER_HIT_TEXTURES
+  // etc.) — anything not listed here keeps the original 'hitHurt' default.
+  static HIT_SOUND_BY_TEXTURE = {
+    fx_hit_blunt: 'bumpHurt',
+    fx_hit_blunt_alt: 'bumpHurt',
+    fx_hit_explosion: 'explosion',
+    fx_hit_claw: 'screech',
+    fx_hit_bite: 'snekHurt',
+    fx_hit_cloud: 'hiss',
+    fx_hit_engulf: 'burnHurt',
+  };
+
+  // Shared flying-projectile tween — bow's arrow and dagger's thrown-blade
+  // skill both use this now instead of each rolling their own tween.
+  // textureKey's native orientation must point along rotation 0 (matches
+  // fx_lodge_arrow's existing convention — see _refreshLodgeSprites).
+  _playProjectileVFX(attacker, target, { textureKey, tint = null, missed = false, scale = 0.6, duration = 260, landingSound = null, isCrit = false } = {}) {
+    if (!this.textures?.exists(textureKey)) return;
+    const fromSlot = attacker?._slot;
+    const toSlot = target?._slot;
+    if (!fromSlot || !toSlot) return;
+
+    const fromX = fromSlot.x ?? 0;
+    const fromY = fromSlot.y ?? 0;
+    // On a miss, the projectile flies PAST the target instead of stopping
+    // on them — a readable "whiff" rather than a full impact landing.
+    const targetX = toSlot.x ?? 0;
+    const targetY = toSlot.y ?? 0;
+    const toX = missed ? targetX + (targetX - fromX) * 0.25 : targetX;
+    const toY = missed ? targetY + (targetY - fromY) * 0.25 : targetY;
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+
+    const proj = this.add.image(fromX, fromY, textureKey)
+      .setScale(scale)
+      .setDepth(3) // above slot containers (depth 2) — flies in front of portraits
+      .setRotation(angle);
+    if (tint != null) proj.setTint(tint);
+
+    // Crit gets its OWN sound (critHurt, previously loaded but never played)
+    // regardless of shape — a crit should always read as "bigger," not just
+    // whatever this texture normally plays.
+    const resolvedSound = isCrit ? 'critHurt' : (landingSound || CombatScene.HIT_SOUND_BY_TEXTURE[textureKey] || 'hitHurt');
+
+    this.tweens.add({
+      targets: proj,
+      x: toX, y: toY,
+      duration,
+      ease: 'Quad.easeIn', // starts slow, accelerates into the hit — reads punchier than linear
+      onComplete: () => {
+        proj.destroy();
+        if (!missed && resolvedSound) SoundManager.play(resolvedSound);
+      },
+    });
+  }
+
+  // Shared melee-impact "pop" — a static image scales/fades in at the
+  // TARGET's own position (no travel, unlike a projectile). Used for close-
+  // range weapons (dagger, and future sword/mace passes). No miss handling
+  // needed here — on a miss this simply isn't called at all, same as how a
+  // floating damage number wouldn't show either.
+  _playMeleeImpactVFX(target, { textureKey, tint = null, scale = 0.75, duration = 220, sound = null, isCrit = false } = {}) {
+    if (!this.textures?.exists(textureKey)) return;
+    const slot = target?._slot;
+    if (!slot) return;
+
+    const img = this.add.image(slot.x ?? 0, slot.y ?? 0, textureKey)
+      .setScale(scale * 0.5)
+      .setAlpha(0)
+      .setDepth(3);
+    if (tint != null) img.setTint(tint);
+
+    this.tweens.add({
+      targets: img,
+      scale,
+      alpha: 0.95,
+      duration: duration * 0.35,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: img,
+          alpha: 0,
+          duration: duration * 0.65,
+          ease: 'Quad.easeIn',
+          onComplete: () => img.destroy(),
+        });
+      },
+    });
+    const resolvedSound = isCrit ? 'critHurt' : (sound || CombatScene.HIT_SOUND_BY_TEXTURE[textureKey] || 'hitHurt');
+    if (resolvedSound) SoundManager.play(resolvedSound);
+  }
+
+  // Weapon-type dispatcher — fires fire-and-forget right after the hit roll
+  // in _applyAbilityToTarget (and from _applyDirectResult for splash/AOE),
+  // never delays or gates the actual (synchronous) damage resolution.
+  // Add a branch here as more attack VFX are ready — e.g.
+  // `if (attacker?.weaponType === 'sword_1h') this._playSwordVFX(...)`.
+  _playAttackVFX(attacker, target, { missed = false, ability = null, isCrit = false } = {}) {
+    if (attacker?.weaponType === 'bow') {
+      this._playBowArrowVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'dagger') {
+      this._playDaggerVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'mace_2h') {
+      this._playMaceVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'sword_1h') {
+      this._playSwordVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'staff') {
+      this._playStaffVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.tags?.includes('beast')) {
+      // Beasts (Oskar/Kiro etc.) have no weaponType at all — they're
+      // natural attackers, not equipped ones — so they need their own
+      // branch keyed on the enemy template's own 'beast' tag instead.
+      this._playBeastVFX(attacker, target, missed, ability, isCrit);
+    }
+  }
+
+  // Reuses the existing fx_lodge_arrow asset (no new art needed — it's
+  // already the right shape). Elemental/status arrows get tinted per their
+  // own buildupHint family; a plain physical shot (Lodge Arrow, Piercing
+  // Release, Hunter's Finish...) keeps the arrow's natural color.
+  _playBowArrowVFX(attacker, target, missed, ability, isCrit) {
+    this._playProjectileVFX(attacker, target, {
+      textureKey: 'fx_lodge_arrow',
+      tint: this._tintForAbility(ability),
+      missed,
+      isCrit,
+    });
+  }
+
+  // Dagger Throw is the one projectile-tagged dagger skill (thrown blade —
+  // reuses fx_proj_star, tinted lacerate-red by its own buildupHint).
+  // Every other dagger skill is melee: a static impact pop at the target,
+  // shape chosen per skill (puncture vs. slash) since that's a pure flavor
+  // call with no data field to derive it from — everything else about the
+  // effect (tint, timing, sound) still comes from the shared, data-driven
+  // helpers above.
+  static DAGGER_HIT_TEXTURES = {
+    needle_feint: 'fx_hit_puncture',
+    vital_mark: 'fx_hit_puncture',
+    ember_strike: 'fx_hit_slash',
+    needle_venom: 'fx_hit_puncture',
+    pressure_point: 'fx_hit_puncture',
+    ghoststep: 'fx_hit_slash',
+    hex_stitch: 'fx_hit_puncture',
+    static_prick: 'fx_hit_puncture',
+    heartpiercer: 'fx_hit_puncture',
+    venom_bloom: 'fx_hit_cloud',
+    silent_order: 'fx_hit_slash',
+    curse_of_needles: 'fx_hit_puncture',
+    flash_overload: 'fx_hit_slash',
+    vein_tap: 'fx_hit_puncture',
+  };
+
+  _playDaggerVFX(attacker, target, missed, ability, isCrit) {
+    if ((ability?.tags || []).includes('projectile')) {
+      this._playProjectileVFX(attacker, target, {
+        textureKey: 'fx_proj_star',
+        tint: this._tintForAbility(ability),
+        missed,
+        scale: 0.5,
+        isCrit,
+      });
+      return;
+    }
+    if (missed) return; // melee whiff: no effect, matches no-floating-number-on-miss
+    const textureKey = CombatScene.DAGGER_HIT_TEXTURES[ability?.id] || 'fx_hit_slash';
+    this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), isCrit });
+  }
+
+  // Mace has one genuinely thrown skill — Boulder Toss — now correctly
+  // 'projectile'-tagged in its own data/skills.js definition (was only
+  // marked via the dead emitTagsOnUse field, which nothing in the engine
+  // reads; fixing the REAL tags array also makes it correctly proc an
+  // ally's armed Volley, not just fixing its VFX). Dispatch here checks
+  // that tag generically — same pattern as dagger — rather than hardcoding
+  // the skill id, so any FUTURE mace skill someone tags 'projectile' picks
+  // up the flying treatment automatically too.
+  //
+  // Everything else is a blunt swing; big AOE/finisher-tier hits (already-
+  // declared aoe:true, or a 'finisher'/'proliferate' tag — still data-
+  // driven) get the bigger explosion visual instead of a plain swing.
+  // Regular swings pick blunt vs. blunt_alt at RANDOM per cast — the point
+  // is visual variety on repeat casts of the SAME skill, which a fixed
+  // per-skill lookup (like dagger's puncture/slash split) can't give you; a
+  // coin flip each time can.
+  static MACE_BIG_IMPACT_TAGS = new Set(['finisher', 'proliferate', 'aoe']);
+
+  _playMaceVFX(attacker, target, missed, ability, isCrit) {
+    if ((ability?.tags || []).includes('projectile')) {
+      this._playProjectileVFX(attacker, target, {
+        textureKey: 'fx_proj_ball',
+        tint: this._tintForAbility(ability),
+        missed,
+        scale: 0.65,
+        isCrit,
+      });
+      return;
+    }
+    if (missed) return;
+    const tags = ability?.tags || [];
+    const isBigImpact = ability?.aoe === true || tags.some(t => CombatScene.MACE_BIG_IMPACT_TAGS.has(t));
+    const textureKey = isBigImpact ? 'fx_hit_explosion' : (Math.random() < 0.5 ? 'fx_hit_blunt' : 'fx_hit_blunt_alt');
+    this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), scale: isBigImpact ? 0.95 : 0.75, isCrit });
+  }
+
+  // Sword_1h has zero projectile-tagged skills — pure melee, no ball/bolt
+  // dispatch needed. No "big impact" tier the way mace has (a wide cleave
+  // reads better as a slash than an explosion) and no _alt asset exists yet
+  // for slash (unlike blunt), so no per-cast random variety here — just a
+  // 2-way split, precise thrusts vs. cuts, same editorial-call pattern as
+  // dagger's puncture/slash. Everything not explicitly thrust-flavored
+  // defaults to slash, matching a sword's primary motion.
+  static SWORD_PUNCTURE_SKILLS = new Set(['power_stab', 'soft_spot_exposed']);
+
+  _playSwordVFX(attacker, target, missed, ability, isCrit) {
+    if (missed) return;
+    const textureKey = CombatScene.SWORD_PUNCTURE_SKILLS.has(ability?.id) ? 'fx_hit_puncture' : 'fx_hit_slash';
+    this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), isCrit });
+  }
+
+  // Staff is fully ranged — every real attack spell is now 'projectile'-
+  // tagged (see data/skills.js: they carried no melee shape to fall back on
+  // in the first place, so unlike bow/dagger/mace there's no melee branch
+  // here at all). Lightning-flavored bolts (and Arcane Needle, designed
+  // from the start as "a needle-thin bolt of force") use the bolt shape;
+  // everything else uses the round orb. Tint still comes from the same
+  // data-driven family lookup as every other weapon.
+  static STAFF_BOLT_SKILLS = new Set(['arcane_needle', 'galvanic_touch', 'thunder_mark']);
+
+  _playStaffVFX(attacker, target, missed, ability, isCrit) {
+    const textureKey = CombatScene.STAFF_BOLT_SKILLS.has(ability?.id) ? 'fx_proj_bolt' : 'fx_proj_ball';
+    this._playProjectileVFX(attacker, target, {
+      textureKey,
+      tint: this._tintForAbility(ability),
+      missed,
+      scale: 0.55,
+      isCrit,
+    });
+  }
+
+  // Only encounter 4's beasts (Oskar/Kiro) exist right now — the other
+  // named enemies (encounter 3's dummies, encounter 5's duelists, Gorrek)
+  // are humanoid/weapon-wielding and already covered by the weaponType
+  // branches above. Toxic Spit is the one true ranged beast skill (a spat
+  // glob, not a swing) so it flies via _playProjectileVFX like any other
+  // projectile; everything else is a melee bite/claw/swipe, hand-mapped the
+  // same way DAGGER_HIT_TEXTURES is (no data field distinguishes "bite" from
+  // "claw" — pure flavor call). Unmapped future beast skills fall back to a
+  // bite/claw keyword guess off their id, then default to claw.
+  static BEAST_PROJECTILE_SKILLS = new Set(['kiro_toxic_spit']);
+  static BEAST_HIT_TEXTURES = {
+    oskar_rending_bite: 'fx_hit_bite',
+    oskar_infectious_claw: 'fx_hit_claw',
+    oskar_maw_rip: 'fx_hit_bite',
+    oskar_rotting_maw: 'fx_hit_bite',
+    oskar_reflex_bite: 'fx_hit_bite',
+    kiro_venomous_swipe: 'fx_hit_claw',
+    kiro_corrosive_bite: 'fx_hit_bite',
+    kiro_poison_cloud: 'fx_hit_cloud',
+  };
+  _playBeastVFX(attacker, target, missed, ability, isCrit) {
+    if (CombatScene.BEAST_PROJECTILE_SKILLS.has(ability?.id)) {
+      this._playProjectileVFX(attacker, target, {
+        textureKey: 'fx_proj_ball',
+        tint: this._tintForAbility(ability),
+        missed,
+        scale: 0.5,
+        isCrit,
+      });
+      return;
+    }
+    if (missed) return;
+    let textureKey = CombatScene.BEAST_HIT_TEXTURES[ability?.id];
+    if (!textureKey) {
+      const hay = `${ability?.id || ''} ${ability?.name || ''}`.toLowerCase();
+      textureKey = /bite|maw|fang/.test(hay) ? 'fx_hit_bite' : 'fx_hit_claw';
+    }
+    this._playMeleeImpactVFX(target, {
+      textureKey,
+      tint: this._tintForAbility(ability),
+      isCrit,
+    });
   }
 
   // ---------- Lodge arrow sprites (attached to character, one per stack) ----------
