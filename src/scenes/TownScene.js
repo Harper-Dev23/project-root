@@ -160,12 +160,11 @@ function randomRarityForGamble() {
 }
 
 // Weapon types actually brought up to the current v3.23 skill standard (see
-// project memory) — sword_1h/dagger/staff/mace_2h are done, bow is next up
-// so it's included now rather than needing this list touched again the
-// moment that lands. Everything else (sword_2h, spear_1h, whip, sling, gun,
-// wand, shield) is still on the old v3.21 skill set, not worth surfacing in
-// the gamble pool until it's actually caught up.
-const GAMBLE_WEAPON_TYPES = ['sword_1h', 'dagger', 'staff', 'mace_2h', 'bow'];
+// project memory) — sword_1h/dagger/staff/mace_2h/bow/axe_2h are done.
+// Everything else (sword_2h, spear_1h, whip, sling, gun, wand, shield) is
+// still on the old v3.21 skill set, not worth surfacing in the gamble pool
+// until it's actually caught up.
+const GAMBLE_WEAPON_TYPES = ['sword_1h', 'dagger', 'staff', 'mace_2h', 'bow', 'axe_2h'];
 
 // Get all weapon IDs from Items.js — exclude locked/unique items (e.g. Bloodthirster)
 function getWeaponIdPool() {

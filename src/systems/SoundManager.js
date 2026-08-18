@@ -18,7 +18,13 @@ export const AUDIO_MANIFEST = [
   { id: 'snekHurt',  file: 'snekHurt.wav',  volume: 0.5 },
   { id: 'hiss',      file: 'hiss.wav',      volume: 0.45 },
   { id: 'screech',   file: 'screech.wav',   volume: 0.5 },
-  { id: 'explosion', file: 'explosion.wav', volume: 0.6 },
+  // Was 0.6, tied for the loudest multiplier in the manifest alongside
+  // hugeHit — found too loud specifically via Gorrek's AOE/finisher hits,
+  // but this ONE number is the single shared volume for every 'explosion'
+  // play in the game (mace/axe big-impact swings, Gorrek's Disrupting
+  // Roar/Bleeding Sweep/Death Spiral, any future skill), not scoped to any
+  // one caller — lowering it here is the correct global fix, not a one-off.
+  { id: 'explosion', file: 'explosion.wav', volume: 0.42 },
   { id: 'projFire',  file: 'projFire.wav',  volume: 0.5 },
   { id: 'gamble',      file: 'gamble.wav',      volume: 0.5 },
   { id: 'gambleEpic',  file: 'gambleEpic.wav',  volume: 0.65 },

@@ -7,6 +7,7 @@ import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
 import UIButton, { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
+import { GameplaySettings } from '../systems/GameplaySettings.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 import { buildSkillTooltipLines } from '../ui/skillTooltip.js';
 import { setupSceneCursor, setCursor } from '../ui/cursor.js';
@@ -1979,6 +1980,40 @@ export default class CombatScene extends Phaser.Scene {
     const buildupTooltipLines = Object.entries(buildupPctByFamily)
       .map(([fam, pct]) => `${fam.charAt(0).toUpperCase() + fam.slice(1)}: +${pct}%`);
 
+    // PDR/EDR/NDR breakdown — getDamageReductionFraction (CombatLogic.js)
+    // sums these SAME two sources additively into one fraction before
+    // applying it as a single multiplicative reduction to raw damage (see
+    // the "additive-then-multiply model" comment on the PD/ED/ND row
+    // below) — there's no hidden multiplicative stacking between gear and
+    // combat bonuses, just this one addition. "Gear/Base" is char.derived
+    // (baseStats-derived + gear DR affixes + any flat template bonus);
+    // "Combat Bonus" folds together char.combatMods (currently only ever
+    // holds damage-conversion flags, never a numeric DR mod, but included
+    // for correctness if that changes) and active status-effect mods
+    // (temporary buffs/debuffs, e.g. Guard) — together they equal
+    // eff.PhysicalResist/etc., i.e. gear + combat always reconstructs the
+    // headline number. Expose's own T1 self-vulnerability penalty (physical
+    // only) is applied AFTER this sum inside getDamageReductionFraction, so
+    // it's broken out as its own line instead of folded into either bucket.
+    const drBreakdown = (statKey, includeExpose) => {
+      const gearVal = char?.derived?.[statKey] || 0;
+      const combatVal = (eff[statKey] || 0) - gearVal;
+      const lines = [
+        `Gear/Base: ${gearVal >= 0 ? '+' : ''}${gearVal}%`,
+        `Combat Bonus: ${combatVal >= 0 ? '+' : ''}${combatVal}%`,
+      ];
+      if (includeExpose && (char?.weakness?.tiers?.expose | 0) >= 1) {
+        const I = familyIntensityMult('expose', char.weakness.meters?.expose | 0);
+        const t1cfg = WeaknessV3?.families?.expose?.t1;
+        const sub = Math.round(Math.min((t1cfg?.physDRPen ?? 0) * I, t1cfg?.physDRPenCap ?? Infinity) * 100);
+        if (sub > 0) lines.push(`Exposed (self): -${sub}%`);
+      }
+      return lines;
+    };
+    const pdrLines = drBreakdown('PhysicalResist', true);
+    const edrLines = drBreakdown('ElementalResist', false);
+    const ndrLines = drBreakdown('NecroticResist', false);
+
     const critInfo = (() => {
       const w = char?.weakness;
       let line = '-';
@@ -2060,7 +2095,16 @@ export default class CombatScene extends Phaser.Scene {
     // rowsRight row with no pair just gets `null` at that index in rowsMid.
     const rowsRight = [
       { label: 'MP:', value: `${char.currentMP}/${char.maxMP}`, desc: 'Current / maximum Mana Points, spent on skills with an MP cost.' },
-      { label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%`, desc: 'Physical / Elemental / Necrotic Damage Reduction — % of incoming damage of each type prevented.' },
+      {
+        label: 'PDR/EDR/NDR:', value: `${pdr}% / ${edr}% / ${ndr}%`,
+        desc: 'Physical / Elemental / Necrotic Damage Reduction — % of incoming damage of each type prevented. Hover for the gear vs. combat-bonus breakdown.',
+        descLines: [
+          'Physical / Elemental / Necrotic Damage Reduction:', '',
+          `Physical (${pdr}%):`, ...pdrLines.map(l => `  ${l}`), '',
+          `Elemental (${edr}%):`, ...edrLines.map(l => `  ${l}`), '',
+          `Necrotic (${ndr}%):`, ...ndrLines.map(l => `  ${l}`),
+        ],
+      },
       { label: 'PD/ED/ND:', value: `${pdPct >= 0 ? '+' : ''}${pdPct}% / ${edPct >= 0 ? '+' : ''}${edPct}% / ${ndPct >= 0 ? '+' : ''}${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
       { label: 'H.Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
       { label: 'CostX:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ff6666' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
@@ -5570,7 +5614,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!missed && result?.poisonTicks?.count > 0) {
       const { count, damageEach } = result.poisonTicks;
       for (let i = 0; i < count; i++) {
-        this.time.delayedCall(400 * (i + 1), () => {
+        this.time.delayedCall(400 * (i + 1) * GameplaySettings.animDurationMult(), () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
           target.currentHP = Math.max(0, (target.currentHP || 0) - damageEach);
           this._showFloatingNumber?.(damageEach, target, false);
@@ -5654,7 +5698,7 @@ export default class CombatScene extends Phaser.Scene {
         ally.statusEffects.splice(vIdx, 1); // consume
         this._log(`${ally.name} volleys with ${user.name}'s ${ability.name}!`);
         for (let i = 0; i < copies; i++) {
-          this.time.delayedCall(280 * (i + 1), () => {
+          this.time.delayedCall(280 * (i + 1) * GameplaySettings.animDurationMult(), () => {
             if (this.combatEnded || !target || target.status === 'incapacitated') return;
             this._applyDirectResult(ally, target, {
               amount: Math.floor((result?.amount || 0) * eff),
@@ -5678,7 +5722,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!missed && !options?.isRepeat && (result?.repeatChance || 0) > 0) {
       if (Math.random() < result.repeatChance) {
         this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
-        this.time.delayedCall(380, () => {
+        this.time.delayedCall(380 * GameplaySettings.animDurationMult(), () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
           const repeatScale = Number.isFinite(result?.repeatScale) ? result.repeatScale : 1;
           this._applyDirectResult(user, target, this._buildRepeatPayload(result, target, repeatScale), { ability, isRepeat: true });
@@ -5722,7 +5766,7 @@ export default class CombatScene extends Phaser.Scene {
       const rcZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.runeChannel);
       if (rcZone && Math.random() < 0.25) {
         this._log(`${user?.name ?? 'Mage'}'s rune channel recasts the spell at reduced power!`);
-        this.time.delayedCall(480, () => {
+        this.time.delayedCall(480 * GameplaySettings.animDurationMult(), () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
           this._applyAbilityToTarget(user, target, ability, null, { isRepeat: true, powerScale: 0.60 });
         });
@@ -7363,6 +7407,7 @@ export default class CombatScene extends Phaser.Scene {
     const fromSlot = attacker?._slot;
     const toSlot = target?._slot;
     if (!fromSlot || !toSlot) return;
+    duration *= GameplaySettings.animDurationMult();
 
     const fromX = fromSlot.x ?? 0;
     const fromY = fromSlot.y ?? 0;
@@ -7406,6 +7451,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!this.textures?.exists(textureKey)) return;
     const slot = target?._slot;
     if (!slot) return;
+    duration *= GameplaySettings.animDurationMult();
 
     const img = this.add.image(slot.x ?? 0, slot.y ?? 0, textureKey)
       .setScale(scale * 0.5)
@@ -7439,7 +7485,20 @@ export default class CombatScene extends Phaser.Scene {
   // Add a branch here as more attack VFX are ready — e.g.
   // `if (attacker?.weaponType === 'sword_1h') this._playSwordVFX(...)`.
   _playAttackVFX(attacker, target, { missed = false, ability = null, isCrit = false } = {}) {
-    if (attacker?.weaponType === 'bow') {
+    if (attacker?.tags?.includes('beast')) {
+      // Checked FIRST, ahead of every weaponType branch below — beasts like
+      // Oskar/Kiro are secretly equipped with a real weapon item (e.g.
+      // crude_dagger, see data/combatScenarios.js) purely so calculateDamage()
+      // has real weapon dice to roll, which also sets a real weaponType on
+      // them as a side effect. That's a stats-only trick, not a thematic
+      // "this beast wields a dagger" statement — checking weaponType first
+      // would silently route them through dagger's VFX (found live: Oskar/
+      // Kiro showed dagger's default fx_hit_slash fallback instead of bite/
+      // claw, since none of their skill ids are in DAGGER_HIT_TEXTURES). A
+      // beast should always look like a beast regardless of what it's
+      // stat-equipped with under the hood.
+      this._playBeastVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'bow') {
       this._playBowArrowVFX(attacker, target, missed, ability, isCrit);
     } else if (attacker?.weaponType === 'dagger') {
       this._playDaggerVFX(attacker, target, missed, ability, isCrit);
@@ -7449,11 +7508,16 @@ export default class CombatScene extends Phaser.Scene {
       this._playSwordVFX(attacker, target, missed, ability, isCrit);
     } else if (attacker?.weaponType === 'staff') {
       this._playStaffVFX(attacker, target, missed, ability, isCrit);
-    } else if (attacker?.tags?.includes('beast')) {
-      // Beasts (Oskar/Kiro etc.) have no weaponType at all — they're
-      // natural attackers, not equipped ones — so they need their own
-      // branch keyed on the enemy template's own 'beast' tag instead.
-      this._playBeastVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'axe_2h') {
+      this._playAxeVFX(attacker, target, missed, ability, isCrit);
+    } else if (attacker?.weaponType === 'sword_2h') {
+      // sword_2h is still a legacy (non-typed-pipeline) weapon type project-
+      // wide — this branch is VFX-only, doesn't imply the weapon itself was
+      // modernized. Gorrek (encounter 6) wields Bloodthirster (sword_2h) and
+      // had ZERO attack VFX before this — same silent-fallthrough gap Oskar/
+      // Kiro had pre-fix, just via an unhandled weaponType instead of a
+      // missing beast-tag branch. See project_encounter6_vfx_sfx_pass.
+      this._playSword2hVFX(attacker, target, missed, ability, isCrit);
     }
   }
 
@@ -7492,6 +7556,20 @@ export default class CombatScene extends Phaser.Scene {
     curse_of_needles: 'fx_hit_puncture',
     flash_overload: 'fx_hit_slash',
     vein_tap: 'fx_hit_puncture',
+    // Encounter 3's dagger-wielders (Gary the warlock, Mo the rogue) — see
+    // project_encounter3_vfx_sfx_pass. Same editorial pattern as the player
+    // entries above, just extended with these enemy skill ids.
+    warlock_hex: 'fx_hit_puncture',
+    warlock_dark_bolts: 'fx_hit_puncture',
+    warlock_curse_amplify: 'fx_hit_puncture',
+    warlock_drain_life: 'fx_hit_puncture',
+    warlock_curse_needles: 'fx_hit_puncture',
+    warlock_reckless_immolation: 'fx_hit_slash',
+    rogue_poisoned_knife: 'fx_hit_puncture',
+    rogue_hamstring: 'fx_hit_puncture',
+    rogue_sneak_attack: 'fx_hit_puncture',
+    rogue_finishing_strike: 'fx_hit_puncture',
+    rogue_curse_twist: 'fx_hit_puncture',
   };
 
   _playDaggerVFX(attacker, target, missed, ability, isCrit) {
@@ -7553,7 +7631,12 @@ export default class CombatScene extends Phaser.Scene {
   // 2-way split, precise thrusts vs. cuts, same editorial-call pattern as
   // dagger's puncture/slash. Everything not explicitly thrust-flavored
   // defaults to slash, matching a sword's primary motion.
-  static SWORD_PUNCTURE_SKILLS = new Set(['power_stab', 'soft_spot_exposed']);
+  static SWORD_PUNCTURE_SKILLS = new Set([
+    'power_stab', 'soft_spot_exposed',
+    // Chad the Unbreakable (encounter 3) — a finishing thrust reads more
+    // puncture than slash; see project_encounter3_vfx_sfx_pass.
+    'fighter_executioner',
+  ]);
 
   _playSwordVFX(attacker, target, missed, ability, isCrit) {
     if (missed) return;
@@ -7561,16 +7644,109 @@ export default class CombatScene extends Phaser.Scene {
     this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), isCrit });
   }
 
-  // Staff is fully ranged — every real attack spell is now 'projectile'-
-  // tagged (see data/skills.js: they carried no melee shape to fall back on
-  // in the first place, so unlike bow/dagger/mace there's no melee branch
-  // here at all). Lightning-flavored bolts (and Arcane Needle, designed
-  // from the start as "a needle-thin bolt of force") use the bolt shape;
-  // everything else uses the round orb. Tint still comes from the same
-  // data-driven family lookup as every other weapon.
-  static STAFF_BOLT_SKILLS = new Set(['arcane_needle', 'galvanic_touch', 'thunder_mark']);
+  // Axe (2h) — mostly melee, plus Axe Throw (added after this method was
+  // first written, checked here the same way dagger/mace check their own
+  // projectile-tagged skill: via the real 'projectile' tag, not hardcoded).
+  // Every real melee hit is a chop/cleave (fx_hit_slash), but unlike sword
+  // it has real AOE/finisher/execute-tier skills (bloodletting_cleave,
+  // decapitating_arc, hemorrhage_strike, artery_sever, death_blow — all
+  // already tagged 'aoe'/'finisher'/'execute'), so it reuses mace's "big
+  // impact" convention (data-driven off existing tags, not per-skill
+  // hardcoding) instead of sword's flat single-texture approach.
+  static AXE_BIG_IMPACT_TAGS = new Set(['finisher', 'aoe', 'execute']);
+
+  _playAxeVFX(attacker, target, missed, ability, isCrit) {
+    if ((ability?.tags || []).includes('projectile')) {
+      this._playProjectileVFX(attacker, target, {
+        textureKey: 'fx_proj_lance',
+        tint: this._tintForAbility(ability),
+        missed,
+        scale: 0.6,
+        isCrit,
+      });
+      return;
+    }
+    if (missed) return;
+    const tags = ability?.tags || [];
+    const isBigImpact = tags.some(t => CombatScene.AXE_BIG_IMPACT_TAGS.has(t));
+    const textureKey = isBigImpact ? 'fx_hit_explosion' : 'fx_hit_slash';
+    this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), scale: isBigImpact ? 0.95 : 0.75, isCrit });
+  }
+
+  // Sword (2h) — same "big impact" convention as mace/axe: default swing is
+  // a plain slash, AOE/finisher-tier moves (Gorrek's Disrupting Roar/
+  // Bleeding Sweep/Death Spiral) get the bigger explosion visual. No known
+  // sword_2h skill is 'projectile'-tagged today, but the check is here
+  // anyway for consistency/future-proofing, same as every other weapon's
+  // dispatch. See project_encounter6_vfx_sfx_pass.
+  static SWORD2H_BIG_IMPACT_TAGS = new Set(['finisher', 'aoe']);
+
+  _playSword2hVFX(attacker, target, missed, ability, isCrit) {
+    if ((ability?.tags || []).includes('projectile')) {
+      this._playProjectileVFX(attacker, target, {
+        textureKey: 'fx_proj_lance',
+        tint: this._tintForAbility(ability),
+        missed,
+        scale: 0.65,
+        isCrit,
+      });
+      return;
+    }
+    if (missed) return;
+    const tags = ability?.tags || [];
+    const isBigImpact = tags.some(t => CombatScene.SWORD2H_BIG_IMPACT_TAGS.has(t));
+    const textureKey = isBigImpact ? 'fx_hit_explosion' : 'fx_hit_slash';
+    this._playMeleeImpactVFX(target, { textureKey, tint: this._tintForAbility(ability), scale: isBigImpact ? 0.95 : 0.8, isCrit });
+  }
+
+  // Staff is almost entirely ranged — nearly every real attack spell is
+  // 'projectile'-tagged (see data/skills.js) — but checks the tag rather
+  // than assuming it unconditionally, same pattern as bow/dagger/mace,
+  // since Galvanic Touch is a genuine melee exception (a touch spell, not a
+  // bolt — had 'projectile' added during the bulk staff pass, then reverted
+  // per the user's correction). Lightning-flavored bolts (and Arcane
+  // Needle, designed from the start as "a needle-thin bolt of force") use
+  // the bolt shape; everything else ranged uses the round orb. Tint still
+  // comes from the same data-driven family lookup as every other weapon.
+  static STAFF_BOLT_SKILLS = new Set([
+    'arcane_needle', 'thunder_mark',
+    // Lenny the Magnificent (encounter 3) — his lightning-flavored skills,
+    // same convention as the player's own lightning staff spells; see
+    // project_encounter3_vfx_sfx_pass. Stan's own flame_flick stays on the
+    // default ball (fire, not lightning). Inferno Release gets its own
+    // dedicated treatment below instead, not this bolt/ball choice at all.
+    'wizard_arcane_bolt', 'wizard_static_field', 'wizard_overload',
+  ]);
+
+  // Skills that get a bigger dedicated impact instead of the generic small
+  // ball/bolt — for a two-turn-channeled AOE ultimate like Inferno Release,
+  // a thumbnail-sized fireball flying across the screen undersold it. Still
+  // real 'projectile'-tagged in data/skills.js (Volley-proc eligibility is
+  // a gameplay concern, unrelated to how dramatic the impact LOOKS), so this
+  // is checked BEFORE the generic projectile branch below rather than by
+  // removing the tag. fx_hit_engulf was one of the original 16 uploaded
+  // assets, unused everywhere until now — "engulfed in flame" fits an
+  // inferno nova better than a flying ball ever could.
+  static STAFF_ENGULF_SKILLS = new Set(['wizard_inferno_release']);
 
   _playStaffVFX(attacker, target, missed, ability, isCrit) {
+    if (CombatScene.STAFF_ENGULF_SKILLS.has(ability?.id)) {
+      if (missed) return;
+      this._playMeleeImpactVFX(target, {
+        textureKey: 'fx_hit_engulf',
+        tint: this._tintForAbility(ability),
+        scale: 1.15,
+        duration: 320,
+        sound: 'hugeHit',
+        isCrit,
+      });
+      return;
+    }
+    if (!(ability?.tags || []).includes('projectile')) {
+      if (missed) return;
+      this._playMeleeImpactVFX(target, { textureKey: 'fx_hit_puncture', tint: this._tintForAbility(ability), isCrit });
+      return;
+    }
     const textureKey = CombatScene.STAFF_BOLT_SKILLS.has(ability?.id) ? 'fx_proj_bolt' : 'fx_proj_ball';
     this._playProjectileVFX(attacker, target, {
       textureKey,
@@ -8726,7 +8902,11 @@ export default class CombatScene extends Phaser.Scene {
       const res = this._executeSkill(npc, skillId, target);
       if (res?.ok) {
         // DO NOT zero any buckets here – _executeSkill already spent the right one.
-        this.time.delayedCall(250, () => { if (!this.combatEnded) finish(true); });
+        // Scaled by GameplaySettings.animDurationMult() — this is the pause
+        // between the NPC's skill actually firing (VFX included) and moving
+        // on, so on the slow default it needs to actually wait long enough
+        // for that VFX to be seen, not just the tween itself.
+        this.time.delayedCall(250 * GameplaySettings.animDurationMult(), () => { if (!this.combatEnded) finish(true); });
         return true;
       }
       return false;
@@ -8803,7 +8983,8 @@ export default class CombatScene extends Phaser.Scene {
             if (npc?.actionsLeft && npc.actionsLeft[ability.actionCost || 'class'] != null) {
               npc.actionsLeft[ability.actionCost || 'class'] = 0;
             }
-            this.time.delayedCall(250, () => { if (!this.combatEnded) finish(true); });
+            // Scaled — see runAndEnd's comment above.
+            this.time.delayedCall(250 * GameplaySettings.animDurationMult(), () => { if (!this.combatEnded) finish(true); });
             return;
           }
         }
@@ -8867,10 +9048,21 @@ export default class CombatScene extends Phaser.Scene {
       this._performNPCAction(npc, action, (didAct) => {
         if (this.combatEnded) return;
         if (!didAct) {
+          // Not scaled — no action actually fired here (no target, on
+          // cooldown, etc.), so there's no VFX to wait on.
           this.time.delayedCall(150, () => tryAct(depth + 1));
           return;
         }
         if (hasActionsRemaining()) {
+          // NOT scaled (reverted) — runAndEnd's OWN scaled 250ms wait
+          // already ran before this callback ever fires, and that alone
+          // comfortably covers a full VFX playthrough (melee: 220ms base,
+          // even at the slow 4x default that's 880ms, under the scaled
+          // 1000ms wait; projectile: 260ms base, 1040ms at 4x, still under
+          // 250(scaled)+200(flat) combined). This second delay was purely
+          // extra breathing room before the AI's NEXT decision, not
+          // protecting anything visual — scaling it just made whole NPC
+          // turns run long without the VFX needing any more time to be seen.
           this.time.delayedCall(200, () => tryAct(depth + 1));
         } else {
           this._advanceTurn();

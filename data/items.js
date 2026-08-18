@@ -187,7 +187,10 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 8, max: 13 },
+    // Was 8-13 — matched to mace_2h's 7-12 for balance (both are the same
+    // "heavy 2h blunt/bleed" tier of weapon, no reason for axe to roll a
+    // flat point higher on both ends).
+    damage: { min: 7, max: 12 },
     description: 'A brutal axe with a chipped but deadly edge.'
   },
 

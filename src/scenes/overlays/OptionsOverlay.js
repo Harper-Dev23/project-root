@@ -2,6 +2,7 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { HOTKEYS } from '../../systems/HotkeyManager.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { AudioSettings } from '../../systems/AudioSettings.js';
+import { GameplaySettings } from '../../systems/GameplaySettings.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { DevFlags } from '../../systems/DevFlags.js';
 import { MENU_THEME } from '../../ui/styles.js';
@@ -146,10 +147,13 @@ export default class OptionsOverlay extends Phaser.Scene {
 
     } else if (name === 'Gameplay') {
       let cy = contentY;
-      addText(left, cy, 'Gameplay', sectionStyle); cy += 32;
-      addText(left + 20, cy, '• Combat Hints: Enabled', itemStyle); cy += 26;
-      addText(left + 20, cy, '• Auto-Pause on Encounter: Enabled', itemStyle); cy += 26;
-      addText(left + 20, cy, '• Tooltip Detail Level: Standard', itemStyle);
+      addText(left, cy, 'Gameplay', sectionStyle); cy += 40;
+      this._buildCheckbox(group, left + 20, cy, 'Quick Combat', 'quickCombat', depth);
+      cy += 26;
+      addText(left + 20, cy,
+        'Off: attack animations play at a slower, more readable pace.\nOn: the snappy pace combat was originally tuned at.',
+        { ...itemStyle, wordWrap: { width: width - left - 60 } }
+      );
 
     } else if (name === 'Hotkeys') {
       this._buildHotkeysTab(group, left, contentY, width, sectionStyle, itemStyle, noteStyle, depth);
@@ -158,8 +162,9 @@ export default class OptionsOverlay extends Phaser.Scene {
       this._buildCheatsTab(group, left, contentY, sectionStyle, noteStyle, depth);
     }
 
-    // Note at bottom for placeholder tabs
-    if (name !== 'Hotkeys' && name !== 'Audio' && name !== 'Cheats') {
+    // Note at bottom for placeholder tabs — Gameplay now has a real control
+    // (Quick Combat), so it's excluded here same as Audio/Hotkeys/Cheats.
+    if (name !== 'Hotkeys' && name !== 'Audio' && name !== 'Cheats' && name !== 'Gameplay') {
       const note = this.add.text(
         left,
         this._bounds.bottom - 80,
@@ -233,6 +238,50 @@ export default class OptionsOverlay extends Phaser.Scene {
         applyValue(pointer.x);
         if (settingKey !== 'music') SoundManager.play('select');
       });
+  }
+
+  /**
+   * Builds one labeled checkbox bound to GameplaySettings[settingKey] — same
+   * click-anywhere-on-the-row interaction as the volume sliders above, just
+   * a boolean toggle instead of a drag.
+   */
+  _buildCheckbox(group, x, y, label, settingKey, depth) {
+    const boxSize = 18;
+
+    const box = this.add.rectangle(x, y, boxSize, boxSize, 0x2a2a2a)
+      .setStrokeStyle(1, 0x777777)
+      .setOrigin(0, 0.5)
+      .setDepth(depth);
+    group.add(box);
+
+    // Checked state is represented via TEXT CONTENT ('✓' vs '') rather than
+    // .setVisible() — found live that _showTab() calls
+    // this._tabContent[name].setVisible(true) on every tab (re)display
+    // (fresh build AND cached re-show), and Phaser's Group.setVisible()
+    // cascades to force EVERY child's own .visible back to true,
+    // unconditionally undoing this checkbox's own OFF state the moment the
+    // tab is shown again. An empty string still renders nothing regardless
+    // of that cascade, since it's not a visibility flag the group can touch.
+    const check = this.add.text(x + boxSize / 2, y, GameplaySettings[settingKey] ? '✓' : '', {
+      fontSize: '15px', color: '#ffdd88', fontStyle: 'bold'
+    }).setOrigin(0.5).setDepth(depth + 1);
+    group.add(check);
+
+    const labelText = this.add.text(x + boxSize + 12, y, label, {
+      fontSize: '15px', color: '#d0d0d0'
+    }).setOrigin(0, 0.5).setDepth(depth);
+    group.add(labelText);
+
+    const toggle = () => {
+      const next = !GameplaySettings[settingKey];
+      GameplaySettings.set(settingKey, next);
+      check.setText(next ? '✓' : '');
+      SoundManager.play('select');
+    };
+
+    [box, labelText].forEach(el => {
+      el.setInteractive({ useHandCursor: true }).on('pointerdown', toggle);
+    });
   }
 
   _buildHotkeysTab(group, left, startY, panelWidth, sectionStyle, itemStyle, noteStyle, depth) {
