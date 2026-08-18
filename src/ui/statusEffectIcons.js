@@ -44,6 +44,7 @@ const STATUS_ICON_LIBRARY = {
   shaken_aim: { glyph: 'SA', name: 'Shaken Aim', fg: '#e0e0e0', bg: '#2a2a2a', border: '#888888', description: 'Accuracy reduced — greatly increased chance to miss this turn.' },
   shattered_defenses: { glyph: 'SD', name: 'Shattered Defenses', fg: '#ffd1d1', bg: '#3b1d1d', border: '#b24a4a', description: 'Physical Resist reduced.' },
   torn_defenses: { glyph: 'TD', name: 'Torn Defenses', fg: '#ffb8b8', bg: '#341616', border: '#c25454', description: 'Lacerate buildup taken is increased.' },
+  wound_opener_seal: { glyph: 'WO', name: 'Festering Wound', fg: '#ff9fb0', bg: '#341018', border: '#cc3344', description: "Lacerate, Toxic, and Disease buildup can't decay." },
   shattering_cut_sundered: { glyph: 'SU', name: 'Sundered', fg: '#ffd1d1', bg: '#3b1d1d', border: '#b24a4a', description: 'Armor is fractured.' },
   ice_shatter_armorbreak: { glyph: 'IB', name: 'Armorbreak', fg: '#d5f1ff', bg: '#17344b', border: '#5fa0c8', description: 'Armor shattered by ice.' },
   tainted: { glyph: 'TN', name: 'Tainted', fg: '#ffd6f2', bg: '#30192b', border: '#b25d9c', description: 'Afflicted by foul magic.' },

@@ -12191,24 +12191,35 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
     cooldown: 2,
-    buildupHint: { lacerate: 80 },
+    buildupHint: { lacerate: 88 },
     apply: (attacker, target) => {
       const ability = SKILLS?.rending_hew;
       const roll = calculateDamage(attacker, target, ability);
-      const hasLacerate = (target?.weakness?.tiers?.lacerate || 0) >= 1;
-      const totalPct = 100 + (hasLacerate ? 20 : 0);
+
+      // Same tiered-bonus shape as Searing Clout (mace_2h/fire), just keyed
+      // off Lacerate instead — flat 15%/30% per tier, not stacking, folded
+      // into one skillPct alongside the 100% base.
+      const lacerateTier = target?.weakness?.tiers?.lacerate || 0;
+      const bonusPct = lacerateTier >= 2 ? 30 : lacerateTier >= 1 ? 15 : 0;
+      const basePct = 100;
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: totalPct, isCrit: roll.isCrit, critMult: roll.critMult }
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: basePct + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% Lacerate tier` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
-        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 80 },
+        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 88 },
       };
     },
-    description: "A savage swing that opens a bleeding wound; heavier when the foe is already bleeding."
+    description: "Deals 100% weapon damage, +15% against a Bleeding (Lacerate T1) target (+30% instead if Hemorrhaging, Lacerate T2). Builds Lacerate."
   },
 
   'trophy_cry': {
@@ -12232,7 +12243,7 @@ Object.assign(RAW_SKILLS, {
         return { amount: 0, log: `${attacker?.name || "The axeman"} finds no trophy to cry for yet.` };
       }
       const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
-      const healAmt = Math.floor(maxHP * 0.1);
+      const healAmt = Math.floor(maxHP * 0.25);
       if (healAmt > 0 && attacker) {
         attacker.currentHP = Math.min(maxHP, (attacker.currentHP ?? 0) + healAmt);
       }
@@ -12252,7 +12263,7 @@ Object.assign(RAW_SKILLS, {
         log: `${attacker?.name || "The axeman"} roars over the fallen, healing ${healAmt} HP and rallying the party.`,
       };
     },
-    description: "After a kill this turn, roar in triumph to heal 10% HP and reduce all ally status buildups by 50."
+    description: "If any enemy died this turn, heal 25% of your own max HP and reduce your whole party's weakness buildup by 50."
   },
 
   'wound_opener': {
@@ -12273,24 +12284,58 @@ Object.assign(RAW_SKILLS, {
     cooldown: 3,
     requiresWeakness: { family: "lacerate", tier: 1 },
     buildupHint: { lacerate: 100 },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.wound_opener;
       const roll = calculateDamage(attacker, target, ability);
       const toxicTier = target?.weakness?.tiers?.toxic || 0;
       const diseaseTier = target?.weakness?.tiers?.disease || 0;
-      const totalPct = 100 + (toxicTier >= 1 || diseaseTier >= 1 ? 25 : 0);
+      const necroticBonus = toxicTier >= 1 || diseaseTier >= 1;
+      const totalPct = 100 + (necroticBonus ? 25 : 0);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: totalPct, isCrit: roll.isCrit, critMult: roll.critMult }
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: totalPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${totalPct}%${necroticBonus ? ', Necrotic' : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          // Same conversion pattern as pestilent_word (staff) — only the
+          // toxic/disease-triggered hit actually turns necrotic; the plain
+          // 100% hit (Lacerate T1 alone) stays physical.
+          ...(necroticBonus ? { skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 } } : {}),
+        }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Real 2-of-the-TARGET'S-OWN-turns decay pause on Lacerate/Toxic/
+      // Disease — uses the existing weakness.grace per-family counter
+      // (_endTurnWeakness/_weaknessDecayUnit already reads it, decrementing
+      // once per that unit's own turn; this is the same field a family's
+      // own config-driven starting grace period already uses, not a new
+      // bolted-on mechanic). Always applied — the skill already requires
+      // Lacerate T1 to be cast at all, independent of the toxic/disease
+      // damage bonus above.
+      if (target?.weakness?.grace) {
+        target.weakness.grace.lacerate = Math.max(target.weakness.grace.lacerate || 0, 2);
+        target.weakness.grace.toxic = Math.max(target.weakness.grace.toxic || 0, 2);
+        target.weakness.grace.disease = Math.max(target.weakness.grace.disease || 0, 2);
+      }
+      // Purely cosmetic status entry — the real effect above already lives
+      // in weakness.grace (which _endTurnWeakness reads directly, no status
+      // effect involved), but the status-icon system only ever looks at
+      // target.statusEffects, so without this the debuff was invisible on
+      // the enemy despite working correctly. No mods: real mechanic is
+      // untouched by this; ticks down in lockstep with grace since both are
+      // decremented once per the TARGET's own end-of-turn.
+      scene?._addStatusEffects?.(target, [{ id: 'wound_opener_seal', turns: 2 }]);
+
       return {
         ...roll, physical, elemental, necrotic, amount,
+        ...(necroticBonus ? { isMagic: true } : {}),
         buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
       };
     },
-    description: "Twist the axe into existing wounds; deals 25% bonus damage if the target is also poisoned or diseased."
+    description: "Requires the target to be Bleeding (Lacerate T1+). Deals 100% weapon damage, or 125% as Necrotic if the target is also Poisoned (Toxic T1) or Sickened (Disease T1). Prevents the target's Lacerate, Toxic, and Disease buildup from decaying for 2 of their turns."
   },
 
   'butchers_march': {
