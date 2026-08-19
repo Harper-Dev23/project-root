@@ -4018,11 +4018,9 @@ export default class CombatScene extends Phaser.Scene {
   _onUnitKnockedOut(unit) {
     this._log(`${unit.name} has been knocked out!`);
     unit.status = 'incapacitated';
-    // Track enemy kills for skills like trophy_cry / blood_frenzy that require a kill this turn
+    // Track enemy kills for skills like trophy_cry that require a kill this turn
     if (unit.isEnemy) {
       this.enemyDiedThisTurn = true;
-      const lacTier = unit?.weakness?.tiers?.lacerate || 0;
-      this.killedEnemyLacerateTier = Math.max(this.killedEnemyLacerateTier || 0, lacTier);
 
       this.enemiesDefeatedCount = (this.enemiesDefeatedCount || 0) + 1;
       this._postLocalChatLines(this.localChatScript?.onEnemyDefeated?.(this._buildLocalChatCtx({
@@ -4816,6 +4814,39 @@ export default class CombatScene extends Phaser.Scene {
       // hit vs miss, but doesn't touch resultMutable or gate anything below
       // it — damage still resolves synchronously exactly as before.
       this._playAttackVFX?.(attacker, target, { missed, ability, isCrit: resultMutable?.isCrit === true });
+
+      // Generic "on crit, restore HP%/initiative to the attacker" rider —
+      // reads any active status effect's onCritRestore field, not a
+      // per-skill hardcoded check, so any future skill can reuse it just by
+      // declaring the same field. Currently only Butcher's March
+      // (butchers_march_buff) declares this, and it had ZERO consumers
+      // anywhere in the engine before now — same "declared but unenforced"
+      // bug class as elsewhere this project, not a "restoring incorrectly"
+      // bug; this is the first time it's ever actually fired.
+      if (!missed && resultMutable?.isCrit === true) {
+        for (const se of (attacker?.statusEffects || [])) {
+          const restore = se?.onCritRestore;
+          if (!restore || (!se.permanent && (se.turns || 0) <= 0)) continue;
+          if (restore.hpPct > 0) {
+            const maxHP = attacker?.maxHP || 0;
+            const healAmt = Math.floor(maxHP * (restore.hpPct / 100));
+            if (healAmt > 0) {
+              attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
+              this._showFloatingNumber?.(healAmt, attacker, true, false);
+            }
+          }
+          if (restore.initiativeGain > 0) {
+            // Initiative Gauge fills toward its max via regen and is SPENT
+            // (subtracted) as a cost by requiresInitiativeGauge skills — so
+            // "gain" here means adding to the bank, capped at max, not
+            // subtracting.
+            const cap = attacker.initiativeGaugeMax ?? 100;
+            attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + restore.initiativeGain);
+          }
+        }
+        this._updateHealthBars?.();
+        this._updateHPMPBars?.();
+      }
     }
 
     // Skill-provided "only if this hit actually lands" callback — for
@@ -7649,8 +7680,8 @@ export default class CombatScene extends Phaser.Scene {
   // projectile-tagged skill: via the real 'projectile' tag, not hardcoded).
   // Every real melee hit is a chop/cleave (fx_hit_slash), but unlike sword
   // it has real AOE/finisher/execute-tier skills (bloodletting_cleave,
-  // decapitating_arc, hemorrhage_strike, artery_sever, death_blow — all
-  // already tagged 'aoe'/'finisher'/'execute'), so it reuses mace's "big
+  // hemorrhage_strike, death_blow — all already tagged 'aoe'/'finisher'/
+  // 'execute'), so it reuses mace's "big
   // impact" convention (data-driven off existing tags, not per-skill
   // hardcoding) instead of sword's flat single-texture approach.
   static AXE_BIG_IMPACT_TAGS = new Set(['finisher', 'aoe', 'execute']);
@@ -9144,7 +9175,6 @@ export default class CombatScene extends Phaser.Scene {
 
     // Clear per-turn kill flags at the start of each new actor's turn
     this.enemyDiedThisTurn = false;
-    this.killedEnemyLacerateTier = 0;
     this.currentActorMovedThisTurn = false;
     this.lodgesDislodgedThisTurn = 0;
 

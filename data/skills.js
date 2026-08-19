@@ -563,7 +563,7 @@ const RAW_SKILLS = {
     name: 'Transpose: Fire',
     type: 'class',
     actionCost: 'class',
-    mpCost: 6,
+    mpCost: 5,
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
@@ -580,7 +580,7 @@ const RAW_SKILLS = {
     name: 'Transpose: Lightning',
     type: 'class',
     actionCost: 'class',
-    mpCost: 6,
+    mpCost: 5,
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
@@ -597,7 +597,7 @@ const RAW_SKILLS = {
     name: 'Transpose: Cold',
     type: 'class',
     actionCost: 'class',
-    mpCost: 6,
+    mpCost: 5,
     hpCost: 0,
     requiresTarget: false,
     cooldown: TRANSPOSE_COOLDOWN,
@@ -3376,7 +3376,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "expose"],
@@ -3441,8 +3441,9 @@ Object.assign(RAW_SKILLS, {
       let log;
       if (hasWeakness && attacker) {
         const before = attacker.initiativeGauge || 0;
-        attacker.initiativeGauge = Math.max(0, before - 15);
-        const gain = Math.max(0, before - attacker.initiativeGauge);
+        const cap = attacker.initiativeGaugeMax ?? 100;
+        attacker.initiativeGauge = Math.min(cap, before + 15);
+        const gain = Math.max(0, attacker.initiativeGauge - before);
         log = gain ? `${attacker.name || "The duelist"} seizes tempo, gaining initiative.` : undefined;
       }
 
@@ -3490,7 +3491,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "finisher", "consume"],
@@ -3574,7 +3575,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "consume", "control"],
@@ -3624,7 +3625,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "aoe", "consume"],
@@ -3773,7 +3774,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "attack", "cold", "aoe", "consume"],
@@ -3854,7 +3855,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "execute", "consume"],
@@ -3909,7 +3910,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "support"],
@@ -4226,7 +4227,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "expose", "aoe"],
@@ -4491,7 +4492,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "consume"],
@@ -4554,7 +4555,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "expose", "consume"],
@@ -4605,7 +4606,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "disease", "necrotic", "consume"],
@@ -4663,7 +4664,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lightning", "fire", "consume"],
@@ -4707,7 +4708,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "disease", "toxic", "lodge", "consume"],
@@ -4762,7 +4763,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "disorient", "aoe"],
@@ -4805,7 +4806,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "finisher"],
@@ -5464,7 +5465,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "consume"],
@@ -6111,7 +6112,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "consume"],
@@ -6152,7 +6153,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "disorient", "finisher"],
@@ -6200,7 +6201,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "cold", "amplify"],
@@ -6247,7 +6248,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "toxic", "consume"],
@@ -6290,7 +6291,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "finisher"],
@@ -6338,7 +6339,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "proliferate", "aoe"],
@@ -6773,7 +6774,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse", "amplify"],
@@ -6817,7 +6818,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "cold", "amplify"],
@@ -6865,7 +6866,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "toxic", "consume"],
@@ -6910,7 +6911,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "lightning", "amplify"],
@@ -6966,7 +6967,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "transform"],
@@ -7023,7 +7024,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "finisher"],
@@ -7367,7 +7368,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "expose"],
@@ -7414,7 +7415,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "finisher"],
@@ -7462,7 +7463,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "amplify"],
@@ -7510,7 +7511,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "consume"],
@@ -7561,7 +7562,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "finisher"],
@@ -7625,7 +7626,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "amplify", "disorient"],
@@ -7675,7 +7676,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     cooldown: 6,
     requiresTarget: false,
     targetRequirement: "self",
@@ -7866,7 +7867,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     // 'projectile' added — see frost_swell's comment above.
@@ -7921,7 +7922,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     // 'projectile' added — see frost_swell's comment above.
@@ -7979,7 +7980,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "projectile", "expose"],
@@ -8026,7 +8027,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     // No cooldown — requiring an active runic zone (below) plus the MP cost
     // is already enough of a natural downside per the user's call.
     requiresTarget: true,
@@ -8104,7 +8105,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8220,7 +8221,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8305,7 +8306,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 6,
+    mpCost: 5,
     cooldown: 5,
     requiresTarget: false,
     targetRequirement: "self",
@@ -8392,7 +8393,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 10,
+    mpCost: 9,
     cooldown: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8473,7 +8474,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     cooldown: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8608,7 +8609,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     cooldown: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8686,7 +8687,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 6,
+    mpCost: 5,
     cooldown: 5,
     requiresTarget: true,
     // "ally" targeting already includes the caster's own slot (allySlots
@@ -8734,7 +8735,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 10,
+    mpCost: 9,
     cooldown: 7,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -8814,7 +8815,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "ally",
     // "spell" tag added — this is the actual reason it couldn't recast from
@@ -9849,7 +9850,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "finisher"],
@@ -9897,7 +9898,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "consume"],
@@ -9938,7 +9939,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient", "finisher"],
@@ -9986,7 +9987,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "amplify"],
@@ -10032,7 +10033,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "finisher"],
@@ -10096,7 +10097,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "transform"],
@@ -10221,7 +10222,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -10311,7 +10312,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "toxic", "necrotic"],
@@ -10373,7 +10374,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "fire"],
@@ -10432,7 +10433,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse"],
@@ -10488,7 +10489,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lacerate"],
@@ -10531,7 +10532,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -10579,7 +10580,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning"],
@@ -10756,7 +10757,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: ["major", "bonus"],
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "lacerate"],
@@ -10812,7 +10813,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["toxic", "necrotic"],
@@ -10903,7 +10904,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -10956,7 +10957,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -11004,7 +11005,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning"],
@@ -11061,7 +11062,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "toxic", "necrotic"],
@@ -11187,7 +11188,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "defensive"],
@@ -11246,7 +11247,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning", "elemental"],
@@ -11355,7 +11356,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "necrotic"],
@@ -11417,7 +11418,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient", "aoe"],
@@ -11532,7 +11533,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "buff", "fire"],
@@ -11590,7 +11591,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "expose"],
@@ -11655,7 +11656,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "cold", "control"],
@@ -11744,7 +11745,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "taunt", "control"],
@@ -11785,7 +11786,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "lacerate"],
@@ -11926,7 +11927,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "heal", "necrotic"],
@@ -11967,7 +11968,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "lacerate"],
@@ -12277,13 +12278,13 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
     cooldown: 3,
     requiresWeakness: { family: "lacerate", tier: 1 },
-    buildupHint: { lacerate: 100 },
+    buildupHint: { lacerate: 50 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.wound_opener;
       const roll = calculateDamage(attacker, target, ability);
@@ -12332,10 +12333,154 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll, physical, elemental, necrotic, amount,
         ...(necroticBonus ? { isMagic: true } : {}),
-        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
+        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 50 },
       };
     },
     description: "Requires the target to be Bleeding (Lacerate T1+). Deals 100% weapon damage, or 125% as Necrotic if the target is also Poisoned (Toxic T1) or Sickened (Disease T1). Prevents the target's Lacerate, Toxic, and Disease buildup from decaying for 2 of their turns."
+  },
+
+  // -------- Moved up from the end of the axe block (disorient/disease/curse
+  // — the 3 weakness families axe's original 20-skill kit never generated
+  // as a primary buildupHint target) — repositioned here, right after the
+  // first 3 skills, so they land in the Generator section of the action
+  // menu instead of the tail end, at the user's request. --------
+
+  // Axe's own version of the "100% dmg + single buildupHint + rewardIfWeak"
+  // template every other weapon has (dagger_throw/ghoststep, arcane_needle
+  // after its own number fix above) — 'projectile'-tagged so it correctly
+  // triggers an ally's armed Volley reaction like every other thrown/shot
+  // skill. Disorient fits a heavy thrown weapon impact (stagger on landing);
+  // the reward triggers off Lacerate T1+ — axe's own most-built family,
+  // mirroring how dagger_throw's reward checks Expose (dagger's own most-
+  // built family) instead of a generic unrelated one.
+  'axe_throw': {
+    id: "axe_throw",
+    name: "Axe Throw",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 11,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["projectile", "attack", "disorient"],
+    cooldown: 2,
+    buildupHint: { disorient: 113 },
+    rewardIfWeak: [
+      { family: "lacerate", tierAtLeast: 1, buff: { addBuildup: { disorient: 50 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.axe_throw;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      const rule = findRewardIfWeakRule(ability, lacTier);
+      let disorientBuildup = ability?.buildupHint?.disorient ?? 113;
+      if (rule) disorientBuildup += rule.buff?.addBuildup?.disorient || 0;
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: disorientBuildup } };
+    },
+    description: "Hurls your axe end over end — deals 100% weapon damage and applies Disorient buildup. If the target is already bleeding, applies even more."
+  },
+
+  // Axe's two "marked_cut-style" skills — the other common 2-per-weapon
+  // template (100% dmg + single buildupHint + rewardIfTierCross granting
+  // bonus buildup in a DIFFERENT family on an actual tier-cross, not just a
+  // precondition check). Every other real weapon has exactly 2 of these;
+  // axe had zero using this exact shape (scarlet_rush is close but rewards
+  // healMP, not a cross-family buildup chain). Both reward branches loop
+  // back into families axe's own kit already cares about — Lacerate (its
+  // core economy, fed by Hemorrhage Strike/Artery Sever/Inferno Arc) and
+  // Expose (War Cry's own family) — rather than borrowing an unrelated
+  // pairing from another weapon's version of this template.
+  'festering_cleave': {
+    id: "festering_cleave",
+    name: "Festering Cleave",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 12,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disease"],
+    cooldown: 2,
+    buildupHint: { disease: 85 },
+    rewardIfTierCross: [
+      { family: "disease", tier: 1, debuff: { addBuildup: { lacerate: 75 } } },
+      { family: "disease", tier: 2, debuff: { addBuildup: { lacerate: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.festering_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        buildup: { disease: ability?.buildupHint?.disease ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A filthy chop that festers on contact — deals 100% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
+  },
+
+  'hexed_cleave': {
+    id: "hexed_cleave",
+    name: "Hexed Cleave",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse"],
+    cooldown: 2,
+    buildupHint: { curse: 85 },
+    rewardIfTierCross: [
+      { family: "curse", tier: 1, debuff: { addBuildup: { expose: 75 } } },
+      { family: "curse", tier: 2, debuff: { addBuildup: { expose: 150 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hexed_cleave;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        buildup: { curse: ability?.buildupHint?.curse ?? 85 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "A cleave laced with a battlefield hex — deals 100% weapon damage and applies Curse buildup. Crossing a Curse tier lays the target bare, adding bonus Expose buildup."
   },
 
   'butchers_march': {
@@ -12348,7 +12493,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "stance", "self-buff"],
@@ -12368,44 +12513,49 @@ Object.assign(RAW_SKILLS, {
     description: "Enter a bloodthirsty stance for 3 turns; critical strikes restore 5% HP and gain 5 initiative."
   },
 
+  // Reworked from a crit-conditional active strike into a reaction, modeled
+  // on read_and_react's live (v3.22) shape: no apply() — arming happens
+  // purely through the reaction-prep menu — and canTrigger reuses its exact
+  // tag+weaponType fallback pattern (inverted for ranged instead of melee),
+  // since as of the encounter 3/5/6 VFX pass several enemy skills (Huntsman,
+  // Kiro, the wizards) DO carry real 'ranged'/'projectile' tags now — this
+  // isn't blocked on missing data the way it would have been earlier in the
+  // project. Uses 'pre_hit' rather than 'self_hit' because the Accuracy
+  // debuff has to land on the attacker BEFORE rollToHit() runs for this same
+  // attack — checkPreHit fires strictly before the usesHitRoll block in
+  // _applyAbilityToTarget, and computeHitChance() reads the attacker's
+  // statusEffects live via getEffectiveDerived(), so this is confirmed to
+  // actually affect the incoming hit's chance, not just look like it does.
   'bone_notch': {
     id: "bone_notch",
-    name: "Bone Notch",
+    name: "Blinding Glint",
     type: "weapon",
-    mechanic: "active",
+    mechanic: "reaction",
     versionTag: "v3.23",
-    typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 15,
-    actionCost: "major",
-    mpCost: 10,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate"],
-    cooldown: 4,
-    buildupHint: { lacerate: 100 },
-    conditionHint: { requiresCrit: true },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.bone_notch;
-      const roll = calculateDamage(attacker, target, ability);
-      const lacTier = target?.weakness?.tiers?.lacerate || 0;
-      const expTier = target?.weakness?.tiers?.expose || 0;
-      const fullHit = roll.isCrit && (lacTier >= 1 || expTier >= 1);
-      const totalPct = fullHit ? 150 : 100;
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: totalPct, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        buildup: fullHit ? { lacerate: ability?.buildupHint?.lacerate ?? 100 } : {},
-        log: !fullHit ? `${attacker?.name || "The axeman"} swings but fails to notch the bone cleanly.` : undefined,
-      };
+    actionCost: "reaction",
+    mpCost: 3,
+    cooldown: 3,
+    requiresTarget: false,
+    reaction: {
+      trigger: "pre_hit",
+      cooldownOn: "trigger",
+      canTrigger: ({ attacker, sourceAbility }) => {
+        const RANGED_WEAPON_TYPES = ['bow', 'sling', 'gun'];
+        const tags = sourceAbility?.tags || [];
+        if (tags.includes('melee')) return false;
+        return tags.includes('ranged') || RANGED_WEAPON_TYPES.includes(attacker?.weaponType);
+      },
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return null;
+        scene?._addStatusEffects?.(attacker, [{ id: 'blinding_glint_scoped', turns: 1, mods: { Accuracy: -25 } }]);
+        scene?._log?.(`${owner?.name || "The axeman"} catches the light on their blade, dazzling ${attacker.name}!`);
+        return { scopedDebuffId: 'blinding_glint_scoped' };
+      },
     },
-    description: "On a crit vs a bleeding or exposed foe, deal 150% damage and deepen the wound."
+    description: "Reaction: when targeted by a ranged attack, catch the light off your axe blade — the attacker's Accuracy is reduced by 25 for that attack."
   },
 
   'war_cry': {
@@ -12421,17 +12571,23 @@ Object.assign(RAW_SKILLS, {
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["support", "shout", "expose", "aoe"],
+    tags: ["support", "shout", "expose", "aoe", "initiative"],
     cooldown: 3,
     buildupHint: { expose: 80 },
+    // Spending initiative is this skill's whole job — below the minimum
+    // spend tier, it has nothing to do, so it should fizzle instead of
+    // silently firing for free. Checked generically in _applyAbilityToTarget.
+    requiresInitiativeGauge: 10,
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.war_cry;
-      // Amplified if target already has expose T1+
-      const expTier = target?.weakness?.tiers?.expose || 0;
-      const amplified = expTier >= 1;
-      const initiativeSpend = amplified ? 30 : 10;
-      const exposeBuildup = amplified ? 130 : 80;
-      if (attacker) attacker.initiativeGauge = (attacker.initiativeGauge || 0) + initiativeSpend;
+      // Same auto-pick-the-highest-affordable-tier shape as Blazing Fervor:
+      // 10/20/30, not a player choice.
+      const gauge = attacker?.initiativeGauge || 0;
+      const spend = gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      const steps = spend / 10;
+      const exposeBuildup = 80 + 25 * (steps - 1); // 80 / 105 / 130
+      const atkPowerPct = 10 + 5 * steps; // 15 / 20 / 25
 
       // Expose enemy column
       const splash = [];
@@ -12444,32 +12600,29 @@ Object.assign(RAW_SKILLS, {
             .map(slot => slot.char)
             .forEach(char => splash.push({ target: char, amount: 0, buildup: { expose: exposeBuildup }, tags: ability?.tags }));
         }
-        // AttackPower +15% to ally column for 2 turns
-        const atkBuff = { id: "war_cry_atk_buff", turns: 2, AttackPower: 15 };
+        // AttackPower buff to the caster's whole column, scaled by spend tier.
+        // Nested under mods (not a top-level field) — _sumStatusEffectMods
+        // only ever reads se.mods.AttackPower, so a top-level field here
+        // would silently do nothing, which is exactly what the old version did.
+        const atkBuff = { id: "war_cry_atk_buff", turns: 2, mods: { AttackPower: atkPowerPct } };
         const attackerCol = scene._getUnitColumn?.(attacker);
         const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
         if (attackerCol) {
           (allySlots || [])
             .filter(slot => slot?.char && slot.char !== attacker && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === attackerCol)
-            .forEach(slot => {
-              slot.char.statusEffects = slot.char.statusEffects || [];
-              slot.char.statusEffects.push({ ...atkBuff });
-            });
+            .forEach(slot => scene._addStatusEffects?.(slot.char, [{ ...atkBuff }]));
         }
-        if (attacker) {
-          attacker.statusEffects = attacker.statusEffects || [];
-          attacker.statusEffects.push({ ...atkBuff });
-        }
+        if (attacker) scene._addStatusEffects?.(attacker, [{ ...atkBuff }]);
       }
 
       return {
         amount: 0,
         buildup: { expose: exposeBuildup },
         splash: splash.length ? splash : undefined,
-        log: `${attacker?.name || "The axeman"} bellows a war cry${amplified ? " with full fury" : ""}, exposing foes and bolstering allies.`,
+        log: `${attacker?.name || "The axeman"} bellows a war cry (spent ${spend} initiative), exposing foes for ${exposeBuildup} and granting allies +${atkPowerPct}% AttackPower.`,
       };
     },
-    description: "A bonus-action shout that exposes an enemy column and grants allies +15% AttackPower. Amplifies if the target is already exposed."
+    description: "Spend initiative (10/20/30, based on current gauge) to expose an enemy column and grant your own column +AttackPower for 2 turns. Both the Expose buildup (80/105/130) and the AttackPower bonus (15/20/25%) scale with how much you spend."
   },
 
   'scarlet_rush': {
@@ -12523,7 +12676,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "finisher", "consume"],
@@ -12567,7 +12720,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 16,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "heal", "aoe"],
@@ -12621,7 +12774,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "fire", "elemental", "consume"],
@@ -12685,53 +12838,6 @@ Object.assign(RAW_SKILLS, {
     description: "Ignite an open wound — converts up to 400 lacerate into fire buildup; scorches the column if the foe is diseased."
   },
 
-  'artery_sever': {
-    id: "artery_sever",
-    name: "Artery Sever",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 17,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "lacerate", "finisher", "consume"],
-    cooldown: 4,
-    apply: (attacker, target) => {
-      const ability = SKILLS?.artery_sever;
-      const roll = calculateDamage(attacker, target, ability);
-      const currentMeter = target?.weakness?.meters?.lacerate || 0;
-      const consumed = Math.min(400, currentMeter);
-      const bonusPct = Math.floor(consumed / 100) * 12.5;
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 115 + bonusPct, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      if (consumed > 0 && target?.weakness?.meters) {
-        target.weakness.meters.lacerate = Math.max(0, currentMeter - consumed);
-        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
-      }
-      // 'necroticVulnPct' had zero real consumers anywhere in the engine —
-      // fixed to use the same real, generically-enforced mods mechanism
-      // overhead_hew's shattered_armor already uses for PhysicalResist.
-      const statusEffects = consumed >= 200
-        ? [{ id: "artery_necrotic_vuln", turns: 3, mods: { NecroticResist: -25 } }]
-        : undefined;
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        statusEffects,
-        log: consumed >= 200 ? `${attacker?.name || "The axeman"} severs the artery — the target becomes vulnerable to necrotic damage.` : undefined,
-      };
-    },
-    description: "Consume up to 400 lacerate for bonus damage (+12.5% per 100); 200+ consumed applies necrotic vulnerability."
-  },
-
   'harvest_momentum': {
     id: "harvest_momentum",
     name: "Harvest Momentum",
@@ -12752,7 +12858,8 @@ Object.assign(RAW_SKILLS, {
       (scene?.enemySlots || []).forEach(s => { totalLacMeter += s?.char?.weakness?.meters?.lacerate || 0; });
       const initiativeGain = Math.min(20, Math.floor(totalLacMeter / 50));
       if (initiativeGain > 0 && attacker) {
-        attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
+        const cap = attacker.initiativeGaugeMax ?? 100;
+        attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + initiativeGain);
       }
       return {
         amount: 0,
@@ -12775,7 +12882,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "aoe"],
@@ -12829,7 +12936,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "execute", "consume"],
@@ -12882,48 +12989,6 @@ Object.assign(RAW_SKILLS, {
   },
 
   // -------- Generation (elemental / utility) --------
-  'decapitating_arc': {
-    id: "decapitating_arc",
-    name: "Decapitating Arc",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 7,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "aoe"],
-    cooldown: 4,
-    aoe: { shape: "column" },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.decapitating_arc;
-      const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      const splash = resolveAOESplash(scene, target, ability.aoe).slice(0, 2).map(char => {
-        const splashPhysical = Math.floor(physical * 0.85);
-        const splashElemental = Math.floor(elemental * 0.85);
-        const splashNecrotic = Math.floor(necrotic * 0.85);
-        return {
-          target: char,
-          amount: Math.max(1, splashPhysical + splashElemental + splashNecrotic),
-          physical: splashPhysical, elemental: splashElemental, necrotic: splashNecrotic,
-          tags: ability?.tags,
-        };
-      });
-      return { ...roll, physical, elemental, necrotic, amount, splash: splash.length ? splash : undefined };
-    },
-    description: "A sweeping arc that cleaves through a column — 100% primary, 85% to up to 2 column-mates."
-  },
-
   'ember_cleave': {
     id: "ember_cleave",
     name: "Ember Cleave",
@@ -13042,46 +13107,12 @@ Object.assign(RAW_SKILLS, {
       const lightningBuildup = ability?.buildupHint?.lightning ?? 70;
       if (coldTier >= 2 && attacker) {
         const initiativeGain = Math.floor(lightningBuildup / 10);
-        attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - initiativeGain);
+        const cap = attacker.initiativeGaugeMax ?? 100;
+        attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + initiativeGain);
       }
       return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: "lightning", buildup: { lightning: lightningBuildup } };
     },
     description: "Lightning chop with 70 buildup; +25% vs chilled foes, gains 7 initiative vs Frostbitten (T2)."
-  },
-
-  'blood_frenzy': {
-    id: "blood_frenzy",
-    name: "Blood Frenzy",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "CON",
-    requiredValue: 14,
-    actionCost: "bonus",
-    mpCost: 0,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["support", "mana"],
-    cooldown: 3,
-    conditionHint: { requiresKillThisTurn: true, requiresLacerate: true },
-    apply: (attacker, _target, scene) => {
-      const lacTier = scene?.killedEnemyLacerateTier || 0;
-      if (!scene?.enemyDiedThisTurn || lacTier < 1) {
-        return { amount: 0, log: `${attacker?.name || "The axeman"} has not fed on bleeding prey yet.` };
-      }
-      const mpRestored = lacTier >= 2 ? 7 : 4;
-      if (attacker) {
-        const maxMP = attacker?.maxMP ?? attacker?.derivedStats?.maxMP ?? 0;
-        attacker.currentMP = Math.min(maxMP, (attacker.currentMP ?? 0) + mpRestored);
-      }
-      return {
-        amount: 0,
-        mpGain: mpRestored,
-        log: `${attacker?.name || "The axeman"} feeds on the carnage, restoring ${mpRestored} MP.`,
-      };
-    },
-    description: "After killing a lacerate T1 enemy: restore 4 MP. T2 enemy: restore 7 MP."
   },
 
   // -------- Payoff (armor shred) --------
@@ -13096,7 +13127,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "debuff"],
@@ -13114,148 +13145,6 @@ Object.assign(RAW_SKILLS, {
       return { ...roll, physical, elemental, necrotic, amount, statusEffects };
     },
     description: "A 115% cleaving blow that shatters armor, reducing the target's physical damage reduction by 10% for 3 turns."
-  },
-
-  // -------- New additions (disorient/disease/curse — the 3 weakness
-  // families axe's original 20-skill kit never generated as a primary
-  // buildupHint target) --------
-
-  // Axe's own version of the "100% dmg + single buildupHint + rewardIfWeak"
-  // template every other weapon has (dagger_throw/ghoststep, arcane_needle
-  // after its own number fix above) — 'projectile'-tagged so it correctly
-  // triggers an ally's armed Volley reaction like every other thrown/shot
-  // skill. Disorient fits a heavy thrown weapon impact (stagger on landing);
-  // the reward triggers off Lacerate T1+ — axe's own most-built family,
-  // mirroring how dagger_throw's reward checks Expose (dagger's own most-
-  // built family) instead of a generic unrelated one.
-  'axe_throw': {
-    id: "axe_throw",
-    name: "Axe Throw",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 11,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["projectile", "attack", "disorient"],
-    cooldown: 2,
-    buildupHint: { disorient: 113 },
-    rewardIfWeak: [
-      { family: "lacerate", tierAtLeast: 1, buff: { addBuildup: { disorient: 50 } } },
-    ],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.axe_throw;
-      const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        {
-          ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
-          isCrit: roll.isCrit, critMult: roll.critMult,
-        }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      const lacTier = target?.weakness?.tiers?.lacerate || 0;
-      const rule = findRewardIfWeakRule(ability, lacTier);
-      let disorientBuildup = ability?.buildupHint?.disorient ?? 113;
-      if (rule) disorientBuildup += rule.buff?.addBuildup?.disorient || 0;
-      return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: disorientBuildup } };
-    },
-    description: "Hurls your axe end over end — deals 100% weapon damage and applies Disorient buildup. If the target is already bleeding, applies even more."
-  },
-
-  // Axe's two "marked_cut-style" skills — the other common 2-per-weapon
-  // template (100% dmg + single buildupHint + rewardIfTierCross granting
-  // bonus buildup in a DIFFERENT family on an actual tier-cross, not just a
-  // precondition check). Every other real weapon has exactly 2 of these;
-  // axe had zero using this exact shape (scarlet_rush is close but rewards
-  // healMP, not a cross-family buildup chain). Both reward branches loop
-  // back into families axe's own kit already cares about — Lacerate (its
-  // core economy, fed by Hemorrhage Strike/Artery Sever/Inferno Arc) and
-  // Expose (War Cry's own family) — rather than borrowing an unrelated
-  // pairing from another weapon's version of this template.
-  'festering_cleave': {
-    id: "festering_cleave",
-    name: "Festering Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 12,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "disease"],
-    cooldown: 2,
-    buildupHint: { disease: 85 },
-    rewardIfTierCross: [
-      { family: "disease", tier: 1, debuff: { addBuildup: { lacerate: 75 } } },
-      { family: "disease", tier: 2, debuff: { addBuildup: { lacerate: 150 } } },
-    ],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.festering_cleave;
-      const roll = calculateDamage(attacker, target, ability);
-      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        buildup: { disease: ability?.buildupHint?.disease ?? 85 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A filthy chop that festers on contact — deals 100% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
-  },
-
-  'hexed_cleave': {
-    id: "hexed_cleave",
-    name: "Hexed Cleave",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 13,
-    actionCost: "major",
-    mpCost: 4,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "curse"],
-    cooldown: 2,
-    buildupHint: { curse: 85 },
-    rewardIfTierCross: [
-      { family: "curse", tier: 1, debuff: { addBuildup: { expose: 75 } } },
-      { family: "curse", tier: 2, debuff: { addBuildup: { expose: 150 } } },
-    ],
-    apply: (attacker, target) => {
-      const ability = SKILLS?.hexed_cleave;
-      const roll = calculateDamage(attacker, target, ability);
-      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        buildup: { curse: ability?.buildupHint?.curse ?? 85 },
-        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
-      };
-    },
-    description: "A cleave laced with a battlefield hex — deals 100% weapon damage and applies Curse buildup. Crossing a Curse tier lays the target bare, adding bonus Expose buildup."
   },
 
   // --- Mace (2h) ---
@@ -13529,7 +13418,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "terrain"],
@@ -13803,7 +13692,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disease", "proliferate"],
@@ -13888,7 +13777,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 18,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "terrain"],
@@ -13962,7 +13851,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack"],
@@ -14051,7 +13940,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: ["major", "bonus"],
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     // Added 'projectile' — the skill is literally named "Boulder Toss" and
@@ -14138,7 +14027,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["attack", "holy", "aoe", "support"],
@@ -14275,7 +14164,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 17,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["attack", "aoe", "proliferate", "disorient"],
@@ -14479,7 +14368,7 @@ Object.assign(RAW_SKILLS, {
     // already standing in a zone) to also gate behind Initiative; that
     // resource instead went to Gravity Slam, which is more of a reliable
     // finisher.
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["support", "terrain", "finisher"],
@@ -15015,7 +14904,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     cooldown: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -15136,7 +15025,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     cooldown: 2,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -15186,7 +15075,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 8,
+    mpCost: 5,
     cooldown: 5,
     requiresTarget: false,
     targetRequirement: "self",
@@ -15260,7 +15149,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 13,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     cooldown: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -15495,7 +15384,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     cooldown: 4,
     typedDamage: true,
     requiresTarget: true,
@@ -15568,7 +15457,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     cooldown: 6,
     typedDamage: true,
     requiresTarget: true,
@@ -15618,7 +15507,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     cooldown: 5,
     typedDamage: true,
     requiresTarget: true,
@@ -15697,7 +15586,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 7,
+    mpCost: 6,
     cooldown: 5,
     typedDamage: true,
     requiresTarget: true,
@@ -15764,7 +15653,7 @@ Object.assign(RAW_SKILLS, {
     // requirement gate (was 10/8) — this skill no longer requires anything
     // to be present on the target at all, Hunter's Mark is now an optional
     // bonus rather than a prerequisite, and it no longer touches lodges.
-    mpCost: 8,
+    mpCost: 5,
     cooldown: 6,
     typedDamage: true,
     requiresTarget: true,
@@ -15852,7 +15741,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 8,
+    mpCost: 5,
     cooldown: 6,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -15970,7 +15859,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 9,
+    mpCost: 6,
     cooldown: 6,
     typedDamage: true,
     requiresTarget: true,
@@ -16060,7 +15949,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 15,
     actionCost: "bonus",
-    mpCost: 6,
+    mpCost: 5,
     cooldown: 2,
     requiresTarget: false,
     targetRequirement: "self",
@@ -16199,7 +16088,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 10,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "fire"],
@@ -16229,7 +16118,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "spell", "curse"],
@@ -16838,7 +16727,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "curse", "aoe"],
@@ -16964,7 +16853,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "control", "consume"],
@@ -17024,7 +16913,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "consume"],
@@ -17110,7 +16999,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "curse", "proliferate", "aoe"],
@@ -17181,7 +17070,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "debuff"],
@@ -17226,7 +17115,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["support", "debuff"],
@@ -17286,7 +17175,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "INT",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["magic", "attack", "transform"],
