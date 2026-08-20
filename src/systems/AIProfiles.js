@@ -256,8 +256,18 @@ export const AI_PROFILES = {
       // yet, so Curse of Needles has something to extend once it's off
       // cooldown. Checked before Dark Bolts so curse actually gets started
       // instead of being crowded out by plain filler damage.
+      //
+      // Prefers whoever already carries SOME curse meter, same "stick to the
+      // cursed target" pattern curse_needles/curse_amplify above already
+      // use — was falling back straight to weakest(foes), which re-targets
+      // as HP% shifts between casts and scatters buildup across different
+      // party members instead of stacking it on one, so nobody ever
+      // actually crossed T1 even after multiple Hex casts. Checked by METER
+      // (not tier, unlike highestWeakness) since the scattering happens
+      // entirely in the sub-T1 range this is meant to protect.
       if (canUseSkill(npc, 'warlock_hex')) {
-        const target = weakest(foes);
+        const alreadyCursed = foes.find(f => (f?.weakness?.meters?.curse || 0) > 0);
+        const target = alreadyCursed || weakest(foes);
         if (target) return buildAction('warlock_hex', target);
       }
       if (canUseSkill(npc, 'warlock_dark_bolts')) {

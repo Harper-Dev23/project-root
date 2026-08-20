@@ -1164,9 +1164,9 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     // buildupHint added — see fighter_heavy_slash's comment above.
-    buildupHint: { curse: 80 },
-    apply: () => ({ amount: 2, buildup: { curse: 80 } }),
-    description: "Deals 2 damage and applies 80 Curse buildup."
+    buildupHint: { curse: 100 },
+    apply: () => ({ amount: 2, buildup: { curse: 100 } }),
+    description: "Deals 2 damage and applies 100 Curse buildup."
   },
   'warlock_drain_life': {
     id: 'warlock_drain_life',
@@ -8373,6 +8373,7 @@ Object.assign(RAW_SKILLS, {
         statusEffects: [{
           id: 'ward_focus_accuracy', permanent: true,
           mods: { Accuracy: 50 }, onHit: {}, nextHitOnly: true,
+          vfx: { kind: 'buff_increase' },
         }],
         log: `${attacker?.name ?? 'Mage'} focuses, restoring 3 MP!`,
       };
@@ -8583,6 +8584,7 @@ Object.assign(RAW_SKILLS, {
     // including 'spell') without needing an explicit noRecast flag; a
     // simple self-utility buff, not a real recast candidate.
     tags: ["support", "mana", "zone"],
+    vfxHint: { kind: 'mana' },
     apply: (attacker) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Mana Fountain requires an active runic zone." };
@@ -8712,7 +8714,7 @@ Object.assign(RAW_SKILLS, {
         target.weakness.tiers.curse = weaknessTierFromMeter(target.weakness.meters.curse);
       }
       const statusEffects = resilienceGain > 0
-        ? [{ id: 'curse_suppression_ward', turns: 3, mods: { Resilience: resilienceGain } }]
+        ? [{ id: 'curse_suppression_ward', turns: 3, mods: { Resilience: resilienceGain }, vfx: { kind: 'buff_harden' } }]
         : undefined;
       return {
         amount: 0,
@@ -8822,6 +8824,7 @@ Object.assign(RAW_SKILLS, {
     // Rune Channel before; the recast check gates on tags.includes('spell').
     tags: ["magic", "spell", "holy", "heal", "regen"],
     cooldown: 3,
+    vfxHint: { kind: 'heal' },
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.restoration_light;
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
@@ -8867,10 +8870,10 @@ Object.assign(RAW_SKILLS, {
         amount: healAmount,
         isHeal: true,
         isCrit: roll.isCrit,
-        statusEffects: [{ id: "regen", turns: 2, tickHeal: regenTick }],
+        statusEffects: [{ id: "regen", turns: 2, tickHeal: regenTick, vfx: { kind: 'heal' } }],
       };
     },
-    description: "Heals 150% of your weapon roll and grants Regen (2 turns, 3 HP/turn)."
+    description: "Heals 150% of your weapon roll. Also grants Regen for 2 turns, healing 35% of that same base roll each turn."
   },
 
   'curse_cinders': {
@@ -9146,35 +9149,6 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Unravel a glyph to carry Expose down the rank."
-  },
-
-  'ward_focus': {
-    id: "ward_focus",
-    name: "Ward Focus",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.21",
-    requiredWeapon: ["staff"],
-    requiredStat: "WIS",
-    requiredValue: 12,
-    actionCost: "bonus",
-    mpCost: 0,
-    requiresTarget: false,
-    targetRequirement: "self",
-    tags: ["support", "mp", "stance"],
-    statusEffects: [{ id: "ward_focus", turns: 1, mpRestoreFlat: 3, nextSpellAccPct: 10 }],
-    apply: (attacker) => {
-      const ability = SKILLS?.ward_focus;
-      const statusEffects = Array.isArray(ability?.statusEffects)
-        ? ability.statusEffects.map(effect => ({ ...effect }))
-        : [];
-
-      return {
-        amount: 0,
-        statusEffects,
-      };
-    },
-    description: "Reinforce the flow-restore MP and steady your next spell."
   },
 
   // -------- Payoff (6) --------
@@ -10396,6 +10370,7 @@ Object.assign(RAW_SKILLS, {
         statusId: "pressure_point_ignition",
         permanent: true,
         onNextDamageTaken: { bonusDamagePercent: 30, buildup: { fire: 100 } },
+        vfx: { kind: 'debuff_burn' },
       },
     }],
     apply: (attacker, target) => {
@@ -10672,6 +10647,8 @@ Object.assign(RAW_SKILLS, {
         const actualGain = attacker.currentMP - before;
         const gainText = actualGain > 0 ? `gains ${actualGain} MP` : 'is already at full MP';
         scene?._log?.(`${attacker.name || "The rogue"} extracts enemy disease — ${gainText} and purges ${cleanseAmount} disease.`);
+        // Direct MP mutation, not routed through result.mpGain, so called directly.
+        if (actualGain > 0) scene?._playStatusVFX?.(attacker, { kind: 'mana' });
       }
 
       return { amount: 0 };
@@ -10735,6 +10712,7 @@ Object.assign(RAW_SKILLS, {
         const actualGain = char.currentMP - before;
         if (actualGain > 0) {
           scene?._log?.(`${char.name} recovers ${actualGain} MP.`);
+          scene?._playStatusVFX?.(char, { kind: 'mana' });
         } else {
           scene?._log?.(`${char.name} is already at full MP.`);
         }
@@ -10773,6 +10751,7 @@ Object.assign(RAW_SKILLS, {
     critBleedPct: 15,
     critBleedTurns: 2,
     critBleedStatusId: "heartpierced",
+    critBleedVfxKind: 'debuff_sick',
     apply: (attacker, target) => {
       const ability = SKILLS?.heartpiercer;
       const roll = calculateDamage(attacker, target, ability);
@@ -10963,7 +10942,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "curse", "necrotic"],
     cooldown: 4,
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.curse_of_needles;
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
@@ -10976,18 +10955,20 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      target.statusEffects = target.statusEffects || [];
-      const alreadyCursed = target.statusEffects.some(se => se?.id === 'curse_of_needles');
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_of_needles');
       if (!alreadyCursed) {
         // Tier 1 rider ("+X weapon damage") — weaponDamageFlat is read inside
         // calculateDamage() (applyCurseWeaponRiders) and baked directly into
         // the base weapon roll, before skill%/buffs/gear/crit, for ANY hit
         // this target takes while cursed. curseScaled: true amplifies it
-        // while the target is Afflicted (Curse T2), same as before.
-        target.statusEffects.push({
+        // while the target is Afflicted (Curse T2), same as before. Routed
+        // through _addStatusEffects (not a raw .push()) so the vfx hint
+        // below actually fires, and so a recast coalesces correctly.
+        scene?._addStatusEffects?.(target, [{
           id: "curse_of_needles", name: "Curse of Needles", permanent: true,
           onHit: { weaponDamageFlat: 2, curseScaled: true },
-        });
+          vfx: { kind: 'debuff_weak' },
+        }]);
       }
       return { ...roll, physical, elemental, necrotic, amount };
     },
@@ -12247,6 +12228,9 @@ Object.assign(RAW_SKILLS, {
       const healAmt = Math.floor(maxHP * 0.25);
       if (healAmt > 0 && attacker) {
         attacker.currentHP = Math.min(maxHP, (attacker.currentHP ?? 0) + healAmt);
+        // Direct HP mutation, not routed through the generic isHeal
+        // pipeline — vfxHint wouldn't fire here, so this is called directly.
+        scene?._playStatusVFX?.(attacker, { kind: 'heal' });
       }
       const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
       (allySlots || []).forEach(s => {
@@ -12328,7 +12312,7 @@ Object.assign(RAW_SKILLS, {
       // the enemy despite working correctly. No mods: real mechanic is
       // untouched by this; ticks down in lockstep with grace since both are
       // decremented once per the TARGET's own end-of-turn.
-      scene?._addStatusEffects?.(target, [{ id: 'wound_opener_seal', turns: 2 }]);
+      scene?._addStatusEffects?.(target, [{ id: 'wound_opener_seal', turns: 2, vfx: { kind: 'debuff_sick' } }]);
 
       return {
         ...roll, physical, elemental, necrotic, amount,
@@ -12498,7 +12482,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "stance", "self-buff"],
     cooldown: 5,
-    statusEffects: [{ id: "butchers_march_buff", turns: 3, onCritRestore: { hpPct: 5, initiativeGain: 5 } }],
+    statusEffects: [{ id: "butchers_march_buff", turns: 3, onCritRestore: { hpPct: 5, initiativeGain: 5 }, vfx: { kind: 'buff_power' } }],
     apply: (attacker) => {
       const ability = SKILLS?.butchers_march;
       const statusEffects = Array.isArray(ability?.statusEffects)
@@ -12550,7 +12534,7 @@ Object.assign(RAW_SKILLS, {
       },
       exec: ({ owner, attacker, scene }) => {
         if (!attacker) return null;
-        scene?._addStatusEffects?.(attacker, [{ id: 'blinding_glint_scoped', turns: 1, mods: { Accuracy: -25 } }]);
+        scene?._addStatusEffects?.(attacker, [{ id: 'blinding_glint_scoped', turns: 1, mods: { Accuracy: -25 }, vfx: { kind: 'debuff_confuse' } }]);
         scene?._log?.(`${owner?.name || "The axeman"} catches the light on their blade, dazzling ${attacker.name}!`);
         return { scopedDebuffId: 'blinding_glint_scoped' };
       },
@@ -12604,7 +12588,7 @@ Object.assign(RAW_SKILLS, {
         // Nested under mods (not a top-level field) — _sumStatusEffectMods
         // only ever reads se.mods.AttackPower, so a top-level field here
         // would silently do nothing, which is exactly what the old version did.
-        const atkBuff = { id: "war_cry_atk_buff", turns: 2, mods: { AttackPower: atkPowerPct } };
+        const atkBuff = { id: "war_cry_atk_buff", turns: 2, mods: { AttackPower: atkPowerPct }, vfx: { kind: 'warcry' } };
         const attackerCol = scene._getUnitColumn?.(attacker);
         const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
         if (attackerCol) {
@@ -12751,6 +12735,9 @@ Object.assign(RAW_SKILLS, {
       if (healAmt > 0 && attacker) {
         const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
         attacker.currentHP = Math.min(maxHP, (attacker.currentHP ?? 0) + healAmt);
+        // Direct HP mutation, same as Trophy Cry — bypasses the generic
+        // isHeal pipeline, so this is called directly rather than via vfxHint.
+        scene?._playStatusVFX?.(attacker, { kind: 'heal' });
       }
       return {
         amount: 0,
@@ -12952,11 +12939,11 @@ Object.assign(RAW_SKILLS, {
       const expConsumed = Math.min(400, expMeter);
       const fireConsumed = Math.min(400, fireMeter);
       const totalConsumed = expConsumed + fireConsumed;
-      const bonusPct = Math.floor(totalConsumed / 100) * 5;
+      const bonusPct = Math.floor(totalConsumed / 100) * 15;
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 200 + bonusPct, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 150 + bonusPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       if (target?.weakness?.meters) {
@@ -12972,7 +12959,7 @@ Object.assign(RAW_SKILLS, {
         log: `${attacker?.name || "The headsman"} delivers the Death Blow — ${totalConsumed} buildup consumed.`,
       };
     },
-    description: "Requires the target to be below 40% HP. Deals 200% weapon damage, plus 5% per 100 combined Expose/Fire buildup consumed (up to 400 of each, +40% max), and consumes that buildup."
+    description: "Requires the target to be below 40% HP. Deals 150% weapon damage, plus 15% per 100 combined Expose/Fire buildup consumed (up to 400 of each, +120% max), and consumes that buildup."
   },
 
   // -------- Generation (elemental / utility) --------
@@ -12992,7 +12979,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "fire", "elemental", "buildup"],
     cooldown: 2,
-    buildupHint: { fire: 60 },
+    buildupHint: { fire: 80 },
     apply: (attacker, target) => {
       const ability = SKILLS?.ember_cleave;
       const roll = calculateDamage(attacker, target, ability);
@@ -13007,11 +12994,11 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      let fireBuildup = ability?.buildupHint?.fire ?? 60;
-      if (coldTier >= 1) fireBuildup += 20;
+      let fireBuildup = ability?.buildupHint?.fire ?? 80;
+      if (coldTier >= 1) fireBuildup += 50;
       return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: "fire", buildup: { fire: fireBuildup } };
     },
-    description: "Fiery chop with 60 fire buildup; deals 15% more and gains +20 buildup vs chilled/frostbitten foes."
+    description: "Fiery chop with 80 fire buildup; deals 15% more and gains +50 buildup (130 total) vs chilled/frostbitten foes."
   },
 
   'rime_chop': {
@@ -13025,39 +13012,48 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 0,
+    // Was 0 — brought up to a regular cost matching Ember Cleave's tier
+    // (same major/cooldown-2-3 generator shape).
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "elemental", "buildup", "necrotic"],
     cooldown: 3,
-    buildupHint: { cold: 60 },
+    buildupHint: { cold: 80 },
     apply: (attacker, target) => {
       const ability = SKILLS?.rime_chop;
       const roll = calculateDamage(attacker, target, ability);
       const coldTier = target?.weakness?.tiers?.cold || 0;
+      const toNecrotic = coldTier >= 2;
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: coldTier >= 2 ? 130 : 100, isCrit: roll.isCrit, critMult: roll.critMult,
-          skillConversion: { physToElemPct: 100 },
+          skillPct: toNecrotic ? 130 : 100, isCrit: roll.isCrit, critMult: roll.critMult,
+          // Below T2: physical converts to elemental (cold), same as before.
+          // At T2: the WHOLE hit converts to necrotic instead of cold.
+          skillConversion: toNecrotic
+            ? { physToNecroPct: 100, elemToNecroPct: 100 }
+            : { physToElemPct: 100 },
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const buildup = { cold: ability?.buildupHint?.cold ?? 60 };
-      if (coldTier >= 2) {
+      const buildup = { cold: ability?.buildupHint?.cold ?? 80 };
+      if (toNecrotic) {
+        // Independent per-family check now — 80 to EACH necrotic-flavored
+        // family (Toxic/Disease/Curse) the target already has any presence
+        // of, not an escalating count-gated ladder like the old version.
         const toxicMeter  = target?.weakness?.meters?.toxic   || 0;
         const diseaseMeter = target?.weakness?.meters?.disease || 0;
         const curseMeter  = target?.weakness?.meters?.curse   || 0;
-        const necFamilies = (toxicMeter > 0 ? 1 : 0) + (diseaseMeter > 0 ? 1 : 0) + (curseMeter > 0 ? 1 : 0);
-        if (necFamilies >= 1) buildup.toxic   = 80;
-        if (necFamilies >= 2) buildup.disease = 80;
-        if (necFamilies >= 3) buildup.curse   = 80;
+        if (toxicMeter > 0) buildup.toxic = 80;
+        if (diseaseMeter > 0) buildup.disease = 80;
+        if (curseMeter > 0) buildup.curse = 80;
       }
-      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: "cold", buildup };
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: toNecrotic ? "necrotic" : "cold", buildup };
     },
-    description: "Cold chop with 60 cold buildup; vs Frostbitten (T2) deals +30% necrotic damage and spreads necrotic buildups."
+    description: "Deals 100% weapon damage as Cold, applying 80 Cold buildup. Vs Frostbitten (Cold T2+), deals 130% instead and the whole hit converts to Necrotic damage — also applying 80 buildup to each of the target's active Toxic/Disease/Curse weaknesses."
   },
 
   'storm_splitter': {
@@ -13071,12 +13067,13 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 0,
+    // Was 0 — brought up to a regular cost, same tier as Ember Cleave/Rime Chop.
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning", "elemental", "buildup", "initiative"],
     cooldown: 3,
-    buildupHint: { lightning: 70 },
+    buildupHint: { lightning: 80 },
     apply: (attacker, target) => {
       const ability = SKILLS?.storm_splitter;
       const roll = calculateDamage(attacker, target, ability);
@@ -13091,7 +13088,7 @@ Object.assign(RAW_SKILLS, {
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const lightningBuildup = ability?.buildupHint?.lightning ?? 70;
+      const lightningBuildup = ability?.buildupHint?.lightning ?? 80;
       if (coldTier >= 2 && attacker) {
         const initiativeGain = Math.floor(lightningBuildup / 10);
         const cap = attacker.initiativeGaugeMax ?? 100;
@@ -13099,7 +13096,7 @@ Object.assign(RAW_SKILLS, {
       }
       return { ...roll, physical, elemental, necrotic, amount, isMagic: true, element: "lightning", buildup: { lightning: lightningBuildup } };
     },
-    description: "Lightning chop with 70 buildup; +25% vs chilled foes, gains 7 initiative vs Frostbitten (T2)."
+    description: "Deals 100% weapon damage as Lightning, applying 80 Lightning buildup. Deals 125% instead vs Chilled (Cold T1+) foes, and gains 8 initiative vs Frostbitten (Cold T2+)."
   },
 
   // -------- Payoff (armor shred) --------
@@ -13117,21 +13114,35 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "debuff"],
+    tags: ["melee", "attack", "debuff", "initiative"],
     cooldown: 4,
+    // Spend-tiered like War Cry/Blazing Fervor — auto-picks the highest of
+    // 10/20/30 the current gauge can afford, not a player choice. Below the
+    // minimum spend tier it has nothing to do, so it fizzles instead of
+    // firing for free (checked generically in _applyAbilityToTarget).
+    requiresInitiativeGauge: 10,
     apply: (attacker, target) => {
       const ability = SKILLS?.overhead_hew;
+      const gauge = attacker?.initiativeGauge || 0;
+      const spend = gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+      const steps = spend / 10;
+      const skillPct = 115 + 15 * (steps - 1); // 115 / 130 / 145
+      const shredPct = 20 * steps; // 20 / 40 / 60
       const roll = calculateDamage(attacker, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 115, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      const statusEffects = [{ id: "shattered_armor", turns: 3, mods: { PhysicalResist: -10 } }];
-      return { ...roll, physical, elemental, necrotic, amount, statusEffects };
+      const statusEffects = [{ id: "shattered_armor", turns: 3, mods: { PhysicalResist: -shredPct }, vfx: { kind: 'debuff_decrease' } }];
+      return {
+        ...roll, physical, elemental, necrotic, amount, statusEffects,
+        log: `${attacker?.name || "The axeman"} cleaves overhead (spent ${spend} initiative) — shatters armor for -${shredPct}% PhysicalResist.`,
+      };
     },
-    description: "A 115% cleaving blow that shatters armor, reducing the target's physical damage reduction by 10% for 3 turns."
+    description: "Spend initiative (10/20/30, based on current gauge) for a cleaving blow that scales from 115% to 145% weapon damage, and shatters the target's armor for -20% to -60% PhysicalResist (3 turns), based on how much you spend."
   },
 
   // --- Mace (2h) ---

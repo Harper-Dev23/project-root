@@ -5053,6 +5053,8 @@ export default class CombatScene extends Phaser.Scene {
           // damage number instead of a heal. The "(CRIT!)" log tag below is
           // the crit signal for heals; the floating number stays heal-green.
           this._showFloatingNumber?.(healed, target, true);
+          const healVfxKind = ability?.vfxHint?.kind;
+          if (healVfxKind) this._playStatusVFX?.(target, { kind: healVfxKind });
 
           // Same tooltip mechanism damage numbers get — reads the SAME
           // shared breakdown log calculateHealRoll now correctly
@@ -5210,7 +5212,8 @@ export default class CombatScene extends Phaser.Scene {
           const tickDamage = Math.max(1, Math.floor(dmg * (ability.critBleedPct / 100)));
           const bleedTurns = Number.isFinite(ability?.critBleedTurns) ? ability.critBleedTurns : 2;
           const statusId = ability.critBleedStatusId || `${ability.id}_bleed`;
-          this._addStatusEffects(target, [{ id: statusId, turns: bleedTurns, tickDamage }]);
+          const bleedVfx = ability.critBleedVfxKind ? { kind: ability.critBleedVfxKind } : undefined;
+          this._addStatusEffects(target, [{ id: statusId, turns: bleedTurns, tickDamage, vfx: bleedVfx }]);
           this._log(`${target.name} suffers a bleed from ${ability.name} — ${tickDamage} damage per turn for ${bleedTurns} turns.`);
         }
 
@@ -5645,6 +5648,8 @@ export default class CombatScene extends Phaser.Scene {
       const gain = result.mpGain;
       user.currentMP = Math.min(user.maxMP || 99, (user.currentMP || 0) + gain);
       this._log(`${user.name} recovers ${gain} MP (${ability?.name ?? 'skill'}).`);
+      const mpVfxKind = ability?.vfxHint?.kind;
+      if (mpVfxKind) this._playStatusVFX?.(user, { kind: mpVfxKind });
     }
 
     // (8) Initiative bonus from crit (e.g. silent_order)
@@ -5966,6 +5971,8 @@ export default class CombatScene extends Phaser.Scene {
         target.currentHP = after;
         if (healed > 0) {
           this._showFloatingNumber?.(healed, target, /*isHeal=*/true, /*isCrit=*/false);
+          const healVfxKind = opts?.ability?.vfxHint?.kind;
+          if (healVfxKind) this._playStatusVFX?.(target, { kind: healVfxKind });
           const healTooltip = this._buildHealTooltipData({
             user, target, ability: opts?.ability || null,
             amount: healed, raw: rawAmt,
@@ -6225,7 +6232,10 @@ export default class CombatScene extends Phaser.Scene {
           const after = Math.min(maxHP || before, before + healAmount);
           const healed = after - before;
           ally.currentHP = after;
-          if (healed > 0) this._showFloatingNumber?.(healed, ally, true, !!roll.isCrit);
+          if (healed > 0) {
+            this._showFloatingNumber?.(healed, ally, true, !!roll.isCrit);
+            this._playStatusVFX?.(ally, { kind: 'heal' });
+          }
         }
         this._log(`${char.name}'s ward weave mends the party for ${healAmount} HP.`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
@@ -6329,6 +6339,8 @@ export default class CombatScene extends Phaser.Scene {
         char.currentHP = after;
         if (healed > 0) {
           this._showFloatingNumber?.(healed, char, /*isHeal=*/true, /*isCrit=*/false);
+          const tickVfxKind = se?.vfx?.kind;
+          if (tickVfxKind) this._playStatusVFX?.(char, { kind: tickVfxKind });
           this._log(`${char.name} regenerates ${healed} HP.`);
           this._updateHealthBars?.(); this._updateHPMPBars?.();
         }
@@ -7422,6 +7434,70 @@ export default class CombatScene extends Phaser.Scene {
   _tintForAbility(ability) {
     const family = this._dominantBuildupFamily(ability);
     return family ? CombatScene.WEAKNESS_VFX_TINTS[family] : null;
+  }
+
+  // Generic buff/heal/debuff VFX kinds — companion to WEAKNESS_VFX_TINTS
+  // above, but for the non-attack "fx_buff_*"/"fx_heal"/"fx_inflict_*"
+  // sprite set. Deliberately opt-in only (see _playStatusVFX call sites):
+  // a status effect or ability only gets a flash if it explicitly declares
+  // vfx:{kind:'...'} / vfxHint:{kind:'...'} — there's no blind heuristic
+  // guessing from mods, so this only ever lights up on skills that have
+  // actually been reviewed and annotated, weapon type by weapon type.
+  static STATUS_VFX_KINDS = {
+    heal: { textureKey: 'fx_heal', tint: 0x55dd77 },
+    buff_health: { textureKey: 'fx_buff_health', tint: 0x55dd77 },
+    // Reuses the buff_health sprite tinted blue instead of a dedicated
+    // asset — same "generic sprite + runtime tint" convention as everything
+    // else here, just for MP-restore effects specifically (ward_focus,
+    // mana_fountain) rather than HP ones.
+    mana: { textureKey: 'fx_buff_health', tint: 0x4488ff },
+    buff_power: { textureKey: 'fx_buff_power', tint: 0xff8844 },
+    buff_increase: { textureKey: 'fx_buff_increase', tint: 0xffdd55 },
+    buff_harden: { textureKey: 'fx_buff_harden', tint: 0x88ccff },
+    buff_magic: { textureKey: 'fx_buff_magic', tint: 0xcc88ff },
+    warcry: { textureKey: 'fx_warcry', tint: 0xffcc33 },
+    debuff_decrease: { textureKey: 'fx_inflict_decrease', tint: 0xdd5566 },
+    debuff_sick: { textureKey: 'fx_inflict_sick', tint: 0x88aa44 },
+    debuff_burn: { textureKey: 'fx_inflict_burn', tint: 0xff5522 },
+    debuff_shock: { textureKey: 'fx_inflict_shock', tint: 0xffee44 },
+    debuff_confuse: { textureKey: 'fx_inflict_confuse', tint: 0xcc99ff },
+    debuff_leer: { textureKey: 'fx_inflict_leer', tint: 0x999999 },
+    debuff_weak: { textureKey: 'fx_inflict_weak', tint: 0x996699 },
+  };
+
+  // Same static-sprite flash primitive _playMeleeImpactVFX uses, minus the
+  // hit-sound defaulting (a buff/heal/debuff landing isn't a "hurt" sound,
+  // so this only plays a sound if the caller explicitly asks for one).
+  _playStatusVFX(target, { kind, scale = 0.7, duration = 240, sound = null } = {}) {
+    const spec = CombatScene.STATUS_VFX_KINDS[kind];
+    if (!spec || !this.textures?.exists(spec.textureKey)) return;
+    const slot = target?._slot;
+    if (!slot) return;
+    duration *= GameplaySettings.animDurationMult();
+
+    const img = this.add.image(slot.x ?? 0, slot.y ?? 0, spec.textureKey)
+      .setScale(scale * 0.5)
+      .setAlpha(0)
+      .setDepth(3)
+      .setTint(spec.tint);
+
+    this.tweens.add({
+      targets: img,
+      scale,
+      alpha: 0.95,
+      duration: duration * 0.35,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: img,
+          alpha: 0,
+          duration: duration * 0.65,
+          ease: 'Quad.easeIn',
+          onComplete: () => img.destroy(),
+        });
+      },
+    });
+    if (sound) SoundManager.play(sound);
   }
 
   // Per-shape landing sound — every impact used to play the same 'hitHurt'
@@ -9458,6 +9534,7 @@ export default class CombatScene extends Phaser.Scene {
       statusPayload.turns = turns;
     }
     if (hasCustomMarker) statusPayload.onNextDamageTaken = debuff.onNextDamageTaken;
+    if (debuff.vfx) statusPayload.vfx = debuff.vfx;
     this._addStatusEffects(target, [statusPayload]);
 
     if (summary.length) {
@@ -9535,6 +9612,14 @@ export default class CombatScene extends Phaser.Scene {
     let lodgeChanged = false;
     for (const se of effects) {
       const def = (StatusEffects && StatusEffects[se.id]) || {};
+
+      // Fire-and-forget buff/debuff flash — opt-in only (see
+      // STATUS_VFX_KINDS' comment above _playStatusVFX). Reads the caller's
+      // own vfx hint first, falling back to a default declared once on the
+      // status effect's registry entry in StatusEffects.js.
+      const vfxKind = se?.vfx?.kind || def?.vfx?.kind;
+      if (vfxKind) this._playStatusVFX?.(target, { kind: vfxKind });
+
       const permanent = se.permanent ?? def.permanent ?? false;
       const incoming = {
         // Spread registry defaults, then the caller's own values (winning

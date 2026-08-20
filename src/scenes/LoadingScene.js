@@ -110,6 +110,20 @@ export default class LoadingScene extends Phaser.Scene {
     this.load.image('fx_inflict_leer', 'assets/sprites/fx_inflict_leer_generic.png');
     this.load.image('fx_inflict_weak', 'assets/sprites/fx_inflict_weak_generic.png');
 
+    // Generic tintable buff/heal/debuff VFX (companion to the attack VFX
+    // block above — same "generic" grayscale-tinted-at-runtime convention).
+    this.load.image('fx_buff_harden', 'assets/sprites/fx_buff_harden_generic.png');
+    this.load.image('fx_buff_health', 'assets/sprites/fx_buff_health_generic.png');
+    this.load.image('fx_buff_increase', 'assets/sprites/fx_buff_increase_generic.png');
+    this.load.image('fx_buff_magic', 'assets/sprites/fx_buff_magic_generic.png');
+    this.load.image('fx_buff_power', 'assets/sprites/fx_buff_power_generic.png');
+    this.load.image('fx_heal', 'assets/sprites/fx_heal_generic.png');
+    this.load.image('fx_inflict_burn', 'assets/sprites/fx_inflict_burn_generic.png');
+    this.load.image('fx_inflict_decrease', 'assets/sprites/fx_inflict_decrease_generic.png');
+    this.load.image('fx_inflict_shock', 'assets/sprites/fx_inflict_shock_generic.png');
+    this.load.image('fx_inflict_sick', 'assets/sprites/fx_inflict_sick_generic.png');
+    this.load.image('fx_warcry', 'assets/sprites/fx_warcry_generic.png');
+
     // Interior backgrounds
     this.load.image('zafaar_interior', 'assets/interiors/zafaar_interior.png');
     this.load.image('styx_interior',   'assets/interiors/styx_interior.png');
