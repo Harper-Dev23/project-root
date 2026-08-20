@@ -4364,6 +4364,19 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // --- Generic target-HP%% requirement gate (e.g. Death Blow, an execute
+    // that should only ever fire below a real HP threshold rather than
+    // silently downgrading into a weaker attack) — same free-fizzle shape
+    // as requiresWeakness above.
+    if (Number.isFinite(ability?.requiresTargetHPPctBelow)) {
+      const maxHP = target?.maxHP ?? target?.derivedStats?.maxHP ?? 0;
+      const hpPct = maxHP > 0 ? (target?.currentHP ?? 0) / maxHP : 1;
+      if (hpPct > ability.requiresTargetHPPctBelow / 100) {
+        this._log(`${ability.name} fizzles: ${target?.name || 'target'} isn't below ${ability.requiresTargetHPPctBelow}% HP.`);
+        return; // no costs, no cooldown, no on-act triggers
+      }
+    }
+
 
     // === BEGIN v3: per-action weakness triggers (actor-side) ====================
     const actor = user;

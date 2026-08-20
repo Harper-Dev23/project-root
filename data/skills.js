@@ -12641,7 +12641,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
     cooldown: 3,
-    buildupHint: { lacerate: 100 },
+    buildupHint: { lacerate: 80 },
     rewardIfTierCross: [
       { family: "lacerate", tier: 1, healMP: 3 },
       { family: "lacerate", tier: 2, healMP: 6 },
@@ -12657,11 +12657,11 @@ Object.assign(RAW_SKILLS, {
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
-        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 100 },
+        buildup: { lacerate: ability?.buildupHint?.lacerate ?? 80 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A swift raking strike that builds lacerate; restores MP when a tier is crossed."
+    description: "Deals 95% weapon damage. Restores 3 MP if this hit crosses the target into Lacerate T1 (Bleeding), or 6 MP if it crosses into T2 (Hemorrhaging)."
   },
 
   // -------- Payoff --------
@@ -12692,13 +12692,13 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       const currentMeter = target?.weakness?.meters?.lacerate || 0;
-      const consumed = Math.min(600, currentMeter);
+      const consumed = Math.min(400, currentMeter);
       if (consumed > 0 && target?.weakness?.meters) {
         const remaining = Math.max(0, currentMeter - consumed);
         target.weakness.meters.lacerate = remaining;
         if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(remaining);
       }
-      const tickDamage = consumed > 0 ? Math.floor(consumed / 10) : 0;
+      const tickDamage = consumed > 0 ? Math.floor(consumed / 5) : 0;
       const statusEffects = tickDamage > 0 ? [{ id: "hemorrhage_dot", turns: 3, tickDamage }] : undefined;
       return {
         ...roll, physical, elemental, necrotic, amount,
@@ -12706,7 +12706,7 @@ Object.assign(RAW_SKILLS, {
         log: consumed > 0 ? `${attacker?.name || "The axeman"} opens a hemorrhage — ${tickDamage} bleed damage per turn for 3 turns.` : undefined,
       };
     },
-    description: "A brutal finisher that consumes up to 600 lacerate and converts it into a hemorrhage DOT."
+    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 120% weapon damage and consumes up to 400 of the target's Lacerate buildup, converting it into a bleed that deals (consumed ÷ 5) damage per turn for 3 turns."
   },
 
   'blood_surge': {
@@ -12755,12 +12755,14 @@ Object.assign(RAW_SKILLS, {
       return {
         amount: 0,
         splash: splash.length ? splash : undefined,
-        log: healAmt > 0
-          ? `${attacker?.name || "The axeman"} surges on blood, striking bleeders and healing ${healAmt} HP.`
-          : `${attacker?.name || "The axeman"} surges on blood, striking bleeders.`,
+        log: splash.length === 0
+          ? `${attacker?.name || "The axeman"} finds no bleeders to surge on.`
+          : healAmt > 0
+            ? `${attacker?.name || "The axeman"} surges on blood, striking bleeders and healing ${healAmt} HP.`
+            : `${attacker?.name || "The axeman"} surges on blood, striking bleeders.`,
       };
     },
-    description: "Strike all lacerate T1+ enemies for 50% damage; heal 5% HP per enemy in hemorrhage tier."
+    description: "Deals 50% weapon damage to every enemy with Lacerate T1+. Heals 5% of your own max HP for each of those enemies that's Hemorrhaging (Lacerate T2+)."
   },
 
   'inferno_arc': {
@@ -12800,14 +12802,14 @@ Object.assign(RAW_SKILLS, {
         target.weakness.meters.lacerate = Math.max(0, currentLac - consumed);
         if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
       }
-      const fireBuildup = (ability?.buildupHint?.fire ?? 80) + Math.floor(consumed / 5);
+      const fireBuildup = (ability?.buildupHint?.fire ?? 80) + consumed;
       const splash = [];
       // 'disease' — the family rime_chop's own necrotic-spread mechanic
       // already treats as "the necrotic-flavored family" (there's no family
       // literally named 'necrotic'; this checked that nonexistent key
       // before, so the branch could never fire — fixed during migration).
       const diseaseTier = target?.weakness?.tiers?.disease || 0;
-      if (diseaseTier >= 2 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+      if (diseaseTier >= 1 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
         const column = scene._getUnitColumn(target);
         if (column) {
           const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
@@ -12835,7 +12837,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Ignite an open wound — converts up to 400 lacerate into fire buildup; scorches the column if the foe is diseased."
+    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 110% weapon damage as Fire and consumes up to 400 of the target's Lacerate buildup, converting it 1:1 into bonus Fire buildup (up to +400). If the target is also Sickened (Disease T1+), the fire arcs to the rest of their column for 70% of this hit's elemental damage and 60% of the Fire buildup."
   },
 
   'harvest_momentum': {
@@ -12856,7 +12858,7 @@ Object.assign(RAW_SKILLS, {
     apply: (attacker, _target, scene) => {
       let totalLacMeter = 0;
       (scene?.enemySlots || []).forEach(s => { totalLacMeter += s?.char?.weakness?.meters?.lacerate || 0; });
-      const initiativeGain = Math.min(20, Math.floor(totalLacMeter / 50));
+      const initiativeGain = Math.min(30, Math.floor(totalLacMeter / 50) * 2);
       if (initiativeGain > 0 && attacker) {
         const cap = attacker.initiativeGaugeMax ?? 100;
         attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + initiativeGain);
@@ -12868,7 +12870,7 @@ Object.assign(RAW_SKILLS, {
           : `${attacker?.name || "The axeman"} finds no momentum to harvest yet.`,
       };
     },
-    description: "Convert all enemy lacerate meters into initiative (1 per 50 meters, cap 20)."
+    description: "Convert all enemy lacerate meters into initiative (2 per 50 meters, cap 30)."
   },
 
   'bloodletting_cleave': {
@@ -12886,7 +12888,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "aoe"],
-    cooldown: 6,
+    cooldown: 3,
     aoe: { shape: "column" },
     buildupHint: { lacerate: 60 },
     apply: (attacker, target, scene) => {
@@ -12922,7 +12924,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "A heavy column sweep at 110%/75%; spreads disease buildup to splash targets if the primary is diseased."
+    description: "Deals 110% weapon damage to the primary target and 75% to the rest of their rank, applying 60 Lacerate buildup to each. If the primary target is Plagued (Disease T2+), the rest of the rank also gains 80 Disease buildup."
   },
 
   'death_blow': {
@@ -12941,30 +12943,15 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "execute", "consume"],
     cooldown: 8,
-    conditionHint: { requiresLowHP: true },
+    requiresTargetHPPctBelow: 40,
     apply: (attacker, target) => {
       const ability = SKILLS?.death_blow;
       const roll = calculateDamage(attacker, target, ability);
-      const hp = target?.currentHP ?? 9999;
-      const maxHP = target?.maxHP ?? target?.derivedStats?.maxHP ?? 0;
-      const threshold = maxHP ? Math.floor(maxHP * 0.4) : 0;
-      const isBroken = !(maxHP > 0 && hp > threshold);
-
-      if (!isBroken) {
-        let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-          { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-          attacker, target,
-          { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 50, isCrit: roll.isCrit, critMult: roll.critMult }
-        );
-        return {
-          ...roll, physical, elemental, necrotic, amount: Math.max(1, physical + elemental + necrotic),
-          log: `${attacker?.name || "The axeman"} swings wide — the target is not yet broken.`,
-        };
-      }
-
-      const lacMeter = target?.weakness?.meters?.lacerate || 0;
       const expMeter = target?.weakness?.meters?.expose || 0;
-      const totalConsumed = lacMeter + expMeter;
+      const fireMeter = target?.weakness?.meters?.fire || 0;
+      const expConsumed = Math.min(400, expMeter);
+      const fireConsumed = Math.min(400, fireMeter);
+      const totalConsumed = expConsumed + fireConsumed;
       const bonusPct = Math.floor(totalConsumed / 100) * 5;
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -12973,11 +12960,11 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       if (target?.weakness?.meters) {
-        target.weakness.meters.lacerate = 0;
-        target.weakness.meters.expose = 0;
+        target.weakness.meters.expose = Math.max(0, expMeter - expConsumed);
+        target.weakness.meters.fire = Math.max(0, fireMeter - fireConsumed);
         if (target.weakness.tiers) {
-          target.weakness.tiers.lacerate = weaknessTierFromMeter(0);
-          target.weakness.tiers.expose = weaknessTierFromMeter(0);
+          target.weakness.tiers.expose = weaknessTierFromMeter(target.weakness.meters.expose);
+          target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
         }
       }
       return {
@@ -12985,7 +12972,7 @@ Object.assign(RAW_SKILLS, {
         log: `${attacker?.name || "The headsman"} delivers the Death Blow — ${totalConsumed} buildup consumed.`,
       };
     },
-    description: "Execute a target below 40% HP at 200% base damage (+5% per 100 lacerate/expose consumed)."
+    description: "Requires the target to be below 40% HP. Deals 200% weapon damage, plus 5% per 100 combined Expose/Fire buildup consumed (up to 400 of each, +40% max), and consumes that buildup."
   },
 
   // -------- Generation (elemental / utility) --------
