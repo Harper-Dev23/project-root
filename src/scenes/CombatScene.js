@@ -16,7 +16,7 @@ import { setupSceneCursor, setCursor } from '../ui/cursor.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items, RARITY_ORDER } from '../../data/items.js';
-import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack } from '../../data/skills.js';
+import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack, dislodgeLodges } from '../../data/skills.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
@@ -5231,7 +5231,7 @@ export default class CombatScene extends Phaser.Scene {
         // reflects any onNextDamageTaken bonus as part of the final hit.
         if (raw > 0) {
           const { bonusDamage } = this._processTargetHitRiders(target, user, {
-            rawDamage: raw, mitigatedDamage: dmg, ignoreDR, preHitRiderRefs,
+            rawDamage: raw, mitigatedDamage: dmg, ignoreDR, preHitRiderRefs, isCrit,
           });
           dmg += bonusDamage;
         }
@@ -6033,7 +6033,7 @@ export default class CombatScene extends Phaser.Scene {
         )
       );
       const { bonusDamage } = this._processTargetHitRiders(target, user, {
-        rawDamage: rawAmt, mitigatedDamage: amt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs,
+        rawDamage: rawAmt, mitigatedDamage: amt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs, isCrit: payload?.isCrit === true,
       });
       amt += bonusDamage;
       resultInfo.mitigatedAmount = amt;
@@ -6574,10 +6574,31 @@ export default class CombatScene extends Phaser.Scene {
    * the hit before final HP subtraction (onNextDamageTaken only).
    */
   _processTargetHitRiders(target, attacker, opts = {}) {
-    const { rawDamage = 0, mitigatedDamage = rawDamage, ignoreDR = false, preHitRiderRefs = null } = opts;
+    const { rawDamage = 0, mitigatedDamage = rawDamage, ignoreDR = false, preHitRiderRefs = null, isCrit = false } = opts;
     let bonusDamage = 0;
     const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
     const toRemove = [];
+
+    // Mending Barb (bow) — auto-dislodges EVERY stacked healOnCrit lodge at
+    // once the moment the wearer takes a crit, healing them for the combined
+    // total (each lodge's own healScalingBonus reading off how many lodges
+    // are present, same "more stacked = bigger payoff" shape the damage
+    // lodges already use). Deliberately NOT gated by preHitRiderRefs — that
+    // snapshot only exists to stop a status THIS SAME cast just applied from
+    // also reacting to it, and only tracks 5 specific fields lodges don't
+    // carry; a lodge is always from an earlier cast; there's no same-hit
+    // case to guard against here.
+    if (isCrit && rawDamage > 0 && list.some(se => se?.id === 'lodged' && se.healOnCrit)) {
+      const { totalHeal, dislodged } = dislodgeLodges(target, this, Infinity, { filter: se => se.healOnCrit });
+      if (totalHeal > 0) {
+        const maxHP = target.maxHP || totalHeal;
+        target.currentHP = Math.min(maxHP, (target.currentHP || 0) + totalHeal);
+        this._showFloatingNumber?.(totalHeal, target, true);
+        this._playStatusVFX?.(target, { kind: 'heal' });
+        this._log(`${target.name}'s mending barb${dislodged > 1 ? 's burst' : ' bursts'} — healed for ${totalHeal} HP!`);
+        this._updateHealthBars?.(); this._updateHPMPBars?.();
+      }
+    }
 
     for (let i = 0; i < list.length; i++) {
       const se = list[i];
@@ -6828,12 +6849,19 @@ export default class CombatScene extends Phaser.Scene {
       // Generic per-family incoming-buildup vulnerability, e.g.
       // `{ fireBuildupMul: 1.4 }` on a status effect (Glacial Strike's
       // Trapped Fire, Gust Lash's Wind Exposed). Multiple active sources stack.
+      // Guard was `(se?.turns || 0) > 0` only — a PERMANENT source (turns:
+      // null, e.g. Curse of Pendulums' exposeBuildupMul/lacerateBuildupMul/
+      // disorientBuildupMul) always failed that check and silently never
+      // contributed, same bug class as Festering Wound above. Fixed to the
+      // canonical active-check used elsewhere in this file (line ~1351,
+      // ~4913, ~5254): `se.permanent || (se.turns||0) > 0`.
       {
         const mulKey = `${key}BuildupMul`;
         let vulnMul = 1;
         for (const se of (target?.statusEffects || [])) {
           const m = se?.[mulKey];
-          if ((se?.turns || 0) > 0 && typeof m === 'number') vulnMul *= m;
+          const active = se?.permanent || (se?.turns || 0) > 0;
+          if (active && typeof m === 'number') vulnMul *= m;
         }
         if (vulnMul !== 1) amt = Math.max(0, Math.floor(amt * vulnMul));
       }
@@ -6940,6 +6968,17 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${target.name} is now ${label}.`);
     } else {
       this._log(`${target.name} weakens: ${family} dropped to T${newTier}.`);
+    }
+
+    // Generic "T2 weakness reached" reaction trigger — fires from every
+    // source that can move a tier (a hit, a zone tick, decay recompute,
+    // etc., since this function is the one shared choke point all of them
+    // already call), not just attacks. ReactionSystem listens for it the
+    // same way it listens for self_hit/ally_projectile_used; a prepared
+    // reaction on the OPPOSING side reacts to this unit "becoming Ablaze/
+    // Frostbitten/whatever T2 flavor", not to being hit by it.
+    if (newTier === 2 && oldTier < 2) {
+      this.bus?.emit('weakness_tier_cross', { unit: target, family, newTier, oldTier });
     }
   }
   _weaknessDecayAll() {
@@ -7072,6 +7111,49 @@ export default class CombatScene extends Phaser.Scene {
         }
       }
 
+      // Healing from the ground (Hallowed Ground) — symmetric to
+      // tickPctMaxHP's damage above, just a flat amount baked in at cast
+      // time (same "compute once with the caster's own stats, reference it
+      // later" convention baseDamage/baseHeal use on lodges) rather than a
+      // %-of-maxHP formula, since a heal zone isn't scaled to the
+      // OCCUPANT's own HP the way a damage zone punishes them relative to it.
+      if (!died && (eff.healFlat || 0) > 0) {
+        const maxHP = char.maxHP || eff.healFlat;
+        const before = char.currentHP || 0;
+        const after = Math.min(maxHP, before + eff.healFlat);
+        const healed = after - before;
+        if (healed > 0) {
+          char.currentHP = after;
+          this._log(`${char.name} is mended by ${eff.id} — ${healed} HP.`);
+          this._showFloatingNumber?.(healed, char, true);
+          this._playStatusVFX?.(char, { kind: 'heal' });
+          this._updateHealthBars?.(); this._updateHPMPBars?.();
+        }
+      }
+
+      // Reduces N from EVERY weakness family the occupant currently has any
+      // meter in (Hallowed Ground) — the existing buildupFamilies block
+      // right below only ever ADDS, so this is a genuinely new capability,
+      // not a reuse of it with a negative number (that field explicitly
+      // requires amt > 0 per family and does nothing otherwise).
+      if (!died && (eff.reduceAllBuildupBy || 0) > 0 && char.weakness?.meters) {
+        let anyReduced = false;
+        const reducedParts = [];
+        for (const [fam, meter] of Object.entries(char.weakness.meters)) {
+          if ((meter || 0) <= 0) continue;
+          const after = Math.max(0, meter - eff.reduceAllBuildupBy);
+          if (after !== meter) {
+            char.weakness.meters[fam] = after;
+            reducedParts.push(`${fam} -${meter - after}`);
+            anyReduced = true;
+          }
+        }
+        if (anyReduced) {
+          this._recomputeWeaknessTiers(char);
+          this._log(`${char.name}'s weaknesses ease in ${eff.id}: ${reducedParts.join(', ')}.`);
+        }
+      }
+
       // Named buildup families (e.g. disorient +50 per turn) — explicit map
       if (!died && eff.buildupFamilies && char.weakness) {
         char.weakness.meters = char.weakness.meters || {};
@@ -7198,6 +7280,7 @@ export default class CombatScene extends Phaser.Scene {
     curse:     0xcc66aa,
     physical:  0xaa8855,  // warm brown for earth/quake zones
     disease:   0x7fae3f,  // sickly plague green, distinct from toxic's brighter green
+    holy:      0x8fc7ff,  // soft blue-white for healing/support zones (Hallowed Ground)
   };
 
   // Sprite key per slotEffect id (fall back to 'fx_crack' for all ground effects)
@@ -9631,11 +9714,13 @@ export default class CombatScene extends Phaser.Scene {
       toStat('AttackPower', -Math.abs(debuff.damageDealtDownPct), 'damage dealt');
     }
 
-    // Custom, non-stat marker consumed by a later hit rather than expressed as
-    // a numeric mod — e.g. Pressure Point's ignition (next hit taken gets
-    // bonus fire damage). Bypasses the "no stat mods, nothing to do" bailout
-    // below since it's a real effect even with an empty mods object.
-    const hasCustomMarker = !!debuff.onNextDamageTaken;
+    // Custom, non-stat markers consumed by a later hit rather than expressed
+    // as a numeric mod — onNextDamageTaken (e.g. Pressure Point's ignition,
+    // ONE-SHOT) and onHitBy (e.g. Festering Contagion's heal-whoever-hits-it
+    // rider, PERSISTENT while active — see _processTargetHitRiders for both
+    // shapes). Bypasses the "no stat mods, nothing to do" bailout below
+    // since either is a real effect even with an empty mods object.
+    const hasCustomMarker = !!debuff.onNextDamageTaken || !!debuff.onHitBy;
     if (Object.keys(mods).length === 0 && !hasCustomMarker) return;
 
     const effectId = debuff.statusId || `reward_${ability?.id || 'skill'}_debuff`;
@@ -9645,7 +9730,8 @@ export default class CombatScene extends Phaser.Scene {
     } else {
       statusPayload.turns = turns;
     }
-    if (hasCustomMarker) statusPayload.onNextDamageTaken = debuff.onNextDamageTaken;
+    if (debuff.onNextDamageTaken) statusPayload.onNextDamageTaken = debuff.onNextDamageTaken;
+    if (debuff.onHitBy) statusPayload.onHitBy = debuff.onHitBy;
     if (debuff.vfx) statusPayload.vfx = debuff.vfx;
     this._addStatusEffects(target, [statusPayload]);
 

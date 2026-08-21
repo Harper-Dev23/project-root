@@ -80,6 +80,10 @@ export default class ReactionSystem {
     // returning early) is specifically wrong here: attacker and reactor are
     // on the SAME side by construction for this event.
     this.bus?.on?.('ally_projectile_used', payload => this._onAllyProjectileUsed(payload));
+    // A unit (either side) just crossed INTO a T2 weakness tier, from
+    // whatever cause — see _onWeaknessTierCross below for why this can't
+    // reuse _onEvent's self_hit/ally_hit shape.
+    this.bus?.on?.('weakness_tier_cross', payload => this._onWeaknessTierCross(payload));
   }
 
 
@@ -442,6 +446,70 @@ export default class ReactionSystem {
     }
 
     return null;
+  }
+
+  // Fires when ANY unit (either side) crosses INTO a T2 weakness tier,
+  // regardless of what caused it — a hit, a zone tick, decay recompute, a
+  // start-of-turn proc all funnel through the single emission point in
+  // _onWeaknessTierChanged (CombatScene.js), so this reaction category
+  // reacts to "target became Ablaze/Frostbitten/etc.", not to "I got hit".
+  // There's no well-defined attacker (a zone tick has none), so candidates
+  // are scoped to the side OPPOSING the unit that crossed, mirroring
+  // checkPreHit's multi-teammate priority-sorted scan rather than _onEvent's
+  // single-target shape. A reaction can optionally restrict itself to one
+  // family via reaction.weaknessFamily (e.g. 'cold') — checked here, before
+  // canTrigger, since it's a static property of the skill, not a runtime rule.
+  _onWeaknessTierCross({ unit, family, newTier, oldTier }) {
+    if (!unit || unit.status === 'incapacitated') return;
+
+    const sideSlots = unit.isEnemy ? this.scene?.allySlots : this.scene?.enemySlots;
+    const reactors = (sideSlots || [])
+      .map(s => s?.char)
+      .filter(a => a && a.status !== 'incapacitated');
+
+    for (const owner of reactors) {
+      const st = this._state(owner);
+      if (!st || (st.triggersRemaining | 0) <= 0) continue;
+      if (Array.isArray(owner.statusEffects) && owner.statusEffects.some(se => se?.blocksAction)) continue;
+
+      const pool = this._resolvePrepared(owner);
+      const candidates = pool
+        .map(id => SKILLS[id])
+        .filter(Boolean)
+        .map(s => ({ s, trig: getTriggerForEvent(s, 'weakness_tier_cross') }))
+        .filter(x =>
+          x.trig &&
+          (!x.s.reaction?.weaknessFamily || x.s.reaction.weaknessFamily === family) &&
+          this._meetsReqs(owner, x.s) &&
+          (DevFlags.isNoCooldownEnabled() || !this.scene?._isSkillOnCooldown?.(owner, x.s.id))
+        )
+        .sort((a, b) => (b.trig.priority || 0) - (a.trig.priority || 0));
+
+      if (!candidates.length) continue;
+      const chosen = candidates[0].s;
+
+      if (typeof chosen?.reaction?.canTrigger === 'function') {
+        const ok = chosen.reaction.canTrigger({
+          owner, attacker: null, target: unit, scene: this.scene,
+          event: 'weakness_tier_cross', family, newTier, oldTier,
+        });
+        if (!ok) continue;
+      }
+
+      this._fireReaction({
+        owner,
+        attacker: null,
+        target: unit,
+        reactSkill: chosen,
+        evt: 'weakness_tier_cross',
+        incomingMutable: null,
+        sourceAbility: null,
+        sourceIntent: null,
+      });
+
+      st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
+      return; // one reactor fires per crossing, same stop-at-first-success shape as checkPreHit
+    }
   }
 
   _resolvePrepared(owner) {

@@ -393,7 +393,7 @@ export const WeaknessV3 = {
       // overflowing Toxic meter should be MORE likely to dodge its decay
       // tick, not a flat chance regardless of how far past T2 it is.
       t1: { decayBypassChance: 0.30, decayBypassChanceCap: 0.75 },
-      t2: { startTickBase: 5 },        // lighter start-of-turn poison tick
+      t2: { startTickBase: 10 },       // matches Fire's base start-of-turn tick
     },
   },
 };

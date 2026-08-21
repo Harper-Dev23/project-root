@@ -76,12 +76,24 @@ export function applyRhythmStack(char, scene) {
  * buildup source, which is where Hunter's Mark's separate BuildupReceived% mod applies
  * generically (_applyWeaknessBuildup, CombatScene.js).
  */
-function dislodgeLodges(target, scene, count = Infinity) {
-  if (!target) return { totalDamage: 0, buildup: {}, dislodged: 0 };
+export function dislodgeLodges(target, scene, count = Infinity, opts = {}) {
+  if (!target) return { totalDamage: 0, totalHeal: 0, buildup: {}, dislodged: 0 };
+  // Optional predicate scoping which lodges this pop actually touches — e.g.
+  // Mending Barb's auto-dislodge-on-crit only wants to pop ITS OWN
+  // healOnCrit lodges, never a damage lodge that happened to also be
+  // present (in practice these never mix, since damage lodges go on
+  // enemies and healing ones go on allies, but the filter makes that
+  // explicit rather than assumed).
+  const pool = typeof opts.filter === 'function'
+    ? (target.statusEffects || []).filter(se => se?.id === 'lodged' && opts.filter(se))
+    : (target.statusEffects || []).filter(se => se?.id === 'lodged');
   const allLodges = (target.statusEffects || []).filter(se => se?.id === 'lodged');
-  const toRemove = isFinite(count) ? allLodges.slice(0, count) : allLodges;
-  if (toRemove.length === 0) return { totalDamage: 0, buildup: {}, dislodged: 0 };
+  const toRemove = isFinite(count) ? pool.slice(0, count) : pool;
+  if (toRemove.length === 0) return { totalDamage: 0, totalHeal: 0, buildup: {}, dislodged: 0 };
 
+  // Scaling reads off the TOTAL lodge count present (all lodges, not just
+  // the ones this pop is removing) — same "every lodge on the target counts
+  // toward everyone's scaling" rule the damage lodges already use.
   const totalLodges = allLodges.length;
   const huntersMark = (target.statusEffects || []).find(se => se?.id === 'hunters_mark' && (se.turns || 0) > 0);
   // Was hardcoded to a flat 1.25 regardless of what the mark's own
@@ -90,11 +102,16 @@ function dislodgeLodges(target, scene, count = Infinity) {
   const markBonus = huntersMark ? 1 + ((huntersMark.mods?.LodgeDamage || 0) / 100) : 1.0;
 
   let totalDamage = 0;
+  let totalHeal = 0;
   const buildup = {};
   for (const lodge of toRemove) {
     const additionalLodges = totalLodges - 1;
     const scale = lodge.scalingBonus ? (1 + lodge.scalingBonus * additionalLodges) : 1;
     totalDamage += Math.floor((lodge.baseDamage || 0) * scale * markBonus);
+    // Heal side — symmetric to baseDamage/scalingBonus above, just no
+    // Hunter's Mark amplification (that mod is explicitly damage-only).
+    const healScale = lodge.healScalingBonus ? (1 + lodge.healScalingBonus * additionalLodges) : 1;
+    totalHeal += Math.floor((lodge.baseHeal || 0) * healScale);
     const bo = lodge.buildupOnDislodge;
     if (bo?.family && bo?.amount) {
       const buScale = lodge.buildupScalingBonus ? (1 + lodge.buildupScalingBonus * additionalLodges) : 1;
@@ -108,7 +125,7 @@ function dislodgeLodges(target, scene, count = Infinity) {
     scene.lodgesDislodgedThisTurn = (scene.lodgesDislodgedThisTurn || 0) + toRemove.length;
     scene._refreshLodgeSprites?.(target);
   }
-  return { totalDamage, buildup, dislodged: toRemove.length };
+  return { totalDamage, totalHeal, buildup, dislodged: toRemove.length };
 }
 
 // Shared by hail_of_arrows and its own hail_of_arrows_shot sub-skill —
@@ -8953,6 +8970,51 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 100% weapon damage as Fire, +63 Curse buildup. Requires target at least Hexed. Applies a permanent rider: while cursed, acting gains Fire buildup instead of losing it, scaling with Curse intensity — works regardless of the target's own Fire tier."
   },
 
+  // --- Staff Reaction ---
+  // First skill on the new "T2 weakness cross" reaction trigger
+  // (ReactionSystem._onWeaknessTierCross, fed by CombatScene's
+  // _onWeaknessTierChanged — see that function's comment for why it's a
+  // cause-agnostic hook). Fires off ANY enemy crossing into Cold T2
+  // (Frostbitten) from ANY source — a hit from this caster, an ally's
+  // attack, a DOT tick, decay recompute — not just a hit this caster
+  // personally lands, unlike every other reaction in the game. The theft
+  // math mirrors frost_swell's existing rewardIfTierCross.stealInitiative
+  // (same "steal only what's actually available" rule, bumped to 20 —
+  // meaningfully bigger since this is a standalone reaction rather than a
+  // rider on an attack that's already dealing its own damage).
+  'frostbitten_reflex': {
+    id: "frostbitten_reflex",
+    name: "Frostbitten Reflex",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.23",
+    requiredWeapon: ["staff"],
+    requiredStat: "INT",
+    requiredValue: 12,
+    actionCost: "reaction",
+    mpCost: 4,
+    cooldown: 3,
+    requiresTarget: false,
+    reaction: {
+      trigger: "weakness_tier_cross",
+      weaknessFamily: "cold",
+      cooldownOn: "trigger",
+      exec: ({ owner, target, scene }) => {
+        if (!owner || !target) return;
+        const avail = target.initiativeGauge || 0;
+        const stolen = Math.min(20, avail);
+        if (stolen > 0) {
+          target.initiativeGauge = Math.max(0, avail - stolen);
+          const cap = owner.initiativeGaugeMax ?? 100;
+          owner.initiativeGauge = Math.min(cap, (owner.initiativeGauge || 0) + stolen);
+          scene?._log?.(`${owner.name} seizes the opening as ${target.name} turns Frostbitten — steals ${stolen} Initiative.`);
+          scene?._playStatusVFX?.(owner, { kind: 'buff_power' });
+        }
+      },
+    },
+    description: "Reaction: whenever an enemy becomes Frostbitten (Cold T2), from any source, steal up to 20 Initiative from them."
+  },
+
   // ===============================
   // SURPLUS - v3.21 Staff (awaiting rework as class/high-req skills)
   // ===============================
@@ -10992,6 +11054,72 @@ Object.assign(RAW_SKILLS, {
     description: "Deals 110% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while at least Hexed, amplified while Afflicted."
   },
 
+  // Dagger's healing skill — generator, not a payoff (dagger has no other
+  // Disease source, unlike Toxic which Needle Venom already covers). Uses
+  // the same rewardIfTierCross engine Crushing Mark/Staggering Point/etc.
+  // already use, gated on the REAL post-buildup tier the target actually
+  // crosses (not a self-predicted guess) — see _applyRewardDebuff's onHitBy
+  // forwarding, added for this skill specifically.
+  'festering_contagion': {
+    id: "festering_contagion",
+    name: "Festering Contagion",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disease", "necrotic", "aoe"],
+    cooldown: 4,
+    buildupHint: { disease: 90 },
+    rewardIfTierCross: [
+      {
+        family: "disease", tier: 1,
+        debuff: { statusId: "festering_contagion_t1", turns: 3, onHitBy: { healAttacker: 1 }, vfx: { kind: 'buff_health' } },
+      },
+      {
+        family: "disease", tier: 2,
+        debuff: { statusId: "festering_contagion_t2", turns: 3, onHitBy: { healAttacker: 3, buildup: { disease: 10 } }, vfx: { kind: 'buff_health' } },
+      },
+    ],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.festering_contagion;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Contagion spreads — half the same Disease buildup also lands on
+      // whoever's adjacent, matching the "spreads to others" naming.
+      const buildupVal = ability?.buildupHint?.disease ?? 90;
+      const adjacentSplash = resolveAOESplash(scene, target, { shape: 'adjacent' }).map(tgt => ({
+        target: tgt, amount: 0, buildup: { disease: Math.floor(buildupVal * 0.5) }, tags: ability?.tags,
+      }));
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true,
+        buildup: { disease: buildupVal },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+        splash: adjacentSplash.length ? adjacentSplash : undefined,
+      };
+    },
+    description: "Deals 100% weapon damage as Necrotic and applies 90 Disease buildup, spreading half of that to adjacent enemies. Crossing Disease T1 (Sickened) marks the target — whoever hits them heals 1 HP for 3 turns. Crossing T2 (Plagued) instead grows this to 3 HP and re-feeds 10 Disease to the target on every one of those hits."
+  },
+
   'flash_overload': {
     id: "flash_overload",
     name: "Flash Overload",
@@ -11169,6 +11297,78 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Deals 100% weapon damage. Consumes all Lacerate, converting it to Toxic buildup (120% if target is at least Raw). Stronger if the target is Hemorrhaging."
+  },
+
+  // --- Dagger Reaction ---
+  // Second consumer of the new "T2 weakness cross" reaction trigger (see
+  // frostbitten_reflex, staff section, for the shared engine plumbing this
+  // rides on). Reacts to an enemy crossing Lacerate T2 (Hemorrhaging) from
+  // ANY source and punishes it with a free, reduced-power swing — a real
+  // counterattack, distinct from Staff's resource-theft flavor. The swing
+  // is a hidden sub-skill (carrion_strike_swing) rather than basic_attack
+  // itself, since basic_attack's apply() hardcodes skillPct:100 with no
+  // override hook — same "hidden sub-skill, suffixed id, identical name"
+  // pattern hail_of_arrows_shot/farsight_volley_shot already use.
+  'carrion_strike_swing': {
+    id: "carrion_strike_swing",
+    name: "Carrion Strike",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    tags: ["melee", "attack"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.carrion_strike_swing;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 60, skillLabel: 'Carrion Strike weapon damage (60%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
+    },
+    description: "A reduced-power free strike, granted by Carrion Strike's reaction."
+  },
+
+  'carrion_strike': {
+    id: "carrion_strike",
+    name: "Carrion Strike",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.23",
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "reaction",
+    mpCost: 3,
+    cooldown: 3,
+    requiresTarget: false,
+    reaction: {
+      trigger: "weakness_tier_cross",
+      weaknessFamily: "lacerate",
+      cooldownOn: "trigger",
+      exec: ({ owner, target, scene }) => {
+        const swing = SKILLS?.carrion_strike_swing;
+        if (!owner || !target || !swing) return;
+        scene?._log?.(`${owner.name} smells blood — ${target.name} is Hemorrhaging, and pays for it!`);
+        // Same generic <family>BuildupMul mechanism as Curse of Pendulums/
+        // Bell Ringer/Shattering Cut — an open wound just takes more of
+        // everything for a couple turns, not just more damage.
+        scene?._addStatusEffects?.(target, [{
+          id: "carrion_marked", turns: 2,
+          lacerateBuildupMul: 1.25, toxicBuildupMul: 1.25, diseaseBuildupMul: 1.25,
+          vfx: { kind: 'debuff_sick' },
+        }]);
+        scene.time?.delayedCall?.(50, () => {
+          scene._applyAbilityToTarget(owner, target, swing, { isReaction: true, tags: swing.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: whenever an enemy becomes Hemorrhaging (Lacerate T2), from any source, strike them for free at 60% weapon damage and mark them for 2 turns to take +25% Lacerate/Toxic/Disease buildup."
   },
 
   // --- Sword (1h) --- v3.22
@@ -12054,6 +12254,72 @@ Object.assign(RAW_SKILLS, {
       return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
     },
     description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: -20 Accuracy, scaling up to -50 at max Curse intensity."
+  },
+
+  // Sword's healing skill — fizzles (no cost/cooldown spent) if the caster
+  // has no active Rhythm at all, since this skill's whole point is scaling
+  // off it. Uses the exact same applyRhythmStack every other Rhythm-granting
+  // skill shares (adds a stack if under the 3 cap, refreshes ALL existing
+  // stacks' duration either way) — deliberately does NOT consume anything,
+  // per explicit request.
+  'harmonic_strike': {
+    id: "harmonic_strike",
+    name: "Harmonic Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "heal", "support"],
+    cooldown: 4,
+    apply: (attacker, target, scene) => {
+      const hasRhythm = (attacker?.statusEffects || []).some(se => se?.id === 'rhythm_stack');
+      if (!hasRhythm) {
+        return { amount: 0, fizzle: true, log: `${attacker?.name || "The swordsman"} has no rhythm to draw on — Harmonic Strike fizzles.` };
+      }
+      const ability = SKILLS?.harmonic_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      applyRhythmStack(attacker, scene);
+      const stackCount = (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length;
+
+      const healRoll = calculateHealRoll(attacker, ability);
+      const healPct = 20 * stackCount;
+      const healAmt = Math.max(1, applyHealModifiers(healRoll.amount, attacker, {
+        ability, skillPct: healPct,
+        skillLabel: `${ability?.name || 'Skill'} rhythm healing (${healPct}%, ${stackCount} stack${stackCount !== 1 ? 's' : ''})`,
+        isCrit: healRoll.isCrit, critMult: healRoll.critMult,
+      }));
+
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        const before = ally.currentHP || 0;
+        const maxHP = ally.maxHP || before;
+        ally.currentHP = Math.min(maxHP, before + healAmt);
+        if (ally.currentHP > before) {
+          scene?._showFloatingNumber?.(ally.currentHP - before, ally, true, false);
+          scene?._playStatusVFX?.(ally, { kind: 'heal' });
+        }
+      });
+      scene?._log?.(`${attacker?.name || "The swordsman"} strikes in rhythm (${stackCount} stack${stackCount !== 1 ? 's' : ''}) — the party heals ${healAmt} HP!`);
+
+      return { ...roll, physical, elemental, necrotic, amount };
+    },
+    description: "Requires at least one active Rhythm stack. Deals 100% weapon damage, then builds/refreshes your own Rhythm (does not consume it) and heals your whole party — 20% of your heal roll per active Rhythm stack (up to 60% at 3 stacks)."
   },
 
   'shattering_cut': {
@@ -14691,7 +14957,61 @@ Object.assign(RAW_SKILLS, {
           : `${attacker?.name || "The warrior"} triggers the active quake zones, but no enemies are caught in them.`,
       };
     },
-    description: "Requires at least one active Quake zone. Triggers the effect of every active Quake zone on whoever's standing in it, without using up any of their remaining duration. Restores 5 MP per distinct enemy caught in a zone."
+    description: "Requires at least one active Quake zone. Triggers the effect of every active Quake zone on whoever's standing in it (including Hallowed Ground's healing on an ally), without using up any of their remaining duration. Restores 5 MP per distinct ENEMY caught in a zone — allies don't grant MP."
+  },
+
+  // Mace's healing skill — a real quake zone (isQuakeZone:true), same
+  // family as Quake Mark/Fault Line/etc., just planted on an ally's own
+  // tile instead of an enemy's and carrying no damage/buildup of its own.
+  // Being a real quake zone means Tremor Echo already triggers it for free
+  // (that skill's own enemiesHit tally only ever counts opposite-side
+  // occupants toward its MP reward, so an ally standing in this zone gets
+  // the heal/buildup-ease without granting any MP — no extra code needed
+  // for that, it falls out of Tremor Echo's existing side-check). Earthshatter
+  // can never touch it either way — that skill is enemy-only targeting.
+  'hallowed_ground': {
+    id: "hallowed_ground",
+    name: "Hallowed Ground",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "WIS",
+    requiredValue: 13,
+    actionCost: "bonus",
+    mpCost: 4,
+    requiresTarget: true,
+    targetRequirement: "ally",
+    tags: ["support", "heal", "terrain"],
+    cooldown: 4,
+    slotEffect: {
+      id: "hallowed_ground_zone",
+      isQuakeZone: true,
+      element: "holy",
+      turns: 3,
+      tickPctMaxHP: 0,
+      reduceAllBuildupBy: 20,
+    },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.hallowed_ground;
+      // Same heal pipeline as Restoration Light — computed once now with
+      // the caster's own stats, baked into the zone as a flat per-tick
+      // amount (same "compute once, reference later" convention the lodge
+      // baseDamage/baseHeal fields use), not recomputed at tick time.
+      const roll = calculateHealRoll(attacker, ability);
+      const healFlat = Math.max(1, applyHealModifiers(roll.amount, attacker, {
+        ability, skillPct: 50,
+        skillLabel: `${ability?.name || 'Skill'} zone healing (50%)`,
+        isCrit: roll.isCrit, critMult: roll.critMult,
+      }));
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect, healFlat } : undefined;
+      return {
+        amount: 0,
+        slotEffect,
+        log: `${attacker?.name || "The cleric"} sanctifies the ground beneath ${target?.name || "an ally"}.`,
+      };
+    },
+    description: "Bonus: sanctify the ground beneath an ally for 3 turns. At the end of each of their turns standing in it, they heal a flat amount and lose 20 of every active weakness buildup."
   },
 
   // Mace's curse-rider — bumped to a 30% base (vs. 20% on the other four)
@@ -15457,6 +15777,59 @@ Object.assign(RAW_SKILLS, {
       return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
     description: "Deals 75% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
+  },
+
+  // Bow's healing skill — an ally-targeted lodge (a first for the family;
+  // every other lodge goes on an enemy). Uses the new baseHeal/
+  // healScalingBonus pair on dislodgeLodges (symmetric to baseDamage/
+  // scalingBonus) and the new healOnCrit marker _processTargetHitRiders
+  // reads generically: when the wearer takes a crit, EVERY stacked lodge
+  // pops at once, each one's own healScalingBonus reading off the total
+  // lodge count present — same "more stacked = bigger combined payoff"
+  // shape the damage lodges already have, just for a heal instead.
+  'mending_barb': {
+    id: "mending_barb",
+    name: "Mending Barb",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["bow"],
+    requiredStat: "WIS",
+    requiredValue: 12,
+    actionCost: "bonus",
+    mpCost: 3,
+    cooldown: 2,
+    requiresTarget: true,
+    targetRequirement: "ally",
+    tags: ["support", "heal", "lodge"],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.mending_barb;
+      // Real heal pipeline (calculateHealRoll/applyHealModifiers, same as
+      // Restoration Light) — computed once now with the caster's own
+      // stats/gear/Proficiency, then baked into the lodge exactly like
+      // baseDamage is on every other lodge, not recomputed at pop time.
+      const roll = calculateHealRoll(attacker, ability);
+      const baseHeal = Math.max(1, applyHealModifiers(roll.amount, attacker, {
+        ability, skillPct: 40,
+        skillLabel: `${ability?.name || 'Skill'} lodge healing (40%)`,
+        isCrit: roll.isCrit, critMult: roll.critMult,
+      }));
+
+      target.statusEffects = target.statusEffects || [];
+      target.statusEffects.push({
+        id: 'lodged', baseHeal, healScalingBonus: 0.10, healOnCrit: true, stackable: true,
+        // Soft blue-white hue — visually distinct from a damage lodge's
+        // reds/golds on the portrait (see _refreshLodgeSprites).
+        tint: 0x9fd6ff,
+      });
+      scene?._refreshLodgeSprites?.(target);
+      const lodgeCount = target.statusEffects.filter(se => se?.id === 'lodged').length;
+      return {
+        amount: 0,
+        log: `${attacker?.name ?? 'Archer'} lodges a mending barb in ${target?.name ?? 'the ally'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
+      };
+    },
+    description: "Bonus: lodge a mending barb in an ally. The next time they take a critical hit, every mending barb on them bursts at once, healing them — each one's own payout growing 10% per OTHER lodge (of any kind) present."
   },
 
   // Same shape as Barbed Shaft, re-themed to Lightning — a charged
