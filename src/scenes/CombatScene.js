@@ -47,7 +47,7 @@ import {
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
   getProficiencyBreakdown, getProficiencyMultiplier,
-  applyGearConversionAndPercent, applyLightningJolt,
+  applyGearConversionAndPercent, applyLightningJolt, getColdDealtPenaltyPct,
   calculateHealRoll, applyHealModifiers,
 } from '../systems/CombatLogic.js';
 
@@ -1389,7 +1389,11 @@ export default class CombatScene extends Phaser.Scene {
     // --- rebuild visuals at destination ---
     // Use your existing portrait builder (works for both allies and enemies)
     if (typeof this._placePortrait === 'function') {
+      const fromX = old?.x, fromY = old?.y;
       this._placePortrait(unit, newSlot);
+      if (old && Number.isFinite(fromX) && Number.isFinite(fromY)) {
+        this._playMoveHopVFX(newSlot, fromX - newSlot.x, fromY - newSlot.y);
+      }
     }
 
     // Reposition lodge arrows to the new slot
@@ -2047,23 +2051,46 @@ export default class CombatScene extends Phaser.Scene {
     const ge = char?.gearEffects || {};
     const atkPowerPct = _sumStatusEffectMods?.(char)?.AttackPower || 0;
 
-    // Cold T2's attacker-side "deals less damage" penalty IS a real,
-    // player-visible weakness effect (unlike the hidden balance dial above),
-    // so it belongs here — mirrors applyWeaknessDamagePipeline's exact
-    // formula (CombatLogic.js) so the number shown matches what combat
-    // actually applies.
-    let coldDealtPenaltyPct = 0;
-    if ((char?.weakness?.tiers?.cold || 0) >= 2) {
-      const coldMeter = char?.weakness?.meters?.cold || 0;
-      const I = familyIntensityMult('cold', coldMeter);
-      const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
-      const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
-      coldDealtPenaltyPct = Math.round(Math.min(basePen * I, capPen) * 100);
-    }
+    // Cold T2's attacker-side "deals less damage" penalty — now summed
+    // directly into the Combat Bonus pool below (was its own separate
+    // multiplicative stage on the raw pre-skillPct roll; see
+    // getColdDealtPenaltyPct's own comment in CombatLogic.js for why that
+    // changed). Shared function so this panel can never drift from what
+    // combat actually applies.
+    const coldDealtPenaltyPct = Math.round(getColdDealtPenaltyPct(char));
+
+    // Kindling Rite's own +20%/stack elemental-only bonus (up to +60% at 3
+    // stacks) — read the same way CombatLogic.js's applyTypedDamageModifiers
+    // does (live runic_zone status, not a gear/stat field), since it's a
+    // temporary zone effect rather than anything gearEffects tracks. Was
+    // entirely invisible on this panel before — only showed up as a
+    // breakdown-tooltip line during an actual cast, never as a standing bonus.
+    const kindZone = (char?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.kindlingRite);
+    const kindlingRitePct = 20 * (kindZone?.mods?.kindlingRiteStacks || 0);
 
     const pdPct = Math.round((ge.globalDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
-    const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+    const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct + kindlingRitePct - coldDealtPenaltyPct);
     const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+
+    // Same "Gear vs Combat Bonus" split as drBreakdown above, mirrored onto
+    // the OUTGOING side. Cold's penalty is folded directly into Combat Bonus
+    // now (not its own line) — it's genuinely the same additive pool as
+    // AttackPower/Kindling Rite in the real pipeline now, unlike Exposed on
+    // the DR side, which stays its own line there for display clarity, not
+    // because the math treats it any differently.
+    const dmgBreakdown = (gearPct, kindlingBonus = 0) => {
+      const combatVal = atkPowerPct + kindlingBonus - coldDealtPenaltyPct;
+      const lines = [
+        `Gear: ${gearPct >= 0 ? '+' : ''}${gearPct}%`,
+        `Combat Bonus: ${combatVal >= 0 ? '+' : ''}${combatVal}%`,
+      ];
+      if (kindlingBonus > 0) lines.push(`  includes Kindling Rite: +${kindlingBonus}%`);
+      if (coldDealtPenaltyPct > 0) lines.push(`  includes Chilled/Frostbitten (self): -${coldDealtPenaltyPct}%`);
+      return lines;
+    };
+    const pdLines = dmgBreakdown(ge.globalDamagePercent || 0);
+    const edLines = dmgBreakdown((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0), kindlingRitePct);
+    const ndLines = dmgBreakdown((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0));
 
     // Net MP change at the start of this character's turn: gear/INT regen
     // MINUS Concussed's flat drain (Disorient T2) — mirrors the exact
@@ -2105,7 +2132,16 @@ export default class CombatScene extends Phaser.Scene {
           `Necrotic (${ndr}%):`, ...ndrLines.map(l => `  ${l}`),
         ],
       },
-      { label: 'PD/ED/ND:', value: `${pdPct >= 0 ? '+' : ''}${pdPct}% / ${edPct >= 0 ? '+' : ''}${edPct}% / ${ndPct >= 0 ? '+' : ''}${ndPct}%`, desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab.' },
+      {
+        label: 'PD/ED/ND:', value: `${pdPct >= 0 ? '+' : ''}${pdPct}% / ${edPct >= 0 ? '+' : ''}${edPct}% / ${ndPct >= 0 ? '+' : ''}${ndPct}%`,
+        desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab. Hover for the gear vs. combat-bonus breakdown.',
+        descLines: [
+          'Physical / Elemental / Necrotic Damage:', '',
+          `Physical (${pdPct >= 0 ? '+' : ''}${pdPct}%):`, ...pdLines.map(l => `  ${l}`), '',
+          `Elemental (${edPct >= 0 ? '+' : ''}${edPct}%):`, ...edLines.map(l => `  ${l}`), '',
+          `Necrotic (${ndPct >= 0 ? '+' : ''}${ndPct}%):`, ...ndLines.map(l => `  ${l}`),
+        ],
+      },
       { label: 'H.Recv:', value: `${healPct}%`, desc: '% of incoming healing actually received.' },
       { label: 'CostX:', value: `×${costMult.toFixed(2)}`, valueColor: (costMult > 1 ? '#ff6666' : '#eeeeee'), valueBold: costMult > 1, desc: 'Multiplier on skill MP/HP costs — raised by Disorient.' },
       { label: 'Crit%:', value: `${eff.CritChance ?? 0}`, desc: 'Chance this character\'s hits land as critical strikes for bonus damage. Reduced by the target\'s Evasion (half value), boosted by this character\'s own excess Accuracy (half value).' },
@@ -4581,6 +4617,31 @@ export default class CombatScene extends Phaser.Scene {
     // buildup numbers; skills that don't read it are simply unaffected
     // (recast at full power) until they're migrated to support it.
     const powerScale = Number.isFinite(options?.powerScale) ? options.powerScale : 1;
+
+    // Snapshot the TARGET's status effects before apply() runs, so a miss
+    // (determined further below, only after apply() has already run — see
+    // the usesHitRoll block) can restore them exactly. This exists because
+    // apply() computes and often directly commits its own side effects
+    // (a skill calling scene._addStatusEffects on itself, or the generic
+    // result.statusEffects return processed right after apply() returns)
+    // BEFORE the engine has any idea whether this cast will actually hit —
+    // the roll can't move earlier because it depends on resultMutable.autoHit,
+    // a flag only apply() itself can set (e.g. Boulder Toss forcing a
+    // guaranteed hit vs a Frostbitten target). Previously only amount/
+    // buildup/isHeal/splash got zeroed on a miss; status-effect riders (like
+    // a Curse skill's permanent debuff) silently landed regardless of the
+    // roll. Scoped to just `target` — the one character the upcoming roll is
+    // actually about — not splash/ally targets a support skill might also
+    // touch, since those don't share this same single hit-roll.
+    let targetStatusSnapshot = null;
+    if (target) {
+      try {
+        targetStatusSnapshot = JSON.parse(JSON.stringify(target.statusEffects || []));
+      } catch (e) {
+        targetStatusSnapshot = null; // non-serializable content — skip restore rather than crash the cast
+      }
+    }
+
     let result = {};
     try {
       result = ability.apply(user, target, this, { powerScale }) || {};
@@ -4821,6 +4882,16 @@ export default class CombatScene extends Phaser.Scene {
         resultMutable.isHeal = false;
         resultMutable.buildup = null;
         resultMutable.splash = null;
+        resultMutable.statusEffects = null;
+        // Undo whatever apply() already committed to the target's own status
+        // effects (a direct scene._addStatusEffects call inside apply(), or
+        // the generic result.statusEffects processed right after apply()
+        // returned, above) — see targetStatusSnapshot's own comment for why
+        // this has to be a rollback rather than a pre-check.
+        if (target && targetStatusSnapshot) {
+          target.statusEffects = targetStatusSnapshot;
+          this._refreshStatusEffectIcons?.(target);
+        }
       }
       // Brief attack VFX (currently just bow's arrow flight) — fire-and-
       // forget, purely visual. Placed right after the hit roll so it knows
@@ -5527,10 +5598,12 @@ export default class CombatScene extends Phaser.Scene {
           const gain = Math.max(1, Math.floor((attacker.maxHP || 1) * rule.healHPpct));
           attacker.currentHP = Math.min(attacker.maxHP || gain, (attacker.currentHP || 0) + gain);
           this._log(`${attacker.name} recovers ${gain} HP (tier ${rule.tier} ${fam}).`);
+          this._playStatusVFX?.(attacker, { kind: 'heal' });
         }
         if (rule.healMP) {
           attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + rule.healMP);
           this._log(`${attacker.name} recovers ${rule.healMP} MP (tier ${rule.tier} ${fam}).`);
+          this._playStatusVFX?.(attacker, { kind: 'mana' });
         }
         if (rule.stealInitiative) {
           // Genuine theft, not a flat grant — capped by both the cap itself
@@ -5563,10 +5636,12 @@ export default class CombatScene extends Phaser.Scene {
           const gain = Math.max(1, Math.floor((attacker.maxHP || 1) * result.rewardIfWeak.healHPpct));
           attacker.currentHP = Math.min(attacker.maxHP || gain, (attacker.currentHP || 0) + gain);
           this._log(`${attacker.name} siphons ${gain} HP (weak ${fam}).`);
+          this._playStatusVFX?.(attacker, { kind: 'heal' });
         }
         if (result.rewardIfWeak.healMP) {
           attacker.currentMP = Math.max(0, (attacker.currentMP || 0) + result.rewardIfWeak.healMP);
           this._log(`${attacker.name} restores ${result.rewardIfWeak.healMP} MP (weak ${fam}).`);
+          this._playStatusVFX?.(attacker, { kind: 'mana' });
         }
       }
     }
@@ -5605,9 +5680,11 @@ export default class CombatScene extends Phaser.Scene {
     // (4) Column/team buffs (ally-side)
     if (result?.teamBuff?.scope === 'column' && result.teamBuff.effect) {
       const allies = this._getAlliesInSameColumn(attacker);
+      // Routed through _addStatusEffects (was a raw .push()) so a recast
+      // coalesces correctly like every other status effect, and so a vfx
+      // hint on the effect actually fires.
       for (const a of allies) {
-        a.statusEffects = a.statusEffects || [];
-        a.statusEffects.push({ ...result.teamBuff.effect });
+        this._addStatusEffects(a, [{ ...result.teamBuff.effect }]);
       }
       this._log(`${attacker.name} grants ${result.teamBuff.effect.id} to their rank.`);
     }
@@ -7498,6 +7575,41 @@ export default class CombatScene extends Phaser.Scene {
       },
     });
     if (sound) SoundManager.play(sound);
+  }
+
+  // Movement used to just teleport — _placePortrait tears down the old
+  // slot's children and rebuilds fresh ones in the new slot with no
+  // animation between the two. This animates the portrait traveling from
+  // the OLD slot's screen position to the NEW one instead: a horizontal
+  // slide plus a short vertical hop layered on top, so it reads as a single
+  // "hop over" motion rather than a flat glide. Called AFTER _placePortrait
+  // has already rebuilt the new slot's children — dx/dy is the offset from
+  // the new slot back to where the old one was, so each child starts there
+  // and eases back to its real (destination) position. Fire-and-forget, same
+  // as every other VFX in this file — the logical move already happened;
+  // this only smooths out how it LOOKS.
+  _playMoveHopVFX(slot, dx, dy) {
+    if (!slot?.list?.length || (!dx && !dy)) return;
+    const mult = GameplaySettings.animDurationMult();
+    const duration = 320 * mult;
+    const hopHeight = 18;
+    // Skip index 0 — the slot's own border Rectangle, which shouldn't move.
+    slot.list.slice(1).forEach(child => {
+      if (!child || typeof child.x !== 'number') return;
+      const baseX = child.x, baseY = child.y;
+      child.x = baseX + dx;
+      child.y = baseY + dy;
+      this.tweens.add({ targets: child, x: baseX, ease: 'Quad.easeInOut', duration });
+      this.tweens.add({
+        targets: child,
+        y: baseY - hopHeight,
+        ease: 'Quad.easeOut',
+        duration: duration * 0.4,
+        onComplete: () => {
+          this.tweens.add({ targets: child, y: baseY, ease: 'Quad.easeIn', duration: duration * 0.6 });
+        },
+      });
+    });
   }
 
   // Per-shape landing sound — every impact used to play the same 'hitHurt'
@@ -9423,7 +9535,7 @@ export default class CombatScene extends Phaser.Scene {
     // skills.js) instead of a stat-mod status effect. Bypasses the "no stat
     // mods, nothing to do" bailout below since it's a real effect on its own.
     if (buff.grantsRhythm) {
-      applyRhythmStack(target);
+      applyRhythmStack(target, this);
     }
 
     const turns = Math.max(1, buff.turns | 0);
@@ -9453,7 +9565,7 @@ export default class CombatScene extends Phaser.Scene {
     if (Object.keys(mods).length === 0) return;
 
     const effectId = buff.statusId || `reward_${ability?.id || 'skill'}_buff`;
-    this._addStatusEffects(target, [{ id: effectId, turns, mods }]);
+    this._addStatusEffects(target, [{ id: effectId, turns, mods, vfx: buff.vfx }]);
 
     if (summary.length) {
       const durationText = turns > 1 ? `${turns} turns` : '1 turn';

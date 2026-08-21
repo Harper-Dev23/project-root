@@ -285,7 +285,7 @@ export const ENEMY_TYPES = {
   },
 
   berserker_boss: {
-    skin: 'berserker_portrait',
+    skin: 'portrait_gorrek',
     // Was 420, then 650 — user playtested 650/-20% and still found the fight
     // resolving too fast in both directions (easy wins and near-wipes).
     // Raised again so it buys more turns of real counterplay instead of a

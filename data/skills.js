@@ -49,13 +49,14 @@ const cloneArray = (arr) => (Array.isArray(arr) ? [...arr] : undefined);
  * separate array entries into a single icon with a "×N" badge instead of N
  * duplicate icons.
  */
-export function applyRhythmStack(char) {
+export function applyRhythmStack(char, scene) {
   if (!char) return;
   char.statusEffects = char.statusEffects || [];
   const existing = char.statusEffects.filter(se => se?.id === 'rhythm_stack');
   existing.forEach(se => { se.turns = 2; }); // always refresh duration on all stacks
   if (existing.length < 3) {
     char.statusEffects.push({ id: 'rhythm_stack', turns: 2, stackable: true, mods: { AttackPower: 5 } });
+    scene?._playStatusVFX?.(char, { kind: 'buff_power' });
   }
 }
 
@@ -410,6 +411,7 @@ const RAW_SKILLS = {
       const parts = [`${user.name} meditates, ready to act again.`, 'Bonus action restored.'];
       if (blocked.length) parts.push(`Shakes off ${blocked.length === 1 ? 'a binding effect' : 'binding effects'}.`);
       scene?._log?.(parts.join(' '));
+      scene?._playStatusVFX?.(user, { kind: 'buff_increase' });
       return { amount: 0 };
     }
   },
@@ -448,7 +450,8 @@ const RAW_SKILLS = {
         breaksOnAttack: true,
         breaksOnHitTaken: true,
         sneakAttackBonus: 15,
-        onExpire: { id: 'hide_reward', turns: 3, mods: { Accuracy: 15 }, breaksOnAttack: true },
+        onExpire: { id: 'hide_reward', turns: 3, mods: { Accuracy: 15 }, breaksOnAttack: true, vfx: { kind: 'buff_increase' } },
+        vfx: { kind: 'buff_increase' },
       }]);
       scene?._log?.(`${user.name} melts into the shadows.`);
       return { amount: 0 };
@@ -468,7 +471,7 @@ const RAW_SKILLS = {
     description: 'Acolyte: bless an ally with +10 Accuracy and +10% damage for 3 turns.',
     apply: (user, target, scene) => {
       if (!target) return { amount: 0, log: `${user.name} tries to bless, but finds no target.` };
-      scene?._addStatusEffects?.(target, [{ id: 'blessing', turns: 3, mods: { Accuracy: 10, AttackPower: 10 } }]);
+      scene?._addStatusEffects?.(target, [{ id: 'blessing', turns: 3, mods: { Accuracy: 10, AttackPower: 10 }, vfx: { kind: 'buff_increase' } }]);
       scene?._log?.(`${user.name} blesses ${target.name}.`);
       return { amount: 0 };
     }
@@ -507,6 +510,10 @@ const RAW_SKILLS = {
         id: 'watch_over', turns: 2,
         mods: { PhysicalResist: 10, ElementalResist: 10, NecroticResist: 10 },
         guardianWatch: { guardianId: user.id, guardianName: user.name, extendTurns: 3, markTurns: 2, markMult: 0.2 },
+        // debuff_leer, not a buff kind — visually it's just a set of watchful
+        // eyes, which fits "someone is looking out for you" better than any
+        // of the actual buff assets, per explicit request.
+        vfx: { kind: 'debuff_leer' },
       }]);
       scene?._log?.(`${user.name} watches over ${ally.name}.`);
       return { amount: 0 };
@@ -541,6 +548,7 @@ const RAW_SKILLS = {
         id: 'blockade', turns: 2,
         mods: { PhysicalResist: 25, ElementalResist: 25, NecroticResist: 25 },
         data: { enemyTargetingLocksFront: true },
+        vfx: { kind: 'buff_harden' },
       }]);
       scene?._log?.(`${user.name} forms a blockade — enemies must go through the front line.`);
       return { amount: 0 };
@@ -569,7 +577,7 @@ const RAW_SKILLS = {
     cooldown: TRANSPOSE_COOLDOWN,
     description: 'Performer: your next hit converts all its buildup into pure Fire. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
-      scene?._addStatusEffects?.(user, [{ id: 'transpose_fire', turns: 3, transposeBuildupTo: 'fire' }]);
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_fire', turns: 3, transposeBuildupTo: 'fire', vfx: { kind: 'buff_magic' } }]);
       stampTransposeCooldowns(user);
       scene?._log?.(`${user.name} hums a searing refrain.`);
       return { amount: 0 };
@@ -586,7 +594,7 @@ const RAW_SKILLS = {
     cooldown: TRANSPOSE_COOLDOWN,
     description: 'Performer: your next hit converts all its buildup into pure Lightning. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
-      scene?._addStatusEffects?.(user, [{ id: 'transpose_lightning', turns: 3, transposeBuildupTo: 'lightning' }]);
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_lightning', turns: 3, transposeBuildupTo: 'lightning', vfx: { kind: 'buff_magic' } }]);
       stampTransposeCooldowns(user);
       scene?._log?.(`${user.name} hums a crackling refrain.`);
       return { amount: 0 };
@@ -603,7 +611,7 @@ const RAW_SKILLS = {
     cooldown: TRANSPOSE_COOLDOWN,
     description: 'Performer: your next hit converts all its buildup into pure Cold. Shares a cooldown with the other Transpose spells.',
     apply: (user, _target, scene) => {
-      scene?._addStatusEffects?.(user, [{ id: 'transpose_cold', turns: 3, transposeBuildupTo: 'cold' }]);
+      scene?._addStatusEffects?.(user, [{ id: 'transpose_cold', turns: 3, transposeBuildupTo: 'cold', vfx: { kind: 'buff_magic' } }]);
       stampTransposeCooldowns(user);
       scene?._log?.(`${user.name} hums a chilling refrain.`);
       return { amount: 0 };
@@ -910,7 +918,7 @@ const NPC_ONLY_SKILLS = {
     // same scene._addStatusEffects(char, effects) pattern fighter_bulwark_call
     // already uses for its own party-wide buff below.
     apply: (user, target, scene) => {
-      scene?._addStatusEffects?.(user, [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 } }]);
+      scene?._addStatusEffects?.(user, [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }]);
       return { amount: 3, buildup: { cold: 60 } };
     },
     description: "Deals 3 damage and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
@@ -928,7 +936,7 @@ const NPC_ONLY_SKILLS = {
     requiresWeakness: { family: 'expose', tier: 1 },
     apply: (user, target, scene) => {
       scene?._log?.(`${user.name} taunts ${target?.name}!`);
-      return { amount: 0, statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null } }] };
+      return { amount: 0, statusEffects: [{ id: 'taunted', turns: 1, data: { forcedTarget: user?.id || null }, vfx: { kind: 'debuff_leer' } }] };
     },
     description: "Requires the target to be Exposed (T1+). Forces them to attack you on their next turn — no damage of its own."
   },
@@ -1005,10 +1013,12 @@ const NPC_ONLY_SKILLS = {
         scene?._addStatusEffects?.(ally, [{
           id: 'bulwark_call', turns: 2,
           mods: { PhysicalResist: resistBonus, ElementalResist: resistBonus, NecroticResist: resistBonus },
+          vfx: { kind: 'buff_harden' },
         }]);
         const mpRestore = Math.floor((ally.maxMP || 0) * 0.25);
         if (mpRestore > 0) {
           ally.currentMP = Math.min(ally.maxMP || 0, (ally.currentMP || 0) + mpRestore);
+          scene?._playStatusVFX?.(ally, { kind: 'mana' });
         }
       });
 
@@ -1028,10 +1038,11 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'ally',
-    apply: (_user, target) => {
+    apply: (_user, target, scene) => {
       if (!target) return { amount: 0 };
       const heal = Math.max(14, Math.floor((target.maxHP || 50) * 0.35));
       target.currentHP = Math.min(target.maxHP || heal, (target.currentHP || 0) + heal);
+      scene?._playStatusVFX?.(target, { kind: 'heal' });
       return { amount: 0 };
     },
     description: "Restores 35% of an ally's max HP (minimum 14)."
@@ -1060,6 +1071,7 @@ const NPC_ONLY_SKILLS = {
       if (removed) {
         scene?._log?.(`${target.name} is cleansed of maladies.`);
         target.currentMP = Math.min(target.maxMP || 0, (target.currentMP || 0) + 4);
+        scene?._playStatusVFX?.(target, { kind: 'mana' });
       }
       return { amount: 0 };
     },
@@ -1080,7 +1092,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'ally',
     apply: (_user, target) => ({
       amount: 0,
-      statusEffects: [{ id: 'healer_blessing', turns: 3, mods: { Accuracy: 10 }, data: { mpRegen: 2 } }]
+      statusEffects: [{ id: 'healer_blessing', turns: 3, mods: { Accuracy: 10 }, data: { mpRegen: 2 }, vfx: { kind: 'buff_increase' } }]
     }),
     description: "Grants an ally +10 Accuracy for 3 turns."
   },
@@ -1122,6 +1134,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'ally',
     requiresInitiativeGauge: 30,
+    vfxHint: { kind: 'heal' },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.healer_mending_wave;
       // requiresInitiativeGauge (checked generically before apply() ever
@@ -1179,12 +1192,13 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     requiresWeakness: { family: 'curse', tier: 1 },
-    apply: (user, target) => {
+    apply: (user, target, scene) => {
       const tier = target?.weakness?.tiers?.curse || 0;
       const dmg = 4;
       const heal = tier >= 2 ? 18 : 10;
       if (user) {
         user.currentHP = Math.min(user.maxHP || heal, (user.currentHP || 0) + heal);
+        scene?._playStatusVFX?.(user, { kind: 'heal' });
       }
       return { amount: dmg };
     },
@@ -1322,6 +1336,7 @@ const NPC_ONLY_SKILLS = {
       const statusEffects = alreadyCursed ? undefined : [{
         id: 'warlock_curse_needles', name: 'Curse of Needles', permanent: true,
         onHit: { weaponDamageFlat: 2, curseScaled: true },
+        vfx: { kind: 'debuff_weak' },
       }];
 
       return { ...roll, physical, elemental, necrotic, amount, statusEffects };
@@ -1478,7 +1493,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { lacerate: 80 },
-    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 } }] }),
+    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 }, vfx: { kind: 'debuff_decrease' } }] }),
     description: "Deals 5 damage and applies 80 Lacerate buildup. Slows the target (-10 Initiative for 2 turns)."
   },
   'rogue_evasion': {
@@ -1495,8 +1510,9 @@ const NPC_ONLY_SKILLS = {
       const anyAfflicted = scene?.turnOrder?.some(u => !u.isEnemy && u.status !== 'incapacitated' && (((u.weakness?.tiers?.curse || 0) >= 1) || ((u.weakness?.tiers?.toxic || 0) >= 1)));
       if (anyAfflicted) {
         user.currentMP = Math.min(user.maxMP || 0, (user.currentMP || 0) + 3);
+        scene?._playStatusVFX?.(user, { kind: 'mana' });
       }
-      return { amount: 0, statusEffects: [{ id: 'rogue_evasion', turns: 1, mods: { Evasion: 20 } }] };
+      return { amount: 0, statusEffects: [{ id: 'rogue_evasion', turns: 1, mods: { Evasion: 20 }, vfx: { kind: 'buff_increase' } }] };
     },
     description: "Grants +20 Evasion for 1 turn. Also restores 3 MP if any party member is Cursed or Poisoned (Toxic T1+)."
   },
@@ -1643,7 +1659,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: (user) => ({
       amount: 0,
-      statusEffects: [{ id: 'wizard_mana_shield', turns: 2, mods: { ElementalResist: 20 } }]
+      statusEffects: [{ id: 'wizard_mana_shield', turns: 2, mods: { ElementalResist: 20 }, vfx: { kind: 'buff_harden' } }]
     }),
     description: "Grants +20 Elemental Resist for 2 turns."
   },
@@ -1682,7 +1698,7 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: false,
     apply: (attacker, _target, scene) => {
-      scene?._addStatusEffects?.(attacker, [{ id: 'channeling_inferno', turns: 2 }]);
+      scene?._addStatusEffects?.(attacker, [{ id: 'channeling_inferno', turns: 2, vfx: { kind: 'buff_power' } }]);
       scene?._log?.(`${attacker?.name || 'Lenny'} begins channeling a massive inferno...`);
       return { amount: 0 };
     },
@@ -1769,7 +1785,7 @@ const NPC_ONLY_SKILLS = {
         ...roll, physical, elemental, necrotic, amount,
         // +50% then another +25% buildup across encounter 4 (was 80, then 120).
         buildup: { expose: 150 },
-        statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null } }]
+        statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null }, vfx: { kind: 'debuff_leer' } }]
       };
     },
     description: "Deals 35% weapon damage and applies 150 Expose buildup. Marks the target for 3 turns, making allies more likely to focus their attacks on it."
@@ -1786,7 +1802,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'ally',
     apply: (_user, beast) => ({
       amount: 0,
-      statusEffects: [{ id: 'commanded', turns: 1, mods: { Initiative: 15, Accuracy: 10 } }]
+      statusEffects: [{ id: 'commanded', turns: 1, mods: { Initiative: 15, Accuracy: 10 }, vfx: { kind: 'buff_increase' } }]
     }),
     description: "Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn."
   },
@@ -1814,7 +1830,7 @@ const NPC_ONLY_SKILLS = {
       return {
         ...roll, physical, elemental, necrotic, amount,
         // +50% then another +25% buildup across encounter 4 (was 90, then 135).
-        buildup: { lacerate: 169 }, statusEffects: [{ id: 'immobilized', turns: 2 }]
+        buildup: { lacerate: 169 }, statusEffects: [{ id: 'immobilized', turns: 2, vfx: { kind: 'debuff_shock' } }]
       };
     },
     description: "Deals 80% weapon damage and applies 169 Lacerate buildup. Immobilizes the target for 2 turns."
@@ -1838,8 +1854,7 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, _target, scene) => {
       const beasts = scene?.enemies?.filter(u => u?.tags?.includes('beast')) || [];
       for (const beast of beasts) {
-        beast.statusEffects = beast.statusEffects || [];
-        beast.statusEffects.push({ id: 'empowered_pack', turns: 2, mods: { Initiative: 20, Accuracy: 10 } });
+        scene?._addStatusEffects?.(beast, [{ id: 'empowered_pack', turns: 2, mods: { Initiative: 20, Accuracy: 10 }, vfx: { kind: 'buff_increase' } }]);
       }
       return { amount: 0 };
     },
@@ -2269,6 +2284,7 @@ const NPC_ONLY_SKILLS = {
 
       scene?._log?.(`${attacker?.name || 'Kiro'} sheds his old skin, regenerating ${actualHealed} HP!`);
       scene?._showFloatingNumber?.(actualHealed, attacker, /*isHeal=*/true, /*isCrit=*/false);
+      scene?._playStatusVFX?.(attacker, { kind: 'heal' });
       scene?._updateHealthBars?.();
       scene?._updateHPMPBars?.();
 
@@ -2336,7 +2352,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: (user) => ({
       amount: 0,
-      statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 } }]
+      statusEffects: [{ id: 'heated_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }]
     }),
     description: "Grants +15 Physical Resist for 2 turns."
   },
@@ -2472,7 +2488,7 @@ const NPC_ONLY_SKILLS = {
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: false,
-    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 } }] }),
+    apply: () => ({ amount: 0, statusEffects: [{ id: 'icy_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }] }),
     description: "Grants +15 Physical Resist for 2 turns."
   },
   'ice_freeze_point': {
@@ -2504,7 +2520,7 @@ const NPC_ONLY_SKILLS = {
         ...roll, physical, elemental, necrotic, amount,
         isMagic: true, element: 'cold',
         consumeWeakness: ['cold'],
-        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }],
+        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true, vfx: { kind: 'debuff_shock' } }],
       };
     },
     description: "Requires target at Cold T2. Deals 130% weapon damage as Cold, +30% more (Thermal Shock) if the target is also at least Singed. Applies Frozen (skip next action)."
@@ -2578,7 +2594,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: () => ({
       amount: 0,
-      statusEffects: [{ id: 'ember_fire_ward', turns: 2, mods: { ElementalResist: 20 }, fireBuildupMul: 0.5 }]
+      statusEffects: [{ id: 'ember_fire_ward', turns: 2, mods: { ElementalResist: 20 }, fireBuildupMul: 0.5, vfx: { kind: 'buff_harden' } }]
     }),
     description: "Self-buff: +20% Elemental Resist and half incoming Fire buildup for 2 turns."
   },
@@ -2593,7 +2609,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: () => ({
       amount: 0,
-      statusEffects: [{ id: 'rime_cold_ward', turns: 2, mods: { ElementalResist: 20 }, coldBuildupMul: 0.5 }]
+      statusEffects: [{ id: 'rime_cold_ward', turns: 2, mods: { ElementalResist: 20 }, coldBuildupMul: 0.5, vfx: { kind: 'buff_harden' } }]
     }),
     description: "Self-buff: +20% Elemental Resist and half incoming Cold buildup for 2 turns."
   },
@@ -2825,7 +2841,7 @@ const NPC_ONLY_SKILLS = {
         ...roll, physical, elemental, necrotic, amount,
         isMagic: true, element: 'cold',
         buildup: { cold: 200 }, consumeWeakness: ['cold'],
-        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true }],
+        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true, vfx: { kind: 'debuff_shock' } }],
       };
     },
     description: "Enraged only. Deals 180% weapon damage as Cold, applies massive Cold buildup, and Freezes the target (skip next action)."
@@ -2999,7 +3015,7 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
         ability, tags: ability?.tags, skipGearMultiplier: true,
       }));
-      scene?._addStatusEffects?.(attacker, [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 } }]);
+      scene?._addStatusEffects?.(attacker, [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }]);
       return { ...roll, amount, buildup: { disorient: 90 } };
     },
     description: "Deals weapon damage and applies 90 Disorient buildup, while bracing itself for 2 turns (+15 Physical Resist)."
@@ -3015,7 +3031,7 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: (user) => ({
       amount: 0,
-      statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 10 } }]
+      statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 10 }, vfx: { kind: 'buff_increase' } }]
     }),
     description: "Grants +30 Initiative and +10 Accuracy for 2 turns."
   },
@@ -3079,7 +3095,7 @@ const NPC_ONLY_SKILLS = {
       }
       return {
         amount: 0,
-        statusEffects: [{ id: 'berserker_glare', turns: 2 }],
+        statusEffects: [{ id: 'berserker_glare', turns: 2, vfx: { kind: 'debuff_leer' } }],
         log: `${attacker?.name || 'The Berserker'} fixes a murderous glare on ${target?.name || 'the target'}.`,
       };
     },
@@ -3157,7 +3173,7 @@ const NPC_ONLY_SKILLS = {
       attacker.currentHP = Math.max(0, (attacker.currentHP || 0) - selfDamage);
       scene?._showFloatingNumber?.(selfDamage, attacker, false, false);
       scene?._updateHealthBars?.(); scene?._updateHPMPBars?.();
-      scene?._addStatusEffects?.(attacker, [{ id: 'reckless_harvest_buff', turns: 3, mods: { AttackPower: atkPowerPct } }]);
+      scene?._addStatusEffects?.(attacker, [{ id: 'reckless_harvest_buff', turns: 3, mods: { AttackPower: atkPowerPct }, vfx: { kind: 'buff_power' } }]);
       return {
         amount: 0,
         log: `${attacker?.name || 'The Berserker'} tears at his own wounds, harvesting ${meter} Lacerate for +${atkPowerPct}% power (${selfDamage} self-damage).`,
@@ -3177,7 +3193,7 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'self',
     tags: ['self'],
     apply: (attacker, _target, scene) => {
-      scene?._addStatusEffects?.(attacker, [{ id: 'bloodrite_buff', turns: 2, mods: { LifeStealPct: 10 } }]);
+      scene?._addStatusEffects?.(attacker, [{ id: 'bloodrite_buff', turns: 2, mods: { LifeStealPct: 10 }, vfx: { kind: 'buff_health' } }]);
       return { amount: 0, log: `${attacker?.name || 'The Berserker'} howls a bloodrite — his wounds will mend faster.` };
     },
     description: "Grants +10% Lifesteal for 2 turns, doubling his Bloodthirster's own 10% while active."
@@ -10942,6 +10958,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "curse", "necrotic"],
     cooldown: 4,
     requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.curse_of_needles;
       const roll = calculateDamage(attacker, target, ability);
@@ -10970,9 +10987,9 @@ Object.assign(RAW_SKILLS, {
           vfx: { kind: 'debuff_weak' },
         }]);
       }
-      return { ...roll, physical, elemental, necrotic, amount };
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
     },
-    description: "Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while at least Hexed, amplified while Afflicted."
+    description: "Deals 110% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while at least Hexed, amplified while Afflicted."
   },
 
   'flash_overload': {
@@ -11030,6 +11047,56 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Deals 125% weapon damage. Requires the target to be at least Zapped. Applies Disorient to all enemies. If the target is Shocked, the hit is guaranteed to repeat for free — including the Disorient applied to every other enemy."
+  },
+
+  // New curse-rider skill (dagger's second, alongside Curse of Needles) —
+  // same intensity-scaling shape used across the whole "seven curses"
+  // batch: base magnitude at Curse T1, scaling continuously past T2 via
+  // weaknessIntensityMult on the target's own Curse meter, computed once at
+  // cast time (same technique Rime Chop/Bell Ringer already use for their
+  // own tier/overflow scaling) rather than a live-reading generic flag.
+  'curse_of_normality': {
+    id: "curse_of_normality",
+    name: "Curse of Normality",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_of_normality;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const curseMeter = target?.weakness?.meters?.curse || 0;
+      const basePct = 20;
+      const scaledPct = curseTier >= 2 ? Math.round(basePct * weaknessIntensityMult(curseMeter)) : basePct;
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_of_normality');
+      if (!alreadyCursed) {
+        scene?._addStatusEffects?.(target, [{
+          id: "curse_of_normality", name: "Curse of Normality", permanent: true,
+          mods: { AttackPower: -scaledPct },
+          vfx: { kind: 'debuff_decrease' },
+        }]);
+      }
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
+    },
+    description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: -20% AttackPower, scaling up to -50% at max Curse intensity."
   },
 
   'vein_tap': {
@@ -11185,8 +11252,8 @@ Object.assign(RAW_SKILLS, {
     // guardPct is _applyRewardBuff's existing PhysicalResist mapping — no
     // engine changes needed, just declaring the reward.
     rewardIfTierCross: [
-      { family: "cold", tier: 1, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance" } },
-      { family: "cold", tier: 2, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance" } },
+      { family: "cold", tier: 1, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
+      { family: "cold", tier: 2, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.guarded_slash;
@@ -11297,7 +11364,7 @@ Object.assign(RAW_SKILLS, {
 
       const statusEffects = [];
       if (rule) {
-        statusEffects.push({ id: "rallied_vulnerability", turns: 1, mods: { PhysicalResist: -10 } });
+        statusEffects.push({ id: "rallied_vulnerability", turns: 1, mods: { PhysicalResist: -10 }, vfx: { kind: 'debuff_decrease' } });
       }
 
       const amount = Math.max(1, physical + elemental + necrotic);
@@ -11310,10 +11377,11 @@ Object.assign(RAW_SKILLS, {
         if (!ally || ally.status === 'incapacitated') return;
         const maxMP = ally.maxMP ?? ally.derivedStats?.maxMP ?? 0;
         ally.currentMP = Math.min(maxMP, (ally.currentMP || 0) + mpRestored);
+        scene?._playStatusVFX?.(ally, { kind: 'mana' });
       });
       scene?._log?.(`${attacker?.name || "The swordsman"} rallies the party, restoring ${mpRestored} MP to all allies.`);
 
-      applyRhythmStack(attacker);
+      applyRhythmStack(attacker, scene);
 
       return {
         ...roll,
@@ -11353,7 +11421,7 @@ Object.assign(RAW_SKILLS, {
     rewardIfWeak: [
       { family: "expose", tierAtLeast: 2, buff: { grantsRhythm: true } },
     ],
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.soft_spot_exposed;
       const roll = calculateDamage(attacker, target, ability);
 
@@ -11373,7 +11441,7 @@ Object.assign(RAW_SKILLS, {
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
       const rule = findRewardIfWeakRule(ability, exposeTier);
-      if (rule?.buff?.grantsRhythm) applyRhythmStack(attacker);
+      if (rule?.buff?.grantsRhythm) applyRhythmStack(attacker, scene);
 
       const amount = Math.max(1, physical + elemental + necrotic);
 
@@ -11498,6 +11566,7 @@ Object.assign(RAW_SKILLS, {
         const mpRestore = 3;
         const maxMP = owner.maxMP ?? 0;
         owner.currentMP = Math.min(maxMP, (owner.currentMP || 0) + mpRestore);
+        scene?._playStatusVFX?.(owner, { kind: 'mana' });
         scene?._log?.(`${owner.name} reads the attack — damage reduced 25%, ${mpRestore} MP restored!`);
       },
     },
@@ -11547,7 +11616,7 @@ Object.assign(RAW_SKILLS, {
       // who already has the buff coalesces into one entry — keeping the
       // stronger of the two onHit values — instead of stacking two live
       // entries that both fire on every hit.
-      const buff = { id: "blazing_fervor_buff", turns: 2, onHit: { fireDamage: fireDmgOnHit, fireBuildup: fireBuildupOnHit } };
+      const buff = { id: "blazing_fervor_buff", turns: 2, onHit: { fireDamage: fireDmgOnHit, fireBuildup: fireBuildupOnHit }, vfx: { kind: 'buff_magic' } };
       const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
       (allySlots || []).forEach(s => {
         const ally = s?.char;
@@ -11668,7 +11737,7 @@ Object.assign(RAW_SKILLS, {
           target.weakness.meters.cold = Math.max(0, coldMeter - consumedCold);
           if (target.weakness.tiers) target.weakness.tiers.cold = weaknessTierFromMeter(target.weakness.meters.cold);
         }
-        statusEffects.push({ id: "frost_numbed", turns: 1 });
+        statusEffects.push({ id: "frost_numbed", turns: 1, vfx: { kind: 'debuff_shock' } });
       }
 
       // Fire T2+: consume up to 400 fire, independent of the cold threshold above.
@@ -11699,6 +11768,7 @@ Object.assign(RAW_SKILLS, {
             // Resist-as-mitigation-points convention as torn_defenses/rallied_vulnerability.
             mods: { ElementalResist: -(steps * 13) },
             onTurnEndOnce: { damage: steps * 13, isMagic: true },
+            vfx: { kind: 'debuff_burn' },
           });
         }
       }
@@ -11743,7 +11813,7 @@ Object.assign(RAW_SKILLS, {
         const enemy = s?.char;
         if (!enemy || enemy.status === 'incapacitated') return;
         if ((enemy?.weakness?.tiers?.disorient || 0) < 1) return;
-        scene?._addStatusEffects?.(enemy, [{ id: "shaken_aim", turns: 1, mods: { Accuracy: -50 } }]);
+        scene?._addStatusEffects?.(enemy, [{ id: "shaken_aim", turns: 1, mods: { Accuracy: -50 }, vfx: { kind: 'debuff_confuse' } }]);
         affected++;
       });
       return {
@@ -11877,7 +11947,7 @@ Object.assign(RAW_SKILLS, {
 
       let log;
       if (variant?.grantsRhythm) {
-        applyRhythmStack(attacker);
+        applyRhythmStack(attacker, scene);
         log = `${attacker?.name || "The swordsman"} strikes from the back rank, building rhythm!`;
       } else if (variant?.initiativePerRhythmStack) {
         const totalStacks = Math.min(3, (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length);
@@ -11914,7 +11984,7 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "heal", "necrotic"],
     cooldown: 4,
     requiresWeakness: { anyOf: [{ family: "toxic", tierAtLeast: 1 }, { family: "disease", tierAtLeast: 1 }, { family: "curse", tierAtLeast: 1 }] },
-    apply: (attacker, target) => {
+    apply: (attacker, target, scene) => {
       const ability = SKILLS?.balancing_blow;
       const roll = calculateDamage(attacker, target, ability);
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
@@ -11929,6 +11999,7 @@ Object.assign(RAW_SKILLS, {
       if (healAmt > 0 && attacker) {
         const maxHP = attacker.maxHP ?? attacker.derivedStats?.maxHP ?? 0;
         attacker.currentHP = Math.min(maxHP, (attacker.currentHP || 0) + healAmt);
+        scene?._playStatusVFX?.(attacker, { kind: 'heal' });
       }
       return {
         ...roll, physical, elemental, necrotic, amount,
@@ -11936,6 +12007,53 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "100% damage vs necrotically afflicted; heals 1 HP per 25 total necrotic buildup (toxic + disease + curse)."
+  },
+
+  // Sword's curse-rider — same intensity-scaling shape as Curse of
+  // Normality (dagger)/Curse of Pendulums (mace)/Curse of Doubt (bow)/Curse
+  // of Static (axe), just targeting Accuracy for this kit.
+  'curse_of_visions': {
+    id: "curse_of_visions",
+    name: "Curse of Visions",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_of_visions;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const curseMeter = target?.weakness?.meters?.curse || 0;
+      const basePct = 20;
+      const scaledPct = curseTier >= 2 ? Math.round(basePct * weaknessIntensityMult(curseMeter)) : basePct;
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_of_visions');
+      if (!alreadyCursed) {
+        scene?._addStatusEffects?.(target, [{
+          id: "curse_of_visions", name: "Curse of Visions", permanent: true,
+          mods: { Accuracy: -scaledPct },
+          vfx: { kind: 'debuff_confuse' },
+        }]);
+      }
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
+    },
+    description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: -20 Accuracy, scaling up to -50 at max Curse intensity."
   },
 
   'shattering_cut': {
@@ -11976,7 +12094,7 @@ Object.assign(RAW_SKILLS, {
       const pdrReduction = steps * 13;
       const statusEffects = [];
       if (pdrReduction > 0) {
-        statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction } });
+        statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction }, vfx: { kind: 'debuff_decrease' } });
       }
       // Lacerate-buildup vulnerability now scales continuously with steps
       // instead of a flat +50% at the 200 breakpoint — +25% per 100 past
@@ -11985,7 +12103,7 @@ Object.assign(RAW_SKILLS, {
       // Strike's Trapped Fire (_applyWeaknessBuildup in CombatScene.js).
       const lacerateVulnPct = steps >= 2 ? steps * 25 : 0;
       if (lacerateVulnPct > 0) {
-        statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1 + lacerateVulnPct / 100 });
+        statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1 + lacerateVulnPct / 100, vfx: { kind: 'debuff_sick' } });
       }
       return {
         ...roll, physical, elemental, necrotic, amount,
@@ -13100,6 +13218,55 @@ Object.assign(RAW_SKILLS, {
   },
 
   // -------- Payoff (armor shred) --------
+  // Axe's curse-rider — deliberately separate from Hexed Cleave, which
+  // stays untouched. Boosts each INDIVIDUAL Lightning Jolt roll the cursed
+  // target takes (see applyLightningJolt, CombatLogic.js), not a one-time
+  // flat add — since Jolt can roll up to 4 times on a single hit at
+  // Lightning T2+ with high intensity, this compounds fast by design.
+  'curse_of_static': {
+    id: "curse_of_static",
+    name: "Curse of Static",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "CHA",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_of_static;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const curseMeter = target?.weakness?.meters?.curse || 0;
+      const baseBonus = 1;
+      const scaledBonus = curseTier >= 2 ? Math.round(baseBonus * weaknessIntensityMult(curseMeter)) : baseBonus;
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_static');
+      if (!alreadyCursed) {
+        scene?._addStatusEffects?.(target, [{
+          id: "curse_static", name: "Curse of Static", permanent: true,
+          joltRollBonus: scaledBonus,
+          vfx: { kind: 'debuff_shock' },
+        }]);
+      }
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
+    },
+    description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: +1 damage to each Lightning Jolt roll against the target (up to +3 at max Curse intensity), compounding with T2's multi-jolt procs."
+  },
+
   'overhead_hew': {
     id: "overhead_hew",
     name: "Overhead Hew",
@@ -13320,8 +13487,8 @@ Object.assign(RAW_SKILLS, {
     // Fires on crossing EITHER threshold (Dazed or Concussed), same debuff
     // either way — same pattern as Needle Feint's crit-chance reward.
     rewardIfTierCross: [
-      { family: "disorient", tier: 1, debuff: { physicalVulnPct: 15, turns: 2 } },
-      { family: "disorient", tier: 2, debuff: { physicalVulnPct: 15, turns: 2 } },
+      { family: "disorient", tier: 1, debuff: { physicalVulnPct: 15, turns: 2, vfx: { kind: 'debuff_decrease' } } },
+      { family: "disorient", tier: 2, debuff: { physicalVulnPct: 15, turns: 2, vfx: { kind: 'debuff_decrease' } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.ringing_blow;
@@ -13398,6 +13565,7 @@ Object.assign(RAW_SKILLS, {
           turns: 1,
           nextHitOnly: true,
           onHit: { buildup: { cold: 100 } },
+          vfx: { kind: 'buff_power' },
         }]);
         scene?._log?.(`${owner.name} braces against the blast — the splash damage is completely negated! Their next attack carries a surge of cold.`);
       },
@@ -13503,7 +13671,7 @@ Object.assign(RAW_SKILLS, {
     // falls back to title-casing the id when there's no STATUS_ICON_LIBRARY
     // entry, so leaving the old id here would've still shown "Iron Chant" on
     // buffed allies even after the skill's own display name changed.
-    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 63 } } },
+    teamBuff: { scope: "column", effect: { id: "fel_chant", turns: 1, guardDiseaseTierPct: { 1: 25, 2: 50 }, guardHits: 2, retaliateBuildup: { disease: 63 }, vfx: { kind: 'buff_harden' } } },
     apply: () => {
       const ability = SKILLS?.fel_chant;
       const effect = ability?.teamBuff?.effect ? {
@@ -13863,7 +14031,6 @@ Object.assign(RAW_SKILLS, {
       { family: "disorient", tierAtLeast: 1 },
       { family: "expose", tierAtLeast: 1 },
     ],
-    statusEffects: [{ id: "bell_ringer_concuss", turns: 2, mods: { Initiative: -15, speedDownPct: 12 } }],
     apply: (attacker, target) => {
       const ability = SKILLS?.bell_ringer;
       const roll = calculateDamage(attacker, target, ability);
@@ -13915,7 +14082,7 @@ Object.assign(RAW_SKILLS, {
       // Disorient-finisher identity (this doesn't consume any buildup at
       // all, just a temporary incoming-buildup vulnerability).
       if (roll.isCrit) {
-        statusEffects.push({ id: "bell_ringer_rattled", turns: 1, disorientBuildupMul: 1.5 });
+        statusEffects.push({ id: "bell_ringer_rattled", turns: 1, disorientBuildupMul: 1.5, vfx: { kind: 'debuff_confuse' } });
       }
 
       return {
@@ -13924,7 +14091,7 @@ Object.assign(RAW_SKILLS, {
         statusEffects: statusEffects.length ? statusEffects : undefined,
       };
     },
-    description: "Requires Disorient T1+ and Expose T1+. Deals 100% weapon damage, +8% per Disorient tier, plus overflow. Crit multiplier is separately boosted +15% per Expose tier, plus overflow — on top of the universal Expose T2 crit bonus every attack already gets. If this hit crits, the target also takes +50% Disorient buildup for 1 turn. Applies an Initiative/speed penalty debuff."
+    description: "Requires Disorient T1+ and Expose T1+. Deals 100% weapon damage, +8% per Disorient tier, plus overflow. Crit multiplier is separately boosted +15% per Expose tier, plus overflow — on top of the universal Expose T2 crit bonus every attack already gets. If this hit crits, the target also takes +50% Disorient buildup for 1 turn."
   },
 
   'boulder_toss': {
@@ -14090,7 +14257,7 @@ Object.assign(RAW_SKILLS, {
         // families, so max 3 families x T2 x 5% = -30% cap), 2-turn debuff.
         const weakenPct = Math.min(30, tierSum * 5);
         if (weakenPct > 0) {
-          scene?._addStatusEffects?.(victim, [{ id: "sacred_shockwave_weakened", turns: 2, mods: { AttackPower: -weakenPct } }]);
+          scene?._addStatusEffects?.(victim, [{ id: "sacred_shockwave_weakened", turns: 2, mods: { AttackPower: -weakenPct }, vfx: { kind: 'debuff_decrease' } }]);
         }
       };
 
@@ -14137,6 +14304,8 @@ Object.assign(RAW_SKILLS, {
           const mpAfter = maxMP > 0 ? Math.min(maxMP, mpBefore + healMP) : mpBefore;
           ally.currentHP = hpAfter;
           ally.currentMP = mpAfter;
+          if (hpAfter > hpBefore) scene?._playStatusVFX?.(ally, { kind: 'heal' });
+          if (mpAfter > mpBefore) scene?._playStatusVFX?.(ally, { kind: 'mana' });
           healedAllies.push({ id: ally.id || ally.name, healedHP: hpAfter - hpBefore, healedMP: mpAfter - mpBefore });
         });
       }
@@ -14512,6 +14681,7 @@ Object.assign(RAW_SKILLS, {
       if (mpGain > 0 && attacker) {
         const maxMP = attacker.maxMP ?? 0;
         attacker.currentMP = Math.min(maxMP, (attacker.currentMP || 0) + mpGain);
+        scene?._playStatusVFX?.(attacker, { kind: 'mana' });
       }
 
       return {
@@ -14522,6 +14692,56 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Requires at least one active Quake zone. Triggers the effect of every active Quake zone on whoever's standing in it, without using up any of their remaining duration. Restores 5 MP per distinct enemy caught in a zone."
+  },
+
+  // Mace's curse-rider — bumped to a 30% base (vs. 20% on the other four)
+  // and spread across the whole physical family (Expose/Lacerate/Disorient
+  // together via the generic <family>BuildupMul mechanism, the same one
+  // Bell Ringer's disorientBuildupMul/Shattering Cut's lacerateBuildupMul
+  // already use) rather than a single-stat mods debuff.
+  'curse_of_pendulums': {
+    id: "curse_of_pendulums",
+    name: "Curse of Pendulums",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["mace_2h"],
+    requiredStat: "CHA",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_of_pendulums;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const curseMeter = target?.weakness?.meters?.curse || 0;
+      const basePct = 30;
+      const scaledPct = curseTier >= 2 ? Math.round(basePct * weaknessIntensityMult(curseMeter)) : basePct;
+      const mul = 1 + scaledPct / 100;
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_of_pendulums');
+      if (!alreadyCursed) {
+        scene?._addStatusEffects?.(target, [{
+          id: "curse_of_pendulums", name: "Curse of Pendulums", permanent: true,
+          exposeBuildupMul: mul, lacerateBuildupMul: mul, disorientBuildupMul: mul,
+          vfx: { kind: 'debuff_decrease' },
+        }]);
+      }
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
+    },
+    description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: +30% Expose/Lacerate/Disorient buildup taken, scaling up to +75% at max Curse intensity."
   },
 
   'concussive_drain': {
@@ -15152,10 +15372,8 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["support", "mark"],
-    apply: (attacker, target) => {
-      target.statusEffects = target.statusEffects || [];
-      target.statusEffects = target.statusEffects.filter(se => se?.id !== 'hunters_mark');
-      target.statusEffects.push({ id: 'hunters_mark', turns: 2, mods: { BuildupReceived: 50, LodgeDamage: 25 } });
+    apply: (attacker, target, scene) => {
+      scene?._addStatusEffects?.(target, [{ id: 'hunters_mark', turns: 2, mods: { BuildupReceived: 50, LodgeDamage: 25 }, vfx: { kind: 'debuff_weak' } }]);
       return {
         amount: 0,
         log: `${attacker?.name ?? 'Archer'} marks ${target?.name ?? 'the target'} — +50% buildup received, +25% lodge damage.`,
@@ -15315,9 +15533,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "buff", "expose"],
-    apply: (attacker) => {
-      attacker.statusEffects = attacker.statusEffects || [];
-      attacker.statusEffects = attacker.statusEffects.filter(se => se?.id !== 'snipe_pose');
+    apply: (attacker, _target, scene) => {
       // mods.AttackPower (not a bespoke bonusDmgPct field) so this reads
       // through the SAME generic Category-A pool applyDamageModifiers/
       // applyTypedDamageModifiers already sum every active AttackPower
@@ -15328,7 +15544,7 @@ Object.assign(RAW_SKILLS, {
       // the bonus show up in the damage tooltip's own "Generic increased
       // damage" breakdown line — same one Rhythm already produces — for
       // free, with no separate tooltip wiring needed.
-      attacker.statusEffects.push({ id: 'snipe_pose', turns: 1, mods: { AttackPower: 50 }, exposeBuildup: 80 });
+      scene?._addStatusEffects?.(attacker, [{ id: 'snipe_pose', turns: 1, mods: { AttackPower: 50 }, exposeBuildup: 80, vfx: { kind: 'buff_power' } }]);
       return {
         amount: 0,
         log: `${attacker?.name ?? 'Archer'} takes careful aim — next attack +50% increased damage and +80 expose.`,
@@ -15352,6 +15568,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "mana"],
+    vfxHint: { kind: 'mana' },
     apply: (attacker, _target, scene) => {
       const count = scene?.lodgesDislodgedThisTurn || 0;
       if (count === 0) {
@@ -15804,6 +16021,7 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["ranged", "attack", "projectile"],
+    vfxHint: { kind: 'mana' },
     apply: (attacker, target) => {
       const ability = SKILLS?.farsight_volley_shot;
       const roll = calculateDamage(attacker, target, ability);
@@ -15937,6 +16155,52 @@ Object.assign(RAW_SKILLS, {
   // to the stronger value instead of stacking two live entries. Party-wide
   // Accuracy instead of fire damage/buildup on hit. No existing bow skill
   // spent Initiative at all before this.
+  // Bow's curse-rider — same shape as Curse of Normality/Visions, targeting
+  // Evasion: they second-guess their own ability to dodge.
+  'curse_of_doubt': {
+    id: "curse_of_doubt",
+    name: "Curse of Doubt",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["bow"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 6,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["ranged", "attack", "projectile", "curse", "necrotic"],
+    cooldown: 4,
+    requiresWeakness: { family: "curse", tierAtLeast: 1 },
+    buildupHint: { curse: 60 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.curse_of_doubt;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const curseMeter = target?.weakness?.meters?.curse || 0;
+      const basePct = 20;
+      const scaledPct = curseTier >= 2 ? Math.round(basePct * weaknessIntensityMult(curseMeter)) : basePct;
+      const alreadyCursed = (target.statusEffects || []).some(se => se?.id === 'curse_of_doubt');
+      if (!alreadyCursed) {
+        scene?._addStatusEffects?.(target, [{
+          id: "curse_of_doubt", name: "Curse of Doubt", permanent: true,
+          mods: { Evasion: -scaledPct },
+          vfx: { kind: 'debuff_decrease' },
+        }]);
+      }
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: 60 } };
+    },
+    description: "Deals 100% weapon damage and applies 60 Curse buildup. Requires target at least Hexed. Applies a permanent rider: -20 Evasion, scaling up to -50 at max Curse intensity."
+  },
+
   'trueshot_call': {
     id: "trueshot_call",
     name: "Trueshot Call",
@@ -15973,7 +16237,7 @@ Object.assign(RAW_SKILLS, {
       (allySlots || []).forEach(s => {
         const ally = s?.char;
         if (!ally || ally.status === 'incapacitated') return;
-        scene?._addStatusEffects?.(ally, [{ id: 'trueshot_call', turns: 2, mods: { Accuracy: accBonus } }]);
+        scene?._addStatusEffects?.(ally, [{ id: 'trueshot_call', turns: 2, mods: { Accuracy: accBonus }, vfx: { kind: 'buff_increase' } }]);
       });
 
       scene?._log?.(`${attacker?.name || 'The archer'} calls a true shot (spent ${spend} initiative) — allies gain +${accBonus} Accuracy for 2 turns.`);

@@ -359,26 +359,30 @@ export function getHealingReceivedMult(char) {
 // Signature: (physical, elemental, necrotic, attacker, target, ability) → { physical, elemental, necrotic }
 // --------------------------------------------------
 function applyWeaknessDamagePipeline(physical, elemental, necrotic, attacker, target, ability) {
-  // Attacker under Cold T2 → deals less physical, elemental, AND necrotic
-  // damage (overflow-scaled, capped) — previously only reduced physical and
-  // elemental, silently leaving necrotic output untouched.
-  {
-    const wa = attacker?.weakness;
-    if (wa && ((wa.tiers?.cold | 0) >= 2)) {
-      const m = wa.meters?.cold | 0;
-      const I = familyIntensityMult('cold', m);
-      const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
-      const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
-      const pen = Math.min(basePen * I, capPen);
-      const prevTotal = physical + elemental + necrotic;
-      physical = Math.max(0, Math.floor(physical * (1 - pen)));
-      elemental = Math.max(0, Math.floor(elemental * (1 - pen)));
-      necrotic = Math.max(0, Math.floor(necrotic * (1 - pen)));
-      try { _pushBreakdown?.({ label: 'Cold T2 damage-out', mult: (1 - pen), from: prevTotal, to: physical + elemental + necrotic }); } catch { }
-    }
-  }
-
+  // Cold T2's outgoing-damage penalty moved to the "Combat Bonus" step in
+  // applyTypedDamageModifiers/applyDamageModifiers — summed additively with
+  // AttackPower/Kindling Rite into ONE combined multiplier, instead of its
+  // own separate multiplicative stage applied to the raw pre-skillPct roll.
+  // Per explicit request: sequential multiplication (raw × (1−cold) ×
+  // (1+combat)) hit harder than intended whenever a big positive combat
+  // buff was also active, since Cold was shrinking the base BEFORE that
+  // buff multiplied it back up. See getColdDealtPenaltyPct, used by both
+  // pipelines now.
   return { physical: Math.max(0, physical), elemental: Math.max(0, elemental), necrotic: Math.max(0, necrotic) };
+}
+
+// Cold T2's outgoing-damage penalty (overflow-scaled, capped) — shared by
+// both damage pipelines (typed and legacy) and by the character info panel,
+// so all three read the exact same number. Returns a plain percentage
+// (e.g. 35 for the 35% cap), not a fraction.
+export function getColdDealtPenaltyPct(attacker) {
+  const wa = attacker?.weakness;
+  if (!wa || (wa.tiers?.cold | 0) < 2) return 0;
+  const m = wa.meters?.cold | 0;
+  const I = familyIntensityMult('cold', m);
+  const basePen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenalty ?? 0;
+  const capPen = WeaknessV3?.families?.cold?.t2?.dmgDealtPenaltyCap ?? 0.35;
+  return Math.min(basePen * I, capPen) * 100;
 }
 
 // --------------------------------------------------
@@ -408,6 +412,14 @@ export function applyLightningJolt(target) {
   const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
   const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
 
+  // Curse of Static (axe) — a permanent rider adding a flat bonus to EACH
+  // individual jolt roll below, not a one-time total add, so it compounds
+  // with T2's multi-jolt procs (up to 4 rolls/hit) by design.
+  const staticRider = Array.isArray(target?.statusEffects)
+    ? target.statusEffects.find(se => se?.id === 'curse_static')
+    : null;
+  const staticBonus = staticRider?.joltRollBonus || 0;
+
   let repeats = 1;
   let joltTotal = 0;
 
@@ -431,6 +443,7 @@ export function applyLightningJolt(target) {
     } else {
       j = flat;
     }
+    j += staticBonus;
     joltTotal += j;
   }
 
@@ -946,11 +959,18 @@ export function applyDamageModifiers(amount, attacker, target, opts = {}) {
     }
   }
 
-  // AttackPower from status effect mods (e.g. war_cry_buff +15%) — always applies
+  // AttackPower from status effect mods (e.g. war_cry_buff +15%) — always
+  // applies. Cold T2's outgoing-damage penalty is summed additively into
+  // this same combat-bonus pool now — see applyTypedDamageModifiers' own
+  // step 3 comment for why (was its own separate multiplicative stage on
+  // the raw pre-skillPct roll, which hit harder than intended whenever a
+  // big positive combat buff was also active).
   const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
-  if (atkPowerPct !== 0) {
+  const coldPenaltyPct = getColdDealtPenaltyPct(attacker);
+  const combatBonusPct = atkPowerPct - coldPenaltyPct;
+  if (combatBonusPct !== 0) {
     const prev = out;
-    const mult = 1 + atkPowerPct / 100;
+    const mult = Math.max(0, 1 + combatBonusPct / 100);
     out = Math.max(0, Math.floor(out * mult));
     try { _pushBreakdown({ label: 'Generic increased damage', mult, from: prev, to: out }); } catch { }
   }
@@ -1271,9 +1291,16 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
 
   // 3) Combat buffs (Category A) — AttackPower status mods, summed across every
   // active buff into ONE multiplier (two +20% buffs = +40% total, not 1.2×1.2).
+  // Cold T2's outgoing-damage penalty is summed into this SAME pool now
+  // (was its own separate multiplicative stage on the raw pre-skillPct roll
+  // — see applyWeaknessDamagePipeline's comment) so a big positive combat
+  // buff genuinely offsets it instead of Cold shrinking the base first and
+  // the buff only scaling up what was left.
   const atkPowerPct = _sumStatusEffectMods(attacker)?.AttackPower || 0;
-  if (atkPowerPct !== 0) {
-    const mult = 1 + atkPowerPct / 100;
+  const coldPenaltyPct = getColdDealtPenaltyPct(attacker);
+  const combatBonusPct = atkPowerPct - coldPenaltyPct;
+  if (combatBonusPct !== 0) {
+    const mult = Math.max(0, 1 + combatBonusPct / 100);
     const prev = physical + elemental + necrotic;
     physical *= mult;
     elemental *= mult;

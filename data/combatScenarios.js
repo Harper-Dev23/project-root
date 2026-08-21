@@ -136,7 +136,7 @@ export const COMBAT_SCENARIOS = {
     // predated Unstoppable Rush's glare redesign and Reckless
     // Harvest/Bloodrite entirely.
     longDescription: "Gorrek fights on a hair trigger: initiative builds fast, his glare punishes anyone who stands still, and he'll tear open his own wounds for a burst of power if you let his bleeding go unchecked. Survive the opening rush, watch for Death Spiral once he's built Expose and Lacerate, and don't ignore his glare.",
-    portraitKey: 'berserker_portrait',
+    portraitKey: 'portrait_gorrek',
     enemies: [
       {
         type: 'berserker_boss', slotId: 2, name: 'Gorrek',
