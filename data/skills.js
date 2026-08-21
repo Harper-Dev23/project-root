@@ -7767,10 +7767,10 @@ Object.assign(RAW_SKILLS, {
     // If target is at least Chilled (Cold T1): flat +20% damage and +20
     // additional Cold buildup — both flat now, replacing the old per-tier/
     // intensity-scaled formulas. Crossing Frostbitten (Cold T2) steals up to
-    // 5 Initiative from the target (genuine theft, capped by what they
+    // 8 Initiative from the target (genuine theft, capped by what they
     // actually have — see stealInitiative in CombatScene.js).
     rewardIfWeak: [{ family: "cold", tierAtLeast: 1, buff: { damagePct: 20, addBuildup: { cold: 25 } } }],
-    rewardIfTierCross: [{ family: "cold", tier: 2, stealInitiative: 5 }],
+    rewardIfTierCross: [{ family: "cold", tier: 2, stealInitiative: 8 }],
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.frost_swell;
       // powerScale (default 1) — set by a Rune Channel recast at 0.60. Only
@@ -7817,7 +7817,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Cold, +82 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +25 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 5 Initiative from the target."
+    description: "Deals 100% weapon damage as Cold, +82 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +25 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 8 Initiative from the target."
   },
 
   'galvanic_touch': {
@@ -7899,7 +7899,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 13,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, staff variety pass)
+    // — damage nerfed 100%→65%; Lightning buildup and the tier-cross
+    // Disorient reward are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -7919,7 +7922,7 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
@@ -7933,7 +7936,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Lightning. Applies Lightning buildup. Crossing a tier leaves them reeling from the shock (bonus Disorient)."
+    description: "Bonus action. Deals 65% weapon damage as Lightning. Applies Lightning buildup. Crossing a tier leaves them reeling from the shock (bonus Disorient)."
   },
 
   // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
@@ -7954,7 +7957,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["staff"],
     requiredStat: "INT",
     requiredValue: 14,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, staff variety pass)
+    // — damage nerfed 100%→65%; Disease buildup and the tier-cross Toxic
+    // reward are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -7974,7 +7980,7 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
         }
@@ -7988,7 +7994,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
+    description: "Bonus action. Deals 65% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
   },
 
   // Staff's own projectile skill — same shape as Ghost Step/Dagger Throw
@@ -8253,7 +8259,11 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
     requiredValue: 13,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, staff variety pass)
+    // — an AoE hitting up to 4 targets deserves a bigger cut than a
+    // single-target skill, so base nerfed 85%→55% (not the usual ~65%);
+    // Disorient buildup and the tier-cross damage-down debuff are untouched.
+    actionCost: "bonus",
     mpCost: 5,
     cooldown: 4,
     requiresTarget: true,
@@ -8282,7 +8292,7 @@ Object.assign(RAW_SKILLS, {
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
 
-      const basePct = 85;
+      const basePct = 55;
       const scaledPct = basePct * powerScale;
       const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
@@ -8326,7 +8336,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Deals 85% weapon damage + 100 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
+    description: "Bonus action. Deals 55% weapon damage + 100 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
   },
 
   'rune_channel': {
@@ -10273,7 +10283,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 11,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, dagger variety pass)
+    // — damage nerfed 100%→65%; Expose buildup and the tier-cross Toxic
+    // reward are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -10290,7 +10303,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
@@ -10300,7 +10313,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage. Applies Expose. Crossing a tier lets poison seep into the wound (bonus Toxic)."
+    description: "Bonus action. Deals 65% weapon damage. Applies Expose. Crossing a tier lets poison seep into the wound (bonus Toxic)."
   },
 
   // Same formula/shape as Marked Cut — see Vital Mark's comment above for the
@@ -10485,7 +10498,13 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 11,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, dagger variety pass)
+    // — dagger has two "template" skills (this one + Dagger Throw); keeping
+    // Dagger Throw Major and moving this one, same treatment sword's Ember
+    // Arc got (template skill stays Major) vs. Broken Cadence (moved).
+    // Damage nerfed 100%→65%; Curse buildup and the Disorient-tier bonus
+    // are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -10505,7 +10524,7 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
@@ -10516,7 +10535,7 @@ Object.assign(RAW_SKILLS, {
       if (rule) curseBuildup += rule.buff?.addBuildup?.curse || 0;
       return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: curseBuildup } };
     },
-    description: "Deals 100% weapon damage."
+    description: "Bonus action. Deals 65% weapon damage and applies Curse buildup. If the target is at least Dazed (Disorient T1+), applies even more."
   },
 
   // Dagger's own projectile skill — same shape as Ghost Step right above
@@ -10632,7 +10651,11 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, dagger variety pass)
+    // — damage nerfed 100%→65%; the Lightning buildup and free-repeat
+    // chance (scaling with the target's Lightning meter, up to 40%) are
+    // untouched, since those are the actual utility hook.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -10648,7 +10671,7 @@ Object.assign(RAW_SKILLS, {
       const ability = SKILLS?.static_prick;
       const roll = calculateDamage(attacker, target, ability);
 
-      // 100% base + 25% if target is at least Ablaze (Fire T2) — Category A,
+      // 65% base + 25% if target is at least Ablaze (Fire T2) — Category A,
       // combined additively into ONE skillPct instead of a second chained
       // multiply.
       const fireTier = target?.weakness?.tiers?.fire || 0;
@@ -10660,8 +10683,8 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100 + bonusPct,
-          skillLabel: `${ability?.name || 'Skill'} weapon damage (100%${bonusPct ? ` + ${bonusPct}% Fire tier` : ''})`,
+          skillPct: 65 + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (65%${bonusPct ? ` + ${bonusPct}% Fire tier` : ''})`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
@@ -10676,7 +10699,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Deals 100% weapon damage. Chance to repeat the hit for free, scaling with the target's Lightning meter (max 40%)."
+    description: "Bonus action. Deals 65% weapon damage. Chance to repeat the hit for free, scaling with the target's Lightning meter (max 40%)."
   },
 
   'street_panacea': {
@@ -11371,8 +11394,269 @@ Object.assign(RAW_SKILLS, {
     description: "Reaction: whenever an enemy becomes Hemorrhaging (Lacerate T2), from any source, strike them for free at 60% weapon damage and mark them for 2 turns to take +25% Lacerate/Toxic/Disease buildup."
   },
 
+  // Dagger's Initiative Gauge SPENDER — deliberately mirrors Blazing Fervor
+  // (sword_1h) shape-for-shape: same 10/20/30 spend-highest-affordable-tier,
+  // same 2/4/6-per-tier scaling, same 2-turn party-wide onHit rider, same
+  // bonus-action/cooldown-2 cost. Fire→Necrotic, buildup→Disease. The
+  // necroticDamage half of the onHit rider needed a new engine consumer
+  // (added alongside fireDamage/fireBuildup in _applyAbilityToTarget); the
+  // buildup half reuses the already-generic onHit.buildup rider as-is.
+  'withering_fervor': {
+    id: "withering_fervor",
+    name: "Withering Fervor",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["dagger"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "bonus",
+    mpCost: 5,
+    requiresTarget: false,
+    targetRequirement: "self",
+    tags: ["support", "buff", "necrotic"],
+    cooldown: 2,
+    // Spending initiative is this skill's whole job — below the minimum
+    // spend tier, it has nothing to do, so it should fizzle instead of
+    // silently firing for free. Checked generically in _applyAbilityToTarget.
+    requiresInitiativeGauge: 10,
+    apply: (attacker, _target, scene) => {
+      // Spend initiative — three tiers (10/20/30), spends the HIGHEST tier
+      // the current gauge can fully afford. Same logic as Blazing Fervor.
+      const gauge = attacker?.initiativeGauge || 0;
+      const spend = gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
+      attacker.initiativeGauge = Math.max(0, (attacker.initiativeGauge || 0) - spend);
+
+      // +2 necrotic damage and +20 disease buildup per 10 initiative spent.
+      const steps = spend / 10;
+      const necroticDmgOnHit = 2 * steps;
+      const diseaseBuildupOnHit = 20 * steps;
+
+      // Apply buff to all allies including self. Routed through
+      // scene._addStatusEffects (not a direct push) so a recast on an ally
+      // who already has the buff coalesces into one entry — keeping the
+      // stronger of the two onHit values — instead of stacking two live
+      // entries that both fire on every hit.
+      const buff = { id: "withering_fervor_buff", turns: 2, onHit: { necroticDamage: necroticDmgOnHit, buildup: { disease: diseaseBuildupOnHit } }, vfx: { kind: 'debuff_sick' } };
+      const allySlots = attacker?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      (allySlots || []).forEach(s => {
+        const ally = s?.char;
+        if (!ally || ally.status === 'incapacitated') return;
+        scene?._addStatusEffects?.(ally, [{ ...buff }]);
+      });
+      scene?._log?.(`${attacker?.name || "The rogue"} withers with fervor (spent ${spend} initiative) — allies deal +${necroticDmgOnHit} necrotic damage and +${diseaseBuildupOnHit} disease buildup on hit for 2 turns.`);
+      return { amount: 0 };
+    },
+    description: "Spend initiative (10/20/30, based on current gauge) to rally allies with decay: +2 necrotic damage and +20 disease buildup per 10 initiative spent, on their attacks, for 2 turns."
+  },
+
+  // Dagger's Initiative Gauge GENERATOR — per user request, triggers off
+  // crossing Disease OR Lacerate (whichever the target already has stacked),
+  // not off crit like Silent Order. New `grantInitiative` reward type (pure
+  // gain, doesn't touch the target's own gauge — added alongside the
+  // existing stealInitiative in the same rewardIfTierCross consumer).
+  // Applies both families at once specifically so either one crossing is
+  // enough to pay off — a target already worked over by Vein Tap/Festering
+  // Contagion/Carrion Strike is exactly when this generates the most.
+  'grave_strike': {
+    id: "grave_strike",
+    name: "Grave Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 15,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "necrotic", "disease", "lacerate"],
+    cooldown: 3,
+    buildupHint: { lacerate: 45, disease: 45 },
+    rewardIfTierCross: [
+      { family: "disease", tier: 1, grantInitiative: 6 },
+      { family: "disease", tier: 2, grantInitiative: 12 },
+      { family: "lacerate", tier: 1, grantInitiative: 6 },
+      { family: "lacerate", tier: 2, grantInitiative: 12 },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.grave_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: 'Grave Strike weapon damage (100%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100, elemToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true,
+        buildup: { lacerate: 45, disease: 45 },
+        rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
+      };
+    },
+    description: "Deals 100% weapon damage as Necrotic. Applies 45 Lacerate and 45 Disease buildup. Crossing either Bleeding/Hemorrhaging or Sickened/Plagued generates Initiative (6 at T1, 12 at T2, per family)."
+  },
+
   // --- Sword (1h) --- v3.22
   // -------- Generation --------
+
+  // Three sword_1h skills closing buildup-family gaps the kit had zero
+  // coverage for (Fire/Disorient/Lacerate) — see the cross-weapon balance
+  // audit. Each intentionally borrows a DIFFERENT existing shape rather than
+  // all three using one template. Placed here at the top of Generation
+  // (not down with the finisher/payoff skills) since these are meant to be
+  // early-turn buildup generators, not scaling payoffs.
+
+  // Fire: the "100% dmg + single buildup family + cross-family rewardIfWeak
+  // bonus" template every other kit already has one of (Dagger Throw→
+  // Lacerate, Ghoststep→Curse, Axe Throw→Disorient, Arcane Needle→Expose) —
+  // sword's turn, keyed to Fire, reusing Arcane Needle's own curse-gate.
+  'ember_arc': {
+    id: "ember_arc",
+    name: "Ember Arc",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "CHA",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire"],
+    cooldown: 3,
+    buildupHint: { fire: 113 },
+    rewardIfWeak: [
+      { family: "curse", tierAtLeast: 1, buff: { addBuildup: { fire: 50 } } },
+    ],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.ember_arc;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const curseTier = target?.weakness?.tiers?.curse || 0;
+      const rule = findRewardIfWeakRule(ability, curseTier);
+      let fireBuildup = ability?.buildupHint?.fire ?? 113;
+      if (rule) fireBuildup += rule.buff?.addBuildup?.fire || 0;
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { fire: fireBuildup } };
+    },
+    description: "A searing arc of flame — deals 100% weapon damage as Fire and applies Fire buildup. If the target is already Cursed, applies even more."
+  },
+
+  // Disorient: deliberately NOT the cross-family template — scales off the
+  // caster's OWN Rhythm stacks instead. Builds (or refreshes) a stack FIRST,
+  // then reads the resulting total, so a cold start still guarantees one
+  // stack's worth rather than reading 0 before the stack exists. Closes the
+  // real gap Sword Flourish left: that skill only ever SPREADS an existing
+  // Disorient meter, nothing in the kit actually generates fresh Disorient.
+  'broken_cadence': {
+    id: "broken_cadence",
+    name: "Broken Cadence",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    // Bonus action from the start (cross-weapon balance audit — sword
+    // needed more Bonus-slot variety) — damage set to 65% rather than a
+    // full 100% swing, since the Rhythm-scaled Disorient buildup is the
+    // actual payoff here, not the weapon damage.
+    actionCost: "bonus",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "disorient"],
+    cooldown: 3,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.broken_cadence;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, skillLabel: 'Broken Cadence weapon damage (65%)', isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      applyRhythmStack(attacker, scene);
+      const totalStacks = Math.min(3, (attacker.statusEffects || []).filter(se => se?.id === 'rhythm_stack').length);
+      const disorientBuildup = 60 * totalStacks;
+
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: disorientBuildup } };
+    },
+    description: "Bonus action. Deals 65% weapon damage. Builds a Rhythm stack, then applies Disorient buildup scaled by your total Rhythm stacks (60 per stack, up to 180 at 3 stacks)."
+  },
+
+  // Lacerate: borrows Searing Clout's (mace_2h/fire) shape — a flat %
+  // damage bonus gated on the TARGET'S OWN current tier in the SAME family
+  // this hit is building, checked live pre-hit rather than via the
+  // rewardIfTierCross engine path (which only fires status-effect rewards
+  // AFTER damage is already committed, so it can't buff this same hit).
+  'widening_cut': {
+    id: "widening_cut",
+    name: "Widening Cut",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    cooldown: 3,
+    buildupHint: { lacerate: 80 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.widening_cut;
+      const roll = calculateDamage(attacker, target, ability);
+
+      // 100% base + 15%/30% at Lacerate T1/T2 — flat per tier, not
+      // stacking, folded into ONE skillPct, same shape as Searing Clout.
+      const lacTier = target?.weakness?.tiers?.lacerate || 0;
+      const bonusPct = lacTier >= 2 ? 30 : lacTier >= 1 ? 15 : 0;
+      const basePct = 100;
+
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: basePct + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}%${bonusPct ? ` + ${bonusPct}% vs Lacerated` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 80 } };
+    },
+    description: "Deals 100% weapon damage, +15%/+30% if the target is already Bleeding/Hemorrhaging. Applies 80 Lacerate buildup."
+  },
+
   'marked_cut': {
     id: "marked_cut",
     name: "Marked Cut",
@@ -11535,7 +11819,14 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["sword_1h"],
     requiredStat: "CHA",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (per the cross-weapon balance audit — sword was
+    // the most Major-skewed kit) — this is a support/utility pick (MP
+    // restore + Rhythm), not a finisher, so damage nerfed 100%→60% (was
+    // 100/110 with the Disorient reward) to offset the action-economy gain
+    // of getting a real attack roll on the bonus slot; the MP restore/
+    // Rhythm build/vulnerability rider are untouched, since those were
+    // always the actual point of the skill.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -11559,7 +11850,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100 + dmgPct, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 60 + dmgPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const statusEffects = [];
@@ -11591,7 +11882,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Deals 100% weapon damage. Requires target at least Flayed. Restores MP to all allies and builds Rhythm. Stronger if the target is Dazed."
+    description: "Bonus action. Deals 60% weapon damage. Requires target at least Flayed. Restores MP to all allies and builds Rhythm. Stronger if the target is Dazed."
   },
 
   'soft_spot_exposed': {
@@ -11604,7 +11895,12 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit) — an Expose buildup
+    // generator that also grants Rhythm at T2, not a finisher, so damage
+    // nerfed 100/125% → 60/75% (the necrotic-weakness bonus kept as a
+    // relative +25% on top) to offset the action-economy gain; buildup and
+    // the Rhythm grant are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -11636,7 +11932,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: hasNecroticWeakness ? 125 : 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: hasNecroticWeakness ? 75 : 60, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const exposeTier = target?.weakness?.tiers?.expose || 0;
@@ -11653,7 +11949,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Deals 100% weapon damage. Applies Expose. +25% damage if the target has any necrotic weakness (Toxic, Disease, or Curse)."
+    description: "Bonus action. Deals 60% weapon damage. Applies Expose. +25% damage (75% total) if the target has any necrotic weakness (Toxic, Disease, or Curse). Grants Rhythm if the target is at least Flayed."
   },
 
   'sword_flourish': {
@@ -12551,7 +12847,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 10,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, axe variety pass) —
+    // damage nerfed 100%→65% base; Lacerate buildup and the own-tier bonus
+    // are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -12564,10 +12863,10 @@ Object.assign(RAW_SKILLS, {
 
       // Same tiered-bonus shape as Searing Clout (mace_2h/fire), just keyed
       // off Lacerate instead — flat 15%/30% per tier, not stacking, folded
-      // into one skillPct alongside the 100% base.
+      // into one skillPct alongside the base.
       const lacerateTier = target?.weakness?.tiers?.lacerate || 0;
       const bonusPct = lacerateTier >= 2 ? 30 : lacerateTier >= 1 ? 15 : 0;
-      const basePct = 100;
+      const basePct = 65;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -12585,7 +12884,7 @@ Object.assign(RAW_SKILLS, {
         buildup: { lacerate: ability?.buildupHint?.lacerate ?? 88 },
       };
     },
-    description: "Deals 100% weapon damage, +15% against a Bleeding (Lacerate T1) target (+30% instead if Hemorrhaging, Lacerate T2). Builds Lacerate."
+    description: "Bonus action. Deals 65% weapon damage, +15% against a Bleeding (Lacerate T1) target (+30% instead if Hemorrhaging, Lacerate T2). Builds Lacerate."
   },
 
   'trophy_cry': {
@@ -12783,7 +13082,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, axe variety pass) —
+    // damage nerfed 100%→65%; Disease buildup and the tier-cross Lacerate
+    // reward are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -12800,7 +13102,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
@@ -12809,7 +13111,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "A filthy chop that festers on contact — deals 100% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
+    description: "Bonus action. A filthy chop that festers on contact — deals 65% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
   },
 
   'hexed_cleave': {
@@ -13003,7 +13305,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, axe variety pass) —
+    // damage nerfed 95%→60%; the MP-restore-on-tier-cross utility (the
+    // actual point of the skill) is untouched.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -13020,7 +13325,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 95, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 60, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
@@ -13029,54 +13334,10 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 95% weapon damage. Restores 3 MP if this hit crosses the target into Lacerate T1 (Bleeding), or 6 MP if it crosses into T2 (Hemorrhaging)."
+    description: "Bonus action. Deals 60% weapon damage. Restores 3 MP if this hit crosses the target into Lacerate T1 (Bleeding), or 6 MP if it crosses into T2 (Hemorrhaging)."
   },
 
   // -------- Payoff --------
-  'hemorrhage_strike': {
-    id: "hemorrhage_strike",
-    name: "Hemorrhage Strike",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 18,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "finisher", "consume"],
-    cooldown: 5,
-    requiresWeakness: { family: "lacerate", tier: 2 },
-    apply: (attacker, target) => {
-      const ability = SKILLS?.hemorrhage_strike;
-      const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 120, isCrit: roll.isCrit, critMult: roll.critMult }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      const currentMeter = target?.weakness?.meters?.lacerate || 0;
-      const consumed = Math.min(400, currentMeter);
-      if (consumed > 0 && target?.weakness?.meters) {
-        const remaining = Math.max(0, currentMeter - consumed);
-        target.weakness.meters.lacerate = remaining;
-        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(remaining);
-      }
-      const tickDamage = consumed > 0 ? Math.floor(consumed / 5) : 0;
-      const statusEffects = tickDamage > 0 ? [{ id: "hemorrhage_dot", turns: 3, tickDamage }] : undefined;
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        statusEffects,
-        log: consumed > 0 ? `${attacker?.name || "The axeman"} opens a hemorrhage — ${tickDamage} bleed damage per turn for 3 turns.` : undefined,
-      };
-    },
-    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 120% weapon damage and consumes up to 400 of the target's Lacerate buildup, converting it into a bleed that deals (consumed ÷ 5) damage per turn for 3 turns."
-  },
-
   'blood_surge': {
     id: "blood_surge",
     name: "Blood Surge",
@@ -13134,81 +13395,6 @@ Object.assign(RAW_SKILLS, {
       };
     },
     description: "Deals 50% weapon damage to every enemy with Lacerate T1+. Heals 5% of your own max HP for each of those enemies that's Hemorrhaging (Lacerate T2+)."
-  },
-
-  'inferno_arc': {
-    id: "inferno_arc",
-    name: "Inferno Arc",
-    type: "weapon",
-    mechanic: "active",
-    versionTag: "v3.23",
-    typedDamage: true,
-    requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 16,
-    actionCost: "major",
-    mpCost: 5,
-    requiresTarget: true,
-    targetRequirement: "enemy",
-    tags: ["melee", "attack", "fire", "elemental", "consume"],
-    cooldown: 5,
-    requiresWeakness: { family: "lacerate", tier: 2 },
-    buildupHint: { fire: 80 },
-    apply: (attacker, target, scene) => {
-      const ability = SKILLS?.inferno_arc;
-      const roll = calculateDamage(attacker, target, ability);
-      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
-        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target,
-        {
-          ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 110, isCrit: roll.isCrit, critMult: roll.critMult,
-          skillConversion: { physToElemPct: 100 },
-        }
-      );
-      const amount = Math.max(1, physical + elemental + necrotic);
-      const currentLac = target?.weakness?.meters?.lacerate || 0;
-      const consumed = Math.min(400, currentLac);
-      if (consumed > 0 && target?.weakness?.meters) {
-        target.weakness.meters.lacerate = Math.max(0, currentLac - consumed);
-        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
-      }
-      const fireBuildup = (ability?.buildupHint?.fire ?? 80) + consumed;
-      const splash = [];
-      // 'disease' — the family rime_chop's own necrotic-spread mechanic
-      // already treats as "the necrotic-flavored family" (there's no family
-      // literally named 'necrotic'; this checked that nonexistent key
-      // before, so the branch could never fire — fixed during migration).
-      const diseaseTier = target?.weakness?.tiers?.disease || 0;
-      if (diseaseTier >= 1 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          const splashPhysical = 0;
-          const splashElemental = Math.max(1, Math.floor(elemental * 0.7));
-          (sideSlots || [])
-            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char)
-            .forEach(char => splash.push({
-              target: char,
-              amount: splashElemental,
-              physical: splashPhysical, elemental: splashElemental, necrotic: 0,
-              isMagic: true,
-              element: "fire",
-              buildup: { fire: Math.floor(fireBuildup * 0.6) },
-              tags: ability?.tags,
-            }));
-        }
-      }
-      return {
-        ...roll, physical, elemental, necrotic, amount,
-        isMagic: true,
-        element: "fire",
-        buildup: { fire: fireBuildup },
-        splash: splash.length ? splash : undefined,
-      };
-    },
-    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 110% weapon damage as Fire and consumes up to 400 of the target's Lacerate buildup, converting it 1:1 into bonus Fire buildup (up to +400). If the target is also Sickened (Disease T1+), the fire arcs to the rest of their column for 70% of this hit's elemental damage and 60% of the Fire buildup."
   },
 
   'harvest_momentum': {
@@ -13578,6 +13764,130 @@ Object.assign(RAW_SKILLS, {
     description: "Spend initiative (10/20/30, based on current gauge) for a cleaving blow that scales from 115% to 145% weapon damage, and shatters the target's armor for -20% to -60% PhysicalResist (3 turns), based on how much you spend."
   },
 
+  // Both moved to the very end of the axe block, at the user's request —
+  // these are the only two axe skills with a hard requiresWeakness T2 gate
+  // (Lacerate T2/Hemorrhaging), so everything above (Rime Chop, Storm
+  // Splitter, etc.) is usable from a cold start and these two are true
+  // payoffs, gated on state only a few other skills can even set up.
+  'hemorrhage_strike': {
+    id: "hemorrhage_strike",
+    name: "Hemorrhage Strike",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 18,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "finisher", "consume"],
+    cooldown: 5,
+    requiresWeakness: { family: "lacerate", tier: 2 },
+    apply: (attacker, target) => {
+      const ability = SKILLS?.hemorrhage_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 120, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const currentMeter = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(400, currentMeter);
+      if (consumed > 0 && target?.weakness?.meters) {
+        const remaining = Math.max(0, currentMeter - consumed);
+        target.weakness.meters.lacerate = remaining;
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(remaining);
+      }
+      const tickDamage = consumed > 0 ? Math.floor(consumed / 5) : 0;
+      const statusEffects = tickDamage > 0 ? [{ id: "hemorrhage_dot", turns: 3, tickDamage }] : undefined;
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        statusEffects,
+        log: consumed > 0 ? `${attacker?.name || "The axeman"} opens a hemorrhage — ${tickDamage} bleed damage per turn for 3 turns.` : undefined,
+      };
+    },
+    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 120% weapon damage and consumes up to 400 of the target's Lacerate buildup, converting it into a bleed that deals (consumed ÷ 5) damage per turn for 3 turns."
+  },
+
+  'inferno_arc': {
+    id: "inferno_arc",
+    name: "Inferno Arc",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    requiredWeapon: ["axe_2h"],
+    requiredStat: "STR",
+    requiredValue: 16,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "fire", "elemental", "consume"],
+    cooldown: 5,
+    requiresWeakness: { family: "lacerate", tier: 2 },
+    buildupHint: { fire: 80 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.inferno_arc;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110, isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const currentLac = target?.weakness?.meters?.lacerate || 0;
+      const consumed = Math.min(400, currentLac);
+      if (consumed > 0 && target?.weakness?.meters) {
+        target.weakness.meters.lacerate = Math.max(0, currentLac - consumed);
+        if (target.weakness.tiers) target.weakness.tiers.lacerate = weaknessTierFromMeter(target.weakness.meters.lacerate);
+      }
+      const fireBuildup = (ability?.buildupHint?.fire ?? 80) + consumed;
+      const splash = [];
+      // 'disease' — the family rime_chop's own necrotic-spread mechanic
+      // already treats as "the necrotic-flavored family" (there's no family
+      // literally named 'necrotic'; this checked that nonexistent key
+      // before, so the branch could never fire — fixed during migration).
+      const diseaseTier = target?.weakness?.tiers?.disease || 0;
+      if (diseaseTier >= 1 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
+        const column = scene._getUnitColumn(target);
+        if (column) {
+          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+          const splashPhysical = 0;
+          const splashElemental = Math.max(1, Math.floor(elemental * 0.7));
+          (sideSlots || [])
+            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
+            .map(slot => slot.char)
+            .forEach(char => splash.push({
+              target: char,
+              amount: splashElemental,
+              physical: splashPhysical, elemental: splashElemental, necrotic: 0,
+              isMagic: true,
+              element: "fire",
+              buildup: { fire: Math.floor(fireBuildup * 0.6) },
+              tags: ability?.tags,
+            }));
+        }
+      }
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true,
+        element: "fire",
+        buildup: { fire: fireBuildup },
+        splash: splash.length ? splash : undefined,
+      };
+    },
+    description: "Requires the target to be Hemorrhaging (Lacerate T2+). Deals 110% weapon damage as Fire and consumes up to 400 of the target's Lacerate buildup, converting it 1:1 into bonus Fire buildup (up to +400). If the target is also Sickened (Disease T1+), the fire arcs to the rest of their column for 70% of this hit's elemental damage and 60% of the Fire buildup."
+  },
+
   // --- Mace (2h) ---
   'quake_mark': {
     id: "quake_mark",
@@ -13739,7 +14049,11 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 14,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, mace variety pass) —
+    // nerfed to 65% (was 100, briefly 80 — bumped down further per
+    // follow-up request); Disorient buildup and the tier-cross
+    // vulnerability debuff are untouched.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -13764,7 +14078,7 @@ Object.assign(RAW_SKILLS, {
       // skillPct (Category A: a skill-specific reward for hitting a bleeding target).
       const lacerateTier = target?.weakness?.tiers?.lacerate || 0;
       const bonusPct = lacerateTier >= 1 ? 20 : 0;
-      const basePct = 100;
+      const basePct = 65;
 
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -13785,7 +14099,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage, +20% against a Bleeding (Lacerate) target. Builds Disorient. Crossing either Disorient tier applies a physical vulnerability debuff."
+    description: "Bonus action. Deals 65% weapon damage, +20% against a Bleeding (Lacerate) target. Builds Disorient. Crossing either Disorient tier applies a physical vulnerability debuff."
   },
 
   'bedrock_guard': {
@@ -14681,8 +14995,20 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 10,
-    actionCost: "major",
-    mpCost: 0,
+    // Was 0 MP — same "stray leftover test value" issue the buildupHint
+    // comment below already flagged once (that was 310, fixed to 50). A
+    // Major action that could scale to 190% weapon damage (all three
+    // physical weaknesses stacked) with only a 2-turn cooldown had no
+    // business being completely free; basic_attack is the one deliberately-
+    // 0-MP skill in the game (explicitly documented as an always-available
+    // fallback) — this isn't that. Priced to match its cd2 siblings
+    // (Ringing Blow/Concussive Drain at mp3, Crushing Mark/Rotcrusher at
+    // mp4). Also moved Major → Bonus (cross-weapon balance audit, mace
+    // variety pass) with a base-damage nerf (100%→65%, briefly 80 —
+    // bumped down further per follow-up request) — the per-family
+    // scaling bonuses are untouched.
+    actionCost: "bonus",
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "blunt", "disorient"],
@@ -14699,9 +15025,9 @@ Object.assign(RAW_SKILLS, {
       // +30% for Bleeding (Lacerate T1+), +30% for Raw (Expose T1+), +30%
       // for Dazed (Disorient T1+). Combines additively into ONE skillPct
       // (Category A bonuses), so a target weak from all three sits at
-      // 100% + 30% + 30% + 30% = 190% weapon damage.
+      // 65% + 30% + 30% + 30% = 155% weapon damage.
       const tiers = target?.weakness?.tiers || {};
-      let skillPct = 100;
+      let skillPct = 65;
       if ((tiers.lacerate | 0) >= 1) skillPct += 30;
       if ((tiers.expose | 0) >= 1) skillPct += 30;
       if ((tiers.disorient | 0) >= 1) skillPct += 30;
@@ -14722,7 +15048,7 @@ Object.assign(RAW_SKILLS, {
         buildup: { disorient: ability?.buildupHint?.disorient ?? 50 },
       };
     },
-    description: "Deals 100% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 190% against a foe weak from all three. Builds Disorient."
+    description: "Bonus action. Deals 65% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 155% against a foe weak from all three. Builds Disorient."
   },
 
   'plague_slam': {
@@ -15074,7 +15400,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
     requiredValue: 16,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, mace variety pass) —
+    // nerfed to 65% (was 100, briefly 80 — bumped down further per
+    // follow-up request); MP restore/Disorient buildup untouched.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -15095,7 +15424,7 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
@@ -15107,7 +15436,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage, saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2 (both fire if a single hit skips straight past T1)."
+    description: "Bonus action. Deals 65% weapon damage, saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2 (both fire if a single hit skips straight past T1)."
   },
 
   // --- Spear (1h) ---
@@ -15517,7 +15846,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, bow variety pass) —
+    // damage nerfed 100%→65% to offset the action-economy gain; the
+    // Disorient buildup and tier-cross Expose reward are untouched.
+    actionCost: "bonus",
     mpCost: 4,
     cooldown: 2,
     requiresTarget: true,
@@ -15534,7 +15866,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
@@ -15544,7 +15876,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
+    description: "Bonus action. Deals 65% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
   },
 
   // Same shape as Staggering Point above. Curse primary: bow had no
@@ -15716,7 +16048,12 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["bow"],
     requiredStat: "DEX",
     requiredValue: 12,
-    actionCost: "major",
+    // Moved Major → Bonus (cross-weapon balance audit, bow variety pass) —
+    // was already a lighter 75% base (a "quick tag" skill by design), nerfed
+    // further to 50% to offset the action-economy gain; the lodge/dislodge
+    // payoff (25% of the real computed hit, scaling with other lodges
+    // present) is untouched and scales down proportionally on its own.
+    actionCost: "bonus",
     mpCost: 4,
     cooldown: 2,
     typedDamage: true,
@@ -15732,7 +16069,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skillPct: 75, skillLabel: `${ability?.name || 'Skill'} weapon damage (75%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skillPct: 50, skillLabel: `${ability?.name || 'Skill'} weapon damage (50%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       // Banks 25% of the REAL, already-computed hit (post skillPct/crit/buffs)
@@ -15776,7 +16113,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Deals 75% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
+    description: "Bonus action. Deals 50% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
   },
 
   // Bow's healing skill — an ally-targeted lodge (a first for the family;

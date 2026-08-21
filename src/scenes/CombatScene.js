@@ -1550,9 +1550,10 @@ export default class CombatScene extends Phaser.Scene {
     const mpBar = new StatusBar(this, -42, barY, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
+    const weaknessDots = this._createWeaknessDots(char);
 
     slot.removeAllListeners();
-    slot.add([sprite, nameText, hpBar, mpBar]);
+    slot.add([sprite, nameText, hpBar, mpBar, weaknessDots]);
     slot.occupied = true;
     slot.char = char;
     this._wireSlotInfoClick(slot, char);
@@ -1561,6 +1562,7 @@ export default class CombatScene extends Phaser.Scene {
     char.icon = sprite;
     char.hpBar = hpBar;
     char.mpBar = mpBar;
+    this._updateWeaknessDots(char);
   }
 
 
@@ -2956,8 +2958,20 @@ export default class CombatScene extends Phaser.Scene {
       allSlots.forEach(s => { if (s?.char) this._refreshStatusEffectIcons(s.char); });
     }
 
-    // Scrollable viewport setup for the action menu
-    this.actionMenuViewport = { x: -96, y: -34, width: 352, height: 254 };
+    // Scrollable viewport setup for the action menu — content area back to
+    // its original full 254 height (an earlier version reserved a bottom
+    // strip for a fixed Back button; Back now lives in the top-right corner
+    // instead). The list itself is narrowed from the original 352 to 320 —
+    // NOT the panel background (see PANEL_WIDTH below, which stays 352, the
+    // panel's original on-screen footprint) — freeing a real 32px column
+    // inside the SAME panel for Back + the scrollbar. The original panel
+    // already hugged the canvas's right edge with only 12px to spare
+    // (layout.actionMenu.x = width-280, panel right edge lands at
+    // width-12), so widening the panel itself clipped off-canvas at normal
+    // window sizes — confirmed via a live screenshot — hence narrowing the
+    // list instead of widening the panel.
+    const PANEL_WIDTH = 352;
+    this.actionMenuViewport = { x: -96, y: -34, width: 320, height: 254 };
     const {
       x: viewportX = 0,
       y: viewportY = 0,
@@ -2965,9 +2979,15 @@ export default class CombatScene extends Phaser.Scene {
       height: viewportHeight
     } = this.actionMenuViewport;
 
+    // Panel background keeps its ORIGINAL on-screen footprint (based on
+    // PANEL_WIDTH=352, not the now-narrower list width) — the list itself
+    // is what got narrowed, freeing a real column inside the SAME panel
+    // bounds for Back + the scrollbar, at x:[viewportX+viewportWidth,
+    // viewportX+PANEL_WIDTH] = [224,256] local, i.e. a 32px-wide strip
+    // between the list's new right edge and the panel's original right edge.
     const bg = createPanel(this,
       viewportX - 12, viewportY - 12,
-      viewportWidth + 24, viewportHeight + 24,
+      PANEL_WIDTH + 24, viewportHeight + 24,
       'menu')
       .setDepth(UI_DEPTH.overlay - 1);
     this.actionMenuBg = bg;
@@ -2990,6 +3010,63 @@ export default class CombatScene extends Phaser.Scene {
 
     this.actionMenuScrollY = 0;
     this.actionMenuScrollMax = 0;
+
+    // Fixed Back button — a persistent sibling of actionMenuList (added
+    // directly to actionMenu, so _clearActionMenuContent's removeAll never
+    // touches it). Top of the reserved right-hand column, beside the list —
+    // per request: thin, near the top, not hanging off the bottom where it
+    // used to sit. Submenus set _actionMenuBackCallback instead of each
+    // building their own in-list Back button.
+    this._actionMenuBackCallback = null;
+    const rightColLeft = viewportX + viewportWidth;   // 224 local — list's new right edge
+    const rightColRight = viewportX + PANEL_WIDTH;     // 256 local — panel's original inner right edge
+    const backCenterX = (rightColLeft + rightColRight) / 2;
+    const backY = viewportY + 14;
+    this._actionMenuBackBtn = new UIButton(
+      this, backCenterX, backY, 'Back',
+      () => { this._actionMenuBackCallback?.(); },
+      26, 22
+    );
+    // Red-tinted idle state (per request) — distinct from the amber
+    // selected-state UIButton already uses elsewhere, so it doesn't get
+    // confused with an "active/selected" skill button.
+    this._actionMenuBackBtn.background.setStrokeStyle(1.5, 0xaa2222);
+    this._actionMenuBackBtn.text.setStyle({ color: '#ff9999', fontSize: '11px' });
+    this._actionMenuBackBtn.setVisible(false);
+    this.actionMenu.add(this._actionMenuBackBtn);
+
+    // Thin scrollbar track + thumb, in the same right-hand column below the
+    // Back button. Deliberately SHORTER than the full scroll viewport (it's
+    // a proportional "minimap" of the scrollable range, not a 1:1 ruler) —
+    // capped so its bottom edge stays well clear of the action lights /
+    // End Turn button below the panel (per report: the old full-height
+    // track ran down that far and caused misclicks on End Turn).
+    const trackX = backCenterX - 3;
+    const trackY = backY + 20;
+    const trackH = 70;
+    this._actionMenuScrollTrack = { x: trackX, y: trackY, width: 6, height: trackH };
+    const trackGfx = this.add.graphics();
+    trackGfx.fillStyle(0x000000, 0.25);
+    trackGfx.fillRoundedRect(trackX, trackY, 6, trackH, 3);
+    this._actionMenuScrollTrackGfx = trackGfx;
+    this.actionMenu.add(trackGfx);
+
+    const thumbGfx = this.add.graphics();
+    this._actionMenuScrollThumbGfx = thumbGfx;
+    this.actionMenu.add(thumbGfx);
+    // Invisible hit-zone the same footprint as the track, dragged to scroll.
+    const thumbZone = this.add.zone(trackX + 3, trackY, 14, trackH)
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true, draggable: true });
+    this._actionMenuScrollThumbZone = thumbZone;
+    thumbZone.on('drag', (_pointer, _dragX, dragY) => {
+      const th = this._actionMenuScrollThumbHeight || 16;
+      const usableH = Math.max(1, trackH - th);
+      const localY = Phaser.Math.Clamp(dragY - trackY, 0, usableH);
+      const ratio = localY / usableH;
+      this._setActionMenuScroll(ratio * (this.actionMenuScrollMax || 0));
+    });
+    this.actionMenu.add(thumbZone);
 
     // Skill filter pill state — persists across submenu switches
     this._activeFilterTags = new Set();
@@ -3161,6 +3238,7 @@ export default class CombatScene extends Phaser.Scene {
     this._exitTargetingMode?.();
     this._clearActionMenuContent();
     this._hideSkillFilterPills?.();
+    this._setActionMenuBackCallback?.(null); // root menu — nothing to go back to
     const curr = this._currentChar?.();
     const isPlayerTurn = !!curr && !curr.isEnemy;
 
@@ -3210,6 +3288,67 @@ export default class CombatScene extends Phaser.Scene {
 
     (this.enemies || []).forEach(enemy => {
       if (enemy?.hpBar) enemy.hpBar.update(enemy.currentHP, getEffMax(enemy));
+    });
+
+    // Piggybacks on this same broad "something changed, refresh the portrait
+    // chrome" hook rather than threading a call through every individual
+    // buildup-application site — every caller of _updateHealthBars already
+    // wants the portrait refreshed after a hit/heal/tick, and weakness
+    // buildup virtually always changes alongside one of those.
+    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => this._updateWeaknessDots(u));
+  }
+
+  // Experimental "quick reference" cluster (per user request) — a small dot
+  // per weakness FAMILY THE UNIT CURRENTLY HAS ANY BUILDUP IN, not a fixed
+  // 9-slot bar/ring. A full always-present 9-slot readout would be mostly
+  // gray dead space against a target only weak to two or three things, and
+  // the user specifically flagged wanting to avoid anything that visually
+  // competes with combat animations — a handful of small static dots is a
+  // much lighter footprint than a ring around the portrait or a full second
+  // bar. Colors reuse the exact same family palette the action-menu filter
+  // pills already use (_createSkillFilterPills' PILL_DEFS), so this reads as
+  // the same color language rather than inventing a new one.
+  static WEAKNESS_DOT_COLORS = {
+    fire: 0xdd5500, cold: 0x4477cc, lightning: 0xcccc22, disorient: 0x9944cc,
+    lacerate: 0xcc4444, expose: 0xcc8844, disease: 0x447744, curse: 0x6633aa, toxic: 0x44aa44,
+  };
+  static WEAKNESS_DOT_ORDER = ['fire', 'cold', 'lightning', 'disorient', 'lacerate', 'expose', 'disease', 'curse', 'toxic'];
+
+  // Creates the (initially empty) container for one unit's dot cluster,
+  // positioned on the opposite side of the portrait from the HP/MP bars
+  // (those sit at x:-50/-42, rotated vertical — see _placePortrait/
+  // _assignCharToSlot) so it doesn't compete with them for space.
+  _createWeaknessDots(char) {
+    const container = this.add.container(46, 0);
+    char.weaknessDots = container;
+    char.weaknessDotSprites = {};
+    return container;
+  }
+
+  _updateWeaknessDots(char) {
+    const container = char?.weaknessDots;
+    if (!container || !char?.weakness) return;
+
+    const active = CombatScene.WEAKNESS_DOT_ORDER.filter(fam => (char.weakness.meters?.[fam] || 0) > 0);
+
+    // Rebuild from scratch — only runs from _updateHealthBars (post-action,
+    // not per-frame), and the active-family count is tiny (0-9), so this is
+    // cheap; simpler than diffing which dots changed.
+    Object.values(char.weaknessDotSprites || {}).forEach(d => d.destroy());
+    char.weaknessDotSprites = {};
+
+    const SPACING = 11;
+    const startY = -((active.length - 1) * SPACING) / 2;
+    active.forEach((fam, i) => {
+      const meter = char.weakness.meters?.[fam] || 0;
+      const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
+      // Dim just past 0, fully lit at/after T2 — "how close to T2" is the
+      // same read every intensity-scaled weakness mechanic already uses.
+      const alpha = Phaser.Math.Clamp(0.35 + 0.65 * (meter / Math.max(1, t2)), 0.35, 1);
+      const dot = this.add.circle(0, startY + i * SPACING, 4, CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff, alpha)
+        .setStrokeStyle(1, 0x000000, 0.5);
+      container.add(dot);
+      char.weaknessDotSprites[fam] = dot;
     });
   }
 
@@ -3407,13 +3546,13 @@ export default class CombatScene extends Phaser.Scene {
     });
 
     // Back — discards any unconfirmed checkbox edits (next open re-seeds
-    // from whatever's actually prepared).
-    const backBtn = new UIButton(this, baseX, y + 8, '🔙 Back', () => {
+    // from whatever's actually prepared). Uses the fixed Back button now
+    // (see _setActionMenuBackCallback) instead of an in-list button.
+    this._setActionMenuBackCallback(() => {
       this._rxSelection = null;
       this._rxSelectionOwner = null;
       this._buildActionMenuRoot?.();
     });
-    this._actionMenuAdd(backBtn);
 
     this._finalizeActionMenuLayout();
   }
@@ -3451,10 +3590,10 @@ export default class CombatScene extends Phaser.Scene {
       }).setOrigin(0);
       this._actionMenuAdd(noText);
 
-      // Back button
-      this._actionMenuAdd(
-        new UIButton(this, baseX, 50, '🔙 Back', () => this._buildActionMenuRoot())
-      );
+      this._setActionMenuBackCallback(() => this._buildActionMenuRoot());
+      // Was missing before the fixed-Back-button refactor too — scroll
+      // bounds never got (re)computed for the empty-list case.
+      this._finalizeActionMenuLayout();
       return;
     }
 
@@ -3491,11 +3630,7 @@ export default class CombatScene extends Phaser.Scene {
       this._actionMenuAdd(btn);
     });
 
-    // Back button
-    const offsetY = abilities.length * 50 + 10;
-    this._actionMenuAdd(
-      new UIButton(this, baseX, offsetY, '🔙 Back', () => this._buildActionMenuRoot())
-    );
+    this._setActionMenuBackCallback(() => this._buildActionMenuRoot());
 
     this._finalizeActionMenuLayout();
 
@@ -5260,6 +5395,13 @@ export default class CombatScene extends Phaser.Scene {
             if (proc.fireBuildup > 0 && target?.weakness) {
               this._applyWeaknessBuildup(target, { fire: proc.fireBuildup }, { user });
             }
+            // Necrotic counterpart to fireDamage above (Withering Fervor) —
+            // same shape: flat, unmitigated, legacy-skill-only fallback.
+            if (proc.necroticDamage > 0 && !ability?.typedDamage) {
+              dmg += proc.necroticDamage;
+              try { _pushBreakdown({ label: se.name || 'Necrotic rider', flat: proc.necroticDamage }); } catch { }
+              this._log(`${user.name}'s ${se.name || 'necrotic rider'} withers ${target.name} for +${proc.necroticDamage} necrotic damage.`);
+            }
             // Generic family-keyed buildup rider (e.g. Bedrock Guard's cold
             // surge on the wielder's next attack) — same shape as
             // nextHitBuildup elsewhere, but attacker-side (applies when THIS
@@ -5304,7 +5446,13 @@ export default class CombatScene extends Phaser.Scene {
           if (matched) mult = matched.mult;
           const initGain = Math.max(0, Math.round(statVal * mult));
           if (initGain > 0) {
-            user.initiative = (user.initiative || 0) + initGain;
+            // Was writing to `user.initiative` — a stray field only ever read
+            // as a fallback for the regen-RATE stat (see _tickInitiativeGauge),
+            // not the actual gauge pool. Silent Order logged a grant that
+            // never touched the real resource. Fixed to initiativeGauge,
+            // capped like every other gain/steal in the game.
+            const cap = user.initiativeGaugeMax ?? 100;
+            user.initiativeGauge = Math.min(cap, (user.initiativeGauge || 0) + initGain);
             this._log(`${user?.name ?? 'Attacker'} gains ${initGain} initiative (${ci.stat} ${statVal} × ${mult}).`);
           }
         }
@@ -5503,9 +5651,12 @@ export default class CombatScene extends Phaser.Scene {
                 if (living.length > 0) this._log(`Sandstorm — ${ok.disorientAll} disorient sweeps the remaining enemies!`);
               }
 
-              // initiativeGained: add to attacker's initiative gauge
+              // initiativeGained: add to attacker's initiative gauge. Was
+              // writing to `user.initiative` (regen-rate stat fallback, not
+              // the gauge itself) — same bug as Silent Order's critInitiative.
               if ((ok.initiativeGained || 0) > 0) {
-                user.initiative = (user.initiative || 0) + ok.initiativeGained;
+                const cap = user.initiativeGaugeMax ?? 100;
+                user.initiativeGauge = Math.min(cap, (user.initiativeGauge || 0) + ok.initiativeGained);
                 this._log(`${user?.name ?? 'The slinger'} reads the opening — +${ok.initiativeGained} initiative!`);
               }
 
@@ -5618,6 +5769,15 @@ export default class CombatScene extends Phaser.Scene {
             this._log(`${attacker.name} steals ${stolen} Initiative from ${target.name} (tier ${rule.tier} ${fam}).`);
           }
         }
+        if (rule.grantInitiative) {
+          // Pure gain, not theft — the target's own gauge is untouched (e.g.
+          // Grave Strike: crossing a Disease/Lacerate tier just generates
+          // Initiative out of nothing, same "gain" flavor as Harvest
+          // Momentum/Storm Splitter, unlike stealInitiative above).
+          const cap = attacker.initiativeGaugeMax ?? 100;
+          attacker.initiativeGauge = Math.min(cap, (attacker.initiativeGauge || 0) + rule.grantInitiative);
+          this._log(`${attacker.name} gains ${rule.grantInitiative} Initiative (tier ${rule.tier} ${fam}).`);
+        }
         if (rule.buff) {
           this._applyRewardBuff(attacker, rule.buff, ability, { family: fam, tier: rule.tier });
         }
@@ -5625,6 +5785,20 @@ export default class CombatScene extends Phaser.Scene {
           this._applyRewardDebuff(target, rule.debuff, ability, { family: fam, tier: rule.tier, attacker });
         }
       }
+    }
+
+    // Transpose: consume — the single point this whole ability's buildup
+    // resolution is done (primary buildup, splash fan-out, and this same
+    // tier-cross reward block's own addBuildup debuffs have all already run
+    // above). Gated the same way Hide's sneak-attack bonus is (a real
+    // hostile action, not a miss/self-buff/heal) so a whiff or a support
+    // cast doesn't silently burn the charge. _applyWeaknessBuildup already
+    // redirected every family this resolution actually applied; this just
+    // removes the now-spent status so the NEXT unrelated hit stops
+    // redirecting too.
+    if (!missed && target && user?.isEnemy !== target?.isEnemy && Array.isArray(user?.statusEffects)) {
+      const tIdx = user.statusEffects.findIndex(se => se?.transposeBuildupTo);
+      if (tIdx !== -1) user.statusEffects.splice(tIdx, 1);
     }
 
     // (2) Reward if target is already weak
@@ -5729,10 +5903,14 @@ export default class CombatScene extends Phaser.Scene {
       if (mpVfxKind) this._playStatusVFX?.(user, { kind: mpVfxKind });
     }
 
-    // (8) Initiative bonus from crit (e.g. silent_order)
+    // (8) Initiative bonus from crit — a skill can return this directly on
+    // its result instead of using the declarative critInitiative field.
+    // Same bug as the other two sites: was writing to `user.initiative`
+    // (the regen-rate stat fallback), not the gauge itself.
     if (!missed && (result?.initiativeGained || 0) > 0) {
       const initGain = result.initiativeGained;
-      user.initiative = (user.initiative || 0) + initGain;
+      const cap = user.initiativeGaugeMax ?? 100;
+      user.initiativeGauge = Math.min(cap, (user.initiativeGauge || 0) + initGain);
       this._log(`${user?.name ?? 'Attacker'} gains ${initGain} initiative!`);
     }
 
@@ -6780,21 +6958,29 @@ export default class CombatScene extends Phaser.Scene {
     // this hit would apply into one element, even physical/necrotic —
     // summed BEFORE any of the per-family gear/mark/vulnerability scaling
     // below runs, so that scaling still applies correctly to the single
-    // redirected family. One-shot: consumed on the first call attributed
-    // to this attacker that has ANY buildup to redirect, which in practice
-    // means their next attack — but since this is the single real choke
-    // point every buildup application already funnels through (splash,
-    // repeat, DOT ticks, retaliation procs, not just a fresh primary hit),
-    // an unrelated proc firing first could theoretically eat the charge
-    // instead of the intended next attack. Known, accepted tradeoff for a
-    // first pass.
+    // redirected family. Deliberately does NOT consume the status here —
+    // this is the single real choke point every buildup source in ONE
+    // ability's whole resolution funnels through (primary, splash, tier-
+    // cross reward addBuildup, retaliation procs), and consuming on the
+    // very first of possibly several calls meant a small early piece (e.g.
+    // splash, or a tier-cross reward's own addBuildup firing AFTER the
+    // primary hit) silently missed the redirect while the "big" part of
+    // the same hit got skipped over. Real consumption now happens exactly
+    // once, at the end of _applyAbilityToTarget's own hostile-hit
+    // resolution — see the "Transpose: consume" block there.
     const attacker = ctx?.user;
-    if (attacker && Array.isArray(attacker.statusEffects)) {
-      const idx = attacker.statusEffects.findIndex(se => se?.transposeBuildupTo);
-      if (idx !== -1) {
-        const toFamily = attacker.statusEffects[idx].transposeBuildupTo;
+    // Excludes self-applied ticks (a lodged arrow's own tickBuildup, Kindling
+    // Rite's runic-zone pulse) — those pass ctx.user === target (the same
+    // character buildup-ing themselves), not an attacker hitting someone
+    // else, and since Transpose is no longer consumed on first touch (see
+    // above), leaving this unguarded would let an armed Transpose silently
+    // hijack a character's own passive self-ticks for up to its full 3-turn
+    // duration instead of only ever affecting a real hit against a hostile.
+    if (attacker && attacker !== target && Array.isArray(attacker.statusEffects)) {
+      const active = attacker.statusEffects.find(se => se?.transposeBuildupTo);
+      if (active) {
+        const toFamily = active.transposeBuildupTo;
         const total = Object.values(buildupMap || {}).reduce((sum, v) => sum + Math.max(0, Math.floor(v || 0)), 0);
-        attacker.statusEffects.splice(idx, 1);
         if (total > 0) {
           buildupMap = { [toFamily]: total };
           this._log(`${attacker.name}'s buildup twists into pure ${toFamily}!`);
@@ -8606,6 +8792,16 @@ export default class CombatScene extends Phaser.Scene {
 
     const roots = this.actionMenuList?.list || this.actionMenu?.list || [];
     roots.forEach(visit);
+    // The fixed Back button and scrollbar drag zone are siblings of
+    // actionMenuList (added directly to actionMenu, not touched by the
+    // block above) — deliberately NOT recursively re-interactive-ized here.
+    // this.actionMenu itself gets setVisible(false) on the enemy-turn path
+    // in _buildActionMenuRoot, and Phaser containers already gate input on
+    // an ancestor's visibility, so these two stay simply "always
+    // interactive, gated by visibility" instead of being toggled through
+    // this recursive child-walk (which was a plausible source of a real
+    // reported bug: the Back button visually responding to hover but never
+    // actually firing its click).
   }
 
   _updateActionMenuScrollBounds() {
@@ -8637,6 +8833,56 @@ export default class CombatScene extends Phaser.Scene {
       this.actionMenuList.y = -this.actionMenuScrollY;
     }
     this._refreshActionMenuInteractivity();
+    this._updateActionMenuScrollbarVisual();
+  }
+
+  // Sets which callback the fixed Back button invokes, and shows/hides it —
+  // null means "no back target" (the root menu). Called by each submenu
+  // builder instead of them each creating their own in-list Back button.
+  _setActionMenuBackCallback(fn) {
+    this._actionMenuBackCallback = fn || null;
+    this._actionMenuBackBtn?.setVisible(!!fn);
+  }
+
+  // Redraws the scrollbar thumb from the current scroll state and hides the
+  // whole track+thumb when there's nothing to scroll. Called every time
+  // _applyActionMenuScroll runs (i.e. after any scroll bounds recompute or
+  // any scroll offset change), so it never falls out of sync with the mouse
+  // wheel or the drag handle itself.
+  _updateActionMenuScrollbarVisual() {
+    const track = this._actionMenuScrollTrack;
+    const thumbGfx = this._actionMenuScrollThumbGfx;
+    if (!track || !thumbGfx) return;
+
+    const max = this.actionMenuScrollMax || 0;
+    const hasScroll = max > 0.5;
+    this._actionMenuScrollTrackGfx?.setVisible(hasScroll);
+    thumbGfx.setVisible(hasScroll);
+    this._actionMenuScrollThumbZone?.setVisible(hasScroll);
+    if (!hasScroll) return;
+
+    // Thumb SIZE is proportional to the real scrollable viewport, not the
+    // track's own on-screen height (the track is deliberately shorter than
+    // the content area — see the "minimap" comment where it's built, sized
+    // to stop well clear of the action lights / End Turn button below the
+    // panel). Thumb POSITION still moves across the track's actual height.
+    const viewH = this.actionMenuViewport?.height || track.height;
+    const contentHeight = viewH + max;
+    const thumbH = Math.max(10, Math.floor(track.height * (viewH / contentHeight)));
+    this._actionMenuScrollThumbHeight = thumbH;
+    const usableH = Math.max(1, track.height - thumbH);
+    const ratio = Phaser.Math.Clamp((this.actionMenuScrollY || 0) / max, 0, 1);
+    const thumbY = track.y + ratio * usableH;
+
+    thumbGfx.clear();
+    thumbGfx.fillStyle(0xcfa64a, 0.9);
+    thumbGfx.fillRoundedRect(track.x, thumbY, track.width, thumbH, 3);
+
+    if (this._actionMenuScrollThumbZone) {
+      this._actionMenuScrollThumbZone.y = thumbY;
+      this._actionMenuScrollThumbZone.setSize(14, thumbH);
+      this._actionMenuScrollThumbZone.input.hitArea.height = thumbH;
+    }
   }
 
   /**
@@ -9931,12 +10177,14 @@ export default class CombatScene extends Phaser.Scene {
 
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
+    const weaknessDots = this._createWeaknessDots(unit);
 
-    unit._slot.add([hpBar, mpBar]);
+    unit._slot.add([hpBar, mpBar, weaknessDots]);
 
     // Maintain handles for updates
     unit.hpBar = hpBar;
     unit.mpBar = mpBar;
+    this._updateWeaknessDots(unit);
   }
 
   // Shared by _showVictoryScreen/_showDefeatScreen: dims and input-blocks
@@ -10167,14 +10415,16 @@ export default class CombatScene extends Phaser.Scene {
     const mpBar = new StatusBar(this, -42, 0, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
+    const weaknessDots = this._createWeaknessDots(char);
 
     // Add to container
-    slot.add([sprite, nameTxt, hpBar, mpBar]);
+    slot.add([sprite, nameTxt, hpBar, mpBar, weaknessDots]);
 
     // Store references for later updates
     char.icon = sprite;
     char.hpBar = hpBar;
     char.mpBar = mpBar;
+    this._updateWeaknessDots(char);
 
     // NEW: ensure status icons render now that slot/icon exist
     this._refreshStatusEffectIcons?.(char);
