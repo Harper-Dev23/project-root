@@ -2731,6 +2731,21 @@ export default class TownScene extends Phaser.Scene {
       'training_encounter_6'
     ];
 
+    // Optional account-wide rematch tiers, keyed by base scenario id — a
+    // generic map (not hardcoded to just Gorrek) so a future second/third
+    // scenario can get the same tier picker just by adding an entry here.
+    // Only Gorrek has any right now.
+    const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
+    const RECKONING_TIERS = {
+      training_encounter_6: [
+        'training_encounter_6_reckoning_1',
+        'training_encounter_6_reckoning_2',
+        'training_encounter_6_reckoning_3',
+        'training_encounter_6_reckoning_4',
+        'training_encounter_6_reckoning_5',
+      ],
+    };
+
     const menuOptions = scenarioIds.map(id => {
       const scenario = COMBAT_SCENARIOS[id];
       const unlocked  = ProgressionManager.isScenarioUnlocked(id);
@@ -2739,6 +2754,25 @@ export default class TownScene extends Phaser.Scene {
       // Label shows a checkmark for already-beaten scenarios; hide name if locked.
       const label = !unlocked ? '???' : (completed ? `${scenario.name}  ✓` : scenario.name);
 
+      // Tier picker only makes sense once the base fight itself is
+      // reachable — no point surfacing Reckoning I-V while Gorrek is still '???'.
+      const tierIds = unlocked ? RECKONING_TIERS[id] : null;
+      const tiers = tierIds ? tierIds.map((tierId, i) => {
+        const tierScenario = COMBAT_SCENARIOS[tierId];
+        const tierUnlocked = ProgressionManager.isScenarioUnlocked(tierId);
+        const tierCompleted = ProgressionManager.isScenarioCompleted(tierId);
+        return {
+          label: ROMAN[i] || String(i + 1),
+          fullLabel: tierScenario.name,
+          unlocked: tierUnlocked,
+          completed: tierCompleted,
+          description: tierScenario.description,
+          longDescription: tierScenario.longDescription || tierScenario.description,
+          portraitKey: tierScenario.portraitKey || null,
+          onSelect: tierUnlocked ? () => this._startTraining(tierId) : null,
+        };
+      }) : null;
+
       return {
         label,
         description:     unlocked ? scenario.description : '???',
@@ -2746,6 +2780,7 @@ export default class TownScene extends Phaser.Scene {
         portraitKey:     scenario.portraitKey || null,
         locked:          !unlocked,
         onSelect:        unlocked ? () => this._startTraining(id) : null,
+        tiers,
       };
     });
 

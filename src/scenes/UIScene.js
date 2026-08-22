@@ -1182,6 +1182,70 @@ export default class UIScene extends Phaser.Scene {
       }).setOrigin(0, 0);
 
       this.popupButtons.push(optionText, descText);
+
+      // Optional tier picker (e.g. Gorrek's Reckoning I-V) — a small stack
+      // of compact pips to the LEFT of this row, generic enough for any
+      // option to use, not hardcoded to one scenario. Deliberately left of
+      // the row (not right) — user's own reasoning: the right side runs out
+      // of room fast if more than one option ever needs this.
+      if (Array.isArray(opt.tiers) && opt.tiers.length) {
+        // 2-column grid (up to 3 rows) rather than one tall vertical stack —
+        // 5 pips stacked singly ran taller than this row's own 75px spacing
+        // and visibly overlapped the row above it (confirmed via a live
+        // screenshot). Same fix shape as the combat weakness-dot cluster.
+        const COL_MAX = 3;
+        const pipW = 26, pipH = 20, pipGap = 3, colGap = 3;
+        const pipX0 = 220 - 24 - (pipW + colGap + pipW / 2);
+
+        opt.tiers.forEach((tier, ti) => {
+          const tierLocked = !tier.unlocked;
+          const col = Math.floor(ti / COL_MAX);
+          const row = ti % COL_MAX;
+          const rowsInCol = Math.min(COL_MAX, opt.tiers.length - col * COL_MAX);
+          const colStartY = yPos - ((rowsInCol - 1) * (pipH + pipGap)) / 2;
+          const pipX = pipX0 + col * (pipW + colGap);
+          const pipY = colStartY + row * (pipH + pipGap);
+          const pip = this.add.text(pipX, pipY, tier.label, {
+            fontSize: '12px',
+            color: tierLocked ? '#555555' : (tier.completed ? '#88cc88' : '#cccccc'),
+            backgroundColor: '#222222',
+            padding: { x: 3, y: 3 },
+          }).setOrigin(0.5).setInteractive({ useHandCursor: !tierLocked });
+
+          if (tierLocked) {
+            pip.on('pointerdown', () => {
+              detailTitle.setText(tier.label ? `${opt.label} — ${tier.fullLabel || tier.label}` : opt.label);
+              detailDesc.setText('Complete the previous tier to unlock this one.');
+              detailPortrait.setVisible(false);
+              fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
+              fightButton.disableInteractive();
+              fightButton.removeAllListeners('pointerdown');
+            });
+          } else {
+            pip.on('pointerdown', () => {
+              detailTitle.setText(tier.fullLabel || tier.label);
+              detailDesc.setText(tier.longDescription || tier.description || '');
+              if (tier.portraitKey) {
+                detailPortrait.setTexture(tier.portraitKey).setVisible(true);
+              } else {
+                detailPortrait.setVisible(false);
+              }
+              fightButton._startScenario = tier.onSelect;
+              fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
+              fightButton.setInteractive({ useHandCursor: true });
+              fightButton.removeAllListeners('pointerdown');
+              fightButton.on('pointerdown', () => {
+                fightButton._startScenario();
+                this.time.delayedCall(100, () => this.cleanupPopup());
+              });
+            })
+              .on('pointerover', () => pip.setStyle({ color: MENU_THEME.accentHover }))
+              .on('pointerout', () => pip.setStyle({ color: tier.completed ? '#88cc88' : '#cccccc' }));
+          }
+
+          this.popupButtons.push(pip);
+        });
+      }
     });
 
     // === Exit Button ===

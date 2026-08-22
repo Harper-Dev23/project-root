@@ -3214,6 +3214,41 @@ const NPC_ONLY_SKILLS = {
       return { amount: 0, log: `${attacker?.name || 'The Berserker'} howls a bloodrite — his wounds will mend faster.` };
     },
     description: "Grants +10% Lifesteal for 2 turns, doubling his Bloodthirster's own 10% while active."
+  },
+
+  // Gorrek's Reckoning-tier II unlock — nothing in his base kit protects
+  // him from Disorient at all (Disrupting Roar/Guarded Fury/Blood Fury all
+  // apply it to OTHERS, none of them touch his own). Disorient T2 raises
+  // his own MP costs and drains MP at turn start — for a boss whose entire
+  // kit already runs on MP with only one free fallback, a coordinated
+  // party could otherwise lock him down hard. Same self-tier-check gate
+  // shape as Reckless Harvest (requiresWeakness + on:'self'), and the same
+  // generic <family>BuildupMul rider every vulnerability status in the game
+  // already uses — just inverted below 1.0 for resistance instead of above
+  // 1.0 for vulnerability.
+  'berserker_steel_mind': {
+    id: 'berserker_steel_mind',
+    name: 'Steel Mind',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 3,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'self',
+    tags: ['self'],
+    requiresWeakness: [{ family: 'disorient', tier: 1, on: 'self' }],
+    apply: (attacker, _target, scene) => {
+      if (attacker?.weakness?.meters) {
+        attacker.weakness.meters.disorient = 0;
+        if (attacker.weakness.tiers) attacker.weakness.tiers.disorient = 0;
+      }
+      scene?._addStatusEffects?.(attacker, [{
+        id: 'steel_mind_buff', turns: 3, disorientBuildupMul: 0.5, vfx: { kind: 'buff_harden' },
+      }]);
+      return { amount: 0, log: `${attacker?.name || 'The Berserker'} clears his head, shrugging off the daze.` };
+    },
+    description: "Requires the Berserker himself to be at least Dazed. Clears his own Disorient buildup and halves incoming Disorient buildup for 3 turns."
   }
 };
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
@@ -12905,7 +12940,12 @@ Object.assign(RAW_SKILLS, {
     conditionHint: { requiresKillThisTurn: true },
     apply: (attacker, _target, scene) => {
       if (!scene?.enemyDiedThisTurn) {
-        return { amount: 0, log: `${attacker?.name || "The axeman"} finds no trophy to cry for yet.` };
+        // Real fizzle — no bonus action, MP, or cooldown spent (same
+        // result.fizzle mechanism Momentum Strike uses for its own
+        // can't-know-until-apply-time condition). Was returning a normal
+        // result, which still consumed the bonus action on an accidental
+        // click even though nothing happened.
+        return { fizzle: true, log: `${attacker?.name || "The axeman"} finds no trophy to cry for yet.` };
       }
       const maxHP = attacker?.maxHP ?? attacker?.derivedStats?.maxHP ?? 0;
       const healAmt = Math.floor(maxHP * 0.25);

@@ -338,5 +338,109 @@ export const ENEMY_TYPES = {
     // Now genuinely tied to the Bloodthirster weapon via the scenario's
     // drops config (combatScenarios.js) + _equipEnemyItem's gearEffects
     // handling, so this template no longer needs its own copy of the number.
+  },
+
+  // Reckoning I-V — account-wide rematch tiers, gated sequentially behind
+  // each other via ProgressionManager (training_encounter_6_reckoning_N),
+  // surfaced as a tier picker beside Gorrek's row in the training menu.
+  // Toughness is the primary lever per design: derivedBonus ramps up hard
+  // (including Elemental/Necrotic Resist, which base Gorrek has NONE of at
+  // all), HP/damage/buildup all move much more modestly. Steel Mind (his
+  // Disorient self-cleanse) unlocks starting at Reckoning II — everything
+  // else is numbers-only scaling on the same 11-skill base kit.
+  berserker_boss_reckoning_1: {
+    skin: 'portrait_gorrek',
+    maxHP: 950,
+    maxMP: 150,
+    mpRegenPerTurn: 12,
+    damageMultiplierPct: -37,
+    buildupMultiplierPct: 8,
+    derivedBonus: { PhysicalResist: 30, Resilience: 42, ElementalResist: 8, NecroticResist: 8 },
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    skills: [
+      'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
+      'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
+      'berserker_reckless_harvest', 'berserker_bloodrite'
+    ],
+    aiProfile: 'berserker_boss',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  berserker_boss_reckoning_2: {
+    skin: 'portrait_gorrek',
+    maxHP: 1050,
+    maxMP: 150,
+    mpRegenPerTurn: 12,
+    damageMultiplierPct: -34,
+    buildupMultiplierPct: 16,
+    derivedBonus: { PhysicalResist: 40, Resilience: 54, ElementalResist: 16, NecroticResist: 16 },
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    skills: [
+      'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
+      'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
+      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+    ],
+    aiProfile: 'berserker_boss',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  berserker_boss_reckoning_3: {
+    skin: 'portrait_gorrek',
+    maxHP: 1150,
+    maxMP: 150,
+    mpRegenPerTurn: 12,
+    damageMultiplierPct: -31,
+    buildupMultiplierPct: 24,
+    derivedBonus: { PhysicalResist: 50, Resilience: 66, ElementalResist: 24, NecroticResist: 24 },
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    skills: [
+      'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
+      'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
+      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+    ],
+    aiProfile: 'berserker_boss',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  berserker_boss_reckoning_4: {
+    skin: 'portrait_gorrek',
+    maxHP: 1250,
+    maxMP: 150,
+    mpRegenPerTurn: 12,
+    damageMultiplierPct: -28,
+    buildupMultiplierPct: 32,
+    derivedBonus: { PhysicalResist: 60, Resilience: 78, ElementalResist: 32, NecroticResist: 32 },
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    skills: [
+      'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
+      'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
+      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+    ],
+    aiProfile: 'berserker_boss',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  berserker_boss_reckoning_5: {
+    skin: 'portrait_gorrek',
+    maxHP: 1350,
+    maxMP: 150,
+    mpRegenPerTurn: 12,
+    damageMultiplierPct: -25,
+    buildupMultiplierPct: 40,
+    derivedBonus: { PhysicalResist: 70, Resilience: 90, ElementalResist: 40, NecroticResist: 40 },
+    baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    skills: [
+      'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
+      'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
+      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+    ],
+    aiProfile: 'berserker_boss',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   }
 };

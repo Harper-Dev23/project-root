@@ -1632,11 +1632,21 @@ export default class CombatScene extends Phaser.Scene {
         // affects real damage output the same way globalDamagePercent does,
         // but is deliberately NOT read by the character sheet's PD/ED/ND
         // display — this is a dev balance lever, not a user-facing buff/debuff.
+        // buildupMultiplierPct: sibling dial to damageMultiplierPct above —
+        // a flat template-level bonus to buildup THIS enemy applies to
+        // others (e.g. Gorrek's Reckoning tiers), reusing the same
+        // physicalBuildupPercent field armor affixes already write into
+        // gearEffects (read generically by _applyWeaknessBuildup). Scoped to
+        // physical since every berserker_boss skill only ever applies
+        // Expose/Lacerate/Disorient — a future boss dealing a different
+        // family's buildup would need its own category field added here.
         gearEffects: {
           ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
             ? { mpPerTurn: template.mpRegenPerTurn } : {}),
           ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
             ? { hiddenDamagePercent: template.damageMultiplierPct } : {}),
+          ...(Number.isFinite(template.buildupMultiplierPct) && template.buildupMultiplierPct !== 0
+            ? { physicalBuildupPercent: template.buildupMultiplierPct } : {}),
         },
       };
 
@@ -3337,15 +3347,26 @@ export default class CombatScene extends Phaser.Scene {
     Object.values(char.weaknessDotSprites || {}).forEach(d => d.destroy());
     char.weaknessDotSprites = {};
 
+    // Two columns, 5 rows max per column (per request — a single 9-tall
+    // column was too much vertical space) — column 0 fills first (up to 5),
+    // any remaining families spill into column 1 to the right. Each column
+    // is independently vertically centered on however many dots IT holds,
+    // so a lone overflow dot in column 1 doesn't sit oddly offset.
+    const COL_MAX = 5;
     const SPACING = 11;
-    const startY = -((active.length - 1) * SPACING) / 2;
+    const COL_GAP = 11;
     active.forEach((fam, i) => {
+      const col = Math.floor(i / COL_MAX);
+      const rowIndex = i % COL_MAX;
+      const rowsInThisCol = Math.min(COL_MAX, active.length - col * COL_MAX);
+      const colStartY = -((rowsInThisCol - 1) * SPACING) / 2;
+
       const meter = char.weakness.meters?.[fam] || 0;
       const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
       // Dim just past 0, fully lit at/after T2 — "how close to T2" is the
       // same read every intensity-scaled weakness mechanic already uses.
       const alpha = Phaser.Math.Clamp(0.35 + 0.65 * (meter / Math.max(1, t2)), 0.35, 1);
-      const dot = this.add.circle(0, startY + i * SPACING, 4, CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff, alpha)
+      const dot = this.add.circle(col * COL_GAP, colStartY + rowIndex * SPACING, 4, CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff, alpha)
         .setStrokeStyle(1, 0x000000, 0.5);
       container.add(dot);
       char.weaknessDotSprites[fam] = dot;
@@ -4251,6 +4272,15 @@ export default class CombatScene extends Phaser.Scene {
 
     // 🔧 Adjust turn index safely
     const removedIndex = this.turnOrder.indexOf(unit);
+    // Was this unit the one CURRENTLY acting? A death from something
+    // synchronous mid-action (a reaction counterattack, a retaliation
+    // proc — anything other than the two end-of-turn tick paths
+    // _advanceTurn already hardens for) leaves turnOrder/currentTurnIndex
+    // silently repointed at whoever's next, but nothing tells the ACTION
+    // MENU that — it just sits showing the dead unit's stale submenu/Back
+    // callback until something unrelated happens to rebuild it. See the
+    // rebuild call below.
+    const wasCurrentActor = removedIndex !== -1 && removedIndex === this.currentTurnIndex;
     this.turnOrder = this.turnOrder.filter(u => u !== unit);
     if (removedIndex !== -1 && removedIndex < this.currentTurnIndex) {
       this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
@@ -4265,6 +4295,16 @@ export default class CombatScene extends Phaser.Scene {
     this._placeInKOArea(unit);
 
     this._checkVictoryCondition();
+
+    // Resync the action menu to whoever the bookkeeping above just made
+    // "current" — a real _advanceTurn() (with its cooldown/DOT/status-
+    // duration ticks) is for the character who just NATURALLY finished
+    // their own turn; skipping that here is deliberate, since a unit who
+    // died mid-action has no "rest of their turn" for those to apply to.
+    // Just refreshing the UI is enough to stop it showing a corpse's menu.
+    if (wasCurrentActor && !this.combatEnded) {
+      this._buildActionMenuRoot?.();
+    }
   }
 
 

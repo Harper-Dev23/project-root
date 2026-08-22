@@ -23,6 +23,16 @@ const UNLOCK_REQUIRES = {
   'training_encounter_4': 'training_encounter_3',
   'training_encounter_5': 'training_encounter_4',
   'training_encounter_6': 'training_encounter_5',
+  // Gorrek's Reckoning I-V rematch tiers — chained sequentially behind each
+  // other and the base fight, same isScenarioUnlocked()/dev-bypass path
+  // every other scenario already uses. Deliberately NOT added to
+  // SCENARIO_ORDER below — that array only drives refreshCombatPitFlag's
+  // main-story "!" marker chain, which these are unrelated to.
+  'training_encounter_6_reckoning_1': 'training_encounter_6',
+  'training_encounter_6_reckoning_2': 'training_encounter_6_reckoning_1',
+  'training_encounter_6_reckoning_3': 'training_encounter_6_reckoning_2',
+  'training_encounter_6_reckoning_4': 'training_encounter_6_reckoning_3',
+  'training_encounter_6_reckoning_5': 'training_encounter_6_reckoning_4',
 };
 
 // Quest flags that must ALL be cleared before the next scenario unlocks.
@@ -51,14 +61,19 @@ const SCENARIO_ORDER = [
 ];
 
 // Hunt Tickets awarded on FIRST completion of each scenario.
-// Scenario 6 gives a unique item instead, so it earns 0 tickets here.
 const TICKET_REWARDS = {
   'training_encounter_1': 12,
   'training_encounter_2': 12,
   'training_encounter_3': 12,
   'training_encounter_4': 18,
   'training_encounter_5': 24,
-  'training_encounter_6': 0,
+  'training_encounter_6': 30,
+  // Reckoning I-V — increasing per tier, per request.
+  'training_encounter_6_reckoning_1': 35,
+  'training_encounter_6_reckoning_2': 40,
+  'training_encounter_6_reckoning_3': 50,
+  'training_encounter_6_reckoning_4': 60,
+  'training_encounter_6_reckoning_5': 75,
 };
 
 // Quest flags auto-set on first clear of each scenario.

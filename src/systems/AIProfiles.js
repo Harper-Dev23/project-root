@@ -640,6 +640,13 @@ export const AI_PROFILES = {
       if (canUseSkill(npc, 'berserker_battle_frenzy') && !hasStatus(npc, 'battle_frenzy')) {
         return buildAction('berserker_battle_frenzy', npc);
       }
+      // Reckoning II+ only (not in every tier's skills list — canUseSkill
+      // correctly no-ops for tiers that don't have it). Checked ahead of
+      // Harvest/Bloodrite: getting Disorient off himself before he's fully
+      // locked down matters more than either payoff.
+      if (canUseSkill(npc, 'berserker_steel_mind') && hasAnyWeakness(npc, ['disorient'], 1)) {
+        return buildAction('berserker_steel_mind', npc);
+      }
       if (canUseSkill(npc, 'berserker_reckless_harvest') && hasAnyWeakness(npc, ['lacerate'], 1)) {
         return buildAction('berserker_reckless_harvest', npc);
       }

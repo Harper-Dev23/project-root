@@ -31,7 +31,7 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_3: {
     name: 'The Animated Six',
-    description: 'Chad, Stan, Gary, Doug, Mo, and Lenny — six animated constructs covering every classic RPG role, with real tactics instead of scripted swings.',
+    description: 'Six animated constructs, real combat AI.',
     longDescription: 'Six training constructs animated into distinct classes: Chad tanks and can redirect a blow onto himself, Stan channels genuine healing magic across the party, Gary and Lenny fight with the same layered tactics a real caster would use, and Doug and Mo react the instant an ally is struck — Mo with a curse that saps your next attack. Expect real synergy and payoffs, not six copies of the same dummy.',
     portraitKey: 'dummy_portrait_equipped_fighter',
     // Same six dummies as encounter 2 (Lenny/Gary/Stan/Doug/Mo/Chad),
@@ -68,7 +68,7 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_4: {
     name: 'Huntsman & Beasts',
-    description: 'Coordinate against a huntsman commander and his beasts.',
+    description: 'A huntsman commander leads two beasts.',
     longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
     portraitKey: 'portrait_styx_commander',
     enemies: [
@@ -157,6 +157,97 @@ export const COMBAT_SCENARIOS = {
         ],
       }
     ]
+  },
+
+  // Reckoning I-V — account-wide rematch tiers (ProgressionManager gates
+  // each one sequentially behind the last: base clear → I → II → III → IV →
+  // V), same fixed Bloodthirster/armor drops as the base fight each time.
+  // Surfaced as a tier picker beside Gorrek's row in the training menu, not
+  // as 5 more rows in the main list.
+  training_encounter_6_reckoning_1: {
+    name: 'Gorrek — Reckoning I',
+    description: 'A tougher Gorrek — the first rematch tier.',
+    longDescription: "He remembers losing. Reckoning I: noticeably harder to put down, though his kit hasn't grown yet.",
+    portraitKey: 'portrait_gorrek',
+    enemies: [{
+      type: 'berserker_boss_reckoning_1', slotId: 2, name: 'Gorrek',
+      drops: [
+        { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ],
+    }]
+  },
+  training_encounter_6_reckoning_2: {
+    name: 'Gorrek — Reckoning II',
+    description: 'A tougher Gorrek, now able to shake off Disorient.',
+    longDescription: "Reckoning II: tougher still, and he's learned to clear his own head — Disorient alone won't hold him down anymore.",
+    portraitKey: 'portrait_gorrek',
+    enemies: [{
+      type: 'berserker_boss_reckoning_2', slotId: 2, name: 'Gorrek',
+      drops: [
+        { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ],
+    }]
+  },
+  training_encounter_6_reckoning_3: {
+    name: 'Gorrek — Reckoning III',
+    description: 'A tougher Gorrek — the third rematch tier.',
+    longDescription: "Reckoning III: even harder to wear down. Expect a long fight.",
+    portraitKey: 'portrait_gorrek',
+    enemies: [{
+      type: 'berserker_boss_reckoning_3', slotId: 2, name: 'Gorrek',
+      drops: [
+        { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ],
+    }]
+  },
+  training_encounter_6_reckoning_4: {
+    name: 'Gorrek — Reckoning IV',
+    description: 'A tougher Gorrek — the fourth rematch tier.',
+    longDescription: "Reckoning IV: brutally resilient. Bring everything you have.",
+    portraitKey: 'portrait_gorrek',
+    enemies: [{
+      type: 'berserker_boss_reckoning_4', slotId: 2, name: 'Gorrek',
+      drops: [
+        { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ],
+    }]
+  },
+  training_encounter_6_reckoning_5: {
+    name: 'Gorrek — Reckoning V',
+    description: 'The final rematch tier — the hardest Gorrek gets.',
+    longDescription: "Reckoning V: as tough as he gets. If you can put him down here, you've earned it.",
+    portraitKey: 'portrait_gorrek',
+    enemies: [{
+      type: 'berserker_boss_reckoning_5', slotId: 2, name: 'Gorrek',
+      drops: [
+        { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        { equip: 'chest', rarity: 'uncommon', droppable: false },
+        { equip: 'head', rarity: 'uncommon', droppable: false },
+        { equip: 'legs', rarity: 'uncommon', droppable: false },
+        { equip: 'gloves', rarity: 'uncommon', droppable: false },
+        { equip: 'boots', rarity: 'uncommon', droppable: false },
+      ],
+    }]
   },
 
   // === Hunt encounters (placeholder — no real enemy roster yet) ===

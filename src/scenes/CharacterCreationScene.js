@@ -3,6 +3,7 @@ import GameState from '../systems/GameState.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import UIButton, { createButton } from '../ui/Button.js';
+import { createPanel } from '../ui/GamePanel.js';
 import { FONTS } from '../ui/styles.js';
 import {
   buildCharacter,
@@ -138,6 +139,16 @@ export default class CharacterCreationScene extends Phaser.Scene {
       this.raceButtons.push({ race, btn });
     });
 
+
+    // Tinted backdrop for the race/class description text below the skin
+    // picker — both raceDescriptionText (y=600) and classSkillText (y=660)
+    // render centered (setOrigin(0.5)) with a 300px wordWrap, so this is
+    // sized generously around that combined footprint. Created once, before
+    // either text exists, so normal draw order already puts it behind them —
+    // both get destroyed and recreated on every race/class change, but
+    // always as fresh top-level adds, so they stay on top without needing
+    // an explicit depth on either side.
+    createPanel(this, 70, 555, 340, 160, 'default');
 
     this.selectedSkin = null;
     this.showPortraitOptions(this.selectedRace);
