@@ -14,6 +14,7 @@ import GameState from '../../systems/GameState.js';
 import { rebuildCharacterStats, calculateDerivedStats } from '../../systems/CharacterBuilder.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { getAwakeningsFor, TIER_STYLE } from '../../../data/awakenings.js';
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
@@ -103,6 +104,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
     // so without this _showTab() would skip rebuilding against destroyed game objects.
     this._statItems   = null;
     this._talentItems = null;
+    this._awakeningNodeLabels = null;
 
     this._buildCharStrip();
     this._buildTabRow();
@@ -116,31 +118,32 @@ export default class LevelUpOverlay extends Phaser.Scene {
     const d = this._depth;
     const c = this._char;
 
-    const y = b.y + 53;
+    // Sits on the frame's own title row (left of the centered "Level Up"),
+    // NOT below it. The strip used to start at b.y+53 — but _buildTabRow
+    // draws opaque tab backgrounds at the same x (b.x+24) spanning
+    // b.y+66..b.y+90, painted after the strip at the same depth, so they
+    // covered the bottom half of the name and the whole race/class line.
+    // Moving the strip up into the empty left half of the title row clears
+    // the tabs entirely without shifting any tab/content geometry below.
+    const y = b.y + 20;
 
     this.add.text(b.x + 24, y,
       c.name,
       { fontSize: '20px', color: '#ffddaa', fontStyle: 'bold', fontFamily: 'Georgia' }
     ).setDepth(d);
 
-    this.add.text(b.x + 24, y + 22,
+    this.add.text(b.x + 24, y + 25,
       `${c.race}  ·  ${c.baseClass}  ·  Level ${c.level}`,
       { fontSize: '13px', color: '#888888' }
     ).setDepth(d);
 
-    // Points-remaining badge (top-right of strip), updated as points are spent
-    this._stripBadge = this.add.text(b.right - 24, y + 10,
+    // Points-remaining badge — right-aligned, level with the tab row so it
+    // reads as part of the same band (clear of the frame's close button,
+    // which occupies the top-right corner at b.y+18).
+    this._stripBadge = this.add.text(b.right - 24, b.y + 78,
       this._badgeLabel(),
       { fontSize: '15px', color: '#ffdd44', fontStyle: 'bold' }
     ).setOrigin(1, 0.5).setDepth(d);
-
-    // Thin divider under strip
-    const divGfx = this.add.graphics().setDepth(d);
-    divGfx.lineStyle(1, 0x5a4a3a, 0.5);
-    divGfx.beginPath();
-    divGfx.moveTo(b.x + 16, y + 38);
-    divGfx.lineTo(b.right - 16, y + 38);
-    divGfx.strokePath();
   }
 
   _badgeLabel() {
@@ -208,6 +211,9 @@ export default class LevelUpOverlay extends Phaser.Scene {
     const showTalent = name === 'Talents';
     this._statItems?.forEach(c => c.setVisible(showStat));
     this._talentItems?.forEach(c => c.setVisible(showTalent));
+    // Constellation node labels are rebuilt per selected awakening, so they
+    // live outside _talentItems and need toggling explicitly.
+    this._awakeningNodeLabels?.forEach(c => c.setVisible(showTalent));
   }
 
   // ── Stat Points Tab ───────────────────────────────────────────────────────────
@@ -462,7 +468,12 @@ export default class LevelUpOverlay extends Phaser.Scene {
     this._close();
   }
 
-  // ── Talents Tab (placeholder) ─────────────────────────────────────────────────
+  // ── Talents Tab (Awakening teaser) ────────────────────────────────────────────
+  // Still fully locked — nothing here is spendable or persisted. It previews
+  // the three Awakening paths available to this character's base class, each
+  // with its real 12-node constellation shape (3 entry / 4 adept / 4 master /
+  // 1 capstone) so the eventual system reads as a real branching choice
+  // rather than a generic "coming soon" panel.
 
   _buildTalentsTab() {
     const b = this._bounds;
@@ -472,86 +483,185 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
     const contentTop = b.y + 108;
     const char = this._char;
+    const paths = getAwakeningsFor(char.baseClass);
 
-    // ── Ghost node tree ─────────────────────────────────────────────────────────
-    const treeCX = b.centerX;
-    const treeTop = contentTop + 20;
+    // No data for this base class — fall back to the old plain locked notice
+    // rather than rendering an empty frame.
+    if (!paths.length) {
+      const lock = this.add.text(b.centerX, contentTop + 120, '🔒', { fontSize: '52px' })
+        .setOrigin(0.5).setDepth(d + 2);
+      const head = this.add.text(b.centerX, contentTop + 180, 'Awaiting Awakening',
+        { fontSize: '26px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia' }
+      ).setOrigin(0.5).setDepth(d + 2);
+      group.add(lock); group.add(head);
+      return;
+    }
 
-    const nodes = [
-      { x: treeCX,       y: treeTop        },
-      { x: treeCX - 130, y: treeTop + 80   },
-      { x: treeCX + 130, y: treeTop + 80   },
-      { x: treeCX - 210, y: treeTop + 170  },
-      { x: treeCX - 60,  y: treeTop + 170  },
-      { x: treeCX + 60,  y: treeTop + 170  },
-      { x: treeCX + 210, y: treeTop + 170  },
-      { x: treeCX - 180, y: treeTop + 255  },
-      { x: treeCX,       y: treeTop + 255  },
-      { x: treeCX + 180, y: treeTop + 255  },
-    ];
+    this._awakeningPaths = paths;
+    this._awakeningIndex = 0;
 
-    const edges = [[0,1],[0,2],[1,3],[1,4],[2,5],[2,6],[3,7],[4,8],[6,9]];
-
-    const treeGfx = this.add.graphics().setDepth(d);
-    group.add(treeGfx);
-
-    // Edges
-    treeGfx.lineStyle(1, 0x334455, 0.45);
-    edges.forEach(([a, b_]) => {
-      treeGfx.beginPath();
-      treeGfx.moveTo(nodes[a].x, nodes[a].y);
-      treeGfx.lineTo(nodes[b_].x, nodes[b_].y);
-      treeGfx.strokePath();
-    });
-
-    // Node circles
-    nodes.forEach(n => {
-      treeGfx.fillStyle(0x1a2233, 0.9);
-      treeGfx.fillCircle(n.x, n.y, 20);
-      treeGfx.lineStyle(1, 0x334466, 0.55);
-      treeGfx.strokeCircle(n.x, n.y, 20);
-    });
-
-    // ── Lock overlay ────────────────────────────────────────────────────────────
-    const overlayH = 310;
-    const overlayRect = this.add.rectangle(
-      b.centerX, contentTop + 165, b.width - 48, overlayH, 0x000000, 0.62
-    ).setDepth(d + 1);
-    group.add(overlayRect);
-
-    // Lock icon
-    const lockTxt = this.add.text(b.centerX, contentTop + 108,
-      '🔒', { fontSize: '52px' }
-    ).setOrigin(0.5).setDepth(d + 2);
-    group.add(lockTxt);
-
-    // Heading
-    const heading = this.add.text(b.centerX, contentTop + 174,
-      'Awaiting Awakening',
-      { fontSize: '26px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia' }
-    ).setOrigin(0.5).setDepth(d + 2);
-    group.add(heading);
-
-    // Divider line
-    const lineGfx = this.add.graphics().setDepth(d + 2);
-    lineGfx.lineStyle(1, 0x445566, 0.5);
-    lineGfx.beginPath();
-    lineGfx.moveTo(b.centerX - 140, contentTop + 205);
-    lineGfx.lineTo(b.centerX + 140, contentTop + 205);
-    lineGfx.strokePath();
-    group.add(lineGfx);
-
-    // Flavor text
-    const flavor = this.add.text(b.centerX, contentTop + 215,
-      `${char.name}'s talent tree will unlock when they undergo the Awakening ritual.\n\n` +
-      `Through the Awakening, a fighter transcends their base class — gaining access to\n` +
-      `specialized paths, passive abilities, and signature techniques unique to their journey.`,
-      {
-        fontSize: '14px', color: '#667788', align: 'center',
-        wordWrap: { width: 560 }, lineSpacing: 4
-      }
+    // ── Header ────────────────────────────────────────────────────────────────
+    const head = this.add.text(b.centerX, contentTop - 2,
+      `🔒  Awaiting Awakening`,
+      { fontSize: '20px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia' }
     ).setOrigin(0.5, 0).setDepth(d + 2);
-    group.add(flavor);
+    group.add(head);
+
+    const sub = this.add.text(b.centerX, contentTop + 26,
+      `When ${char.name} undergoes the Awakening ritual, they will choose ONE of these three paths.`,
+      { fontSize: '12px', color: '#667788', align: 'center', wordWrap: { width: 660 } }
+    ).setOrigin(0.5, 0).setDepth(d + 2);
+    group.add(sub);
+
+    // ── Path selector tabs (the three awakenings for this class) ──────────────
+    const selY = contentTop + 52;
+    const selW = 168;
+    const selGap = 10;
+    const totalW = paths.length * selW + (paths.length - 1) * selGap;
+    let selX = b.centerX - totalW / 2;
+
+    this._awakeningTabs = [];
+    paths.forEach((path, i) => {
+      const cx = selX + i * (selW + selGap) + selW / 2;
+
+      const bg = this.add.rectangle(cx, selY + 15, selW, 30, 0x1a1a22)
+        .setOrigin(0.5).setDepth(d + 2)
+        .setStrokeStyle(1, 0x3a3a4a)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this._showAwakening(i));
+
+      const lbl = this.add.text(cx, selY + 15, path.name,
+        { fontSize: '14px', color: '#777788', fontFamily: 'Georgia' }
+      ).setOrigin(0.5).setDepth(d + 3)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => this._showAwakening(i));
+
+      group.add(bg); group.add(lbl);
+      this._awakeningTabs.push({ bg, lbl });
+    });
+
+    // ── Tree canvas + per-path text, redrawn by _showAwakening ────────────────
+    this._awakeningTreeGfx = this.add.graphics().setDepth(d + 2);
+    group.add(this._awakeningTreeGfx);
+
+    // Faint framed "window" the constellation sits behind, so it reads as a
+    // sealed preview rather than an active panel.
+    const paneX = b.x + 24;
+    const paneY = selY + 40;
+    const paneW = b.width - 48;
+    // Fill the remaining frame height (leaving room for the motif caption
+    // below) rather than a fixed short box — the 12 nodes need the vertical
+    // spread or their labels collide with the row beneath them.
+    const paneH = Math.max(268, (b.y + b.height) - paneY - 52);
+    this._awakeningPane = { x: paneX, y: paneY, w: paneW, h: paneH };
+
+    const paneBg = this.add.rectangle(paneX + paneW / 2, paneY + paneH / 2, paneW, paneH, 0x090c14, 0.75)
+      .setDepth(d + 1).setStrokeStyle(1, 0x2a3346);
+    group.add(paneBg);
+
+    this._awakeningMotifTxt = this.add.text(b.centerX, paneY + paneH + 8, '',
+      { fontSize: '12px', color: '#6a7a8a', align: 'center', wordWrap: { width: 660 }, lineSpacing: 3 }
+    ).setOrigin(0.5, 0).setDepth(d + 2);
+    group.add(this._awakeningMotifTxt);
+
+    // Node labels are created per-path and destroyed on switch — tracked
+    // separately from `group` so they don't leak across selections.
+    this._awakeningNodeLabels = [];
+
+    this._showAwakening(0);
+  }
+
+  // Renders one awakening's constellation into the preview pane. Everything
+  // drawn here is deliberately desaturated/locked — no interaction, no state.
+  _showAwakening(index) {
+    const paths = this._awakeningPaths || [];
+    const path = paths[index];
+    if (!path) return;
+    if (index !== this._awakeningIndex) SoundManager.play('select');
+    this._awakeningIndex = index;
+
+    // Selector tab visuals
+    this._awakeningTabs?.forEach((t, i) => {
+      const active = i === index;
+      t.bg.setFillStyle(active ? 0x2a2438 : 0x1a1a22);
+      t.bg.setStrokeStyle(1, active ? 0x7a6fb5 : 0x3a3a4a);
+      t.lbl.setStyle({ color: active ? '#bbaaee' : '#777788' });
+    });
+
+    this._awakeningMotifTxt?.setText(`✦  ${path.motif} — ${path.motifDesc}`);
+
+    // Clear previous constellation
+    const g = this._awakeningTreeGfx;
+    g.clear();
+    this._awakeningNodeLabels?.forEach(t => t.destroy());
+    this._awakeningNodeLabels = [];
+
+    const pane = this._awakeningPane;
+    const d = this._depth;
+    // Inset so nodes at x/y 0 or 1 aren't flush against the pane border, and
+    // so their text labels have room to sit beside them.
+    const padX = 78, padY = 26;
+    const toX = (nx) => pane.x + padX + nx * (pane.w - padX * 2);
+    const toY = (ny) => pane.y + padY + ny * (pane.h - padY * 2);
+
+    const pts = path.nodes.map(n => ({ ...n, px: toX(n.x), py: toY(n.y) }));
+
+    // ── Edges ────────────────────────────────────────────────────────────────
+    (path.edges || []).forEach(([a, bIdx, kind]) => {
+      const p1 = pts[a], p2 = pts[bIdx];
+      if (!p1 || !p2) return;
+      if (kind === 'link') {
+        // "Shared bonus" connection — visually linked but not a prerequisite.
+        // Drawn as a dashed line so the distinction is readable without color.
+        g.lineStyle(1, 0x6a5a8a, 0.55);
+        const segs = 9;
+        for (let s = 0; s < segs; s += 2) {
+          const t0 = s / segs, t1 = Math.min(1, (s + 1) / segs);
+          g.beginPath();
+          g.moveTo(p1.px + (p2.px - p1.px) * t0, p1.py + (p2.py - p1.py) * t0);
+          g.lineTo(p1.px + (p2.px - p1.px) * t1, p1.py + (p2.py - p1.py) * t1);
+          g.strokePath();
+        }
+      } else {
+        g.lineStyle(1.5, 0x3a4a66, 0.6);
+        g.beginPath();
+        g.moveTo(p1.px, p1.py);
+        g.lineTo(p2.px, p2.py);
+        g.strokePath();
+      }
+    });
+
+    // ── Nodes ────────────────────────────────────────────────────────────────
+    pts.forEach((p) => {
+      const style = TIER_STYLE[p.t] || TIER_STYLE[1];
+      const r = style.radius;
+
+      g.fillStyle(0x11151f, 0.95);
+      g.fillCircle(p.px, p.py, r);
+      g.lineStyle(p.t === 4 ? 2 : 1.25, style.color, p.t === 4 ? 0.9 : 0.7);
+      g.strokeCircle(p.px, p.py, r);
+
+      // Capstone gets a second ring so it reads as the payoff by SHAPE, not
+      // only by color/size (see the doc's accessibility note — state and rank
+      // should never be conveyed by color alone).
+      if (p.t === 4) {
+        g.lineStyle(1, style.color, 0.45);
+        g.strokeCircle(p.px, p.py, r + 5);
+      }
+
+      const label = this.add.text(p.px, p.py + r + 3, p.n, {
+        fontSize: p.t === 4 ? '11px' : '9px',
+        color: p.t === 4 ? '#c9ae5e' : '#7a879c',
+        align: 'center',
+        wordWrap: { width: 92 },
+        fontStyle: p.t === 4 ? 'bold' : 'normal',
+      }).setOrigin(0.5, 0).setDepth(d + 3);
+      this._awakeningNodeLabels.push(label);
+    });
+
+    // Keep new labels hidden if the user has since switched tabs away.
+    const visible = this._activeTab === 'Talents';
+    this._awakeningNodeLabels.forEach(t => t.setVisible(visible));
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────────

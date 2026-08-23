@@ -43,6 +43,44 @@ export default class InventoryOverlay extends Phaser.Scene {
     return buildItemTooltipLines(item, { rarityColors: RARITY_COLORS });
   }
 
+  // Shift-to-compare: shows the selected character's currently equipped
+  // item in the matching slot as a second tooltip beside the primary one.
+  // Weapons always compare against weaponMain (no reliable single "slot"
+  // field to pick main vs off from an inventory row) — everything else
+  // compares against its own baseItem.slot, same field the [Eq] button uses.
+  _updateCompareTooltip(baseItem, item) {
+    if (!this._shiftHeld || !this.tooltip?.container?.visible) {
+      this.compareTooltip?.hide();
+      return;
+    }
+    const char = GameState.party[this.selectedCharIndex];
+    const slot = baseItem?.type === 'weapon' ? 'weaponMain' : baseItem?.slot;
+    const equipped = char && slot ? char.equipment[slot] : null;
+    if (!isItemInstance(equipped) || equipped === item) {
+      this.compareTooltip?.hide();
+      return;
+    }
+
+    const disp = this._formatItemDisplay(equipped);
+    // Seed position doesn't matter — show() only uses it to size/layout the
+    // background; the real position is set below, anchored off the primary
+    // tooltip's ACTUAL rendered spot (already margin/clamped by its own show()).
+    this.compareTooltip.show(0, 0, {
+      title: `Equipped: ${disp.title || disp.name}`,
+      titleColor: disp.titleColor || disp.color,
+      lines: disp.lines
+    });
+
+    const primaryX = this.tooltip.container.x;
+    const primaryY = this.tooltip.container.y;
+    const primaryW = this.tooltip._bgW || 0;
+    const compareW = this.compareTooltip._bgW || 0;
+    const gap = 8;
+    let cx = primaryX + primaryW + gap;
+    if (cx + compareW > 1280 - 8) cx = primaryX - compareW - gap;
+    this.compareTooltip.container.setPosition(Math.max(8, cx), primaryY);
+  }
+
 
   create() {
     SoundManager.init(this);
@@ -53,10 +91,30 @@ export default class InventoryOverlay extends Phaser.Scene {
     if (town?.input) town.input.enabled = false;
     // ensure clean state on every create()
     if (this.tooltip) { this.tooltip.destroy(); this.tooltip = null; }
+    if (this.compareTooltip) { this.compareTooltip.destroy(); this.compareTooltip = null; }
 
     // fresh tooltip (this scene instance owns the display list that will be destroyed on restart)
     this.tooltip = new Tooltip(this);
     this.input.on('pointerdown', () => this.tooltip.hide());
+
+    // Hold-Shift-to-compare: a second Tooltip instance, shown beside the
+    // primary one, rendering the selected character's currently EQUIPPED
+    // item in the matching slot. _hoveredCompareItem tracks whatever's
+    // under the cursor right now so a Shift press mid-hover (no mouse
+    // movement) still shows it immediately, not just on the next pointermove.
+    this.compareTooltip = new Tooltip(this);
+    this._shiftHeld = false;
+    this._hoveredCompareItem = null;
+    this.input.keyboard.on('keydown-SHIFT', () => {
+      this._shiftHeld = true;
+      if (this._hoveredCompareItem) {
+        this._updateCompareTooltip(this._hoveredCompareItem.baseItem, this._hoveredCompareItem.item);
+      }
+    });
+    this.input.keyboard.on('keyup-SHIFT', () => {
+      this._shiftHeld = false;
+      this.compareTooltip?.hide();
+    });
 
     // remove any leftover wheel handler from a previous run
     if (this._onWheel) this.input.off('wheel', this._onWheel, this);
@@ -296,11 +354,19 @@ export default class InventoryOverlay extends Phaser.Scene {
             titleColor: dispP.titleColor || dispP.color,
             lines: dispP.lines
           });
+          this._hoveredCompareItem = { baseItem, item };
+          this._updateCompareTooltip(baseItem, item);
         })
-        .on('pointerout', () => this.tooltip.hide())
+        .on('pointerout', () => {
+          this.tooltip.hide();
+          this._hoveredCompareItem = null;
+          this.compareTooltip?.hide();
+        })
         .on('pointermove', (p) => {
           if (!this._isPointerWithinArea(p, pArea)) {
             this.tooltip.hide();
+            this._hoveredCompareItem = null;
+            this.compareTooltip?.hide();
             return;
           }
           this.tooltip.show(p.worldX, p.worldY, {
@@ -308,6 +374,8 @@ export default class InventoryOverlay extends Phaser.Scene {
             titleColor: dispP.titleColor || dispP.color,
             lines: dispP.lines
           });
+          this._hoveredCompareItem = { baseItem, item };
+          this._updateCompareTooltip(baseItem, item);
         });
 
       const rowBgHeight = rowP.height + 6;
@@ -491,11 +559,19 @@ export default class InventoryOverlay extends Phaser.Scene {
             titleColor: dispG.titleColor || dispG.color,
             lines: dispG.lines
           });
+          this._hoveredCompareItem = { baseItem, item };
+          this._updateCompareTooltip(baseItem, item);
         })
-        .on('pointerout', () => this.tooltip.hide())
+        .on('pointerout', () => {
+          this.tooltip.hide();
+          this._hoveredCompareItem = null;
+          this.compareTooltip?.hide();
+        })
         .on('pointermove', (p) => {
           if (!this._isPointerWithinArea(p, gArea)) {
             this.tooltip.hide();
+            this._hoveredCompareItem = null;
+            this.compareTooltip?.hide();
             return;
           }
           this.tooltip.show(p.worldX, p.worldY, {
@@ -503,6 +579,8 @@ export default class InventoryOverlay extends Phaser.Scene {
             titleColor: dispG.titleColor || dispG.color,
             lines: dispG.lines
           });
+          this._hoveredCompareItem = { baseItem, item };
+          this._updateCompareTooltip(baseItem, item);
         })
       const rowBgHeight = rowG.height + 10;
       const rowBg = this.add.rectangle(0, y - 5, newWidth, rowBgHeight, 0x000000, 0.35)

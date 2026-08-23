@@ -12,6 +12,11 @@ import { DEFAULT_TRIBE_REP, clampRepScore, TRIBE_IDS } from './TribeRelations.js
 
 const DEFAULT_TRIBE_HUNT_POINTS = Object.fromEntries(TRIBE_IDS.map(id => [id, 0]));
 
+// Per-tribe intel level (0..TRIBE_INTEL_MAX). See getTribeIntel below —
+// separate track from rep, nothing raises it yet.
+const TRIBE_INTEL_MAX = 4;
+const DEFAULT_TRIBE_INTEL = Object.fromEntries(TRIBE_IDS.map(id => [id, 0]));
+
 // ---------------------------------------------------------------------------
 // Config: which scenario must be completed before the next one opens up.
 // null  →  always available (no prerequisite)
@@ -149,6 +154,9 @@ const ProgressionManager = {
   // Derives to a level via TribeRelations.getRepIndex(score).
   tribeRep: { ...DEFAULT_TRIBE_REP },
 
+  // Per-tribe intel level (0..TRIBE_INTEL_MAX) — see getTribeIntel.
+  tribeIntel: { ...DEFAULT_TRIBE_INTEL },
+
   // Tribe-wide Hunt Point grand totals — one number per tribe, all four
   // tracked regardless of player allegiance so a future cross-tribe
   // leaderboard needs no data migration.
@@ -253,6 +261,25 @@ const ProgressionManager = {
     const isOwn  = this.tribe === tribeId;
     const current = this.getTribeRep(tribeId);
     this.tribeRep[tribeId] = clampRepScore(current + amount, isOwn);
+  },
+
+  // ----- Tribe intel (0..INTEL_MAX) ---------------------------------------
+  // Deliberately SEPARATE from rep: rep is how a tribe treats you, intel is
+  // what you know about them (their parties, their stash, the sites they've
+  // charted). Nothing raises this yet — the systems that will are teased in
+  // data/tribeSystems.js. Stored and serialized now so the Tribe Relations
+  // screen reads live state instead of a hardcoded zero, and so any future
+  // intel source has somewhere real to write.
+
+  getTribeIntel(tribeId) {
+    return this.tribeIntel?.[tribeId] ?? 0;
+  },
+
+  addTribeIntel(tribeId, amount) {
+    if (!tribeId) return;
+    if (!this.tribeIntel) this.tribeIntel = { ...DEFAULT_TRIBE_INTEL };
+    const next = this.getTribeIntel(tribeId) + amount;
+    this.tribeIntel[tribeId] = Math.max(0, Math.min(TRIBE_INTEL_MAX, next));
   },
 
   /**
@@ -367,6 +394,7 @@ const ProgressionManager = {
       tribeVendorStock:    { ...this.tribeVendorStock },
       completedQuestSteps: [...this.completedQuestSteps],
       tribeRep:            { ...this.tribeRep },
+      tribeIntel:          { ...this.tribeIntel },
       tribeHuntPoints:     { ...this.tribeHuntPoints },
       tribeHuntingParties: Object.fromEntries(
         Object.entries(this.tribeHuntingParties).map(([k, v]) => [k, { ...v }])
@@ -388,6 +416,8 @@ const ProgressionManager = {
     this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
     this.tribeRep            = (data.tribeRep && typeof data.tribeRep === 'object')
       ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
+    this.tribeIntel          = (data.tribeIntel && typeof data.tribeIntel === 'object')
+      ? { ...DEFAULT_TRIBE_INTEL, ...data.tribeIntel } : { ...DEFAULT_TRIBE_INTEL };
     this.tribeHuntPoints     = (data.tribeHuntPoints && typeof data.tribeHuntPoints === 'object')
       ? { ...DEFAULT_TRIBE_HUNT_POINTS, ...data.tribeHuntPoints } : { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
@@ -409,6 +439,7 @@ const ProgressionManager = {
     this.tribeVendorStock    = {};
     this.completedQuestSteps = [];
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
+    this.tribeIntel          = { ...DEFAULT_TRIBE_INTEL };
     this.tribeHuntPoints     = { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
     this.partyGear           = {};

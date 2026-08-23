@@ -83,7 +83,10 @@ function canAfford(npc, ability) {
   if (!ability) return false;
   const type = ability.actionCost || 'major';
   const mpCost = Math.max(0, ability.mpCost || 0);
-  if ((npc.actionsLeft?.[type] || 0) <= 0) return false;
+  // 'free' actions bypass the action-point economy entirely — actionsLeft
+  // never carries a 'free' key (see AIProfiles.js's canUseSkill, same fix),
+  // so this always fell through to false for any free-cost skill.
+  if (type !== 'free' && (npc.actionsLeft?.[type] || 0) <= 0) return false;
   if ((npc.cooldowns?.[ability.id] || 0) > 0) return false;
   return (npc.currentMP ?? 0) >= mpCost;
 }

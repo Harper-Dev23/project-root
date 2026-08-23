@@ -205,13 +205,15 @@ export const COMBAT_SCENARIOS = {
     portraitKey: 'portrait_gorrek',
     enemies: [{
       type: 'berserker_boss_reckoning_3', slotId: 2, name: 'Gorrek',
+      // Armor rarity upgraded uncommon -> rare starting here (weapon stays
+      // the fixed historic-tier Bloodthirster in every tier).
       drops: [
         { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
-        { equip: 'chest', rarity: 'uncommon', droppable: false },
-        { equip: 'head', rarity: 'uncommon', droppable: false },
-        { equip: 'legs', rarity: 'uncommon', droppable: false },
-        { equip: 'gloves', rarity: 'uncommon', droppable: false },
-        { equip: 'boots', rarity: 'uncommon', droppable: false },
+        { equip: 'chest', rarity: 'rare', droppable: false },
+        { equip: 'head', rarity: 'rare', droppable: false },
+        { equip: 'legs', rarity: 'rare', droppable: false },
+        { equip: 'gloves', rarity: 'rare', droppable: false },
+        { equip: 'boots', rarity: 'rare', droppable: false },
       ],
     }]
   },
@@ -224,11 +226,11 @@ export const COMBAT_SCENARIOS = {
       type: 'berserker_boss_reckoning_4', slotId: 2, name: 'Gorrek',
       drops: [
         { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
-        { equip: 'chest', rarity: 'uncommon', droppable: false },
-        { equip: 'head', rarity: 'uncommon', droppable: false },
-        { equip: 'legs', rarity: 'uncommon', droppable: false },
-        { equip: 'gloves', rarity: 'uncommon', droppable: false },
-        { equip: 'boots', rarity: 'uncommon', droppable: false },
+        { equip: 'chest', rarity: 'rare', droppable: false },
+        { equip: 'head', rarity: 'rare', droppable: false },
+        { equip: 'legs', rarity: 'rare', droppable: false },
+        { equip: 'gloves', rarity: 'rare', droppable: false },
+        { equip: 'boots', rarity: 'rare', droppable: false },
       ],
     }]
   },
@@ -239,13 +241,14 @@ export const COMBAT_SCENARIOS = {
     portraitKey: 'portrait_gorrek',
     enemies: [{
       type: 'berserker_boss_reckoning_5', slotId: 2, name: 'Gorrek',
+      // Armor rarity upgraded rare -> epic at the final tier.
       drops: [
         { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
-        { equip: 'chest', rarity: 'uncommon', droppable: false },
-        { equip: 'head', rarity: 'uncommon', droppable: false },
-        { equip: 'legs', rarity: 'uncommon', droppable: false },
-        { equip: 'gloves', rarity: 'uncommon', droppable: false },
-        { equip: 'boots', rarity: 'uncommon', droppable: false },
+        { equip: 'chest', rarity: 'epic', droppable: false },
+        { equip: 'head', rarity: 'epic', droppable: false },
+        { equip: 'legs', rarity: 'epic', droppable: false },
+        { equip: 'gloves', rarity: 'epic', droppable: false },
+        { equip: 'boots', rarity: 'epic', droppable: false },
       ],
     }]
   },

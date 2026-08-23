@@ -1119,12 +1119,31 @@ export default class UIScene extends Phaser.Scene {
     options.forEach((opt, index) => {
       const yPos = startY + index * spacing;
       const isLocked = !!opt.locked;
+      const hasTiers = Array.isArray(opt.tiers) && opt.tiers.length > 0;
 
-      // Locked items are dimmed and show a lock marker; unlocked items are normal.
-      const labelText  = isLocked ? `[ ${opt.label} ]  🔒` : `[ ${opt.label} ]`;
+      // Which tier (e.g. Gorrek's Reckoning I-V) is currently dialed in via
+      // the dropdown below — null means the base scenario itself. Lives on
+      // the option object so both the row's own click handler and the
+      // dropdown's picks read/write the same state.
+      opt._selectedTier = null;
+
+      // Composes the row's own button label from whichever tier is
+      // currently selected — e.g. "Gorrek II  ✓" — instead of a separate
+      // pip cluster reporting the tier on the side. Locked rows keep the
+      // original '???'-style label regardless of tier state.
+      const computeLabel = () => {
+        if (isLocked) return `[ ${opt.label} ]  🔒`;
+        const tier = opt._selectedTier;
+        if (tier) {
+          const name = `${opt.baseName || opt.label} ${tier.label}`;
+          return `[ ${tier.completed ? name + '  ✓' : name} ]`;
+        }
+        return `[ ${opt.label} ]`;
+      };
+
       const labelColor = isLocked ? '#555555' : '#cccccc';
 
-      const optionText = this.add.text(220, yPos, labelText, {
+      const optionText = this.add.text(220, yPos, computeLabel(), {
         fontSize: '20px',
         color: labelColor,
         backgroundColor: '#333333',
@@ -1132,119 +1151,140 @@ export default class UIScene extends Phaser.Scene {
       }).setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: !isLocked });
 
-      if (isLocked) {
-        // Clicking a locked entry just shows a note in the detail panel.
-        optionText.on('pointerdown', () => {
-          detailTitle.setText(opt.label);
-          detailDesc.setText('Complete the previous scenario to unlock this challenge.');
-          detailPortrait.setVisible(false);
-          // Keep fight button disabled.
-          fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
-          fightButton.disableInteractive();
-          fightButton.removeAllListeners('pointerdown');
-        });
-      } else {
-        optionText
-          .on('pointerdown', () => {
-            detailTitle.setText(opt.label);
-            detailDesc.setText(opt.longDescription || opt.description || '');
-            if (opt.portraitKey) {
-              detailPortrait.setTexture(opt.portraitKey).setVisible(true);
-            } else {
-              detailPortrait.setVisible(false);
-            }
-            // Enable fight button.
-            fightButton._startScenario = opt.onSelect;
-            fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
-            fightButton.setInteractive({ useHandCursor: true });
-            fightButton.removeAllListeners('pointerdown');
-            fightButton.on('pointerdown', () => {
-              // Start the scene transition FIRST, and delay tearing down this
-              // popup's fully-opaque overlay by a beat — Phaser scene starts
-              // (game.scene.start('LoadingScene', ...) under the hood) don't
-              // take effect until the next update tick, so destroying the
-              // overlay synchronously here left a 1-frame gap where TownScene
-              // was briefly visible underneath before LoadingScene painted
-              // over it. Keeping the overlay up a little longer costs
-              // nothing since we're navigating away regardless.
-              fightButton._startScenario();
-              this.time.delayedCall(100, () => this.cleanupPopup());
-            });
-          })
-          .on('pointerover', () => optionText.setStyle({ color: MENU_THEME.accentHover }))
-          .on('pointerout',  () => optionText.setStyle({ color: '#cccccc' }));
-      }
-
       const descText = this.add.text(220, yPos + 20, opt.description || '', {
         fontSize: '14px',
         color: isLocked ? '#444444' : '#aaaaaa',
         wordWrap: { width: 200 }
       }).setOrigin(0, 0);
 
+      // Pushes whichever is currently selected (base scenario or a tier)
+      // into the row label, description, detail panel and Fight button —
+      // shared by clicking the row itself AND by picking an option from the
+      // tier dropdown, so both paths always agree on what's armed.
+      const applySelection = () => {
+        const tier = opt._selectedTier;
+        const target = tier || opt;
+        const tierLocked = !!(tier && !tier.unlocked);
+
+        optionText.setText(computeLabel());
+        descText.setText((tier ? (tier.description || tier.longDescription) : opt.description) || '');
+
+        if (tierLocked) {
+          detailTitle.setText(`${opt.baseName || opt.label} — ${tier.fullLabel || tier.label}`);
+          detailDesc.setText('Complete the previous tier to unlock this one.');
+          detailPortrait.setVisible(false);
+          fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
+          fightButton.disableInteractive();
+          fightButton.removeAllListeners('pointerdown');
+          return;
+        }
+
+        detailTitle.setText(tier ? (tier.fullLabel || tier.label) : opt.label);
+        detailDesc.setText(target.longDescription || target.description || '');
+        if (target.portraitKey) {
+          detailPortrait.setTexture(target.portraitKey).setVisible(true);
+        } else {
+          detailPortrait.setVisible(false);
+        }
+        fightButton._startScenario = target.onSelect;
+        fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
+        fightButton.setInteractive({ useHandCursor: true });
+        fightButton.removeAllListeners('pointerdown');
+        fightButton.on('pointerdown', () => {
+          // Start the scene transition FIRST, and delay tearing down this
+          // popup's fully-opaque overlay by a beat — Phaser scene starts
+          // (game.scene.start('LoadingScene', ...) under the hood) don't
+          // take effect until the next update tick, so destroying the
+          // overlay synchronously here left a 1-frame gap where TownScene
+          // was briefly visible underneath before LoadingScene painted
+          // over it. Keeping the overlay up a little longer costs
+          // nothing since we're navigating away regardless.
+          fightButton._startScenario();
+          this.time.delayedCall(100, () => this.cleanupPopup());
+        });
+      };
+
+      if (isLocked) {
+        // Clicking a locked entry just shows a note in the detail panel.
+        optionText.on('pointerdown', () => {
+          detailTitle.setText(opt.label);
+          detailDesc.setText('Complete the previous scenario to unlock this challenge.');
+          detailPortrait.setVisible(false);
+          fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
+          fightButton.disableInteractive();
+          fightButton.removeAllListeners('pointerdown');
+        });
+      } else {
+        optionText
+          .on('pointerdown', applySelection)
+          .on('pointerover', () => optionText.setStyle({ color: MENU_THEME.accentHover }))
+          .on('pointerout',  () => optionText.setStyle({ color: '#cccccc' }));
+      }
+
       this.popupButtons.push(optionText, descText);
 
-      // Optional tier picker (e.g. Gorrek's Reckoning I-V) — a small stack
-      // of compact pips to the LEFT of this row, generic enough for any
-      // option to use, not hardcoded to one scenario. Deliberately left of
-      // the row (not right) — user's own reasoning: the right side runs out
-      // of room fast if more than one option ever needs this.
-      if (Array.isArray(opt.tiers) && opt.tiers.length) {
-        // 2-column grid (up to 3 rows) rather than one tall vertical stack —
-        // 5 pips stacked singly ran taller than this row's own 75px spacing
-        // and visibly overlapped the row above it (confirmed via a live
-        // screenshot). Same fix shape as the combat weakness-dot cluster.
-        const COL_MAX = 3;
-        const pipW = 26, pipH = 20, pipGap = 3, colGap = 3;
-        const pipX0 = 220 - 24 - (pipW + colGap + pipW / 2);
+      // Optional tier dropdown (e.g. Gorrek's Reckoning I-V) — a compact
+      // "▾" toggle to the LEFT of the row (right side runs out of room fast
+      // if more than one option ever needs this) that expands a short pick
+      // list of Base + each tier, birthday-picker style: pick one and it
+      // collapses back down, with the choice now baked into the row's own
+      // label instead of living in a separate always-visible pip cluster.
+      if (hasTiers) {
+        const toggleX = 190;
+        const toggle = this.add.text(toggleX, yPos, '▾', {
+          fontSize: '16px',
+          color: '#cccccc',
+          backgroundColor: '#222222',
+          padding: { x: 6, y: 4 },
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
-        opt.tiers.forEach((tier, ti) => {
-          const tierLocked = !tier.unlocked;
-          const col = Math.floor(ti / COL_MAX);
-          const row = ti % COL_MAX;
-          const rowsInCol = Math.min(COL_MAX, opt.tiers.length - col * COL_MAX);
-          const colStartY = yPos - ((rowsInCol - 1) * (pipH + pipGap)) / 2;
-          const pipX = pipX0 + col * (pipW + colGap);
-          const pipY = colStartY + row * (pipH + pipGap);
-          const pip = this.add.text(pipX, pipY, tier.label, {
-            fontSize: '12px',
-            color: tierLocked ? '#555555' : (tier.completed ? '#88cc88' : '#cccccc'),
-            backgroundColor: '#222222',
-            padding: { x: 3, y: 3 },
-          }).setOrigin(0.5).setInteractive({ useHandCursor: !tierLocked });
+        const pickList = [
+          { label: 'Base', tier: null, unlocked: true, completed: !!opt.completed },
+          ...opt.tiers.map(t => ({ label: t.label, tier: t, unlocked: t.unlocked, completed: t.completed })),
+        ];
 
-          if (tierLocked) {
-            pip.on('pointerdown', () => {
-              detailTitle.setText(tier.label ? `${opt.label} — ${tier.fullLabel || tier.label}` : opt.label);
+        // Opens UPWARD from the toggle — this row (Gorrek) sits at the
+        // bottom of the list, close enough to Exit that a downward list
+        // would crowd or clip past it; opening up instead overlays the
+        // row(s) above it, which is fine for a transient dropdown that
+        // collapses the instant something is picked.
+        const ROW_H = 20;
+        const dropdown = this.add.container(0, 0).setVisible(false).setDepth(50);
+        pickList.forEach((entry, i) => {
+          const rowLocked = !entry.unlocked;
+          const oy = yPos - (pickList.length - i) * ROW_H;
+          const text = entry.completed ? `${entry.label}  ✓` : entry.label;
+          const idleColor = rowLocked ? '#555555' : (entry.completed ? '#88cc88' : '#dddddd');
+          const row = this.add.text(toggleX, oy, text, {
+            fontSize: '13px',
+            color: idleColor,
+            backgroundColor: '#1a1a1a',
+            padding: { x: 6, y: 3 },
+          }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+          row.on('pointerdown', () => {
+            if (rowLocked) {
+              detailTitle.setText(entry.tier ? `${opt.baseName || opt.label} — ${entry.tier.fullLabel || entry.tier.label}` : opt.label);
               detailDesc.setText('Complete the previous tier to unlock this one.');
               detailPortrait.setVisible(false);
               fightButton.setStyle({ color: '#555555', backgroundColor: '#222222' });
               fightButton.disableInteractive();
               fightButton.removeAllListeners('pointerdown');
-            });
-          } else {
-            pip.on('pointerdown', () => {
-              detailTitle.setText(tier.fullLabel || tier.label);
-              detailDesc.setText(tier.longDescription || tier.description || '');
-              if (tier.portraitKey) {
-                detailPortrait.setTexture(tier.portraitKey).setVisible(true);
-              } else {
-                detailPortrait.setVisible(false);
-              }
-              fightButton._startScenario = tier.onSelect;
-              fightButton.setStyle({ color: '#cccccc', backgroundColor: '#333333' });
-              fightButton.setInteractive({ useHandCursor: true });
-              fightButton.removeAllListeners('pointerdown');
-              fightButton.on('pointerdown', () => {
-                fightButton._startScenario();
-                this.time.delayedCall(100, () => this.cleanupPopup());
-              });
-            })
-              .on('pointerover', () => pip.setStyle({ color: MENU_THEME.accentHover }))
-              .on('pointerout', () => pip.setStyle({ color: tier.completed ? '#88cc88' : '#cccccc' }));
-          }
+            } else {
+              opt._selectedTier = entry.tier;
+              applySelection();
+            }
+            dropdown.setVisible(false);
+          });
+          row.on('pointerover', () => { if (!rowLocked) row.setStyle({ color: MENU_THEME.accentHover }); });
+          row.on('pointerout',  () => { if (!rowLocked) row.setStyle({ color: idleColor }); });
 
-          this.popupButtons.push(pip);
+          dropdown.add(row);
         });
+
+        toggle.on('pointerdown', () => dropdown.setVisible(!dropdown.visible));
+
+        this.popupButtons.push(toggle, dropdown);
       }
     });
 

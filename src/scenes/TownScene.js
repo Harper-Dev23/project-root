@@ -2775,6 +2775,8 @@ export default class TownScene extends Phaser.Scene {
 
       return {
         label,
+        baseName:        scenario.name,
+        completed,
         description:     unlocked ? scenario.description : '???',
         longDescription: unlocked ? (scenario.longDescription || scenario.description) : '???',
         portraitKey:     scenario.portraitKey || null,

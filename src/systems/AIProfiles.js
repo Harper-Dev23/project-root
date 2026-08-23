@@ -18,7 +18,14 @@ const canUseSkill = (npc, skillId) => {
   const skill = SKILLS?.[skillId];
   if (!skill) return false;
   const actionType = skill.actionCost || 'major';
-  if (!hasAction(npc, actionType)) return false;
+  // 'free' actions (e.g. berserker_unstoppable_rush/opportunist_strike)
+  // bypass the action-point economy entirely — actionsLeft never carries a
+  // 'free' key at all (see CombatScene._canUseActionType's own comment on
+  // this), so hasAction(npc,'free') was always false, meaning EVERY
+  // free-cost skill in this file's priority lists silently could never be
+  // chosen — confirmed via direct testing that Unstoppable Rush (Gorrek's
+  // Glare) has never actually fired through this check.
+  if (actionType !== 'free' && !hasAction(npc, actionType)) return false;
   if (cooldownFor(npc, skillId) > 0) return false;
   const mpCost = Math.max(0, skill.mpCost || 0);
   return mpAvailable(npc) >= mpCost;
@@ -45,7 +52,12 @@ const weightedPick = (list, weightFn) => {
 
 const targetScore = (target, opts = {}) => {
   const noise = randomRange(0, opts.noise ?? 0.9);
-  const hpBias = opts.preferLowHP ? (1 - hpRatio(target)) * 2.4 : 0.5 * (1 - hpRatio(target));
+  // preferHighHP is a genuine inversion (favors whoever's LEAST hurt) —
+  // preferLowHP:false on its own still leans low-HP, just at half strength,
+  // which isn't useful for "spread damage to whoever hasn't been hit" logic.
+  const hpBias = opts.preferHighHP ? hpRatio(target) * 2.4
+    : opts.preferLowHP ? (1 - hpRatio(target)) * 2.4
+    : 0.5 * (1 - hpRatio(target));
   const families = Array.isArray(opts.preferWeakness) ? opts.preferWeakness : (opts.preferWeakness ? [opts.preferWeakness] : []);
   const weaknessBias = families.reduce((sum, fam) => {
     const tier = target?.weakness?.tiers?.[fam] || 0;
@@ -185,15 +197,30 @@ export const AI_PROFILES = {
       // reaction rather than a routine heal.
       const hurtAllies = allies.filter(a => hpRatio(a) < 0.7);
       if (canUseSkill(npc, 'healer_mending_wave') && (npc.initiativeGauge || 0) >= 30 && hurtAllies.length >= 2) {
-        const anchor = pickTarget(hurtAllies, { preferLowHP: true, noise: 1 }) || hurtAllies[0];
+        const anchor = pickTarget(hurtAllies, { preferLowHP: true, noise: 0.4 }) || hurtAllies[0];
         return buildAction('healer_mending_wave', anchor);
       }
 
-      const lowAlly = pickTarget(allies, { preferLowHP: true, noise: 1 });
+      // Restore — heals cap at maxHP, so casting on someone already topped
+      // off just burns MP/cooldown/action for nothing. Filtered to actually
+      // wounded allies first, then a low noise so it reliably goes to
+      // whoever's hurt worst instead of a near-coinflip among anyone with a
+      // scratch (the old flat noise:1 diluted the low-HP weighting enough
+      // that it could pick a barely-hurt ally over one at critical HP).
+      const woundedAllies = allies.filter(a => hpRatio(a) < 1);
+      const lowAlly = pickTarget(woundedAllies, { preferLowHP: true, noise: 0.05 });
       if (canUseSkill(npc, 'healer_heal') && lowAlly) {
         return buildAction('healer_heal', lowAlly);
       }
-      const afflicted = pickTarget(allies, { preferWeakness: ['curse', 'disease', 'toxic'], minTier: 1, preferLowHP: true });
+      // Cleanse — healer_cleanse's own apply() only does anything for an
+      // ally actually carrying Curse/Disease/Toxic meter, but the old
+      // weighting alone (no filter) still let a completely unafflicted ally
+      // win the roll sometimes, wasting the cast. Filtered to real
+      // candidates first, then weighted toward whoever's hurt worst among them.
+      const cleanseCandidates = allies.filter(a =>
+        ['curse', 'disease', 'toxic'].some(fam => (a?.weakness?.meters?.[fam] || 0) > 0)
+      );
+      const afflicted = pickTarget(cleanseCandidates, { preferWeakness: ['curse', 'disease', 'toxic'], preferLowHP: true, noise: 0.35 });
       if (canUseSkill(npc, 'healer_cleanse') && afflicted) {
         return buildAction('healer_cleanse', afflicted);
       }
@@ -622,9 +649,28 @@ export const AI_PROFILES = {
       }
 
       const { foes } = buildTargetList(npc, scene, enemies);
-      const heavyTarget = pickTarget(foes.filter(t => hasAnyWeakness(t, ['expose', 'lacerate'], 2)), { preferLowHP: true, noise: 0.9 });
+      // Death Spiral's real cast gate requires BOTH Expose T2 AND Lacerate T2
+      // (see its requiresWeakness array in skills.js) — hasAnyWeakness is an
+      // OR, so this used to let the AI pick a target with only ONE of the
+      // two, attempt the cast, and have it fizzle for free (silently eating
+      // the whole class-action slot for the turn). Matched to the real gate.
+      const heavyTarget = pickTarget(
+        foes.filter(t => (t?.weakness?.tiers?.expose || 0) >= 2 && (t?.weakness?.tiers?.lacerate || 0) >= 2),
+        { preferLowHP: true, noise: 0.9 }
+      );
       if (canUseSkill(npc, 'berserker_death_spiral') && heavyTarget) {
         return buildAction('berserker_death_spiral', heavyTarget);
+      }
+      // Free filler strike — checked early (alongside Unstoppable Rush) since
+      // it costs no action-economy pool, only a short cooldown, so it stacks
+      // on top of whatever else he does this turn instead of competing with
+      // it. Targets whoever's healthiest/least-focused (see the skill's own
+      // AI-picked-target comment) specifically to spread damage across the
+      // party instead of piling crits onto whoever's already being focused —
+      // the fight's actual one-shot risk.
+      if (canUseSkill(npc, 'berserker_opportunist_strike')) {
+        const healthiest = pickTarget(foes, { preferHighHP: true, noise: 0.5 });
+        if (healthiest) return buildAction('berserker_opportunist_strike', healthiest);
       }
       // Free action (no action-economy cost, just Initiative — see the
       // skill's own comment in skills.js) — checked early since it stacks on

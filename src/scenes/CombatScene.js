@@ -1608,6 +1608,14 @@ export default class CombatScene extends Phaser.Scene {
         weakness: makeWeaknessState(),
         _weaknessDerived: { maxHPDown: 0, evasionDown: 0, initiativeSlow: 0 },
         healingReceivedBonus: 1.0,
+        // healMissingHpBonusMax: desperation-healing dial (e.g. Gorrek) — his
+        // own healing/lifesteal received scales up linearly with missing
+        // HP%, read by _startTurnWeakness. initiativeSlowAuraPct: aura dial
+        // (e.g. Gorrek's Reckoning IV+) — flat % cut to the WHOLE opposing
+        // party's Initiative Gauge regen, read the same way. Both generic,
+        // not hardcoded to one boss.
+        healMissingHpBonusMax: Number.isFinite(template.healMissingHpBonusMax) ? template.healMissingHpBonusMax : 0,
+        initiativeSlowAuraPct: Number.isFinite(template.initiativeSlowAuraPct) ? template.initiativeSlowAuraPct : 0,
 
         // Equipment dict (populated below if config.drops present)
         equipment: {},
@@ -3034,7 +3042,19 @@ export default class CombatScene extends Phaser.Scene {
     const backY = viewportY + 14;
     this._actionMenuBackBtn = new UIButton(
       this, backCenterX, backY, 'Back',
-      () => { this._actionMenuBackCallback?.(); },
+      () => {
+        try {
+          this._actionMenuBackCallback?.();
+        } catch (err) {
+          // A throw in here previously died silently — the click would
+          // visibly register (button flashes) but never navigate anywhere,
+          // and every later click just re-hits the same broken callback.
+          // Logging it turns a "back button is mysteriously dead for the
+          // rest of the fight" report into an actual stack trace.
+          console.error('[actionMenu back] callback threw', err);
+          this._buildActionMenuRoot?.();
+        }
+      },
       26, 22
     );
     // Red-tinted idle state (per request) — distinct from the amber
@@ -3070,11 +3090,26 @@ export default class CombatScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true, draggable: true });
     this._actionMenuScrollThumbZone = thumbZone;
     thumbZone.on('drag', (_pointer, _dragX, dragY) => {
-      const th = this._actionMenuScrollThumbHeight || 16;
-      const usableH = Math.max(1, trackH - th);
-      const localY = Phaser.Math.Clamp(dragY - trackY, 0, usableH);
-      const ratio = localY / usableH;
-      this._setActionMenuScroll(ratio * (this.actionMenuScrollMax || 0));
+      try {
+        const th = this._actionMenuScrollThumbHeight || 16;
+        const usableH = Math.max(1, trackH - th);
+        const localY = Phaser.Math.Clamp(dragY - trackY, 0, usableH);
+        const ratio = localY / usableH;
+        this._setActionMenuScroll(ratio * (this.actionMenuScrollMax || 0));
+      } catch (err) {
+        console.error('[actionMenu scrollbar] drag handler threw', err);
+      }
+    });
+    // Safety net for an interrupted drag (e.g. releasing the mouse off the
+    // game canvas mid-drag, or the action menu rebuilding underneath the
+    // drag because a reaction/extra-action fired). Phaser's own drag state
+    // is expected to clear on pointerup regardless, but if it ever doesn't,
+    // re-asserting interactivity here on every release is a cheap, safe way
+    // to make sure this zone (and the sibling Back button, re-armed the
+    // same way in _finalizeActionMenuLayout) can never get stuck dead for
+    // the rest of the fight.
+    thumbZone.on('dragend', () => {
+      if (!thumbZone.input?.enabled) thumbZone.setInteractive({ useHandCursor: true, draggable: true });
     });
     this.actionMenu.add(thumbZone);
 
@@ -4180,10 +4215,16 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} lacks the MP to use ${skill.name}.`);
       return { ok: false };
     }
+    // 'free' actions bypass the action-point economy entirely — actionsLeft
+    // never carries a 'free' key at all (same exemption _useAbility already
+    // makes for player casts; this NPC-side execution path is separate code
+    // and was missing it, so any NPC skill with actionCost:'free' — e.g.
+    // berserker_unstoppable_rush/opportunist_strike — always failed here
+    // with "has no free actions left" the moment the AI actually tried it).
     const hasActionCost = Array.isArray(skill.actionCost)
       ? skill.actionCost.every(t => user.actionsLeft?.[t] > 0)
-      : (user.actionsLeft?.[skill.actionCost] > 0);
-    if (skill.actionCost && !hasActionCost) {
+      : (skill.actionCost === 'free' ? true : (user.actionsLeft?.[skill.actionCost] > 0));
+    if (skill.actionCost && skill.actionCost !== 'free' && !hasActionCost) {
       this._log(`${user.name} has no ${skill.actionCost} actions left.`);
       return { ok: false };
     }
@@ -8399,10 +8440,34 @@ export default class CombatScene extends Phaser.Scene {
     char._weaknessDerived = char._weaknessDerived || {};
     this._applyDiseaseDerivedNow(char, 'turn-start');
 
+    // Desperation healing (e.g. Gorrek's healMissingHpBonusMax, a generic
+    // per-unit dial) — healing/lifesteal received scales up linearly with
+    // missing HP%, multiplying on top of whatever Disease's own penalty
+    // just set above rather than overwriting it.
+    if ((char.healMissingHpBonusMax || 0) > 0) {
+      const missingPct = 1 - Math.max(0, Math.min(1, (char.currentHP || 0) / Math.max(1, char.maxHP || 1)));
+      const desperationMult = 1 + missingPct * char.healMissingHpBonusMax;
+      char.healingReceivedBonus = (char.healingReceivedBonus ?? 1.0) * desperationMult;
+    }
+
     // Reset per-turn derived fields EVERY turn (so we re-derive cleanly)
     char._weaknessDerived.maxHPDown = 0;
     char._weaknessDerived.evasionDown = 0;
     char._weaknessDerived.initiativeSlow = 0;
+
+    // Boss initiative-slow aura (e.g. Gorrek's Reckoning IV+) — a flat,
+    // always-on % reduction to the whole opposing party's Initiative Gauge
+    // regen, generic via initiativeSlowAuraPct on any enemy template rather
+    // than hardcoded to one boss. Reapplied every player turn since
+    // _weaknessDerived resets above — not a dispellable status effect, so
+    // it can't be cleansed off.
+    if (!char.isEnemy) {
+      const auraSources = (this.enemies || []).filter(e => e && e.status !== 'incapacitated' && (e.initiativeSlowAuraPct || 0) > 0);
+      if (auraSources.length) {
+        const maxAuraPct = Math.max(...auraSources.map(e => e.initiativeSlowAuraPct));
+        char._weaknessDerived.initiativeSlow = Math.min(0.9, maxAuraPct / 100);
+      }
+    }
 
     // healingReceivedBonus is used by Disease T1; default to neutral if missing
     if (char.healingReceivedBonus == null) char.healingReceivedBonus = 1.0;
@@ -8647,8 +8712,14 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _tickInitiativeGauge(char) {
-    // Base regen is the character's Initiative stat (derived preferred)
-    const baseRegen = Math.max(0, (char?.derived?.Initiative ?? char?.initiative ?? 0) | 0);
+    // Base regen is the character's Initiative stat. Was char.derived.Initiative
+    // directly, which silently ignored any status-effect Initiative mod (e.g.
+    // Battle Frenzy's own "+30 Initiative" — declared, summed by
+    // getEffectiveDerived, but never actually read here, so it did nothing).
+    // Routed through getEffectiveDerived so base + combatMods + status mods
+    // all actually count, for every unit, not just Gorrek.
+    const eff = (typeof getEffectiveDerived === 'function') ? getEffectiveDerived(char) : null;
+    const baseRegen = Math.max(0, ((eff ? eff.Initiative : (char?.derived?.Initiative ?? char?.initiative ?? 0))) | 0);
 
     // Cold modifiers
     const t = char?.weakness?.tiers?.cold | 0;
@@ -8662,6 +8733,11 @@ export default class CombatScene extends Phaser.Scene {
       const rPen = Math.min(rBase * I, rCap); // 0..cap
       regen = Math.max(0, Math.floor(baseRegen * (1 - rPen)));
     }
+
+    // Boss initiative-slow aura (see _startTurnWeakness) — a flat % cut to
+    // whatever regen is left after Cold's own penalty above.
+    const slowPct = Math.min(0.9, char?._weaknessDerived?.initiativeSlow || 0);
+    if (slowPct > 0) regen = Math.max(0, Math.floor(regen * (1 - slowPct)));
 
     // Optional T2 drain at start of turn
     let drain = 0;
@@ -8970,6 +9046,22 @@ export default class CombatScene extends Phaser.Scene {
   _finalizeActionMenuLayout() {
     this._updateActionMenuScrollBounds();
     this._applyActionMenuScroll(); // also calls _refreshActionMenuInteractivity
+
+    // Defensive re-arm for the two persistent siblings of actionMenuList
+    // (Back button, scrollbar drag zone) — reported as both going dead
+    // together for the rest of a fight, root cause not pinned down (see
+    // console.error hooks added on their own handlers). Neither is touched
+    // by _setActionMenuInteractive's recursive walk by design (see that
+    // method's comment), so nothing else re-asserts their input state — if
+    // anything ever leaves one of them non-interactive, this runs on every
+    // single menu rebuild (i.e. after every action) and heals it immediately
+    // instead of leaving it stuck for however long is left in the fight.
+    if (this._actionMenuBackBtn && !this._actionMenuBackBtn.input?.enabled) {
+      this._actionMenuBackBtn.setInteractive({ useHandCursor: true });
+    }
+    if (this._actionMenuScrollThumbZone && !this._actionMenuScrollThumbZone.input?.enabled) {
+      this._actionMenuScrollThumbZone.setInteractive({ useHandCursor: true, draggable: true });
+    }
   }
 
   _isPointerOverActionMenu(pointer) {
@@ -9543,7 +9635,16 @@ export default class CombatScene extends Phaser.Scene {
     switch (action.type) {
       case 'major':
       case 'bonus':
-      case 'class': {
+      case 'class':
+      // 'free' actions (e.g. berserker_unstoppable_rush/opportunist_strike)
+      // costs no action-economy pool at all — was missing from this switch
+      // entirely, so decide() returning a free-type action always fell
+      // through to the `default:` case below and silently did nothing
+      // ("Gorrek waits.") every single time, spamming the retry loop up to
+      // its depth-12 safety valve. Runs through the exact same runAndEnd
+      // path as major/bonus/class — _executeSkill/_applyAbilityToTarget
+      // already know not to spend anything for a 'free' actionCost.
+      case 'free': {
         const skillId = action.skill || 'basic_attack';
         const ability = SKILLS[skillId];
         if (!ability) break;

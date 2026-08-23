@@ -1752,7 +1752,7 @@ const NPC_ONLY_SKILLS = {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
+          skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
@@ -1773,7 +1773,7 @@ const NPC_ONLY_SKILLS = {
         })),
       };
     },
-    description: "Unleashes the channeled inferno — 110% weapon damage as Fire to the entire party."
+    description: "Unleashes the channeled inferno — 90% weapon damage as Fire to the entire party."
   },
 
   // Encounter 4 - Huntsman & Beasts
@@ -3048,9 +3048,9 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: false,
     apply: (user) => ({
       amount: 0,
-      statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 10 }, vfx: { kind: 'buff_increase' } }]
+      statusEffects: [{ id: 'battle_frenzy', turns: 2, mods: { Initiative: 30, Accuracy: 20 }, vfx: { kind: 'buff_increase' } }]
     }),
-    description: "Grants +30 Initiative and +10 Accuracy for 2 turns."
+    description: "Grants +30 Initiative and +20 Accuracy for 2 turns."
   },
   'berserker_death_spiral': {
     id: 'berserker_death_spiral',
@@ -3249,6 +3249,39 @@ const NPC_ONLY_SKILLS = {
       return { amount: 0, log: `${attacker?.name || 'The Berserker'} clears his head, shrugging off the daze.` };
     },
     description: "Requires the Berserker himself to be at least Dazed. Clears his own Disorient buildup and halves incoming Disorient buildup for 3 turns."
+  },
+
+  // Free filler strike — no action-economy pool spent at all (same
+  // "free" shape berserker_unstoppable_rush uses), just a short cooldown so
+  // it can't be spammed every single retry within one turn. Added because
+  // his class pool has exactly one skill in it (Death Spiral) and sits
+  // completely idle any turn that isn't castable — this fires on top of his
+  // normal major/bonus/class actions instead of competing with them, and
+  // the AI (berserker_boss profile) deliberately targets whoever's
+  // healthiest/least-focused so it spreads damage across the party rather
+  // than piling more onto whoever he's already been hitting — the actual
+  // fix for one-shot-by-crit risk, not just a numbers trim.
+  'berserker_opportunist_strike': {
+    id: 'berserker_opportunist_strike',
+    name: 'Opportunist Strike',
+    type: 'enemy',
+    actionCost: 'free',
+    mpCost: 0,
+    cooldown: 1,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack'],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.berserker_opportunist_strike;
+      const roll = calculateDamage(attacker, target, ability);
+      const full = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
+        ability, tags: ability?.tags, skipGearMultiplier: true,
+      }));
+      const amount = Math.max(1, Math.floor(full * 0.5));
+      return { ...roll, amount };
+    },
+    description: "A free opportunistic jab — no action cost, only a short cooldown. Deals 50% weapon damage."
   }
 };
 Object.assign(RAW_SKILLS, NPC_ONLY_SKILLS);
@@ -10884,7 +10917,7 @@ Object.assign(RAW_SKILLS, {
     // Handled generically in CombatScene, post-mitigation — see the
     // "Crit-triggered bleed" block there — not computed here, since apply()
     // only ever sees the pre-mitigation amount.
-    critBleedPct: 15,
+    critBleedPct: 50,
     critBleedTurns: 2,
     critBleedStatusId: "heartpierced",
     critBleedVfxKind: 'debuff_sick',
@@ -10914,7 +10947,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount };
     },
-    description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). On crit, inflicts Heartpierced — a 2-turn bleed dealing 15% of the hit as damage per turn."
+    description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). On crit, inflicts Heartpierced — a 2-turn bleed dealing 50% of the hit as damage per turn."
   },
 
   'venom_bloom': {
@@ -12253,17 +12286,19 @@ Object.assign(RAW_SKILLS, {
 
       const statusEffects = [];
 
-      // Cold only locks the target's bonus action once it reaches the 400
-      // threshold — below that, the skill still fires (T2 = 200+ is enough
-      // to use it) but does not consume or lock anything. Frost-Numbed
+      // Cold locks the target's bonus action once it reaches the 200
+      // threshold — the same T2 floor that already gates casting this skill
+      // at all, so landing the hit now always locks the bonus action.
+      // Consumption is capped at 200 even if the target is sitting on more
+      // (e.g. T3+) — any excess above 200 is left behind. Frost-Numbed
       // (turns:1) is checked once at the start of the target's own next
       // turn (see the actionsLeft reset in _advanceTurn/_takeEnemyTurn),
       // so it fires exactly once, then expires — same timing model as
       // Trapped Fire below.
       const coldMeter = target?.weakness?.meters?.cold || 0;
       let consumedCold = 0;
-      if (coldMeter >= 400) {
-        consumedCold = 400;
+      if (coldMeter >= 200) {
+        consumedCold = 200;
         if (target?.weakness?.meters) {
           target.weakness.meters.cold = Math.max(0, coldMeter - consumedCold);
           if (target.weakness.tiers) target.weakness.tiers.cold = weaknessTierFromMeter(target.weakness.meters.cold);
@@ -12314,7 +12349,7 @@ Object.assign(RAW_SKILLS, {
           + (consumedFire ? " Trapped fire will flare at the end of their next turn." : ""),
       };
     },
-    description: "Deals 160% weapon damage. If the target has 400+ Cold, consumes it to disable their bonus action for their next turn (Frost-Numbed). If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 62.5% consumed, increases Fire buildup taken by 12.5% per 100 consumed, and makes the target vulnerable to all Elemental damage by 13% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 13 damage per 100 consumed."
+    description: "Deals 160% weapon damage. If the target has 200+ Cold, consumes up to 200 to disable their bonus action for their next turn (Frost-Numbed). If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 62.5% consumed, increases Fire buildup taken by 12.5% per 100 consumed, and makes the target vulnerable to all Elemental damage by 13% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 13 damage per 100 consumed."
   },
 
   'taunting_cry': {

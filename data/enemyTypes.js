@@ -317,6 +317,10 @@ export const ENEMY_TYPES = {
     // spread — high STR/CON, everything else baseline-to-low, CHA nudged up
     // over INT/WIS so Initiative and MP regen have some real footing.
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    // Desperation healing — his lifesteal/any healing received scales up to
+    // +50% (at ~0% HP) as he loses health, read generically off this field
+    // by CombatScene._startTurnWeakness. Linear with missing HP%.
+    healMissingHpBonusMax: 0.5,
     skills: [
       'berserker_reckless_strike',
       'berserker_crushing_blow',
@@ -326,6 +330,7 @@ export const ENEMY_TYPES = {
       'berserker_battle_frenzy',
       'berserker_death_spiral',
       'berserker_unstoppable_rush',
+      'berserker_opportunist_strike',
       'berserker_blood_fury',
       'berserker_reckless_harvest',
       'berserker_bloodrite'
@@ -353,15 +358,16 @@ export const ENEMY_TYPES = {
     maxHP: 950,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -37,
+    damageMultiplierPct: -37.5,
     buildupMultiplierPct: 8,
     derivedBonus: { PhysicalResist: 30, Resilience: 42, ElementalResist: 8, NecroticResist: 8 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    healMissingHpBonusMax: 0.5,
     skills: [
       'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
       'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
-      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
-      'berserker_reckless_harvest', 'berserker_bloodrite'
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_opportunist_strike',
+      'berserker_blood_fury', 'berserker_reckless_harvest', 'berserker_bloodrite'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,
@@ -372,15 +378,16 @@ export const ENEMY_TYPES = {
     maxHP: 1050,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -34,
+    damageMultiplierPct: -35,
     buildupMultiplierPct: 16,
     derivedBonus: { PhysicalResist: 40, Resilience: 54, ElementalResist: 16, NecroticResist: 16 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    healMissingHpBonusMax: 0.5,
     skills: [
       'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
       'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
-      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
-      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_opportunist_strike',
+      'berserker_blood_fury', 'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,
@@ -391,15 +398,16 @@ export const ENEMY_TYPES = {
     maxHP: 1150,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -31,
+    damageMultiplierPct: -32.5,
     buildupMultiplierPct: 24,
     derivedBonus: { PhysicalResist: 50, Resilience: 66, ElementalResist: 24, NecroticResist: 24 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    healMissingHpBonusMax: 0.5,
     skills: [
       'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
       'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
-      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
-      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_opportunist_strike',
+      'berserker_blood_fury', 'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,
@@ -410,15 +418,21 @@ export const ENEMY_TYPES = {
     maxHP: 1250,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -28,
+    damageMultiplierPct: -30,
     buildupMultiplierPct: 32,
     derivedBonus: { PhysicalResist: 60, Resilience: 78, ElementalResist: 32, NecroticResist: 32 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    healMissingHpBonusMax: 0.5,
+    // New at Reckoning IV+ — a constant aura that slows the WHOLE opposing
+    // party's Initiative Gauge regen by 40%, read generically off this field
+    // by CombatScene._startTurnWeakness/_tickInitiativeGauge (not tied to a
+    // dispellable status effect, so players can't cleanse it off).
+    initiativeSlowAuraPct: 40,
     skills: [
       'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
       'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
-      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
-      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_opportunist_strike',
+      'berserker_blood_fury', 'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,
@@ -429,15 +443,18 @@ export const ENEMY_TYPES = {
     maxHP: 1350,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -25,
+    damageMultiplierPct: -27.5,
     buildupMultiplierPct: 40,
     derivedBonus: { PhysicalResist: 70, Resilience: 90, ElementalResist: 40, NecroticResist: 40 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },
+    healMissingHpBonusMax: 0.5,
+    // Same Reckoning IV+ aura as tier IV — see its own comment there.
+    initiativeSlowAuraPct: 40,
     skills: [
       'berserker_reckless_strike', 'berserker_crushing_blow', 'berserker_disrupting_roar',
       'berserker_bleeding_sweep', 'berserker_guarded_fury', 'berserker_battle_frenzy',
-      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_blood_fury',
-      'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
+      'berserker_death_spiral', 'berserker_unstoppable_rush', 'berserker_opportunist_strike',
+      'berserker_blood_fury', 'berserker_reckless_harvest', 'berserker_bloodrite', 'berserker_steel_mind'
     ],
     aiProfile: 'berserker_boss',
     isEnemy: true,
