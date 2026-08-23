@@ -5,7 +5,7 @@ slug: "islet-of-job"
 category: "places"
 subtab: "Regions"
 order: 290
-tags: ["places", "island"]
+tags: ["places","island","on-map"]
 status: "approved"
 teaser: false
 requires: []

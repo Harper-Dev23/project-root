@@ -5,7 +5,7 @@ slug: "ruins-of-exodus"
 category: "places"
 subtab: "Regions"
 order: 280
-tags: ["places", "ruins"]
+tags: ["places","ruins","on-map"]
 status: "approved"
 teaser: false
 requires: []

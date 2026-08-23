@@ -5,7 +5,7 @@ slug: "cradle-coast"
 category: "places"
 subtab: "Regions"
 order: 120
-tags: ["places", "coastal"]
+tags: ["places","coastal","on-map"]
 status: "approved"
 teaser: false
 requires: []

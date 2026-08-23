@@ -1,6 +1,15 @@
 const EXCLUDE_PATTERNS = ['non-canonical', 'game notes'];
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown']);
-const VALID_CATEGORIES = new Set(['lore', 'systems', 'hunt', 'people', 'places', 'factions', 'buildings', 'personal']);
+// MUST stay in sync with JOURNAL_CATEGORIES in data/journal/manifest.js.
+// 'divinity' was missing here while 27 entries declared `category: divinity`
+// in their frontmatter — inferCategory rejects anything not in this set and
+// falls through to keyword matching, where CATEGORY_KEYWORDS.lore contains
+// 'prophet'/'false-god', so the whole Divinity section silently emptied into
+// Lore. Same for 'index' and the 'world/' folder.
+const VALID_CATEGORIES = new Set([
+    'lore', 'systems', 'hunt', 'people', 'places',
+    'factions', 'buildings', 'personal', 'divinity', 'items', 'index',
+]);
 
 const CATEGORY_KEYWORDS = {
     systems: ['weakness', 'mechanic', 'systems', 'stat', 'weapon'],
@@ -275,7 +284,14 @@ function buildEntry({ meta, body, relativePath, stats }) {
     const sort = parseNumber(meta.sort, explicitOrder ?? 999);
     const version = parseNumber(meta.version, 1);
     const updatedAt = meta.updatedAt || (stats?.mtime ? new Date(stats.mtime).toISOString() : new Date().toISOString());
-    const content = body.trim();
+    const rawBody = body.trim();
+    // Strip the leading "# Title" for DISPLAY only. The title is already
+    // shown in the reader's own header (JournalContent.titleText), so
+    // leaving it in the markdown rendered it a second time as an <h1> —
+    // the doubled header. Title/excerpt derivation below still reads
+    // rawBody, so headings remain the title source for files whose
+    // frontmatter omits `title:`.
+    const content = rawBody.replace(/^#\s+.*(?:\r?\n)+/, '');
     const icon = typeof meta.icon === 'string' && meta.icon.trim() ? meta.icon.trim() : undefined;
     const subtabValue = normaliseString(meta.subtab);
     const subtab = subtabValue || null;
@@ -283,7 +299,7 @@ function buildEntry({ meta, body, relativePath, stats }) {
     const teaser = parseBoolean(meta.teaser, false);
     const titleOverride = normaliseString(meta.title) || undefined;
 
-    const { title, excerpt } = deriveTitleAndExcerpt(content, titleOverride, filenameTitle, meta.excerpt);
+    const { title, excerpt } = deriveTitleAndExcerpt(rawBody, titleOverride, filenameTitle, meta.excerpt);
     if (!title) {
         console.warn(`[MarkdownLoader] Skipping ${relativePath}: missing title`);
         return null;

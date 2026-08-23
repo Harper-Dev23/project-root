@@ -3,9 +3,9 @@ id: places/springs_of_sheol
 title: "Springs of Sheol"
 slug: "springs-of-sheol"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 350
-tags: ["places", "geothermal"]
+tags: ["places","geothermal","water","landmark"]
 status: "approved"
 teaser: false
 requires: []

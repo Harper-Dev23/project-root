@@ -88,6 +88,14 @@ export default class TribeHQOverlay extends Phaser.Scene {
         fontSize: '16px', color: '#88ddff',
       }).setDepth(d),
 
+      // Elapsed world time, right-aligned opposite the Hunt Points line.
+      // Accumulates across every hunt on this save (see
+      // ProgressionManager.getWorldDate) — groundwork for a hunt season.
+      this.add.text(b.right - 40, b.y + 64,
+        `${ProgressionManager.getWorldDate().label}  ·  ${ProgressionManager.getWorldDate().detail}`, {
+          fontSize: '14px', color: '#9aa4b4',
+        }).setOrigin(1, 0).setDepth(d),
+
       this.add.text(l, b.y + 88, `${tname} Tribe Total: ${ProgressionManager.getTribeHuntPoints(tid)}`, {
         fontSize: '18px', color: '#ffdd88', fontStyle: 'bold',
       }).setDepth(d),

@@ -5,7 +5,7 @@ slug: "forest-of-eden"
 category: "places"
 subtab: "Regions"
 order: 20
-tags: ["places", "forest"]
+tags: ["places","forest","on-map"]
 status: "approved"
 teaser: false
 requires: []

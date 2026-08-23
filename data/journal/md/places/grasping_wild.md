@@ -5,7 +5,7 @@ slug: "grasping-wild"
 category: "places"
 subtab: "Regions"
 order: 140
-tags: ["places", "jungle"]
+tags: ["places","jungle","on-map"]
 status: "approved"
 teaser: false
 requires: []

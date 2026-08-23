@@ -3,9 +3,9 @@ id: places/cave_of_adullam
 title: "Cave of Adullam"
 slug: "cave-of-adullam"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 200
-tags: ["places", "cave"]
+tags: ["places","cave","landmark"]
 status: "approved"
 teaser: false
 requires: []

@@ -8604,9 +8604,14 @@ export default class CombatScene extends Phaser.Scene {
         const basePct = WeaknessV3?.families?.lacerate?.t2?.startPctHP ?? 0.06;
         const capPct = WeaknessV3?.families?.lacerate?.t2?.startPctCap ?? 0.20;
 
-        const I = (typeof weaknessIntensityMult === 'function')
-          ? weaknessIntensityMult(meter)
-          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('lacerate', meter) : 1);
+        // familyIntensityMult FIRST (matching Fire and Toxic). This used to
+        // prefer the global weaknessIntensityMult with familyIntensityMult
+        // as a dead fallback, which meant Lacerate could never have its own
+        // curve no matter what was configured — the same stale pattern that
+        // was blocking Toxic.
+        const I = (typeof familyIntensityMult === 'function')
+          ? familyIntensityMult('lacerate', meter)
+          : (typeof weaknessIntensityMult === 'function' ? weaknessIntensityMult(meter) : 1);
 
         const pct = Math.min(basePct * (I > 0 ? I : 1), capPct);
         const dot = Math.max(1, Math.floor(maxHP * pct));
@@ -8639,9 +8644,13 @@ export default class CombatScene extends Phaser.Scene {
 
         const base = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
 
-        const I = (typeof weaknessIntensityMult === 'function')
-          ? weaknessIntensityMult(m)
-          : (typeof familyIntensityMult === 'function' ? familyIntensityMult('toxic', m) : 1);
+        // familyIntensityMult FIRST (same as Fire's burn tick above) so
+        // Toxic's own intensity ramp in StatusEffects.js actually applies.
+        // This used to prefer the global weaknessIntensityMult, which meant
+        // any per-family curve configured for Toxic was silently ignored.
+        const I = (typeof familyIntensityMult === 'function')
+          ? familyIntensityMult('toxic', m)
+          : (typeof weaknessIntensityMult === 'function' ? weaknessIntensityMult(m) : 1);
 
         const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1)));
 

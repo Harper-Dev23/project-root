@@ -3,7 +3,7 @@ id: buildings/camp_vendors
 title: "Camp Vendors"
 slug: "camp-vendors"
 category: "buildings"
-subtab: "Camp"
+subtab: "Camp Nehemiah"
 order: 30
 tags: ["buildings", "vendors"]
 status: "approved"

@@ -3,9 +3,9 @@ id: places/prophets_throat
 title: "Prophet's Throat"
 slug: "prophets-throat"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 300
-tags: ["places", "cave"]
+tags: ["places","cave","landmark"]
 status: "approved"
 teaser: false
 requires: []

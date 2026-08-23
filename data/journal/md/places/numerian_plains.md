@@ -5,7 +5,7 @@ slug: "numerian-plains"
 category: "places"
 subtab: "Regions"
 order: 160
-tags: ["places", "plains"]
+tags: ["places","plains","on-map"]
 status: "approved"
 teaser: false
 requires: []

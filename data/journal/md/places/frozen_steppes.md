@@ -5,7 +5,7 @@ slug: "frozen-steppes"
 category: "places"
 subtab: "Regions"
 order: 330
-tags: ["places", "tundra"]
+tags: ["places","tundra","on-map"]
 status: "approved"
 teaser: false
 requires: []

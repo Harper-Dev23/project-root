@@ -3,9 +3,9 @@ id: places/rapids_of_meribah
 title: "Rapids of Meribah"
 slug: "rapids-of-meribah"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 230
-tags: ["places", "river"]
+tags: ["places","river","water","landmark"]
 status: "approved"
 teaser: false
 requires: []

@@ -5,7 +5,7 @@ slug: "wicked-coast"
 category: "places"
 subtab: "Regions"
 order: 180
-tags: ["places", "coastal"]
+tags: ["places","coastal","on-map"]
 status: "approved"
 teaser: false
 requires: []

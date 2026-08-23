@@ -5,7 +5,7 @@ slug: "camp-nehemiah"
 category: "places"
 subtab: "Regions"
 order: 10
-tags: ["places", "camp"]
+tags: ["places","camp","on-map"]
 status: "approved"
 teaser: false
 requires: []

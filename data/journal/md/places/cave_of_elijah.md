@@ -3,9 +3,9 @@ id: places/cave_of_elijah
 title: "Cave of Elijah"
 slug: "cave-of-elijah"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 210
-tags: ["places", "cave"]
+tags: ["places","cave","landmark"]
 status: "approved"
 teaser: false
 requires: []

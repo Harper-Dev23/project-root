@@ -25,4 +25,6 @@ Everything a Hunter can carry falls into a few types: **weapons**, **armor**, **
 
 Some items break this pattern entirely: **unique** items (like tribe pendants) come with a single fixed bonus instead of rolling from the random pool, and **soulbound** items (like the Waystone Shard) can never be sold or lost.
 
+Every affix, its tier and its exact roll range is listed in [[Affix Reference (In Depth)]].
+
 See also: *Weapon Types and Handedness* and *Historic (Renown) Items* under Systems for how weapon slots and long-term item growth work.

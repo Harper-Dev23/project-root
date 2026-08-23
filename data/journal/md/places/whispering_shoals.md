@@ -5,7 +5,7 @@ slug: "whispering-shoals"
 category: "places"
 subtab: "Regions"
 order: 40
-tags: ["places", "coast"]
+tags: ["places","coastal","on-map"]
 status: "approved"
 teaser: false
 requires: []

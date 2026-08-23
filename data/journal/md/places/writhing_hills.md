@@ -5,7 +5,7 @@ slug: "writhing-hills"
 category: "places"
 subtab: "Regions"
 order: 190
-tags: ["places", "desert"]
+tags: ["places","desert","on-map"]
 status: "approved"
 teaser: false
 requires: []

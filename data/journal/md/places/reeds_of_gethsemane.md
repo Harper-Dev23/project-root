@@ -5,7 +5,7 @@ slug: "reeds-of-gethsemane"
 category: "places"
 subtab: "Regions"
 order: 50
-tags: ["places", "wetland", "hunt-zone"]
+tags: ["places","wetland","hunt-zone","on-map"]
 status: "approved"
 teaser: false
 requires: []

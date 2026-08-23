@@ -5,7 +5,7 @@ slug: "river-wormwood"
 category: "places"
 subtab: "Regions"
 order: 170
-tags: ["places", "river"]
+tags: ["places","river","water","on-map"]
 status: "approved"
 teaser: false
 requires: []

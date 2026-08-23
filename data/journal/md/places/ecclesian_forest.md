@@ -5,7 +5,7 @@ slug: "ecclesian-forest"
 category: "places"
 subtab: "Regions"
 order: 320
-tags: ["places", "forest"]
+tags: ["places","forest","on-map"]
 status: "approved"
 teaser: false
 requires: []

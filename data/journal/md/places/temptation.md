@@ -3,9 +3,9 @@ id: places/temptation
 title: "Temptation (The Coral Lure)"
 slug: "temptation"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 250
-tags: ["places", "coastal"]
+tags: ["places","coastal","landmark"]
 status: "approved"
 teaser: false
 requires: []

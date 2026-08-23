@@ -3,9 +3,9 @@ id: places/stones_of_levithica
 title: "Stones of Levithica"
 slug: "stones-of-levithica"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 360
-tags: ["places", "ruins"]
+tags: ["places","ruins","landmark"]
 status: "approved"
 teaser: false
 requires: []

@@ -5,7 +5,7 @@ slug: "dunes-of-zin"
 category: "places"
 subtab: "Regions"
 order: 130
-tags: ["places", "desert"]
+tags: ["places","desert","on-map"]
 status: "approved"
 teaser: false
 requires: []

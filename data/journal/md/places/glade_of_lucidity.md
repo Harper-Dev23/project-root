@@ -3,9 +3,9 @@ id: places/glade_of_lucidity
 title: "Glade of Lucidity"
 slug: "glade-of-lucidity"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 240
-tags: ["places", "glade"]
+tags: ["places","glade","landmark"]
 status: "approved"
 teaser: false
 requires: []

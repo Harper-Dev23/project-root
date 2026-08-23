@@ -157,6 +157,13 @@ const ProgressionManager = {
   // Per-tribe intel level (0..TRIBE_INTEL_MAX) — see getTribeIntel.
   tribeIntel: { ...DEFAULT_TRIBE_INTEL },
 
+  // Total in-world time elapsed across every hunt on this save. Advanced by
+  // HuntManager on each day/night flip and never reset by a hunt ending, so
+  // it accumulates for the life of the save. Groundwork for a future
+  // hunt-season limit ("a season lasts N nights"); nothing consumes it yet.
+  nightsElapsed: 0,
+  daysElapsed: 0,
+
   // Tribe-wide Hunt Point grand totals — one number per tribe, all four
   // tracked regardless of player allegiance so a future cross-tribe
   // leaderboard needs no data migration.
@@ -221,6 +228,39 @@ const ProgressionManager = {
   addHuntPoints(amount) {
     this.huntPoints = Math.max(0, this.huntPoints + amount);
     return this.huntPoints;
+  },
+
+  // ----- Elapsed world time --------------------------------------------
+
+  getNightsElapsed() { return this.nightsElapsed || 0; },
+  getDaysElapsed() { return this.daysElapsed || 0; },
+
+  /** Called by HuntManager when the world flips into night. */
+  advanceNight() {
+    this.nightsElapsed = (this.nightsElapsed || 0) + 1;
+    return this.nightsElapsed;
+  },
+
+  /** Called by HuntManager when the world flips into a new day. */
+  advanceDay() {
+    this.daysElapsed = (this.daysElapsed || 0) + 1;
+    return this.daysElapsed;
+  },
+
+  /**
+   * Human-readable elapsed time, for UI that wants to show a "date".
+   * Day 1 is the day a Hunter arrives, so the count is 1-based.
+   */
+  getWorldDate() {
+    const nights = this.getNightsElapsed();
+    const days = this.getDaysElapsed();
+    return {
+      nights,
+      days,
+      dayNumber: days + 1,
+      label: `Day ${days + 1}`,
+      detail: nights === 1 ? '1 night on the island' : `${nights} nights on the island`,
+    };
   },
 
   // ----- Tribe-wide Hunt Points (all four tribes, player + NPC parties) ----
@@ -395,6 +435,8 @@ const ProgressionManager = {
       completedQuestSteps: [...this.completedQuestSteps],
       tribeRep:            { ...this.tribeRep },
       tribeIntel:          { ...this.tribeIntel },
+      nightsElapsed:       this.nightsElapsed,
+      daysElapsed:         this.daysElapsed,
       tribeHuntPoints:     { ...this.tribeHuntPoints },
       tribeHuntingParties: Object.fromEntries(
         Object.entries(this.tribeHuntingParties).map(([k, v]) => [k, { ...v }])
@@ -418,6 +460,8 @@ const ProgressionManager = {
       ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
     this.tribeIntel          = (data.tribeIntel && typeof data.tribeIntel === 'object')
       ? { ...DEFAULT_TRIBE_INTEL, ...data.tribeIntel } : { ...DEFAULT_TRIBE_INTEL };
+    this.nightsElapsed       = Number.isFinite(data.nightsElapsed) ? data.nightsElapsed : 0;
+    this.daysElapsed         = Number.isFinite(data.daysElapsed) ? data.daysElapsed : 0;
     this.tribeHuntPoints     = (data.tribeHuntPoints && typeof data.tribeHuntPoints === 'object')
       ? { ...DEFAULT_TRIBE_HUNT_POINTS, ...data.tribeHuntPoints } : { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
@@ -440,6 +484,8 @@ const ProgressionManager = {
     this.completedQuestSteps = [];
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
     this.tribeIntel          = { ...DEFAULT_TRIBE_INTEL };
+    this.nightsElapsed       = 0;
+    this.daysElapsed         = 0;
     this.tribeHuntPoints     = { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
     this.partyGear           = {};

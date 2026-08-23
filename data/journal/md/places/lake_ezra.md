@@ -3,9 +3,9 @@ id: places/lake_ezra
 title: "Lake Ezra"
 slug: "lake-ezra"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 70
-tags: ["places", "lake"]
+tags: ["places","lake","water","landmark"]
 status: "approved"
 teaser: false
 requires: []

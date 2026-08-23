@@ -185,33 +185,38 @@ export const FAVOR_SOURCES = [
 // Flavor + what each tribe is actually good at, so the four cards read as
 // four different offers rather than one offer with four names.
 
+// Epithets and values are the CANON ones from the Player Handbook and the
+// journal's Four Tribes entry — not the specialities of whoever currently
+// speaks for each tribe. (An earlier pass labelled Elseth "the Animancers"
+// and Styx "the Tacticians" after Wren and Cade; those are individuals, not
+// the tribe's identity. `figure` keeps the leader, `epithet` keeps the tribe.)
 export const TRIBE_SPECIALTIES = {
   elseth: {
-    epithet: 'The Animancers',
+    epithet: 'Silk and Ledger',
     figure: 'Wren, Animancer',
-    focus: 'Spirit-work and the reshaping of damage itself',
-    offer: 'Conversion charms, necrotic craft, and readings the other tribes '
-      + 'will not attempt.',
+    focus: 'Wealth, diplomacy, knowledge and binding pacts',
+    offer: 'Trade and oath-making — sacred commerce drawn from ancient '
+      + 'dealings with dragonkind.',
   },
   styx: {
-    epithet: 'The Tacticians',
+    epithet: 'Beasts and Bone',
     figure: 'Cade, Tactician',
-    focus: 'Planning, positioning and field intelligence',
-    offer: 'The best scouting in the valley — routes, enemy dispositions, and '
-      + 'the discipline to use them.',
+    focus: 'Simplicity, beast-communion, memory and instinct',
+    offer: 'Beast-talkers and spirit listeners — humble, strange, and the '
+      + 'closest of the four to the wild itself.',
   },
   lesse: {
-    epithet: 'The Duelists',
+    epithet: 'Bloom and Veil',
     figure: 'Ember & Rime',
-    focus: 'Elemental mastery and the duel',
-    offer: 'Fire and frost craft, and instruction that turns an even fight into '
-      + 'a short one.',
+    focus: 'Grace, artistry, sacred growth and subtle power',
+    offer: 'Enchanters and keepers of memory, said to share distant blood '
+      + 'with the ancient elves.',
   },
   zafaar: {
-    epithet: 'The Champions',
+    epithet: 'Ash and Fang',
     figure: "Gorrek's kin",
-    focus: 'Raw martial strength and the proving ground',
-    offer: 'Weapons, armor and trials — everything measured by what you can '
-      + 'carry off the field.',
+    focus: 'Strength, fury and honor in conquest',
+    offer: 'The bold, the wrathful and the unbroken — everything measured by '
+      + 'what you can carry off the field.',
   },
 };

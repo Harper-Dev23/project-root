@@ -5,7 +5,7 @@ slug: "mount-ararat"
 category: "places"
 subtab: "Sacred Mountains"
 order: 370
-tags: ["places", "mountain", "sacred"]
+tags: ["places","mountain","sacred","landmark"]
 status: "approved"
 teaser: false
 requires: []

@@ -5,7 +5,7 @@ slug: "valley-of-joshua"
 category: "places"
 subtab: "Regions"
 order: 340
-tags: ["places", "valley"]
+tags: ["places","valley","on-map"]
 status: "approved"
 teaser: false
 requires: []

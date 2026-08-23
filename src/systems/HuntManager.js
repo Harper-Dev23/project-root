@@ -106,8 +106,14 @@ export const HuntManager = {
     if (_advancesSinceFlip >= DAY_NIGHT_ADVANCES) {
       _advancesSinceFlip = 0;
       _isNight = !_isNight;
-      if (!_isNight) {
+      // Save-wide elapsed time. _day/_isNight above are per-hunt and reset
+      // on end(); these accumulate for the life of the save so a future
+      // hunt-season limit has a real clock to read.
+      if (_isNight) {
+        ProgressionManager.advanceNight();
+      } else {
         _day += 1;
+        ProgressionManager.advanceDay();
         // Other tribes' background progress ticks once per in-game day —
         // far coarser than the player's own per-advance turn.
         TribeHuntSimulator.tick();

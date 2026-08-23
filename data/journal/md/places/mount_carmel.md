@@ -5,7 +5,7 @@ slug: "mount-carmel"
 category: "places"
 subtab: "Sacred Mountains"
 order: 380
-tags: ["places", "mountain", "sacred"]
+tags: ["places","mountain","sacred","landmark"]
 status: "approved"
 teaser: false
 requires: []

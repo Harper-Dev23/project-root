@@ -5,7 +5,7 @@ slug: "mount-nebo"
 category: "places"
 subtab: "Sacred Mountains"
 order: 400
-tags: ["places", "mountain", "sacred"]
+tags: ["places","mountain","sacred","landmark"]
 status: "approved"
 teaser: false
 requires: []

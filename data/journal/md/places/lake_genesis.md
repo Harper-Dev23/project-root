@@ -5,7 +5,7 @@ slug: "lake-genesis"
 category: "places"
 subtab: "Regions"
 order: 80
-tags: ["places", "lake"]
+tags: ["places","lake","water","on-map"]
 status: "approved"
 teaser: false
 requires: []

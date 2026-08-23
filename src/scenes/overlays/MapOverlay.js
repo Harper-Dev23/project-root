@@ -1,6 +1,7 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import MapRegionLayer from '../../ui/MapRegionLayer.js';
+import { MAP_REGIONS, TERRAIN_TINT, polyLabelPoint } from '../../../data/mapRegions.js';
 
 
 export default class MapOverlay extends Phaser.Scene {
@@ -26,6 +27,9 @@ export default class MapOverlay extends Phaser.Scene {
     this.regionLayer?.destroy();
     this.regionLayer = null;
     this._regionInfo = null;
+    this._legendRows = null;
+    this._mapFrameGfx = null;
+    this._mapSeaGfx = null;
     this._calGfx = null;
     this._calibrating = false;
     this._calPoints = [];
@@ -40,11 +44,26 @@ export default class MapOverlay extends Phaser.Scene {
     const backgroundDepth = contentDepth - 1;
     const bounds = frame.bounds;
 
+    // Reserve a left-hand column for the region legend. The map viewport
+    // only loses that width — pan and zoom are untouched, and the island
+    // still fits comfortably at the default fit-scale.
+    const LEGEND_W = 208;
+    const LEGEND_GAP = 14;
+
+    // Top edge at +84, not +72 — the instruction line sits at +60 and runs
+    // ~20px tall, so the old value clipped it behind the legend panel.
+    const CONTENT_TOP = bounds.y + 84;
+    const CONTENT_H = bounds.height - 152;
+
+    this.legendRect = new Phaser.Geom.Rectangle(
+      bounds.x + 24, CONTENT_TOP, LEGEND_W, CONTENT_H
+    );
+
     this.mapArea = new Phaser.Geom.Rectangle(
-      bounds.x + 24,
-      bounds.y + 72,
-      bounds.width - 48,
-      bounds.height - 140
+      bounds.x + 24 + LEGEND_W + LEGEND_GAP,
+      CONTENT_TOP,
+      bounds.width - 48 - LEGEND_W - LEGEND_GAP,
+      CONTENT_H
     );
 
     const infoText = this.add.text(bounds.x + 32, bounds.y + 60,
@@ -102,16 +121,23 @@ export default class MapOverlay extends Phaser.Scene {
       this.currentScale = fitScale;
       this.mapImage.setScale(this.currentScale);
 
+      this._buildMapFrame(contentDepth);
+
       this._updateMapBounds();
       this._clampMapPosition();
 
       // Hoverable region hotspots (see data/mapRegions.js).
+      // showIdleOutlines:false — the browse map shows the art clean and
+      // only outlines what you're actually pointing at; the legend below
+      // is how you find things without painting 25 outlines over it.
       this.regionLayer = new MapRegionLayer(this, {
         container: this.mapContainer,
         image: this.mapImage,
         depth: contentDepth,
         clipRect: this.mapArea,
+        showIdleOutlines: false,
         onHover: (r) => {
+          this._syncLegendHighlight?.(r);
           // Guarded: scene instance properties survive stop/launch, so a
           // stale Text from a previous create() can still be referenced here
           // after its texture is gone (setText would throw on a dead frame).
@@ -121,6 +147,7 @@ export default class MapOverlay extends Phaser.Scene {
         },
       });
 
+      this._buildLegend(contentDepth);
       this._buildCalibrateButton(bounds, contentDepth);
     } else {
       this.add.text(
@@ -197,10 +224,175 @@ export default class MapOverlay extends Phaser.Scene {
     if (!this.mapImage) return;
     this.currentScale = Phaser.Math.Clamp(scale, 0.4, 2.5);
     this.mapImage.setScale(this.currentScale);
+    this._syncMapFrameScale();
     this._updateMapBounds();
     this._clampMapPosition();
     this.regionLayer?.redraw();
     this._redrawCalibration?.();
+  }
+
+  // ── Decorative map frame ──────────────────────────────────────────────────
+  // Zoomed out, the map art used to simply stop — a hard rectangular edge
+  // against the empty panel, which read as a texture floating in a void
+  // rather than a chart. Two pieces fix that, both living INSIDE
+  // mapContainer so they pan and zoom with the art:
+  //
+  //   1. An "open sea" bleed painted well beyond the image bounds, in the
+  //      map's own edge tone (sampled from the art: a deep teal ~#2e4249),
+  //      fading outward. Panning past the coastline now runs into more
+  //      ocean instead of a cut-off.
+  //   2. A drawn border right on the image edge — a broad band, a double
+  //      hairline, and corner ornaments — so the chart has a physical rim.
+  //
+  // Drawn once in NATIVE image pixels and rescaled with the image (same
+  // approach MapRegionLayer uses), so it never needs re-rendering on zoom.
+
+  _buildMapFrame(depth) {
+    if (!this.mapImage) return;
+    const W = this.mapImage.width;
+    const H = this.mapImage.height;
+    const halfW = W / 2;
+    const halfH = H / 2;
+
+    const SEA = 0x2e4249;
+
+    // --- 1. Open-sea bleed, behind the art ---------------------------------
+    // A single flat fill, deliberately. A stepped alpha falloff was tried
+    // first and the bands read as concentric rectangles rather than a
+    // gradient — worse than no falloff at all. One uniform sea tone lets
+    // the framed chart sit on open water instead.
+    // Padding is large enough to cover the viewport at minimum zoom (0.4)
+    // from any pan position, so no edge is ever reachable.
+    const SEA_PAD = 4000;
+    const sea = this.add.graphics();
+    sea.fillStyle(SEA, 1);
+    sea.fillRect(-halfW - SEA_PAD, -halfH - SEA_PAD, W + SEA_PAD * 2, H + SEA_PAD * 2);
+    this.mapContainer.addAt(sea, 0);   // behind the image
+    this._mapSeaGfx = sea;
+
+    // --- 2. The frame itself, over the art ---------------------------------
+    const frame = this.add.graphics();
+
+    // Broad outer band sitting just outside the art edge.
+    frame.lineStyle(26, 0x1b2731, 0.95);
+    frame.strokeRect(-halfW - 13, -halfH - 13, W + 26, H + 26);
+    // Warm inlay, then a fine dark keyline hard against the art.
+    frame.lineStyle(5, 0x6b5a3e, 0.9);
+    frame.strokeRect(-halfW - 3, -halfH - 3, W + 6, H + 6);
+    frame.lineStyle(2, 0x141c24, 1);
+    frame.strokeRect(-halfW, -halfH, W, H);
+
+    // Corner ornaments — short right-angle brackets in the warm inlay tone.
+    const arm = 46;
+    frame.lineStyle(6, 0xbba46a, 0.95);
+    const corners = [
+      [-halfW - 8, -halfH - 8,  1,  1],
+      [ halfW + 8, -halfH - 8, -1,  1],
+      [-halfW - 8,  halfH + 8,  1, -1],
+      [ halfW + 8,  halfH + 8, -1, -1],
+    ];
+    for (const [cx, cy, sx, sy] of corners) {
+      frame.beginPath();
+      frame.moveTo(cx, cy + sy * arm);
+      frame.lineTo(cx, cy);
+      frame.lineTo(cx + sx * arm, cy);
+      frame.strokePath();
+    }
+
+    this.mapContainer.add(frame);
+    this._mapFrameGfx = frame;
+
+    this._syncMapFrameScale();
+  }
+
+  /** Keeps the frame and sea bleed locked to the image's current scale. */
+  _syncMapFrameScale() {
+    const s = this.mapImage?.scaleX ?? 1;
+    this._mapSeaGfx?.setScale(s);
+    this._mapFrameGfx?.setScale(s);
+  }
+
+  // ── Region legend ─────────────────────────────────────────────────────────
+  // Because the browse map no longer draws idle outlines, this list is how
+  // you find a region without hunting for it with the cursor. Hovering a row
+  // highlights it on the map; clicking centres the map on it (handy once
+  // you've zoomed in and lost your bearings).
+
+  _buildLegend(depth) {
+    const R = this.legendRect;
+    if (!R) return;
+
+    this.add.rectangle(R.centerX, R.centerY, R.width, R.height, 0x090c14, 0.72)
+      .setStrokeStyle(1, 0x2a3346).setDepth(depth);
+
+    this.add.text(R.x + 12, R.y + 10, 'REGIONS', {
+      fontSize: '11px', color: '#6a7a90', fontStyle: 'bold',
+    }).setDepth(depth + 1);
+
+    this.add.text(R.x + R.width - 12, R.y + 10, `${MAP_REGIONS.length}`, {
+      fontSize: '11px', color: '#4f5a68',
+    }).setOrigin(1, 0).setDepth(depth + 1);
+
+    const top = R.y + 30;
+    const rowH = Math.min(20, (R.height - 44) / MAP_REGIONS.length);
+    this._legendRows = [];
+
+    MAP_REGIONS.forEach((region, i) => {
+      const y = top + i * rowH;
+      const tint = TERRAIN_TINT[region.terrain] ?? 0xffffff;
+      const isHunt = !!region.huntZoneId;
+
+      // Full-width hit strip so the whole row is hoverable, not just glyphs.
+      const strip = this.add.rectangle(R.centerX, y + rowH / 2, R.width - 8, rowH, 0xffffff, 0)
+        .setDepth(depth + 1)
+        .setInteractive({ useHandCursor: true });
+
+      const swatch = this.add.rectangle(R.x + 14, y + rowH / 2, 7, 7, tint, 0.95)
+        .setDepth(depth + 2);
+
+      const label = this.add.text(R.x + 26, y + rowH / 2,
+        (isHunt ? '★ ' : '') + region.name, {
+          fontSize: '11px',
+          color: isHunt ? '#ffdd88' : '#9aa4b4',
+        }).setOrigin(0, 0.5).setDepth(depth + 2);
+
+      const row = { region, strip, swatch, label, isHunt };
+      strip.on('pointerover', () => {
+        this.regionLayer?.highlightRegion(region);
+        this._paintLegendRow(row, true);
+      });
+      strip.on('pointerout', () => {
+        this.regionLayer?.clearHighlight();
+        this._paintLegendRow(row, false);
+      });
+      strip.on('pointerdown', () => this._centreOnRegion(region));
+
+      this._legendRows.push(row);
+    });
+  }
+
+  _paintLegendRow(row, on) {
+    row.strip.setFillStyle(0xffffff, on ? 0.08 : 0);
+    row.label.setColor(on ? '#ffeebb' : (row.isHunt ? '#ffdd88' : '#9aa4b4'));
+  }
+
+  /** Keeps legend rows in sync when the highlight came from the map itself. */
+  _syncLegendHighlight(region) {
+    if (!this._legendRows) return;
+    this._legendRows.forEach(row => this._paintLegendRow(row, row.region === region));
+  }
+
+  /** Pans the map so a region sits in the middle of the viewport. */
+  _centreOnRegion(region) {
+    if (!this.mapImage || !this.regionLayer) return;
+    const [nx, ny] = polyLabelPoint(region.poly);
+    const s = this.mapImage.scaleX || 1;
+    // Where that point sits relative to the container origin, then offset
+    // the container so it lands on the viewport centre.
+    this.mapContainer.x = this.mapArea.centerX - (nx - 0.5) * this.mapImage.width * s;
+    this.mapContainer.y = this.mapArea.centerY - (ny - 0.5) * this.mapImage.height * s;
+    this._clampMapPosition();
+    this.regionLayer.highlightRegion(region);
   }
 
   // ── Calibration mode ──────────────────────────────────────────────────────

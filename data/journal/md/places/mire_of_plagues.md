@@ -5,7 +5,7 @@ slug: "mire-of-plagues"
 category: "places"
 subtab: "Regions"
 order: 310
-tags: ["places", "swamp"]
+tags: ["places","swamp","on-map"]
 status: "approved"
 teaser: false
 requires: []

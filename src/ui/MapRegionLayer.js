@@ -12,7 +12,7 @@
 //   • Labels are deliberately NOT in that container — they're screen-space
 //     so the font stays a constant readable size no matter the zoom.
 
-import { MAP_REGIONS, TERRAIN_TINT, pointInPoly, polyCentroid } from '../../data/mapRegions.js';
+import { MAP_REGIONS, TERRAIN_TINT, pointInPoly, polyLabelPoint } from '../../data/mapRegions.js';
 
 export default class MapRegionLayer {
   /**
@@ -26,6 +26,10 @@ export default class MapRegionLayer {
    *   onSelect     — fn(region) when a selectable region is clicked
    *   onHover      — fn(region|null) whenever the hovered region changes
    *   dimUnselectable — draw non-selectable regions muted (hunt-picker mode)
+   *   showIdleOutlines— draw every region's outline even when not hovered.
+   *                     False on the browse map (the art should read as art
+   *                     until you point at something); true in the picker,
+   *                     where you need to see all the options at once.
    */
   constructor(scene, opts = {}) {
     this.scene = scene;
@@ -36,7 +40,12 @@ export default class MapRegionLayer {
     this.onSelect = opts.onSelect || null;
     this.onHover = opts.onHover || null;
     this.dimUnselectable = !!opts.dimUnselectable;
+    this.showIdleOutlines = opts.showIdleOutlines !== false;
     this.enabled = true;
+
+    // Optional externally-driven highlight (e.g. hovering a legend row)
+    // that behaves exactly like a pointer hover on the map.
+    this.forced = null;
 
     this.selectable = opts.selectableIds
       ? new Set(opts.selectableIds)
@@ -112,9 +121,27 @@ export default class MapRegionLayer {
 
   handlePointerMove(pointer) {
     if (!this.enabled) return;
+    // A legend-driven highlight outranks the pointer, so moving the mouse
+    // toward the legend doesn't clear the row you're pointing at.
+    if (this.forced) return;
     const r = this.regionAt(pointer.x, pointer.y);
     this._setHovered(r);
     if (r) this._positionLabel(r);
+  }
+
+  /** Highlight a region from outside the map (legend row hover). */
+  highlightRegion(regionOrId) {
+    const r = typeof regionOrId === 'string'
+      ? this.regions.find(x => x.id === regionOrId)
+      : regionOrId;
+    this.forced = r || null;
+    this._setHovered(r || null);
+    if (r) this._positionLabel(r);
+  }
+
+  clearHighlight() {
+    this.forced = null;
+    this._setHovered(null);
   }
 
   handlePointerDown(pointer) {
@@ -160,7 +187,9 @@ export default class MapRegionLayer {
   }
 
   _positionLabel(r) {
-    const [cx, cy] = polyCentroid(r.poly);
+    // polyLabelPoint, not the raw centroid — concave regions (the crescent
+    // Mountains of Proverbs) have a centroid that lands outside themselves.
+    const [cx, cy] = polyLabelPoint(r.poly);
     const p = this.normToScreen(cx, cy);
     const w = Math.max(this.label.width, this.sublabel.width) + 22;
     const h = 40;
@@ -197,7 +226,7 @@ export default class MapRegionLayer {
       const tint = TERRAIN_TINT[r.terrain] ?? 0xffffff;
 
       let fillAlpha = 0;
-      let lineAlpha = selectable ? 0.30 : 0.12;
+      let lineAlpha = this.showIdleOutlines ? (selectable ? 0.30 : 0.12) : 0;
       let lineW = 1;
       let lineColor = tint;
 
@@ -220,6 +249,10 @@ export default class MapRegionLayer {
         lineAlpha = 1;
         lineW = 2.5;
       }
+
+      // Nothing to paint for an idle region on the browse map — skip it
+      // entirely so a 60-point river outline costs nothing when hidden.
+      if (fillAlpha <= 0 && lineAlpha <= 0) continue;
 
       if (fillAlpha > 0) {
         g.fillStyle(this.dimUnselectable && !selectable ? 0x10141a : tint, fillAlpha);

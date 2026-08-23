@@ -5,7 +5,7 @@ slug: "mountains-of-proverbs"
 category: "places"
 subtab: "Regions"
 order: 100
-tags: ["places", "mountain"]
+tags: ["places","mountain","on-map"]
 status: "approved"
 teaser: false
 requires: []

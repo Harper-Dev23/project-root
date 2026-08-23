@@ -3,9 +3,9 @@ id: places/cave_of_the_seven_sleepers
 title: "Cave of the Seven Sleepers"
 slug: "cave-of-the-seven-sleepers"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 220
-tags: ["places", "cave"]
+tags: ["places","cave","landmark"]
 status: "approved"
 teaser: false
 requires: []

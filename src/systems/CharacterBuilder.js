@@ -5,13 +5,25 @@ import { Items } from '../../data/items.js';
 import GameState from './GameState.js';
 import { getItemComputedData } from './ItemFactory.js';
 // --- Constants ------------------------------------------------
+// NET TOTALS ARE NORMALISED: every race sums to +6, every class to +3, so
+// any race/class pairing lands on exactly +9. Previously races ranged 2-6
+// and classes 2-3, which meant a Human Acolyte started +9 while an Elf
+// Beggar started +4 — a gap of more than double, entirely invisible at the
+// character-creation screen. Each entry keeps its original identity stats
+// and its original penalty; only the shortfall was filled in.
 export const RACE_BONUSES = {
+  // +1 across the board — no spike, no gap.
   Human: { STR: 1, DEX: 1, CON: 1, INT: 1, WIS: 1, CHA: 1 },
-  Dwarf: { STR: 2, CON: 2, DEX: -1 },
-  Elf: { DEX: 2, INT: 1, CON: -1 },
-  Ferrow: { DEX: 2, WIS: 1, STR: -1 },
-  Wylett: { DEX: 1, WIS: 2, CHA: -1 },
-  Skith: { DEX: 2, INT: 1, CHA: -1 }
+  // Builders: durable, and patient enough to know stone. (was +3)
+  Dwarf: { STR: 2, CON: 3, WIS: 2, DEX: -1 },
+  // Thinkers: intellect and social standing both coveted. (was +2)
+  Elf: { DEX: 2, INT: 3, CHA: 2, CON: -1 },
+  // Explorers: perceptive and hard to wear down on a long road. (was +2)
+  Ferrow: { DEX: 2, WIS: 3, CON: 2, STR: -1 },
+  // Survivalists: the hardiest of the six, and the most resilient. (was +2)
+  Wylett: { DEX: 1, WIS: 3, CON: 3, CHA: -1 },
+  // Deceptionists: quick and clever, with the edge to finish it. (was +2)
+  Skith: { DEX: 3, INT: 3, STR: 1, CHA: -1 }
 };
 
 //export const RACE_MOVES = {
@@ -23,13 +35,14 @@ export const RACE_BONUSES = {
 //  Skith: { range: 2, cooldown: 3, name: 'Scale Slide' }
 //};
 
+// Every class sums to +3 — see the note on RACE_BONUSES above.
 export const CLASS_BONUSES = {
-  Beggar: { DEX: 1, CON: 1 },
+  Beggar: { DEX: 2, CON: 1 },      // was +2; Hide rewards the extra DEX
   Acolyte: { WIS: 2, CHA: 1 },
   Performer: { CHA: 2, DEX: 1 },
   Grunt: { STR: 2, CON: 1 },
   Scholar: { INT: 2, WIS: 1 },
-  Shepherd: { WIS: 1, DEX: 1 }
+  Shepherd: { WIS: 2, DEX: 1 }     // was +2; Watch Over leans on WIS
 };
 
 // --- Helpers --------------------------------------------------
@@ -42,9 +55,14 @@ function mergeStats(base, bonus) {
 }
 
 function getStartingSkills(baseClass) {
-  const ids = ['basic_attack'];
-  if (baseClass === 'Scholar') ids.push('fireball');
-  return ids;
+  // Scholars used to also start with 'fireball'. That skill was commented
+  // out of data/skills.js ("moved to v3.22 surplus block above"), so
+  // SKILLS.fireball became undefined while this grant stayed behind —
+  // spreading `...undefined` handed every Scholar a phantom entry
+  // { id:'fireball', requiresTarget:false, targetRequirement:null } with no
+  // name, no description and no apply(). Grant removed; the filter in
+  // buildCharacter guards against any future id going stale the same way.
+  return ['basic_attack'];
 }
 
 export function getUnlockedWeaponSkills(stats) {
@@ -176,8 +194,13 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
         id: movementId
       }] : []),
 
-      // base class starters
-      ...startingSkillIds.map(id => {
+      // base class starters. Filtered against SKILLS first — an id that no
+      // longer resolves must be dropped, not spread into a nameless stub.
+      ...startingSkillIds.filter(id => {
+        if (SKILLS[id]) return true;
+        console.warn(`[CharacterBuilder] starting skill '${id}' not found in SKILLS - skipped`);
+        return false;
+      }).map(id => {
         const skill = SKILLS[id];
         return {
           ...skill,

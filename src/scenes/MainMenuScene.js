@@ -1,6 +1,7 @@
 import SceneManager from '../systems/SceneManager.js';
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import JournalState from '../systems/JournalState.js';
 import { createButton } from '../ui/Button.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager, AUDIO_MANIFEST, MUSIC_MANIFEST } from '../systems/SoundManager.js';
@@ -48,6 +49,11 @@ export default class MainMenuScene extends Phaser.Scene {
       // Reset all in-memory state for a clean new game.
       GameState.reset();
       ProgressionManager.reset();
+      // Journal read-state lives in localStorage (key 'game.journalState'),
+      // NOT in the save slot — so without this it survived across new games
+      // and every entry stayed marked read forever once seen. JournalState
+      // has always had reset(); nothing called it until now.
+      JournalState.reset();
       // Seed the orientation flow — first flag points the player to the bonfire.
       ProgressionManager.setQuestFlag('orientation_bonfire');
       this.sceneManager.enterTown();

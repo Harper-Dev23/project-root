@@ -5,7 +5,7 @@ slug: "verdant-shroud"
 category: "places"
 subtab: "Regions"
 order: 30
-tags: ["places", "wilderness"]
+tags: ["places","wilderness","on-map"]
 status: "approved"
 teaser: false
 requires: []

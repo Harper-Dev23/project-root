@@ -5,7 +5,7 @@ slug: "mount-moriah"
 category: "places"
 subtab: "Sacred Mountains"
 order: 390
-tags: ["places", "mountain", "sacred"]
+tags: ["places","mountain","sacred","landmark"]
 status: "approved"
 teaser: false
 requires: []

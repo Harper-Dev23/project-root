@@ -7,10 +7,43 @@ const CONTENT_TOP_OFFSET = CONTAINER_PADDING + 110;
 // paragraph lines; list items pushed their raw text into listBuffer without
 // ever passing through here, so "- **Vendors** - exchange..." rendered with
 // the literal asterisks still showing instead of bold text.
+function escapeAttr(value) {
+    return String(value).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function formatInline(text) {
-    return text
+    // Inline code is pulled out FIRST and stashed, so its contents can't be
+    // mangled by the emphasis rules below (a formula like `2 * INT` would
+    // otherwise have its asterisk eaten as italics).
+    const code = [];
+    let out = String(text).replace(/`([^`]+)`/g, (_m, c) => {
+        code.push(c);
+        return `@@CODE${code.length - 1}@@`;
+    });
+
+    out = out
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/_(.+?)_/g, '<em>$1</em>');
+        // Single-asterisk italics — the vault notes use *this* far more than
+        // _this_, and without it the asterisks rendered literally (e.g. every
+        // prophet entry opened with a visible "*Major Prophet of ...*").
+        // Runs AFTER the ** rule so bold isn't chewed up first.
+        .replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/_(.+?)_/g, '<em>$1</em>')
+        // Obsidian-style wikilinks — [[Target]] and [[Target|Shown text]].
+        // These came straight over from the vault notes and used to render
+        // as literal "[[Bay of Solace]]" brackets. Now they become real
+        // in-journal navigation, resolved by title/slug at click time
+        // (see _bindWikiLinks) rather than needing exact entry ids.
+        .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, label) => {
+            const t = target.trim();
+            return `<a href="#" class="journal-wikilink" data-target="${escapeAttr(t)}">${label ? label.trim() : t}</a>`;
+        })
+        // Standard markdown links to other entries: [text](entry:some/id)
+        .replace(/\[([^\]]+)\]\(entry:([^)]+)\)/g,
+            (_m, label, id) => `<a href="#" class="journal-wikilink" data-target="${escapeAttr(id.trim())}">${label}</a>`);
+
+    // Restore the stashed code spans.
+    return out.replace(/@@CODE(\d+)@@/g, (_m, i) => `<code>${escapeAttr(code[Number(i)])}</code>`);
 }
 
 function simpleMarkdownToHtml(markdown = '') {
@@ -24,10 +57,69 @@ function simpleMarkdownToHtml(markdown = '') {
         listBuffer = [];
     };
 
+    // Blockquote and table buffers — both are multi-line constructs, so they
+    // accumulate across iterations and flush when the block ends. Neither
+    // was supported before: vault notes lean on `> quotes` heavily and
+    // several system pages are built around pipe tables, and both were
+    // rendering as raw punctuation.
+    let quoteBuffer = [];
+    let tableBuffer = [];
+
+    const flushQuote = () => {
+        if (!quoteBuffer.length) return;
+        html.push('<blockquote>' + quoteBuffer.map(q => `<p>${q}</p>`).join('') + '</blockquote>');
+        quoteBuffer = [];
+    };
+
+    const splitRow = (row) => row
+        .replace(/^\s*\|/, '')
+        .replace(/\|\s*$/, '')
+        .split('|')
+        .map(cell => cell.trim());
+
+    const flushTable = () => {
+        if (!tableBuffer.length) return;
+        // A separator row (|---|---|) marks the line above it as the header.
+        const sepIdx = tableBuffer.findIndex(r => /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(r) && r.includes('-'));
+        let headRow = null;
+        let bodyRows = tableBuffer;
+        if (sepIdx > 0) {
+            headRow = tableBuffer[sepIdx - 1];
+            bodyRows = tableBuffer.slice(sepIdx + 1);
+        }
+        const head = headRow
+            ? '<thead><tr>' + splitRow(headRow).map(c => `<th>${formatInline(c)}</th>`).join('') + '</tr></thead>'
+            : '';
+        const body = '<tbody>' + bodyRows
+            .map(r => '<tr>' + splitRow(r).map(c => `<td>${formatInline(c)}</td>`).join('') + '</tr>')
+            .join('') + '</tbody>';
+        html.push(`<table class="journal-table">${head}${body}</table>`);
+        tableBuffer = [];
+    };
+
+    const flushAll = () => { flushList(); flushQuote(); flushTable(); };
+
     for (const rawLine of lines) {
         const line = rawLine.trim();
-        if (!line) {
+
+        // Table rows: any line that starts and ends with a pipe.
+        if (/^\|.*\|$/.test(line)) {
+            flushList(); flushQuote();
+            tableBuffer.push(line);
+            continue;
+        }
+        if (tableBuffer.length) flushTable();
+
+        // Blockquotes.
+        if (line.startsWith('>')) {
             flushList();
+            quoteBuffer.push(formatInline(line.replace(/^>\s?/, '')));
+            continue;
+        }
+        if (quoteBuffer.length) flushQuote();
+
+        if (!line) {
+            flushAll();
             html.push('<p></p>');
             continue;
         }
@@ -56,15 +148,20 @@ function simpleMarkdownToHtml(markdown = '') {
         html.push(`<p>${formatInline(line)}</p>`);
     }
 
-    flushList();
+    flushAll();
     return html.join('');
 }
 
 export default class JournalContent extends Phaser.GameObjects.Container {
-    constructor(scene, x, y, width, height, { onNavigate, domDepth = 0 } = {}) {
+    constructor(scene, x, y, width, height, { onNavigate, resolveEntryRef, resolveTokens, domDepth = 0 } = {}) {
         super(scene, x, y);
         this.setSize(width, height);
         this.onNavigate = onNavigate;
+        this.resolveEntryRef = resolveEntryRef;
+        // Optional {{token}} -> live-value resolver, so an entry can display
+        // real save state (elapsed days, tickets, standing) instead of being
+        // frozen prose. Entries with no tokens are unaffected.
+        this.resolveTokens = resolveTokens;
 
         this.background = scene.add.rectangle(0, 0, width, height, COLORS.panel, 0.85)
             .setOrigin(0)
@@ -222,14 +319,24 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         }
 
         this.titleText.setText(entry.title);
-        const updated = entry.updatedAt ? new Date(entry.updatedAt).toLocaleDateString() : '';
-        const tagLine = entry.tags?.length ? `Tags: ${entry.tags.join(', ')}` : '';
-        const versionText = entry.version ? `v${entry.version}` : '';
-        const parts = [updated && `Updated ${updated}`, versionText, tagLine].filter(Boolean);
-        this.metaText.setText(parts.join(' • '));
+        // Meta line deliberately minimal. It used to read
+        // "Updated 8/23/2026 • v1 • Tags: places, coastal" — a file mtime
+        // and a version number that mean nothing in-fiction, followed by the
+        // same tags already drawn as pills right below it. Only the subtab
+        // (a real navigational fact) survives.
+        this.metaText.setText(entry.subtab || '');
         this._renderTags(entry.tags || []);
 
-        const html = simpleMarkdownToHtml(entry.content || '');
+        // Substitute {{tokens}} before markdown conversion, so a token can
+        // sit inside a heading, list item or table cell and still format.
+        let raw = entry.content || '';
+        if (this.resolveTokens) {
+            raw = raw.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (m, key) => {
+                const v = this.resolveTokens(key);
+                return (v === undefined || v === null) ? m : String(v);
+            });
+        }
+        const html = simpleMarkdownToHtml(raw);
         const relatedLinks = (entry.links?.related || [])
             .map(id => `<button data-entry="${id}" class="journal-related">${id}</button>`)
             .join('');
@@ -241,6 +348,54 @@ export default class JournalContent extends Phaser.GameObjects.Container {
           .journal-content h3 { font-size: 20px; margin: 12px 0; }
           .journal-content p { margin: 12px 0; }
           .journal-content ul { margin: 12px 18px; padding: 0 18px; }
+          .journal-content table.journal-table {
+            border-collapse: collapse;
+            margin: 14px 0;
+            width: 100%;
+            font-size: 0.94em;
+          }
+          .journal-content table.journal-table th,
+          .journal-content table.journal-table td {
+            border: 1px solid #3a3a44;
+            padding: 6px 10px;
+            text-align: left;
+            vertical-align: top;
+          }
+          .journal-content table.journal-table th {
+            background: #23232b;
+            color: #ffddaa;
+            font-weight: bold;
+          }
+          .journal-content table.journal-table tr:nth-child(even) td { background: #1a1a20; }
+          .journal-content blockquote {
+            margin: 12px 0;
+            padding: 2px 0 2px 14px;
+            border-left: 3px solid #5a4a3a;
+            color: #b9b2a4;
+            font-style: italic;
+          }
+          .journal-content blockquote p { margin: 4px 0; }
+          .journal-content code {
+            background: #23232b;
+            border: 1px solid #3a3a44;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: monospace;
+            font-size: 0.92em;
+            color: #cfe0a0;
+          }
+          .journal-content a.journal-wikilink {
+            color: #9ecbff;
+            text-decoration: none;
+            border-bottom: 1px dotted #4a6a8a;
+            cursor: pointer;
+          }
+          .journal-content a.journal-wikilink:hover { color: #ffddaa; border-bottom-color: #ffddaa; }
+          .journal-content a.journal-wikilink.is-missing {
+            color: #8a8a96;
+            border-bottom-style: none;
+            cursor: default;
+          }
           .journal-content button.journal-related {
             background: #1f1f1f;
             color: #ffddaa;
@@ -256,6 +411,7 @@ export default class JournalContent extends Phaser.GameObjects.Container {
 
         this._setContentHtml(baseHtml, entry.id ?? '');
         this._bindRelatedEntryButtons();
+        this._bindWikiLinks();
         this._resetScroll();
     }
 
@@ -282,6 +438,35 @@ export default class JournalContent extends Phaser.GameObjects.Container {
         if (this._contentInner) {
             this._contentInner.style.transform = `translateY(${this.scrollContainer.y}px)`;
         }
+    }
+
+    /**
+     * Wires [[wikilinks]] to real journal navigation.
+     *
+     * Vault notes link by human title ("[[Bay of Solace]]"), not by entry id
+     * ("places/bay_of_solace"), so resolution is done here against the live
+     * entry list rather than expecting authors to write ids. Anything that
+     * doesn't resolve is greyed out and inert instead of being a dead link
+     * that looks clickable — a lot of vault notes reference pages that were
+     * never brought across.
+     */
+    _bindWikiLinks() {
+        if (!this._contentInner) return;
+        this._contentInner.querySelectorAll('a.journal-wikilink').forEach(a => {
+            const raw = (a.getAttribute('data-target') || '').trim();
+            const resolved = this.resolveEntryRef ? this.resolveEntryRef(raw) : null;
+            if (!resolved) {
+                a.classList.add('is-missing');
+                a.setAttribute('title', `No journal entry for "${raw}" yet`);
+                a.addEventListener('click', e => e.preventDefault());
+                return;
+            }
+            a.setAttribute('title', resolved.title || raw);
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.onNavigate?.(resolved.id);
+            });
+        });
     }
 
     _bindRelatedEntryButtons() {

@@ -3,9 +3,9 @@ id: places/the_judges
 title: "The Judges"
 slug: "the-judges"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 270
-tags: ["places", "mystery"]
+tags: ["places","mystery","landmark"]
 status: "approved"
 teaser: false
 requires: []

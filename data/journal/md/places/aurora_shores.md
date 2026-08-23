@@ -5,7 +5,7 @@ slug: "aurora-shores"
 category: "places"
 subtab: "Regions"
 order: 90
-tags: ["places", "coastal"]
+tags: ["places","coastal","on-map"]
 status: "approved"
 teaser: false
 requires: []

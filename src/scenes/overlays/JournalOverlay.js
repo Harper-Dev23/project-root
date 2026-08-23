@@ -6,6 +6,7 @@ import JournalContent from '../../ui/JournalContent.js';
 import { JournalIndex } from '../../systems/JournalIndex.js';
 import { JournalState } from '../../systems/JournalState.js';
 import { readAllMarkdown } from '../../systems/MarkdownLoader.js';
+import ProgressionManager from '../../systems/ProgressionManager.js';
 import { FONTS } from '../../ui/styles.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 
@@ -207,6 +208,8 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
         const contentHeight = bounds.height - TOP_BAR_HEIGHT - BOTTOM_BAR_HEIGHT - 24;
         this.content = new JournalContent(scene, contentX, TOP_BAR_HEIGHT + 12, contentWidth, contentHeight, {
             onNavigate: (entryId) => this.openEntry(entryId),
+            resolveEntryRef: (ref) => this._resolveEntryRef(ref),
+            resolveTokens: (key) => this._resolveToken(key),
             domDepth: this.baseDepth + 1
         });
 
@@ -577,6 +580,48 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             breadcrumb = `${categoryLabel} › ${activeEntry.title}`;
         }
         this.breadcrumbText.setText(`Journal › ${breadcrumb}`);
+    }
+
+    /**
+     * Resolves a [[wikilink]] target to a real entry.
+     *
+     * Vault notes link by human title, so this accepts (in priority order)
+     * an exact entry id, a slug, or a case-insensitive title match — with a
+     * final pass that ignores a leading "The " so "[[Frozen Steppes]]"
+     * still finds "The Frozen Steppes". Returns null when nothing matches,
+     * which the reader renders as an inert grey link.
+     */
+    _resolveEntryRef(ref) {
+        if (!ref || !Array.isArray(this._entries)) return null;
+        const raw = String(ref).trim();
+        const lower = raw.toLowerCase();
+        const stripThe = (s) => s.replace(/^the\s+/i, '').trim().toLowerCase();
+
+        const visible = this._entries.filter(e => JournalState.isUnlockedEntry(e));
+        return visible.find(e => e.id === raw)
+            || visible.find(e => (e.slug || '').toLowerCase() === lower)
+            || visible.find(e => (e.title || '').toLowerCase() === lower)
+            || visible.find(e => stripThe(e.title || '') === stripThe(raw))
+            || null;
+    }
+
+    /**
+     * Live values an entry can embed as {{token}}. Returns undefined for an
+     * unknown key, which leaves the raw token visible rather than silently
+     * blanking it — a broken token should be obvious, not invisible.
+     */
+    _resolveToken(key) {
+        const d = ProgressionManager.getWorldDate?.() || {};
+        switch (key) {
+            case 'worldDate':    return d.label;
+            case 'dayNumber':    return d.dayNumber;
+            case 'nights':       return d.nights;
+            case 'days':         return d.days;
+            case 'huntTickets':  return ProgressionManager.huntTickets;
+            case 'tribeTickets': return ProgressionManager.tribeTickets;
+            case 'huntPoints':   return ProgressionManager.huntPoints;
+            default:             return undefined;
+        }
     }
 
     openEntry(entryId) {

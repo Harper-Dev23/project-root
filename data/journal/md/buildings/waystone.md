@@ -3,7 +3,7 @@ id: buildings/waystone
 title: "The Waystone"
 slug: "waystone"
 category: "buildings"
-subtab: "Camp"
+subtab: "Camp Nehemiah"
 order: 20
 tags: ["buildings", "waystone"]
 status: "approved"

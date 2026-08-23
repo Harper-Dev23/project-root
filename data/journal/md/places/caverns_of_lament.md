@@ -3,9 +3,9 @@ id: places/caverns_of_lament
 title: "Caverns of Lament"
 slug: "caverns-of-lament"
 category: "places"
-subtab: "Regions"
+subtab: "Sites"
 order: 110
-tags: ["places", "cave"]
+tags: ["places","cave","landmark"]
 status: "approved"
 teaser: false
 requires: []

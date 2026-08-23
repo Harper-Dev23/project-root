@@ -17,24 +17,27 @@ const CHIP_PADDING_X = 12;
 const CHIP_GAP_X = 8;
 
 const ICON_GLYPHS = {
-    'icon-journal': 'dY"-',
-    'icon-scroll': 'dY"o',
-    'icon-hunt': 'dYZ_',
-    'icon-system': '�sT�,?',
-    'icon-tribes': 'dY>-',
-    'icon-island': 'dY??�,?',
-    'icon-favor': 'dYT?',
-    'icon-relic': 'dY-?�,?',
-    'icon-stats': 'dY"S',
-    'icon-weakness': '�?,�,?',
-    'icon-swords': '�s"�,?'
+    'icon-journal':  '\u{1F4D3}',  // notebook
+    'icon-scroll':   '\u{1F4DC}',  // scroll
+    'icon-hunt':     '\u{1F3F9}',  // bow and arrow
+    'icon-system':   '\u2699',     // gear
+    'icon-tribes':   '\u{1F6E1}',  // shield
+    'icon-island':   '\u{1F5FA}',  // world map
+    'icon-favor':    '\u{1F52E}',  // crystal ball
+    'icon-relic':    '\u{1F48E}',  // gem
+    'icon-stats':    '\u{1F4CA}',  // bar chart
+    'icon-weakness': '\u{1F480}',  // skull
+    'icon-swords':   '\u2694',     // crossed swords
 };
 
 function getIconGlyph(icon) {
     if (!icon) return null;
     if (ICON_GLYPHS[icon]) return ICON_GLYPHS[icon];
     if (icon.length === 1) return icon;
-    return '?';
+    // No '?' fallback: an unknown icon key used to render a literal
+    // question mark beside the entry, which read as a rendering artifact.
+    // Showing nothing is strictly better than showing a wrong glyph.
+    return null;
 }
 
 function normaliseSubtab(value) {

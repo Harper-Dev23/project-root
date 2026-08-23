@@ -323,6 +323,24 @@ export const WeaknessV3 = {
         // was effectively 0 (unset); set to 10 = 50% of the old 20 baseline
         onActBuildupFlat: 10,
       },
+      // These previously existed ONLY as inline `?? 0.06` / `?? 0.20`
+      // fallbacks at the Hemorrhaging tick in CombatScene.js, making
+      // Lacerate the one family whose damage couldn't be tuned from here.
+      // Surfaced with identical values — behaviour-neutral.
+      //
+      // Own intensity ramp (previously ran the global curve, whose 2.5 cap
+      // made 15% a HARD ceiling the moment meter hit 800). Slope 0.0025 is
+      // tuned so 800 still lands on exactly 15% — the old ceiling is now a
+      // waypoint rather than a wall — and growth continues past it until
+      // startPctCap binds at 22% around meter ~1270.
+      //
+      // The intensity cap here is deliberately generous (4.0 = 24%) so that
+      // startPctCap below is the single thing controlling the ceiling.
+      intensity: { formula: 'linear', slope: 0.0025, cap: 4.0 },
+      t2: {
+        startPctHP: 0.06,   // fraction of the target's MAX HP per end-of-turn tick
+        startPctCap: 0.22,  // soft ceiling, reached around meter 1270
+      },
     },
 
 
@@ -392,6 +410,13 @@ export const WeaknessV3 = {
       // costMultiplier, Cold's gaugeRegenPenalty, etc. below) — a heavily
       // overflowing Toxic meter should be MORE likely to dodge its decay
       // tick, not a flat chance regardless of how far past T2 it is.
+      // Own intensity ramp, mirroring Fire's shape at roughly HALF strength.
+      // Toxic previously ran the global curve (cap 2.5), which left its tick
+      // flat-lining at 25 while Fire climbed past 110 — far weaker than the
+      // "sustained grind" role intended. Slope 0.0075 puts Toxic at ~50% of
+      // Fire's tick across the meaningful range (200-1000), and the 8.0 cap
+      // matches Fire's own so it never becomes the binding constraint.
+      intensity: { formula: 'linear', slope: 0.0075, cap: 8.0 },
       t1: { decayBypassChance: 0.30, decayBypassChanceCap: 0.75 },
       t2: { startTickBase: 10 },       // matches Fire's base start-of-turn tick
     },

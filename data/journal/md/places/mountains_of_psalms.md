@@ -5,7 +5,7 @@ slug: "mountains-of-psalms"
 category: "places"
 subtab: "Regions"
 order: 150
-tags: ["places", "mountain"]
+tags: ["places","mountain","on-map"]
 status: "approved"
 teaser: false
 requires: []

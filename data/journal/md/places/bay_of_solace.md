@@ -5,7 +5,7 @@ slug: "bay-of-solace"
 category: "places"
 subtab: "Regions"
 order: 60
-tags: ["places", "coastal", "hunt-zone"]
+tags: ["places","coastal","hunt-zone","on-map"]
 status: "approved"
 teaser: false
 requires: []
