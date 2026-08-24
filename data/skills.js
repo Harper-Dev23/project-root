@@ -1966,7 +1966,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 40 }, skillPct: 65, skillLabel: `${ability?.name || 'Skill'} weapon damage (65%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       const hasLac = (target?.weakness?.tiers?.lacerate || 0) >= 1;
@@ -2025,7 +2025,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 115, skillLabel: `${ability?.name || 'Skill'} weapon damage (115%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 60 }, skillPct: 115, skillLabel: `${ability?.name || 'Skill'} weapon damage (115%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       if (target?.weakness) {
@@ -2105,7 +2105,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 100 }, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 90, then 135).
@@ -2132,7 +2132,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 70 }, skillPct: 85, skillLabel: `${ability?.name || 'Skill'} weapon damage (85%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 90, then 135).
@@ -2161,7 +2161,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 45, skillLabel: `${ability?.name || 'Skill'} weapon damage (45%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 100 }, skillPct: 45, skillLabel: `${ability?.name || 'Skill'} weapon damage (45%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
@@ -2213,7 +2213,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 145, skillLabel: `${ability?.name || 'Skill'} weapon damage (145%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 70 }, skillPct: 145, skillLabel: `${ability?.name || 'Skill'} weapon damage (145%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       const payload = { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['toxic'] };
@@ -2249,7 +2249,7 @@ const NPC_ONLY_SKILLS = {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         user, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillConversion: { physToNecroPct: 100 }, skillPct: 55, skillLabel: `${ability?.name || 'Skill'} weapon damage (55%)`, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
       // +50% then another +25% buildup across encounter 4 (was 70, then 105).

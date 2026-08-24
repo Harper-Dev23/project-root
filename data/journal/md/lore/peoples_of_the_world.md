@@ -10,7 +10,7 @@ status: "approved"
 teaser: false
 requires: []
 sort: 30
-version: 1
+version: 2
 updatedAt: 2026-08-23
 ---
 # Peoples of the World
@@ -39,7 +39,7 @@ Nomadic, and drawn to high places -- their sky city is the one thing every accou
 
 ## Wylett -- the Survivalists
 
-Found throughout the thriving parts of the world rather than concentrated anywhere. Both prey and predator run in them -- rabbit, rodent and fishlike lines alongside fox, hyena, lion and bear.
+Found throughout the thriving parts of the world rather than concentrated anywhere. Both prey and predator run in them -- rabbit, rodent, ovine and fishlike lines alongside fox, hyena, lion and bear.
 
 ## Skith -- the Deceptionists
 

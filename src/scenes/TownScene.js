@@ -1725,7 +1725,8 @@ export default class TownScene extends Phaser.Scene {
           { id: "sever_gloves", cost: 0, desc: "Combat: sever an enemy's glove slot (up to Epic). Free for testing." },
           { id: "sever_boots", cost: 0, desc: "Combat: sever an enemy's boot slot (up to Epic). Free for testing." },
           { id: "sever_ring", cost: 0, desc: "Combat: sever an enemy's ring slot (up to Epic). Free for testing." },
-          { id: "sever_amulet", cost: 0, desc: "Combat: sever an enemy's amulet slot (up to Epic). Free for testing." }
+          { id: "sever_amulet", cost: 0, desc: "Combat: sever an enemy's amulet slot (up to Epic). Free for testing." },
+          { id: "tabula_rasa", cost: 0, desc: "Strips all renown from an item. Not yet functional — Renown is unimplemented." }
         ]
       },
 

@@ -10,12 +10,12 @@ status: "draft"
 teaser: false
 requires: []
 sort: 100
-version: 1
+version: 2
 updatedAt: 2026-08-23
 ---
 # Ruth — The Hunt Guide
 
-A Wylett, and described by those who have met her as "a lamb" — small, gentle, and quiet even by Wylett standards. Ruth is assigned as a Hunter's guide for their first journey out of [[Camp Nehemiah]], introduced immediately before departure and present through every day of that first hunt.
+Ruth is a **lamb Wylett** — literally so. The Wylett carry the lines of many beasts, prey and predator alike, and hers is ovine: small, soft-faced, and quiet even by the standards of a people who mostly keep quiet anyway. She is assigned as a Hunter's guide for their first journey out of [[Camp Nehemiah]], introduced immediately before departure and present through every day of that first hunt.
 
 She is the only fixed presence on a road that is otherwise entirely uncertain.
 
@@ -33,7 +33,7 @@ She is introduced at camp, just before the party departs, and anchors each day o
 
 Where she comes from is not recorded. Some tie her to the Reeds themselves; others to whatever first drew her into the cult's orbit.
 
-The epithet is the part that troubles people. The Wylett are woodland-coded — nimble, evasive, beast-instinct under pressure. Nothing about them is ovine. Whether "the lamb" is a literal thing about Ruth or simply what people call her, no one who uses the word seems willing to explain it — which, given how much of the Reeds' lore turns on sacrifice, is its own kind of answer.
+What people do remark on is the pairing: a lamb sent to walk a Hunter through the [[The Reeds of Gethsemane]], of all places, on the first hunt of their life. Nobody at camp says the word *sacrifice* out loud. They do not need to — the Wylett lines are plain enough to read at a glance, and everyone who watches her leave through the gate is thinking it.
 
 ---
 

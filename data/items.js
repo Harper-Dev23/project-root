@@ -689,4 +689,27 @@ export const Items = {
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s amulet slot (up to Epic), turning it into normal loot.',
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NOT IMPLEMENTED — placeholder so the item exists and can be handled.
+  //
+  // Renown itself is barely built: an item carries `renownState`
+  // ('gaining' | 'historic'), a `renown`/`renownMax` pair that only drives a
+  // progress bar in InventoryOverlay, and a `history` block (kills,
+  // damageDealt, battlesCarried). Nothing consumes any of it yet.
+  //
+  // Tabula Rasa is the eventual counterpart: wipe an item's accumulated
+  // renown and history back to nothing. It deliberately carries NO
+  // combatUse (it is not a combat item) and no onUse handler, so it can be
+  // bought, carried and inspected but does nothing when used — exactly like
+  // the mechanic it is waiting on.
+  // ═══════════════════════════════════════════════════════════════════════════
+  tabula_rasa: {
+    id: 'tabula_rasa',
+    name: 'Tabula Rasa',
+    type: 'consumable',
+    rarity: 'rare',
+    notImplemented: true,
+    description: 'A blank slate, bound in unmarked vellum. Strips an item of all renown it has gathered — every kill, every battle carried, every story told about it — and returns it to an ordinary thing. [Not yet functional: the Renown system is unimplemented.]',
+  },
+
 };
