@@ -1047,18 +1047,32 @@ export default class UIScene extends Phaser.Scene {
     this.popupGroup = this.add.container(0, 0).setDepth(DEPTH.MENU).setScrollFactor(0);
     this.popupButtons = [];
 
-    // Dark background overlay — fully opaque so TownScene and the persistent
-    // side panels behind it are completely blacked out, not just dimmed.
-    const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 1)
-      .setOrigin(0.5)
-      .setInteractive();
+    // Backdrop. Falls back to the original fully-opaque black rectangle when
+    // no bgKey is given (or its texture failed to load), so this stays safe
+    // for any future caller that has no art of its own. Either way it is
+    // interactive and opaque, which is what stops clicks reaching TownScene
+    // and its side panels underneath.
+    let overlay;
+    if (opts.bgKey && this.textures.exists(opts.bgKey)) {
+      overlay = this.add.image(w / 2, h / 2, opts.bgKey)
+        .setOrigin(0.5)
+        .setDisplaySize(w, h)
+        .setInteractive();
+    } else {
+      overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 1)
+        .setOrigin(0.5)
+        .setInteractive();
+    }
 
     // Title
+    // Shadowed: this menu can now sit on a full-colour backdrop rather than
+    // the flat black it was designed against, and white-on-sky is otherwise
+    // close to unreadable. Harmless when no bgKey is supplied.
     const titleText = this.add.text(220, 80, title, {
       fontSize: '26px',
       color: '#ffffff',
       fontStyle: 'bold'
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0, 0.5).setShadow(2, 2, '#000000', 6, true, true);
 
     // --- Dev bypass toggle (optional) ---
     // Shown only when the caller passes opts.bypassToggle.
@@ -1151,11 +1165,13 @@ export default class UIScene extends Phaser.Scene {
       }).setOrigin(0, 0.5)
         .setInteractive({ useHandCursor: !isLocked });
 
+      // Brighter and shadowed: these sit directly on the backdrop with no
+      // panel behind them, so mid-grey vanished against wood and grass.
       const descText = this.add.text(220, yPos + 20, opt.description || '', {
         fontSize: '14px',
-        color: isLocked ? '#444444' : '#aaaaaa',
+        color: isLocked ? '#666666' : '#e2e2e2',
         wordWrap: { width: 200 }
-      }).setOrigin(0, 0);
+      }).setOrigin(0, 0).setShadow(1, 1, '#000000', 5, true, true);
 
       // Pushes whichever is currently selected (base scenario or a tier)
       // into the row label, description, detail panel and Fight button —

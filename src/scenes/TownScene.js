@@ -2856,7 +2856,7 @@ export default class TownScene extends Phaser.Scene {
     this.scene.get('UIScene')?.showSelectionMenu(
       'Choose Training Scenario',
       menuOptions,
-      { bypassToggle }
+      { bypassToggle, bgKey: 'training_select_bg' }
     );
   }
 

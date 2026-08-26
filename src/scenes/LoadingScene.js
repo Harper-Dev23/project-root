@@ -82,6 +82,9 @@ export default class LoadingScene extends Phaser.Scene {
     // Combat pit background
     this.load.image('combat_pit_bg', 'assets/Combat_Pit.png');
 
+    // Training scenario picker backdrop
+    this.load.image('training_select_bg', 'assets/Training_Scenario_Selector_Background.png');
+
     // Combat VFX sprites (ground effects, status indicators)
     this.load.image('fx_crack', 'assets/sprites/fx_crack.png');
     this.load.image('fx_lodge_arrow', 'assets/sprites/fx_lodge_arrow.png');
