@@ -739,6 +739,16 @@ export function createItemInstance(id, opts = {}) {
     instance.questProgress = { lacerateBuildupDealt: 0, innocentBloodDrunk: 0, huntsCompleted: 0 };
   }
 
+  // Base items that declare a renownOrigin (e.g. every Bone weapon) are
+  // renown-capable the moment they exist — a drop source only has to pick
+  // the right base id, and can pass droppedFrom via opts for the history log.
+  if (base.renownOrigin) {
+    applyRenownOrigin(instance, base.renownOrigin, {
+      droppedFrom: opts.droppedFrom || null,
+      droppedScenario: opts.droppedScenario || null,
+    });
+  }
+
   // For fixed-affix items, also record the rolled value for tooltip display
   if (base.fixedAffix && suffixes.length) {
     instance.fixedAffixKey = base.fixedAffix.key;
@@ -951,4 +961,97 @@ export function getItemComputedData(itemRef) {
   }
 
   return view;
+}
+
+
+// ============================================================================
+// Renown origins
+// ============================================================================
+// An item is renown-capable because of WHERE IT CAME FROM, not its rarity.
+// (This replaced an earlier placeholder that granted renown to any epic-rarity
+// bone pile gamble.)
+//
+// The origin is declared on the BASE item definition, not bolted onto an
+// instance after the fact. A Bone Dagger is its own base type sitting beside
+// Crude Dagger with its own damage range -- it is not a Crude Dagger wearing a
+// bonus, so its higher damage is ordinary base damage and is scaled by
+// "% weapon damage" affixes exactly like any other weapon's.
+//
+// The origin matters because the renown tree keys off it: each origin unlocks
+// its own arm of the shared web, and those arms are one-way.
+export const RENOWN_ORIGINS = {
+  bone: { id: 'bone', label: 'Bone' },
+  // Earned rather than dropped: severing the soul-bond on an item that
+  // was never meant to be lootable. Applied by the Severing Chant
+  // consumables in combat, not by any drop table.
+  //
+  // Unlike bone (which is its own base type), severing REBRANDS the item it
+  // acts on: the base name's leading descriptor is replaced with "Severed", so
+  // "Light Cap" -> "Severed Cap" and "Crude War Mace" -> "Severed War Mace".
+  // Every base name in the game is "<descriptor> <type noun(s)>", so dropping
+  // the first word leaves exactly the type. Single-word names (Bloodthirster)
+  // get it prepended instead.
+  severed: {
+    id: 'severed',
+    label: 'Severed',
+    renameBase: (baseName) => {
+      const parts = String(baseName || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return 'Severed';
+      return parts.length > 1
+        ? ['Severed', ...parts.slice(1)].join(' ')
+        : `Severed ${parts[0]}`;
+    },
+  },
+};
+
+// Default renown needed to fully traverse. Placeholder until the tree exists.
+export const DEFAULT_RENOWN_MAX = 1000;
+
+/**
+ * Stamps the renown fields onto a freshly created instance whose base item
+ * declares a renownOrigin. Called automatically by createItemInstance, so a
+ * drop source only has to pick the right base id -- nothing has to remember to
+ * mark it afterwards.
+ *
+ * Field names are the pre-existing ones so the inventory panel's renown bar,
+ * the Inspect button gate and itemTooltip all keep working untouched;
+ * renownOrigin is the only addition.
+ */
+export function applyRenownOrigin(instance, originId, opts = {}) {
+  if (!isItemInstance(instance)) return instance;
+  if (instance.renownOrigin) return instance;
+  if (!RENOWN_ORIGINS[originId]) {
+    console.warn(`[ItemFactory] unknown renown origin '${originId}'`);
+    return instance;
+  }
+  instance.renownOrigin = originId;
+
+  // Rebrand the base-name portion in place, leaving rolled affixes alone:
+  // "Swift Light Cap of the Lion" -> "Swift Severed Cap of the Lion".
+  // Replacing the exact base-name substring is safer than counting words in
+  // the affixed name, since prefixes and suffixes are variable length.
+  const originDef = RENOWN_ORIGINS[originId];
+  if (originDef.renameBase && instance.displayName) {
+    const baseName = Items[instance.id]?.name;
+    if (baseName && instance.displayName.includes(baseName)) {
+      instance.displayName = instance.displayName.replace(baseName, originDef.renameBase(baseName));
+    }
+  }
+
+  instance.renownState = 'gaining';
+  instance.renown = 0;
+  instance.renownMax = opts.renownMax ?? DEFAULT_RENOWN_MAX;
+  instance.history = {
+    droppedFrom: opts.droppedFrom || null,
+    droppedScenario: opts.droppedScenario || null,
+    kills: 0, damageDealt: 0, battlesCarried: 0,
+  };
+  return instance;
+}
+
+/** Every base item id carrying the given renown origin. */
+export function getRenownItemIds(originId, { type = null } = {}) {
+  return Object.entries(Items)
+    .filter(([, it]) => it?.renownOrigin === originId && (!type || it.type === type))
+    .map(([id]) => id);
 }

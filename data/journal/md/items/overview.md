@@ -27,4 +27,4 @@ Some items break this pattern entirely: **unique** items (like tribe pendants) c
 
 Every affix, its tier and its exact roll range is listed in [[Affix Reference (In Depth)]].
 
-See also: *Weapon Types and Handedness* and *Historic (Renown) Items* under Systems for how weapon slots and long-term item growth work.
+See also: [[Weapon Types and Handedness]] for how weapon slots work, and [[Historic (Renown) Items]] for long-term item growth.

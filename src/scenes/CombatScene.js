@@ -23,7 +23,7 @@ import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
-import { isItemInstance, createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
+import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin } from '../systems/ItemFactory.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
@@ -3850,6 +3850,10 @@ export default class CombatScene extends Phaser.Scene {
       }
       this._spendBonusActionAndItem(user, inst);
       eq._droppable = true;
+      // An item cut free of its soul-bond becomes renown-capable, entering the
+      // renown web at the Severed start. This is the only origin that is EARNED
+      // rather than dropped - see RENOWN_ORIGINS in ItemFactory.js.
+      applyRenownOrigin(eq, 'severed', { droppedFrom: 'sever', droppedScenario: this.scenarioId || null });
       this._log(`${user.name} uses ${itemName} — severs the soul-bond on ${target.name}'s ${cfg.slot}!`);
       return;
     }

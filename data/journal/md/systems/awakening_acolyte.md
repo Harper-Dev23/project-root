@@ -32,18 +32,18 @@ Carrying weight. Pain shared, burdens borne, suffering moved from one body to an
 | Master | Carry Their Weight, Bear the Burden, Radiating Calm, Bound Suffering |
 | Capstone | **One and All** |
 
-## Wiccan
+## Crusader
 
-*Crescent & Sprig — A curved crescent path branching into small leaf nodes.*
+*The Sword — A cross-hilted blade: a wide guard of stars above, narrowing down the blade to a single point.*
 
-The old craft. Brambles, moonlight, bitter roots and hexes that hold.
+Judgment carried by hand. Sigils cut into steel, sentence passed without argument, and the hush that comes before it lands.
 
 | Tier | Nodes |
 |---|---|
-| Entry | Hex Mark, First Bramble, Moonlit Step |
-| Adept | Bramble Ward, Moonlit Brew, Withering Touch, Charmed Herb |
-| Master | Coven Bond, Blood Moon, Bitter Root, Curse Weaver |
-| Capstone | **The Old Ways** |
+| Entry | Sworn Witness, The Hush, First Sentence |
+| Adept | Sigil-Cut Steel, Weight of Judgment, Unflinching, Banner of the Just |
+| Master | Cleave the Stone, No Warning, Inflexible Wrath, Enforcer's Mark |
+| Capstone | **The Sentence Falls** |
 
 ## Sage
 

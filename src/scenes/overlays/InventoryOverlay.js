@@ -20,7 +20,25 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.currentWeaponType = 'Any';
     this.currentArmorSlot = 'Any';
     this.currentRarity = 'All';
+    // Free-text filter. Lives on the instance (like the other filters) rather
+    // than in init(), because scene.restart() re-runs init but NOT the
+    // constructor — that's how every filter here survives a rebuild.
+    this.searchQuery = '';
     this.tooltip = null;
+  }
+
+  /**
+   * Everything one item can be matched against. Deliberately wider than the
+   * visible name so "bone", "severed", "dagger", "head" or "epic" all work
+   * without the player knowing which field they're really searching.
+   */
+  _searchHaystack(inst) {
+    const base = Items[inst.id] || {};
+    return [
+      inst.displayName, base.name, base.type, base.weaponType, base.slot,
+      inst.rarity || inst.quality, inst.renownOrigin,
+      inst.renownState === 'gaining' ? 'renown' : '',
+    ].filter(Boolean).join(' ').toLowerCase();
   }
 
   // Keep party & characters in sync after any change to a character object
@@ -515,6 +533,14 @@ export default class InventoryOverlay extends Phaser.Scene {
     }
     makeCycler(cyclerCX, gToggleY + 22, 'Rarity:', this.currentRarity, RARITIES, v => { this.currentRarity = v; });
 
+    // ---- Search bar --------------------------------------------------------
+    // Sits on the left of the second header row, opposite the Rarity cycler.
+    // Always listening while the overlay is open — there is no focus state to
+    // manage, and the only other key this scene binds is SHIFT (compare
+    // tooltip). ESC is left alone: OverlayFrame uses it to close, and
+    // hijacking it to clear the box would be a surprise.
+    this._buildSearchBar(globalListLeft, gToggleY + 18, 330, contentDepth);
+
     const listStartY = gToggleY + 44;
 
     let inventoryItems = [...(GameState.inventory || [])];
@@ -590,23 +616,29 @@ export default class InventoryOverlay extends Phaser.Scene {
       listContainer.add(rowBg);
       listContainer.add(rowG);
 
+      // [✦ Inspect] used to live inside the `baseItem.locked` branch below,
+      // which was fine when the only renown item was the Bloodthirster (locked
+      // AND historic). Renown now comes from drop condition, so ordinary
+      // unlocked gear can carry it - a Bone weapon got no button at all. Placed
+      // at x=570, clear of the widest row's [Off] at 500(w43).
+      if (item.historic || item.renownState === 'gaining') {
+        const inspectBtn = this.add.text(570, y, '[✦ Inspect]', { fontSize: '13px', color: '#d4a017' })
+          .setInteractive({ useHandCursor: true })
+          .on('pointerover', () => inspectBtn.setStyle({ color: '#ffe066' }))
+          .on('pointerout', () => inspectBtn.setStyle({ color: '#d4a017' }))
+          .on('pointerdown', (p) => {
+            if (!this._isPointerWithinArea(p, gArea)) return;
+            SoundManager.play('select');
+            this._openInspectModal(item);
+          });
+        listContainer.add(inspectBtn);
+      }
+
 
       if (baseItem.locked) {
         // Locked items cannot be moved or transferred — show lock badge and optional Use button.
         const lockLabel = this.add.text(270, y, '[Locked]', { fontSize: '13px', color: '#555577' });
-        if (item.historic || item.renownState === 'gaining') {
-          // Historic / gaining-renown items get an [✦ Inspect] button.
-          const inspectBtn = this.add.text(350, y, '[✦ Inspect]', { fontSize: '13px', color: '#d4a017' })
-            .setInteractive({ useHandCursor: true })
-            .on('pointerover', () => inspectBtn.setStyle({ color: '#ffe066' }))
-            .on('pointerout',  () => inspectBtn.setStyle({ color: '#d4a017' }))
-            .on('pointerdown', (p) => {
-              if (!this._isPointerWithinArea(p, gArea)) return;
-              SoundManager.play('select');
-              this._openInspectModal(item);
-            });
-          listContainer.add([lockLabel, inspectBtn]);
-        } else if (baseItem.onUse === 'waystone_shard_menu') {
+        if (baseItem.onUse === 'waystone_shard_menu') {
           const useBtn = this.add.text(360, y, '[Use]', { fontSize: '14px', color: '#aaccff' })
             .setInteractive({ useHandCursor: true })
             .on('pointerover', () => useBtn.setStyle({ color: '#ccddff' }))
@@ -846,6 +878,84 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.scene.stop();
   }
 
+  /**
+   * Draws the search field and wires the keyboard.
+   *
+   * The list is rebuilt via scene.restart() — the same thing every other
+   * filter does — but debounced, because restarting per keystroke rebuilds the
+   * entire overlay and flickers. The query Text is updated immediately so
+   * typing still feels instant; only the filtering waits for the pause.
+   */
+  _buildSearchBar(x, y, width, depth) {
+    const H = 20;
+    // Deliberately NOT interactive: there is no focus state to grant, and an
+    // interactive rect with no handler would just swallow clicks landing on it.
+    const bg = this.add.rectangle(x, y, width, H, 0x000000, 0.35)
+      .setOrigin(0, 0).setDepth(depth)
+      .setStrokeStyle(1, this.searchQuery ? 0xffff88 : 0x666666, 0.9);
+
+    this.add.text(x + 6, y + 3, 'Search:', { fontSize: '11px', color: '#999999' })
+      .setOrigin(0, 0).setDepth(depth + 1);
+
+    const queryText = this.add.text(x + 58, y + 3, this.searchQuery || 'type to filter…', {
+      fontSize: '12px',
+      color: this.searchQuery ? '#ffff88' : '#5a5a5a',
+      fontStyle: this.searchQuery ? 'normal' : 'italic',
+    }).setOrigin(0, 0).setDepth(depth + 1);
+
+    if (this.searchQuery) {
+      const clear = this.add.text(x + width - 16, y + 3, '✕', { fontSize: '12px', color: '#cc7777' })
+        .setOrigin(0, 0).setDepth(depth + 1)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => clear.setColor('#ff9999'))
+        .on('pointerout', () => clear.setColor('#cc7777'))
+        .on('pointerdown', () => {
+          SoundManager.play('select');
+          this.searchQuery = '';
+          this.scene.restart();
+        });
+    }
+
+    // Live result count — the fastest way to tell a typo from an empty result.
+    const total = (GameState.inventory || []).length;
+    const shown = this._applyGlobalFilters([...(GameState.inventory || [])]).length;
+    if (this.searchQuery) {
+      this.add.text(x + width + 10, y + 3, `${shown} / ${total}`, {
+        fontSize: '11px', color: shown ? '#88cc88' : '#cc7777'
+      }).setOrigin(0, 0).setDepth(depth + 1);
+    }
+
+    const onKey = (ev) => {
+      const k = ev.key;
+      if (k === 'Backspace') {
+        if (!this.searchQuery) return;
+        this.searchQuery = this.searchQuery.slice(0, -1);
+      } else if (k && k.length === 1 && /[\w \-'’]/.test(k)) {
+        if (this.searchQuery.length >= 32) return;
+        this.searchQuery += k;
+      } else {
+        return;   // ignore ESC, arrows, Shift, F-keys, etc.
+      }
+      ev.preventDefault?.();
+      // instant visual feedback, deferred filtering
+      queryText.setText(this.searchQuery || 'type to filter…')
+        .setColor(this.searchQuery ? '#ffff88' : '#5a5a5a')
+        .setStyle({ fontStyle: this.searchQuery ? 'normal' : 'italic' });
+      bg.setStrokeStyle(1, this.searchQuery ? 0xffff88 : 0x666666, 0.9);
+      if (this._searchTimer) this._searchTimer.remove(false);
+      this._searchTimer = this.time.delayedCall(220, () => {
+        this._searchTimer = null;
+        this.scene.restart();
+      });
+    };
+
+    this.input.keyboard?.on('keydown', onKey);
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown', onKey);
+      if (this._searchTimer) { this._searchTimer.remove(false); this._searchTimer = null; }
+    });
+  }
+
   _applyGlobalFilters(items) {
     let result = this._filterByCategory(items, this.currentGlobalCategory);
 
@@ -857,6 +967,18 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     if (this.currentRarity !== 'All') {
       result = result.filter(it => (it.rarity || it.quality || 'common') === this.currentRarity);
+    }
+
+    // Free-text search, applied last so it narrows whatever the tabs/cyclers
+    // already selected. Space-separated terms are ANDed, so "bone axe" finds
+    // only bone axes rather than everything matching either word.
+    const q = (this.searchQuery || '').trim().toLowerCase();
+    if (q) {
+      const terms = q.split(/\s+/);
+      result = result.filter(it => {
+        const hay = this._searchHaystack(it);
+        return terms.every(t => hay.includes(t));
+      });
     }
 
     return result;
@@ -1034,6 +1156,30 @@ export default class InventoryOverlay extends Phaser.Scene {
       container.destroy(true);
       this._inspectModal = null;
     });
+
+    // Renown-capable items get a way into the renown web. Display-only for
+    // now — see RenownTreeOverlay. Historic items without an origin (the
+    // Bloodthirster) don't get one, since they have no entry point in the web.
+    if (item?.renownOrigin) {
+      const treeBtn = this.add.text(px + pw / 2, closeY - 30, '[ View Renown Web ]', {
+        fontSize: '14px', color: '#d4a017'
+      }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+      treeBtn.on('pointerover', () => treeBtn.setColor('#ffe066'));
+      treeBtn.on('pointerout', () => treeBtn.setColor('#d4a017'));
+      treeBtn.on('pointerdown', () => {
+        SoundManager.play('select');
+        container.destroy(true);
+        this._inspectModal = null;
+        if (this.scene.isActive('RenownTreeOverlay')) this.scene.stop('RenownTreeOverlay');
+        this.scene.launch('RenownTreeOverlay', { item });
+        // Without this the web starts BEHIND the inventory, so you'd have to
+        // close the inventory to see it. Same pattern TownScene uses for the
+        // Waystone overlay. The inventory stays open underneath, so closing
+        // the web drops you straight back to the item list.
+        this.scene.bringToTop('RenownTreeOverlay');
+      });
+      container.add(treeBtn);
+    }
 
     container.add(closeBtn);
 

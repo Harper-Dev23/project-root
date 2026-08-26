@@ -193,6 +193,183 @@ export const Items = {
     damage: { min: 7, max: 12 },
     description: 'A brutal axe with a chipped but deadly edge.'
   },
+  // === Bone Weapons (renown-capable) =========================================
+  // Their own base type, NOT a Crude weapon with a bonus attached. Damage is
+  // ~20% above the Crude equivalent and is ordinary base damage, so "% weapon
+  // damage" affixes scale it exactly as they scale any other weapon.
+  //
+  // `renownOrigin` does two jobs: createItemInstance stamps the renown fields
+  // onto any instance of these, and the gamble pools exclude anything carrying
+  // an origin so Bone never drops at normal rates (see BONE_DROP_CHANCE).
+
+  bone_dagger: {
+    id: 'bone_dagger',
+    name: 'Bone Dagger',
+    type: 'weapon',
+    weaponType: 'dagger',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 5, max: 7 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A dull but quick blade ideal for close jabs.'
+  },
+
+  bone_sword_1h: {
+    id: 'bone_sword_1h',
+    name: 'Bone Sword',
+    type: 'weapon',
+    weaponType: 'sword_1h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 10 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A rusted short sword with chipped edges.'
+  },
+
+  bone_sword_2h: {
+    id: 'bone_sword_2h',
+    name: 'Bone Greatsword',
+    type: 'weapon',
+    weaponType: 'sword_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 15 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A heavy, unwieldy blade that deals brutal strikes.'
+  },
+
+  bone_spear_1h: {
+    id: 'bone_spear_1h',
+    name: 'Bone Spear',
+    type: 'weapon',
+    weaponType: 'spear_1h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 10 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A splintered spear good for keeping distance.'
+  },
+
+  bone_whip: {
+    id: 'bone_whip',
+    name: 'Bone Whip',
+    type: 'weapon',
+    weaponType: 'whip',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 4, max: 8 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A worn leather whip with faded stitching.'
+  },
+
+  bone_shield: {
+    id: 'bone_shield',
+    name: 'Bone Shield',
+    type: 'weapon',
+    weaponType: 'shield',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A battered wooden shield with faded paint.'
+  },
+
+  bone_sling: {
+    id: 'bone_sling',
+    name: 'Bone Sling',
+    type: 'weapon',
+    weaponType: 'sling',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 5, max: 8 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A frayed sling made from scrap cord.'
+  },
+
+  bone_bow: {
+    id: 'bone_bow',
+    name: 'Bone Bow',
+    type: 'weapon',
+    weaponType: 'bow',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 7, max: 12 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A creaky bow that fires arrows unevenly.'
+  },
+
+  bone_gun: {
+    id: 'bone_gun',
+    name: 'Bone Gun',
+    type: 'weapon',
+    weaponType: 'gun',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 14 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. An unreliable firearm prone to misfires.'
+  },
+
+  bone_staff: {
+    id: 'bone_staff',
+    name: 'Bone Staff',
+    type: 'weapon',
+    weaponType: 'staff',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 6, max: 11 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A warped staff with faint magical traces.'
+  },
+
+  bone_wand: {
+    id: 'bone_wand',
+    name: 'Bone Wand',
+    type: 'weapon',
+    weaponType: 'wand',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 5, max: 8 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A brittle wand that sputters sparks.'
+  },
+
+  bone_mace_2h: {
+    id: 'bone_mace_2h',
+    name: 'Bone War Mace',
+    type: 'weapon',
+    weaponType: 'mace_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 15 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A massive iron mace with crushing force.'
+  },
+
+  bone_axe_2h: {
+    id: 'bone_axe_2h',
+    name: 'Bone Battle Axe',
+    type: 'weapon',
+    weaponType: 'axe_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 15 },
+    renownOrigin: 'bone',
+    description: 'Carved from something that did not want to die. A brutal axe with a chipped but deadly edge.'
+  },
+
 
   // === Common Armor (Watershade) ===
   simple_helm_str: {

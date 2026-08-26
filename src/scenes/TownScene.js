@@ -166,10 +166,25 @@ function randomRarityForGamble() {
 // until it's actually caught up.
 const GAMBLE_WEAPON_TYPES = ['sword_1h', 'dagger', 'staff', 'mace_2h', 'bow', 'axe_2h'];
 
+// Chance for a bone pile WEAPON gamble to come up Bone instead of Crude.
+// Independent of rarity - a common Bone Dagger is a perfectly good outcome.
+const BONE_DROP_CHANCE = 0.01;
+
 // Get all weapon IDs from Items.js — exclude locked/unique items (e.g. Bloodthirster)
 function getWeaponIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'weapon' && !it?.locked && !it?.unique && GAMBLE_WEAPON_TYPES.includes(it?.weaponType))
+    .filter(([, it]) => it?.type === 'weapon' && !it?.locked && !it?.unique && !it?.renownOrigin
+      && GAMBLE_WEAPON_TYPES.includes(it?.weaponType))
+    .map(([id]) => id);
+}
+
+// Bone weapons are a parallel base type, not an upgrade path off Crude. They
+// share the same droppable weapon types so a Bone drop is always something the
+// player could otherwise have received, just rarer and stronger.
+function getBoneWeaponIdPool() {
+  return Object.entries(Items)
+    .filter(([, it]) => it?.type === 'weapon' && it?.renownOrigin === 'bone'
+      && GAMBLE_WEAPON_TYPES.includes(it?.weaponType))
     .map(([id]) => id);
 }
 
@@ -1192,10 +1207,13 @@ export default class TownScene extends Phaser.Scene {
       fontSize: '12px',
       color: '#3a2818'
     }).setOrigin(0.5).setDepth(13);
+    // 470 ran the "You received: <long affixed name>" line straight into the
+    // panel border at x~1053 (starts at 610, so 610+470 = 1080). Matched to the
+    // same right margin the bonepile drop log uses.
     this.vendorInventoryText = this.add.text(610, 210, '', {
       fontSize: '16px',
       color: '#dddddd',
-      wordWrap: { width: 470 }
+      wordWrap: { width: 420 }
     }).setOrigin(0, 1);
 
     // Inventory scroll container
@@ -1404,6 +1422,15 @@ export default class TownScene extends Phaser.Scene {
       const BONEPILE_LOG_START_Y = 300; // <-- adjust this single number
       const LOG_X = 590;
       const LOG_LINE_H = 24;
+      // The inventory mask spans x 550..1050 (see _setInventoryMaskTop), and the
+      // panel border sits right at its edge. Long affixed names used to run
+      // straight into that border with no margin - a 2-prefix/2-suffix epic
+      // overflowed it outright - so lines now wrap inside a deliberate margin.
+      const LOG_RIGHT = 1030;   // panel border sits at ~1053
+      const LOG_WRAP = LOG_RIGHT - LOG_X;   // 454px of usable text width
+      // Renown-capable drops get a gold mark pinned to the LEFT of the name, so
+      // it stays visible no matter how long the name is or how far it wraps.
+      const LOG_MARK_X = LOG_X - 22;
 
       // Force the mask so the visible top is exactly our log start
       this._setInventoryMaskTop(BONEPILE_LOG_START_Y, PANEL_BOTTOM);
@@ -1414,7 +1441,7 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.lineHeight = LOG_LINE_H;
       this.vendorInventoryContainer.y = 0;
 
-      const createGambleButton = ({ label, y, cost, poolGetter, emptyMessage }) => {
+      const createGambleButton = ({ label, y, cost, poolGetter, emptyMessage, pickPool }) => {
         const ticketWord = cost === 1 ? 'Hunt Ticket' : 'Hunt Tickets';
         const btn = this.add.text(620, y, `[ Gamble ${label} — ${cost} ${ticketWord} ]`, {
           fontSize: '20px',
@@ -1439,31 +1466,34 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
 
-            const baseId = pool[(Math.random() * pool.length) | 0];
+            // A renown drop replaces the pool outright rather than upgrading the
+            // rolled item, so the Bone weapon is simply a different base type
+            // that happened to come up. Rarity is rolled independently, so a
+            // common Bone Dagger is a perfectly good outcome.
+            const activePool = (typeof pickPool === 'function' && pickPool()) || pool;
+            const baseId = activePool[(Math.random() * activePool.length) | 0];
             const q = randomRarityForGamble();
-            const inst = createItemInstance(baseId, { rarity: q });
+            // droppedFrom is threaded through so the renown history log records
+            // where the item came from; harmless on non-renown items.
+            const inst = createItemInstance(baseId, { rarity: q, droppedFrom: 'bonepile' });
             if (!inst) {
               this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
               return;
             }
 
             // Epic-rarity gamble rolls may become "potentially historic" — gaining renown.
-            // The 4-modifier (epic) item has the right conditions to one day transcend.
-            if (q === 'epic') {
-              inst.renownState = 'gaining';
-              inst.renown = 0;
-              inst.renownMax = 1000; // placeholder threshold; tunable later
-              inst.history = { droppedFrom: 'bonepile', droppedScenario: null, kills: 0, damageDealt: 0, battlesCarried: 0 };
-            }
 
             SoundManager.play(q === 'epic' ? 'gambleEpic' : 'gamble');
             InventorySystem.addGlobalItem(inst);
 
             const lineY = BONEPILE_LOG_START_Y + this.vendorInventoryContainer.listHeight;
             const displayColor = RARITY_COLORS[q] || '#ffffff';
+            const isRenown = !!inst.renownOrigin;
+
             const line = this.add.text(LOG_X, lineY, `→ ${inst.displayName}`, {
               fontSize: '16px',
-              color: displayColor
+              color: displayColor,
+              wordWrap: { width: LOG_WRAP }
             })
               .setDepth(13)
               .setInteractive({ useHandCursor: true });
@@ -1476,11 +1506,26 @@ export default class TownScene extends Phaser.Scene {
             });
 
             this.vendorInventoryContainer.add(line);
-            this.vendorInventoryContainer.listHeight += LOG_LINE_H;
+
+            if (isRenown) {
+              // Gold mark - the only thing that distinguishes a renown drop in
+              // the log, since a Bone weapon can roll any rarity and so has no
+              // special colour of its own.
+              const mark = this.add.text(LOG_MARK_X, lineY, '✦', {
+                fontSize: '15px', color: '#d4a017'
+              }).setDepth(13);
+              this.vendorInventoryContainer.add(mark);
+            }
+
+            // Wrapped names are taller than one row, so advance by what the text
+            // actually measures rather than a fixed constant - otherwise a
+            // wrapped line overlaps the next one.
+            this.vendorInventoryContainer.listHeight += Math.max(LOG_LINE_H, line.height + 4);
 
             const visibleH = (this._inventoryMaskBottom - this._inventoryMaskTop);
-            let maxScroll = Math.max(0, this.vendorInventoryContainer.listHeight - visibleH);
-            if (LOG_LINE_H > 0) maxScroll = Math.ceil(maxScroll / LOG_LINE_H) * LOG_LINE_H;
+            // No snap-to-row here any more: rows can be one or two lines tall,
+            // so rounding up to a fixed multiple scrolled past the last entry.
+            const maxScroll = Math.max(0, this.vendorInventoryContainer.listHeight - visibleH);
             this.vendorInventoryContainer.y = -maxScroll;
 
             this.vendorInventoryText.setText(`You received: ${inst.displayName}`);
@@ -1496,6 +1541,16 @@ export default class TownScene extends Phaser.Scene {
         y: 220,
         cost: 1,
         poolGetter: () => getWeaponIdPool(),
+        // 1-in-100: the pile gives up something that remembers being alive.
+        // createItemInstance stamps the renown fields off the base's own
+        // renownOrigin, so nothing further is needed here.
+        pickPool: () => {
+          if (Math.random() >= BONE_DROP_CHANCE) return null;
+          const bones = getBoneWeaponIdPool();
+          if (!bones.length) return null;
+          SoundManager.play('gambleEpic');
+          return bones;
+        },
         emptyMessage: 'No weapon IDs found in Items.js.'
       });
 

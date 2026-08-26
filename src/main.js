@@ -21,6 +21,7 @@ import WaystoneShardOverlay from './scenes/overlays/WaystoneShardOverlay.js';
 import CampRosterOverlay from './scenes/overlays/CampRosterOverlay.js';
 import HuntMapOverlay from './scenes/overlays/HuntMapOverlay.js';
 import HuntHubOverlay from './scenes/overlays/HuntHubOverlay.js';
+import RenownTreeOverlay from './scenes/overlays/RenownTreeOverlay.js';
 import HuntEncounterOverlay from './scenes/overlays/HuntEncounterOverlay.js';
 import HuntEventOverlay from './scenes/overlays/HuntEventOverlay.js';
 import TribeHQOverlay from './scenes/overlays/TribeHQOverlay.js';
@@ -53,6 +54,7 @@ const config = {
     CampRosterOverlay,
     HuntMapOverlay,
     HuntHubOverlay,
+    RenownTreeOverlay,
     HuntEncounterOverlay,
     HuntEventOverlay,
     TribeHQOverlay,

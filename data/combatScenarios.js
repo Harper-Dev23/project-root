@@ -16,7 +16,7 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_2: {
     name: 'Basic Training II',
-    description: 'Six reinforced dummies that shuffle around — practice range and AOE shapes.',
+    description: "Six shuffling dummies — practice AOE.",
     longDescription: 'These sturdier targets deal no damage but move erratically and dodge out of ground hazards, giving you a safe way to practice range, positioning, and AOE shapes before facing anything that hits back.',
     portraitKey: 'dummy_portrait',
     enemies: [
@@ -31,8 +31,8 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_3: {
     name: 'The Animated Six',
-    description: 'Six animated constructs, real combat AI.',
-    longDescription: 'Six training constructs animated into distinct classes: Chad tanks and can redirect a blow onto himself, Stan channels genuine healing magic across the party, Gary and Lenny fight with the same layered tactics a real caster would use, and Doug and Mo react the instant an ally is struck — Mo with a curse that saps your next attack. Expect real synergy and payoffs, not six copies of the same dummy.',
+    description: "Six constructs, real combat AI.",
+    longDescription: "Six constructs with real class roles and real combat AI. They guard, heal and answer each other — damage alone won't close this one.",
     portraitKey: 'dummy_portrait_equipped_fighter',
     // Same six dummies as encounter 2 (Lenny/Gary/Stan/Doug/Mo/Chad),
     // repurposed and geared up — names carried over so the crowd (Local
@@ -102,7 +102,7 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_5: {
     name: 'Elemental Duelists',
-    description: 'Battle elite fire and ice duelists leveraging elemental reactions.',
+    description: "Elite fire and ice duelists.",
     longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
     portraitKey: 'portrait_lesse_duelist_ice',
     enemies: [
@@ -131,11 +131,11 @@ export const COMBAT_SCENARIOS = {
 
   training_encounter_6: {
     name: 'Gorrek',
-    description: 'Gorrek — a relentless berserker who punishes hesitation and tears open his own wounds for power.',
+    description: "A relentless solo berserker.",
     // Rewritten alongside this session's kit expansion — the old text
     // predated Unstoppable Rush's glare redesign and Reckless
     // Harvest/Bloodrite entirely.
-    longDescription: "Gorrek fights on a hair trigger: initiative builds fast, his glare punishes anyone who stands still, and he'll tear open his own wounds for a burst of power if you let his bleeding go unchecked. Survive the opening rush, watch for Death Spiral once he's built Expose and Lacerate, and don't ignore his glare.",
+    longDescription: "A solo berserker on a hair trigger. His glare punishes standing still, and he feeds on his own wounds — the longer he bleeds, the harder he hits.",
     portraitKey: 'portrait_gorrek',
     enemies: [
       {

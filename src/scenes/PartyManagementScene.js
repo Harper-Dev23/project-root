@@ -201,20 +201,15 @@ export default class PartyManagementScene extends Phaser.Scene {
     SLOT_DEF.forEach((def, i) => {
       const { x, y } = def;
 
-      // FRAME: purely visual, centered, below portraits
-      let frame;
-      if (this.textures.exists('ui_frame')) {
-        frame = this.add.image(x, y, 'ui_frame')
-          .setOrigin(0.5)
-          .setDisplaySize(SLOT_SIZE, SLOT_SIZE)
-          .setDepth(1002)
-          .setTint(0xddccbb);
-      } else {
-        frame = this.add.rectangle(x, y, SLOT_SIZE, SLOT_SIZE, 0xddccbb, 0.25)
-          .setOrigin(0.5)
-          .setStrokeStyle(2, 0xddccbb)
-          .setDepth(1002);
-      }
+      // FRAME: purely visual, centered, below portraits.
+      // Was the shared 'ui_frame' texture — but that asset is the FULL-SCREEN
+      // town border (1280x720, with banners, grass and spears baked into its
+      // corners). Squashed into a 64px square it collapsed into a few thin
+      // horizontal lines plus red/blue banner specks, reading as render
+      // artifacts rather than slots. Drawn here instead, matching the
+      // L-bracket corner language PANEL_STYLES already uses elsewhere.
+      const frame = this.add.graphics().setPosition(x, y).setDepth(1002);
+      this._paintSlotFrame(frame, SLOT_SIZE, 'idle');
       // IMPORTANT: do NOT call frame.setInteractive()
 
       // DROP ZONE: same center & size as frame
@@ -232,6 +227,68 @@ export default class PartyManagementScene extends Phaser.Scene {
 
       this.slots.push({ frame, zone, def });
     });
+
+    // Highlight the slot under a dragged portrait. Phaser fires these on the
+    // drop zone itself, so nothing here needs its own hit area.
+    this.input.on('dragenter', (_p, _obj, dropZone) => this._setSlotState(dropZone, 'hover'));
+    this.input.on('dragleave', (_p, _obj, dropZone) => this._setSlotState(dropZone, 'idle'));
+    this.input.on('drop', (_p, _obj, dropZone) => this._setSlotState(dropZone, 'idle'));
+  }
+
+  /** Repaints the frame belonging to `zone`, if that zone is one of ours. */
+  _setSlotState(zone, state) {
+    const slot = (this.slots || []).find(s => s.zone === zone);
+    if (!slot?.frame?.scene) return;   // guard: scene may have shut down mid-drag
+    this._paintSlotFrame(slot.frame, SLOT_SIZE, state);
+  }
+
+  /**
+   * Draws one slot outline: four L-shaped corner brackets plus a faint dashed
+   * edge between them. `state` is 'idle' or 'hover' (drag is over this slot).
+   * Kept as a repaint rather than two cached objects so the hover treatment
+   * can change weight and colour, not just alpha.
+   */
+  _paintSlotFrame(g, size, state = 'idle') {
+    const hover = state === 'hover';
+    const half = size / 2;
+    const arm = 14;          // length of each bracket arm
+    const dash = 4;          // dash length
+    const gap = 5;           // gap between dashes
+
+    const cornerColor = hover ? 0xffffaa : MENU_THEME.panelCorner;
+    const edgeColor = hover ? 0xffffaa : MENU_THEME.panelStroke;
+    const cornerAlpha = hover ? 1.0 : 0.75;
+    const edgeAlpha = hover ? 0.55 : 0.28;
+
+    g.clear();
+
+    if (hover) {
+      g.fillStyle(0xffffaa, 0.08);
+      g.fillRect(-half, -half, size, size);
+    }
+
+    // Dashed edges, drawn inward from each corner so the dash pattern stays
+    // symmetrical regardless of where it runs out against the bracket arms.
+    g.lineStyle(1, edgeColor, edgeAlpha);
+    for (let d = arm; d < size - arm; d += dash + gap) {
+      const len = Math.min(dash, size - arm - d);
+      if (len <= 0) break;
+      g.beginPath();
+      g.moveTo(-half + d, -half); g.lineTo(-half + d + len, -half);   // top
+      g.moveTo(-half + d, half); g.lineTo(-half + d + len, half);    // bottom
+      g.moveTo(-half, -half + d); g.lineTo(-half, -half + d + len);   // left
+      g.moveTo(half, -half + d); g.lineTo(half, -half + d + len);    // right
+      g.strokePath();
+    }
+
+    // Four L-brackets
+    g.lineStyle(2, cornerColor, cornerAlpha);
+    g.beginPath();
+    g.moveTo(-half, -half + arm); g.lineTo(-half, -half); g.lineTo(-half + arm, -half); // TL
+    g.moveTo(half - arm, -half); g.lineTo(half, -half); g.lineTo(half, -half + arm);  // TR
+    g.moveTo(-half, half - arm); g.lineTo(-half, half); g.lineTo(-half + arm, half);  // BL
+    g.moveTo(half - arm, half); g.lineTo(half, half); g.lineTo(half, half - arm);   // BR
+    g.strokePath();
   }
 
 
