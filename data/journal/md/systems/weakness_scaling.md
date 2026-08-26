@@ -32,7 +32,20 @@ Every effect that scales does so off the same curve:
 intensity = 1 + (buildup - 200) / 300     capped at 2.5
 ```
 
-So 200 buildup is intensity 1.0, 350 is 1.5, 500 is 2.0, and 950 or more sits at the 2.5 cap. Two families override this with their own linear ramp — **Cold** and **Disorient** both use `+0.007 per point` capped at 3.0, and **Fire** uses `+0.01 per point` capped at 8.0, by far the steepest in the game.
+So 200 buildup is intensity 1.0, 350 is 1.5, 500 is 2.0, and 950 or more sits at the 2.5 cap.
+
+**Five families override that default with their own linear ramp.** The remaining four — Lightning, Expose, Disease and Curse — use the shared curve above.
+
+| Family | Ramp per point | Cap | At 500 | At 1500 |
+|---|---|---|---|---|
+| **Fire** | +0.01 | 8.0 | 4.00 | 8.00 |
+| **Toxic** | +0.0075 | 8.0 | 3.25 | 8.00 |
+| **Cold** | +0.007 | 3.0 | 3.00 | 3.00 |
+| **Disorient** | +0.007 | 3.0 | 3.00 | 3.00 |
+| **Lacerate** | +0.0025 | 4.0 | 1.75 | 4.00 |
+| *(shared default)* | +0.00333 | 2.5 | 2.00 | 2.50 |
+
+Fire is the steepest in the game. Toxic follows the same shape at roughly half the strength, but shares Fire's ceiling — it simply takes far longer to get there. Cold and Disorient rise quickly and then stop early. Lacerate is the slowest ramp but keeps climbing well past where Cold and Disorient have flattened.
 
 Nearly every effect below is written as `base x intensity, capped` — the cap matters, because most reach it well before intensity does.
 

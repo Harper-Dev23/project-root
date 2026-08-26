@@ -1845,6 +1845,40 @@ export default class CombatScene extends Phaser.Scene {
       if (misc.physicalBuildupPercent) enemy.gearEffects.physicalBuildupPercent = (enemy.gearEffects.physicalBuildupPercent || 0) + misc.physicalBuildupPercent;
       if (misc.elementalBuildupPercent) enemy.gearEffects.elementalBuildupPercent = (enemy.gearEffects.elementalBuildupPercent || 0) + misc.elementalBuildupPercent;
       if (misc.necroticBuildupPercent) enemy.gearEffects.necroticBuildupPercent = (enemy.gearEffects.necroticBuildupPercent || 0) + misc.necroticBuildupPercent;
+      // Jewelry misc mods — the amulet/ring families. Same gap as the armor
+      // buildup% block directly above: rolled by ItemFactory, aggregated
+      // into _miscMods, copied to gearEffects for PLAYERS in
+      // CharacterBuilder.rebuildCharacterStats, but never copied here, so an
+      // enemy wearing jewelry got the item and the tooltip and none of the
+      // effect. Every consumer reads these off gearEffects with no
+      // player-only gate (procHalfDamageTaken in _rollProcHalfDamageTaken,
+      // physBuildupOnPhysDmg/elemBuildupOnElemDmg in _applyAbilityToTarget
+      // and _applyDirectResult, the proc*Flat family in
+      // CombatLogic.applyJewelryDamageProcs), so wiring the copy is all that
+      // was missing. Mirrors CharacterBuilder.js's own jewelry block 1:1.
+      if (misc.physToElemPercent) enemy.gearEffects.physToElemPercent = (enemy.gearEffects.physToElemPercent || 0) + misc.physToElemPercent;
+      if (misc.physToNecroPercent) enemy.gearEffects.physToNecroPercent = (enemy.gearEffects.physToNecroPercent || 0) + misc.physToNecroPercent;
+      if (misc.elemToNecroPercent) enemy.gearEffects.elemToNecroPercent = (enemy.gearEffects.elemToNecroPercent || 0) + misc.elemToNecroPercent;
+      if (misc.initBonusOnBattleStart) enemy.gearEffects.initBonusOnBattleStart = (enemy.gearEffects.initBonusOnBattleStart || 0) + misc.initBonusOnBattleStart;
+      if (misc.shieldPctOnBattleStart) enemy.gearEffects.shieldPctOnBattleStart = (enemy.gearEffects.shieldPctOnBattleStart || 0) + misc.shieldPctOnBattleStart;
+      if (misc.procDoubleDamage) enemy.gearEffects.procDoubleDamage = (enemy.gearEffects.procDoubleDamage || 0) + misc.procDoubleDamage;
+      if (misc.procHalfDamageTaken) enemy.gearEffects.procHalfDamageTaken = (enemy.gearEffects.procHalfDamageTaken || 0) + misc.procHalfDamageTaken;
+      if (misc.procHealOnHeal) enemy.gearEffects.procHealOnHeal = (enemy.gearEffects.procHealOnHeal || 0) + misc.procHealOnHeal;
+      if (misc.procElemFlat) enemy.gearEffects.procElemFlat = (enemy.gearEffects.procElemFlat || 0) + misc.procElemFlat;
+      if (misc.procNecroFlat) enemy.gearEffects.procNecroFlat = (enemy.gearEffects.procNecroFlat || 0) + misc.procNecroFlat;
+      if (misc.procPhysFlat) enemy.gearEffects.procPhysFlat = (enemy.gearEffects.procPhysFlat || 0) + misc.procPhysFlat;
+      if (misc.physBuildupOnPhysDmg) {
+        enemy.gearEffects.physBuildupOnPhysDmg = enemy.gearEffects.physBuildupOnPhysDmg || {};
+        for (const [fam, amt] of Object.entries(misc.physBuildupOnPhysDmg)) {
+          enemy.gearEffects.physBuildupOnPhysDmg[fam] = (enemy.gearEffects.physBuildupOnPhysDmg[fam] || 0) + amt;
+        }
+      }
+      if (misc.elemBuildupOnElemDmg) {
+        enemy.gearEffects.elemBuildupOnElemDmg = enemy.gearEffects.elemBuildupOnElemDmg || {};
+        for (const [fam, amt] of Object.entries(misc.elemBuildupOnElemDmg)) {
+          enemy.gearEffects.elemBuildupOnElemDmg[fam] = (enemy.gearEffects.elemBuildupOnElemDmg[fam] || 0) + amt;
+        }
+      }
     }
 
     // Weapon-suffix buildup% (e.g. "of Sparks" +fire buildup, per-family —
@@ -5580,7 +5614,20 @@ export default class CombatScene extends Phaser.Scene {
               : (result?.isMagic ? dmg : 0);
             if (elemSrc > 0) {
               for (const [fam, pct] of Object.entries(elemPct)) {
-                if (!ability?.tags?.includes(fam)) continue;
+                // NO element-tag gate. This used to require
+                // ability.tags.includes(fam), which was plumbing, not
+                // balance: converted damage carries no element tag, so
+                // gear conversion / Elemental Overload / Boulder Toss's
+                // Ablaze phys->elem all produced genuinely elemental
+                // damage that the amulet then refused to read (measured:
+                // 0 buildup on hits verified elemental by resist testing).
+                // Elemental Overload (ring) and any Le'sse amulet were
+                // mutually useless as a result. Now matches the Zafaar
+                // physical amulets, which never had a gate, and Transpose,
+                // which already re-colours buildup families outright. The
+                // amulet's own declared family always wins; buildup is
+                // ADDED, never redirected, so the skill's own buildup is
+                // untouched and off-element pairings are a real choice.
                 const bonus = Math.floor(elemSrc * pct / 100);
                 if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
               }
@@ -6360,7 +6407,10 @@ export default class CombatScene extends Phaser.Scene {
           const elemSrc = directTypeBreakdown ? (directTypeBreakdown.elemDmg || 0) : (payload.isMagic ? dealt : 0);
           if (elemSrc > 0) {
             for (const [fam, pct] of Object.entries(elemPct)) {
-              if (!opts?.ability?.tags?.includes(fam)) continue;
+              // No element-tag gate — see the primary-hit path in
+              // _applyAbilityToTarget for the full rationale. Kept in
+              // sync deliberately: splash/repeat/volley hits flow through
+              // here instead of that function.
               const bonus = Math.floor(elemSrc * pct / 100);
               if (bonus > 0) this._applyWeaknessBuildup(target, { [fam]: bonus }, { user });
             }

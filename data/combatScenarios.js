@@ -173,6 +173,13 @@ export const COMBAT_SCENARIOS = {
       type: 'berserker_boss_reckoning_1', slotId: 2, name: 'Gorrek',
       drops: [
         { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        // Zafaar Pendant of Lacerations — 65-85% of his physical damage is
+        // ALSO added as Lacerate buildup, on top of Bleeding Sweep's own.
+        // rarity pinned to the item's declared 'uncommon' so _equipEnemyItem's
+        // random-rarity roll can't override it; the fixed affix always rolls
+        // regardless of rollAffixes (unique + fixedAffix short-circuits the
+        // affix pool in createItemInstance).
+        { equip: 'amulet', itemId: 'zafaar_amulet_lacerate', rarity: 'uncommon', droppable: false },
         { equip: 'chest', rarity: 'uncommon', droppable: false },
         { equip: 'head', rarity: 'uncommon', droppable: false },
         { equip: 'legs', rarity: 'uncommon', droppable: false },
@@ -226,6 +233,10 @@ export const COMBAT_SCENARIOS = {
       type: 'berserker_boss_reckoning_4', slotId: 2, name: 'Gorrek',
       drops: [
         { equip: 'weaponMain', itemId: 'bloodthirster', rarity: 'historic', rollAffixes: false, droppable: false },
+        // Zafaar Band of Warding — 3-5% chance to halve any incoming damage
+        // instance, rolled per hit after DR. Same fixed-rarity note as the
+        // Reckoning I pendant.
+        { equip: 'ring', itemId: 'zafaar_ring_half_damage', rarity: 'uncommon', droppable: false },
         { equip: 'chest', rarity: 'rare', droppable: false },
         { equip: 'head', rarity: 'rare', droppable: false },
         { equip: 'legs', rarity: 'rare', droppable: false },

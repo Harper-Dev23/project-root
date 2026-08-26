@@ -863,7 +863,8 @@ const NPC_ONLY_SKILLS = {
       const moved = scene?._enemyTryShuffleOneColumn?.(attacker);
       if (moved) scene?._log?.(`${attacker.name} shuffles position.`);
       return { amount: 0, moved };
-    }
+    },
+    description: 'Bonus action. Shifts one column sideways, changing which of your ranks can reach it.'
   },
 
   'dummy_sway': {

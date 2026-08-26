@@ -7,7 +7,7 @@ const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown']);
 // 'prophet'/'false-god', so the whole Divinity section silently emptied into
 // Lore. Same for 'index' and the 'world/' folder.
 const VALID_CATEGORIES = new Set([
-    'lore', 'systems', 'hunt', 'people', 'places',
+    'lore', 'systems', 'hunt', 'people', 'places', 'encounters',
     'factions', 'buildings', 'personal', 'divinity', 'items', 'index',
 ]);
 

@@ -1103,18 +1103,39 @@ export function applyDamagePctBonus(amount, dmgPct, label) {
 // shape: { physToElemPct, physToNecroPct, elemToNecroPct } (any subset).
 function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = '', opts = {}) {
   if (!conv) return { physical, elemental, necrotic };
+
+  // Move `pct` percent of `from` into another bucket, and NEVER move more than
+  // actually exists there. Two independent guards, both cheap:
+  //   1. pct is clamped to 0-100. A single source above 100 used to convert
+  //      more than the pool held, driving the source bucket negative; the
+  //      Math.max(0, ...) floor at the end of applyGearConversionAndPercent
+  //      then clamped that away while the DESTINATION kept the full inflated
+  //      amount, so the hit gained damage out of nothing (measured: 100 in,
+  //      150 out at physToElemPct 150).
+  //   2. the moved amount is clamped to what remains, so any future stacking
+  //      of multiple conversion sources into one summed percentage also can't
+  //      manufacture damage.
+  // Neither guard is reachable with today's content (the three Elseth amulets
+  // roll 25-35, are unique, and share the single amulet slot, so nothing can
+  // stack) — this exists so adding a second conversion source later can't
+  // silently reintroduce the bug.
+  const take = (pool, pct) => {
+    const p = Math.max(0, Math.min(100, pct || 0));
+    return Math.min(Math.max(0, pool), Math.floor(pool * p / 100));
+  };
+
   if (conv.physToElemPct) {
-    const c = Math.floor(physical * conv.physToElemPct / 100);
+    const c = take(physical, conv.physToElemPct);
     physical -= c; elemental += c;
     if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `phys→ele${labelSuffix}`, convert: c }); } catch { } }
   }
   if (conv.physToNecroPct) {
-    const c = Math.floor(physical * conv.physToNecroPct / 100);
+    const c = take(physical, conv.physToNecroPct);
     physical -= c; necrotic += c;
     if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `phys→necro${labelSuffix}`, convert: c }); } catch { } }
   }
   if (conv.elemToNecroPct) {
-    const c = Math.floor(elemental * conv.elemToNecroPct / 100);
+    const c = take(elemental, conv.elemToNecroPct);
     elemental -= c; necrotic += c;
     if (!opts.silent) { try { if (c > 0) _pushBreakdown({ label: `elem→necro${labelSuffix}`, convert: c }); } catch { } }
   }
