@@ -159,6 +159,65 @@ function normalizeAfterLoad(c) {
 }
 
 
+// ---------------------------------------------------------------------------
+// Save schema version
+// ---------------------------------------------------------------------------
+// Saves have carried `version: 3` for a long time, but nothing ever READ it -
+// load() went straight to the fields. That meant a save written by a different
+// build of the game would half-load instead of failing cleanly: missing fields
+// silently became defaults, and the player got a subtly broken character with
+// no indication anything had gone wrong.
+//
+// Bump SAVE_VERSION whenever the shape of the payload changes, and add an entry
+// to MIGRATIONS that upgrades a save from (n-1) to n. Migrations run in order,
+// so a very old save walks forward one step at a time.
+export const SAVE_VERSION = 3;
+
+// key n = 'upgrade a save at version n-1 so it is valid at version n'
+// e.g. 4: (data) => { data.newField = []; return data; }
+const MIGRATIONS = {};
+
+/**
+ * Brings a parsed save payload up to SAVE_VERSION.
+ * Returns { ok, data, reason } - never throws, never partially applies.
+ */
+function migrateSave(data) {
+  // Saves written before the version stamp existed. Treat as the oldest known
+  // schema rather than rejecting - these are real saves that still load fine.
+  let v = Number.isFinite(data.version) ? data.version : 1;
+
+  if (v > SAVE_VERSION) {
+    return {
+      ok: false,
+      reason: `This save was made by a newer version of the game (save v${v}, ` +
+              `this build reads up to v${SAVE_VERSION}). Refusing to load it so ` +
+              `it isn't overwritten with incomplete data.`,
+    };
+  }
+
+  while (v < SAVE_VERSION) {
+    const step = MIGRATIONS[v + 1];
+    if (!step) {
+      // No migration defined for this hop. Load anyway - historically every
+      // save has been forward-compatible - but say so, so a real breakage
+      // shows up in the console instead of as mystery behaviour.
+      console.warn(`[GameState] No migration from save v${v} to v${v + 1}; ` +
+                   `loading as-is. Fields added since v${v} will use defaults.`);
+      break;
+    }
+    try {
+      data = step(data) || data;
+    } catch (e) {
+      return { ok: false, reason: `Migration to v${v + 1} failed: ${e.message}` };
+    }
+    v += 1;
+  }
+
+  data.version = SAVE_VERSION;
+  return { ok: true, data };
+}
+
+
 const GameState = {
   characters: [],
   party: [],
@@ -290,7 +349,7 @@ const GameState = {
     if (!slot) return console.warn('Save slot required');
 
     const payload = {
-      version: 3,
+      version: SAVE_VERSION,
       characters: (this.characters || []).map(serializeCharacter),
       slain: (this.slain || []).map(serializeCharacter),
       partyIds: (this.party || []).map(p => p.id),
@@ -324,7 +383,26 @@ const GameState = {
     if (!raw) { console.warn(`No save in slot ${slot}`); return false; }
 
     let data;
-    try { data = JSON.parse(raw); } catch (e) { console.error('Corrupt save:', e); return false; }
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      // Set lastLoadError here too - otherwise it keeps whatever the
+      // PREVIOUS failed load put there and reports the wrong reason.
+      console.error('Corrupt save:', e);
+      this.lastLoadError = `Save slot '${slot}' is corrupt and could not be read.`;
+      return false;
+    }
+
+    // Version gate. Runs before ANY field is read so a mismatched save fails
+    // cleanly instead of half-loading into the live game state.
+    const migrated = migrateSave(data);
+    if (!migrated.ok) {
+      console.error(`[GameState] Cannot load slot '${slot}': ${migrated.reason}`);
+      this.lastLoadError = migrated.reason;
+      return false;
+    }
+    data = migrated.data;
+    this.lastLoadError = null;
 
     // Characters
     this.characters = (data.characters || [])

@@ -1,0 +1,75 @@
+# Posts to Discord when a new build is actually LIVE on GitHub Pages.
+#
+# Deliberately triggered on `deployment_status`, not on `push`. A push only
+# means the code was committed; the site isn't reachable until Pages finishes
+# building (usually 30-60s later). Announcing on push would tell your friends
+# to reload before the update exists.
+#
+# SETUP (one time):
+#   1. In Discord: Server Settings > Integrations > Webhooks > New Webhook.
+#      Pick the channel, then "Copy Webhook URL".
+#   2. In GitHub: repo Settings > Secrets and variables > Actions >
+#      New repository secret. Name it exactly DISCORD_WEBHOOK, paste the URL.
+#
+# That's it. No bot, no server, nothing to keep running.
+
+name: Announce deploy to Discord
+
+on:
+  deployment_status:
+
+jobs:
+  notify:
+    # deployment_status fires for every state change (queued/in_progress/
+    # success/failure). Only announce real successes, and only for Pages.
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      # Needed only so `git log` can read the commit subject below —
+      # deployment_status runs on a bare runner with no repo checked out.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Post to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          PAGE_URL: ${{ github.event.deployment_status.environment_url }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "DISCORD_WEBHOOK secret is not set — skipping (not a failure)."
+            exit 0
+          fi
+
+          # Commit subject line, escaped for JSON.
+          MSG=$(git log -1 --pretty=%s "$SHA" 2>/dev/null || echo "new build")
+          MSG=$(printf '%s' "$MSG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')
+          SHORT=$(printf '%s' "$SHA" | cut -c1-7)
+          URL="${PAGE_URL:-https://harper-dev23.github.io/project-root/}"
+
+          cat > payload.json <<JSON
+          {
+            "username": "Behel'ith",
+            "embeds": [{
+              "title": "New build is live",
+              "description": "$MSG",
+              "url": "$URL",
+              "color": 13795140,
+              "fields": [
+                { "name": "Play", "value": "$URL" },
+                { "name": "Commit", "value": "[\`$SHORT\`](https://github.com/$REPO/commit/$SHA)", "inline": true }
+              ],
+              "footer": { "text": "Reload the page to get it. Your save is kept." }
+            }]
+          }
+          JSON
+
+          curl -sS -f -H "Content-Type: application/json" -d @payload.json "$WEBHOOK" \
+            && echo "posted to Discord" \
+            || { echo "Discord post failed (build itself is unaffected)"; exit 0; }
+
+    permissions:
+      contents: read
