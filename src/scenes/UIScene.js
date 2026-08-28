@@ -477,7 +477,7 @@ export default class UIScene extends Phaser.Scene {
         fontSize: '14px',
         color: classColor,
         fontStyle: 'bold',
-        fontFamily: 'Georgia'
+        fontFamily: 'Georgia, Gelasio, serif'
       }).setOrigin(0.5, 0);
 
       const panelCenterX = leftPanelWidth / 2;
@@ -500,7 +500,7 @@ export default class UIScene extends Phaser.Scene {
       const favorText = this.add.text(barX + barWidth + 4, panelY + 40, `★${char.favor}`, {
         fontSize: '9px',
         color: '#88ccff',
-        fontFamily: 'Georgia'
+        fontFamily: 'Georgia, Gelasio, serif'
       }).setOrigin(0, 0.5);
 
       // Thin separator line after each member except the last
@@ -562,7 +562,7 @@ export default class UIScene extends Phaser.Scene {
       fontSize: '20px',
       color: MENU_THEME.titleColor,
       fontStyle: 'bold',
-      fontFamily: 'Georgia'
+      fontFamily: 'Georgia, Gelasio, serif'
     })
       .setOrigin(0.5)
       .setDepth(DEPTH.UI_OVERLAY)

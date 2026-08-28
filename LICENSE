@@ -1,0 +1,51 @@
+Copyright (c) 2026 Edward Lee Harper. All rights reserved.
+
+Behel'ith / The Sacred Hunt
+
+
+WHAT YOU MAY DO
+---------------
+
+You are welcome to play this game, and to clone or fork this repository in
+order to run it for yourself, read the code, or learn from it.
+
+
+WHAT IS RESERVED
+----------------
+
+All rights not expressly granted above are reserved. In particular, the
+original artwork, music, writing, and game design in this repository —
+including but not limited to the backgrounds, portraits, sprites, interiors,
+map art, recorded music, and the journal and lore text — may not be
+redistributed, sold, or reused in another project without written permission.
+
+This is a personal project shared with friends, not an open-source release.
+If you want to use something from it, just ask.
+
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+Parts of this repository are owned by others and carry their own licences,
+which take precedence over this file for those files:
+
+  phaser.js            Phaser 3.60.0
+                       Copyright 2013-2023 Photon Storm Ltd.
+                       MIT License — https://opensource.org/licenses/MIT
+
+  assets/fonts/*.woff2 Gelasio, Cinzel, Cormorant Garamond, Lato
+                       SIL Open Font License 1.1
+                       Full text and per-font copyright notices are in
+                       assets/fonts/OFL.txt
+
+
+NO WARRANTY
+-----------
+
+This software is provided "as is", without warranty of any kind, express or
+implied. The author is not liable for any claim, damages, or other liability
+arising from its use.
+
+
+Note: this file states the author's intent in plain language. It is not legal
+advice, and it has not been reviewed by a lawyer.

@@ -123,7 +123,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const { x, y, width, bottom } = this._bounds;
     const left = x + 40;
 
-    this._text(left, y + 64, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia' });
+    this._text(left, y + 64, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia, Gelasio, serif' });
     this._text(left, y + 92, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
     this._button(x + width - 140, y + 64, 'Change Location', () => this._openMap(), 'danger');
 
@@ -204,7 +204,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const { x, y, width, bottom } = this._bounds;
     const left = x + 40;
 
-    this._text(left, y + 60, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia' });
+    this._text(left, y + 60, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia, Gelasio, serif' });
 
     // Supply bar
     const barY = y + 96;

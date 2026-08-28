@@ -1,0 +1,32 @@
+# Claude Code local settings.
+# These record machine-specific paths (Windows username, the location of the
+# private Obsidian vault) and tool permissions. Nothing secret, but nothing that
+# belongs in a public repo either — and settings.local.json is local by design.
+.claude/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# Dependencies (none today — the project vendors phaser.js directly — but this
+# keeps an accidental `npm install` out of the repo)
+node_modules/
+
+# Audio/art masters. Source files are large and are not what the game loads;
+# keep the exported .ogg/.mp3/.png/.webp, keep the masters out.
+*.wav
+!assets/audio/*.wav
+*.aup3
+*.rpp
+*.rpp-bak
+*.psd
+*.kra
+*.xcf
+
+# Scratch
+/tmp/
+*.log

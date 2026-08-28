@@ -1,0 +1,94 @@
+/* Self-hosted webfonts.
+ *
+ * Bundled rather than linked from Google so the game has no third-party
+ * runtime dependency and works offline.
+ *
+ * Gelasio is here as a METRIC-COMPATIBLE stand-in for Georgia: same glyph
+ * widths, so a Linux machine (which has no Georgia) lays text out at exactly
+ * the same size as Windows/macOS instead of shifting and overflowing.
+ * Georgia itself is proprietary Microsoft and cannot be redistributed, which
+ * is why the stacks list "Georgia, Gelasio" - real Georgia where installed,
+ * identical metrics everywhere else.
+ *
+ * Latin subset only. All four families are SIL Open Font License 1.1.
+ */
+
+@font-face {
+  font-family: 'Gelasio';
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/gelasio-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Gelasio';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/gelasio-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Gelasio';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('assets/fonts/gelasio-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/cinzel-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('assets/fonts/cinzel-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/cormorant-garamond-400-italic.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/cormorant-garamond-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('assets/fonts/cormorant-garamond-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('assets/fonts/lato-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Lato';
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url('assets/fonts/lato-700.woff2') format('woff2');
+}

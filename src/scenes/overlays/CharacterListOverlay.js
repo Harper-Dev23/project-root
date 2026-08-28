@@ -346,7 +346,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
     const nameText = this.add.text(portraitWidth / 2, portraitBoxSize + 12, character.name, {
       fontSize: '20px',
       color: '#ffddaa',
-      fontFamily: 'Georgia',
+      fontFamily: 'Georgia, Gelasio, serif',
       align: 'center',
       wordWrap: { width: portraitWidth - 12 }
     })

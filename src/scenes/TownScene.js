@@ -922,7 +922,7 @@ export default class TownScene extends Phaser.Scene {
       titleBox = this.add.text(640, 120, titleText, {
         fontSize: '28px',
         color: titleColor,
-        fontFamily: 'Georgia',
+        fontFamily: 'Georgia, Gelasio, serif',
         fontStyle: 'bold'
       }).setOrigin(0.5);
     }
@@ -1897,7 +1897,7 @@ export default class TownScene extends Phaser.Scene {
       const stashLabel = this.add.text(panelLeft + 52, panelTop + 52, '🗄 Stash', {
         fontSize: '14px',
         color: '#ffddaa',
-        fontFamily: 'Georgia',
+        fontFamily: 'Georgia, Gelasio, serif',
       }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
 
       const openStash = () => {
@@ -1922,7 +1922,7 @@ export default class TownScene extends Phaser.Scene {
       const hqLabel = this.add.text(panelLeft + 140, panelTop + 52, '⚔ Tribe HQ', {
         fontSize: '13px',
         color: '#aaffaa',
-        fontFamily: 'Georgia',
+        fontFamily: 'Georgia, Gelasio, serif',
       }).setOrigin(0.5).setDepth(12).setInteractive({ useHandCursor: true });
 
       const openHQ = () => {

@@ -153,7 +153,7 @@ export function createOverlayFrame(scene, {
     const titleStyle = {
         fontSize: '28px',
         color: MENU_THEME.titleColor,
-        fontFamily: 'Georgia'
+        fontFamily: 'Georgia, Gelasio, serif'
     };
 
     // depth + 3 — strictly above frame.content (depth + 2), so an overlay's
@@ -168,7 +168,7 @@ export function createOverlayFrame(scene, {
     const closeButton = scene.add.text(bounds.right - 18, bounds.y + 18, '✕', {
         fontSize: '24px',
         color: '#ff8888',
-        fontFamily: 'Georgia'
+        fontFamily: 'Georgia, Gelasio, serif'
     })
         .setOrigin(1, 0)
         .setInteractive({ useHandCursor: true })

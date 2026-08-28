@@ -66,13 +66,13 @@ export default class StashOverlay extends Phaser.Scene {
     const rx = DIVIDER_X + PAD;
 
     // ── Column headers ──
-    const headerStyle = { fontSize: '14px', color: '#ffddaa', fontFamily: 'Georgia', fontStyle: 'bold' };
+    const headerStyle = { fontSize: '14px', color: '#ffddaa', fontFamily: 'Georgia, Gelasio, serif', fontStyle: 'bold' };
     this.root.add(this.add.text(lx, TOP_Y - 22, 'Global Inventory', headerStyle));
     this.root.add(this.add.text(rx, TOP_Y - 22, `${tribeName} Stash`, headerStyle));
 
     // ── Transfer All button (inventory → stash) ──
     const transferAllBtn = this.add.text(DIVIDER_X, TOP_Y + PANEL_H / 2, '→ Stash All →', {
-      fontSize: '13px', color: '#ffe066', fontFamily: 'Georgia'
+      fontSize: '13px', color: '#ffe066', fontFamily: 'Georgia, Gelasio, serif'
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     transferAllBtn.on('pointerover', () => transferAllBtn.setColor('#ffffff'));
@@ -183,7 +183,7 @@ export default class StashOverlay extends Phaser.Scene {
 
     if (!items || items.length === 0) {
       container.add(
-        this.add.text(colX + 8, TOP_Y + 16, '— empty —', { fontSize: '13px', color: '#666666', fontFamily: 'Georgia' })
+        this.add.text(colX + 8, TOP_Y + 16, '— empty —', { fontSize: '13px', color: '#666666', fontFamily: 'Georgia, Gelasio, serif' })
       );
       return 0;
     }
@@ -199,13 +199,13 @@ export default class StashOverlay extends Phaser.Scene {
       const nameTxt = this.add.text(colX + 8, rowY + ROW_H / 2, info.name, {
         fontSize: '13px',
         color: info.color,
-        fontFamily: 'Georgia',
+        fontFamily: 'Georgia, Gelasio, serif',
       }).setOrigin(0, 0.5);
 
       const arrow = this.add.text(colX + colW - 10, rowY + ROW_H / 2, arrowChar, {
         fontSize: '14px',
         color: arrowColor,
-        fontFamily: 'Georgia',
+        fontFamily: 'Georgia, Gelasio, serif',
         fontStyle: 'bold',
       }).setOrigin(1, 0.5).setInteractive({ useHandCursor: true });
 

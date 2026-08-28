@@ -64,7 +64,7 @@ export default class MapRegionLayer {
       .setOrigin(0.5).setDepth(this.depth + 6).setVisible(false)
       .setStrokeStyle(1, 0x6a7a90);
     this.label = scene.add.text(0, 0, '', {
-      fontSize: '15px', color: '#ffeebb', fontFamily: 'Georgia',
+      fontSize: '15px', color: '#ffeebb', fontFamily: 'Georgia, Gelasio, serif',
     }).setOrigin(0.5).setDepth(this.depth + 7).setVisible(false);
     this.sublabel = scene.add.text(0, 0, '', {
       fontSize: '11px', color: '#9aa4b4',

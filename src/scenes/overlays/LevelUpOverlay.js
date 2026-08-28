@@ -129,7 +129,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
     this.add.text(b.x + 24, y,
       c.name,
-      { fontSize: '20px', color: '#ffddaa', fontStyle: 'bold', fontFamily: 'Georgia' }
+      { fontSize: '20px', color: '#ffddaa', fontStyle: 'bold', fontFamily: 'Georgia, Gelasio, serif' }
     ).setDepth(d);
 
     this.add.text(b.x + 24, y + 25,
@@ -491,7 +491,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
       const lock = this.add.text(b.centerX, contentTop + 120, '🔒', { fontSize: '52px' })
         .setOrigin(0.5).setDepth(d + 2);
       const head = this.add.text(b.centerX, contentTop + 180, 'Awaiting Awakening',
-        { fontSize: '26px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia' }
+        { fontSize: '26px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia, Gelasio, serif' }
       ).setOrigin(0.5).setDepth(d + 2);
       group.add(lock); group.add(head);
       return;
@@ -503,7 +503,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
     // ── Header ────────────────────────────────────────────────────────────────
     const head = this.add.text(b.centerX, contentTop - 2,
       `🔒  Awaiting Awakening`,
-      { fontSize: '20px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia' }
+      { fontSize: '20px', color: '#9999bb', fontStyle: 'bold', fontFamily: 'Georgia, Gelasio, serif' }
     ).setOrigin(0.5, 0).setDepth(d + 2);
     group.add(head);
 
@@ -531,7 +531,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
         .on('pointerdown', () => this._showAwakening(i));
 
       const lbl = this.add.text(cx, selY + 15, path.name,
-        { fontSize: '14px', color: '#777788', fontFamily: 'Georgia' }
+        { fontSize: '14px', color: '#777788', fontFamily: 'Georgia, Gelasio, serif' }
       ).setOrigin(0.5).setDepth(d + 3)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this._showAwakening(i));

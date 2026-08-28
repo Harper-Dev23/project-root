@@ -74,10 +74,42 @@ const config = {
 };
 //BRIEF TEST UPLOAD TO GIT
 // Boot the game and store the instance
-const game = new Phaser.Game(config);
+// Phaser draws text into a canvas, and canvas rendering does NOT trigger
+// webfont loading the way DOM text does. Booting before the faces are ready
+// silently bakes the fallback font into every Text object created on the first
+// screens. So: ask for the faces we actually use, wait for them, then boot.
+//
+// Never blocks forever - a failed/blocked font rejects or times out and we boot
+// anyway with whatever the browser has. A missing font is a cosmetic problem;
+// a game that never starts is not.
+const FONTS_TO_WARM = [
+  '400 16px Gelasio',
+  '700 16px Gelasio',
+  'italic 400 16px Gelasio',
+  '400 16px Cinzel',
+  '400 16px "Cormorant Garamond"',
+  '400 16px Lato',
+  '700 16px Lato',
+];
 
-// Create and attach the SceneManager to GameState so it can be accessed globally
-GameState.sceneManager = new SceneManager(game);
-window.sceneManager = GameState.sceneManager;
-// Optionally, launch the main menu using the manager
-GameState.sceneManager.startMainMenu();
+async function warmFonts() {
+  if (!document.fonts?.load) return;
+  const timeout = new Promise(res => setTimeout(res, 3000));
+  const loads = Promise.all(
+    FONTS_TO_WARM.map(spec => document.fonts.load(spec).catch(() => {}))
+  ).then(() => document.fonts.ready).catch(() => {});
+  await Promise.race([loads, timeout]);
+}
+
+function boot() {
+  const game = new Phaser.Game(config);
+
+  // Create and attach the SceneManager to GameState so it can be accessed globally
+  GameState.sceneManager = new SceneManager(game);
+  window.sceneManager = GameState.sceneManager;
+  // Optionally, launch the main menu using the manager
+  GameState.sceneManager.startMainMenu();
+
+}
+
+warmFonts().then(boot);

@@ -134,7 +134,7 @@ export default class HuntMapOverlay extends Phaser.Scene {
 
     if (!region) {
       add(this.add.text(this._detailX, y, 'The Island of Behel\'ith', {
-        fontSize: '17px', color: '#ffdd88', fontFamily: 'Georgia',
+        fontSize: '17px', color: '#ffdd88', fontFamily: 'Georgia, Gelasio, serif',
         wordWrap: { width: this._detailW },
       }).setDepth(d + 2));
       add(this.add.text(this._detailX, y + 34,
@@ -149,7 +149,7 @@ export default class HuntMapOverlay extends Phaser.Scene {
 
     add(this.add.text(this._detailX, y, region.name, {
       fontSize: '17px', color: region.huntZoneId ? '#ffdd88' : '#98a0ac',
-      fontFamily: 'Georgia', wordWrap: { width: this._detailW },
+      fontFamily: 'Georgia, Gelasio, serif', wordWrap: { width: this._detailW },
     }).setDepth(d + 2));
     y += 30;
 

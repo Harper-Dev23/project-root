@@ -50,7 +50,7 @@ export function createTextBanner(scene, {
   // would either clip long text or leave huge empty boxes for short text.
   const bodyText = scene.add.text(0, 0, body, {
     fontSize, color, fontStyle, align: 'center',
-    fontFamily: 'Georgia',
+    fontFamily: 'Georgia, Gelasio, serif',
     wordWrap: { width: width - PAD * 2 },
     lineSpacing: 4,
   }).setOrigin(0.5, 0);
@@ -71,7 +71,7 @@ export function createTextBanner(scene, {
       fontSize: titleFontSize,
       color: titleColor,
       fontStyle: 'bold',
-      fontFamily: 'Georgia',
+      fontFamily: 'Georgia, Gelasio, serif',
     }).setOrigin(0.5).setDepth(depth + 1);
     items.push(bannerBg, bannerRule, titleText);
   }

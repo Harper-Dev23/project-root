@@ -344,7 +344,7 @@ export default class OptionsOverlay extends Phaser.Scene {
 
     const makeToggle = (label, isOn, onToggle) => {
       const box = this.add.text(left, cy, isOn ? '[✓]' : '[ ]', {
-        fontSize: '15px', color: isOn ? '#88ff88' : '#888888', fontFamily: 'Georgia'
+        fontSize: '15px', color: isOn ? '#88ff88' : '#888888', fontFamily: 'Georgia, Gelasio, serif'
       }).setDepth(depth).setInteractive({ useHandCursor: true });
       group.add(box);
 

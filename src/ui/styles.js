@@ -67,12 +67,12 @@ export const FONTS = {
   heading: {
     fontSize: '28px',
     color: COLORS.text,
-    fontFamily: 'Cinzel, Georgia, serif', // Classic, sharp, elegant
+    fontFamily: 'Cinzel, Georgia, Gelasio, serif', // Classic, sharp, elegant
   },
   body: {
     fontSize: '18px',
     color: COLORS.subtext,
-    fontFamily: 'Cormorant Garamond, Times, serif', // Old-world readable serif
+    fontFamily: '"Cormorant Garamond", Times, serif', // Old-world readable serif
   },
   button: {
     fontSize: '20px',

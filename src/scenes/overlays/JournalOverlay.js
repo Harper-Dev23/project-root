@@ -81,7 +81,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
 
     async _bootJournalData() {
         try {
-            const mdEntries = await readAllMarkdown('/data/journal/md');
+            const mdEntries = await readAllMarkdown('data/journal/md');
             const entries = [...SEEDS, ...mdEntries];
             JournalState.init(entries);
             this.index.setEntries(entries);

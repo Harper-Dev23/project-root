@@ -577,7 +577,7 @@ export default class CombatScene extends Phaser.Scene {
   _createCombatLogTabs(x, y, padding, tabBarHeight) {
     const makeTab = (label, tab, offsetX) => {
       const text = this.add.text(x + padding + offsetX, y + padding - 2, label, {
-        fontSize: '14px', fontFamily: 'Georgia', color: '#888888',
+        fontSize: '14px', fontFamily: 'Georgia, Gelasio, serif', color: '#888888',
       }).setDepth(UI_DEPTH.overlay + 1);
       const underline = this.add.graphics().setDepth(UI_DEPTH.overlay + 1);
       text.setInteractive({ useHandCursor: true })

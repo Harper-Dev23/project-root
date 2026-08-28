@@ -102,7 +102,7 @@ export default class RenownTreeOverlay extends Phaser.Scene {
     // ---- HUD --------------------------------------------------------------
     this.add.text(W / 2, 62,
       `Origin: ${originLabel}   ·   Renown ${this._item?.renown ?? 0} / ${this._item?.renownMax ?? 0}`,
-      { fontSize: '15px', color: '#c8ccd4', fontFamily: 'Georgia' }
+      { fontSize: '15px', color: '#c8ccd4', fontFamily: 'Georgia, Gelasio, serif' }
     ).setOrigin(0.5, 0).setDepth(2020);
 
     this.add.text(W / 2, H - 44,

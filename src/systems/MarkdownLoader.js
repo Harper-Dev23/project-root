@@ -438,7 +438,11 @@ async function readMarkdownFilesBrowser(basePath) {
     return entries;
 }
 
-export async function readAllMarkdown(basePath = '/data/journal/md') {
+// basePath is RELATIVE on purpose. It used to be '/data/journal/md', which
+// only resolves when the game is served from a domain root. On GitHub Pages
+// a project site lives at <user>.github.io/<repo>/, so the leading slash sent
+// the fetch to <user>.github.io/data/... and the whole journal 404'd.
+export async function readAllMarkdown(basePath = 'data/journal/md') {
     if (hasNodeFs()) {
         return readMarkdownFilesNode(basePath);
     }

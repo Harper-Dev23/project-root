@@ -101,7 +101,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
         .on('pointerdown', () => this._showTab(name));
 
       const lbl = this.add.text(cx, tabY, name,
-        { fontSize: '14px', color: '#777788', fontFamily: 'Georgia' }
+        { fontSize: '14px', color: '#777788', fontFamily: 'Georgia, Gelasio, serif' }
       ).setOrigin(0.5).setDepth(d + 3)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this._showTab(name));
@@ -404,7 +404,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
 
       add(this.add.text(px + 48, py + 12, p.name, {
         fontSize: '15px', color: unlocked ? C.unlocked : C.locked,
-        fontStyle: 'bold', fontFamily: 'Georgia',
+        fontStyle: 'bold', fontFamily: 'Georgia, Gelasio, serif',
       }).setDepth(d + 2));
 
       // Gate marker — text label, not color alone, so the locked/unlocked
@@ -526,7 +526,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
       }).setDepth(d + 2));
 
       add(this.add.text(rightX + 40, ty, tier.name, {
-        fontSize: '14px', color: tier.color, fontStyle: 'bold', fontFamily: 'Georgia',
+        fontSize: '14px', color: tier.color, fontStyle: 'bold', fontFamily: 'Georgia, Gelasio, serif',
       }).setDepth(d + 2));
 
       let uy = ty + 22;

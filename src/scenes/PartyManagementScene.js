@@ -163,7 +163,7 @@ export default class PartyManagementScene extends Phaser.Scene {
       .setOrigin(0.5).setDepth(1002);
 
     // Close [X] — positioned inside the panel top-right, matching other overlays
-    this.add.text(panelX + panelW - 18, panelY + 18, '✕', { fontSize: '24px', color: '#ff8888', fontFamily: 'Georgia' })
+    this.add.text(panelX + panelW - 18, panelY + 18, '✕', { fontSize: '24px', color: '#ff8888', fontFamily: 'Georgia, Gelasio, serif' })
       .setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
 
