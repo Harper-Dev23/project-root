@@ -373,8 +373,23 @@ const GameState = {
       console.log(`[SAVE] char#${i} equip snapshot=`, ch.equipment);
     });
     console.log('>>> DEBUG SAVE snapshot:', JSON.stringify(payload.characters, null, 2));
-    localStorage.setItem(`bmSave_${slot}`, JSON.stringify(payload));
+    // localStorage.setItem THROWS when storage is unavailable or full - most
+    // commonly iOS Safari private browsing, where the quota is effectively
+    // zero. Unguarded, that took down whatever triggered the save (autosave
+    // fires from several places, including mid-scene transitions).
+    try {
+      localStorage.setItem(`bmSave_${slot}`, JSON.stringify(payload));
+    } catch (e) {
+      const why = e && e.name === 'QuotaExceededError'
+        ? 'Browser storage is full or unavailable (private browsing blocks saving).'
+        : `Could not write the save: ${e && e.message ? e.message : e}`;
+      console.error(`[GameState] Save to '${slot}' failed - ${why}`);
+      this.lastSaveError = why;
+      return false;
+    }
+    this.lastSaveError = null;
     console.log(`Saved → ${slot}`);
+    return true;
   },
 
   load(slot) {

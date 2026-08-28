@@ -13503,7 +13503,7 @@ Object.assign(RAW_SKILLS, {
           : `${attacker?.name || "The axeman"} finds no momentum to harvest yet.`,
       };
     },
-    description: "Convert all enemy lacerate meters into initiative (2 per 50 meters, cap 30)."
+    description: "Draws momentum from enemy bleeding: gain 2 Initiative per 50 total enemy Lacerate, up to 30. Does not consume their Lacerate."
   },
 
   'bloodletting_cleave': {

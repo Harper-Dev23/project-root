@@ -4360,6 +4360,14 @@ export default class CombatScene extends Phaser.Scene {
     // callback until something unrelated happens to rebuild it. See the
     // rebuild call below.
     const wasCurrentActor = removedIndex !== -1 && removedIndex === this.currentTurnIndex;
+    // Tell _advanceTurn that the unit it is about to advance PAST is already
+    // gone. Its own `previousCharDied` only covers deaths from the two
+    // end-of-turn tick paths (hazard zones, weakness DOTs). A death from
+    // anything synchronous mid-action - a reaction counterattack, a
+    // retaliation proc, self-damage like Reckless Immolation - never set it,
+    // so the index (already correctly repointed at the next unit by the
+    // filter below) got incremented again and skipped that unit entirely.
+    if (wasCurrentActor) this._currentActorDiedMidTurn = true;
     this.turnOrder = this.turnOrder.filter(u => u !== unit);
     if (removedIndex !== -1 && removedIndex < this.currentTurnIndex) {
       this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
@@ -9844,6 +9852,11 @@ export default class CombatScene extends Phaser.Scene {
     // 1) Apply END-OF-TURN consequences for the actor who just acted
     const previousChar = this._currentChar?.();
     let previousCharDied = false;
+    // Consume the mid-turn-death flag exactly once, here, so a stale value
+    // can never suppress a later legitimate increment (which would let a
+    // unit act twice).
+    const actorDiedMidTurn = !!this._currentActorDiedMidTurn;
+    this._currentActorDiedMidTurn = false;
     if (previousChar) {
       // tick centralized cooldowns for the actor who just acted
       this._tickCooldownsEndOfTurn(previousChar);
@@ -9887,7 +9900,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // 2) Advance to next actor
     if (!this.turnOrder?.length) return;                  // avoid modulo 0
-    if (previousCharDied) {
+    if (previousCharDied || actorDiedMidTurn) {
       // previousChar was just removed from turnOrder by _onUnitKnockedOut,
       // which only decrements currentTurnIndex if the removed slot was
       // BEFORE it — since previousChar WAS AT currentTurnIndex, that
