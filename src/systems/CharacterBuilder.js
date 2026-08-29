@@ -1,5 +1,5 @@
 // src/systems/CharacterBuilder.js
-import { isItemInstance } from './ItemFactory.js';
+import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { SKILLS } from '../../data/skills.js';
 import { Items } from '../../data/items.js';
 import GameState from './GameState.js';
@@ -63,6 +63,44 @@ function getStartingSkills(baseClass) {
   // name, no description and no apply(). Grant removed; the filter in
   // buildCharacter guards against any future id going stale the same way.
   return ['basic_attack'];
+}
+
+// Starting armour, one common-rarity set per class.
+//
+// Every new character used to spawn naked and had to walk to Watershade before
+// they could do anything, which made character creation feel unfinished. Each
+// set leans on the class's own stat spread (see CLASS_BONUSES) using only the
+// common `simple_*` pieces, so this grants no power a player couldn't buy for
+// free on turn one - it just skips the errand.
+//
+// Weapons and jewellery are deliberately NOT included: arming yourself at
+// Ironbinder's Stand is an actual Elder quest step.
+const CLASS_STARTING_ARMOR = {
+  //          head               chest                   legs               gloves               boots
+  Grunt:     ['simple_helm_str', 'simple_chest_con_str', 'simple_legs_con', 'simple_gloves_str', 'simple_boots_con'],
+  Beggar:    ['simple_helm_dex', 'simple_chest_dex_int', 'simple_legs_dex', 'simple_gloves_dex', 'simple_boots_con'],
+  Performer: ['simple_helm_dex', 'simple_chest_dex_int', 'simple_legs_dex', 'simple_gloves_dex', 'simple_boots_dex'],
+  Acolyte:   ['simple_helm_int', 'simple_chest_wis_con', 'simple_legs_wis', 'simple_gloves_int', 'simple_boots_wis'],
+  Scholar:   ['simple_helm_int', 'simple_chest_dex_int', 'simple_legs_wis', 'simple_gloves_int', 'simple_boots_wis'],
+  Shepherd:  ['simple_helm_dex', 'simple_chest_wis_con', 'simple_legs_wis', 'simple_gloves_dex', 'simple_boots_wis'],
+};
+const ARMOR_SLOT_ORDER = ['head', 'chest', 'legs', 'gloves', 'boots'];
+
+/** Fresh common-rarity instances of a class's starting set, keyed by slot. */
+function buildStartingArmor(baseClass) {
+  const set = CLASS_STARTING_ARMOR[baseClass] || CLASS_STARTING_ARMOR.Grunt;
+  const out = {};
+  ARMOR_SLOT_ORDER.forEach((slot, i) => {
+    const id = set[i];
+    if (!id) return;
+    // rollAffixes:false - common rolls none anyway, but being explicit means a
+    // future change to the common tier can't silently arm new characters with
+    // affixed gear.
+    const inst = createItemInstance(id, { rarity: 'common', rollAffixes: false });
+    if (inst) out[slot] = inst;
+    else console.warn('[CharacterBuilder] starting armor ' + id + ' not found; ' + slot + ' left empty');
+  });
+  return out;
 }
 
 export function getUnlockedWeaponSkills(stats) {
@@ -213,6 +251,11 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
 
     cooldowns: {},
     baseStats: { ...stats },
+    // Snapshot of the stats this character was CREATED with, before any
+    // level-up allocation. Only consumer today is the respec tonic, which
+    // needs a baseline to restore to - nothing else reads it, so deleting
+    // the tonic later leaves this a harmless unused field.
+    creationStats: { ...stats },
     totalStats,
     derived,
     maxHP,
@@ -237,17 +280,26 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
 
     weaponType: null,
     weapon: null,
-    equipment: {
-      weaponMain: null,
-      weaponOff: null,
-      head: null,
-      chest: null,
-      legs: null,
-      gloves: null,
-      boots: null,
-      ring: null,
-      amulet: null
-    },
+    // Slot order matters: the inventory's Equipped panel renders
+    // Object.keys(equipment) directly, so this literal IS the display order.
+    // Spreading the armour set in last put ring/amulet above the armour rows,
+    // which read as a bug next to every previously-made character.
+    equipment: (() => {
+      const armor = buildStartingArmor(baseClass);
+      return {
+        // Weapons stay empty on purpose: the Elder's quest to visit
+        // Ironbinder's Stand is what arms you.
+        weaponMain: null,
+        weaponOff: null,
+        head: armor.head || null,
+        chest: armor.chest || null,
+        legs: armor.legs || null,
+        gloves: armor.gloves || null,
+        boots: armor.boots || null,
+        ring: null,
+        amulet: null,
+      };
+    })(),
     inventory: [],
 
     location: { x: 0, y: 0 },

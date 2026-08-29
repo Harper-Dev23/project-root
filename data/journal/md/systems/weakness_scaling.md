@@ -92,7 +92,7 @@ Only **Fire** carries a heavier weight than baseline (40 against the standard 35
 
 ### Fire — *Singed / Ablaze*
 - **T1:** **10** buildup lost on acting. Incoming fire damage **+25%**, capped at **+100%**.
-- **T2:** burn tick of **10**, plus **5 per 100** buildup, at turn start. Consumes **50** buildup per tick on a scaling curve, capped at **400**.
+- **T2:** burn tick of **10**, plus **5 per 100** buildup, at end of turn. Fire does not consume its own meter — instead it uses a **steeper decay curve** than any other family (see below), so it still burns out fastest.
 
 ### Disorient — *Dazed / Concussed*
 - **T1:** ability costs **+25%**, capped at **+75%**.
@@ -141,7 +141,7 @@ Fire, Toxic and Lacerate all deal damage at end of turn, and all three are shape
 | 1270 | 22% *(soft cap)* | 80 *(capped)* | 143 |
 | 2000 | 22% max HP | 80 | 180 |
 
-**Fire — the spike.** Scales at `+0.01 per point` **and** adds a flat 5 per 100 meter, so it climbs faster than anything else. It pays for that: it consumes **50 of its own meter every tick** (up to 400) and decays fastest at **40**. Fire burns hot and burns out.
+**Fire — the spike.** Scales at `+0.01 per point` **and** adds a flat 5 per 100 meter, so it climbs faster than anything else. It pays for that with the steepest decay in the game: past 200 meter Fire sheds **60 plus 50 per additional 100**, up to 340 a turn — roughly **2.4x** what Lacerate loses at the same meter. Fire burns hot and burns out.
 
 **Toxic — the grind.** Scales at `+0.0075 per point` — deliberately half of Fire — with no second term. It consumes nothing, decays slowest at **30**, and at Tier 1 has up to a **75%** chance to skip decay entirely. Half the damage, indefinitely.
 

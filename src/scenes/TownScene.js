@@ -13,6 +13,7 @@ import { describeModifiers } from '../systems/HuntModifiers.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
+import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -27,7 +28,12 @@ const QUEST_FLAG_POSITIONS = {
   tribe_vendor:   { x: 610, y: 404 },
   vendor_row:     { x: 524, y: 344 },
   combat_pit:     { x: 824, y: 56  },
-  orientation_bonfire: { x: 683, y: 302 },
+  // Nudged from (683,302), where it clipped the bonfire's own hover zone
+  // (625..685 x 302..352) at its top-right corner. This is the ONE marker whose
+  // centre sat inside a zone, and since building zones win the hover test, its
+  // tooltip could never have appeared -- on the first marker a new player meets.
+  // Now centred above the fire (zone centre x=655) and clear of the top edge.
+  orientation_bonfire: { x: 655, y: 283 },
   orientation_elder:   { x: 857, y: 342 },
   elder_bonepile:           { x: 857, y: 342 },
   elder_leveling:           { x: 857, y: 342 },
@@ -377,6 +383,91 @@ export default class TownScene extends Phaser.Scene {
     return buildItemTooltipLines(itemRef, { rarityColors: RARITY_COLORS });
   }
 
+  // ===========================================================
+  // Quest markers — hover hint + click-through to the Quest Log
+  // ===========================================================
+  //
+  // The "!"/"★" markers are pure decoration: they are drawn at depth 5/6 with
+  // NO setInteractive(), so they can never consume a click meant for the
+  // building underneath. That matters more than it looks -- 13 of the 30
+  // markers physically overlap a building's hover zone at their drawn size
+  // (radius 11), and because markers sit above the zones in the display list
+  // they would win every hit test if they were interactive. Making them
+  // clickable would have broken entering the Combat Pit and all four leader
+  // huts in exchange for a tooltip.
+  //
+  // So hover and click are resolved here instead, at the scene level, against
+  // the plain coordinate list built in _refreshQuestFlags(). Building zones
+  // always win: if the pointer is over any interactive object, this does
+  // nothing at all.
+  _initQuestMarkerInput() {
+    // Matches the marker's drawn radius (11) plus its idle pulse to 1.25x.
+    const HOVER_RADIUS = 14;
+
+    const markerAt = (pointer) => {
+      if (!this._questMarkers?.length) return null;
+      // A building zone under the cursor always takes priority.
+      const over = this.input.hitTestPointer(pointer);
+      if (over && over.length) return null;
+      const px = pointer.worldX, py = pointer.worldY;
+      let best = null, bestD = HOVER_RADIUS;
+      for (const m of this._questMarkers) {
+        const d = Math.hypot(m.x - px, m.y - py);
+        if (d <= bestD) { bestD = d; best = m; }
+      }
+      return best;
+    };
+
+    this.input.on('pointermove', (pointer) => {
+      const m = markerAt(pointer);
+      if (!m) {
+        if (this._hoveredMarkerFlag) { this._hoveredMarkerFlag = null; this.tooltip?.hide(); }
+        return;
+      }
+      if (this._hoveredMarkerFlag === m.flagId) {
+        this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+        return;
+      }
+      this._hoveredMarkerFlag = m.flagId;
+      const data = this._questMarkerTooltip(m.flagId);
+      if (data) this.tooltip?.show(pointer.worldX, pointer.worldY, data);
+      else this.tooltip?.hide();
+    });
+
+    this.input.on('pointerdown', (pointer) => {
+      const m = markerAt(pointer);
+      if (!m) return;
+      // Informational only -- this never performs the objective itself, so the
+      // player still has to go click the building. It just makes the most
+      // tempting click in the game do something instead of nothing, and it is
+      // how most players will find the Quest Log at all.
+      const ui = this.scene.get('UIScene');
+      if (ui?.anyMenuOverlayOpen?.()) return;
+      this.tooltip?.hide();
+      this._hoveredMarkerFlag = null;
+      SoundManager.play('select');
+      ui?.openOverlay?.('QuestOverlay');
+    });
+
+    this.events.on('sleep', () => { this._hoveredMarkerFlag = null; this.tooltip?.hide(); });
+    this.events.on('shutdown', () => { this._hoveredMarkerFlag = null; });
+  }
+
+  /** Tooltip content for a marker, read straight from the quest step it stands
+   *  for, so the map and the Quest Log can never drift apart. */
+  _questMarkerTooltip(flagId) {
+    const found = getStepForFlag(flagId, ProgressionManager);
+    if (!found) return null;
+    const { quest, step } = found;
+    const desc = resolveStepDescription(step, ProgressionManager);
+    const lines = [];
+    if (desc) lines.push({ text: desc, color: '#dddddd' });
+    lines.push({ text: '', color: '#dddddd' });
+    lines.push({ text: quest.title, color: '#8899aa' });
+    lines.push({ text: 'Click for Quest Log', color: '#ffaa00' });
+    return { title: step.label, titleColor: '#ffdd88', lines };
+  }
+
   _attachTooltip(displayObj, {
     itemRef = null,
     tooltipData = null,
@@ -436,6 +527,7 @@ export default class TownScene extends Phaser.Scene {
 
 
     this.tooltip = new Tooltip(this);
+    this._initQuestMarkerInput();
 
     // Debug click coords
     this.input.on('pointerdown', pointer => {
@@ -829,6 +921,10 @@ export default class TownScene extends Phaser.Scene {
       this._questFlagObjects.forEach(o => o.destroy());
     }
     this._questFlagObjects = [];
+    // Positions of the markers currently on screen. The marker art itself is
+    // deliberately NOT interactive (see _initQuestMarkerInput), so hover/click
+    // is resolved against this list instead.
+    this._questMarkers = [];
 
     for (const [flagId, cfg] of Object.entries(QUEST_FLAG_POSITIONS)) {
       if (!ProgressionManager.hasQuestFlag(flagId)) continue;
@@ -853,6 +949,7 @@ export default class TownScene extends Phaser.Scene {
       });
 
       this._questFlagObjects.push(circle, label);
+      this._questMarkers.push({ flagId, x: cfg.x, y: cfg.y });
     }
   }
 
@@ -1715,21 +1812,11 @@ export default class TownScene extends Phaser.Scene {
           { id: "crude_axe_2h", cost: 0 }
         ]
       },
-      greenhollow: {
-        displayName: "Greenhollow Satchel",
-        flavor: `"A fragrant scent of herbs and bark lingers. 
-        A cloaked figure nods as you approach, laying bundles out along 
-        woven mats. 'Natural, safe... well, mostly,' they whisper."`,
-        inventory: [
-          { id: "healing_potion", cost: 10 },
-          { id: "mana_potion", cost: 12 }
-        ]
-      },
       watershade: {
-        displayName: "Watershade",
-        flavor: `"A lean woman sits beside glinting racks of armor, each 
-        piece polished but practical. She nods once. 'Defense wins wars. 
-        You buying or dreaming?'"`,
+        displayName: "Watershade Armory",
+        flavor: `"Racks of helms, chest pieces and boots line the stall, each 
+        polished but plainly made. A lean woman nods once. 'Armor. All of it 
+        free, all of it common. Defense wins wars — you buying or dreaming?'"`,
         inventory: [
           { id: "simple_helm_str", cost: 0 },
           { id: "simple_helm_dex", cost: 0 },
@@ -1746,6 +1833,16 @@ export default class TownScene extends Phaser.Scene {
           { id: "simple_boots_con", cost: 0 },
           { id: "simple_boots_dex", cost: 0 },
           { id: "simple_boots_wis", cost: 0 }
+        ]
+      },
+      greenhollow: {
+        displayName: "Draughtwell",
+        flavor: `"Stoppered bottles crowd every shelf, catching the light in 
+        greens and bruised purples. Something behind the counter is still 
+        bubbling. 'Drink it and see,' the apothecary offers. 'Most of them 
+        wear off.'"`,
+        inventory: [
+          { id: "tonic_of_reflection", cost: 0 }
         ]
       },
 
@@ -1786,7 +1883,7 @@ export default class TownScene extends Phaser.Scene {
       },
 
       wayfinder: {
-        displayName: "Wayfinder's Cache",
+        displayName: "Greenhollow Satchel",
         flavor: `"A weathered cartographer spreads a handful of dog-eared
         plans across a crate. 'Take your pick — won't cost you a thing.
         Just don't blame me for what you walk into.'"`,

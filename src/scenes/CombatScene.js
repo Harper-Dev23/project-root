@@ -36,7 +36,7 @@ import { resolveAOESplash } from '../systems/aoeResolver.js';
 import {
   makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult,
   WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
-  WeaknessAliases, familyIntensityMult, familyStartConsume,
+  WeaknessAliases, familyIntensityMult,
   WeaknessBuildupCategory,
 } from '../systems/StatusEffects.js';
 
@@ -4079,25 +4079,39 @@ export default class CombatScene extends Phaser.Scene {
       this._reviveAlliesAfterVictory?.();
     }
 
-    // XP: training scenarios only reward on first clear (no farming).
-    // Non-training uses the generic calculation.
+    // XP: training scenarios reward each character's FIRST PERSONAL clear.
+    //
+    // This used to gate on ProgressionManager.isScenarioCompleted, which is
+    // account-wide - so once any party had cleared a fight, a newly created
+    // character could never earn XP from it again no matter how many times they
+    // fought it. Each character now carries their own record; the account-wide
+    // flag is left alone for what it is actually for, gating which encounters
+    // the party may attempt next.
     const alreadyCompleted = ProgressionManager.isScenarioCompleted(this.scenarioId);
-    let xpReward = 0;
-    if (this.isTraining) {
-      xpReward = alreadyCompleted ? 0 : (CombatScene.SCENARIO_XP[this.scenarioId] ?? 0);
-    } else {
-      xpReward = this._calculateXPReward();
-    }
-
     let leveledUpNames = [];
-    if (xpReward > 0) {
-      const result = GameState.awardPartyXP(xpReward);
-      leveledUpNames = result.leveledUpNames;
-      xpSummary.push(...result.summaries);
-    } else if (alreadyCompleted && this.isTraining) {
-      GameState.party.forEach(char => {
-        if (char.status !== 'dead') xpSummary.push(`${char.name} — already cleared (no XP)`);
-      });
+
+    if (this.isTraining) {
+      const perClear = CombatScene.SCENARIO_XP[this.scenarioId] ?? 0;
+      const survivors = GameState.party.filter(c => c && c.status !== 'dead');
+      const first = survivors.filter(c => !GameState.hasCharacterCleared(c, this.scenarioId));
+      const repeat = survivors.filter(c => GameState.hasCharacterCleared(c, this.scenarioId));
+
+      if (perClear > 0 && first.length) {
+        const result = GameState.awardXPTo(first, perClear);
+        leveledUpNames = result.leveledUpNames;
+        xpSummary.push(...result.summaries);
+      }
+      repeat.forEach(c => xpSummary.push(`${c.name} - already cleared (no XP)`));
+
+      // Everyone who survived now owns this clear, first-timers included.
+      survivors.forEach(c => GameState.markCharacterCleared(c, this.scenarioId));
+    } else {
+      const xpReward = this._calculateXPReward();
+      if (xpReward > 0) {
+        const result = GameState.awardPartyXP(xpReward);
+        leveledUpNames = result.leveledUpNames;
+        xpSummary.push(...result.summaries);
+      }
     }
 
     const uiScene = this.scene.get('UIScene');
@@ -7329,7 +7343,7 @@ export default class CombatScene extends Phaser.Scene {
 
       // 2) Compute overflow-aware decay amount (but don't apply yet)
       const m = u.weakness.meters?.[fam] | 0;
-      let decay = weaknessDecayAmount(conf.decay, m);
+      let decay = weaknessDecayAmount(conf.decay, m, conf.decayCurve);
 
       // 3) CURSE: reduce decay amount (T1/T2), scaling with intensity (was flat)
       if (fam === 'curse') {
@@ -8636,22 +8650,10 @@ export default class CombatScene extends Phaser.Scene {
           return { died: true };
         }
 
-        // Optional extra meter consumption at end of turn (per Fire config)
-        const consume = familyStartConsume('fire', m);
-        if (consume > 0) {
-          const before = meters.fire | 0;
-          meters.fire = Math.max(0, before - consume);
-          this._log(`${char.name} burns out: Fire meter ${before} → ${meters.fire} (−${consume}).`);
-
-          const fam = WeaknessFamilies.fire;
-          const newTier = (meters.fire >= fam.t2) ? 2 : (meters.fire >= fam.t1 ? 1 : 0);
-          const oldTier = tiers.fire | 0;
-          if (newTier !== oldTier) {
-            tiers.fire = newTier;
-            (char.weakness.grace || (char.weakness.grace = {})).fire = fam.grace || 0;
-            this._onWeaknessTierChanged?.(char, 'fire', newTier, oldTier, { startTick: true });
-          }
-        }
+        // Fire no longer consumes its own meter here. That was a SECOND
+        // meter-loss mechanism stacked on ordinary decay - the only family
+        // with one - and is now folded into fire's own steeper decay curve
+        // (WeaknessFamilies.fire.decayCurve). One mechanism, same burn-out.
       }
     }
 

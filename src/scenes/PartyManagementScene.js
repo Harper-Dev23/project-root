@@ -628,7 +628,16 @@ export default class PartyManagementScene extends Phaser.Scene {
     });
     GameState.partySlots = slotMap;
 
-    this.sound?.play?.('ui_confirm');
+    // NOTE: this used to be `this.sound?.play?.('ui_confirm')`. 'ui_confirm'
+    // is not in AUDIO_MANIFEST and was never loaded, so Phaser threw
+    // "Audio key ui_confirm missing from cache" from here on every save. The
+    // `?.` only guarded a missing `this.sound`, not the throw. Because it
+    // fired mid-function, the two lines below never ran: portraits didn't
+    // snap into their slots and no confirmation appeared, so a successful
+    // save looked like a no-op. The confirm sound is already covered by the
+    // SoundManager.play('select') at the top of this function -- and going
+    // through SoundManager is what makes a missing key a silent no-op
+    // instead of an exception.
     this._syncPortraitPositionsToSlots();
 
     // Only show feedback if something actually changed.

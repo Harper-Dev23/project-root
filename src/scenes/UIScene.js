@@ -10,6 +10,15 @@ import ProgressionManager from '../systems/ProgressionManager.js';
 import { anyQuestTabHasNew } from './overlays/QuestOverlay.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 
+// Every menu overlay scene key. Hoisted to module scope (was a local inside
+// create()) so other scenes can ask "is a menu already open?" before layering
+// something on top -- TownScene's quest markers need exactly that check.
+export const MENU_OVERLAY_KEYS = [
+  'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
+  'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
+  'TribeRelationsOverlay', 'PartyManagementScene', 'CampRosterOverlay',
+];
+
 function getXPNeededForLevel(level) {
   // Example XP curve; adjust as needed
   return 100 + (level - 1) * 150;
@@ -20,7 +29,13 @@ export default class UIScene extends Phaser.Scene {
     super({ key: 'UIScene' });
   }
   init(data) {
-    this.rightPanelVisible = data?.rightPanelVisible ?? false;
+    // Defaults to OPEN. It used to default closed, which meant a new player's
+    // entire menu -- Character, Party, Inventory, Skills, Map, Quest, Tribes --
+    // sat behind an unlabelled 18px "|>" in the corner with nothing pointing at
+    // it, including the Quest Log that explains what to do next. Nothing ever
+    // passed `true`, so it was closed on every single launch. Collapsing is
+    // still one click for players who want the screen space.
+    this.rightPanelVisible = data?.rightPanelVisible ?? true;
   }
   create() {
     SoundManager.init(this);
@@ -32,13 +47,8 @@ export default class UIScene extends Phaser.Scene {
 
         // ── Hotkeys ────────────────────────────────────────────────────────
     // All overlay scene keys — used to guard against stacking overlays via hotkeys.
-    const MENU_OVERLAY_KEYS = [
-      'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
-      'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-      'TribeRelationsOverlay', 'PartyManagementScene', 'CampRosterOverlay',
-    ];
     // Returns true if any overlay is currently running.
-    const _anyOverlayOpen = () => MENU_OVERLAY_KEYS.some(k => this.scene.isActive(k));
+    const _anyOverlayOpen = () => this.anyMenuOverlayOpen();
 
     this._cleanupHotkeys = registerHotkeys(this, {
       menu_character: () => {
@@ -531,6 +541,11 @@ export default class UIScene extends Phaser.Scene {
       .on('pointerover', () => btn.setStyle({ color: MENU_THEME.accentHover }))
       .on('pointerout', () => btn.setStyle({ color: '#ffffff' }));
     return btn;
+  }
+
+  /** True if any menu overlay scene is currently running. */
+  anyMenuOverlayOpen() {
+    return MENU_OVERLAY_KEYS.some(k => this.scene.isActive(k));
   }
 
   openOverlay(key) {

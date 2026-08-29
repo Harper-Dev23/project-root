@@ -43,6 +43,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'prologue_create_character',
+        flags:          ['orientation_bonfire'],
         label:       'Create a Character',
         description: 'Visit the bonfire at the heart of camp. A hunt must have hunters.',
         isActive:   (pm) => pm.hasQuestFlag('orientation_bonfire'),
@@ -50,6 +51,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'prologue_elder',
+        flags:          ['orientation_elder'],
         label:       'Speak with the Elder',
         description: 'A wise elder waits in the tower at the heart of camp. Heed their counsel before venturing further.',
         isActive:   (pm) => pm.hasQuestFlag('orientation_elder'),
@@ -63,6 +65,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'prologue_equip',
+        flags:          ['vendor_row'],
         label:       'Equip Yourself',
         description: 'Visit the vendor row and prepare your party for the trials ahead.',
         isActive:   (pm) => pm.hasQuestFlag('vendor_row'),
@@ -73,6 +76,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'prologue_first_trial',
+        flags:          ['combat_pit'],
         label:       'Enter the Combat Pit',
         description: 'Prove your party\'s mettle in the Combat Pit. The elder expects results.',
         isActive:   (pm) => !sc(pm, 'training_encounter_1') && !pm.hasQuestFlag('vendor_row') && !pm.hasQuestFlag('orientation_elder'),
@@ -91,6 +95,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'ktt_choose_tribe',
+        flags:          ['tribe_choice', 'lodge_styx', 'lodge_zafaar', 'lodge_elseth', 'lodge_lesse'],
         label:       'Heed the Elder\'s Call',
         description: 'Return to the Elder\'s Tower. The time has come to choose your allegiance.',
         isActive:   (pm) => pm.hasQuestFlag('tribe_choice') || anyLodgeFlag(pm),
@@ -98,6 +103,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'ktt_tribe_vendor',
+        flags:          ['tribe_vendor'],
         label:       'Visit the Tribe Vendor',
         description: 'Your new allegiance grants access to exclusive wares. Spend your Tribe Ticket wisely.',
         isActive:   (pm) => pm.tribe !== null && pm.hasQuestFlag('tribe_vendor'),
@@ -115,6 +121,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'lr_s2',
+        flags:          ['combat_pit'],
         label:       'Complete the Second Trial',
         description: 'Return to the Combat Pit. Your tribe is watching.',
         isActive:   (pm) => pm.tribe !== null && !sc(pm, 'training_encounter_2'),
@@ -122,6 +129,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_elder_bonepile',
+        flags:          ['elder_bonepile'],
         label:       'Return to the Elder',
         description: 'The elder has knowledge to share about the Bone Pile and its risks.',
         isActive:   (pm) => pm.hasQuestFlag('elder_bonepile'),
@@ -129,6 +137,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_s3',
+        flags:          ['combat_pit'],
         label:       'Complete the Third Trial',
         description: 'Steel your party and return to the Combat Pit.',
         isActive:   (pm) => sc(pm, 'training_encounter_2') && !pm.hasQuestFlag('elder_bonepile') && !sc(pm, 'training_encounter_3'),
@@ -136,6 +145,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_elder_leveling',
+        flags:          ['elder_leveling'],
         label:       'Return to the Elder',
         description: 'The elder will explain how your party grows stronger over time.',
         isActive:   (pm) => pm.hasQuestFlag('elder_leveling'),
@@ -143,6 +153,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_s4',
+        flags:          ['combat_pit'],
         label:       'Complete the Fourth Trial',
         description: 'Another trial awaits in the Combat Pit.',
         isActive:   (pm) => sc(pm, 'training_encounter_3') && !pm.hasQuestFlag('elder_leveling') && !sc(pm, 'training_encounter_4'),
@@ -150,6 +161,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_samuel',
+        flags:          ['samuel_mourne'],
         label:       'Meet Samuel Mourne',
         description: 'A solitary figure lingers at the edge of camp. Seek them out.',
         isActive:   (pm) => pm.hasQuestFlag('samuel_mourne'),
@@ -157,6 +169,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_s5',
+        flags:          ['combat_pit'],
         label:       'Complete the Fifth Trial',
         description: 'The Combat Pit calls again. Answer it.',
         isActive:   (pm) => sc(pm, 'training_encounter_4') && !pm.hasQuestFlag('samuel_mourne') && !sc(pm, 'training_encounter_5'),
@@ -164,6 +177,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'lr_s6',
+        flags:          ['combat_pit'],
         label:       'Complete the Final Trial',
         description: 'This is the last trial of the demo. Whatever awaits beyond — face it with everything you have.',
         isActive:   (pm) => sc(pm, 'training_encounter_5') && !sc(pm, 'training_encounter_6'),
@@ -185,6 +199,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'bas_choose_tribe',
+        flags:          ['tribe_choice', 'lodge_styx', 'lodge_zafaar', 'lodge_elseth', 'lodge_lesse'],
         label:       'Choose Your Tribe',
         description: 'Visit the four lodges — Styx, Zafaar, Elseth, and Le\'sse — then return to the Elder\'s Tower to pledge your allegiance.',
         isActive:   (pm) => pm.hasQuestFlag('tribe_choice') || anyLodgeFlag(pm),
@@ -192,6 +207,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_tribe_vendor',
+        flags:          ['tribe_vendor'],
         label:       'Visit the Tribe Vendor',
         description: 'Your new allegiance grants access to exclusive wares. Spend your Tribe Ticket at your tribe\'s vendor.',
         isActive:   (pm) => pm.tribe !== null && pm.hasQuestFlag('tribe_vendor'),
@@ -203,6 +219,7 @@ export const QUEST_LINES = [
       //    Handin flag   (gold ★)   → return to collect reward (Complete button)
       {
         id:          'bas_elseth_leader',
+        flags:          ['elseth_leader_brief', 'elseth_leader_challenge', 'elseth_leader_handin'],
         label:       "Answer Wren the Animancer's Call",
         description: (pm) =>
           pm.hasQuestFlag('elseth_leader_handin')
@@ -215,6 +232,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_styx_leader',
+        flags:          ['styx_leader_brief', 'styx_leader_challenge', 'styx_leader_handin'],
         label:       "Meet Cade, the Styx Tactician",
         description: (pm) =>
           pm.hasQuestFlag('styx_leader_handin')
@@ -227,6 +245,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_lesse_leader',
+        flags:          ['lesse_leader_brief', 'lesse_leader_challenge', 'lesse_leader_handin'],
         label:       "Face Ember and Rime",
         description: (pm) =>
           pm.hasQuestFlag('lesse_leader_handin')
@@ -239,6 +258,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'bas_zafaar_leader',
+        flags:          ['zafaar_leader_brief', 'zafaar_leader_challenge', 'zafaar_leader_handin'],
         label:       'The Zafaar Champion Awaits',
         description: (pm) =>
           pm.hasQuestFlag('zafaar_leader_handin')
@@ -271,6 +291,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'meet_samuel_mourne',
+        flags:          ['samuel_mourne'],
         label:       'Seek Out Samuel Mourne',
         description: 'A solitary figure lingers near the camp. Seek him out and hear what he has to say.',
         isActive:   (pm) => pm.hasQuestFlag('samuel_mourne'),
@@ -280,6 +301,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'attune_waystone',
+        flags:          ['waystone_visit'],
         label:       'Attune to the Waystone',
         description: 'Samuel has directed you to the waystone at the edge of camp. Approach it and allow it to attune to your presence.',
         isActive:   (pm) => pm.hasQuestFlag('waystone_visit'),
@@ -287,6 +309,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'collect_waystone_shard',
+        flags:          ['samuel_waystone_return'],
         label:       'Collect the Waystone Shard',
         description: (pm) => pm.hasQuestFlag('samuel_waystone_return')
           ? 'Return to Samuel Mourne and collect your reward — a personal shard of the waystone network.'
@@ -310,6 +333,7 @@ export const QUEST_LINES = [
     steps: [
       {
         id:         'samuel_awakening_step',
+        flags:         ['samuel_awakening'],
         label:      'Speak with Samuel Mourne',
         description: 'Return to Samuel\'s tent. He has spoken of an "Awakening."',
         isActive:   (pm) => pm.hasQuestFlag('samuel_awakening'),
@@ -318,6 +342,7 @@ export const QUEST_LINES = [
       },
       {
         id:         'seers_awakening_step',
+        flags:         ['seers_awakening'],
         label:      'Visit the Seers\' Tent',
         description: 'The Seers do not speak. But they will show you something.',
         isActive:   (pm) => pm.hasQuestFlag('seers_awakening'),
@@ -368,6 +393,7 @@ export const QUEST_LINES = [
       },
       {
         id:          'bt_intro_elder',
+        flags:          ['bloodthirster_elder_visit'],
         label:       "Visit the Elders' Tower — Floor 2",
         description: 'The Elders study relics of power. Bring the blade to the second floor and see what they make of it.',
         isActive:   (pm) => pm.hasQuestFlag('bloodthirster_elder_visit'),
@@ -446,4 +472,33 @@ export function getQuestState(quest, pm) {
   if (states.some(s => s === 'completed')) return 'completed';
   if (quest.isAvailable(pm))               return 'available';
   return 'locked';
+}
+
+// ── Marker → quest-step lookup (used by TownScene's map markers) ──────────────
+//
+// Each step declares the quest-flag ids that raise a map marker for it
+// (`flags: [...]` above). That keeps the marker's hover text and the Quest Log
+// reading from ONE source: reword a step here and the map updates with it.
+//
+// A step may own several flags (the leader lines use brief/challenge/handin and
+// pick their wording inside `description`), and a flag may appear on several
+// steps (`combat_pit` belongs to every trial). Resolution therefore filters to
+// the step that is currently ACTIVE, which is exactly the one the marker is
+// standing for.
+
+/** The active quest step a given map-marker flag currently represents, or null. */
+export function getStepForFlag(flagId, pm) {
+  for (const quest of QUEST_LINES) {
+    for (const step of quest.steps) {
+      if (!step.flags || !step.flags.includes(flagId)) continue;
+      if (step.isActive(pm) && !step.isComplete(pm)) return { quest, step };
+    }
+  }
+  return null;
+}
+
+/** `description` may be a plain string or a (pm) => string. Normalises both. */
+export function resolveStepDescription(step, pm) {
+  const d = step?.description;
+  return (typeof d === 'function' ? d(pm) : d) || '';
 }

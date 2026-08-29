@@ -572,21 +572,21 @@ export const Items = {
     id: 'zafaar_amulet_disorient',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Disorientation', family: 'physBuildupOnPhysDmg', buildupTarget: 'disorient', range: [65, 85] },
+    fixedAffix: { key: 'of Disorientation', family: 'physBuildupOnPhysDmg', buildupTarget: 'disorient', range: [160, 210] },
   },
 
   zafaar_amulet_lacerate: {
     id: 'zafaar_amulet_lacerate',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Lacerations', family: 'physBuildupOnPhysDmg', buildupTarget: 'lacerate', range: [65, 85] },
+    fixedAffix: { key: 'of Lacerations', family: 'physBuildupOnPhysDmg', buildupTarget: 'lacerate', range: [160, 210] },
   },
 
   zafaar_amulet_expose: {
     id: 'zafaar_amulet_expose',
     name: 'Zafaar Pendant',
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'zafaar', bonuses: {},
-    fixedAffix: { key: 'of Exposure', family: 'physBuildupOnPhysDmg', buildupTarget: 'expose', range: [65, 85] },
+    fixedAffix: { key: 'of Exposure', family: 'physBuildupOnPhysDmg', buildupTarget: 'expose', range: [160, 210] },
   },
 
   // ── LE'SSE AMULETS ────────────────────────────────────────────────────────
@@ -595,21 +595,21 @@ export const Items = {
     id: 'lesse_amulet_cold',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Frost', family: 'elemBuildupOnElemDmg', buildupTarget: 'cold', range: [65, 85] },
+    fixedAffix: { key: 'of Frost', family: 'elemBuildupOnElemDmg', buildupTarget: 'cold', range: [160, 210] },
   },
 
   lesse_amulet_fire: {
     id: 'lesse_amulet_fire',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Embers', family: 'elemBuildupOnElemDmg', buildupTarget: 'fire', range: [65, 85] },
+    fixedAffix: { key: 'of Embers', family: 'elemBuildupOnElemDmg', buildupTarget: 'fire', range: [160, 210] },
   },
 
   lesse_amulet_lightning: {
     id: 'lesse_amulet_lightning',
     name: "Le'sse Pendant",
     type: 'armor', slot: 'amulet', rarity: 'uncommon', unique: true, tribe: 'lesse', bonuses: {},
-    fixedAffix: { key: 'of Storms', family: 'elemBuildupOnElemDmg', buildupTarget: 'lightning', range: [65, 85] },
+    fixedAffix: { key: 'of Storms', family: 'elemBuildupOnElemDmg', buildupTarget: 'lightning', range: [160, 210] },
   },
 
   // ── ZAFAAR RINGS ──────────────────────────────────────────────────────────
@@ -880,6 +880,19 @@ export const Items = {
   // bought, carried and inspected but does nothing when used — exactly like
   // the mechanic it is waiting on.
   // ═══════════════════════════════════════════════════════════════════════════
+  // TESTING ITEM. Resets a character's level-up stat allocation back to what
+  // they were created with and refunds every earned point. Deliberately
+  // minimal: the only support it needs anywhere else is `creationStats` on the
+  // character (set once in CharacterBuilder) and one branch in the inventory's
+  // [Use] button. Delete this entry and that branch and nothing else notices.
+  tonic_of_reflection: {
+    id: 'tonic_of_reflection',
+    name: 'Tonic of Reflection',
+    type: 'consumable',
+    rarity: 'common',
+    onUse: 'respec_stats',
+    description: 'Drink to unmake every choice since your first breath. Refunds all level-up stat points and returns your attributes to what they were at creation. (Testing item.)',
+  },
   tabula_rasa: {
     id: 'tabula_rasa',
     name: 'Tabula Rasa',

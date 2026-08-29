@@ -15,19 +15,97 @@ export default class LoadingScene extends Phaser.Scene {
   preload() {
     const { width, height } = this.sys.game.canvas;
 
+    // Black underneath regardless: the art is 16:9 like the canvas, but this
+    // guarantees no seam if either ever changes, and it IS the background on
+    // the rare first run where the art hasn't finished streaming in yet
+    // (MainMenuScene starts that download once its own menu is up).
     this.add.rectangle(width / 2, height / 2, width, height, 0x000000);
-    this.add.text(width / 2, height / 2, 'Loading...', {
-      fontSize: '32px',
+
+    const hasArt = this.textures.exists('ruins_load_screen');
+    if (hasArt) {
+      this.add.image(width / 2, height / 2, 'ruins_load_screen')
+        .setDisplaySize(width, height)
+        .setDepth(0);
+    }
+
+    // All copy lives in a dark band along the bottom rather than floating over
+    // the middle. The art is pale, high-contrast roots across the entire frame,
+    // so centred white text -- even stroked -- landed on near-white pixels and
+    // read badly. A band keeps every string on a known background while leaving
+    // the piece itself unscrimmed and at full strength.
+    const BAND_H = 132;
+    const bandY = height - BAND_H / 2;
+    this.add.rectangle(width / 2, bandY, width, BAND_H, 0x000000, hasArt ? 0.84 : 0)
+      .setDepth(1);
+    if (hasArt) {
+      this.add.rectangle(width / 2, height - BAND_H, width, 2, 0xc8b48c, 0.45)
+        .setDepth(2);
+    }
+
+    this.add.text(width / 2, height - 104, 'Loading...', {
+      fontSize: '26px',
       color: '#ffffff'
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(3);
+
+    // --- progress bar ---
+    const BAR_W = 460;
+    const BAR_H = 14;
+    const barLeft = (width - BAR_W) / 2;
+    const barY = height - 68;
+
+    this.add.rectangle(width / 2, barY, BAR_W, BAR_H, 0x000000, 0.85)
+      .setStrokeStyle(1, 0xc8b48c, 0.75)
+      .setDepth(3);
+    const barFill = this.add.rectangle(barLeft + 2, barY, 0, BAR_H - 6, 0xd8c9a3)
+      .setOrigin(0, 0.5)
+      .setDepth(4);
+
+    const pctText = this.add.text(width / 2, height - 42, '0%  ·  0 / 0 assets', {
+      fontSize: '14px',
+      color: '#e6d9b8'
+    }).setOrigin(0.5).setDepth(4);
+
+    // Phaser keeps rendering the scene while its own loader runs, so these
+    // fire and repaint live. `progress` emits once per completed file, and
+    // totalToLoad is read inside the callback because the queue below this
+    // point hasn't been built yet at the time these are registered.
+    //
+    // These MUST be removed on shutdown. This scene is reused for every load
+    // (town, combat, character creation...), and LoaderPlugin does NOT clear
+    // its own listeners when the scene stops. Left registered, the handlers
+    // from the previous run fire again on the next one -- still closed over
+    // last run's now-destroyed Text -- and setText() on a destroyed object
+    // throws from inside the loader's own progress emit. That aborts the load
+    // before create() runs, so the target scene never starts and the loading
+    // art just sits there. The `.scene` guard is belt-and-braces: Phaser nulls
+    // it in destroy(), so a stale handler no-ops instead of throwing.
+    const onProgress = (value) => {
+      if (!pctText.scene) return;
+      barFill.width = (BAR_W - 4) * value;
+      const total = this.load.totalToLoad || 0;
+      const done = this.load.totalComplete || 0;
+      pctText.setText(Math.round(value * 100) + '%  ·  ' + done + ' / ' + total + ' assets');
+    };
+    const onComplete = () => {
+      if (!pctText.scene) return;
+      barFill.width = BAR_W - 4;
+      const total = this.load.totalToLoad || 0;
+      pctText.setText('100%  ·  ' + total + ' / ' + total + ' assets');
+    };
+    this.load.on('progress', onProgress);
+    this.load.on('complete', onComplete);
+    this.events.once('shutdown', () => {
+      this.load.off('progress', onProgress);
+      this.load.off('complete', onComplete);
+    });
 
     if (this.tip) {
-      this.add.text(width / 2, height - 60, this.tip, {
-        fontSize: '18px',
-        color: '#aaaaaa',
+      this.add.text(width / 2, height - 20, this.tip, {
+        fontSize: '15px',
+        color: '#d0d0d0',
         align: 'center',
         wordWrap: { width: width * 0.8 }
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(3);
     }
 
     // Load portraits (shared globally)
@@ -207,7 +285,10 @@ export default class LoadingScene extends Phaser.Scene {
     this.scene.start(this.targetScene, this.targetSceneData);
 
     if (this.targetScene === 'TownScene') {
-      this.scene.launch('UIScene', { rightPanelVisible: false });
+      // Was `false`, which forced the menu panel closed on every entry to town
+      // and made UIScene's default unreachable. Omitting it lets UIScene decide
+      // (now: open), so a new player can actually see the menu.
+      this.scene.launch('UIScene');
     }
   }
 }

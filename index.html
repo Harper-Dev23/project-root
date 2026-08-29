@@ -8,6 +8,11 @@
     body {
       margin: 0;
       overflow: hidden;
+      /* Phaser runs FIT + CENTER_BOTH, so any viewport that isn't 16:9 gets
+         letterbox bands. Without this they were the browser default white,
+         which framed a dark game in glare and flashed white before boot.
+         Matches the scenes' own base colour so the bands read as a border. */
+      background: #28282c;
     }
     canvas {
       display: block;

@@ -3,6 +3,7 @@ import ProgressionManager from '../../systems/ProgressionManager.js';
 import { Items } from '../../../data/items.js';
 import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.js';
 import InventorySystem from '../../systems/InventorySystem.js';
+import { rebuildCharacterStats } from '../../systems/CharacterBuilder.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
@@ -245,7 +246,17 @@ export default class InventoryOverlay extends Phaser.Scene {
     equipY += 20;
 
     const EQUIPPED_TEXT_WIDTH = 160;
-    Object.keys(char.equipment).forEach(slot => {
+    // Canonical display order rather than Object.keys(): the equipment object
+    // is built in several places (creation, save load, enemy setup) and any of
+    // them reordering its keys would silently reshuffle this panel. Any slot
+    // not in the list still renders, appended at the end, so a future slot
+    // can't vanish just because nobody updated this array.
+    const SLOT_ORDER = ['weaponMain', 'weaponOff', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
+    const slotKeys = [
+      ...SLOT_ORDER.filter(k => k in char.equipment),
+      ...Object.keys(char.equipment).filter(k => !SLOT_ORDER.includes(k)),
+    ];
+    slotKeys.forEach(slot => {
       const equippedItem = char.equipment[slot];
       let itemName = 'None';
       if (isItemInstance(equippedItem)) {
@@ -709,6 +720,20 @@ export default class InventoryOverlay extends Phaser.Scene {
             });
 
           listContainer.add([transferBtn, eqBtn]);
+        } else if (baseItem.onUse === 'respec_stats') {
+          // TESTING ITEM (Tonic of Reflection). This whole branch and the item
+          // definition are the only support it needs - remove both and nothing
+          // else changes.
+          const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#ffcc88' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => useBtn.setStyle({ color: '#ffe4b3' }))
+            .on('pointerout', () => useBtn.setStyle({ color: '#ffcc88' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('select');
+              this._respecCharacter(char, item);
+            });
+          listContainer.add([transferBtn, useBtn]);
         } else {
           const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
           listContainer.add([transferBtn, useBtn]);
@@ -813,16 +838,20 @@ export default class InventoryOverlay extends Phaser.Scene {
         if (base.name) return base.name;
       }
 
+      // Armour and jewellery: the slot label is already printed to the left of
+      // this value, so falling through to _formatLabel(base.slot) rendered
+      // "Head: Head". Base names here are short (16 chars at worst), so show
+      // the real one; the affixed name still lives in the tooltip.
+      if (base.name) {
+        return base.name;
+      }
+
       if (base.slot) {
         return this._formatLabel(base.slot);
       }
 
       if (base.type) {
         return this._formatLabel(base.type);
-      }
-
-      if (base.name) {
-        return base.name;
       }
     }
 
@@ -956,6 +985,33 @@ export default class InventoryOverlay extends Phaser.Scene {
     });
   }
 
+  /**
+   * TESTING ITEM: Tonic of Reflection.
+   *
+   * Restores baseStats to the snapshot taken at character creation and hands
+   * back every stat point earned since (5 per level, see applyLevelUp), then
+   * rebuilds derived stats. Consumes one copy.
+   *
+   * Refuses on characters created before `creationStats` existed rather than
+   * guessing a baseline - a wrong guess would silently corrupt their stats.
+   */
+  _respecCharacter(char, item) {
+    if (!char) return;
+    if (!char.creationStats) {
+      console.warn('[Respec] no creationStats on', char.name, '- character predates the tonic; refusing.');
+      return;
+    }
+    const level = Math.max(1, char.level || 1);
+    char.baseStats = { ...char.creationStats };
+    char.unspentStatPoints = 5 * (level - 1);
+    rebuildCharacterStats(char);
+    char.currentHP = Math.min(char.currentHP, char.maxHP);
+    char.currentMP = Math.min(char.currentMP, char.maxMP);
+    InventorySystem.removeGlobalItem(item);
+    this._commitChar(char);
+    GameState.save('autosave');
+    this.scene.restart();
+  }
   _applyGlobalFilters(items) {
     let result = this._filterByCategory(items, this.currentGlobalCategory);
 

@@ -301,6 +301,49 @@ const GameState = {
    * so leveling logic only lives in one place.
    * Returns { leveledUpNames, summaries } for callers that want to display it.
    */
+  /**
+   * Award XP to a SPECIFIC set of characters. Training encounters pay out per
+   * character rather than per party, so a level-1 recruit joining a veteran
+   * party still earns their first clear of an old fight.
+   *
+   * awardPartyXP delegates here so levelling logic stays in one place.
+   */
+  awardXPTo(chars, amount) {
+    const leveledUpNames = [];
+    const summaries = [];
+    if (amount <= 0 || !Array.isArray(chars)) return { leveledUpNames, summaries };
+
+    chars.forEach(char => {
+      if (!char || char.status === 'dead') return;
+
+      char.experience = (char.experience || 0) + amount;
+      let summary = `${char.name} gains ${amount} XP`;
+
+      while (char.experience >= getXPNeededForLevel(char.level)) {
+        char.experience -= getXPNeededForLevel(char.level);
+        char.level++;
+        applyLevelUp(char);
+        summary += ` — Level Up! (Lv ${char.level})`;
+        leveledUpNames.push(char.name);
+      }
+      summaries.push(summary);
+    });
+    return { leveledUpNames, summaries };
+  },
+
+  /** Has THIS character personally cleared this scenario before? */
+  hasCharacterCleared(char, scenarioId) {
+    return !!(char && scenarioId && char.clearedScenarios && char.clearedScenarios[scenarioId]);
+  },
+
+  /** Record a personal clear. Separate from ProgressionManager's account-wide
+   *  completedScenarios, which still gates what the party can attempt next. */
+  markCharacterCleared(char, scenarioId) {
+    if (!char || !scenarioId) return;
+    char.clearedScenarios = char.clearedScenarios || {};
+    char.clearedScenarios[scenarioId] = true;
+  },
+
   awardPartyXP(amount) {
     const leveledUpNames = [];
     const summaries = [];

@@ -30,3 +30,12 @@ node_modules/
 # Scratch
 /tmp/
 *.log
+
+# Loading-screen master art. The game ships the 1280x720 .webp beside it
+# (85% smaller, visually lossless at PSNR 44dB); this full-res PNG is the
+# source to re-export from and would sit in git history forever if committed.
+assets/UIinterface/ruins_LoadScreen.png
+
+# Python bytecode (the patch-notes script runs in CI, never from here)
+__pycache__/
+*.pyc

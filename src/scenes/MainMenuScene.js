@@ -81,6 +81,22 @@ export default class MainMenuScene extends Phaser.Scene {
       fontSize: '16px',
       color: '#333333'
     }).setOrigin(1, 1);
+
+    // Stream in the loading-screen art AFTER this menu is already on screen.
+    //
+    // It can't go in preload(): this scene's preload is what the player waits
+    // on before seeing anything at all, and this file is bigger than
+    // everything else that preload pulls combined. It also can't be loaded by
+    // LoadingScene itself, which builds its UI inside preload() and so needs
+    // the texture to already be in the cache.
+    //
+    // Loading it here means it downloads while the player reads the menu, and
+    // LoadingScene falls back to a plain black screen if they click through
+    // faster than it arrives.
+    if (!this.textures.exists('ruins_load_screen')) {
+      this.load.image('ruins_load_screen', 'assets/UIinterface/ruins_LoadScreen.webp');
+      this.load.start();
+    }
   }
 
   createMenuButton(label, x, y, callback) {

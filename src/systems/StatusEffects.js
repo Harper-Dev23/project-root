@@ -271,6 +271,19 @@ export const WeaknessV3 = {
       //  - Caps at 8.0 around ~700 overflow
       intensity: { formula: 'linear', slope: 0.01, cap: 8.0 },
 
+      // Fire's own high-band decay (meter 200+), replacing the old t2.startConsume.
+      // Fire used to lose meter from TWO sources at once - ordinary decay plus a
+      // separate burn-out consume - the only family that did. Expressed here as
+      // what it always effectively was: a steeper decay curve. Still the fastest-
+      // burning family (~2.4x lacerate at meter 600), down from ~3.8x.
+      decayCurve: { highBase: 60, highPer100: 50, highCap: 340 },
+
+      // Fire's own high-band decay (meter 200+), replacing the old
+      // t2.startConsume double-dip. Still by far the fastest-burning family
+      // (~2.4x lacerate at meter 600) but no longer ~3.8x, and it now loses
+      // meter through the same single mechanism as everything else.
+      decayCurve: { highBase: 60, highPer100: 50, highCap: 340 },
+
       t1: {
         onActLoss: 10,         // was 3; stronger on-act burn loss
         // Was flat regardless of how far into Fire overflow the target was —
@@ -291,9 +304,6 @@ export const WeaknessV3 = {
         // handling in _startTurnWeakness (CombatScene.js).
         startTickPerHundred: 5,
 
-        // Optional: extra meter consumption at start of turn (scales with intensity)
-        // Targets: ~150 at 400, ~300-350 at 650-700; clamped by 'cap'
-        startConsume: { base: 50, c1: 0.5, c2: 0.2, S2: 1000, cap: 400 },
       },
     },
 
@@ -336,7 +346,14 @@ export const WeaknessV3 = {
       //
       // The intensity cap here is deliberately generous (4.0 = 24%) so that
       // startPctCap below is the single thing controlling the ceiling.
-      intensity: { formula: 'linear', slope: 0.0025, cap: 4.0 },
+      // Slope softened 0.0025 -> 0.002 (2026-08). Lacerate is the only family
+      // scaling off the TARGET'S max HP, so its value swings hugely with target
+      // size - weakest of the three DOTs against a mook, comfortably the
+      // strongest against a boss. This trims the high end without touching the
+      // meter-200 entry point, which was already fine. The 22% startPctCap is
+      // unreachable in practice (needs meter 1270 against a decay ceiling of
+      // 140), so the slope is the only lever that actually bites here.
+      intensity: { formula: 'linear', slope: 0.002, cap: 4.0 },
       t2: {
         startPctHP: 0.06,   // fraction of the target's MAX HP per end-of-turn tick
         startPctCap: 0.22,  // soft ceiling, reached around meter 1270
@@ -430,6 +447,9 @@ export const WeaknessFamilies = (() => {
   for (const id of WeaknessIDs) {
     const baseDecay = WeaknessV3.families[id]?.baseDecay ?? 35;
     o[id] = { t1: WEAKNESS_T1, t2: WEAKNESS_T2, decay: baseDecay, grace: 0 };
+    // Optional per-family override of the shared high-band decay curve.
+    const curve = WeaknessV3.families[id]?.decayCurve;
+    if (curve) o[id].decayCurve = curve;
   }
   return o;
 })();
@@ -456,7 +476,13 @@ export function weaknessIntensityMult(m) {
 }
 
 /** Overflow-aware decay amount (piecewise curve keeping low tiers modest) */
-export function weaknessDecayAmount(baseDecay, m) {
+// `curve` is an OPTIONAL per-family override of the high band (200+). Fire is
+// the only user: it used to burn its own meter down through a SECOND
+// mechanism (t2.startConsume) stacked on top of ordinary decay, which made it
+// the one family losing meter from two sources at once. That is now expressed
+// as what it always should have been - a steeper decay curve - so every family
+// loses meter through exactly one path.
+export function weaknessDecayAmount(baseDecay, m, curve = null) {
   const g = WeaknessV3.globals || {};
   const baseline = g.DECAY_BASELINE || 35;
   const weight = Math.max(0.5, (baseDecay || baseline) / baseline);
@@ -469,9 +495,11 @@ export function weaknessDecayAmount(baseDecay, m) {
   const midEnd = (g.DECAY_MID_END ?? 22) * weight;
   const midCap = g.DECAY_MID_CAP ?? 24;
 
-  const highBase = (g.DECAY_HIGH_BASE ?? 50) * weight;
-  const highPer100 = (g.DECAY_HIGH_PER_100 ?? 35) * weight;
-  const highCap = g.DECAY_HIGH_CAP ?? 240;
+  // Per-family overrides are ABSOLUTE (not weight-scaled): a family opting out
+  // of the shared curve is stating its own numbers outright.
+  const highBase = curve?.highBase ?? ((g.DECAY_HIGH_BASE ?? 50) * weight);
+  const highPer100 = curve?.highPer100 ?? ((g.DECAY_HIGH_PER_100 ?? 35) * weight);
+  const highCap = curve?.highCap ?? (g.DECAY_HIGH_CAP ?? 240);
 
   const meter = Math.max(0, m | 0);
 
