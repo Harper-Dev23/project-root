@@ -429,7 +429,7 @@ export default class TownScene extends Phaser.Scene {
         return;
       }
       this._hoveredMarkerFlag = m.flagId;
-      const data = this._questMarkerTooltip(m.flagId);
+      const data = this._questMarkerTooltip(m.flags || m.flagId);
       if (data) this.tooltip?.show(pointer.worldX, pointer.worldY, data);
       else this.tooltip?.hide();
     });
@@ -455,17 +455,41 @@ export default class TownScene extends Phaser.Scene {
 
   /** Tooltip content for a marker, read straight from the quest step it stands
    *  for, so the map and the Quest Log can never drift apart. */
-  _questMarkerTooltip(flagId) {
-    const found = getStepForFlag(flagId, ProgressionManager);
-    if (!found) return null;
-    const { quest, step } = found;
-    const desc = resolveStepDescription(step, ProgressionManager);
+  _questMarkerTooltip(flagIdOrList) {
+    // A marker can stand for several objectives on the same tile (see the
+    // grouping in _refreshQuestFlags), so resolve every flag and list them.
+    const flags = Array.isArray(flagIdOrList) ? flagIdOrList : [flagIdOrList];
+    const found = [];
+    const seen = new Set();
+    for (const f of flags) {
+      const hit = getStepForFlag(f, ProgressionManager);
+      if (!hit || seen.has(hit.step.id)) continue;   // two flags can share a step
+      seen.add(hit.step.id);
+      found.push(hit);
+    }
+    if (!found.length) return null;
+
     const lines = [];
-    if (desc) lines.push({ text: desc, color: '#dddddd' });
+    if (found.length === 1) {
+      const { quest, step } = found[0];
+      const desc = resolveStepDescription(step, ProgressionManager);
+      if (desc) lines.push({ text: desc, color: '#dddddd' });
+      lines.push({ text: '', color: '#dddddd' });
+      lines.push({ text: quest.title, color: '#8899aa' });
+      lines.push({ text: 'Click for Quest Log', color: '#ffaa00' });
+      return { title: found[0].step.label, titleColor: '#ffdd88', lines };
+    }
+
+    found.forEach(({ quest, step }, i) => {
+      if (i) lines.push({ text: '', color: '#dddddd' });
+      lines.push({ text: step.label, color: '#ffdd88' });
+      const desc = resolveStepDescription(step, ProgressionManager);
+      if (desc) lines.push({ text: desc, color: '#dddddd' });
+      lines.push({ text: quest.title, color: '#8899aa' });
+    });
     lines.push({ text: '', color: '#dddddd' });
-    lines.push({ text: quest.title, color: '#8899aa' });
     lines.push({ text: 'Click for Quest Log', color: '#ffaa00' });
-    return { title: step.label, titleColor: '#ffdd88', lines };
+    return { title: `${found.length} objectives here`, titleColor: '#ffdd88', lines };
   }
 
   _attachTooltip(displayObj, {
@@ -500,7 +524,41 @@ export default class TownScene extends Phaser.Scene {
   }
 
 
+  /**
+   * Drop every cached interior panel so a freshly started scene rebuilds them.
+   *
+   * Phaser REUSES the Scene instance across stop/start, so plain instance
+   * properties survive a shutdown while the display objects they point at do
+   * not. Every interior here is cached with the same shape:
+   *
+   *     if (this.vendorRowGroup) { this.vendorRowGroup.setVisible(true); return; }
+   *
+   * After Exit-to-main-menu -> New Game that reference is a container destroyed
+   * with the PREVIOUS TownScene. It is still truthy, so the early return fires,
+   * setVisible(true) does nothing on a dead object -- and because entering an
+   * interior hides campMap first, the player is left staring at a black screen
+   * with only the (freshly built) glows and hover zones responding. Entering any
+   * other building and leaving it calls campMap.setVisible(true) and appears to
+   * "fix" it, until the same stale interior is opened again.
+   *
+   * Called from create(), which runs on a real start but NOT on wake -- exactly
+   * right, since on wake these objects are still alive and must be kept.
+   */
+  _resetInteriorCaches() {
+    this.vendorRowGroup = null;
+    this.samuelInteriorGroup = null;
+    this.seersGroup = null;
+    this.waystoneGroup = null;
+    this.tribeVendorGroup = null;
+    this.eldersTowerGroups = null;   // re-initialised lazily to {}
+    this.lodgeGroups = null;         // re-initialised lazily to {}
+    this.leaderGroups = null;        // re-initialised lazily to {}
+  }
+
   create() {
+    // MUST come first: clears interior panels cached on the reused Scene
+    // instance from a previous session. See _resetInteriorCaches().
+    this._resetInteriorCaches();
     SoundManager.init(this);
     setupSceneCursor(this);
     SoundManager.wireEmptyClick(this, 'dullClick');
@@ -527,6 +585,15 @@ export default class TownScene extends Phaser.Scene {
 
 
     this.tooltip = new Tooltip(this);
+    // Keep tooltips inside the visible map. UIScene's right sidebar is 180px
+    // wide and renders above this scene, so a tooltip clamped only to the
+    // canvas edge slid under it and got cut off -- most visibly on the Elders'
+    // Tower marker, which sits far enough right that its tooltip always
+    // overflowed. Derived from the map's own geometry so it tracks any change
+    // to MAP_DISPLAY_WIDTH instead of hardcoding 1100.
+    const RIGHT_SIDEBAR_W = 180;
+    const mapHalf = (this._mapDisplayWidth || 922) / 2;
+    this.tooltip.setBounds(640 - mapHalf, Math.min(640 + mapHalf, 1280 - RIGHT_SIDEBAR_W));
     this._initQuestMarkerInput();
 
     // Debug click coords
@@ -804,13 +871,20 @@ export default class TownScene extends Phaser.Scene {
     // Refresh quest flag markers whenever TownScene wakes (e.g. returning from combat).
     this.events.on('wake', () => this._refreshQuestFlags(), this);
 
-    // Auto-seed orientation flag on first ever load (no scenarios, no flags set).
-    // This ensures a browser refresh doesn't strand the player with no guidance.
-    const nothingInProgress =
-      ProgressionManager.completedScenarios.length === 0 &&
-      ProgressionManager.questFlags.length === 0 &&
-      !ProgressionManager.getTribe();
-    if (nothingInProgress) {
+    // Auto-seed the orientation flag on a genuinely fresh start, so a browser
+    // refresh can't strand a player with no guidance.
+    //
+    // Gated on having NO CHARACTERS, not on "nothing in progress". The old test
+    // (no scenarios AND no flags AND no tribe) could not tell a brand-new game
+    // apart from a player who had consumed their prologue flags but not yet
+    // cleared anything -- so loading such a save re-seeded the bonfire marker
+    // and re-opened "Create a Character" on someone who already had a party.
+    // Having a character is the thing this is actually guarding against.
+    const noCharactersYet = ((GameState.characters || []).length === 0);
+    if (noCharactersYet &&
+        ProgressionManager.completedScenarios.length === 0 &&
+        ProgressionManager.questFlags.length === 0 &&
+        !ProgressionManager.getTribe()) {
       ProgressionManager.setQuestFlag('orientation_bonfire');
     }
 
@@ -926,16 +1000,30 @@ export default class TownScene extends Phaser.Scene {
     // is resolved against this list instead.
     this._questMarkers = [];
 
+    // Group active flags BY TILE before drawing. Several objectives share one
+    // coordinate -- the Elder's Tower alone is the home of orientation_elder,
+    // tribe_choice, elder_bonepile, elder_leveling and bloodthirster_elder_visit
+    // at exactly (857,342). Drawing one marker per flag stacked them perfectly
+    // on top of each other, each running its own pulse tween, which read as a
+    // single brighter/heavier marker and made it look like the quest state was
+    // corrupted. One marker per tile; the tooltip lists everything waiting there.
+    const byTile = new Map();
     for (const [flagId, cfg] of Object.entries(QUEST_FLAG_POSITIONS)) {
       if (!ProgressionManager.hasQuestFlag(flagId)) continue;
+      const key = cfg.x + ',' + cfg.y;
+      if (!byTile.has(key)) byTile.set(key, { x: cfg.x, y: cfg.y, flags: [] });
+      byTile.get(key).flags.push(flagId);
+    }
 
-      // Hand-in flags render as a gold ★ to distinguish from the orange ! (quest available)
-      const isHandin = flagId.endsWith('_handin');
-      const color    = isHandin ? 0xffdd44 : 0xffaa00;
-      const symbol   = isHandin ? '★' : '!';
+    for (const tile of byTile.values()) {
+      // Gold ★ only when EVERY objective here is a hand-in; if anything at this
+      // tile still needs doing, the orange ! is the honest signal.
+      const allHandin = tile.flags.every(f => f.endsWith('_handin'));
+      const color    = allHandin ? 0xffdd44 : 0xffaa00;
+      const symbol   = allHandin ? '★' : '!';
 
-      const circle = this.add.circle(cfg.x, cfg.y, 11, color).setDepth(5);
-      const label  = this.add.text(cfg.x, cfg.y, symbol, {
+      const circle = this.add.circle(tile.x, tile.y, 11, color).setDepth(5);
+      const label  = this.add.text(tile.x, tile.y, symbol, {
         fontSize: '13px', color: '#000000', fontStyle: 'bold'
       }).setOrigin(0.5).setDepth(6);
 
@@ -949,7 +1037,7 @@ export default class TownScene extends Phaser.Scene {
       });
 
       this._questFlagObjects.push(circle, label);
-      this._questMarkers.push({ flagId, x: cfg.x, y: cfg.y });
+      this._questMarkers.push({ flagId: tile.flags[0], flags: tile.flags, x: tile.x, y: tile.y });
     }
   }
 

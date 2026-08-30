@@ -3165,23 +3165,42 @@ export default class CombatScene extends Phaser.Scene {
   // ─── Skill Filter Pills ───────────────────────────────────────────────────
 
   _createSkillFilterPills(menuX, menuY) {
+    // `group` drives the filter logic: pills OR together WITHIN a group, and
+    // the groups AND with each other. So Fire+Cold+Bonus reads as
+    // "(fire OR cold) AND bonus" -- which is how players actually think about
+    // it. `gap` inserts a visual break so the three groups read as distinct.
     const PILL_DEFS = [
-      { tag: 'lacerate',  label: 'Lacer.',   color: 0xcc4444 },
-      { tag: 'expose',    label: 'Expose',   color: 0xcc8844 },
-      { tag: 'disorient', label: 'Disor.',   color: 0x9944cc },
-      { tag: 'disease',   label: 'Disease',  color: 0x447744 },
-      { tag: 'curse',     label: 'Curse',    color: 0x6633aa },
-      { tag: 'toxic',     label: 'Toxic',    color: 0x44aa44 },
-      { tag: 'fire',      label: 'Fire',     color: 0xdd5500 },
-      { tag: 'cold',      label: 'Cold',     color: 0x4477cc },
-      { tag: 'lightning', label: 'Lightn.',  color: 0xcccc22 },
-      { tag: '_major',    label: 'Major',    color: 0xddaa22 },
-      { tag: '_bonus',    label: 'Bonus',    color: 0x22aacc },
+      { tag: 'lacerate',  label: 'Lacer.',   color: 0xcc4444, group: 'family' },
+      { tag: 'expose',    label: 'Expose',   color: 0xcc8844, group: 'family' },
+      { tag: 'disorient', label: 'Disor.',   color: 0x9944cc, group: 'family' },
+      { tag: 'disease',   label: 'Disease',  color: 0x447744, group: 'family' },
+      { tag: 'curse',     label: 'Curse',    color: 0x6633aa, group: 'family' },
+      { tag: 'toxic',     label: 'Toxic',    color: 0x44aa44, group: 'family' },
+      { tag: 'fire',      label: 'Fire',     color: 0xdd5500, group: 'family' },
+      { tag: 'cold',      label: 'Cold',     color: 0x4477cc, group: 'family' },
+      { tag: 'lightning', label: 'Lightn.',  color: 0xcccc22, group: 'family' },
+      { tag: '_major',    label: 'Major',    color: 0xddaa22, group: 'cost', gap: true },
+      { tag: '_bonus',    label: 'Bonus',    color: 0x22aacc, group: 'cost' },
+      // The "generates buildup / spends buildup" split. Reads off buildupHint
+      // and requiresWeakness -- the two fields that actually carry this in the
+      // data (applyWeakness/consumeWeakness are dead names, undefined
+      // everywhere). 49 skills build, 16 spend, 12 do both.
+      { tag: '_builds',   label: 'Builds',   color: 0x66bb88, group: 'nature', gap: true },
+      { tag: '_spends',   label: 'Spends',   color: 0xbb6688, group: 'nature' },
+      // Its own group: not a category but a state check -- "hide anything I
+      // can't actually cast right now" (cooldown, action economy, MP, caster
+      // gates like Blazing Fervor's Initiative cost, and having at least one
+      // legal target).
+      { tag: '_usable',   label: 'Usable',   color: 0x88cc55, group: 'state', gap: true },
     ];
 
     const PILL_W = 50;
-    const PILL_H = 17;
-    const GAP    = 3;
+    // 14 pills at 17px pitch + 3 group gaps = 253px, which fits INSIDE the
+    // 254px menu viewport. At the previous 17/2 sizing the 13-pill column
+    // already overhung the panel bottom by 3px; this is tighter and taller.
+    const PILL_H = 16;
+    const GAP    = 1;
+    const GROUP_GAP = 5;
 
     // Position pill column so its left edge is just past the old right edge, then 10px further left
     const vp = this.actionMenuViewport;
@@ -3193,8 +3212,11 @@ export default class CombatScene extends Phaser.Scene {
     this._skillFilterPillsContainer = container;
     this._skillFilterPillData = [];
 
-    PILL_DEFS.forEach((def, i) => {
-      const py = vpTop + i * (PILL_H + GAP);
+    let pillY = vpTop;
+    PILL_DEFS.forEach((def) => {
+      if (def.gap) pillY += GROUP_GAP;
+      const py = pillY;
+      pillY += PILL_H + GAP;
       const cx = colLeft + PILL_W / 2;
       const cy = py + PILL_H / 2;
 
@@ -3243,11 +3265,14 @@ export default class CombatScene extends Phaser.Scene {
           drawPill(true);
           lbl.setColor(hexStr);
         }
-        this._refreshFilterHighlights();
+        // Rebuild the current submenu so the filter actually removes rows.
+        // Previously this only repainted borders (_refreshFilterHighlights),
+        // which left the list just as long as before.
+        this._reopenCurrentSubmenu();
       });
 
       container.add([bg, lbl, zone]);
-      this._skillFilterPillData.push({ def, drawPill, lbl, hexStr });
+      this._skillFilterPillData.push({ def, drawPill, lbl, hexStr, group: def.group });
     });
 
     container.setVisible(false);
@@ -3269,46 +3294,161 @@ export default class CombatScene extends Phaser.Scene {
     this._skillFilterPillsContainer?.setVisible(false);
   }
 
-  _refreshFilterHighlights() {
+  /** The nine weakness families, as used by the filter pills. */
+  static FILTER_FAMILIES = ['lacerate','expose','disorient','disease','curse','toxic','fire','cold','lightning'];
+
+  /**
+   * Does this skill relate to weakness family `fam`?
+   *
+   * Checks three sources, not just tags: a skill counts as a "fire" skill if
+   * it is tagged fire, if it BUILDS fire (buildupHint), or if it SPENDS fire
+   * (requiresWeakness). Tag-only matching -- what the old highlight code did --
+   * missed most of the skills a player thinks of as belonging to a family.
+   */
+  /**
+   * Every weakness family a skill touches, from ANY of the shapes the data
+   * actually uses. One normaliser instead of a chain of special cases, because
+   * the reward/gate fields have accumulated a lot of shapes:
+   *
+   *   tags                 family name in the tag list
+   *   buildupHint          { fire: 85 }                      - what it builds
+   *   requiresWeakness     { family } | { anyOf:[{family}] } | [ ... ]
+   *   consumeWeakness      [ 'lacerate' ]                    - plain strings
+   *   rewardIfWeak         obj | array; each { family, buff|debuff.addBuildup }
+   *   rewardIfTierCross    array;      each { family, buff|debuff.addBuildup }
+   *   transformWeakness    { from, to }
+   *
+   * A skill counts for a family if it builds it, gates on it, consumes it,
+   * rewards off it, or PAYS OUT in it -- so Ember Strike (builds fire, grants
+   * disorient on crossing a fire tier) appears under both fire and disorient,
+   * and Rally Blow (gates expose, rewards disorient) under both of those.
+   * Deliberately generous: a single family pill otherwise surfaced only 3-4
+   * rows, which is too few for the filter to earn its place.
+   */
+  _weaknessFamiliesOf(skill) {
+    if (!skill) return new Set();
+    if (skill.__famCache) return skill.__famCache;
+    const out = new Set();
+    const FAMS = CombatScene.FILTER_FAMILIES;
+    const addFam = (f) => { if (f && FAMS.includes(f)) out.add(f); };
+    const addBuildupKeys = (o) => { if (o) Object.keys(o).forEach(addFam); };
+    const asArray = (v) => (v == null ? [] : (Array.isArray(v) ? v : [v]));
+    const asArrayFams = asArray;
+
+    if (Array.isArray(skill.tags)) skill.tags.forEach(addFam);
+    // Purely descriptive "this skill is about these families" -- for skills
+    // whose relationship is real but isn't a gate, a build or a reward (see
+    // Balancing Blow, which heals off necrotic meters it never requires).
+    asArrayFams(skill.relatesToFamilies).forEach(addFam);
+    addBuildupKeys(skill.buildupHint);
+    asArray(skill.consumeWeakness).forEach(f => { if (typeof f === 'string') addFam(f); });
+
+    for (const req of asArray(skill.requiresWeakness)) {
+      if (!req) continue;
+      addFam(req.family);
+      asArray(req.anyOf).forEach(r => addFam(r?.family));
+    }
+
+    for (const r of [...asArray(skill.rewardIfWeak), ...asArray(skill.rewardIfTierCross)]) {
+      if (!r) continue;
+      addFam(r.family);
+      addBuildupKeys(r.buff?.addBuildup);
+      addBuildupKeys(r.debuff?.addBuildup);
+    }
+
+    if (skill.transformWeakness) {
+      addFam(skill.transformWeakness.from);
+      addFam(skill.transformWeakness.to);
+    }
+
+    try { Object.defineProperty(skill, '__famCache', { value: out, enumerable: false }); } catch { }
+    return out;
+  }
+
+  _skillTouchesFamily(skill, fam) {
+    return this._weaknessFamiliesOf(skill).has(fam);
+  }
+
+  _skillBuilds(skill)  { return !!(skill?.buildupHint && Object.keys(skill.buildupHint).length); }
+
+  /**
+   * "Spends" means spends a RESOURCE, not strictly weakness buildup — an
+   * initiative-gauge cost reads as spending to a player just as much as
+   * consuming a weakness tier does (Blazing Fervor spends 10 initiative and
+   * was previously in neither pill). consumeWeakness is a separate 12-skill
+   * field from requiresWeakness: a skill can eat buildup without gating on it.
+   */
+  _skillSpends(skill) {
+    if (!skill) return false;
+    if (skill.requiresWeakness) return true;
+    if (skill.requiresInitiativeGauge) return true;
+    const cw = skill.consumeWeakness;
+    return Array.isArray(cw) ? cw.length > 0 : !!cw;
+  }
+
+  /** actionCost can be 'major', 'bonus', 'major,bonus', 'free', 'reaction'. */
+  _skillHasCost(skill, which) {
+    return String(skill?.actionCost || 'major').split(',').map(x => x.trim()).includes(which);
+  }
+
+  /**
+   * Filter predicate for the action menu. Pills OR within their group; the
+   * groups AND together. An empty group imposes no constraint, so with nothing
+   * selected everything passes.
+   */
+  /**
+   * Can the actor cast this RIGHT NOW? Everything that would stop the cast:
+   * cooldown, action economy, MP, caster-side gates (row, Initiative, a
+   * self-weakness requirement), and — for anything that needs a target — at
+   * least one legal one. Shares _validTargetsFor with targeting, so the pill
+   * and the gold outlines can never disagree.
+   */
+  _skillIsUsable(actor, skill) {
+    if (!actor || !skill) return false;
+
+    if (!DevFlags.isNoCooldownEnabled() && (actor.cooldowns?.[skill.id] || 0) > 0) return false;
+    if (skill.actionCost && !this._canUseActionType(skill.actionCost)) return false;
+
+    if (!DevFlags.isFreeManaEnabled()) {
+      const cost = calculateEffectiveResourceCost(actor, skill.mpCost || 0, 'mp').cost;
+      if ((actor.currentMP || 0) < cost) return false;
+    }
+
+    if (this._abilityActorGateReason(actor, skill)) return false;
+    if (skill.requiresTarget && this._validTargetsFor(actor, skill).length === 0) return false;
+    return true;
+  }
+
+  _skillMatchesFilters(skill, actor = null) {
     const active = this._activeFilterTags;
-    if (!this.actionMenuList) return;
+    if (!active || active.size === 0) return true;
 
-    const tagColors = {};
-    this._skillFilterPillData?.forEach(({ def }) => { tagColors[def.tag] = def.color; });
+    if (active.has('_usable') && !this._skillIsUsable(actor || this._currentChar?.(), skill)) return false;
 
-    const WEAKNESS_TAGS = new Set(['lacerate','expose','disorient','disease','curse','toxic','fire','cold','lightning']);
+    const fams = CombatScene.FILTER_FAMILIES.filter(f => active.has(f));
+    if (fams.length && !fams.some(f => this._skillTouchesFamily(skill, f))) return false;
 
-    // Separate active pills into two independent groups
-    const activeWeakness = [...active].filter(t => WEAKNESS_TAGS.has(t));
-    const activeAction   = [...active].filter(t => t === '_major' || t === '_bonus');
+    const costs = ['_major','_bonus'].filter(t => active.has(t));
+    if (costs.length && !costs.some(t => this._skillHasCost(skill, t === '_major' ? 'major' : 'bonus'))) return false;
 
-    this.actionMenuList.list.forEach(obj => {
-      if (!obj?._filterAbility) {
-        obj?.setFilterHighlight?.(null);
-        obj?.setFilterHighlightInner?.(null);
-        return;
-      }
+    const nature = ['_builds','_spends'].filter(t => active.has(t));
+    if (nature.length && !nature.some(t => t === '_builds' ? this._skillBuilds(skill) : this._skillSpends(skill))) return false;
 
-      const ab   = obj._filterAbility;
-      const tags = Array.isArray(ab.tags) ? ab.tags : [];
-      const cost = ab.actionCost || 'major';
+    return true;
+  }
 
-      // Outer border — weakness tag match
-      let outerColor = null;
-      for (const tag of activeWeakness) {
-        if (tags.includes(tag)) { outerColor = tagColors[tag]; break; }
-      }
+  /** Re-runs whichever skill submenu is open, so a pill toggle re-filters it. */
+  _reopenCurrentSubmenu() {
+    const t = this._currentSubmenuType;
+    if (!t) return;
+    this._openSubmenu(t);
+  }
 
-      // Inner border — action type (major/bonus) always occupies inner space
-      let innerColor = null;
-      for (const tag of activeAction) {
-        if (tag === '_major' && cost === 'major') { innerColor = tagColors['_major']; break; }
-        if (tag === '_bonus' && cost === 'bonus') { innerColor = tagColors['_bonus']; break; }
-      }
-
-      obj.setFilterHighlight?.(outerColor);
-      obj.setFilterHighlightInner?.(innerColor);
-    });
+  /** Turns every pill off and rebuilds. Used by the "no matches" row. */
+  _clearSkillFilters() {
+    this._activeFilterTags?.clear();
+    this._skillFilterPillData?.forEach(({ drawPill, lbl }) => { drawPill(false); lbl.setColor('#888888'); });
+    this._reopenCurrentSubmenu();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -3658,6 +3798,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     this._clearActionMenu();
+    this._currentSubmenuType = type;
 
     const actor = this._currentChar?.();
     if (!actor) return;
@@ -3670,17 +3811,97 @@ export default class CombatScene extends Phaser.Scene {
       abilities = abilities.filter(s => (s?.mechanic || '') !== 'reaction');
     }
 
+    // Hydrate once up front so both the filter and the sort read real skill
+    // data (the raw list can hold thin {id} stubs).
+    const hydrated = abilities.map(a => SKILLS[a?.id] || a);
+
+    const anyFilterActive = !!this._activeFilterTags?.size;
+    let shown = hydrated.filter(sk => this._skillMatchesFilters(sk, actor));
+
+    // Sort: action cost first, then stat requirement, then name.
+    //
+    // Cost leads because in combat the question that actually gates a choice
+    // is "can I still afford this?" -- you get one major and one bonus. It
+    // also needs no data rebalancing. requiredValue is the secondary key: it
+    // gives a rough simple->complex gradient, though it's a weak signal today
+    // (93 of 129 weapon skills sit between 12 and 16, with 28 tied at 14), so
+    // it breaks ties rather than driving the order. Basic Attack lands first
+    // naturally -- major cost, no requiredValue.
+    const costRank = (sk) => {
+      const c = String(sk?.actionCost || 'major');
+      if (c.includes('major')) return 0;
+      if (c.includes('bonus')) return 1;
+      if (c === 'free') return 2;
+      return 3;
+    };
+    shown.sort((a, b) =>
+      costRank(a) - costRank(b) ||
+      ((a?.requiredValue ?? 0) - (b?.requiredValue ?? 0)) ||
+      String(a?.name || '').localeCompare(String(b?.name || ''))
+    );
+    abilities = shown;
+
     const baseX = this.actionMenuContentX ?? 0;
 
 
     if (!abilities.length) {
-      const noText = this.add.text(baseX, 0, 'No abilities available', {
-        fontSize: '16px',
-        color: '#888888'
+      // Distinguish "you own nothing here" from "your filters hid everything".
+      // Without this an active filter reads as a broken menu -- and it CAN
+      // empty completely: Basic Attack always populates the weapon list, but
+      // it carries no family tag, so any family pill filters it out too.
+      // Say the RIGHT thing about why the list is empty. "No skills match the
+      // active filters" is misleading when the real cause is that the turn is
+      // spent -- the player goes hunting for a filter that isn't the problem.
+      // Basic Attack is deliberately NOT exempt from Usable: it costs a major
+      // action, so once that's gone it genuinely can't be cast, and showing it
+      // would make the filter lie about the one thing it exists to report.
+      const usableOn = !!this._activeFilterTags?.has('_usable');
+      // 'free' is excluded on purpose: _canUseActionType('free') always returns
+      // true (free actions bypass the action-point economy), so including it
+      // would make anyActionLeft permanently true and this branch unreachable.
+      const anyActionLeft = ['major', 'bonus', 'class']
+        .some(t => this._canUseActionType(t));
+      let msg;
+      if (!anyFilterActive) {
+        msg = 'No abilities available';
+      } else if (usableOn && !anyActionLeft) {
+        msg = 'No actions left this turn.';
+      } else if (usableOn && this._activeFilterTags.size === 1) {
+        msg = 'Nothing usable right now.';
+      } else {
+        msg = 'No skills match the active filters.';
+      }
+      // Wrap to the space actually left of the viewport's RIGHT EDGE, not to
+      // the viewport width — content starts at actionMenuContentX, so using the
+      // full width overran the mask and clipped the message mid-word.
+      const vp = this.actionMenuViewport || { x: -96, width: 320 };
+      const wrapW = Math.max(120, (vp.x + vp.width) - baseX - 16);
+      const noText = this.add.text(baseX, 0, msg, {
+        fontSize: '14px',
+        color: '#888888',
+        wordWrap: { width: wrapW }
       }).setOrigin(0);
       this._actionMenuAdd(noText);
 
+      if (anyFilterActive) {
+        const clearBtn = this.add.text(baseX, noText.height + 10, '[ Clear filters ]', {
+          fontSize: '14px', color: '#ffcc88'
+        }).setOrigin(0)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerover', () => clearBtn.setColor('#ffe4b3'))
+          .on('pointerout',  () => clearBtn.setColor('#ffcc88'))
+          .on('pointerdown', () => { SoundManager.play('select'); this._clearSkillFilters(); });
+        this._actionMenuAdd(clearBtn);
+      }
+
       this._setActionMenuBackCallback(() => this._buildActionMenuRoot());
+      // The pills MUST be shown on this branch too, not just on the populated
+      // one at the end of this function. Filtering to empty, going Back (which
+      // hides them) and re-entering used to land here and return early, so the
+      // player was left with only [ Clear filters ] and no way to un-toggle the
+      // single pill that hid everything. The controls that caused the empty
+      // state have to stay reachable from inside it.
+      this._showSkillFilterPills?.();
       // Was missing before the fixed-Back-button refactor too — scroll
       // bounds never got (re)computed for the empty-list case.
       this._finalizeActionMenuLayout();
@@ -3710,9 +3931,6 @@ export default class CombatScene extends Phaser.Scene {
         this._useAbility(full, btn);
       });
 
-      // Store ability reference for filter pill highlighting
-      btn._filterAbility = full;
-
       // Make sure tooltip uses the hydrated object
       this._wireAbilityTooltip?.(btn, full, actor);
 
@@ -3724,9 +3942,9 @@ export default class CombatScene extends Phaser.Scene {
 
     this._finalizeActionMenuLayout();
 
-    // Show filter pills for skill submenus; apply any active filters
+    // Show filter pills for skill submenus. Filtering itself happens above,
+    // when the list is built -- there's no separate highlight pass any more.
     this._showSkillFilterPills?.();
-    this._refreshFilterHighlights?.();
   }
 
 
@@ -3956,10 +4174,173 @@ export default class CombatScene extends Phaser.Scene {
 
 
 
+  // ─── Ability gating, split by what it depends on ──────────────────────────
+  //
+  // These are PURE predicates that mirror the authoritative gates inside
+  // _applyAbilityToTarget. They do not replace those -- that function stays the
+  // final word (a target can stop qualifying between arming and clicking, and
+  // it also handles NPC casts). What they add is the ability to know a gate
+  // will fail BEFORE the player commits, so targeting can grey out impossible
+  // targets instead of letting the ability fizzle on click.
+  //
+  // The split matters: actor gates make a skill wholly unusable this turn,
+  // while target gates only rule out particular enemies.
+
+  /**
+   * Runs a skill's own canExecute hook. Returns a reason string, or null if it
+   * passes / isn't declared.
+   *
+   * This hook already existed and was honoured by _executeSkill and NPCLogic,
+   * but NOT by _applyAbilityToTarget — the path a player click actually takes.
+   * Same gap requiresWeakness had. Four staff zone skills relied on it in
+   * prose only ("Req zone") and silently burned both the action and the MP.
+   */
+  _abilityCanExecuteReason(user, target, ability) {
+    if (typeof ability?.canExecute !== 'function') return null;
+    let verdict;
+    try {
+      verdict = ability.canExecute({ user, target, scene: this }) ?? true;
+    } catch (err) {
+      console.error('[canExecute] threw for', ability?.id, err);
+      return null;   // never let a broken hook block an ability outright
+    }
+    const failed = (typeof verdict === 'object') ? (verdict.ok === false) : (verdict === false);
+    if (!failed) return null;
+    return (typeof verdict === 'object' && verdict.reason) || 'requirements not met';
+  }
+
+  /** Gates that depend only on the CASTER. Returns a reason, or null if fine. */
+  _abilityActorGateReason(user, ability) {
+    if (!ability) return null;
+
+    if (ability.requiresColumn) {
+      const col = this._getUnitColumn(user);
+      if (col !== ability.requiresColumn) return `must be in the ${ability.requiresColumn} row`;
+    }
+
+    if (Number.isFinite(ability.requiresInitiativeGauge) && ability.requiresInitiativeGauge > 0) {
+      if ((user?.initiativeGauge || 0) < ability.requiresInitiativeGauge) {
+        return `needs ${ability.requiresInitiativeGauge} Initiative`;
+      }
+    }
+
+    // requiresWeakness entries carrying `on: 'self'` check the CASTER, so they
+    // gate the whole ability rather than any particular target.
+    for (const req of (Array.isArray(ability.requiresWeakness) ? ability.requiresWeakness : [ability.requiresWeakness])) {
+      if (!req || req.on !== 'self') continue;
+      const fam = req.family;
+      if (!fam) continue;
+      const minTier = req.tierAtLeast ?? req.tier ?? 1;
+      if (((user?.weakness?.tiers || {})[fam] || 0) < minTier) {
+        return `you need ${String(fam).toUpperCase()} T${minTier}`;
+      }
+    }
+
+    // Self-cast skills never go through targeting (_useAbility sends them
+    // straight to _applyAbilityToTarget with the caster as the target), so
+    // their canExecute belongs here. Targeted skills get it per-candidate in
+    // _abilityTargetGateReason instead.
+    if (!ability.requiresTarget) {
+      const why = this._abilityCanExecuteReason(user, user, ability);
+      if (why) return why;
+    }
+    return null;
+  }
+
+  /** Gates that depend on the TARGET. Returns a reason, or null if fine. */
+  _abilityTargetGateReason(user, target, ability) {
+    if (!ability || !target) return null;
+
+    const minCurse = Number(ability.minCurseTier) || 0;
+    if (minCurse > 0 && ((target.weakness?.tiers?.curse | 0) < minCurse)) {
+      return `needs CURSE T${minCurse}`;
+    }
+
+    for (const req of (Array.isArray(ability.requiresWeakness) ? ability.requiresWeakness : [ability.requiresWeakness])) {
+      if (!req || req.on === 'self') continue;
+      const fam = req.family;
+      if (!fam) continue;
+      const minTier = req.tierAtLeast ?? req.tier ?? 1;
+      if (((target.weakness?.tiers || {})[fam] || 0) < minTier) {
+        return `needs ${String(fam).toUpperCase()} T${minTier}`;
+      }
+    }
+
+    if (Number.isFinite(ability.requiresTargetHPPctBelow)) {
+      const maxHP = target.maxHP ?? target.derivedStats?.maxHP ?? 0;
+      const hpPct = maxHP > 0 ? (target.currentHP ?? 0) / maxHP : 1;
+      if (hpPct > ability.requiresTargetHPPctBelow / 100) {
+        return `needs below ${ability.requiresTargetHPPctBelow}% HP`;
+      }
+    }
+
+    const why = this._abilityCanExecuteReason(user, target, ability);
+    if (why) return why;
+    return null;
+  }
+
+  /**
+   * Best-effort explanation for why nothing is targetable — reports the gate
+   * reason shared by every candidate, so "needs EXPOSE T1" surfaces instead of
+   * a bare "no valid targets".
+   */
+  _abilityUnavailableReason(user, ability) {
+    const slots = ability?.targetRequirement === 'enemy' ? this.enemySlots : this.allySlots;
+    const live = (slots || []).filter(sl => sl.char && sl.char.status !== 'incapacitated');
+    if (!live.length) return null;
+    const reasons = live.map(sl => this._abilityTargetGateReason(user, sl.char, ability)).filter(Boolean);
+    if (reasons.length !== live.length) return null;   // some failed for range, not a gate
+    const first = reasons[0];
+    return reasons.every(r => r === first) ? first : null;
+  }
+
+  /**
+   * Every slot this ability could legally be aimed at right now: correct side,
+   * within targetColumns/targetSlots, occupied by a living unit, and passing
+   * the target-side gates. Single source of truth for both targeting highlight
+   * and (next) the "Usable" filter.
+   */
+  _validTargetsFor(user, ability) {
+    if (!ability) return [];
+    const slots = ability.targetRequirement === 'enemy' ? this.enemySlots : this.allySlots;
+    let out = slots || [];
+
+    if (ability.targetColumns?.length && !DevFlags.isNoRangeEnabled()) {
+      out = out.filter(sl => ability.targetColumns.includes(this._getColumnBySlotId(sl.slotId)));
+    }
+    if (ability.targetSlots?.length && !DevFlags.isNoRangeEnabled()) {
+      out = out.filter(sl => ability.targetSlots.includes(sl.slotId));
+    }
+    out = out.filter(sl => sl.char && sl.char.status !== 'incapacitated');
+    out = out.filter(sl => !this._abilityTargetGateReason(user, sl.char, ability));
+    return out;
+  }
+
   _enterTargetingMode(ability, sourceBtn = null) {
     // Always clear prior listeners first — prevents stale once() handlers from a previous
     // ability (different side) firing when the player switches abilities mid-targeting
     this._clearSlotListeners();
+
+    const user = this._currentChar?.();
+
+    // Refuse to arm at all when a caster-side gate already fails, or when no
+    // enemy on the field could satisfy the ability. Previously targeting armed
+    // regardless, the player picked someone, and the ability fizzled on impact
+    // with only a combat-log line to explain it -- most visibly on the
+    // weakness-gated skills, whose requirement _enterTargetingMode never knew
+    // about. Saying so up front costs the player nothing (no action, no MP).
+    const actorReason = this._abilityActorGateReason(user, ability);
+    if (actorReason) {
+      this._log(`${ability.name} unavailable: ${actorReason}.`);
+      return;
+    }
+
+    const filtered = this._validTargetsFor(user, ability);
+    if (!filtered.length) {
+      const why = this._abilityUnavailableReason?.(user, ability);
+      this._log(`${ability.name} has no valid targets${why ? ` — ${why}` : ''}.`);
+      return;
+    }
 
     this.targetingAbility = ability;
 
@@ -3967,27 +4348,7 @@ export default class CombatScene extends Phaser.Scene {
     this.targetingAbilityBtn = sourceBtn;
     sourceBtn?.setFill(0x88ff88);  // UIButton interprets this as "selected" → amber-gold style
 
-    const slots = ability.targetRequirement === 'enemy' ? this.enemySlots : this.allySlots;
-    // Optional per-column target filter
-    let filtered = slots;
-    if (ability.targetColumns?.length && !DevFlags.isNoRangeEnabled()) {
-      filtered = slots.filter(s => {
-        const col = this._getColumnBySlotId(s.slotId);
-        return ability.targetColumns.includes(col);
-      });
-    }
-    // Optional explicit slot-ID target filter (e.g. arc-pattern skills that can
-    // only be aimed at a flank slot, not the center row) — same shape as
-    // targetColumns above, just keyed on raw slotId instead of column.
-    if (ability.targetSlots?.length && !DevFlags.isNoRangeEnabled()) {
-      filtered = filtered.filter(s => ability.targetSlots.includes(s.slotId));
-    }
-
-
-
     filtered.forEach(slot => {
-      if (!slot.char || slot.char.status === 'incapacitated') return;
-
 
 
       /* ---- 1️⃣  Make the container clickable for this ability ---- */
@@ -4608,6 +4969,18 @@ export default class CombatScene extends Phaser.Scene {
     if (!options?.isRepeat && user.currentMP < mpCost) {
       this._log(`${user.name} lacks the MP to use ${ability.name}.`);
       return;
+    }
+
+    // --- The skill's own canExecute hook. _executeSkill and NPCLogic have always
+    // honoured this; this player path did not, so any requirement expressed
+    // through it was unenforced on a normal click. Placed with the other free
+    // fizzles: no action, no MP, no cooldown.
+    {
+      const why = this._abilityCanExecuteReason(user, target, ability);
+      if (why) {
+        this._log(`${ability.name} fizzles: ${why}`);
+        return; // no costs, no cooldown, no on-act triggers
+      }
     }
 
     // --- Optional gating: abilities may require a minimum CURSE tier on the target

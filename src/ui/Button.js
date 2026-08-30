@@ -140,41 +140,4 @@ export default class UIButton extends Phaser.GameObjects.Container {
     this._applyState();
   }
 
-  // Outer highlight — used for weakness tag matches (lacerate, fire, cold, etc.)
-  setFilterHighlight(hexColor) {
-    if (!this._filterOverlay) {
-      this._filterOverlay = this.scene.add.rectangle(
-        0, 0,
-        this.background.width + 4, this.background.height + 4,
-        0x000000, 0
-      );
-      this._filterOverlay.setVisible(false);
-      this.add(this._filterOverlay);
-    }
-    if (hexColor != null) {
-      this._filterOverlay.setStrokeStyle(2.5, hexColor, 1);
-      this._filterOverlay.setVisible(true);
-    } else {
-      this._filterOverlay.setVisible(false);
-    }
-  }
-
-  // Inner highlight — used for action type matches (major/bonus), sits on top of outer.
-  setFilterHighlightInner(hexColor) {
-    if (!this._filterOverlayInner) {
-      const w = this.background.width;
-      const h = this.background.height;
-      this._filterOverlayInner = this.scene.add.rectangle(0, 0, w - 4, h - 4, 0x000000, 0);
-      this._filterOverlayInner.setVisible(false);
-      this.add(this._filterOverlayInner);
-    }
-    if (hexColor != null) {
-      this._filterOverlayInner.setStrokeStyle(1.5, hexColor, 1);
-      this._filterOverlayInner.setVisible(true);
-    } else {
-      this._filterOverlayInner.setVisible(false);
-    }
-  }
 }
-
-

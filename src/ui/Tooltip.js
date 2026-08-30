@@ -207,14 +207,47 @@ _renderPills(tags = []) {
 
 
   // Reposition the tooltip to follow the cursor (with bounds checking)
+  /**
+   * Restrict the area the tooltip is allowed to occupy. Defaults to the whole
+   * canvas. TownScene narrows it to the visible map, because the right sidebar
+   * (x 1100-1280) belongs to UIScene and renders ABOVE TownScene -- a tooltip
+   * clamped only to the canvas edge slid underneath it and became unreadable.
+   */
+  setBounds(left, right) {
+    this.boundsLeft = left;
+    this.boundsRight = right;
+    return this;
+  }
+
+  /**
+   * Shared placement for show() and reposition(). Prefers sitting to the right
+   * of the cursor; when that would overflow the allowed area it FLIPS to the
+   * cursor's left rather than just sliding left, so the pointer never ends up
+   * sitting on top of its own tooltip.
+   */
+  _place(x, y) {
+    const w = this._bgW || 0;
+    const h = this._bgH || 0;
+    const margin = 12;
+    const left = this.boundsLeft ?? 0;
+    const right = this.boundsRight ?? 1280;
+
+    let px = x + margin;
+    if (px + w > right - 8) {
+      px = x - margin - w;                       // flip to the left of the cursor
+      if (px < left + 8) {
+        // Too wide to sit on either side: clamp inside the area and accept
+        // overlapping the cursor rather than spilling outside it.
+        px = Math.max(left + 8, right - w - 8);
+      }
+    }
+    const py = (y - h - margin >= 8) ? y - h - margin : y + margin;
+    this.container.setPosition(px, py);
+  }
+
   reposition(x, y) {
     if (!this.container?.visible) return;
-    const ttW = this._bgW;
-    const ttH = this._bgH;
-    const margin = 12;
-    const px = Math.min(x + margin, 1280 - ttW - 8);
-    const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;
-    this.container.setPosition(px, py);
+    this._place(x, y);
   }
 
   /**
@@ -278,13 +311,9 @@ _renderPills(tags = []) {
     this._bgW = bgW;
     this._bgH = bgH;
 
-    // Place above cursor; fall back to below if too close to top edge
-    const ttW = bgW;
-    const ttH = bgH;
-    const margin = 12;
-    const px = Math.min(x + margin, 1280 - ttW - 8);
-    const py = (y - ttH - margin >= 8) ? y - ttH - margin : y + margin;
-    this.container.setPosition(px, py);
+    // Place above cursor; fall back to below if too close to top edge, and
+    // flip to the cursor's left if there isn't room on the right (see _place).
+    this._place(x, y);
     this.container.setVisible(true);
   }
 

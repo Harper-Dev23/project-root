@@ -69,10 +69,17 @@ export const QUEST_LINES = [
         label:       'Equip Yourself',
         description: 'Visit the vendor row and prepare your party for the trials ahead.',
         isActive:   (pm) => pm.hasQuestFlag('vendor_row'),
+        // `vendor_row` is only ever set BY visiting the Elder, so a player who
+        // walks straight past him to the Combat Pit could never satisfy either
+        // branch: never active (no flag), never complete (orientation_elder is
+        // still set) -- the step sat on "upcoming" forever. Clearing the first
+        // trial now closes it regardless of the route taken there.
         isComplete: (pm) =>
-          !pm.hasQuestFlag('vendor_row') &&
-          !pm.hasQuestFlag('orientation_elder') &&
-          !pm.hasQuestFlag('orientation_bonfire'),
+          sc(pm, 'training_encounter_1') || (
+            !pm.hasQuestFlag('vendor_row') &&
+            !pm.hasQuestFlag('orientation_elder') &&
+            !pm.hasQuestFlag('orientation_bonfire')
+          ),
       },
       {
         id:          'prologue_first_trial',

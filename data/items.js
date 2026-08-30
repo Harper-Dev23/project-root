@@ -44,7 +44,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 1,
-    damage: { min: 4, max: 6 },
+    damage: { min: 6, max: 7 },
     description: 'A dull but quick blade ideal for close jabs.'
   },
 
@@ -127,7 +127,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 6, max: 10 },
+    damage: { min: 6, max: 13 },
     description: 'A creaky bow that fires arrows unevenly.'
   },
 
@@ -151,7 +151,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 5, max: 9 },
+    damage: { min: 7, max: 12 },
     description: 'A warped staff with faint magical traces.'
   },
 
@@ -175,7 +175,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 7, max: 12 },
+    damage: { min: 8, max: 11 },
     description: 'A massive iron mace with crushing force.'
   },
 
@@ -210,7 +210,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 1,
-    damage: { min: 5, max: 7 },
+    damage: { min: 7, max: 9 },
     renownOrigin: 'bone',
     description: 'Carved from something that did not want to die. A dull but quick blade ideal for close jabs.'
   },
@@ -300,7 +300,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 7, max: 12 },
+    damage: { min: 7, max: 16 },
     renownOrigin: 'bone',
     description: 'Carved from something that did not want to die. A creaky bow that fires arrows unevenly.'
   },
@@ -326,7 +326,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 6, max: 11 },
+    damage: { min: 9, max: 14 },
     renownOrigin: 'bone',
     description: 'Carved from something that did not want to die. A warped staff with faint magical traces.'
   },
@@ -352,7 +352,7 @@ export const Items = {
     rarity: 'common',
     bonuses: {},
     hands: 2,
-    damage: { min: 8, max: 15 },
+    damage: { min: 10, max: 13 },
     renownOrigin: 'bone',
     description: 'Carved from something that did not want to die. A massive iron mace with crushing force.'
   },

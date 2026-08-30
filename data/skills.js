@@ -8143,6 +8143,13 @@ Object.assign(RAW_SKILLS, {
     // 'projectile' added — see frost_swell's comment above.
     tags: ["magic", "spell", "fire", "elemental", "zone", "projectile"],
     buildupHint: { fire: 150 },
+    // Declares the "Req zone" its description already promised. Before this the
+    // requirement lived only in prose: apply() quietly did nothing while the
+    // action AND the MP were still spent. Also what the Usable filter and
+    // targeting read, so the skill hides itself until a zone is up.
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'runic_zone' && (se.turns || 0) > 0)
+      ? true
+      : { ok: false, reason: `${user?.name || 'You'} has no active runic zone.` },
     apply: (attacker, target, scene, opts = {}) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Kindling Rite requires an active runic zone." };
@@ -8299,6 +8306,13 @@ Object.assign(RAW_SKILLS, {
     // Zone-toggle utility cast, not a repeatable damage/buildup spell — see
     // conclave_circle's noRecast comment.
     noRecast: true,
+    // Declares the "Req zone" its description already promised. Before this the
+    // requirement lived only in prose: apply() quietly did nothing while the
+    // action AND the MP were still spent. Also what the Usable filter and
+    // targeting read, so the skill hides itself until a zone is up.
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'runic_zone' && (se.turns || 0) > 0)
+      ? true
+      : { ok: false, reason: `${user?.name || 'You'} has no active runic zone.` },
     apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Ward Weave requires an active runic zone." };
@@ -8430,6 +8444,13 @@ Object.assign(RAW_SKILLS, {
     // _applyAbilityToTarget ever runs — a same-cast bootstrapping paradox
     // the user caught in testing. See conclave_circle's noRecast comment.
     noRecast: true,
+    // Declares the "Req zone" its description already promised. Before this the
+    // requirement lived only in prose: apply() quietly did nothing while the
+    // action AND the MP were still spent. Also what the Usable filter and
+    // targeting read, so the skill hides itself until a zone is up.
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'runic_zone' && (se.turns || 0) > 0)
+      ? true
+      : { ok: false, reason: `${user?.name || 'You'} has no active runic zone.` },
     apply: (attacker, target, scene) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Rune Channel requires an active runic zone." };
@@ -8697,6 +8718,13 @@ Object.assign(RAW_SKILLS, {
     // simple self-utility buff, not a real recast candidate.
     tags: ["support", "mana", "zone"],
     vfxHint: { kind: 'mana' },
+    // Declares the "Req zone" its description already promised. Before this the
+    // requirement lived only in prose: apply() quietly did nothing while the
+    // action AND the MP were still spent. Also what the Usable filter and
+    // targeting read, so the skill hides itself until a zone is up.
+    canExecute: ({ user }) => (user?.statusEffects || []).some(se => se?.id === 'runic_zone' && (se.turns || 0) > 0)
+      ? true
+      : { ok: false, reason: `${user?.name || 'You'} has no active runic zone.` },
     apply: (attacker) => {
       const zone = getRunicZone(attacker);
       if (!zone) return { amount: 0, log: "Mana Fountain requires an active runic zone." };
@@ -10297,7 +10325,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 10,
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -10356,7 +10384,7 @@ Object.assign(RAW_SKILLS, {
     // — damage nerfed 100%→65%; Expose buildup and the tier-cross Toxic
     // reward are untouched.
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -10403,7 +10431,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 10,
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "fire"],
@@ -10446,7 +10474,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "toxic", "necrotic"],
@@ -10508,7 +10536,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "fire"],
@@ -10574,7 +10602,7 @@ Object.assign(RAW_SKILLS, {
     // Damage nerfed 100%→65%; Curse buildup and the Disorient-tier bonus
     // are untouched.
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse"],
@@ -10630,7 +10658,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["projectile", "attack", "lacerate"],
@@ -10673,7 +10701,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -10725,7 +10753,7 @@ Object.assign(RAW_SKILLS, {
     // chance (scaling with the target's Lightning meter, up to 40%) are
     // untouched, since those are the actual utility hook.
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning"],
@@ -10905,7 +10933,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: ["major", "bonus"],
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "lacerate"],
@@ -10962,7 +10990,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["toxic", "necrotic"],
@@ -11053,7 +11081,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -11106,7 +11134,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -11163,7 +11191,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disease", "necrotic", "aoe"],
@@ -11223,7 +11251,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning"],
@@ -11286,7 +11314,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -11330,7 +11358,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "toxic", "necrotic"],
@@ -11436,7 +11464,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "reaction",
-    mpCost: 3,
+    mpCost: 2,
     cooldown: 3,
     requiresTarget: false,
     reaction: {
@@ -11480,7 +11508,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "buff", "necrotic"],
@@ -11538,7 +11566,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "necrotic", "disease", "lacerate"],
@@ -11600,7 +11628,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "fire"],
@@ -11653,7 +11681,7 @@ Object.assign(RAW_SKILLS, {
     // full 100% swing, since the Rhythm-scaled Disorient buildup is the
     // actual payoff here, not the weapon damage.
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient"],
@@ -11693,7 +11721,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate"],
@@ -11737,7 +11765,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 10,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose"],
@@ -11789,7 +11817,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "cold", "defensive"],
@@ -11848,7 +11876,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 11,
     actionCost: "major",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning", "elemental"],
@@ -11896,7 +11924,7 @@ Object.assign(RAW_SKILLS, {
     // Rhythm build/vulnerability rider are untouched, since those were
     // always the actual point of the skill.
     actionCost: "bonus",
-    mpCost: 3,
+    mpCost: 2,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "mana", "support"],
@@ -11970,7 +11998,7 @@ Object.assign(RAW_SKILLS, {
     // relative +25% on top) to offset the action-economy gain; buildup and
     // the Rhythm grant are untouched.
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "expose", "necrotic"],
@@ -12032,7 +12060,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient", "aoe"],
@@ -12098,7 +12126,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 12,
     actionCost: "reaction",
-    mpCost: 4,
+    mpCost: 3,
     cooldown: 3,
     requiresTarget: false,
     positionRequirement: ["front", "mid"],
@@ -12148,7 +12176,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "bonus",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "buff", "fire"],
@@ -12206,7 +12234,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "expose"],
@@ -12271,7 +12299,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 15,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "cold", "control"],
@@ -12363,7 +12391,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "bonus",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: false,
     targetRequirement: "self",
     tags: ["support", "taunt", "control"],
@@ -12404,7 +12432,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "aoe", "lacerate"],
@@ -12482,7 +12510,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "free",
-    mpCost: 4,
+    mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "movement", "initiative"],
@@ -12545,12 +12573,24 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CON",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "heal", "necrotic"],
     cooldown: 4,
-    requiresWeakness: { anyOf: [{ family: "toxic", tierAtLeast: 1 }, { family: "disease", tierAtLeast: 1 }, { family: "curse", tierAtLeast: 1 }] },
+    // NOT a gate. This used to declare
+    //   requiresWeakness: { anyOf: [toxic T1, disease T1, curse T1] }
+    // which no gate ever enforced -- both _applyAbilityToTarget and
+    // _executeSkill do `const fam = req?.family; if (!fam) continue;`, and the
+    // anyOf shape has no .family, so the requirement was skipped entirely.
+    // That was a landmine: enforcing anyOf would have made the skill unusable
+    // against a clean target, which is NOT the design. The heal already scales
+    // continuously -- floor(total necrotic / 25) -- and is simply 0 with no
+    // buildup, so it needs no requirement at all.
+    // `relatesToFamilies` is purely descriptive: it keeps the skill listed
+    // under the toxic/disease/curse filter pills without claiming a gate or a
+    // reward. Read only by CombatScene._weaknessFamiliesOf().
+    relatesToFamilies: ["toxic", "disease", "curse"],
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.balancing_blow;
       const roll = calculateDamage(attacker, target, ability);
@@ -12590,7 +12630,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -12640,7 +12680,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "heal", "support"],
@@ -12700,7 +12740,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "STR",
     requiredValue: 16,
     actionCost: "major",
-    mpCost: 6,
+    mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "lacerate"],
@@ -15323,6 +15363,12 @@ Object.assign(RAW_SKILLS, {
     // per DISTINCT enemy caught in any zone — a unit in two zones at once
     // still only counts once, and unoccupied zones (or zones with only
     // allies in them) trigger their effect but grant no MP.
+    // Already fizzled correctly from inside apply(); declaring it here as well
+    // is what lets the Usable filter hide it before it is ever clicked.
+    canExecute: ({ scene }) => Object.values(scene?.slotEffects || {})
+      .some(arr => (arr || []).some(e => e?.isQuakeZone && (e.turns || 0) > 0))
+      ? true
+      : { ok: false, reason: 'No active quake zones.' },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.tremor_echo;
 
@@ -16391,6 +16437,12 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["ranged", "attack", "projectile", "dislodge"],
+    // Already fizzled correctly from inside apply(); declared here so the Usable
+    // filter and targeting can see it — with no lodges anywhere, no enemy is a
+    // legal target and the skill drops out of the list.
+    canExecute: ({ target }) => (target?.statusEffects || []).some(se => se?.id === 'lodged')
+      ? true
+      : { ok: false, reason: `${target?.name || 'Target'} has no lodges.` },
     apply: (attacker, target, scene) => {
       const lodgeCount = (target?.statusEffects || []).filter(se => se?.id === 'lodged').length;
       if (lodgeCount === 0) {

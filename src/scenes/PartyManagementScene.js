@@ -422,6 +422,7 @@ export default class PartyManagementScene extends Phaser.Scene {
         startX = img.x; startY = img.y;
         img.setDepth(2000); border.setDepth(2001);
         border.setStrokeStyle(2, 0xffff00); // yellow while dragging
+        SoundManager.play('dullClick');     // pick up
       });
 
       // manual offset to compensate “feel” if you need it
@@ -435,6 +436,12 @@ export default class PartyManagementScene extends Phaser.Scene {
       img.on('dragend', (_p, _go, dropped) => {
         border.setStrokeStyle(2, 0xffffff);
         img.setDepth(1005); border.setDepth(1006);
+
+        // Landing in a slot uses the same thud as closing a menu ('handsClick',
+        // which this scene already plays on its own close) -- heavier than the
+        // pick-up click. A miss stays silent rather than scolding the player
+        // for a near-hit; the portrait snapping back is feedback enough.
+        if (dropped) SoundManager.play('handsClick');
 
         if (!dropped) {
           // miss → return to where it started (bench or slot)

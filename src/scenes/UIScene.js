@@ -746,55 +746,9 @@ export default class UIScene extends Phaser.Scene {
       this.showToast?.(`Saved to ${slotName}`);
     };
 
-    const showOverwriteConfirm = (slotName) => {
-      if (this.overwriteConfirmGroup) {
-        // Clear previous children safely — don't destroy the container itself
-        // (it's nested in modalPanelGroup and destroy() would crash on sys ref).
-        this.overwriteConfirmGroup.removeAll(true);
-      } else {
-        this.overwriteConfirmGroup = this.add.container(0, 0)
-          .setScrollFactor(0)
-          .setDepth(DEPTH.MODAL_PANEL + 10);
-        this.modalPanelGroup.add(this.overwriteConfirmGroup);
-      }
-
-      const dim = this.add.rectangle(w / 2, h / 2, panelW + 40, panelH + 20, 0x000000, 0.55)
-        .setOrigin(0.5)
-        .setInteractive();
-      const confirmPanel = createPanel(this, w / 2 - 220, h / 2 - 90, 440, 180, 'menu');
-
-      const prompt = this.add.text(w / 2, h / 2 - 30, `Overwrite "${slotName}"?`, {
-        fontSize: '18px',
-        color: '#ffffff',
-        wordWrap: { width: 380 }
-      }).setOrigin(0.5);
-
-      const yesBtn = this.add.text(w / 2 - 70, h / 2 + 35, '[ Yes ]', {
-        fontSize: '18px',
-        color: '#ffffff'
-      }).setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          performSave(slotName);
-        })
-        .on('pointerover', () => yesBtn.setStyle({ color: MENU_THEME.accentHover }))
-        .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
-
-      const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
-        fontSize: '18px',
-        color: '#ffffff'
-      }).setOrigin(0.5)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => {
-          // Clear contents safely — same reason as above
-          this.overwriteConfirmGroup?.removeAll(true);
-          this.overwriteConfirmGroup = null;
-        })
-        .on('pointerover', () => noBtn.setStyle({ color: MENU_THEME.accentHover }))
-        .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
-
-      this.overwriteConfirmGroup.add([dim, confirmPanel, prompt, yesBtn, noBtn]);
-    };
+    const showOverwriteConfirm = (slotName) =>
+      this._showModalConfirm(`Overwrite "${slotName}"?`, () => performSave(slotName),
+        { dimW: panelW + 40, dimH: panelH + 20 });
 
     // Buttons
     const saveBtn = this.add.text(w / 2 - 80, h / 2 - 100, '[ Save ]', { fontSize: '18px', color: '#ffffff' })
@@ -910,6 +864,69 @@ export default class UIScene extends Phaser.Scene {
 
 
 
+  /**
+   * A Yes/No confirm layered over whatever modal popup is already open.
+   *
+   * Lives in `overwriteConfirmGroup` (kept as the property name because
+   * cleanupPopup already nulls it) and is added to modalPanelGroup, so it is
+   * torn down with its parent. Its children are cleared with removeAll(true)
+   * rather than destroying the container itself -- destroy() on this nested
+   * container crashes on a stale sys reference.
+   */
+  _showModalConfirm(message, onYes, { dimW = 460, dimH = 380 } = {}) {
+    if (!this.modalPanelGroup) return;
+    const w = this.sys.game.canvas.width;
+    const h = this.sys.game.canvas.height;
+
+    if (this.overwriteConfirmGroup) {
+      this.overwriteConfirmGroup.removeAll(true);
+    } else {
+      this.overwriteConfirmGroup = this.add.container(0, 0)
+        .setScrollFactor(0)
+        .setDepth(DEPTH.MODAL_PANEL + 10);
+      this.modalPanelGroup.add(this.overwriteConfirmGroup);
+    }
+
+    const dim = this.add.rectangle(w / 2, h / 2, dimW, dimH, 0x000000, 0.55)
+      .setOrigin(0.5)
+      .setInteractive();
+    const confirmPanel = createPanel(this, w / 2 - 220, h / 2 - 90, 440, 180, 'menu');
+
+    const prompt = this.add.text(w / 2, h / 2 - 30, message, {
+      fontSize: '18px',
+      color: '#ffffff',
+      align: 'center',
+      wordWrap: { width: 380 }
+    }).setOrigin(0.5);
+
+    const yesBtn = this.add.text(w / 2 - 70, h / 2 + 35, '[ Yes ]', {
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        SoundManager.play('select');
+        onYes?.();
+      })
+      .on('pointerover', () => yesBtn.setStyle({ color: MENU_THEME.accentHover }))
+      .on('pointerout', () => yesBtn.setStyle({ color: '#ffffff' }));
+
+    const noBtn = this.add.text(w / 2 + 70, h / 2 + 35, '[ No ]', {
+      fontSize: '18px',
+      color: '#ffffff'
+    }).setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        SoundManager.play('dullClick');
+        this.overwriteConfirmGroup?.removeAll(true);
+        this.overwriteConfirmGroup = null;
+      })
+      .on('pointerover', () => noBtn.setStyle({ color: MENU_THEME.accentHover }))
+      .on('pointerout', () => noBtn.setStyle({ color: '#ffffff' }));
+
+    this.overwriteConfirmGroup.add([dim, confirmPanel, prompt, yesBtn, noBtn]);
+  }
+
   createLoadSlotPopup() {
     this.cleanupPopup?.();
 
@@ -999,9 +1016,20 @@ export default class UIScene extends Phaser.Scene {
           .setOrigin(0, 0.5)
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', () => {
-            GameState.load(sl);
-            this.cleanupPopup();
-            this.refreshUI?.();
+            SoundManager.play('select');
+            // Loading discards everything since the last save, and this sits
+            // one click away in the menu -- same class of destructive action
+            // as overwriting a slot, so it gets the same confirm.
+            this._showModalConfirm(
+              `Load "${sl}"?
+Any unsaved progress will be lost.`,
+              () => {
+                GameState.load(sl);
+                this.cleanupPopup();
+                this.refreshUI?.();
+              },
+              { dimW: panelW + 40, dimH: panelH + 20 }
+            );
           })
           .on('pointerover', () => slotText.setStyle({ color: '#ff0' }))
           .on('pointerout', () => slotText.setStyle({ color: '#fff' }));
