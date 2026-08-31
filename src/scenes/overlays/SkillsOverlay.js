@@ -284,8 +284,8 @@ export default class SkillsOverlay extends Phaser.Scene {
       const showTip = () => {
         const { x, y } = this.input.activePointer;
         // Generic mode (no actor) — shows formula text, not live numbers
-        const { lines, tags, titleColor } = buildSkillTooltipLines(s.raw, null);
-        this._showTooltipAt(x, y, { title: s.name, titleColor, lines, tags });
+        const { lines, tags, titleColor, aoeGrid } = buildSkillTooltipLines(s.raw, null);
+        this._showTooltipAt(x, y, { title: s.name, titleColor, lines, tags, aoeGrid });
         bg.setFillStyle(0x303030, 1);
       };
       const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };

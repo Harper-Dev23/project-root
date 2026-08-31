@@ -717,7 +717,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} triages ${target.name} — physical trauma cleansed.`);
       return {};
     },
-    description: 'Bonus action. Cleanse all physical buildup (Lacerate, Expose, Disorient) from an ally. CD 2.'
+    description: 'Cleanse all physical buildup (Lacerate, Expose, Disorient) from an ally. CD 2.'
   },
 
   // Cleanse necrotic buildup families from an ally
@@ -738,7 +738,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} remedies ${target.name} — necrotic corruption purged.`);
       return {};
     },
-    description: 'Bonus action. Cleanse all necrotic buildup (Disease, Curse, Toxic) from an ally. CD 2.'
+    description: 'Cleanse all necrotic buildup (Disease, Curse, Toxic) from an ally. CD 2.'
   },
 
   // Cleanse elemental buildup families from an ally
@@ -759,7 +759,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} steadies ${target.name} — elemental buildup dispelled.`);
       return {};
     },
-    description: 'Bonus action. Cleanse all elemental buildup (Fire, Cold, Lightning) from an ally. CD 2.'
+    description: 'Cleanse all elemental buildup (Fire, Cold, Lightning) from an ally. CD 2.'
   },
 
   // ── STYX Amulet-Granted Skill ────────────────────────────────────────────
@@ -782,7 +782,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} hastens ${target.name} — cooldowns reduced by 3.`);
       return {};
     },
-    description: 'Bonus action. Reduce all cooldowns of an ally by 3 turns. CD 3.'
+    description: 'Reduce all cooldowns of an ally by 3 turns. CD 3.'
   },
 
   // ── LE\'SSE Ring-Granted Skills ───────────────────────────────────────────
@@ -802,7 +802,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} channels Elemental Overload — all damage becomes elemental this turn.`);
       return {};
     },
-    description: 'Bonus action. All damage dealt becomes elemental this turn. CD 3.'
+    description: 'All damage dealt becomes elemental this turn. CD 3.'
   },
 
   // Convert all damage to physical for this turn
@@ -821,7 +821,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} grounds their power — all damage becomes physical this turn.`);
       return {};
     },
-    description: 'Bonus action. All damage dealt becomes physical this turn. CD 3.'
+    description: 'All damage dealt becomes physical this turn. CD 3.'
   },
 
   // Convert all damage to necrotic for this turn
@@ -840,7 +840,7 @@ const RAW_SKILLS = {
       scene?._log?.(`${user.name} severs the spirit — all damage becomes necrotic this turn.`);
       return {};
     },
-    description: 'Bonus action. All damage dealt becomes necrotic this turn. CD 3.'
+    description: 'All damage dealt becomes necrotic this turn. CD 3.'
   }
 };
 
@@ -864,7 +864,7 @@ const NPC_ONLY_SKILLS = {
       if (moved) scene?._log?.(`${attacker.name} shuffles position.`);
       return { amount: 0, moved };
     },
-    description: 'Bonus action. Shifts one column sideways, changing which of your ranks can reach it.'
+    description: 'Shifts one column sideways, changing which of your ranks can reach it.'
   },
 
   'dummy_sway': {
@@ -1631,7 +1631,7 @@ const NPC_ONLY_SKILLS = {
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { curse: 50 },
     apply: () => ({ amount: 4, buildup: { curse: 50 } }),
-    description: "Bonus action. Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup."
+    description: "Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup."
   },
 
   'wizard_arcane_bolt': {
@@ -7778,7 +7778,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "WIS",
     requiredValue: 12,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 0,
     cooldown: 6,
     requiresTarget: false,
     targetRequirement: "self",
@@ -7807,7 +7807,7 @@ Object.assign(RAW_SKILLS, {
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: `${attacker?.name ?? 'Mage'} traces a runic circle of power!` };
     },
-    description: "Trace a runic circle at your feet. Lasts 4 turns, generates 2 MP/turn. Dissipates if you move. Required for zone modification skills."
+    description: "Trace a runic circle at your feet. Lasts 4 turns and draws 2 MP each turn to sustain. Dissipates if you move. Required for every zone-modifying skill."
   },
 
   'frost_swell': {
@@ -7886,7 +7886,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Cold, +82 Cold buildup. If target is at least Chilled (Cold T1): +20% damage, +25 additional Cold buildup. Crossing Frostbitten (Cold T2): steals up to 8 Initiative from the target."
+    description: "A swell of biting cold — deals 100% weapon damage as Cold and applies Cold buildup. It bites harder into an already Chilled target, and steals Initiative from one driven to Frostbitten."
   },
 
   'galvanic_touch': {
@@ -7941,7 +7941,7 @@ Object.assign(RAW_SKILLS, {
       // (CombatScene.js) carries element/isMagic/buildup through correctly,
       // which is everything this hit has since it's 100% elemental after
       // the conversion above — nothing gets lost.
-      const repeatChance = lightningTier >= 1 ? Math.min(0.20, lightningMeter / 1000) : 0;
+      const repeatChance = lightningTier >= 1 ? Math.min(0.40, lightningMeter / 1000) : 0;
 
       return {
         ...roll,
@@ -7952,7 +7952,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Bonus action. Deals 80% weapon damage as Lightning, +69 Lightning buildup. If target is at least Zapped (Lightning T1+): +10 additional Lightning buildup per tier (up to +20 at T2), plus a small meter-scaled chance (up to 20%) of an extra hit carrying the same damage and buildup."
+    description: "A crackling touch — deals 80% weapon damage as Lightning. Against a Zapped target (Lightning T1+) it applies +10 further Lightning buildup per tier, and may arc into a second hit carrying the same damage and buildup: a 1% chance per 10 of their Lightning meter, up to 40% at 400."
   },
 
   // Same formula/shape as Marked Cut (sword_1h) — see Vital Mark's (dagger)
@@ -8005,7 +8005,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage as Lightning. Applies Lightning buildup. Crossing a tier leaves them reeling from the shock (bonus Disorient)."
+    description: "Deals 65% weapon damage as Lightning. Applies Lightning buildup. Crossing a tier leaves them reeling from the shock (bonus Disorient)."
   },
 
   // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
@@ -8063,7 +8063,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
+    description: "Deals 65% weapon damage as Necrotic. Applies Disease. Crossing a tier lets the sickness fester into poison (bonus Toxic)."
   },
 
   // Staff's own projectile skill — same shape as Ghost Step/Dagger Throw
@@ -8161,7 +8161,7 @@ Object.assign(RAW_SKILLS, {
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
 
-      const basePct = 80;
+      const basePct = 100;
       const scaledPct = basePct * powerScale;
       const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
@@ -8206,7 +8206,7 @@ Object.assign(RAW_SKILLS, {
         log: `The runic zone ignites with flames! (Kindling Rite ${stacksAfter}/3 stacks)`,
       };
     },
-    description: "Req zone. Deals 80% weapon damage as Fire, +150 Fire buildup. Modifies zone: stacks up to 3 times. Each stack: caster takes 80 Fire buildup/turn, caster deals +20% elemental damage. At max stacks: 240 Fire buildup/turn, +60% elemental damage."
+    description: "Feed the circle to the flame — deals 100% weapon damage as Fire. Modifies your zone, stacking up to 3 times: each stack gives you +20% elemental damage and burns you for 60 Fire buildup per turn."
   },
 
   'cone_of_blight': {
@@ -8234,7 +8234,7 @@ Object.assign(RAW_SKILLS, {
     // back rank). Enemy slots share the identical row/slot-ID layout as
     // allies (just X-mirrored), so this needs no per-side translation.
     targetSlots: [1, 2, 3, 4, 5],
-    aoe: { shape: 'smallCone' },
+    aoe: { shape: 'smallCone', scale: 0.70 },
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.cone_of_blight;
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
@@ -8285,7 +8285,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Deals 90% weapon damage as Necrotic + 113 Toxic buildup to a target in the front two ranks. Also hits the 1-2 slots directly behind it in a small cone, for 70% damage/buildup."
+    description: "A creeping wave of rot — deals 90% weapon damage as Necrotic and applies Toxic buildup to a target in the front two ranks, splashing the slots directly behind it."
   },
 
   'ward_weave': {
@@ -8329,7 +8329,7 @@ Object.assign(RAW_SKILLS, {
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Protective wards weave through the runic circle!" };
     },
-    description: "Req zone. Modifies zone: drains 3 initiative/turn (replaces MP gain), heals the whole party for 50% weapon-die healing at the end of your turn while active."
+    description: "Weave the circle into a ward — it drains 3 Initiative each turn on top of the zone’s own mana upkeep, and heals the whole party at the end of every turn it holds."
   },
 
   'silence_crescent': {
@@ -8359,7 +8359,7 @@ Object.assign(RAW_SKILLS, {
     // Sacred Shockwave's diamond, just a different fixed group — see
     // aoeResolver.js's "backCrescent" shape.
     targetSlots: [8, 4, 5, 6],
-    aoe: { shape: 'backCrescent' },
+    aoe: { shape: 'backCrescent', scale: 0.60 },
     // Crossing Disorient T2 gives the target -20% damage dealt for 1 turn —
     // declared here so EVERY enemy hit (primary AND each splash target)
     // independently checks their own tier-cross via the generic
@@ -8375,7 +8375,7 @@ Object.assign(RAW_SKILLS, {
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
       const roll = calculateDamage(attacker, target, ability);
 
-      const basePct = 55;
+      const basePct = 120;
       const scaledPct = basePct * powerScale;
       const powerNote = powerScale !== 1 ? ` × ${Math.round(powerScale * 100)}% power` : '';
 
@@ -8419,7 +8419,7 @@ Object.assign(RAW_SKILLS, {
         splash: splash.length ? splash : undefined,
       };
     },
-    description: "Bonus action. Deals 55% weapon damage + 100 Disorient buildup to a target in the back crescent (slots 8,4,5,6 — always hits the other three regardless of which is targeted, at 60% damage/buildup). Any enemy hit whose Disorient crosses T2 takes -20% damage dealt for 1 turn."
+    description: "A ringing arc across the back line — deals 120% weapon damage to a target in the back crescent, and always catches the other three slots of that crescent at 60% regardless of which you aim at."
   },
 
   'rune_channel': {
@@ -8472,7 +8472,7 @@ Object.assign(RAW_SKILLS, {
       scene?._refreshRunicZoneSprite?.(attacker);
       return { amount: 0, log: "Lightning crackles through the runes!" };
     },
-    description: "Req zone. Modifies zone: spells have a 25% chance to fully recast at 60% power (tier-cross rewards still grant full value). Every cast or recast, the caster takes 80 lightning buildup and 1 lightning damage — which can itself trigger Lightning Jolt if the caster is sufficiently charged."
+    description: "Req zone. Modifies zone: spells have a 25% chance to fully recast at 60% power (tier-cross rewards still grant full value). Every cast or recast, you take 40 Lightning buildup and 1 Lightning damage — which can itself set off your own Lightning Jolt if you are charged enough."
   },
 
   'ward_focus': {
@@ -8491,9 +8491,12 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mana"],
     apply: (attacker) => {
+      // 10% of MAX MP rather than a flat 3 — a flat number stopped meaning
+      // anything once a caster's pool grew past the early game.
+      const mpGain = Math.max(1, Math.floor((attacker?.maxMP ?? attacker?.derivedStats?.maxMP ?? 0) * 0.10));
       return {
         amount: 0,
-        mpGain: 3,
+        mpGain,
         // permanent (not turns:1) — persists until actually consumed by the
         // next damaging hit, however many turns away that is, instead of a
         // fixed 1-turn window that could expire unused. onHit:{} +
@@ -8508,10 +8511,10 @@ Object.assign(RAW_SKILLS, {
           mods: { Accuracy: 50 }, onHit: {}, nextHitOnly: true,
           vfx: { kind: 'buff_increase' },
         }],
-        log: `${attacker?.name ?? 'Mage'} focuses, restoring 3 MP!`,
+        log: `${attacker?.name ?? 'Mage'} focuses, restoring ${mpGain} MP!`,
       };
     },
-    description: "Bonus action, 0 MP. Restore 3 MP and gain +50 Accuracy, consumed on your next damaging hit (persists until then, not just for 1 turn)."
+    description: "Gather yourself — restores 10% of your maximum MP and grants +50 Accuracy, held until your next damaging hit rather than expiring after a turn."
   },
 
   // -------- Payoff --------
@@ -8542,7 +8545,7 @@ Object.assign(RAW_SKILLS, {
     // the primary target always being part of the same four-enemy formation
     // it hits.
     targetSlots: [2, 4, 5, 7],
-    aoe: { shape: 'diamond' },
+    aoe: { shape: 'diamond', scale: 0.80 },
     apply: (attacker, target, scene, opts = {}) => {
       const ability = SKILLS?.flame_pillar;
       const powerScale = Number.isFinite(opts?.powerScale) ? opts.powerScale : 1;
@@ -8730,19 +8733,19 @@ Object.assign(RAW_SKILLS, {
       if (!zone) return { amount: 0, log: "Mana Fountain requires an active runic zone." };
       zone.turns += 1;
       const maxMP = attacker?.maxMP ?? attacker?.derivedStats?.maxMP ?? 0;
-      const mpGain = Math.max(1, Math.floor(maxMP * 0.20));
+      const mpGain = Math.max(1, Math.floor(maxMP * 0.35));
       return {
         amount: 0,
         mpGain,
         log: `${attacker?.name ?? 'Mage'} taps the zone — restores ${mpGain} MP and extends it by 1 turn!`,
       };
     },
-    description: "Req zone. Bonus action, 0 MP. Extends zone +1 turn and restores 20% max MP."
+    description: "Draw deeply on the circle — extends the zone by 1 turn and restores 35% of your maximum MP."
   },
 
   'silencing_shockwave': {
     id: "silencing_shockwave",
-    name: "Silencing Shockwave",
+    name: "Skulltap",
     type: "weapon",
     mechanic: "active",
     versionTag: "v3.23",
@@ -8813,10 +8816,10 @@ Object.assign(RAW_SKILLS, {
         ...roll,
         physical, elemental, necrotic, amount,
         isMagic: true,
-        log: consumed > 0 ? `Silencing Shockwave consumes ${consumed} disorient for bonus damage!` : undefined,
+        log: consumed > 0 ? `Skulltap consumes ${consumed} disorient for bonus damage!` : undefined,
       };
     },
-    description: "Requires Disorient T2 (Silenced). Deals 165% weapon damage — converts to Necrotic if the target is below 20% max MP. Consumes up to 400 Disorient buildup for bonus damage (+2.5% per 10 consumed, up to +100%); any excess beyond 400 is left on the target."
+    description: "Drive the ringing in their skull inward. Requires a Concussed target (Disorient T2). Deals 165% weapon damage, converted to Necrotic if the target is below 20% max MP. Consumes up to 400 of their Disorient for +2.5% damage per 10 consumed (up to +100%); anything past 400 is left on them."
   },
 
   'curse_suppression': {
@@ -8863,7 +8866,7 @@ Object.assign(RAW_SKILLS, {
         log: `${curseRemoved} curse suppressed — ${target?.name ?? 'ally'} gains +${resilienceGain} Resilience!`,
       };
     },
-    description: "Bonus action. Requires the target (self or ally) to have Curse T1+. Removes up to 400 Curse buildup, granting +1 Resilience per 8 removed (up to +50) for 3 turns."
+    description: "Requires the target (self or ally) to have Curse T1+. Removes up to 400 Curse buildup, granting +1 Resilience per 8 removed (up to +50) for 3 turns."
   },
 
   'arcane_avalanche': {
@@ -10410,7 +10413,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage. Applies Expose. Crossing a tier lets poison seep into the wound (bonus Toxic)."
+    description: "Deals 65% weapon damage. Applies Expose. Crossing a tier lets poison seep into the wound (bonus Toxic)."
   },
 
   // Same formula/shape as Marked Cut — see Vital Mark's comment above for the
@@ -10457,7 +10460,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 100% weapon damage. Applies Fire. Crossing a tier leaves them reeling from the burn (bonus Disorient)."
+    description: "Deals 100% weapon damage. Applies Fire. Crossing a tier leaves them reeling from the burn (bonus Disorient)."
   },
 
   'needle_venom': {
@@ -10632,7 +10635,7 @@ Object.assign(RAW_SKILLS, {
       if (rule) curseBuildup += rule.buff?.addBuildup?.curse || 0;
       return { ...roll, physical, elemental, necrotic, amount, buildup: { curse: curseBuildup } };
     },
-    description: "Bonus action. Deals 65% weapon damage and applies Curse buildup. If the target is at least Dazed (Disorient T1+), applies even more."
+    description: "Deals 65% weapon damage and applies Curse buildup. If the target is at least Dazed (Disorient T1+), applies even more."
   },
 
   // Dagger's own projectile skill — same shape as Ghost Step right above
@@ -10704,7 +10707,10 @@ Object.assign(RAW_SKILLS, {
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "curse", "necrotic"],
+    tags: ["melee", "attack", "curse", "necrotic", "aoe"],
+    // Was passed inline to resolveAOESplash, so the shape never reached the
+    // tooltip. The splash carries curse buildup only (amount: 0), no damage.
+    aoe: { shape: "column", scale: 0.50, damage: false },
     cooldown: 3,
     buildupHint: { curse: 75 },
     apply: (attacker, target, scene) => {
@@ -10724,7 +10730,7 @@ Object.assign(RAW_SKILLS, {
       const splashCurse = Math.floor(primaryCurse * 0.50);
       const toxicMeter = target?.weakness?.meters?.toxic || target?.currentStats?.toxic || 0;
       const repeatChance = Math.min(0.50, toxicMeter / 1000);
-      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => ({
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => ({
         target: tgt, amount: 0, tags: ability?.tags, buildup: { curse: splashCurse },
       }));
       return {
@@ -10796,7 +10802,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance,
       };
     },
-    description: "Bonus action. Deals 65% weapon damage. Chance to repeat the hit for free, scaling with the target's Lightning meter (max 40%)."
+    description: "Deals 65% weapon damage. Chance to repeat the hit for free, scaling with the target's Lightning meter (max 40%)."
   },
 
   'street_panacea': {
@@ -11254,7 +11260,10 @@ Object.assign(RAW_SKILLS, {
     mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "lightning"],
+    tags: ["melee", "attack", "lightning", "aoe"],
+    // Targets every other living enemy inline (not via resolveAOESplash);
+    // declared so the tooltip can draw it. Disorient buildup only.
+    aoe: { shape: "all", scale: 1.0, damage: false },
     cooldown: 4,
     requiresWeakness: { family: "lightning", tierAtLeast: 1 },
     buildupHint: { disorient: 50 },
@@ -11702,7 +11711,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: disorientBuildup } };
     },
-    description: "Bonus action. Deals 65% weapon damage. Builds a Rhythm stack, then applies Disorient buildup scaled by your total Rhythm stacks (60 per stack, up to 180 at 3 stacks)."
+    description: "Deals 65% weapon damage. Builds a Rhythm stack, then applies Disorient buildup scaled by your total Rhythm stacks (60 per stack, up to 180 at 3 stacks)."
   },
 
   // Lacerate: borrows Searing Clout's (mace_2h/fire) shape — a flat %
@@ -11979,7 +11988,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Bonus action. Deals 60% weapon damage. Requires target at least Flayed. Restores MP to all allies and builds Rhythm. Stronger if the target is Dazed."
+    description: "Deals 60% weapon damage. Requires target at least Flayed. Restores MP to all allies and builds Rhythm. Stronger if the target is Dazed."
   },
 
   'soft_spot_exposed': {
@@ -12046,7 +12055,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Bonus action. Deals 60% weapon damage. Applies Expose. +25% damage (75% total) if the target has any necrotic weakness (Toxic, Disease, or Curse). Grants Rhythm if the target is at least Flayed."
+    description: "Deals 60% weapon damage. Applies Expose. +25% damage (75% total) if the target has any necrotic weakness (Toxic, Disease, or Curse). Grants Rhythm if the target is at least Flayed."
   },
 
   'sword_flourish': {
@@ -12064,6 +12073,9 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "disorient", "aoe"],
+    // Inline shape lifted onto the skill so the tooltip can draw it. Spreads
+    // the target's FULL Disorient meter to their rank, dealing no damage.
+    aoe: { shape: "column", scale: 1.0, damage: false },
     cooldown: 4,
     // Declared at the ability level purely so the tooltip can show it —
     // apply() clones this same array onto each splash payload below, since
@@ -12102,7 +12114,7 @@ Object.assign(RAW_SKILLS, {
       // guess made here before any of that runs — see
       // _applySplashTierCrossRewards in CombatScene.js.
       const spreadAmt = target?.weakness?.meters?.disorient || 0;
-      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(char => ({
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(char => ({
         target: char,
         amount: 0,
         buildup: { disorient: spreadAmt },
@@ -12441,7 +12453,7 @@ Object.assign(RAW_SKILLS, {
     // slots (7, 2) aren't valid targets for this skill. See aoeResolver.js's
     // "arc" shape for the matching splash resolution (top {8,4,3} / bottom {6,5,1}).
     targetSlots: [8, 4, 3, 6, 5, 1],
-    aoe: { shape: "arc" },
+    aoe: { shape: "arc", scale: 0.85 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.crescent_cleave;
       const roll = calculateDamage(attacker, target, ability);
@@ -12995,7 +13007,7 @@ Object.assign(RAW_SKILLS, {
         buildup: { lacerate: ability?.buildupHint?.lacerate ?? 88 },
       };
     },
-    description: "Bonus action. Deals 65% weapon damage, +15% against a Bleeding (Lacerate T1) target (+30% instead if Hemorrhaging, Lacerate T2). Builds Lacerate."
+    description: "Deals 65% weapon damage, +15% against a Bleeding (Lacerate T1) target (+30% instead if Hemorrhaging, Lacerate T2). Builds Lacerate."
   },
 
   'trophy_cry': {
@@ -13227,7 +13239,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. A filthy chop that festers on contact — deals 65% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
+    description: "A filthy chop that festers on contact — deals 65% weapon damage and applies Disease buildup. Crossing a Disease tier deepens the wound, adding bonus Lacerate buildup."
   },
 
   'hexed_cleave': {
@@ -13358,6 +13370,9 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["support", "shout", "expose", "aoe", "initiative"],
+    // Column filter is done inline via _getColumnBySlotId; declared here so
+    // the tooltip can draw it. Splash applies Expose buildup only.
+    aoe: { shape: "column", scale: 1.0, damage: false },
     cooldown: 3,
     buildupHint: { expose: 80 },
     // Spending initiative is this skill's whole job — below the minimum
@@ -13377,13 +13392,10 @@ Object.assign(RAW_SKILLS, {
 
       // Expose enemy column
       const splash = [];
-      if (scene && target && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
-          (sideSlots || [])
-            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char)
+      // Shared resolver instead of a hand-rolled duplicate of its 'column' rule.
+      if (scene && target) {
+        {
+          resolveAOESplash(scene, target, ability.aoe)
             .forEach(char => splash.push({ target: char, amount: 0, buildup: { expose: exposeBuildup }, tags: ability?.tags }));
         }
         // AttackPower buff to the caster's whole column, scaled by spend tier.
@@ -13450,7 +13462,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 60% weapon damage. Restores 3 MP if this hit crosses the target into Lacerate T1 (Bleeding), or 6 MP if it crosses into T2 (Hemorrhaging)."
+    description: "Deals 60% weapon damage. Restores 3 MP if this hit crosses the target into Lacerate T1 (Bleeding), or 6 MP if it crosses into T2 (Hemorrhaging)."
   },
 
   // -------- Payoff --------
@@ -13562,7 +13574,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lacerate", "aoe"],
     cooldown: 3,
-    aoe: { shape: "column" },
+    aoe: { shape: "column", scale: 0.75 },
     buildupHint: { lacerate: 60 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.bloodletting_cleave;
@@ -13943,7 +13955,11 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "fire", "elemental", "consume"],
+    tags: ["melee", "attack", "fire", "elemental", "consume", "aoe"],
+    // Splash only fires against a Diseased target (see diseaseTier gate in
+    // apply); the shape itself is the same same-rank column every other
+    // column skill uses.
+    aoe: { shape: "column", scale: 0.70 },
     cooldown: 5,
     requiresWeakness: { family: "lacerate", tier: 2 },
     buildupHint: { fire: 80 },
@@ -13973,15 +13989,16 @@ Object.assign(RAW_SKILLS, {
       // literally named 'necrotic'; this checked that nonexistent key
       // before, so the branch could never fire — fixed during migration).
       const diseaseTier = target?.weakness?.tiers?.disease || 0;
-      if (diseaseTier >= 1 && scene && typeof scene._getUnitColumn === "function" && typeof scene._getColumnBySlotId === "function") {
-        const column = scene._getUnitColumn(target);
-        if (column) {
-          const sideSlots = target?.isEnemy ? scene.enemySlots : scene.allySlots;
+      // Column resolution goes through the shared resolver like every other AOE
+      // skill. This used to hand-roll the identical predicate inline (same
+      // _getUnitColumn lookup, same alive/not-primary filter) -- a second copy
+      // of the same rule that the tooltip couldn't see. Splash is still gated
+      // on Disease T1+: the AOE only happens against a diseased target.
+      if (diseaseTier >= 1) {
+        {
           const splashPhysical = 0;
           const splashElemental = Math.max(1, Math.floor(elemental * 0.7));
-          (sideSlots || [])
-            .filter(slot => slot?.char && slot.char !== target && slot.char.status !== "incapacitated" && scene._getColumnBySlotId(slot.slotId) === column)
-            .map(slot => slot.char)
+          resolveAOESplash(scene, target, ability.aoe)
             .forEach(char => splash.push({
               target: char,
               amount: splashElemental,
@@ -14215,7 +14232,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage, +20% against a Bleeding (Lacerate) target. Builds Disorient. Crossing either Disorient tier applies a physical vulnerability debuff."
+    description: "Deals 65% weapon damage, +20% against a Bleeding (Lacerate) target. Builds Disorient. Crossing either Disorient tier applies a physical vulnerability debuff."
   },
 
   'bedrock_guard': {
@@ -14895,7 +14912,7 @@ Object.assign(RAW_SKILLS, {
     emitTagsOnUse: ["smash"],
     cooldown: 4,
     // Diamond: fixed slots {2,4,5,7} — the four centre positions. Cannot be moved.
-    aoe: { shape: "diamond" },
+    aoe: { shape: "diamond", scale: 1.0 },   // uniform: every target takes the same 25%
     // Since the diamond AOE is an absolute fixed pattern (not relative to
     // whoever you target), the primary target selection itself is restricted
     // to those same 4 slots — targeting someone outside the diamond would
@@ -15164,7 +15181,7 @@ Object.assign(RAW_SKILLS, {
         buildup: { disorient: ability?.buildupHint?.disorient ?? 50 },
       };
     },
-    description: "Bonus action. Deals 65% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 155% against a foe weak from all three. Builds Disorient."
+    description: "Deals 65% weapon damage, +30% each against a Bleeding (Lacerate), Raw (Expose), or Dazed (Disorient) target — up to 155% against a foe weak from all three. Builds Disorient."
   },
 
   'plague_slam': {
@@ -15558,7 +15575,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage, saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2 (both fire if a single hit skips straight past T1)."
+    description: "Deals 65% weapon damage, saps mental coherence. Restores 2 MP on pushing a foe to Disorient T1, and 4 MP on T2 (both fire if a single hit skips straight past T1)."
   },
 
   // --- Spear (1h) ---
@@ -15998,7 +16015,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Bonus action. Deals 65% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
+    description: "Deals 65% weapon damage. Applies Disorient. Crossing a tier also opens the target's guard (bonus Expose)."
   },
 
   // Same shape as Staggering Point above. Curse primary: bow had no
@@ -16235,7 +16252,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, onHitLanded };
     },
-    description: "Bonus action. Deals 50% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
+    description: "Deals 50% weapon damage and drives in a barbed lodge worth 25% of that damage. When eventually dislodged, it applies 100 Lacerate buildup — +10% more per other lodge on the target at that moment."
   },
 
   // Bow's healing skill — an ally-targeted lodge (a first for the family;
@@ -16648,6 +16665,8 @@ Object.assign(RAW_SKILLS, {
     // MP/cooldown/action on a non-fizzle no-op) — free fizzle now.
     requiresWeakness: { family: "lacerate", tier: 1 },
     tags: ["ranged", "attack", "projectile", "aoe", "lacerate", "necrotic"],
+    // Inline shape lifted onto the skill; matches its SPLASH_SCALE of 0.70.
+    aoe: { shape: "column", scale: 0.70 },
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.barbed_bloom;
       // Capped at 400 (same convention as Frost Shatter) — +10% weapon
@@ -16675,7 +16694,7 @@ Object.assign(RAW_SKILLS, {
         curse:   Math.floor((target?.weakness?.meters?.curse   || 0) * 0.25),
       };
       const hasNecro = Object.values(necroSpread).some(v => v > 0);
-      const splash = resolveAOESplash(scene, target, { shape: "column" }).map(tgt => {
+      const splash = resolveAOESplash(scene, target, ability.aoe).map(tgt => {
         const splashPhysical = Math.floor(physical * SPLASH_SCALE);
         const splashElemental = Math.floor(elemental * SPLASH_SCALE);
         const splashNecrotic = Math.floor(necrotic * SPLASH_SCALE);
@@ -16808,6 +16827,10 @@ Object.assign(RAW_SKILLS, {
     // show a damage breakdown of its own; every real hit comes from the
     // independent farsight_volley_shot casts this fires off.
     tags: ["support", "aoe", "mana"],
+    // Fires an independent arrow at every BACK-rank enemy, targeted inline.
+    // Display-only: the resolver has no backRank case, and this skill does
+    // not use it -- the declaration exists so the tooltip can draw the rank.
+    aoe: { shape: "backRank", scale: 1.0 },
     apply: (attacker, target, scene) => {
       // Defensive fallback only — normal play can't reach this anymore
       // (targetColumns above already restricts targeting), but any other

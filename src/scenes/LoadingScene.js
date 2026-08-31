@@ -117,6 +117,16 @@ export default class LoadingScene extends Phaser.Scene {
         this.load.image(key, path);
       }
     }
+    // Weakness portrait overlays — grayscale, tinted at runtime per family
+    // (see CombatScene._updateWeaknessOverlays). Painted against the 128x128
+    // portrait template, rendered down to the portrait's live 64x64.
+    this.load.image('wk_crack',    'assets/sprites/portrait_crack_overlay.png');
+    this.load.image('wk_slash',    'assets/sprites/portrait_slash_overlay.png');
+    this.load.image('wk_frost',    'assets/sprites/portrait_frost_creep_overlay.png');
+    this.load.image('wk_disease',  'assets/sprites/portrait_disease_patch_overlay.png');
+    this.load.image('wk_curse',    'assets/sprites/portrait_curse_rune_overlay.png');
+    this.load.image('wk_particle', 'assets/sprites/portrait_soft_particle_orb.png');
+
     //Enemy Portraits
     this.load.image('dummy_portrait', 'assets/sprites/portraits/dummy_portrait.png');
     this.load.image('dummy_portrait_equipped_fighter', 'assets/sprites/portraits/dummy_portrait_equipped_fighter.png');

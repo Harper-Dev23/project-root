@@ -1551,9 +1551,12 @@ export default class CombatScene extends Phaser.Scene {
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
     const weaknessDots = this._createWeaknessDots(char);
+    // Overlays go directly ABOVE the portrait but BELOW the name/bars/dots, so
+    // they never obscure readable UI.
+    const weaknessOverlays = this._createWeaknessOverlays(char);
 
     slot.removeAllListeners();
-    slot.add([sprite, nameText, hpBar, mpBar, weaknessDots]);
+    slot.add([sprite, weaknessOverlays, nameText, hpBar, mpBar, weaknessDots]);
     slot.occupied = true;
     slot.char = char;
     this._wireSlotInfoClick(slot, char);
@@ -1563,6 +1566,7 @@ export default class CombatScene extends Phaser.Scene {
     char.hpBar = hpBar;
     char.mpBar = mpBar;
     this._updateWeaknessDots(char);
+    this._updateWeaknessOverlays(char);
   }
 
 
@@ -3514,7 +3518,10 @@ export default class CombatScene extends Phaser.Scene {
     // buildup-application site — every caller of _updateHealthBars already
     // wants the portrait refreshed after a hit/heal/tick, and weakness
     // buildup virtually always changes alongside one of those.
-    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => this._updateWeaknessDots(u));
+    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+      this._updateWeaknessDots(u);
+      this._updateWeaknessOverlays(u);
+    });
   }
 
   // Experimental "quick reference" cluster (per user request) — a small dot
@@ -3537,6 +3544,280 @@ export default class CombatScene extends Phaser.Scene {
   // positioned on the opposite side of the portrait from the HP/MP bars
   // (those sit at x:-50/-42, rotated vertical — see _placePortrait/
   // _assignCharToSlot) so it doesn't compete with them for space.
+  // ─── Weakness portrait overlays ──────────────────────────────────────────
+  //
+  // Painted grayscale layers laid over a unit's portrait, tinted and blended
+  // per weakness family. Purely atmospheric: the weakness panel carries the
+  // exact numbers, so these only need to read as "this thing is burning /
+  // cracked / rotting" at a glance.
+  //
+  // Blend mode is per FAMILY GROUP, not per effect — that is what keeps two or
+  // three simultaneous overlays legible instead of turning into mud:
+  //   physical  NORMAL    marks sitting on the surface
+  //   elemental ADD       glows
+  //   necrotic  MULTIPLY  stains/darkens
+  //
+  // Tints reuse WEAKNESS_DOT_COLORS, the same palette the dots and the action
+  // menu's filter pills already use, so the whole game speaks one colour
+  // language for weakness rather than three.
+  static WEAKNESS_OVERLAYS = {
+    expose:   { key: 'wk_crack',   blend: 'NORMAL'   },
+    lacerate: { key: 'wk_slash',   blend: 'NORMAL'   },
+    cold:     { key: 'wk_frost',   blend: 'ADD'      },
+    disease:  { key: 'wk_disease', blend: 'MULTIPLY' },
+    curse:    { key: 'wk_curse',   blend: 'MULTIPLY' },
+  };
+
+  // Tier 1 is deliberately QUIET BUT LEGIBLE rather than barely-there. On a
+  // 64px portrait a near-invisible T1 just reads as noise and the information
+  // is wasted; this way the effect is identifiable the moment it lands, and
+  // T2 is a clear escalation rather than a first appearance.
+  static WEAKNESS_OVERLAY_ALPHA = { t1: 0.34, t2: 0.85 };
+
+  // Fire and Toxic are emitters rather than painted layers — a static texture
+  // can't read as "actively burning". Both reuse the one grayscale particle
+  // orb, tinted and configured per family, same asset-reuse idea as the
+  // painted overlays.
+  //
+  // UNLIKE the static overlays these are NOT rebuilt on every refresh: an
+  // emitter torn down and recreated after each hit would visibly restart its
+  // stream. They're created once, retuned in place when the tier changes, and
+  // destroyed only when the meter empties.
+  static WEAKNESS_EMITTERS = {
+    // Scales are deliberately small: the source orb is 64px and the portrait is
+    // only 64px too, so anything above ~0.10 reads as a blob sitting on the
+    // face rather than an ember coming off it. Density carries the tier
+    // instead of size.
+    fire: {
+      blend: 'ADD', lifespan: 800, speedY: { min: -34, max: -16 },
+      t1: { frequency: 210, scale: { start: 0.065, end: 0 }, alpha: { start: 0.55, end: 0 } },
+      t2: { frequency: 70,  scale: { start: 0.10,  end: 0 }, alpha: { start: 0.90, end: 0 } },
+    },
+    toxic: {
+      blend: 'ADD', lifespan: 1500, speedY: { min: -12, max: -4 },
+      t1: { frequency: 300, scale: { start: 0.055, end: 0.015 }, alpha: { start: 0.40, end: 0 } },
+      t2: { frequency: 110, scale: { start: 0.085, end: 0.025 }, alpha: { start: 0.70, end: 0 } },
+    },
+  };
+
+  /** Create-or-retune the emitters for one unit. Returns nothing. */
+  _syncWeaknessEmitters(char) {
+    const container = char?.weaknessOverlays;
+    if (!container || !char?.weakness) return;
+    char.weaknessEmitters = char.weaknessEmitters || {};
+
+    for (const [fam, cfg] of Object.entries(CombatScene.WEAKNESS_EMITTERS)) {
+      const meter = char.weakness.meters?.[fam] || 0;
+      const existing = char.weaknessEmitters[fam];
+
+      if (meter <= 0 || !this.textures?.exists('wk_particle')) {
+        if (existing) { existing.destroy(); delete char.weaknessEmitters[fam]; }
+        continue;
+      }
+
+      const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
+      const tier = meter >= t2 ? 't2' : 't1';
+      const tune = cfg[tier];
+
+      if (!existing) {
+        const em = this.add.particles(0, 0, 'wk_particle', {
+          x: { min: -22, max: 22 },
+          y: { min: -18, max: 20 },
+          speedY: cfg.speedY,
+          speedX: { min: -6, max: 6 },
+          lifespan: cfg.lifespan,
+          quantity: 1,
+          frequency: tune.frequency,
+          scale: tune.scale,
+          alpha: tune.alpha,
+          blendMode: Phaser.BlendModes[cfg.blend] ?? Phaser.BlendModes.ADD,
+          tint: CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff,
+        });
+        container.add(em);
+        char.weaknessEmitters[fam] = em;
+        char.weaknessEmitterTier = char.weaknessEmitterTier || {};
+        char.weaknessEmitterTier[fam] = tier;
+      } else if (char.weaknessEmitterTier?.[fam] !== tier) {
+        // Retune in place so the stream never restarts.
+        existing.frequency = tune.frequency;
+        existing.setParticleScale?.(tune.scale.start, tune.scale.start);
+        existing.setParticleAlpha?.(tune.alpha.start);
+        char.weaknessEmitterTier[fam] = tier;
+      }
+    }
+  }
+
+  /**
+   * Disorient and Lightning have no painted asset (see the handoff doc).
+   *
+   * Disorient duplicates the portrait, offsets it, and drifts it on a sine
+   * tween with low alpha — a double-image that reads as "can't focus".
+   * Lightning draws jagged bolts procedurally with Graphics on a timer, so no
+   * two flashes repeat.
+   *
+   * Both are persistent like the emitters: a tween or timer rebuilt on every
+   * hit would stutter, so these are created once and retuned on tier change.
+   */
+  _syncWeaknessProcedural(char) {
+    const container = char?.weaknessOverlays;
+    if (!container || !char?.weakness) return;
+    char._wkProc = char._wkProc || {};
+
+    // ---- Disorient: drifting double-image ----
+    {
+      const meter = char.weakness.meters?.disorient || 0;
+      const t2 = WeaknessFamilies?.disorient?.t2 ?? 200;
+      const tier = meter >= t2 ? 2 : 1;
+      const st = char._wkProc.disorient;
+      if (meter <= 0) {
+        if (st) { st.tween?.remove(); st.ghost?.destroy(); delete char._wkProc.disorient; }
+      } else if (!st) {
+        const key = char.icon?.texture?.key;
+        if (key && this.textures.exists(key)) {
+          const ghost = this.add.image(0, 0, key)
+            .setDisplaySize(64, 64)
+            .setTint(CombatScene.WEAKNESS_DOT_COLORS.disorient)
+            .setAlpha(tier === 2 ? 0.34 : 0.18)
+            .setBlendMode(Phaser.BlendModes.ADD);
+          container.add(ghost);
+          const amp = tier === 2 ? 5 : 2.5;
+          const tween = this.tweens.add({
+            targets: ghost, x: amp, y: -amp * 0.6,
+            duration: 900,
+            yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+          });
+          char._wkProc.disorient = { ghost, tween, tier };
+        }
+      } else if (st.tier !== tier) {
+        st.ghost.setAlpha(tier === 2 ? 0.34 : 0.18);
+        st.tween?.remove();
+        const amp = tier === 2 ? 5 : 2.5;
+        st.tween = this.tweens.add({
+          targets: st.ghost, x: amp, y: -amp * 0.6,
+          duration: 900,
+          yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+        st.tier = tier;
+      }
+    }
+
+    // ---- Lightning: procedural bolts ----
+    {
+      const meter = char.weakness.meters?.lightning || 0;
+      const t2 = WeaknessFamilies?.lightning?.t2 ?? 200;
+      const tier = meter >= t2 ? 2 : 1;
+      const st = char._wkProc.lightning;
+      if (meter <= 0) {
+        if (st) { st.timer?.remove(); st.gfx?.destroy(); delete char._wkProc.lightning; }
+      } else if (!st || st.tier !== tier) {
+        st?.timer?.remove(); st?.gfx?.destroy();
+        const gfx = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        container.add(gfx);
+        const colour = CombatScene.WEAKNESS_DOT_COLORS.lightning;
+        const flash = () => {
+          gfx.clear();
+          const bolts = tier === 2 ? 2 : 1;
+          for (let b = 0; b < bolts; b++) {
+            let x = Phaser.Math.Between(-24, 24);
+            let y = -26;
+            gfx.lineStyle(tier === 2 ? 1.6 : 1.1, colour, tier === 2 ? 0.95 : 0.6);
+            gfx.beginPath(); gfx.moveTo(x, y);
+            for (let seg = 0; seg < 4; seg++) {
+              x += Phaser.Math.Between(-9, 9);
+              y += 13;
+              gfx.lineTo(x, y);
+            }
+            gfx.strokePath();
+          }
+          // Bolts are a flash, not a standing line — clear shortly after.
+          this.time.delayedCall(tier === 2 ? 150 : 110, () => gfx?.clear?.());
+        };
+        // NOT scaled by animDurationMult: that setting paces ACTION animations,
+        // and at the default 2.25x+ it stretched this ambient flicker to one
+        // bolt every ~2.5s with a 90ms flash — a ~4% duty cycle you'd never
+        // notice. Idle atmosphere runs on its own clock.
+        const timer = this.time.addEvent({
+          delay: tier === 2 ? 520 : 1000,
+          loop: true, callback: flash,
+        });
+        char._wkProc.lightning = { gfx, timer, tier };
+      }
+    }
+  }
+
+  /** Tear down a unit's emitters (slot reuse / combat end). */
+  _destroyWeaknessEmitters(char) {
+    Object.values(char?.weaknessEmitters || {}).forEach(em => em.destroy());
+    Object.values(char?._wkProc || {}).forEach(st => {
+      st?.tween?.remove(); st?.timer?.remove(); st?.ghost?.destroy(); st?.gfx?.destroy();
+    });
+    if (char) { char.weaknessEmitters = {}; char.weaknessEmitterTier = {}; char._wkProc = {}; }
+  }
+
+  _createWeaknessOverlays(char) {
+    const container = this.add.container(0, 0);
+    char.weaknessOverlays = container;
+    char.weaknessOverlaySprites = {};
+    // Party characters SURVIVE between combats, so these fields can still hold
+    // emitters/tweens/timers belonging to the previous (destroyed) scene. Left
+    // in place, _syncWeaknessEmitters would see a truthy `existing` and try to
+    // retune a dead object. Same stale-instance-reference class as the cached
+    // TownScene interiors. Cleared on every fresh slot assignment.
+    char.weaknessEmitters = {};
+    char.weaknessEmitterTier = {};
+    char._wkProc = {};
+    return container;
+  }
+
+  /**
+   * Rebuild a unit's overlay stack from its current weakness meters.
+   *
+   * Called from _updateHealthBars alongside _updateWeaknessDots — i.e. after
+   * any hit/heal/tick, not per frame. Rebuilding wholesale is cheap here (at
+   * most five sprites) and avoids diffing which families changed.
+   */
+  _updateWeaknessOverlays(char) {
+    const container = char?.weaknessOverlays;
+    if (!container || !char?.weakness) return;
+
+    Object.values(char.weaknessOverlaySprites || {}).forEach(sp => sp.destroy());
+    char.weaknessOverlaySprites = {};
+
+    const A = CombatScene.WEAKNESS_OVERLAY_ALPHA;
+    for (const [fam, cfg] of Object.entries(CombatScene.WEAKNESS_OVERLAYS)) {
+      const meter = char.weakness.meters?.[fam] || 0;
+      if (meter <= 0) continue;
+      if (!this.textures?.exists(cfg.key)) continue;
+
+      // Ramp within the tier so a meter climbing toward T2 visibly deepens,
+      // instead of the overlay sitting flat until it snaps at the threshold.
+      const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
+      const t1 = WeaknessFamilies?.[fam]?.t1 ?? Math.round(t2 / 2);
+      let alpha;
+      if (meter >= t2) {
+        alpha = A.t2;
+      } else if (meter >= t1) {
+        alpha = A.t1 + (A.t2 - A.t1) * Math.min(1, (meter - t1) / Math.max(1, t2 - t1)) * 0.6;
+      } else {
+        alpha = A.t1 * Math.max(0.55, Math.min(1, meter / Math.max(1, t1)));
+      }
+
+      const sp = this.add.image(0, 0, cfg.key)
+        .setDisplaySize(64, 64)          // portraits render at 64x64, art is 128x128
+        .setTint(CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff)
+        .setAlpha(alpha)
+        .setBlendMode(Phaser.BlendModes[cfg.blend] ?? Phaser.BlendModes.NORMAL);
+
+      container.add(sp);
+      char.weaknessOverlaySprites[fam] = sp;
+    }
+
+    // Emitters are managed separately — see _syncWeaknessEmitters for why they
+    // must persist rather than be rebuilt with the painted layers above.
+    this._syncWeaknessEmitters(char);
+    this._syncWeaknessProcedural(char);
+  }
+
   _createWeaknessDots(char) {
     const container = this.add.container(46, 0);
     char.weaknessDots = container;
@@ -3601,18 +3882,22 @@ export default class CombatScene extends Phaser.Scene {
     const cdRemaining = actor?.cooldowns?.[ability.id] || 0;
 
     // Shared builder — passes actor for live weapon/stat numbers
-    const { lines, tags, titleColor } = buildSkillTooltipLines(ability, actor, { cdRemaining });
+    const { lines, tags, titleColor, aoeGrid } = buildSkillTooltipLines(ability, actor, { cdRemaining });
 
     // Inject MP-with-modifiers line right after the first line (description)
     // replacing the generic "MP: X" that buildSkillTooltipLines already added
     if (mpPrefix) {
-      const mpIdx = lines.findIndex(l => l.startsWith('MP:'));
+      // Lines may be plain strings OR objects ({ text, color, anchorAoe... }),
+      // so read the text defensively rather than assuming String.
+      const lineText = (l) => (typeof l === 'string' ? l : (l && l.text) || '');
+      const mpIdx = lines.findIndex(l => lineText(l).startsWith('MP:'));
       if (mpIdx >= 0) lines[mpIdx] = mpPrefix;
     }
 
     return {
       title: ability.name || ability.id || 'Ability',
       titleColor,
+      aoeGrid,
       lines,
       tags,
     };
@@ -5164,7 +5449,7 @@ export default class CombatScene extends Phaser.Scene {
     {
       const rZone = (user?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
       if (rZone?.mods?.runeChannel) {
-        this._applyWeaknessBuildup(user, { lightning: 80 }, { user });
+        this._applyWeaknessBuildup(user, { lightning: 40 }, { user });
         const { joltTotal } = applyLightningJolt(user);
         const selfDmg = 1 + joltTotal;
         user.currentHP = Math.max(0, (user.currentHP || 0) - selfDmg);
@@ -7143,19 +7428,22 @@ export default class CombatScene extends Phaser.Scene {
       if (se.id === 'runic_zone' && (se.turns || 0) > 0) {
         const maxMP = char.maxMP ?? char.derivedStats?.maxMP ?? 0;
 
+        // The zone COSTS mana to sustain (mpPerTurn is a drain, not a gain).
+        // Ward Weave layers an initiative drain ON TOP of that upkeep rather
+        // than replacing it, so the weave is a genuine second cost.
+        if ((se.mpPerTurn || 0) > 0) {
+          const mpCost = se.mpPerTurn;
+          char.currentMP = Math.max(0, (char.currentMP || 0) - mpCost);
+          this._log(`${char.name}'s runic zone draws ${mpCost} MP to sustain.`);
+        }
         if (se.mods?.wardWeave) {
-          // wardWeave: drain 3 initiative gauge instead of restoring MP
           char.initiativeGauge = Math.max(0, (char.initiativeGauge || 0) - 3);
           this._log(`${char.name}'s ward weave sustains — 3 initiative drained.`);
-        } else if ((se.mpPerTurn || 0) > 0 && maxMP > 0) {
-          const mpGain = se.mpPerTurn;
-          char.currentMP = Math.min(maxMP, (char.currentMP || 0) + mpGain);
-          this._log(`${char.name}'s runic zone restores ${mpGain} MP.`);
         }
 
         if (se.mods?.kindlingRite) {
           const kindStacks = se.mods.kindlingRiteStacks || 1;
-          const fireAmt = 80 * kindStacks;
+          const fireAmt = 60 * kindStacks;   // was 80/stack (240 at max) — nerfed
           this._applyWeaknessBuildup(char, { fire: fireAmt }, { user: char });
           this._log(`${char.name}'s kindling rite pulses — ${fireAmt} fire buildup (${kindStacks}/3 stacks).`);
         }
@@ -10770,8 +11058,9 @@ export default class CombatScene extends Phaser.Scene {
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
     const weaknessDots = this._createWeaknessDots(unit);
+    const weaknessOverlays = this._createWeaknessOverlays(unit);
 
-    unit._slot.add([hpBar, mpBar, weaknessDots]);
+    unit._slot.add([weaknessOverlays, hpBar, mpBar, weaknessDots]);
 
     // Maintain handles for updates
     unit.hpBar = hpBar;
@@ -11008,9 +11297,10 @@ export default class CombatScene extends Phaser.Scene {
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
     const weaknessDots = this._createWeaknessDots(char);
+    const weaknessOverlays = this._createWeaknessOverlays(char);
 
-    // Add to container
-    slot.add([sprite, nameTxt, hpBar, mpBar, weaknessDots]);
+    // Add to container — overlays sit directly above the portrait, below UI.
+    slot.add([sprite, weaknessOverlays, nameTxt, hpBar, mpBar, weaknessDots]);
 
     // Store references for later updates
     char.icon = sprite;
@@ -11023,6 +11313,13 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _shutdownCleanup() {
+    // Weakness overlay emitters/tweens/timers hang off character objects that
+    // outlive this scene (the party). Phaser disposes the scene-owned tween and
+    // time managers itself, but the REFERENCES on those characters would stay,
+    // so clear them here as well as on the next slot assignment.
+    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+      try { this._destroyWeaknessEmitters(u); } catch { }
+    });
     this.koArea = [];
     if (this.koSprites) {
       this.koSprites.forEach(obj => obj.destroy?.());

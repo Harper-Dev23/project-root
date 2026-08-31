@@ -97,6 +97,16 @@ function buffToText(buff) {
   if (buff.physicalVulnPct)     parts.push(`-${buff.physicalVulnPct}% phys resist`);
   if (buff.bleedTakenPct)       parts.push(`+${buff.bleedTakenPct}% bleed taken`);
   if (buff.speedDownPct)        parts.push(`-${buff.speedDownPct}% speed`);
+  // These all existed in skill data but had no renderer, so they printed as
+  // nothing at all -- Silence Crescent's payout line read "On reaching
+  // Concussed: (1t)" with the actual -20% damage silently dropped.
+  if (buff.damageDealtDownPct)  parts.push(`-${buff.damageDealtDownPct}% damage dealt`);
+  if (buff.armorDownPct)        parts.push(`-${buff.armorDownPct}% armor`);
+  if (buff.accDownPct)          parts.push(`-${buff.accDownPct}% Accuracy`);
+  if (buff.accPct)              parts.push(`+${buff.accPct}% Accuracy`);
+  if (buff.bleedResDownPct)     parts.push(`-${buff.bleedResDownPct}% bleed resist`);
+  if (buff.guardBreakPct)       parts.push(`-${buff.guardBreakPct}% Guard`);
+  if (buff.initiativeGaugeDrop) parts.push(`-${buff.initiativeGaugeDrop} Initiative`);
   if (buff.onNextDamageTaken) {
     const n = buff.onNextDamageTaken;
     const nParts = [];
@@ -109,6 +119,77 @@ function buffToText(buff) {
   }
   if (buff.turns)               parts.push(`(${buff.turns}t)`);
   return parts.length ? parts.join(', ') : JSON.stringify(buff);
+}
+
+/**
+ * Formation slot layout, as a 3-column x 5-row grid for the mini AoE diagram.
+ * Mirrors the brick-offset formation the combat scene actually uses:
+ *
+ *     front   mid   back
+ *       3             8
+ *              4
+ *       2             7
+ *              5
+ *       1             6
+ *
+ * col 0 = FRONT rank, col 1 = mid rank, col 2 = back rank.
+ *
+ * Front is deliberately on the LEFT: on screen the player's party sits left of
+ * the enemy formation, so the enemy front line is the edge nearest them. A
+ * diagram with front on the right reads mirrored against the actual board.
+ */
+export const AOE_GRID_SLOTS = [
+  { id: 3, col: 0, row: 0 }, { id: 8, col: 2, row: 0 },
+  { id: 4, col: 1, row: 1 },
+  { id: 2, col: 0, row: 2 }, { id: 7, col: 2, row: 2 },
+  { id: 5, col: 1, row: 3 },
+  { id: 1, col: 0, row: 4 }, { id: 6, col: 2, row: 4 },
+];
+
+const DIAMOND       = [2, 4, 5, 7];
+const BACK_CRESCENT = [8, 4, 5, 6];
+const TOP_ARC       = [8, 4, 3];
+const BOT_ARC       = [6, 5, 1];
+const SMALL_CONE    = { 3: [4], 2: [4, 5], 1: [5], 4: [8, 7], 5: [7, 6] };
+const COLUMNS       = { back: [8, 7, 6], mid: [4, 5], front: [3, 2, 1] };
+const COL_OF        = (id) => COLUMNS.back.includes(id) ? 'back' : COLUMNS.mid.includes(id) ? 'mid' : 'front';
+
+/**
+ * Which slots an AoE shape covers, for the tooltip diagram.
+ *
+ * Fixed shapes (diamond, backCrescent, all) are exact. RELATIVE shapes
+ * (column, arc, smallCone, adjacent) depend on where you aim -- and the player
+ * reads this tooltip BEFORE choosing a target -- so those pick a representative
+ * aim slot and the diagram marks it separately. The picture is an example of
+ * the pattern, not a promise about a specific cast.
+ *
+ * Returns null for shapes with nothing meaningful to draw.
+ */
+export function aoeDiagram(sk) {
+  const shape = sk?.aoe?.shape;
+  if (!shape) return null;
+  const scale = sk.aoe.scale != null ? Math.round(sk.aoe.scale * 100) : 50;
+
+  switch (shape) {
+    case 'diamond':      return { aim: null, hit: DIAMOND,       fixed: true,  scale };
+    case 'backCrescent': return { aim: null, hit: BACK_CRESCENT, fixed: true,  scale };
+    case 'all':
+    case 'party':        return { aim: null, hit: AOE_GRID_SLOTS.map(s => s.id), fixed: true, scale };
+    // Relative — aim at front-middle (2), the most representative front slot.
+    case 'column':       return { aim: 2, hit: COLUMNS[COL_OF(2)].filter(id => id !== 2), fixed: false, scale };
+    case 'smallCone':    return { aim: 2, hit: SMALL_CONE[2] || [], fixed: false, scale };
+    // Arc has no centre-row membership, so aim at front-top (3) to show one.
+    case 'arc':          return { aim: 3, hit: TOP_ARC.filter(id => id !== 3), fixed: false, scale };
+    // Real ADJACENCY_MAP from CombatScene (brick-offset, so mid slots touch
+    // five neighbours). Aim mid-top (4) — the most connected slot, which shows
+    // the pattern at its widest.
+    case 'adjacent':     return { aim: 4, hit: [8, 7, 5, 2, 3], fixed: false, scale };
+    // Whole-rank shapes. Fixed groups, so no example aim is needed.
+    case 'frontRank':    return { aim: null, hit: COLUMNS.front, fixed: true, scale };
+    case 'midRank':      return { aim: null, hit: COLUMNS.mid,   fixed: true, scale };
+    case 'backRank':     return { aim: null, hit: COLUMNS.back,  fixed: true, scale };
+    default:             return null;
+  }
 }
 
 export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
@@ -127,6 +208,24 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   if (sk.buildupHint && typeof sk.buildupHint === 'object') {
     const buildupParts = Object.entries(sk.buildupHint).map(([fam, amt]) => `+${amt} ${capitalize(fam)} buildup`);
     if (buildupParts.length) lines.push(`Applies: ${buildupParts.join(', ')}`);
+  }
+
+  // AoE sits with Applies, not down in the cost/cooldown block. Both describe
+  // WHAT THE SKILL DOES; shape and splash% belong next to the buildup it lands,
+  // not below the cooldown where it read as an unrelated stat.
+  if (tags.includes('aoe') && sk.aoe) {
+    const shape = sk.aoe.shape || 'column';
+    const scale = sk.aoe.scale != null ? Math.round(sk.aoe.scale * 100) : 50;
+    // The mini diagram (aoeGrid, drawn by Tooltip) carries the SHAPE, so this
+    // line only needs the number. Shape names like "backCrescent" and slot ids
+    // meant nothing to a player anyway.
+    // `damage: false` marks a splash that carries buildup/effects but deals no
+    // damage to the secondary targets (Hex Stitch, Sword Flourish). A bare
+    // percentage would read as a damage figure and be wrong.
+    const splashText = sk.aoe.damage === false
+      ? `AoE splash: ${scale}% buildup (no damage)`
+      : `AoE splash: ${scale}%`;
+    lines.push(aoeDiagram(sk) ? splashText : `AoE: ${shape} splash (${scale}%)`);
   }
 
   // Rhythm — shared mechanic across several one-handed sword skills (and
@@ -233,7 +332,11 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   }
 
   // Action cost
-  if (sk.actionCost) lines.push(`Cost: ${COST_LABEL[sk.actionCost] || sk.actionCost}`);
+  // Marked as the AoE diagram's vertical anchor. The Cost/MP/Cooldown/Damage
+  // block is the one part of the tooltip whose position never depends on how
+  // many Applies/reward lines a skill has, so anchoring the diagram here keeps
+  // it clear of that variable-height block on every skill.
+  if (sk.actionCost) lines.push({ text: `Cost: ${COST_LABEL[sk.actionCost] || sk.actionCost}`, anchorAoe: true });
 
   // MP / HP cost
   const resourceParts = [];
@@ -264,19 +367,24 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     lines.push(`Target columns: ${targetCols.join(' / ')}`);
   }
 
-  // AoE hint
-  if (tags.includes('aoe') && sk.aoe) {
-    const shape = sk.aoe.shape || 'column';
-    const scale = sk.aoe.scale != null ? Math.round(sk.aoe.scale * 100) : 50;
-    lines.push(`AoE: ${shape} splash (${scale}%)`);
-  }
-
   // ---- Damage section ----
   const hasWeaponReq = Array.isArray(sk.requiredWeapon)
     ? sk.requiredWeapon.length > 0
     : !!sk.requiredWeapon;
 
-  if (hasWeaponReq) {
+  // A weapon requirement alone doesn't mean the skill SWINGS. Self-targeted
+  // utility (Conclave Circle, Ward Weave, Mana Fountain, Ward Focus...) still
+  // requires a staff, and used to print a "Damage: 10-15" line it never deals.
+  // That was noise buried under the old breakdown; with the breakdown gone it
+  // reads as a plain lie, so skip the block for self-targeted skills that make
+  // no damage claim. Checked across the data: of 28 self-targeted weapon
+  // skills, none carry an `attack` tag and only two mention weapon damage.
+  const claimsDamage =
+    sk.targetRequirement !== 'self' ||
+    (Array.isArray(sk.tags) && sk.tags.includes('attack')) ||
+    /weapon damage/i.test(sk.description || sk.desc || '');
+
+  if (hasWeaponReq && claimsDamage) {
     lines.push('');
     if (actor) {
       // Live mode: real numbers for this character, including rolled weapon
@@ -290,7 +398,6 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
       const wMax = weaponView?.damage?.max ?? 2;
       const str = actor.totalStats?.STR ?? 0;
       const strMod = Math.floor(str / 5);
-      const weapName = weaponView?.name ?? 'Unarmed';
 
       const preGearMin = wMin + strMod;
       const preGearMax = wMax + strMod;
@@ -299,16 +406,15 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
       const finalMin = Math.max(1, Math.floor(preGearMin * gearMult));
       const finalMax = Math.max(1, Math.floor(preGearMax * gearMult));
 
-      lines.push(`Damage: ${finalMin}–${finalMax}`);
-      lines.push(`  ${weapName} (${wMin}–${wMax}) + STR/5 (+${strMod}) = ${preGearMin}–${preGearMax}`);
-      if (gearPct) lines.push(`  × Gear Damage +${gearPct}% = ${finalMin}–${finalMax}`);
+      // Headline number only. The weapon/STR/gear/crit breakdown that used to
+      // sit under this was four extra lines restating information the player
+      // can read on the character sheet, and it pushed the parts that ARE
+      // skill-specific off the bottom of an already long tooltip.
       if (sk.hitCount > 1) {
-        lines.push(`  × ${sk.hitCount} hits = ${finalMin * sk.hitCount}–${finalMax * sk.hitCount} total`);
+        lines.push(`Damage: ${finalMin * sk.hitCount}–${finalMax * sk.hitCount} (${sk.hitCount} hits)`);
+      } else {
+        lines.push(`Damage: ${finalMin}–${finalMax}`);
       }
-
-      const critChance = Math.round((actor.derived?.CritChance || 0) + (weaponView?._derivedMods?.CritChance || 0));
-      const critMult = actor.derived?.CritMult ?? 1.5;
-      if (critChance > 0) lines.push(`  Crit: ${critChance}% chance for ×${critMult}`);
     } else {
       // Generic mode: formula only, no numbers (no character context to compute from)
       lines.push('Damage: weapon damage + STR/5 (+ gear % bonuses)');
@@ -363,5 +469,5 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   while (lines.length && lines[lines.length - 1] === '') lines.pop();
 
   if (lines.length === 0) lines.push('No additional details.');
-  return { lines, tags, titleColor };
+  return { lines, tags, titleColor, aoeGrid: aoeDiagram(sk) };
 }

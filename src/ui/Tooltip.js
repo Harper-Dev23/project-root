@@ -1,5 +1,6 @@
 // src/ui/Tooltip.js
 import { FONTS, COLORS, UI_DEPTH, SPACING } from './styles.js';
+import { AOE_GRID_SLOTS } from './skillTooltip.js';
 
 export default class Tooltip {
   constructor(scene) {
@@ -96,6 +97,7 @@ export default class Tooltip {
   // Returns the total content width/height for background sizing.
   _renderBodyLines(lines = []) {
     this._clearBodyLines();
+    this._aoeAnchorY = null;
     let y = 0;
     let maxW = 0;
     const wrapWidth = 320;
@@ -130,6 +132,7 @@ export default class Tooltip {
       }
 
       const isObj = entry && typeof entry === 'object';
+      if (isObj && entry.anchorAoe) this._aoeAnchorY = y;
       const text = isObj ? (entry.text ?? '') : String(entry ?? '');
       const color = isObj && entry.color != null ? entry.color : (FONTS.muted?.color || '#dddddd');
       const txt = this.scene.add.text(0, y, text, {
@@ -261,6 +264,7 @@ _renderPills(tags = []) {
     let titleColor = '#dddddd';
     let bodyLines = [];
     let tags = [];
+    let aoeGrid = null;
 
     if (Array.isArray(data)) {
       titleText = data[0] || '';
@@ -270,6 +274,7 @@ _renderPills(tags = []) {
       titleColor = data.titleColor || '#dddddd';
       bodyLines = Array.isArray(data.lines) ? data.lines : [];
       tags = Array.isArray(data.tags) ? data.tags : [];
+      aoeGrid = data.aoeGrid || null;
     }
 
     // Set title
@@ -308,6 +313,52 @@ _renderPills(tags = []) {
     this.bg.fillRect(0, 0, bgW, bgH);
     this.bg.lineStyle(1, COLORS.border, 1);
     this.bg.strokeRect(0, 0, bgW, bgH);
+    // ---- AoE mini-diagram, drawn into the dead space to the RIGHT of the
+    // short Cost/MP/Cooldown rows. Costs no extra tooltip height: the width is
+    // already set by the description's 320px wrap, so that gutter is empty.
+    this._clearAoeGrid();
+    if (aoeGrid) {
+      const CELL = 10, GAP = 3, COLS = 3, ROWS = 5;
+      // Extra air either side of the MID column. The formation is brick-offset
+      // (mid rank sits between the front/back rows, not aligned with them), and
+      // a uniform gap made that read as one solid block instead of three ranks.
+      const MID_GAP = 7;
+      const colX = (c) => c * (CELL + GAP) + (c >= 1 ? MID_GAP : 0) + (c >= 2 ? MID_GAP : 0);
+      const gW = colX(COLS - 1) + CELL;
+      const gH = ROWS * CELL + (ROWS - 1) * GAP;
+      const gx = bgW - this.padding - gW - 8;
+      // Anchored to the Cost line (see anchorAoe in skillTooltip.js) so it sits
+      // BELOW the Applies/AoE/reward block, whose height varies per skill and
+      // was colliding with the diagram on skills with several reward lines.
+      const anchor = this._aoeAnchorY;
+      const bodyTopAbs = this.bodyContainer ? this.bodyContainer.y : this.padding;
+      const gy = anchor != null
+        ? Math.min(bodyTopAbs + anchor, bgH - this.padding - gH)
+        : Math.max(this.padding, bgH - this.padding - gH);
+      const g = this.scene.add.graphics().setDepth(this.topDepth);
+      const hit = new Set(aoeGrid.hit || []);
+      for (const slot of AOE_GRID_SLOTS) {
+        const x = gx + colX(slot.col);
+        const y = gy + slot.row * (CELL + GAP);
+        const isAim = aoeGrid.aim === slot.id;
+        const isHit = hit.has(slot.id);
+        if (isAim)       { g.fillStyle(0xffffff, 0.95); g.fillRect(x, y, CELL, CELL); }
+        else if (isHit)  { g.fillStyle(0xffaa33, 0.90); g.fillRect(x, y, CELL, CELL); }
+        else             { g.fillStyle(0x000000, 0.45); g.fillRect(x, y, CELL, CELL);
+                           g.lineStyle(1, 0x666666, 0.7); g.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1); }
+      }
+      // Thin bar down the FRONT edge (right-hand column) so the player can
+      // tell which end of the formation is the front line at a glance.
+      // Front-line marker on the LEFT, matching the flipped orientation.
+      g.fillStyle(0x88aacc, 0.55);
+      g.fillRect(gx - 4, gy, 2, gH);
+      // Faint frame so the squares read as one diagram rather than loose marks.
+      g.lineStyle(1, 0x777777, 0.45);
+      g.strokeRect(gx - 8.5, gy - 4.5, gW + 13, gH + 9);
+      this.container.add(g);
+      this._aoeGridGfx = g;
+    }
+
     this._bgW = bgW;
     this._bgH = bgH;
 
@@ -318,6 +369,8 @@ _renderPills(tags = []) {
   }
 
   // Hide the tooltip
+  _clearAoeGrid() { if (this._aoeGridGfx) { this._aoeGridGfx.destroy(); this._aoeGridGfx = null; } }
+
   hide() { this.container.setVisible(false); }
 
   // Destroy the tooltip container
