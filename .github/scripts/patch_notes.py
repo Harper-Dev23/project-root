@@ -35,7 +35,14 @@ import urllib.request
 
 API = 'https://api.github.com'
 FIELD_CAP = 1000        # Discord's per-field limit is 1024
-SUBJECT_CAP = 160
+# Per-BULLET cap. Was 160, which cut most real notes mid-sentence and left a
+# trailing '...' -- a 313-character bugfix note lost exactly the part naming
+# the symptoms. Discord's real constraint is the 1024-char FIELD, so this only
+# needs to stop one runaway bullet from eating a whole field on its own.
+SUBJECT_CAP = 400
+MAX_FIELDS = 24         # Discord allows 25 fields; keep one spare for 'Play'
+EMBED_CAP = 5500        # Discord's total embed budget is 6000
+NL = chr(10)            # newline, spelled this way so an edit can't mangle it
 
 GROUPS = [
     ('balance', 'Balance'),
@@ -128,6 +135,18 @@ def extract(raw):
     return lines
 
 
+def clip(text, cap):
+    """Trim to `cap` chars on a WORD boundary so a cut note doesn't end
+    mid-word. Returns the text untouched when it already fits."""
+    if len(text) <= cap:
+        return text
+    cut = text[:cap]
+    sp = cut.rfind(' ')
+    if sp > cap * 0.6:
+        cut = cut[:sp]
+    return cut.rstrip(' ,;:-') + '...'
+
+
 def group(subjects):
     label_for = dict(GROUPS)
     order, seen = [], set()
@@ -181,20 +200,34 @@ def main():
 
     order, buckets = group(subjects)
     fields = []
+    spent = 0
     for lbl in order:
         items = buckets[lbl]
         if not items:
             continue
-        lines, total = [], 0
-        for i, it in enumerate(items):
-            txt = it if len(it) <= SUBJECT_CAP else it[:SUBJECT_CAP] + '...'
-            line = '- ' + txt
-            if total + len(line) + 1 > FIELD_CAP:
-                lines.append('- ...and %d more' % (len(items) - i))
-                break
-            lines.append(line)
+        # A category too big for one field CONTINUES into another rather than
+        # dropping its tail with "...and N more". The notes are the whole point
+        # of the message; silently discarding half of them defeats it.
+        chunks, buf, total = [], [], 0
+        for it in items:
+            line = '- ' + clip(it, SUBJECT_CAP)
+            if buf and total + len(line) + 1 > FIELD_CAP:
+                chunks.append(buf)
+                buf, total = [], 0
+            buf.append(line)
             total += len(line) + 1
-        fields.append({'name': lbl, 'value': '\n'.join(lines)})
+        if buf:
+            chunks.append(buf)
+        for n, chunk in enumerate(chunks):
+            value = NL.join(chunk)
+            if len(fields) >= MAX_FIELDS or spent + len(value) > EMBED_CAP:
+                fields.append({'name': lbl,
+                               'value': '- (more changes than fit here - see the compare link)'})
+                spent = EMBED_CAP
+                break
+            fields.append({'name': lbl if n == 0 else '%s (cont.)' % lbl,
+                           'value': value})
+            spent += len(value)
 
     fields.append({'name': 'Play', 'value': url})
 
