@@ -1550,13 +1550,12 @@ export default class CombatScene extends Phaser.Scene {
     const mpBar = new StatusBar(this, -42, barY, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
-    const weaknessDots = this._createWeaknessDots(char);
     // Overlays go directly ABOVE the portrait but BELOW the name/bars/dots, so
     // they never obscure readable UI.
     const weaknessOverlays = this._createWeaknessOverlays(char);
 
     slot.removeAllListeners();
-    slot.add([sprite, weaknessOverlays, nameText, hpBar, mpBar, weaknessDots]);
+    slot.add([sprite, weaknessOverlays, nameText, hpBar, mpBar]);
     slot.occupied = true;
     slot.char = char;
     this._wireSlotInfoClick(slot, char);
@@ -1565,7 +1564,6 @@ export default class CombatScene extends Phaser.Scene {
     char.icon = sprite;
     char.hpBar = hpBar;
     char.mpBar = mpBar;
-    this._updateWeaknessDots(char);
     this._updateWeaknessOverlays(char);
   }
 
@@ -3519,31 +3517,23 @@ export default class CombatScene extends Phaser.Scene {
     // wants the portrait refreshed after a hit/heal/tick, and weakness
     // buildup virtually always changes alongside one of those.
     [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
-      this._updateWeaknessDots(u);
       this._updateWeaknessOverlays(u);
     });
   }
 
-  // Experimental "quick reference" cluster (per user request) — a small dot
-  // per weakness FAMILY THE UNIT CURRENTLY HAS ANY BUILDUP IN, not a fixed
-  // 9-slot bar/ring. A full always-present 9-slot readout would be mostly
-  // gray dead space against a target only weak to two or three things, and
-  // the user specifically flagged wanting to avoid anything that visually
-  // competes with combat animations — a handful of small static dots is a
-  // much lighter footprint than a ring around the portrait or a full second
-  // bar. Colors reuse the exact same family palette the action-menu filter
-  // pills already use (_createSkillFilterPills' PILL_DEFS), so this reads as
-  // the same color language rather than inventing a new one.
-  static WEAKNESS_DOT_COLORS = {
+  // The canonical per-family weakness colour. Shared by the portrait overlays
+  // and matched to the action-menu filter pills (_createSkillFilterPills'
+  // PILL_DEFS) so the game speaks one colour language for weakness.
+  //
+  // This used to also drive a cluster of small dots beside each portrait. Those
+  // were removed once the portrait overlays landed: the overlays carry the
+  // at-a-glance read and the weakness panel carries the exact numbers, so the
+  // dots were a third, redundant readout competing for the same space.
+  static WEAKNESS_COLORS = {
     fire: 0xdd5500, cold: 0x4477cc, lightning: 0xcccc22, disorient: 0x9944cc,
     lacerate: 0xcc4444, expose: 0xcc8844, disease: 0x447744, curse: 0x6633aa, toxic: 0x44aa44,
   };
-  static WEAKNESS_DOT_ORDER = ['fire', 'cold', 'lightning', 'disorient', 'lacerate', 'expose', 'disease', 'curse', 'toxic'];
 
-  // Creates the (initially empty) container for one unit's dot cluster,
-  // positioned on the opposite side of the portrait from the HP/MP bars
-  // (those sit at x:-50/-42, rotated vertical — see _placePortrait/
-  // _assignCharToSlot) so it doesn't compete with them for space.
   // ─── Weakness portrait overlays ──────────────────────────────────────────
   //
   // Painted grayscale layers laid over a unit's portrait, tinted and blended
@@ -3557,15 +3547,27 @@ export default class CombatScene extends Phaser.Scene {
   //   elemental ADD       glows
   //   necrotic  MULTIPLY  stains/darkens
   //
-  // Tints reuse WEAKNESS_DOT_COLORS, the same palette the dots and the action
-  // menu's filter pills already use, so the whole game speaks one colour
-  // language for weakness rather than three.
+  // Tints reuse WEAKNESS_COLORS, the same palette the action menu's filter
+  // pills use, so the whole game speaks one colour language for weakness.
+  // `pulse` drives a slow breathing motion applied every frame in update() —
+  // amp is a fraction of the sprite's own alpha, period is in ms. Painted
+  // layers are otherwise completely still, which is what made Disease read as
+  // a smudge and Curse disappear against a dark portrait.
   static WEAKNESS_OVERLAYS = {
     expose:   { key: 'wk_crack',   blend: 'NORMAL'   },
-    lacerate: { key: 'wk_slash',   blend: 'NORMAL'   },
+    lacerate: { key: 'wk_slash',   blend: 'NORMAL',   pulse: { amp: 0.30, period: 1500 } },
     cold:     { key: 'wk_frost',   blend: 'ADD'      },
-    disease:  { key: 'wk_disease', blend: 'MULTIPLY' },
-    curse:    { key: 'wk_curse',   blend: 'MULTIPLY' },
+    disease:  { key: 'wk_disease', blend: 'MULTIPLY', pulse: { amp: 0.34, period: 2600 } },
+    curse:    { key: 'wk_curse',   blend: 'MULTIPLY', pulse: { amp: 0.32, period: 2100 } },
+  };
+
+  // Overlay-specific tints, falling back to the shared WEAKNESS_COLORS.
+  // Toxic green and Curse purple are both far darker than the fire orange at
+  // the same alpha, so they need their own brighter values here WITHOUT
+  // changing the palette the filter pills share.
+  static WEAKNESS_OVERLAY_TINTS = {
+    toxic: 0x7ae05f,
+    curse: 0xb070f0,
   };
 
   // Tier 1 is deliberately QUIET BUT LEGIBLE rather than barely-there. On a
@@ -3608,7 +3610,11 @@ export default class CombatScene extends Phaser.Scene {
 
     for (const [fam, cfg] of Object.entries(CombatScene.WEAKNESS_EMITTERS)) {
       const meter = char.weakness.meters?.[fam] || 0;
-      const existing = char.weaknessEmitters[fam];
+      let existing = char.weaknessEmitters[fam];
+      // Same trap as the container: a destroyed emitter is truthy but its
+      // internals are null, so setParticleScale() threw "Cannot read
+      // properties of null (reading 'scaleX')". Treat it as absent.
+      if (existing && !existing.scene) { delete char.weaknessEmitters[fam]; existing = null; }
 
       if (meter <= 0 || !this.textures?.exists('wk_particle')) {
         if (existing) { existing.destroy(); delete char.weaknessEmitters[fam]; }
@@ -3616,8 +3622,16 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
+      const t1 = WeaknessFamilies?.[fam]?.t1 ?? Math.round(t2 / 2);
       const tier = meter >= t2 ? 't2' : 't1';
       const tune = cfg[tier];
+      // Below T1, thin the stream out proportionally. A target with 4 Fire was
+      // previously emitting at the full T1 rate, which read as "on fire" when
+      // it should barely register. Frequency is a DELAY, so bigger = sparser.
+      const strength = this._weaknessStrength(fam, meter);
+      const frequency = strength < 1
+        ? Math.round(tune.frequency * (1 + (1 - strength) * 5))
+        : tune.frequency;
 
       if (!existing) {
         const em = this.add.particles(0, 0, 'wk_particle', {
@@ -3627,19 +3641,21 @@ export default class CombatScene extends Phaser.Scene {
           speedX: { min: -6, max: 6 },
           lifespan: cfg.lifespan,
           quantity: 1,
-          frequency: tune.frequency,
+          frequency,
           scale: tune.scale,
           alpha: tune.alpha,
           blendMode: Phaser.BlendModes[cfg.blend] ?? Phaser.BlendModes.ADD,
-          tint: CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff,
+          tint: CombatScene.WEAKNESS_COLORS[fam] ?? 0xffffff,
         });
         container.add(em);
         char.weaknessEmitters[fam] = em;
         char.weaknessEmitterTier = char.weaknessEmitterTier || {};
         char.weaknessEmitterTier[fam] = tier;
-      } else if (char.weaknessEmitterTier?.[fam] !== tier) {
-        // Retune in place so the stream never restarts.
-        existing.frequency = tune.frequency;
+      } else if (char.weaknessEmitterTier?.[fam] !== tier || existing.frequency !== frequency) {
+        // Retune in place so the stream never restarts. Frequency is compared
+        // as well as tier because the sub-T1 thinning above changes density as
+        // the meter climbs WITHIN tier 1, which a tier-only check would miss.
+        existing.frequency = frequency;
         existing.setParticleScale?.(tune.scale.start, tune.scale.start);
         existing.setParticleAlpha?.(tune.alpha.start);
         char.weaknessEmitterTier[fam] = tier;
@@ -3668,36 +3684,44 @@ export default class CombatScene extends Phaser.Scene {
       const meter = char.weakness.meters?.disorient || 0;
       const t2 = WeaknessFamilies?.disorient?.t2 ?? 200;
       const tier = meter >= t2 ? 2 : 1;
-      const st = char._wkProc.disorient;
+      let st = char._wkProc.disorient;
+      if (st && !st.ghosts?.[0]?.scene) { delete char._wkProc.disorient; st = null; }
       if (meter <= 0) {
-        if (st) { st.tween?.remove(); st.ghost?.destroy(); delete char._wkProc.disorient; }
-      } else if (!st) {
+        if (st) { st.tweens?.forEach(t => t.remove()); st.ghosts?.forEach(g => g.destroy()); delete char._wkProc.disorient; }
+      } else if (!st || st.tier !== tier) {
+        st?.tweens?.forEach(t => t.remove());
+        st?.ghosts?.forEach(g => g.destroy());
         const key = char.icon?.texture?.key;
         if (key && this.textures.exists(key)) {
-          const ghost = this.add.image(0, 0, key)
-            .setDisplaySize(64, 64)
-            .setTint(CombatScene.WEAKNESS_DOT_COLORS.disorient)
-            .setAlpha(tier === 2 ? 0.34 : 0.18)
-            .setBlendMode(Phaser.BlendModes.ADD);
-          container.add(ghost);
+          // TWO ghosts at half opacity each, drifting in OPPOSITE directions.
+          // A single ghost sliding one way read as the portrait being nudged;
+          // splitting it both ways reads as double-vision, which is the point.
           const amp = tier === 2 ? 5 : 2.5;
-          const tween = this.tweens.add({
-            targets: ghost, x: amp, y: -amp * 0.6,
-            duration: 900,
-            yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-          });
-          char._wkProc.disorient = { ghost, tween, tier };
+          const each = ((tier === 2 ? 0.34 : 0.18) / 2) * this._weaknessStrength('disorient', meter);
+          const ghosts = [];
+          const tweens = [];
+          for (const dir of [-1, 1]) {
+            const g = this.add.image(-amp * dir, amp * 0.6 * dir, key)
+              .setDisplaySize(64, 64)
+              .setTint(CombatScene.WEAKNESS_COLORS.disorient)
+              .setAlpha(each)
+              .setBlendMode(Phaser.BlendModes.ADD);
+            container.add(g);
+            ghosts.push(g);
+            tweens.push(this.tweens.add({
+              targets: g, x: amp * dir, y: -amp * 0.6 * dir,
+              duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+            }));
+          }
+          char._wkProc.disorient = { ghosts, tweens, tier };
         }
-      } else if (st.tier !== tier) {
-        st.ghost.setAlpha(tier === 2 ? 0.34 : 0.18);
-        st.tween?.remove();
-        const amp = tier === 2 ? 5 : 2.5;
-        st.tween = this.tweens.add({
-          targets: st.ghost, x: amp, y: -amp * 0.6,
-          duration: 900,
-          yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-        });
-        st.tier = tier;
+      } else {
+        // Same tier, but the meter may have moved WITHIN it — restate the alpha
+        // so a climb from 4 to 90 buildup actually deepens the double-image.
+        // Cheap enough to do unconditionally; no rebuild, so the drift tween
+        // keeps running uninterrupted.
+        const each = ((tier === 2 ? 0.34 : 0.18) / 2) * this._weaknessStrength('disorient', meter);
+        st.ghosts?.forEach(g => g.setAlpha(each));
       }
     }
 
@@ -3706,16 +3730,22 @@ export default class CombatScene extends Phaser.Scene {
       const meter = char.weakness.meters?.lightning || 0;
       const t2 = WeaknessFamilies?.lightning?.t2 ?? 200;
       const tier = meter >= t2 ? 2 : 1;
-      const st = char._wkProc.lightning;
+      let st = char._wkProc.lightning;
+      if (st && !st.gfx?.scene) { delete char._wkProc.lightning; st = null; }
       if (meter <= 0) {
         if (st) { st.timer?.remove(); st.gfx?.destroy(); delete char._wkProc.lightning; }
       } else if (!st || st.tier !== tier) {
         st?.timer?.remove(); st?.gfx?.destroy();
         const gfx = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
         container.add(gfx);
-        const colour = CombatScene.WEAKNESS_DOT_COLORS.lightning;
+        const colour = CombatScene.WEAKNESS_COLORS.lightning;
         const flash = () => {
           gfx.clear();
+          // Below T1 the bolt fires only a fraction of the time. Skipping beats
+          // rebuilding the timer whenever the meter nudges, and keeps the flash
+          // itself at full brightness rather than fading it into invisibility.
+          const st2 = char._wkProc.lightning;
+          if (st2 && Math.random() > st2.strength) return;
           const bolts = tier === 2 ? 2 : 1;
           for (let b = 0; b < bolts; b++) {
             let x = Phaser.Math.Between(-24, 24);
@@ -3740,18 +3770,58 @@ export default class CombatScene extends Phaser.Scene {
           delay: tier === 2 ? 520 : 1000,
           loop: true, callback: flash,
         });
-        char._wkProc.lightning = { gfx, timer, tier };
+        char._wkProc.lightning = { gfx, timer, tier, strength: this._weaknessStrength('lightning', meter) };
+      } else {
+        // Same tier — just restate strength so density tracks the meter.
+        st.strength = this._weaknessStrength('lightning', meter);
       }
     }
+  }
+
+  /**
+   * Drop every overlay reference a unit is holding WITHOUT touching the objects
+   * themselves — used when Phaser has already destroyed them (a knocked-out
+   * unit's slot is cleared with removeBetween(..., true)). Calling destroy()
+   * again here would be operating on freed objects.
+   */
+  _forgetWeaknessOverlays(char) {
+    if (!char) return;
+    char.weaknessOverlays = null;
+    char.weaknessOverlaySprites = {};
+    char.weaknessEmitters = {};
+    char.weaknessEmitterTier = {};
+    char._wkProc = {};
   }
 
   /** Tear down a unit's emitters (slot reuse / combat end). */
   _destroyWeaknessEmitters(char) {
     Object.values(char?.weaknessEmitters || {}).forEach(em => em.destroy());
     Object.values(char?._wkProc || {}).forEach(st => {
-      st?.tween?.remove(); st?.timer?.remove(); st?.ghost?.destroy(); st?.gfx?.destroy();
+      st?.tweens?.forEach(t => t?.remove());
+      st?.ghosts?.forEach(g => g?.destroy());
+      st?.timer?.remove(); st?.gfx?.destroy();
     });
     if (char) { char.weaknessEmitters = {}; char.weaknessEmitterTier = {}; char._wkProc = {}; }
+  }
+
+  /**
+   * How strongly a weakness should present, 0..1, for a given meter.
+   *
+   * ONE formula for every family so low-buildup behaviour can't drift between
+   * the painted / emitter / procedural paths — which it already had: Disorient
+   * and Lightning were showing at full tier-1 strength off 4 buildup while the
+   * other seven had been ramped down.
+   *
+   * Returns the fraction of the CURRENT tier's presentation to use. Above T1 it
+   * is 1 (the tier itself carries the escalation); below T1 it ramps from a
+   * faint floor so a trace of buildup is a hint, not a statement.
+   */
+  _weaknessStrength(fam, meter) {
+    const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
+    const t1 = WeaknessFamilies?.[fam]?.t1 ?? Math.round(t2 / 2);
+    if (meter >= t1) return 1;
+    const frac = Math.min(1, Math.max(0, meter) / Math.max(1, t1));
+    return 0.12 + 0.88 * frac;
   }
 
   _createWeaknessOverlays(char) {
@@ -3772,13 +3842,22 @@ export default class CombatScene extends Phaser.Scene {
   /**
    * Rebuild a unit's overlay stack from its current weakness meters.
    *
-   * Called from _updateHealthBars alongside _updateWeaknessDots — i.e. after
-   * any hit/heal/tick, not per frame. Rebuilding wholesale is cheap here (at
+   * Called from _updateHealthBars — i.e. after any hit/heal/tick, not per
+   * frame. Rebuilding wholesale is cheap here (at
    * most five sprites) and avoids diffing which families changed.
    */
   _updateWeaknessOverlays(char) {
     const container = char?.weaknessOverlays;
-    if (!container || !char?.weakness) return;
+    // `container.scene` is undefined once Phaser destroys it — and a destroyed
+    // container is still TRUTHY, so a plain null check let dead units through.
+    // A knocked-out unit's slot is cleared with removeBetween(..., true), which
+    // destroys this container and every emitter inside it, while `char` (and
+    // its references to them) lives on in this.enemies. Everything below then
+    // operated on destroyed objects.
+    if (!container || !container.scene || !char?.weakness) {
+      if (container && !container.scene) this._forgetWeaknessOverlays(char);
+      return;
+    }
 
     Object.values(char.weaknessOverlaySprites || {}).forEach(sp => sp.destroy());
     char.weaknessOverlaySprites = {};
@@ -3799,14 +3878,20 @@ export default class CombatScene extends Phaser.Scene {
       } else if (meter >= t1) {
         alpha = A.t1 + (A.t2 - A.t1) * Math.min(1, (meter - t1) / Math.max(1, t2 - t1)) * 0.6;
       } else {
-        alpha = A.t1 * Math.max(0.55, Math.min(1, meter / Math.max(1, t1)));
+        alpha = A.t1 * this._weaknessStrength(fam, meter);
       }
 
+      const tint = CombatScene.WEAKNESS_OVERLAY_TINTS[fam]
+        ?? CombatScene.WEAKNESS_COLORS[fam] ?? 0xffffff;
       const sp = this.add.image(0, 0, cfg.key)
         .setDisplaySize(64, 64)          // portraits render at 64x64, art is 128x128
-        .setTint(CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff)
+        .setTint(tint)
         .setAlpha(alpha)
         .setBlendMode(Phaser.BlendModes[cfg.blend] ?? Phaser.BlendModes.NORMAL);
+      // Pulse is driven per-frame from update() rather than by a tween: these
+      // sprites are rebuilt on every refresh, and a tween would restart (and
+      // leak) with each rebuild.
+      if (cfg.pulse) { sp._wkBaseAlpha = alpha; sp._wkPulse = cfg.pulse; }
 
       container.add(sp);
       char.weaknessOverlaySprites[fam] = sp;
@@ -3818,50 +3903,6 @@ export default class CombatScene extends Phaser.Scene {
     this._syncWeaknessProcedural(char);
   }
 
-  _createWeaknessDots(char) {
-    const container = this.add.container(46, 0);
-    char.weaknessDots = container;
-    char.weaknessDotSprites = {};
-    return container;
-  }
-
-  _updateWeaknessDots(char) {
-    const container = char?.weaknessDots;
-    if (!container || !char?.weakness) return;
-
-    const active = CombatScene.WEAKNESS_DOT_ORDER.filter(fam => (char.weakness.meters?.[fam] || 0) > 0);
-
-    // Rebuild from scratch — only runs from _updateHealthBars (post-action,
-    // not per-frame), and the active-family count is tiny (0-9), so this is
-    // cheap; simpler than diffing which dots changed.
-    Object.values(char.weaknessDotSprites || {}).forEach(d => d.destroy());
-    char.weaknessDotSprites = {};
-
-    // Two columns, 5 rows max per column (per request — a single 9-tall
-    // column was too much vertical space) — column 0 fills first (up to 5),
-    // any remaining families spill into column 1 to the right. Each column
-    // is independently vertically centered on however many dots IT holds,
-    // so a lone overflow dot in column 1 doesn't sit oddly offset.
-    const COL_MAX = 5;
-    const SPACING = 11;
-    const COL_GAP = 11;
-    active.forEach((fam, i) => {
-      const col = Math.floor(i / COL_MAX);
-      const rowIndex = i % COL_MAX;
-      const rowsInThisCol = Math.min(COL_MAX, active.length - col * COL_MAX);
-      const colStartY = -((rowsInThisCol - 1) * SPACING) / 2;
-
-      const meter = char.weakness.meters?.[fam] || 0;
-      const t2 = WeaknessFamilies?.[fam]?.t2 ?? 200;
-      // Dim just past 0, fully lit at/after T2 — "how close to T2" is the
-      // same read every intensity-scaled weakness mechanic already uses.
-      const alpha = Phaser.Math.Clamp(0.35 + 0.65 * (meter / Math.max(1, t2)), 0.35, 1);
-      const dot = this.add.circle(col * COL_GAP, colStartY + rowIndex * SPACING, 4, CombatScene.WEAKNESS_DOT_COLORS[fam] ?? 0xffffff, alpha)
-        .setStrokeStyle(1, 0x000000, 0.5);
-      container.add(dot);
-      char.weaknessDotSprites[fam] = dot;
-    });
-  }
 
 
   // Build tooltip content for an ability (static fields only; no apply() call)
@@ -5004,6 +5045,10 @@ export default class CombatScene extends Phaser.Scene {
 
     if (unit._slot) {
       unit._slot.char = null;
+      // _clearPortrait destroys this unit's overlay container and everything in
+      // it (emitters, ghost sprites, bolt graphics). Drop the references now so
+      // the next _updateHealthBars can't retune a freed emitter.
+      this._forgetWeaknessOverlays(unit);
       this._clearPortrait(unit._slot);
       unit._slot.occupied = false;
       unit._slot = null;
@@ -11057,15 +11102,13 @@ export default class CombatScene extends Phaser.Scene {
 
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
-    const weaknessDots = this._createWeaknessDots(unit);
     const weaknessOverlays = this._createWeaknessOverlays(unit);
 
-    unit._slot.add([weaknessOverlays, hpBar, mpBar, weaknessDots]);
+    unit._slot.add([weaknessOverlays, hpBar, mpBar]);
 
     // Maintain handles for updates
     unit.hpBar = hpBar;
     unit.mpBar = mpBar;
-    this._updateWeaknessDots(unit);
   }
 
   // Shared by _showVictoryScreen/_showDefeatScreen: dims and input-blocks
@@ -11296,17 +11339,15 @@ export default class CombatScene extends Phaser.Scene {
     const mpBar = new StatusBar(this, -42, 0, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
     hpBar.setAngle(-90);
     mpBar.setAngle(-90);
-    const weaknessDots = this._createWeaknessDots(char);
     const weaknessOverlays = this._createWeaknessOverlays(char);
 
     // Add to container — overlays sit directly above the portrait, below UI.
-    slot.add([sprite, weaknessOverlays, nameTxt, hpBar, mpBar, weaknessDots]);
+    slot.add([sprite, weaknessOverlays, nameTxt, hpBar, mpBar]);
 
     // Store references for later updates
     char.icon = sprite;
     char.hpBar = hpBar;
     char.mpBar = mpBar;
-    this._updateWeaknessDots(char);
 
     // NEW: ensure status icons render now that slot/icon exist
     this._refreshStatusEffectIcons?.(char);
@@ -11328,6 +11369,43 @@ export default class CombatScene extends Phaser.Scene {
     this.tooltip = null;
   }
 
+
+  /**
+   * Phaser calls this every frame. Its only job is breathing the weakness
+   * overlays that declare a `pulse` — a handful of alpha writes across at most
+   * a dozen units, cheap enough not to warrant throttling.
+   *
+   * Driven from scene time rather than tweens on purpose: the painted overlays
+   * are torn down and rebuilt on every combat refresh, so any tween attached to
+   * them would restart mid-breath (and leak a tween per rebuild).
+   */
+  update(time) {
+    const units = this._wkPulseUnits || (this._wkPulseUnits = []);
+    units.length = 0;
+    const party = GameState.party || [];
+    for (let i = 0; i < party.length; i++) units.push(party[i]);
+    const foes = this.enemies || [];
+    for (let i = 0; i < foes.length; i++) units.push(foes[i]);
+
+    for (const u of units) {
+      const sprites = u?.weaknessOverlaySprites;
+      if (!sprites) continue;
+      for (const key in sprites) {
+        const sp = sprites[key];
+        if (!sp || !sp._wkPulse || !sp.scene) continue;
+        const { amp, period } = sp._wkPulse;
+        // Swing between an explicit trough and peak rather than multiplying
+        // the base directly. A T2 overlay sits at 0.85 alpha, so base*(1+amp)
+        // blew past Phaser's 1.0 ceiling and the top of every breath clipped
+        // flat — the pulse visibly stalled at full brightness.
+        const base = sp._wkBaseAlpha;
+        const peak = Math.min(1, base * (1 + amp));
+        const trough = Math.max(0, base * (1 - amp));
+        const wave = (Math.sin((time / period) * Math.PI * 2) + 1) / 2;
+        sp.alpha = trough + (peak - trough) * wave;
+      }
+    }
+  }
 
   _currentChar() {
     return this.turnOrder[this.currentTurnIndex];

@@ -39,3 +39,6 @@ assets/UIinterface/ruins_LoadScreen.png
 # Python bytecode (the patch-notes script runs in CI, never from here)
 __pycache__/
 *.pyc
+
+# Krita writes a .png~ backup beside any edited asset
+*.png~
