@@ -40,11 +40,11 @@ const STAT_LABELS = {
 };
 
 const STAT_EFFECTS = {
-  STR: 'Melee damage  ·  Crit chance',
+  STR: 'Weapon damage  ·  Crit chance',
   DEX: 'Accuracy +2/pt  ·  Crit chance',
   CON: 'Max HP +2/pt  ·  Physical Resist',
   INT: 'Max MP +2/pt  ·  Crit chance',
-  WIS: 'Max MP +1/pt  ·  Elemental Resist  ·  Necrotic Resist  ·  Crit Avoid  ·  Healing',
+  WIS: 'Max MP +1/pt  ·  Elem/Necro Resist  ·  Crit Avoid  ·  Healing  ·  Resilience',
   CHA: 'Max MP +1/pt  ·  Initiative  ·  Elemental Resist',
 };
 
@@ -57,6 +57,7 @@ const PREVIEW_DEFS = [
   { key: 'PhysicalResist',  label: 'Phys Res'    },
   { key: 'ElementalResist', label: 'Elem Res'    },
   { key: 'NecroticResist',  label: 'Necro Res'   },
+  { key: 'Resilience',      label: 'Resilience'  },
 ];
 
 // Card dimensions
@@ -432,10 +433,16 @@ export default class LevelUpOverlay extends Phaser.Scene {
       hypo[s] = (hypo[s] || 0) + pts;
     }
     const newDerived = calculateDerivedStats(hypo, { basePlayerHP: 16 });
+    // Baseline from the UNCHANGED stats, so we can isolate what the pending
+    // points alone are worth and add that to the real current value. Reading
+    // newDerived directly would silently drop every gear contribution (most
+    // visibly Resilience, whose total lives on char.resilience).
+    const curDerived = calculateDerivedStats(this._char.totalStats, { basePlayerHP: 16 });
 
     for (const [key, ref] of Object.entries(this._previewTxts)) {
       const curVal = ref.curVal;
-      const newVal = newDerived[key] ?? curVal;
+      const statDelta = (newDerived[key] ?? 0) - (curDerived[key] ?? 0);
+      const newVal = (typeof curVal === 'number') ? curVal + statDelta : (newDerived[key] ?? curVal);
       const changed = newVal !== curVal;
       ref.txt.setText(changed ? `${ref.label}: ${curVal} → ${newVal}` : `${ref.label}: ${curVal}`);
       ref.txt.setStyle({ color: changed ? '#88ff88' : '#666666' });
@@ -680,6 +687,13 @@ export default class LevelUpOverlay extends Phaser.Scene {
   }
 
   _getDerived(key) {
+    // Resilience is the one preview field that does NOT live on char.derived
+    // as its true total — CharacterBuilder folds WIS-derived and gear
+    // Resilience together onto char.resilience, which is what combat and the
+    // character sheet both read. Use that so this row agrees with them.
+    if (key === 'Resilience') {
+      return this._char.resilience ?? this._char.derived?.Resilience ?? 0;
+    }
     return this._char.derived?.[key] ?? this._char[key] ?? 0;
   }
 

@@ -536,6 +536,56 @@ export const AI_PROFILES = {
     }
   },
 
+  // Laki plays for Disorient rather than damage: arm the shriek, get the
+  // party Rattled with the cheap bonus-action hoot, screech when it can hit
+  // several of them, and only then cash it in with Silent Dive — which is the
+  // one skill that actually scales off the Disorient she has been stacking.
+  laki_beast: {
+    decide(npc, scene, enemies) {
+      const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'laki_startle');
+      if (!alreadyArmed && scene?.reactions?.arm && npc.skills?.includes('laki_startle')) {
+        scene.reactions.arm(npc, SKILLS.laki_startle);
+      }
+
+      const { foes } = buildTargetList(npc, scene, enemies);
+
+      // Cash in on a target she has already rattled.
+      const reeling = highestWeakness(foes, 'disorient', 2) || highestWeakness(foes, 'disorient', 1);
+      if (canUseSkill(npc, 'laki_silent_dive') && reeling) {
+        return buildAction('laki_silent_dive', reeling);
+      }
+
+      // Self-buff while she still has room to use it.
+      if (canUseSkill(npc, 'laki_night_eyes') && hpRatio(npc) < 0.75) {
+        return buildAction('laki_night_eyes', null);
+      }
+
+      // Spread Disorient wide.
+      if (canUseSkill(npc, 'laki_piercing_screech')) {
+        const target = weakest(foes);
+        if (target) return buildAction('laki_piercing_screech', target);
+      }
+
+      // Cheap bonus-action buildup — her bread and butter.
+      if (canUseSkill(npc, 'laki_hooting_taunt')) {
+        const target = weakest(foes);
+        if (target) return buildAction('laki_hooting_taunt', target);
+      }
+
+      if (canUseSkill(npc, 'laki_silent_dive')) {
+        const target = weakest(foes);
+        if (target) return buildAction('laki_silent_dive', target);
+      }
+
+      // Same no-MP fallback every other beast profile ends on.
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = weakest(foes);
+        if (target) return buildAction('basic_attack', target);
+      }
+      return null;
+    }
+  },
+
   fire_duelist: {
     decide(npc, scene, enemies) {
       // Flame Retaliation — armed once and left armed (idempotent, same

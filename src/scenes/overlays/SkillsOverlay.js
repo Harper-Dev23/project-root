@@ -14,7 +14,8 @@ export default class SkillsOverlay extends Phaser.Scene {
     this.scrollMax = 0;
 
     this.items = []; // metrics only
-    this.filter = { weapon: 'Any', stats: new Set() };
+    this.filter = { weapon: 'Any', stats: new Set(), search: '' };
+    this._searchFocused = false;
     this.weaponOptions = ['Any'];
     this.statOptions = [];
 
@@ -184,6 +185,72 @@ export default class SkillsOverlay extends Phaser.Scene {
       chipsX += padW + 8;
     });
 
+    // ── Search box ──
+    // Phaser has no native text input, so this is a drawn box plus a raw
+    // keydown handler. Click to focus (caret shows); Enter or a click outside
+    // blurs. ESC is deliberately NOT bound here — createOverlayFrame owns it
+    // for closing the overlay, and stealing it would break that everywhere.
+    const searchW = Math.min(320, Math.max(180, w - 32 - (chipsX - x) - 90));
+    const searchX = x + w - 16 - searchW;
+    const searchY = y - 4;
+    this._searchBox = this.add.rectangle(searchX + searchW / 2, searchY + 14, searchW, 26, 0x1e1e1e, 1)
+      .setStrokeStyle(1, 0x555555)
+      .setInteractive({ useHandCursor: true });
+    this._searchTxt = this.add.text(searchX + 8, searchY + 6, '', {
+      fontSize: '13px', color: '#ffffff', fixedWidth: searchW - 34
+    }).setOrigin(0, 0);
+    this._searchClear = this.add.text(searchX + searchW - 16, searchY + 6, '✕', {
+      fontSize: '13px', color: '#aa6666'
+    }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+
+    this._searchBox.on('pointerdown', () => { this._searchFocused = true; this._renderSearch(); });
+    this._searchClear.on('pointerdown', () => {
+      this.filter.search = '';
+      this._renderSearch();
+      this._buildCards();
+    });
+
+    // Blur when clicking anywhere that isn't the box itself.
+    const onPointer = (pointer, over) => {
+      const hitBox = Array.isArray(over) && over.includes(this._searchBox);
+      if (!hitBox && this._searchFocused) { this._searchFocused = false; this._renderSearch(); }
+    };
+    this.input.on('pointerdown', onPointer);
+
+    const onKey = (event) => {
+      if (!this._searchFocused) return;
+      const k = event.key;
+      if (k === 'Backspace') {
+        this.filter.search = this.filter.search.slice(0, -1);
+      } else if (k === 'Enter') {
+        this._searchFocused = false;
+      } else if (k && k.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (this.filter.search.length >= 40) return;
+        this.filter.search += k;
+      } else {
+        return;   // arrows/pageup/etc fall through to the scroll handlers
+      }
+      // Caret feedback is instant; the expensive card rebuild is debounced so
+      // holding a key or typing quickly does not rebuild the whole list once
+      // per character. Without this every keystroke destroyed and recreated
+      // every visible card.
+      this._renderSearch();
+      this._queueCardRebuild();
+    };
+    this.input.keyboard?.on('keydown', onKey);
+    this.events.once('shutdown', () => {
+      this.input.keyboard?.off('keydown', onKey);
+      this.input.off('pointerdown', onPointer);
+      // A raw setTimeout outlives the scene, so it must be cancelled here.
+      if (this._pendingCardRebuild) {
+        clearTimeout(this._pendingCardRebuild);
+        this._pendingCardRebuild = null;
+      }
+    });
+
+    this.header.add([this._searchBox, this._searchTxt, this._searchClear]);
+    this._renderSearch();
+
     // Clear chip (persistent)
     const clearTxt = this.add.text(chipsX + 10, chipsY + 6, 'Clear', { fontSize: '12px', color: '#ffffff' }).setOrigin(0, 0);
     const clearW = clearTxt.width + 20;
@@ -219,6 +286,58 @@ export default class SkillsOverlay extends Phaser.Scene {
     });
   }
 
+  /**
+   * Debounced _buildCards — see the search keydown handler.
+   *
+   * Uses window.setTimeout rather than this.time.delayedCall on purpose. The
+   * Phaser clock only advances while the scene is ACTIVE, and this overlay can
+   * sit inactive (a harness check found it parked with time.now frozen), which
+   * would strand a queued rebuild and leave the results list stale forever.
+   * This is pure UI debouncing, not gameplay timing, so it has no reason to
+   * respect scene pause. Cleared on shutdown below.
+   */
+  _queueCardRebuild(delay = 130) {
+    if (this._pendingCardRebuild) clearTimeout(this._pendingCardRebuild);
+    this._pendingCardRebuild = setTimeout(() => {
+      this._pendingCardRebuild = null;
+      // The scene may have been torn down while this was pending.
+      if (!this.scene || !this.sys || this.sys.isDestroyed?.()) return;
+      try { this._buildCards(); } catch (err) { console.error('[skills search]', err); }
+    }, delay);
+  }
+
+  _renderSearch() {
+    if (!this._searchTxt) return;
+    const q = this.filter.search;
+    if (!q) {
+      this._searchTxt.setText(this._searchFocused ? '|' : 'Search skills\u2026');
+      this._searchTxt.setColor(this._searchFocused ? '#ffffff' : '#777777');
+    } else {
+      this._searchTxt.setText(q + (this._searchFocused ? '|' : ''));
+      this._searchTxt.setColor('#ffffff');
+    }
+    this._searchBox?.setStrokeStyle(1, this._searchFocused ? 0xc8a060 : 0x555555);
+  }
+
+  // Every token must match SOMEWHERE in the skill's searchable text, so
+  // "dagger toxic" narrows rather than widens. Covers name, description, id,
+  // tags, required stat and required weapon(s) — the tags are what make
+  // keyword searches like "aoe", "lightning" or "projectile" work.
+  _matchesSearch(id, sk) {
+    const q = (this.filter.search || '').trim().toLowerCase();
+    if (!q) return true;
+    const rw = Array.isArray(sk.requiredWeapon) ? sk.requiredWeapon : (sk.requiredWeapon ? [sk.requiredWeapon] : []);
+    const hay = [
+      sk.name || '', sk.description || sk.desc || '', id,
+      (sk.tags || []).join(' '),
+      sk.requiredStat || '',
+      rw.join(' '),
+      Object.keys(sk.buildupHint || {}).join(' '),
+      String(sk.actionCost || ''),
+    ].join(' ').toLowerCase();
+    return q.split(/\s+/).every(tok => hay.includes(tok));
+  }
+
   // ---------- Cards (sorted ASC by required stat value) ----------
   _buildCards() {
     // Clear prior content only (safe)
@@ -231,6 +350,13 @@ export default class SkillsOverlay extends Phaser.Scene {
     for (const id in SKILLS) {
       const s = SKILLS[id];
       if (!s || s.type !== 'weapon') continue;
+      // Mirror getWeaponSkillsFor's own exclusions. Without the `hidden` check
+      // the six sub-skills that back multi-strike abilities (volley_arrow,
+      // hail_of_arrows_shot, farsight_volley_shot, carrion_strike_swing,
+      // twin_fang_offhand, arterial_rush_cut) were each listed as a SECOND
+      // card under the same display name as their parent — they are engine
+      // plumbing, not skills a player can pick.
+      if (s.hidden || s.disabled || s.enemyOnly) continue;
 
       // Weapon filter
       if (this.filter.weapon !== 'Any') {
@@ -238,6 +364,9 @@ export default class SkillsOverlay extends Phaser.Scene {
         const has = Array.isArray(rw) ? rw.includes(this.filter.weapon) : (rw === this.filter.weapon);
         if (!has) continue;
       }
+
+      // Free-text search (name/description/tags/id/stat/weapon)
+      if (!this._matchesSearch(id, s)) continue;
 
       // Stat multi-filter
       if (this.filter.stats.size > 0) {
@@ -290,14 +419,15 @@ export default class SkillsOverlay extends Phaser.Scene {
       };
       const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };
 
+      // Only the BACKGROUND is interactive. The two Text objects sit on top of
+      // it but are left non-interactive, and Phaser's hit test only considers
+      // interactive objects — so the pointer falls straight through to bg and
+      // hover still works everywhere on the card. Making all three interactive
+      // meant 3 input zones and 6 listeners per card; across ~240 skills that
+      // is ~1450 listeners torn down and rebuilt on EVERY keystroke, which is
+      // what made the search bar lag.
       bg.on('pointerover', showTip);
       bg.on('pointerout', hideTip);
-      name.setInteractive({ useHandCursor: true });
-      name.on('pointerover', showTip);
-      name.on('pointerout', hideTip);
-      meta.setInteractive({ useHandCursor: true });
-      meta.on('pointerover', showTip);
-      meta.on('pointerout', hideTip);
 
       // No-op click for now
       bg.on('pointerdown', () => {
@@ -312,9 +442,11 @@ export default class SkillsOverlay extends Phaser.Scene {
     // Empty state
     if (this.items.length === 0) {
       const t = this.add.text(this.graphViewport.x + 16, this.graphViewport.y + 16,
-        this.filter.stats.size > 0 || this.filter.weapon !== 'Any'
-          ? 'No skills match the current filters.'
-          : 'No weapon skills found.',
+        (this.filter.search || '').trim()
+          ? `No skills match \u201c${this.filter.search}\u201d.`
+          : (this.filter.stats.size > 0 || this.filter.weapon !== 'Any'
+              ? 'No skills match the current filters.'
+              : 'No weapon skills found.'),
         { fontSize: '14px', color: '#aaaaaa' });
       this.content.add(t);
       this.scrollMin = 0; this.scrollMax = 0; this._setScroll(0);

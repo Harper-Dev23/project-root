@@ -26,6 +26,116 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // ==== Encounter 5 Reckoning: summoned adds ====
+  // Ember calls lava spawns, Rime calls ice spawns, at 75% and 35% HP (see
+  // each Reckoning scenario's own summon spec — the thresholds and counts
+  // live there so tiers can differ without cloning these templates).
+  //
+  // These are ADDS: _checkVictoryCondition ignores them, so the fight ends
+  // when the duelists fall regardless of how many are still standing. That is
+  // what lets them be genuine pressure rather than a kill-tax, and why they
+  // are cheap and squishy. No aiProfile on purpose — with none set,
+  // CombatScene falls through to chooseNPCAction, which just picks from the
+  // one skill they own.
+  //
+  // They have their own portraits now (portrait_lavaspawn / portrait_icespawn),
+  // so they read as distinct creatures rather than copies of the duelist who
+  // summoned them. The scenario's enemyScale multiplies them along with
+  // everyone else, so they stay relevant at higher tiers without separate
+  // templates.
+  //
+  // Deliberately GLASSY BUT DANGEROUS. 18 template + CON 6 (+12) = 30 live,
+  // which tier I's 1.35 hpMult lands on ~41 (then ~51 / ~63 at II / III).
+  // They also carry no innate resist, and _spawnEnemy skips the resist half
+  // of enemyScale for adds, so their durability never runs away at high
+  // tiers — an add should always be removable in about one focused action.
+  //
+  // The trade is that they HIT: 110% weapon damage and 90 buildup each, up
+  // from 70%/55. The point is that ignoring them to rush the duelist has a
+  // real cost in damage taken and in Fire/Cold stacking on the party, so
+  // focusing them is a genuine decision rather than a distraction.
+  lava_spawn: {
+    skin: 'portrait_lavaspawn',
+    maxHP: 18,
+    maxMP: 0,
+    baseStats: { STR: 9, DEX: 8, CON: 6, INT: 5, WIS: 5, CHA: 5 },
+    derivedBonus: {},
+    skills: ['lava_spawn_lash'],
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 0, class: 0, reaction: 0 },
+  },
+
+  ice_spawn: {
+    skin: 'portrait_icespawn',
+    maxHP: 18,
+    maxMP: 0,
+    baseStats: { STR: 9, DEX: 8, CON: 6, INT: 5, WIS: 5, CHA: 5 },
+    derivedBonus: {},
+    skills: ['ice_spawn_lash'],
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 0, class: 0, reaction: 0 },
+  },
+
+  // Encounter 2's Reckoning tiers — the timed DPS race. Identical to
+  // mobile_training_dummy_elite in behaviour: they still deal no damage and
+  // still only sway/shuffle, so the sole fail state is the scenario's
+  // turnLimit running out. Resists are uniform across all six dummies at a
+  // given tier (deliberately not varied per dummy) and climb each tier.
+  //
+  // Template maxHP is NOT the in-combat number: _placeEnemies adds the
+  // CON-derived pool on top (CON 5 => +10 here). Live values and the
+  // EFFECTIVE pool once PhysicalResist is applied (eHP = HP / (1 - resist)),
+  // summed across the six dummies:
+  //
+  //   tier     live HP   x6     PhysRes   effective x6   anchor
+  //   base       30      180      0%          180        trivial
+  //   Reck I     55      330      0%          330        playable straight after base
+  //   Reck II    90      540     20%          675        ~base Gorrek's defences
+  //   Reck III  120      720     60%         1800        ~Gorrek Reckoning IV
+  //
+  // Resilience cuts BUILDUP, not damage (78 => ~44% via the resilience/
+  // (resilience+100) curve), so it taxes weakness-driven kits specifically
+  // rather than raw throughput. First-pass numbers, meant to be tuned by feel.
+  mobile_training_dummy_reckoning_1: {
+    skin: 'dummy_portrait',
+    maxHP: 45,
+    maxMP: 0,
+    baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
+    skills: ['dummy_sway', 'dummy_shuffle'],
+    aiProfile: 'mobile_dummy',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  mobile_training_dummy_reckoning_2: {
+    skin: 'dummy_portrait',
+    maxHP: 80,
+    maxMP: 0,
+    baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
+    // Base Gorrek's own defensive profile (PhysicalResist 20 /
+    // Resilience 30), per request that this tier feel like fighting him.
+    derivedBonus: { PhysicalResist: 20, Resilience: 30, ElementalResist: 0, NecroticResist: 0 },
+    skills: ['dummy_sway', 'dummy_shuffle'],
+    aiProfile: 'mobile_dummy',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  mobile_training_dummy_reckoning_3: {
+    skin: 'dummy_portrait',
+    maxHP: 110,
+    maxMP: 0,
+    baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
+    // Gorrek Reckoning IV's profile — the 'very hard' anchor. PhysicalResist
+    // is a FLAT damage cut, so 60 means physical hits land at 40%, which is
+    // what makes this tier brutal rather than the raw HP.
+    derivedBonus: { PhysicalResist: 60, Resilience: 78, ElementalResist: 32, NecroticResist: 32 },
+    skills: ['dummy_sway', 'dummy_shuffle'],
+    aiProfile: 'mobile_dummy',
+    isEnemy: true,
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
   // Encounter 3's six dummies — same average (8 across all 6 core stats,
   // sum 48) but skewed per class archetype, matching how a real party
   // member of that class would be built. Weapon (crude/common tier,
@@ -33,7 +143,7 @@ export const ENEMY_TYPES = {
   // fixed-item pattern berserker_boss uses for its own weapon.
   animated_fighter_dummy: {
     skin: 'dummy_portrait_equipped_fighter',
-    maxHP: 135,
+    maxHP: 125,
     maxMP: 60,
     baseStats: { STR: 10, DEX: 6, CON: 12, INT: 5, WIS: 6, CHA: 9 },
     // Chad — natural 30% Physical Damage Reduction (Expose/Lacerate/Disorient
@@ -51,7 +161,7 @@ export const ENEMY_TYPES = {
 
   animated_healer_dummy: {
     skin: 'dummy_portrait_equipped_healer',
-    maxHP: 105,
+    maxHP: 95,
     maxMP: 120,
     baseStats: { STR: 5, DEX: 5, CON: 8, INT: 6, WIS: 14, CHA: 10 },
     // Stan — +4 flat MP/turn on top of his already-high WIS/CHA regen, same
@@ -65,7 +175,7 @@ export const ENEMY_TYPES = {
 
   animated_warlock_dummy: {
     skin: 'dummy_portrait_equipped_warlock',
-    maxHP: 98,
+    maxHP: 88,
     maxMP: 120,
     baseStats: { STR: 5, DEX: 6, CON: 7, INT: 9, WIS: 6, CHA: 15 },
     // Gary — natural 30% Necrotic Damage Reduction (his own curse/necrotic
@@ -79,7 +189,7 @@ export const ENEMY_TYPES = {
 
   animated_ranger_dummy: {
     skin: 'dummy_portrait_equipped_ranger',
-    maxHP: 113,
+    maxHP: 103,
     maxMP: 80,
     baseStats: { STR: 6, DEX: 16, CON: 7, INT: 6, WIS: 7, CHA: 6 },
     // Doug — sharp-eyed marksman, +20 natural Accuracy on top of his DEX.
@@ -92,7 +202,7 @@ export const ENEMY_TYPES = {
 
   animated_rogue_dummy: {
     skin: 'dummy_portrait_equipped_rogue',
-    maxHP: 105,
+    maxHP: 95,
     maxMP: 70,
     baseStats: { STR: 5, DEX: 14, CON: 6, INT: 6, WIS: 6, CHA: 11 },
     // Mo — +20 natural base Evasion, on top of (and stacking with) his own
@@ -106,7 +216,7 @@ export const ENEMY_TYPES = {
 
   animated_wizard_dummy: {
     skin: 'dummy_portrait_equipped_wizard',
-    maxHP: 98,
+    maxHP: 88,
     maxMP: 110,
     baseStats: { STR: 4, DEX: 6, CON: 7, INT: 16, WIS: 9, CHA: 6 },
     // Lenny — natural 30% Elemental Damage Reduction (Fire/Cold/Lightning
@@ -235,7 +345,7 @@ export const ENEMY_TYPES = {
   // _onUnitKnockedOut in CombatScene.js).
   fire_duelist: {
     skin: 'portrait_lesse_duelist_fire',
-    maxHP: 420,
+    maxHP: 500,
     maxMP: 130,
     // Aggressive glass-cannon spread — STR for weapon damage, CHA for
     // Initiative/gauge regen (Inferno Surge's spend gate).
@@ -259,12 +369,18 @@ export const ENEMY_TYPES = {
       statusId: 'duelist_fury',
       mods: { AttackPower: 30, CritChance: 15, Resilience: 20 },
       unlockSkills: ['ember_wildfire_unleashed'],
+      // Only Rime's death enrages Ember — not a lava/ice spawn's.
+      onlyFromTypes: ['ice_duelist'],
+      // Burst + a STANDING tint pulse on the portrait for as long as she
+      // stays enraged — the buff is permanent, so a one-shot flash would
+      // read as 'that already finished'. Fire orange for Ember.
+      vfx: { kind: 'warcry', tint: 0xff5522 },
     },
   },
 
   ice_duelist: {
     skin: 'portrait_lesse_duelist_ice',
-    maxHP: 420,
+    maxHP: 500,
     maxMP: 130,
     // Controlled/defensive spread — DEX for Accuracy, WIS for Initiative
     // (via CharacterBuilder's derived formula) and MP.
@@ -281,16 +397,56 @@ export const ENEMY_TYPES = {
       statusId: 'duelist_fury',
       mods: { AttackPower: 30, CritChance: 15, Resilience: 20 },
       unlockSkills: ['rime_eternal_frost'],
+      // Only Ember's death enrages Rime.
+      onlyFromTypes: ['fire_duelist'],
+      // Same treatment, opposite element — ice blue for Rime.
+      vfx: { kind: 'warcry', tint: 0x66ccff },
     },
   },
 
+  // Laki — encounter 4's third beast. An owl built around Disorient, which is
+  // the MP-pressure family (T1 raises the party's skill costs, T2 drains MP at
+  // the start of their turn), so she attacks the party's RESOURCES while Oskar
+  // and Kiro attack their health. Evasive and light rather than tanky.
+  //
+  // tags: ['beast'] matters mechanically, not just thematically —
+  // _playAttackVFX checks the beast tag BEFORE weaponType, so without it her
+  // stat-equipping weapon would route her through dagger VFX (the exact bug
+  // Oskar and Kiro had; see project_weapon_vfx_systematic_plan).
+  beast_laki: {
+    skin: 'portrait_laki',
+    maxHP: 270,
+    maxMP: 90,
+    baseStats: { STR: 9, DEX: 14, CON: 10, INT: 8, WIS: 10, CHA: 8 },
+    derivedBonus: { Evasion: 30, ElementalResist: 10 },
+    skills: [
+      'laki_piercing_screech',
+      'laki_silent_dive',
+      'laki_hooting_taunt',
+      'laki_night_eyes',
+      'laki_startle',
+      'basic_attack',
+    ],
+    aiProfile: 'laki_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  // HP ladder raised across Gorrek and all five Reckoning tiers. Measured
+  // EFFECTIVE HP (raw / (1 - average resist)) showed he was not actually the
+  // hardest content: Reckoning V sat at ~3.7k against encounter 4's Reckoning
+  // III at ~4.9k, and even base Gorrek came in under base encounters 4 and 5.
+  // A single target is also easier to focus than a group at equal totals, so
+  // he needs a margin, not parity. His resist ladder already escalates hard
+  // (70% physical by R5), which multiplies whatever raw HP he carries.
   berserker_boss: {
     skin: 'portrait_gorrek',
     // Was 420, then 650 — user playtested 650/-20% and still found the fight
     // resolving too fast in both directions (easy wins and near-wipes).
     // Raised again so it buys more turns of real counterplay instead of a
     // burst-then-grind pattern (see project_encounter6_rework memory).
-    maxHP: 850,
+    maxHP: 1000,
     maxMP: 150,
     // Flat per-turn MP regen (see _placeEnemies in CombatScene.js) — his
     // whole kit costs MP with no free option otherwise, so he'd eventually
@@ -355,7 +511,7 @@ export const ENEMY_TYPES = {
   // else is numbers-only scaling on the same 11-skill base kit.
   berserker_boss_reckoning_1: {
     skin: 'portrait_gorrek',
-    maxHP: 950,
+    maxHP: 1480,
     maxMP: 150,
     mpRegenPerTurn: 12,
     damageMultiplierPct: -37.5,
@@ -375,7 +531,7 @@ export const ENEMY_TYPES = {
   },
   berserker_boss_reckoning_2: {
     skin: 'portrait_gorrek',
-    maxHP: 1050,
+    maxHP: 1780,
     maxMP: 150,
     mpRegenPerTurn: 12,
     damageMultiplierPct: -35,
@@ -395,7 +551,7 @@ export const ENEMY_TYPES = {
   },
   berserker_boss_reckoning_3: {
     skin: 'portrait_gorrek',
-    maxHP: 1150,
+    maxHP: 2080,
     maxMP: 150,
     mpRegenPerTurn: 12,
     damageMultiplierPct: -32.5,
@@ -415,7 +571,7 @@ export const ENEMY_TYPES = {
   },
   berserker_boss_reckoning_4: {
     skin: 'portrait_gorrek',
-    maxHP: 1250,
+    maxHP: 2380,
     maxMP: 150,
     mpRegenPerTurn: 12,
     damageMultiplierPct: -30,
@@ -440,7 +596,7 @@ export const ENEMY_TYPES = {
   },
   berserker_boss_reckoning_5: {
     skin: 'portrait_gorrek',
-    maxHP: 1350,
+    maxHP: 2680,
     maxMP: 150,
     mpRegenPerTurn: 12,
     damageMultiplierPct: -27.5,

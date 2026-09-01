@@ -138,12 +138,16 @@ export default class StashOverlay extends Phaser.Scene {
 
   // ── Render both lists ──
   _refresh(tribeId, lx, rx, TOP_Y, PANEL_H, COL_W) {
-    this._scrollLeft  = 0;
-    this._scrollRight = 0;
+    // Hold both scroll positions across the rebuild. Every transfer re-enters
+    // this method, and resetting to 0 here snapped the player back to the top
+    // of the list on each item moved — painful when working halfway down a
+    // long stash. Re-applied through _setScrollLeft/_setScrollRight at the
+    // end, once the new maxima are known, so they clamp naturally as a list
+    // grows or shrinks by a row (including scrolling past a now-shorter list).
+    const prevScrollL = this._scrollLeft  || 0;
+    const prevScrollR = this._scrollRight || 0;
     this.leftList.removeAll(true);
     this.rightList.removeAll(true);
-    this.leftList.y  = 0;
-    this.rightList.y = 0;
 
     const globalItems = GameState.inventory;
     const stashItems  = GameState.getStash(tribeId);
@@ -174,6 +178,8 @@ export default class StashOverlay extends Phaser.Scene {
 
     this._scrollMaxL = Math.max(0, leftHeight  - PANEL_H);
     this._scrollMaxR = Math.max(0, rightHeight - PANEL_H);
+    this._setScrollLeft(prevScrollL);
+    this._setScrollRight(prevScrollR);
   }
 
   // Returns total content height so caller can set scroll max

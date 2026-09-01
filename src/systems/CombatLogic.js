@@ -1151,7 +1151,7 @@ function convertDamageType(physical, elemental, necrotic, conv, labelSuffix = ''
 //   - Le'sse ring skills (Elemental Overload/Raw Force/Sever Spirit) set a
 //     one-turn combatMods flag that collapses the ENTIRE hit into one type.
 //   - Zafaar/Elseth ring affixes (gearEffects.procX) are chance-per-hit: a
-//     flat +20 of one type, or a straight damage double.
+//     flat +10 of one type, or a straight damage double.
 // Elseth ring flat-damage procs (procPhysFlat/procElemFlat/procNecroFlat) —
 // a Tier-2-style rider: needs to land AFTER the skill's own weapon% (a big
 // skillPct shouldn't touch a flat +20) but BEFORE combat buffs/crit (so both
@@ -1166,19 +1166,26 @@ function applyJewelryFlatProcs(physical, elemental, necrotic, attacker, opts = {
   const silent = !!opts.silent;
   const ge = attacker?.gearEffects || {};
   const roll = () => (Phaser?.Math?.Between ? Phaser.Math.Between(1, 100) : Math.floor(Math.random() * 100) + 1);
-  const PROC_FLAT = 20;
+  // Halved from 20. Two reasons: +20 was simply a large flat add next to an
+  // ~11-15 base hit, and — verified by counting the roll itself — this procs
+  // ONCE PER STRIKE, not once per cast. A multi-strike skill therefore gets a
+  // separate roll per hit (Twin Fang 2, a five-cut Arterial Rush 5), so at a
+  // 5% affix a full Rush lands one ~23% of the time and can land several.
+  // The per-strike roll is correct and intentional; the payload was the part
+  // that made it outsized.
+  const PROC_FLAT = 10;
 
   if ((ge.procPhysFlat || 0) > 0 && roll() <= ge.procPhysFlat) {
     physical += PROC_FLAT;
-    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 physical', flat: PROC_FLAT }); } catch { } }
+    if (!silent) { try { _pushBreakdown({ label: `ring proc: +${PROC_FLAT} physical`, flat: PROC_FLAT }); } catch { } }
   }
   if ((ge.procElemFlat || 0) > 0 && roll() <= ge.procElemFlat) {
     elemental += PROC_FLAT;
-    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 elemental', flat: PROC_FLAT }); } catch { } }
+    if (!silent) { try { _pushBreakdown({ label: `ring proc: +${PROC_FLAT} elemental`, flat: PROC_FLAT }); } catch { } }
   }
   if ((ge.procNecroFlat || 0) > 0 && roll() <= ge.procNecroFlat) {
     necrotic += PROC_FLAT;
-    if (!silent) { try { _pushBreakdown({ label: 'ring proc: +20 necrotic', flat: PROC_FLAT }); } catch { } }
+    if (!silent) { try { _pushBreakdown({ label: `ring proc: +${PROC_FLAT} necrotic`, flat: PROC_FLAT }); } catch { } }
   }
 
   return { physical, elemental, necrotic };

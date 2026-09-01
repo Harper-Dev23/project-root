@@ -179,7 +179,14 @@ export const PANEL_STYLES = {
 // ---- Button Styles -------------------------------------------
 // Used by Button.js createButton(). Silver resting state → crimson on hover.
 export const BUTTON_STYLES = {
-  // Standard interactive button — silver outline, crimson hover
+  // Standard interactive button — silver outline, BRIGHT SILVER hover.
+  // Hover used to be crimson, which read as a warning/destructive cue on
+  // ordinary buttons. Amber-gold is already spoken for as the SELECTED state
+  // (see UIButton._applyState), so hover lifts toward white instead: the
+  // resting silver simply brightens, which reads as "this is under the
+  // cursor" without implying anything about what the button does. The
+  // `danger` and `confirm` styles below keep their red/green hovers, since
+  // there the colour genuinely carries meaning.
   primary: {
     fill:             0x1c1c1c,
     fillAlpha:        0.92,
@@ -190,10 +197,10 @@ export const BUTTON_STYLES = {
     cornerColor:      0x8890a8,   // steel blue-silver ornament
     cornerAlpha:      0.8,
     textColor:        '#b8bccf',  // silver text
-    hoverFill:        0x280d0d,   // dark crimson fill
-    hoverStroke:      0xaa2222,   // crimson border
-    hoverTextColor:   '#ff9999',  // warm crimson text
-    hoverCornerColor: 0xcc3333,
+    hoverFill:        0x2a2f3a,   // lifted slate
+    hoverStroke:      0xc8d0e4,   // bright silver border
+    hoverTextColor:   '#ffffff',  // white text
+    hoverCornerColor: 0xdfe6f5,
     padX: 18,
     padY:  8,
   },

@@ -133,9 +133,9 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     if (misc.procDoubleDamage) lines.push(`  • ${misc.procDoubleDamage}% Chance: Double Damage`);
     if (misc.procHalfDamageTaken) lines.push(`  • ${misc.procHalfDamageTaken}% Chance: Halve Damage Taken`);
     if (misc.procHealOnHeal) lines.push(`  • ${misc.procHealOnHeal}% Chance: Double Heal`);
-    if (misc.procPhysFlat) lines.push(`  • ${misc.procPhysFlat}% Chance: +20 Physical Damage`);
-    if (misc.procElemFlat) lines.push(`  • ${misc.procElemFlat}% Chance: +20 Elemental Damage`);
-    if (misc.procNecroFlat) lines.push(`  • ${misc.procNecroFlat}% Chance: +20 Necrotic Damage`);
+    if (misc.procPhysFlat) lines.push(`  • ${misc.procPhysFlat}% Chance: +10 Physical Damage`);
+    if (misc.procElemFlat) lines.push(`  • ${misc.procElemFlat}% Chance: +10 Elemental Damage`);
+    if (misc.procNecroFlat) lines.push(`  • ${misc.procNecroFlat}% Chance: +10 Necrotic Damage`);
   }
 
   // Falls back to base.grantsSkills (view already spreads it in) for items

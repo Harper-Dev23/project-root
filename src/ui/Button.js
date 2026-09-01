@@ -110,9 +110,12 @@ export default class UIButton extends Phaser.GameObjects.Container {
 
     this.on('pointerover', () => {
       if (!this._isSelected) {
-        this.background.setFillStyle(0x280d0d);
-        this.background.setStrokeStyle(1.5, 0xaa2222);
-        this.text.setStyle({ color: '#ff9999' });
+        // Bright silver, not crimson — see BUTTON_STYLES.primary in styles.js
+        // for why. Amber-gold below is the SELECTED state, so hover has to be
+        // a different axis: the resting silver simply gets brighter.
+        this.background.setFillStyle(0x2a2f3a);
+        this.background.setStrokeStyle(1.5, 0xc8d0e4);
+        this.text.setStyle({ color: '#ffffff' });
       }
     });
     this.on('pointerout', () => this._applyState());

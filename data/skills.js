@@ -903,23 +903,40 @@ const NPC_ONLY_SKILLS = {
     id: 'fighter_heavy_slash',
     name: 'Heavy Slash',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack','expose'],
     // buildupHint added — see project_encounter3_vfx_sfx_pass. Mirrors the
     // flat buildup this already applies; static field is what
     // CombatScene._dominantBuildupFamily reads for attack-VFX tint, invisible
     // to it before this since it only saw the runtime apply() return.
     buildupHint: { expose: 90 },
-    apply: () => ({ amount: 6, buildup: { expose: 90 } }),
-    description: "Deals 6 damage and applies 90 Expose buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.fighter_heavy_slash;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 66, skillLabel: `${ability?.name || 'Skill'} weapon damage (66%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 90 } };
+    },
+    description: "Deals 66% weapon damage and applies 90 Expose buildup."
   },
   'fighter_guarded_blow': {
     id: 'fighter_guarded_blow',
     name: 'Guarded Blow',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 4,
     cooldown: 2,
@@ -937,9 +954,22 @@ const NPC_ONLY_SKILLS = {
     // already uses for its own party-wide buff below.
     apply: (user, target, scene) => {
       scene?._addStatusEffects?.(user, [{ id: 'fighter_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }]);
-      return { amount: 3, buildup: { cold: 60 } };
+      const ability = SKILLS?.fighter_guarded_blow;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 33, skillLabel: `${ability?.name || 'Skill'} weapon damage (33%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { cold: 60 } };
     },
-    description: "Deals 3 damage and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
+    description: "Deals 33% weapon damage as Cold and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist)."
   },
   'fighter_taunt': {
     id: 'fighter_taunt',
@@ -962,15 +992,31 @@ const NPC_ONLY_SKILLS = {
     id: 'fighter_executioner',
     name: "Executioner's Strike",
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack','expose','consume'],
     requiresWeakness: { family: 'expose', tier: 2 },
-    apply: () => ({ amount: 11, consumeWeakness: ['expose'] }),
-    description: "Requires the target to be Flayed (Expose T2+). Deals 11 damage and consumes their Expose buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.fighter_executioner;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 121, skillLabel: `${ability?.name || 'Skill'} weapon damage (121%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['expose'] };
+    },
+    description: "Requires the target to be Flayed (Expose T2+). Deals 121% weapon damage and consumes their Expose buildup."
   },
 
   // Chad's signature — arms itself via the fighter_dummy AI profile (same
@@ -1118,6 +1164,7 @@ const NPC_ONLY_SKILLS = {
     id: 'healer_flame_flick',
     name: 'Flame Flick',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 3,
     cooldown: 1,
@@ -1129,10 +1176,25 @@ const NPC_ONLY_SKILLS = {
     // see project_weapon_vfx_systematic_plan), so without this tag his one
     // real attack skill would render as a melee puncture pop instead of a
     // fire bolt. See project_encounter3_vfx_sfx_pass.
-    tags: ['ranged', 'attack', 'fire', 'projectile'],
+    tags: ['ranged','attack','fire','projectile'],
     buildupHint: { fire: 70 },
-    apply: () => ({ amount: 3, buildup: { fire: 70 } }),
-    description: "Deals 3 damage and applies 70 Fire buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.healer_flame_flick;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 27, skillLabel: `${ability?.name || 'Skill'} weapon damage (27%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { fire: 70 } };
+    },
+    description: "Deals 27% weapon damage as Fire and applies 70 Fire buildup."
   },
 
   // Stan's signature — real heal pipeline (calculateHealRoll/
@@ -1189,15 +1251,32 @@ const NPC_ONLY_SKILLS = {
     id: 'warlock_hex',
     name: 'Hex',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['ranged','attack','curse','necrotic'],
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { curse: 100 },
-    apply: () => ({ amount: 2, buildup: { curse: 100 } }),
-    description: "Deals 2 damage and applies 100 Curse buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.warlock_hex;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 25, skillLabel: `${ability?.name || 'Skill'} weapon damage (25%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { curse: 100 } };
+    },
+    description: "Deals 25% weapon damage as Necrotic and applies 100 Curse buildup."
   },
   'warlock_drain_life': {
     id: 'warlock_drain_life',
@@ -1281,16 +1360,33 @@ const NPC_ONLY_SKILLS = {
     id: 'warlock_dark_bolts',
     name: 'Dark Bolts',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 4,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['ranged','attack','disease','necrotic'],
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { disease: 70 },
-    apply: () => ({ amount: 3, buildup: { disease: 70 } }),
-    description: "Deals 3 damage and applies 70 Disease buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.warlock_dark_bolts;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 38, skillLabel: `${ability?.name || 'Skill'} weapon damage (38%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { disease: 70 } };
+    },
+    description: "Deals 38% weapon damage as Necrotic and applies 70 Disease buildup."
   },
   'warlock_curse_amplify': {
     id: 'warlock_curse_amplify',
@@ -1366,37 +1462,71 @@ const NPC_ONLY_SKILLS = {
     id: 'ranger_quick_shot',
     name: 'Quick Shot',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 3,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['ranged','attack','projectile','expose'],
     // buildupHint added — see fighter_heavy_slash's comment above. Bow's own
     // VFX (_playBowArrowVFX) always flies as an arrow regardless of tags, so
     // this only affects tint, not shape.
     buildupHint: { expose: 60 },
-    apply: () => ({ amount: 4, buildup: { expose: 60 } }),
-    description: "Deals 4 damage and applies 60 Expose buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.ranger_quick_shot;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 34, skillLabel: `${ability?.name || 'Skill'} weapon damage (34%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 60 } };
+    },
+    description: "Deals 34% weapon damage and applies 60 Expose buildup."
   },
   'ranger_frost_arrow': {
     id: 'ranger_frost_arrow',
     name: 'Frost Arrow',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['ranged','attack','projectile','cold'],
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { cold: 90 },
-    apply: () => ({ amount: 4, buildup: { cold: 90 } }),
-    description: "Deals 4 damage and applies 90 Cold buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.ranger_frost_arrow;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 34, skillLabel: `${ability?.name || 'Skill'} weapon damage (34%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { cold: 90 } };
+    },
+    description: "Deals 34% weapon damage as Cold and applies 90 Cold buildup."
   },
   'ranger_volley': {
     id: 'ranger_volley',
     name: 'Volley',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 8,
     cooldown: 2,
@@ -1409,26 +1539,58 @@ const NPC_ONLY_SKILLS = {
       // read the raw roster directly instead of the same filtered candidate
       // list the AI's own primary-target selection already respects.
       const foes = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
+      const ability = SKILLS?.ranger_volley;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 25, skillLabel: `${ability?.name || 'Skill'} weapon damage (25%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // Splash kept at the original 2:3 ratio to the primary hit.
+      const splashAmount = Math.max(1, Math.floor(amount * 0.67));
       return {
-        amount: 3,
-        splash: foes.map(t => ({ target: t, amount: 2 }))
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        splash: foes.map(t => ({ target: t, amount: splashAmount, tags: ability?.tags })),
       };
     },
-    description: "Deals 3 damage to the target and 2 damage to every other party member."
+    description: "Deals 25% weapon damage to the target and 67% of that to every other party member."
   },
   'ranger_aimed_shot': {
     id: 'ranger_aimed_shot',
     name: 'Aimed Shot',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 8,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['ranged','attack','projectile','expose','consume'],
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 7, consumeWeakness: ['expose'] }),
-    description: "Requires the target to be Exposed (T1+). Deals 7 damage and consumes their Expose buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.ranger_aimed_shot;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 59, skillLabel: `${ability?.name || 'Skill'} weapon damage (59%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['expose'] };
+    },
+    description: "Requires the target to be Exposed (T1+). Deals 59% weapon damage and consumes their Expose buildup."
   },
 
   // Doug's signature — needs BOTH triggers (himself hit directly, OR a
@@ -1481,6 +1643,7 @@ const NPC_ONLY_SKILLS = {
     id: 'rogue_poisoned_knife',
     name: 'Poisoned Knife',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 3,
     cooldown: 1,
@@ -1489,30 +1652,55 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { toxic: 70 },
-    apply: (_user, target) => {
+    apply: (user, target) => {
       const exposeTier = target?.weakness?.tiers?.expose || 0;
-      const base = { amount: 3, buildup: { toxic: 70 } };
-      if (exposeTier >= 1) {
-        base.buildup.toxic += 40;
-      }
-      return base;
+      const ability = SKILLS?.rogue_poisoned_knife;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 37, skillLabel: `${ability?.name || 'Skill'} weapon damage (37%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const toxic = 70 + (exposeTier >= 1 ? 40 : 0);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { toxic } };
     },
-    description: "Deals 3 damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+)."
+    description: "Deals 37% weapon damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+)."
   },
   'rogue_hamstring': {
     id: 'rogue_hamstring',
     name: 'Hamstring',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack','lacerate'],
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { lacerate: 80 },
-    apply: () => ({ amount: 5, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -10 }, vfx: { kind: 'debuff_decrease' } }] }),
-    description: "Deals 5 damage and applies 80 Lacerate buildup. Slows the target (-10 Initiative for 2 turns)."
+    apply: (user, target) => {
+      const ability = SKILLS?.rogue_hamstring;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 62, skillLabel: `${ability?.name || 'Skill'} weapon damage (62%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 80 }, statusEffects: [{ id: 'slowed', turns: 2, mods: { Initiative: -3 } }] };
+    },
+    description: "Deals 62% weapon damage and applies 80 Lacerate buildup. Slows the target (-3 Initiative for 2 turns)."
   },
   'rogue_evasion': {
     id: 'rogue_evasion',
@@ -1538,26 +1726,44 @@ const NPC_ONLY_SKILLS = {
     id: 'rogue_sneak_attack',
     name: 'Sneak Attack',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 7,
     cooldown: 1,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack'],
     requiresWeakness: { family: 'expose', tier: 1 },
-    apply: () => ({ amount: 9 }),
-    description: "Requires the target to be Exposed (T1+). Deals 9 damage."
+    apply: (user, target) => {
+      const ability = SKILLS?.rogue_sneak_attack;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 111, skillLabel: `${ability?.name || 'Skill'} weapon damage (111%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
+    },
+    description: "Requires the target to be Exposed (T1+). Deals 111% weapon damage."
   },
   'rogue_finishing_strike': {
     id: 'rogue_finishing_strike',
     name: 'Finishing Strike',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 10,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack','consume'],
     canExecute: ({ target }) => {
       if (!target?.weakness?.tiers) return { ok: false };
       const tiers = target.weakness.tiers;
@@ -1565,8 +1771,22 @@ const NPC_ONLY_SKILLS = {
       const count = families.reduce((n, fam) => n + ((tiers[fam] || 0) >= 1 ? 1 : 0), 0);
       return count >= 2 ? true : { ok: false, reason: `${target.name} lacks layered weaknesses.` };
     },
-    apply: () => ({ amount: 13, consumeWeakness: ['expose', 'toxic'] }),
-    description: "Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 13 damage and consumes their Expose and Toxic buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.rogue_finishing_strike;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 160, skillLabel: `${ability?.name || 'Skill'} weapon damage (160%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['expose', 'toxic'] };
+    },
+    description: "Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 160% weapon damage and consumes their Expose and Toxic buildup."
   },
 
   // Mo's signature — redesigned onto 'pre_hit' (see Guardian's Stand's
@@ -1618,26 +1838,44 @@ const NPC_ONLY_SKILLS = {
     id: 'rogue_curse_twist',
     name: 'Curse Twist',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 3,
     cooldown: 2,
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    tags: ['melee','attack','curse','necrotic'],
     canExecute: ({ target }) => {
       const hasRider = Array.isArray(target?.statusEffects) && target.statusEffects.some(se => se?.id === 'warlock_curse_needles');
       return hasRider ? true : { ok: false, reason: `${target?.name || 'Target'} isn't afflicted by Curse of Needles.` };
     },
     // buildupHint added — see fighter_heavy_slash's comment above.
     buildupHint: { curse: 50 },
-    apply: () => ({ amount: 4, buildup: { curse: 50 } }),
-    description: "Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.rogue_curse_twist;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 49, skillLabel: `${ability?.name || 'Skill'} weapon damage (49%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToNecroPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { curse: 50 } };
+    },
+    description: "Requires the target already afflicted by Curse of Needles. Deals 49% weapon damage as Necrotic and applies 50 Curse buildup."
   },
 
   'wizard_arcane_bolt': {
     id: 'wizard_arcane_bolt',
     name: 'Arcane Bolt',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'bonus',
     mpCost: 3,
     enemyOnly: true,
@@ -1645,15 +1883,31 @@ const NPC_ONLY_SKILLS = {
     targetRequirement: 'enemy',
     // 'projectile' + buildupHint added — see healer_flame_flick's comment
     // above; Lenny is also a staff caster with the same gap.
-    tags: ['ranged', 'attack', 'lightning', 'projectile'],
+    tags: ['ranged','attack','lightning','projectile'],
     buildupHint: { lightning: 60 },
-    apply: () => ({ amount: 4, buildup: { lightning: 60 } }),
-    description: "Deals 4 damage and applies 60 Lightning buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.wizard_arcane_bolt;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 39, skillLabel: `${ability?.name || 'Skill'} weapon damage (39%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { lightning: 60 } };
+    },
+    description: "Deals 39% weapon damage as Lightning and applies 60 Lightning buildup."
   },
   'wizard_static_field': {
     id: 'wizard_static_field',
     name: 'Static Field',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 5,
     cooldown: 1,
@@ -1661,10 +1915,25 @@ const NPC_ONLY_SKILLS = {
     requiresTarget: true,
     targetRequirement: 'enemy',
     // 'projectile' + buildupHint added — see healer_flame_flick's comment above.
-    tags: ['ranged', 'attack', 'lightning', 'projectile'],
+    tags: ['ranged','attack','lightning','projectile'],
     buildupHint: { lightning: 90 },
-    apply: () => ({ amount: 4, buildup: { lightning: 90 } }),
-    description: "Deals 4 damage and applies 90 Lightning buildup."
+    apply: (user, target) => {
+      const ability = SKILLS?.wizard_static_field;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 39, skillLabel: `${ability?.name || 'Skill'} weapon damage (39%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, buildup: { lightning: 90 } };
+    },
+    description: "Deals 39% weapon damage as Lightning and applies 90 Lightning buildup."
   },
   'wizard_mana_shield': {
     id: 'wizard_mana_shield',
@@ -1685,6 +1954,7 @@ const NPC_ONLY_SKILLS = {
     id: 'wizard_overload',
     name: 'Overload',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 8,
     cooldown: 2,
@@ -1695,9 +1965,24 @@ const NPC_ONLY_SKILLS = {
     // 'projectile' added — see healer_flame_flick's comment above. Also
     // carries 'lightning' so the tag-fallback in _dominantBuildupFamily
     // still tints it even though this skill grants no NEW buildup itself.
-    tags: ['ranged', 'attack', 'lightning', 'projectile'],
-    apply: () => ({ amount: 9, consumeWeakness: ['lightning'] }),
-    description: "Requires the target to be Zapped (Lightning T1+). Deals 9 damage and consumes their Lightning buildup."
+    tags: ['ranged','attack','lightning','projectile'],
+    apply: (user, target) => {
+      const ability = SKILLS?.wizard_overload;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 88, skillLabel: `${ability?.name || 'Skill'} weapon damage (88%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, isMagic: true, consumeWeakness: ['lightning'] };
+    },
+    description: "Requires the target to be Zapped (Lightning T1+). Deals 88% weapon damage as Lightning and consumes their Lightning buildup."
   },
 
   // Lenny's signature — two-phase channel. Phase 1 deals no damage, just
@@ -2315,6 +2600,248 @@ const NPC_ONLY_SKILLS = {
   // typed-pipeline pass, same standard as encounter 4. All damage converts
   // fully phys→elemental (skillConversion: {physToElemPct:100}) since these
   // are cast spells, not physical sword swings, unlike Oskar/Kiro's kit.
+  // ==== Encounter 5 Reckoning: summoned adds ====
+  // Deliberately small kits. An add's job is board pressure and buildup, not
+  // damage — they exist so the player has to decide between clearing them and
+  // pushing the duelist, and so AoE shapes have something to catch. Both cost
+  // 0 MP (adds have no MP pool) and are single-target melee.
+  // ==== Laki — encounter 4's third beast (owl, Disorient) ====
+  // Disorient is the MP-pressure family: T1 raises the target's skill costs,
+  // T2 drains MP at the start of their turn. So Laki is built as attrition on
+  // the party's resources rather than their health — she is the reason a long
+  // encounter-4 fight starts running dry. Everything is typed pipeline from
+  // the start (see project_enemy_damage_pipeline_audit).
+
+  'laki_piercing_screech': {
+    id: 'laki_piercing_screech',
+    name: 'Piercing Screech',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 7,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'attack', 'aoe', 'disorient'],
+    aoe: { shape: 'party', scale: 0.6 },
+    buildupHint: { disorient: 100 },
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.laki_piercing_screech;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 70, skillLabel: `${ability?.name || 'Skill'} weapon damage (70%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const splashAmount = Math.max(1, Math.floor(amount * 0.60));
+      const others = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
+      return {
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        buildup: { disorient: 100 },
+        splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { disorient: 100 }, tags: ability?.tags })),
+      };
+    },
+    description: "A screech across the whole party — 70% weapon damage to the target, 60% of that to everyone else, and 100 Disorient buildup to all of them."
+  },
+
+  'laki_silent_dive': {
+    id: 'laki_silent_dive',
+    name: 'Silent Dive',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 5,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'disorient'],
+    buildupHint: { disorient: 60 },
+    // Her single-target payoff, and the only place her damage is real: hits
+    // harder the deeper the target is already Disoriented, so the screech
+    // above is genuine setup rather than just chip.
+    apply: (user, target) => {
+      const ability = SKILLS?.laki_silent_dive;
+      const roll = calculateDamage(user, target, ability);
+      const dTier = target?.weakness?.tiers?.disorient || 0;
+      const bonusPct = dTier >= 2 ? 60 : (dTier >= 1 ? 30 : 0);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110 + bonusPct,
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (110%${bonusPct ? ` + ${bonusPct}% Disorient tier` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: 60 } };
+    },
+    description: "Drops on one target in silence: 110% weapon damage, +30% if they are Rattled (Disorient T1) or +60% if Reeling (T2). Applies 60 Disorient buildup."
+  },
+
+  'laki_hooting_taunt': {
+    id: 'laki_hooting_taunt',
+    name: 'Maddening Hoots',
+    type: 'enemy',
+    actionCost: 'bonus',
+    mpCost: 3,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'disorient'],
+    buildupHint: { disorient: 120 },
+    // No damage at all — pure buildup. This is the skill that actually makes
+    // her a resource threat, and it costs her only a bonus action.
+    apply: (user, target, scene) => {
+      scene?._log?.(`${user?.name || 'The owl'} calls, and the sound will not sit still.`);
+      return { amount: 0, buildup: { disorient: 120 } };
+    },
+    description: "No damage — applies 120 Disorient buildup for a bonus action."
+  },
+
+  'laki_night_eyes': {
+    id: 'laki_night_eyes',
+    name: 'Night Eyes',
+    type: 'enemy',
+    actionCost: 'class',
+    mpCost: 4,
+    cooldown: 4,
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'self',
+    tags: ['support'],
+    apply: (user, _target, scene) => {
+      scene?._addStatusEffects?.(user, [{
+        id: 'laki_night_eyes', turns: 3,
+        mods: { Evasion: 25, Accuracy: 15 },
+        vfx: { kind: 'buff_increase' },
+      }]);
+      return { amount: 0 };
+    },
+    description: "Self: +25 Evasion and +15 Accuracy for 3 turns."
+  },
+
+  'laki_startle': {
+    id: 'laki_startle',
+    name: 'Startle',
+    type: 'enemy',
+    mechanic: 'reaction',
+    actionCost: 'reaction',
+    mpCost: 0,
+    cooldown: 2,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'disorient'],
+    buildupHint: { disorient: 70 },
+    // Answers a hit with noise rather than damage, in keeping with the rest
+    // of her kit — being attacked makes the party's next actions cost more.
+    apply: (user, target) => ({
+      amount: 0,
+      buildup: { disorient: 70 },
+    }),
+    // Same shape Kiro's Venom Reflex uses — `reaction: { trigger: 'self_hit' }`
+    // is the real convention; a bare `reactionTrigger` field is read by nothing.
+    reaction: {
+      trigger: 'self_hit',
+      cooldownOn: 'trigger',
+      canTrigger: () => true,
+      exec: ({ owner, attacker, scene }) => {
+        if (!attacker) return;
+        const ability = SKILLS?.laki_startle;
+        scene?._log?.(`${owner?.name || 'Laki'} erupts into a startled shriek!`);
+        scene.time?.delayedCall(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, ability, { isReaction: true, tags: ability?.tags || [] });
+        });
+      },
+    },
+    description: "Reaction: when struck, shrieks for 70 Disorient buildup on the attacker."
+  },
+
+  'lava_spawn_lash': {
+    id: 'lava_spawn_lash',
+    name: 'Molten Lash',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 0,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'fire'],
+    buildupHint: { fire: 90 },
+    apply: (user, target) => {
+      const ability = SKILLS?.lava_spawn_lash;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'fire', buildup: { fire: 90 },
+      };
+    },
+    description: "Deals 110% weapon damage as Fire and applies 90 Fire buildup."
+  },
+
+  // ==== Encounter 5 Reckoning: summoned adds ====
+  // Deliberately small kits. An add's job is board pressure and buildup, not
+  // damage — they exist so the player has to decide between clearing them and
+  // pushing the duelist, and so AoE shapes have something to catch. Both cost
+  // 0 MP (adds have no MP pool) and are single-target melee.
+  'ice_spawn_lash': {
+    id: 'ice_spawn_lash',
+    name: 'Rime Lash',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 0,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack', 'cold'],
+    buildupHint: { cold: 90 },
+    apply: (user, target) => {
+      const ability = SKILLS?.ice_spawn_lash;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+          skillConversion: { physToElemPct: 100 },
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        isMagic: true, element: 'ice', buildup: { cold: 90 },
+      };
+    },
+    description: "Deals 110% weapon damage as Ice and applies 90 Cold buildup."
+  },
+
   'fire_flame_slash': {
     id: 'fire_flame_slash',
     name: 'Flame Slash',
@@ -2870,6 +3397,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_reckless_strike',
     name: 'Reckless Strike',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 0,
     cooldown: 0,
@@ -2883,10 +3411,17 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target) => {
       const ability = SKILLS?.berserker_reckless_strike;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      return { ...roll, amount };
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
     },
     description: "A free, no-frills swing — always available, even at 0 MP."
   },
@@ -2895,6 +3430,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_crushing_blow',
     name: 'Crushing Blow',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'major',
     mpCost: 6,
     cooldown: 1,
@@ -2910,10 +3446,17 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target) => {
       const ability = SKILLS?.berserker_crushing_blow;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      return { ...roll, amount, buildup: { expose: 110, lacerate: 100 } };
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 110, lacerate: 100 } };
     },
     description: "Deals weapon damage and applies 110 Expose and 100 Lacerate buildup."
   },
@@ -2921,6 +3464,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_disrupting_roar',
     name: 'Disrupting Roar',
     type: 'enemy',
+    typedDamage: true,
     // Was 'class' — moved to 'bonus' (same pool as Bleeding Sweep below) so
     // the two full-party AoEs can no longer both fire in the same turn; they
     // used to sit on separate action pools (class + major) and the AI would
@@ -2945,9 +3489,16 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_disrupting_roar;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       // 70% splash — matches the convention every other AoE in the game
       // uses (Barbed Bloom, etc.). Was a flat 100% copy of the primary's
       // own hit to the ENTIRE party, no discount at all — a big piece of
@@ -2958,6 +3509,7 @@ const NPC_ONLY_SKILLS = {
       const others = (scene?._getTargetableEnemiesFor?.(attacker) || []).filter(u => u !== target);
       return {
         ...roll,
+        physical, elemental, necrotic,
         amount,
         buildup: { disorient: 100 },
         splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { disorient: 100 } })),
@@ -2969,6 +3521,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_bleeding_sweep',
     name: 'Bleeding Sweep',
     type: 'enemy',
+    typedDamage: true,
     // Was 'major' — see berserker_disrupting_roar's comment above for why
     // this now shares the bonus-action pool with it.
     actionCost: 'bonus',
@@ -2986,9 +3539,16 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_bleeding_sweep;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       // 70% splash — see berserker_disrupting_roar's comment above.
       const splashAmount = Math.max(1, Math.floor(amount * 0.70));
       // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
@@ -2996,6 +3556,7 @@ const NPC_ONLY_SKILLS = {
       const others = (scene?._getTargetableEnemiesFor?.(attacker) || []).filter(u => u !== target);
       return {
         ...roll,
+        physical, elemental, necrotic,
         amount,
         buildup: { lacerate: 110 },
         splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { lacerate: 110 } })),
@@ -3007,6 +3568,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_guarded_fury',
     name: 'Guarded Fury',
     type: 'enemy',
+    typedDamage: true,
     // Was 'bonus' — moved to 'major' so he has a second real major-action
     // option now that Unstoppable Rush no longer costs an action at all
     // (see its own comment below).
@@ -3030,11 +3592,18 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_guarded_fury;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       scene?._addStatusEffects?.(attacker, [{ id: 'berserker_guard', turns: 2, mods: { PhysicalResist: 15 }, vfx: { kind: 'buff_harden' } }]);
-      return { ...roll, amount, buildup: { disorient: 90 } };
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { disorient: 90 } };
     },
     description: "Deals weapon damage and applies 90 Disorient buildup, while bracing itself for 2 turns (+15 Physical Resist)."
   },
@@ -3057,6 +3626,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_death_spiral',
     name: 'Death Spiral',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'class',
     mpCost: 12,
     cooldown: 3,
@@ -3073,15 +3643,22 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target, scene) => {
       const ability = SKILLS?.berserker_death_spiral;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
       // He cuts himself open finishing the spiral — self-Lacerate buildup so
       // Reckless Harvest (his own self-Lacerate-consume skill) has real fuel
       // to work with across the fight instead of depending entirely on the
       // party's own Lacerate hits landing on him.
       scene?._applyWeaknessBuildup?.(attacker, { lacerate: 150 }, { user: attacker });
-      return { ...roll, amount, consumeWeakness: ['expose', 'lacerate'] };
+      return { ...roll, physical, elemental, necrotic, amount, consumeWeakness: ['expose', 'lacerate'] };
     },
     description: "Requires the target to be both Exposed and Lacerated (T2+ each). Deals heavy weapon damage, consumes both their Expose and Lacerate buildup, and cuts himself for 150 Lacerate buildup."
   },
@@ -3123,6 +3700,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_blood_fury',
     name: 'Blood Fury',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'reaction',
     mpCost: 4,
     cooldown: 2,
@@ -3152,10 +3730,17 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target) => {
       const ability = SKILLS?.berserker_blood_fury;
       const roll = calculateDamage(attacker, target, ability);
-      const amount = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      return { ...roll, amount, buildup: { expose: 80, disorient: 80 } };
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 100, skillLabel: `${ability?.name || 'Skill'} weapon damage (100%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { expose: 80, disorient: 80 } };
     },
     description: "Reaction: lashes back at whoever strikes him, dealing damage and building Expose and Disorient."
   },
@@ -3266,6 +3851,7 @@ const NPC_ONLY_SKILLS = {
     id: 'berserker_opportunist_strike',
     name: 'Opportunist Strike',
     type: 'enemy',
+    typedDamage: true,
     actionCost: 'free',
     mpCost: 0,
     cooldown: 1,
@@ -3276,11 +3862,20 @@ const NPC_ONLY_SKILLS = {
     apply: (attacker, target) => {
       const ability = SKILLS?.berserker_opportunist_strike;
       const roll = calculateDamage(attacker, target, ability);
-      const full = Math.max(1, applyDamageModifiers(roll.amount, attacker, target, {
-        ability, tags: ability?.tags, skipGearMultiplier: true,
-      }));
-      const amount = Math.max(1, Math.floor(full * 0.5));
-      return { ...roll, amount };
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          // Was a post-hoc Math.floor(full * 0.5). Expressed as skillPct so the
+          // halving happens inside the pipeline, where it is carried as a float
+          // and floored once at the end rather than truncating twice.
+          skillPct: 50, skillLabel: `${ability?.name || 'Skill'} weapon damage (50%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
     },
     description: "A free opportunistic jab — no action cost, only a short cooldown. Deals 50% weapon damage."
   }
@@ -10954,6 +11549,11 @@ Object.assign(RAW_SKILLS, {
     // only ever sees the pre-mitigation amount.
     critBleedPct: 50,
     critBleedTurns: 2,
+    // Also lands WITHOUT a crit once the target is Flayed (Expose T2) — the
+    // skill already requires Raw (T1) to fire at all, so pushing Expose one
+    // tier further converts this from a crit-lottery rider into a guaranteed
+    // one. Handled generically in CombatScene alongside critBleedPct.
+    bleedAlsoAtTier: { family: "expose", tierAtLeast: 2 },
     critBleedStatusId: "heartpierced",
     critBleedVfxKind: 'debuff_sick',
     apply: (attacker, target) => {
@@ -10964,6 +11564,16 @@ Object.assign(RAW_SKILLS, {
       // (Lacerate T2) — Category A, combined additively into ONE skillPct
       // (was two sequential multiplies: 1.6x then 1.3x = 208% instead of the
       // intended 190% at the Lacerate T2 cap).
+      //
+      // Briefly raised to 200 in the dagger pass and put back. That buff was
+      // justified against a measurement that counted only the immediate hit,
+      // which is the wrong basis for THIS skill twice over: Heartpierced adds
+      // a full 100% of the hit back over its two ticks, and the Power Stab it
+      // was compared to had been measured at the FLOOR of its Expose consume
+      // (100 banked, its minimum) rather than anywhere near its 400 ceiling.
+      // Measured properly, 200% + the now-guaranteed bleed put Heartpiercer at
+      // 68 total at Expose T2 versus ~33 for a best-case alternative dagger
+      // turn. The bleed already carries this skill; the base does not need to.
       const lacTier = target?.weakness?.tiers?.lacerate || 0;
       const lacPct = lacTier >= 2 ? 30 : 0;
       const skillPct = 160 + lacPct;
@@ -10982,7 +11592,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount };
     },
-    description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). On crit, inflicts Heartpierced — a 2-turn bleed dealing 50% of the hit as damage per turn."
+    description: "Heavy two-action strike, req target at least Raw (160% + Lacerate T2: +30% damage). Inflicts Heartpierced on a crit, or automatically if the target is Flayed — a 2-turn bleed dealing 50% of the hit as damage per turn."
   },
 
   'venom_bloom': {
@@ -10996,7 +11606,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "DEX",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["toxic", "necrotic"],
@@ -11140,7 +11750,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 13,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -11323,7 +11933,7 @@ Object.assign(RAW_SKILLS, {
     requiredStat: "CHA",
     requiredValue: 14,
     actionCost: "major",
-    mpCost: 5,
+    mpCost: 4,
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "curse", "necrotic"],
@@ -11580,7 +12190,7 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "necrotic", "disease", "lacerate"],
     cooldown: 3,
-    buildupHint: { lacerate: 45, disease: 45 },
+    buildupHint: { lacerate: 70, disease: 70 },
     rewardIfTierCross: [
       { family: "disease", tier: 1, grantInitiative: 6 },
       { family: "disease", tier: 2, grantInitiative: 12 },
@@ -11605,11 +12215,214 @@ Object.assign(RAW_SKILLS, {
       return {
         ...roll, physical, elemental, necrotic, amount,
         isMagic: true,
-        buildup: { lacerate: 45, disease: 45 },
+        buildup: { lacerate: 70, disease: 70 },
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage as Necrotic. Applies 45 Lacerate and 45 Disease buildup. Crossing either Bleeding/Hemorrhaging or Sickened/Plagued generates Initiative (6 at T1, 12 at T2, per family)."
+    description: "Deals 100% weapon damage as Necrotic. Applies 70 Lacerate and 70 Disease buildup. Crossing either Bleeding/Hemorrhaging or Sickened/Plagued generates Initiative (6 at T1, 12 at T2, per family)."
+  },
+
+  // ==== Dagger: the two ungated damage skills ====
+  // Both added in the dagger balance pass. The kit measured 22 skills deep but
+  // had only ONE damage skill that wasn't tied to the weakness system, and its
+  // ceiling (Silent Order, 16.4 dual-wielding) sat 26% under sword_1h's own
+  // ungated best. Every dagger skill above that number was weakness-gated, so a
+  // damage-focused build had no button to press. These two are deliberately
+  // free of requiresWeakness and of any rewardIfWeak/rewardIfTierCross scaling:
+  // their damage never depends on setup.
+
+  // Ungated payoff. Two separate strikes rather than one big number, because
+  // dagger is the kit that dual-wields — calculateDamage already folds a second
+  // weapon in at 75%/75% per swing, so a dual-wielder's two hits here inherit
+  // that automatically and a shield user still gets a clean, if smaller, hit.
+  // No hand-count branching needed: the advantage falls out of the existing
+  // rollWeaponSwing math. 2 x 80% = 160% total.
+  'twin_fang': {
+    id: "twin_fang",
+    name: "Twin Fang",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    // Resolves as two independent casts — see multiHit in CombatScene's
+    // Transpose block, which holds the charge across the whole flurry.
+    multiHit: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 14,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    cooldown: 4,
+    buildupHint: { lacerate: 50 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.twin_fang;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 80, skillLabel: 'Twin Fang weapon damage (80%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Second fang: a genuinely independent cast with its own hit-roll and
+      // its own crit roll, same architecture as Hail of Arrows' per-target
+      // shots — not shared-hit-roll splash. Two chances to crit is the point.
+      const second = SKILLS?.twin_fang_offhand;
+      scene?.time?.delayedCall(140, () => {
+        if (scene.combatEnded || target?.status === 'incapacitated') return;
+        // isSubCast belongs in the 5th arg (options); the 4th is intentOverride.
+        scene._applyAbilityToTarget(attacker, target, second, { isReaction: true, tags: second?.tags || [] }, { isSubCast: true });
+      });
+      // Both blades count as ONE attack for Transpose (2 strikes total).
+      scene?._beginMultiHit?.(attacker, 2);
+
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 25 } };
+    },
+    description: "Strikes twice, each blade rolling to hit and crit on its own. Each strike deals 80% weapon damage and applies 25 Lacerate. Needs no weakness setup."
+  },
+
+  // Not player-selectable — Twin Fang's second strike. Needs to be its own
+  // skill (not a repeat) so it gets a real independent hit-roll; twin_fang's
+  // own apply() is already spoken for by the first strike, same reason
+  // hail_of_arrows_shot exists separately from hail_of_arrows.
+  'twin_fang_offhand': {
+    id: "twin_fang_offhand",
+    name: "Twin Fang",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.twin_fang_offhand;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 80, skillLabel: 'Twin Fang weapon damage (80%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 25 } };
+    },
+    description: "Deals 80% weapon damage and applies 25 Lacerate."
+  },
+
+  // Initiative spender. Grave Strike is the kit's initiative GENERATOR (up to
+  // 24 on a double tier-cross); this is the sink that gives that generation
+  // somewhere to go. Deliberately variable: requiresInitiativeGauge gates it at
+  // one increment (the engine fizzles it for free below that, spending no
+  // action/MP), then apply() converts the banked gauge into cuts at 10 per cut,
+  // capped at 5 cuts / 50 spent.
+  //
+  // 50 is the real ceiling because players run far less Charisma than the
+  // harness's 16 — around 10 on a high-CHA build, which regenerates 11 gauge
+  // per turn. So one cut is roughly one turn banked and a full five-cut Rush
+  // is about four and a half turns of restraint. That is a heavy enough price
+  // to justify 5 x 80% = 400% total, on top of the free upside that splitting
+  // into five separate strikes carries: each cut rolls its own hit and crit
+  // and re-triggers Jolt, on-hit riders and buildup independently.
+  'arterial_rush': {
+    id: "arterial_rush",
+    name: "Arterial Rush",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    typedDamage: true,
+    // Every cut is its own cast — Transpose must cover the whole flurry.
+    multiHit: true,
+    requiredWeapon: ["dagger"],
+    requiredStat: "DEX",
+    requiredValue: 13,
+    actionCost: "major",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    cooldown: 3,
+    requiresInitiativeGauge: 10,
+    buildupHint: { lacerate: 20 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.arterial_rush;
+      const gauge = attacker?.initiativeGauge || 0;
+      const hits = Math.max(1, Math.min(5, Math.floor(gauge / 10)));
+      // Spend only what was actually converted, so leftover gauge under the
+      // next 20 threshold is banked rather than burned.
+      if (attacker) attacker.initiativeGauge = Math.max(0, gauge - hits * 10);
+
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 80, skillLabel: 'Arterial Rush weapon damage (80%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Cut 1 is this cast; the rest are independent sub-casts, each with its
+      // own hit and crit roll (see twin_fang_offhand's note).
+      const cut = SKILLS?.arterial_rush_cut;
+      for (let i = 1; i < hits; i++) {
+        scene?.time?.delayedCall(130 * i, () => {
+          if (scene.combatEnded || target?.status === 'incapacitated') return;
+          // isSubCast belongs in the 5th arg (options); the 4th is intentOverride.
+          scene._applyAbilityToTarget(attacker, target, cut, { isReaction: true, tags: cut?.tags || [] }, { isSubCast: true });
+        });
+      }
+      // One attack, N cuts: the charge drops when the last cut resolves.
+      scene?._beginMultiHit?.(attacker, hits);
+
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        buildup: { lacerate: 20 },
+        log: attacker && attacker.name
+          ? attacker.name + ' spends ' + (hits * 10) + ' Initiative — ' + hits + (hits === 1 ? ' cut!' : ' cuts!')
+          : undefined,
+      };
+    },
+    description: "Spends 10 Initiative per cut, up to 5 cuts (50 Initiative). Each cut deals 80% weapon damage, applies 20 Lacerate, and rolls to hit and crit on its own — so each can separately trigger Jolt and on-hit effects. Needs no weakness setup."
+  },
+
+  // Not player-selectable — one cut of Arterial Rush past the first.
+  'arterial_rush_cut': {
+    id: "arterial_rush_cut",
+    name: "Arterial Rush",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "lacerate"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.arterial_rush_cut;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 80, skillLabel: 'Arterial Rush weapon damage (80%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 20 } };
+    },
+    description: "Deals 80% weapon damage and applies 20 Lacerate."
   },
 
   // --- Sword (1h) --- v3.22
@@ -14314,7 +15127,16 @@ Object.assign(RAW_SKILLS, {
     // status grant, matching the description's own wording exactly
     // ("makes anyone standing in it take +20% elemental damage" — no
     // turn-based qualifier, unlike the Cold buildup line right next to it).
-    slotEffect: { id: "frozen_quake_zone", isQuakeZone: true, element: "cold", tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 63 }, immobilizes: true },
+    // The zone ALWAYS carries the elemental vulnerability; what is conditional
+    // is who it applies to. elementalVulnRequires is re-evaluated per occupant
+    // on every sync (_syncZoneElementalVuln), so the +20% lands on whoever is
+    // standing here while Zapped and lifts the moment that stops being true.
+    slotEffect: {
+      id: "frozen_quake_zone", isQuakeZone: true, element: "cold",
+      tickPctMaxHP: 0.0, turns: 2, buildupFamilies: { cold: 63 }, immobilizes: true,
+      elementalVulnPct: 20,
+      elementalVulnRequires: { family: "lightning", tierAtLeast: 1 },
+    },
     apply: (attacker, target) => {
       const ability = SKILLS?.frozen_quake;
       const roll = calculateDamage(attacker, target, ability);
@@ -14338,15 +15160,14 @@ Object.assign(RAW_SKILLS, {
       const amount = Math.max(1, physical + elemental + necrotic);
       const baseBuildup = ability?.buildupHint?.cold ?? 100;
 
-      // Lightning synergy: if the target is ALSO already Zapped (Lightning
-      // T1+) at cast time, the resulting zone additionally makes anyone
-      // standing in it take +20% elemental damage — checked once here, baked
-      // into the zone's own properties, not re-checked per occupant later.
-      const lightningTier = target?.weakness?.tiers?.lightning || 0;
-      const slotEffect = ability?.slotEffect ? {
-        ...ability.slotEffect,
-        ...(lightningTier >= 1 ? { elementalVulnPct: 20 } : {}),
-      } : undefined;
+      // Lightning synergy used to be snapshotted HERE, off the cast-time
+      // target's tier, and baked into the zone permanently — so the zone's
+      // behaviour depended on someone who might since have died or walked
+      // away, and a newly-Zapped occupant got nothing. It is now a property
+      // of the zone (elementalVulnRequires) evaluated against whoever is
+      // actually standing in it, matching Plague Slam's fire proc and
+      // Sanctified Slam's MP payout. Same shape, all three zones.
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
 
       return {
         ...roll,
@@ -14357,7 +15178,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Requires Cold T1. Deals 95% weapon damage, smashing a frost crack beneath a single foe and leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +63 Cold buildup at the end of their turn. If the target is also Zapped (Lightning T1+), the zone also makes anyone standing in it take +20% elemental damage."
+    description: "Requires Cold T1. Deals 95% weapon damage, smashing a frost crack beneath a single foe and leaving a chilling hazard zone for 2 turns. Enemies standing in the zone are immobilized and suffer +63 Cold buildup at the end of their turn. Anyone standing in the zone while Zapped (Lightning T1+) takes +20% elemental damage, checked continuously rather than at cast time."
   },
 
   'fel_chant': {
@@ -15315,7 +16136,13 @@ Object.assign(RAW_SKILLS, {
     tags: ["melee", "attack", "lightning", "holy", "terrain"],
     cooldown: 2,
     buildupHint: { lightning: 50 },
-    // Zone spawned only if target has lightning t1+: yellow tint, attackers hitting enemies in it gain 2 MP
+    // The zone is now spawned UNCONDITIONALLY — consecrating the ground is
+    // what the slam does. What used to gate the zone's existence (target at
+    // Lightning T1+) instead gates its PAYOUT, via onHitMpRequires below:
+    // anyone hitting a target standing here gets the MP only while that
+    // target is Zapped. Reads more intuitively than "the slam sometimes
+    // leaves no ground at all", and means the ground is worth placing before
+    // the buildup has landed rather than only after.
     slotEffect: {
       id: "sanctified_quake_zone",
       isQuakeZone: true,
@@ -15323,6 +16150,9 @@ Object.assign(RAW_SKILLS, {
       tickPctMaxHP: 0.0,
       turns: 2,
       onHitMpGain: 2,
+      // Declarative, not hardcoded to lightning in the engine — any future
+      // zone can gate its MP payout on any weakness family/tier.
+      onHitMpRequires: { family: "lightning", tierAtLeast: 1 },
     },
     apply: (attacker, target) => {
       const ability = SKILLS?.sanctified_slam;
@@ -15344,10 +16174,10 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Only drop the zone if target already has lightning weakness t1+
-      const slotEffect = (lightningTier >= 1 && ability?.slotEffect)
-        ? { ...ability.slotEffect }
-        : undefined;
+      // Always consecrate the tile — the Lightning gate lives on the zone's
+      // MP payout now (slotEffect.onHitMpRequires), not on whether the zone
+      // gets created at all.
+      const slotEffect = ability?.slotEffect ? { ...ability.slotEffect } : undefined;
       return {
         ...roll,
         physical, elemental, necrotic, amount,
@@ -15355,7 +16185,7 @@ Object.assign(RAW_SKILLS, {
         slotEffect,
       };
     },
-    description: "Deals 100% weapon damage, +15% against a Zapped (Lightning T1+) target. If the target has Lightning weakness (T1+), consecrates the tile for 2 turns — attackers hitting enemies on it gain 2 MP per strike."
+    description: "Deals 100% weapon damage, +15% against a Zapped (Lightning T1+) target. Always consecrates the tile for 2 turns — attackers hitting an enemy standing on it gain 2 MP per strike, but only while that enemy is Zapped (Lightning T1+)."
   },
 
   'tremor_echo': {
@@ -16418,6 +17248,16 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "self",
     tags: ["support", "mana"],
     vfxHint: { kind: 'mana' },
+    // Declarative form of the same gate apply() enforces below. This is what
+    // makes the "Usable" pill hide the skill when there is nothing to pick up:
+    // the filter runs _skillIsUsable -> _abilityActorGateReason, which routes
+    // canExecute for any skill with requiresTarget:false. The apply() check
+    // stays as the real enforcement (NPCLogic reaches apply directly).
+    canExecute: ({ scene }) => (
+      (scene?.lodgesDislodgedThisTurn || 0) > 0
+        ? true
+        : { ok: false, reason: 'no lodges dislodged this turn' }
+    ),
     apply: (attacker, _target, scene) => {
       const count = scene?.lodgesDislodgedThisTurn || 0;
       if (count === 0) {

@@ -33,11 +33,29 @@ const UNLOCK_REQUIRES = {
   // every other scenario already uses. Deliberately NOT added to
   // SCENARIO_ORDER below — that array only drives refreshCombatPitFlag's
   // main-story "!" marker chain, which these are unrelated to.
+  // Every Reckoning tier hangs off its BASE fight, not off the tier below it.
+  // Beating the base fight opens all of them at once and the player may jump
+  // straight to the hardest — these are optional rematches, and chaining them
+  // turned an opt-in challenge into a grind. Ticket rewards are likewise
+  // per-tier and independent (see TICKET_REWARDS), so skipping ahead does not
+  // forfeit anything.
   'training_encounter_6_reckoning_1': 'training_encounter_6',
-  'training_encounter_6_reckoning_2': 'training_encounter_6_reckoning_1',
-  'training_encounter_6_reckoning_3': 'training_encounter_6_reckoning_2',
-  'training_encounter_6_reckoning_4': 'training_encounter_6_reckoning_3',
-  'training_encounter_6_reckoning_5': 'training_encounter_6_reckoning_4',
+  'training_encounter_6_reckoning_2': 'training_encounter_6',
+  'training_encounter_6_reckoning_3': 'training_encounter_6',
+  'training_encounter_6_reckoning_4': 'training_encounter_6',
+  'training_encounter_6_reckoning_5': 'training_encounter_6',
+  'training_encounter_2_reckoning_1': 'training_encounter_2',
+  'training_encounter_2_reckoning_2': 'training_encounter_2',
+  'training_encounter_2_reckoning_3': 'training_encounter_2',
+  'training_encounter_3_reckoning_1': 'training_encounter_3',
+  'training_encounter_3_reckoning_2': 'training_encounter_3',
+  'training_encounter_3_reckoning_3': 'training_encounter_3',
+  'training_encounter_4_reckoning_1': 'training_encounter_4',
+  'training_encounter_4_reckoning_2': 'training_encounter_4',
+  'training_encounter_4_reckoning_3': 'training_encounter_4',
+  'training_encounter_5_reckoning_1': 'training_encounter_5',
+  'training_encounter_5_reckoning_2': 'training_encounter_5',
+  'training_encounter_5_reckoning_3': 'training_encounter_5',
 };
 
 // Quest flags that must ALL be cleared before the next scenario unlocks.
@@ -79,6 +97,22 @@ const TICKET_REWARDS = {
   'training_encounter_6_reckoning_3': 50,
   'training_encounter_6_reckoning_4': 60,
   'training_encounter_6_reckoning_5': 75,
+  // Encounter 2's Reckoning tiers — the timed DPS race.
+  'training_encounter_2_reckoning_1': 15,
+  'training_encounter_2_reckoning_2': 22,
+  'training_encounter_2_reckoning_3': 32,
+  // Encounter 3's Reckoning tiers — pure toughness, no clock.
+  'training_encounter_3_reckoning_1': 20,
+  'training_encounter_3_reckoning_2': 30,
+  'training_encounter_3_reckoning_3': 45,
+  // Encounters 4 and 5 — both gain a mechanic on top of the stat scaling
+  // (an extra beast / summoned adds), so they pay a little more per tier.
+  'training_encounter_4_reckoning_1': 26,
+  'training_encounter_4_reckoning_2': 38,
+  'training_encounter_4_reckoning_3': 55,
+  'training_encounter_5_reckoning_1': 30,
+  'training_encounter_5_reckoning_2': 44,
+  'training_encounter_5_reckoning_3': 64,
 };
 
 // Quest flags auto-set on first clear of each scenario.

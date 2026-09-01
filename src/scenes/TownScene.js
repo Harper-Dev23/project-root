@@ -1747,13 +1747,8 @@ export default class TownScene extends Phaser.Scene {
         emptyMessage: 'No armor IDs found in Items.js.'
       });
 
-      createGambleButton({
-        label: 'Jewelry',
-        y: 280,
-        cost: 3,
-        poolGetter: () => getJewelryIdPool(),
-        emptyMessage: 'No jewelry IDs found in Items.js.'
-      });
+      // The Jewelry gamble button was removed on request — the bone pile now
+      // offers Weapons and Armor only.
 
       return;
     }
@@ -2975,9 +2970,31 @@ export default class TownScene extends Phaser.Scene {
     // Optional account-wide rematch tiers, keyed by base scenario id — a
     // generic map (not hardcoded to just Gorrek) so a future second/third
     // scenario can get the same tier picker just by adding an entry here.
-    // Only Gorrek has any right now.
+    // Every tier unlocks from its BASE fight alone (see ProgressionManager's
+    // SCENARIO_PREREQ) — they are not chained to each other, so a player can
+    // jump straight to the hardest tier and still earn its tickets.
     const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
     const RECKONING_TIERS = {
+      training_encounter_2: [
+        'training_encounter_2_reckoning_1',
+        'training_encounter_2_reckoning_2',
+        'training_encounter_2_reckoning_3',
+      ],
+      training_encounter_3: [
+        'training_encounter_3_reckoning_1',
+        'training_encounter_3_reckoning_2',
+        'training_encounter_3_reckoning_3',
+      ],
+      training_encounter_4: [
+        'training_encounter_4_reckoning_1',
+        'training_encounter_4_reckoning_2',
+        'training_encounter_4_reckoning_3',
+      ],
+      training_encounter_5: [
+        'training_encounter_5_reckoning_1',
+        'training_encounter_5_reckoning_2',
+        'training_encounter_5_reckoning_3',
+      ],
       training_encounter_6: [
         'training_encounter_6_reckoning_1',
         'training_encounter_6_reckoning_2',

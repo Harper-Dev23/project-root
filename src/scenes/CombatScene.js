@@ -446,6 +446,13 @@ export default class CombatScene extends Phaser.Scene {
     this.currentTurnIndex = -1;      // so _advanceTurn() moves to index 0
     this._advanceTurn();             // handles UI gating + AI on enemy turns
 
+    // That bootstrap _advanceTurn() wraps the index to 0, which counts as a
+    // new round and leaves combatRound at 2 during the party's FIRST turn.
+    // Snapshot it here so turnLimit can measure rounds actually played
+    // (combatRound - this value) instead of trusting the absolute number —
+    // comparing raw would silently cost a timed scenario one whole round.
+    this._combatStartRound = this.combatRound;
+
     // Training messaging
     if (this.isTraining && this.scenarioData) {
       this._log(`🏋️ Training: ${this.scenarioData.name}`);
@@ -1578,157 +1585,219 @@ export default class CombatScene extends Phaser.Scene {
       return;
     }
 
-    scenario.enemies.forEach(config => {
-      const template = ENEMY_TYPES[config.type];
-      if (!template) {
-        console.error(`Enemy type not found: ${config.type}`);
-        return;
+    scenario.enemies.forEach(config => this._spawnEnemy(config));
+  }
+
+  /**
+   * Builds ONE enemy from a scenario-style config and puts it on the board.
+   * Extracted verbatim out of _placeEnemies' forEach so that mid-combat
+   * summons go through the exact same construction path as initial placement
+   * — gear, derived stats and the scenario's enemyScale all apply identically.
+   * A summon differs only in what the CALLER does afterwards (turn-order
+   * insertion), which _summonEnemy handles.
+   *
+   * Returns the enemy, or null if the type or slot could not be resolved.
+   */
+  _spawnEnemy(config) {
+    const template = ENEMY_TYPES[config.type];
+    if (!template) {
+      console.error(`Enemy type not found: ${config.type}`);
+      return null;
+    }
+
+    // Normalize base stats
+    const maxHP = Number.isFinite(template.maxHP) ? template.maxHP : 1;
+    const maxMP = Number.isFinite(template.maxMP) ? template.maxMP : 0;
+
+    const enemy = {
+      ...template,                       // base stats / ai / sprites, etc.
+      type: config.type,
+      name: config.name || template.name || config.type,
+      currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
+      maxHP,
+      currentMP: maxMP,
+      maxMP,
+      slotId: config.slotId,
+      status: 'alive',
+      isEnemy: true,                     // ✅ critical flag
+      // Summon spec comes from the SCENARIO entry (falling back to the
+      // template) so each Reckoning tier can declare its own thresholds and
+      // counts without cloning the enemy type. See _checkSummonThresholds.
+      summon: config.summon ?? template.summon ?? null,
+      // An "add" is pressure, not an objective: _checkVictoryCondition
+      // ignores these, so the fight ends when the real enemies fall even if
+      // summons are still standing.
+      isAdd: !!config.isAdd,
+      team: 'enemy',
+      actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+
+      // Ensure skills is an array (some templates may omit)
+      skills: Array.isArray(template.skills) ? [...template.skills] : [],
+
+      // Initialize weakness + per-turn derived bag
+      weakness: makeWeaknessState(),
+      _weaknessDerived: { maxHPDown: 0, evasionDown: 0, initiativeSlow: 0 },
+      healingReceivedBonus: 1.0,
+      // healMissingHpBonusMax: desperation-healing dial (e.g. Gorrek) — his
+      // own healing/lifesteal received scales up linearly with missing
+      // HP%, read by _startTurnWeakness. initiativeSlowAuraPct: aura dial
+      // (e.g. Gorrek's Reckoning IV+) — flat % cut to the WHOLE opposing
+      // party's Initiative Gauge regen, read the same way. Both generic,
+      // not hardcoded to one boss.
+      healMissingHpBonusMax: Number.isFinite(template.healMissingHpBonusMax) ? template.healMissingHpBonusMax : 0,
+      initiativeSlowAuraPct: Number.isFinite(template.initiativeSlowAuraPct) ? template.initiativeSlowAuraPct : 0,
+
+      // Equipment dict (populated below if config.drops present)
+      equipment: {},
+      // baseline derived stats enemies need for DR calculation
+      derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5 },
+      // Base core stats (STR/DEX/CON/INT/WIS/CHA), optional per template —
+      // gear-rolled stat bonuses accumulate on top of this in
+      // _equipEnemyItem, same field either way. Most enemy types still
+      // have no baseStats at all (empty object), which is intentionally
+      // equivalent to their old zero-stat behavior — see the
+      // calculateDerivedStats() pass after the drops loop below.
+      totalStats: { ...(template.baseStats || {}) },
+      // Optional flat per-turn MP regen + overall damage multiplier
+      // declared directly on the enemy template (not gear-derived).
+      // mpRegenPerTurn: for MP-hungry bosses that shouldn't be able to run
+      // completely dry and stop acting — reuses the same gearEffects.
+      // mpPerTurn field _applyGearStartOfTurn already reads for everyone;
+      // _equipEnemyItem's own mpPerTurn writes stack additively on top.
+      // damageMultiplierPct: a blunt overall damage dial (e.g. -20 = 80%
+      // damage on everything) without touching stats or gear — reuses
+      // gearEffects.hiddenDamagePercent, a CombatLogic.js field that
+      // affects real damage output the same way globalDamagePercent does,
+      // but is deliberately NOT read by the character sheet's PD/ED/ND
+      // display — this is a dev balance lever, not a user-facing buff/debuff.
+      // buildupMultiplierPct: sibling dial to damageMultiplierPct above —
+      // a flat template-level bonus to buildup THIS enemy applies to
+      // others (e.g. Gorrek's Reckoning tiers), reusing the same
+      // physicalBuildupPercent field armor affixes already write into
+      // gearEffects (read generically by _applyWeaknessBuildup). Scoped to
+      // physical since every berserker_boss skill only ever applies
+      // Expose/Lacerate/Disorient — a future boss dealing a different
+      // family's buildup would need its own category field added here.
+      gearEffects: {
+        ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
+          ? { mpPerTurn: template.mpRegenPerTurn } : {}),
+        ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
+          ? { hiddenDamagePercent: template.damageMultiplierPct } : {}),
+        ...(Number.isFinite(template.buildupMultiplierPct) && template.buildupMultiplierPct !== 0
+          ? { physicalBuildupPercent: template.buildupMultiplierPct } : {}),
+      },
+    };
+
+    // Equip any configured drops (random item + rarity per entry)
+    if (Array.isArray(config.drops)) {
+      config.drops.forEach(dropCfg => {
+        this._equipEnemyItem(enemy, dropCfg);
+      });
+    }
+
+    // Resolve base + gear core stats (enemy.totalStats, now fully
+    // accumulated) through the SAME calculateDerivedStats() players use —
+    // replaces the old ad-hoc CON/WIS-only branches that used to live in
+    // _equipEnemyItem. Applied ADDITIVELY on top of the template's flat
+    // maxHP/maxMP and the zero-baseline derived stats (direct armor
+    // affixes from _derivedMods already landed in enemy.derived per-item
+    // above) — for an enemy with no baseStats and no stat-granting gear,
+    // every field here is 0 except calculateDerivedStats' own Math.max(1,...)
+    // floor on maxHP, so this is a no-op in practice for the common case.
+    {
+      const statDerived = calculateDerivedStats(enemy.totalStats || {});
+      enemy.maxHP += statDerived.maxHP;
+      enemy.currentHP = Math.min(enemy.maxHP, enemy.currentHP + statDerived.maxHP);
+      enemy.maxMP += statDerived.maxMP;
+      enemy.currentMP = Math.min(enemy.maxMP, enemy.currentMP + statDerived.maxMP);
+      enemy.derived.Accuracy += statDerived.Accuracy;
+      enemy.derived.Evasion += statDerived.Evasion;
+      enemy.derived.CritChance += statDerived.CritChance;
+      enemy.derived.PhysicalResist += statDerived.PhysicalResist;
+      enemy.derived.ElementalResist += statDerived.ElementalResist;
+      enemy.derived.NecroticResist += statDerived.NecroticResist;
+      enemy.derived.Initiative += statDerived.Initiative;
+      enemy.gearEffects = enemy.gearEffects || {};
+      enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + (statDerived.Resilience || 0);
+      enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + (statDerived.MpRegenPerTurn || 0);
+    }
+
+    // Flat "natural" derived-stat bonus baked directly into the template —
+    // e.g. Mo's 20 base Evasion, Chad's 30% PDR, Gary's 30% NDR, Lenny's
+    // 30% EDR — distinct from anything baseStats/gear would grant, so a
+    // player can identify "this enemy resists physical, go find a weakness
+    // that doesn't" instead of every enemy having a flat, uniform profile.
+    // Applied additively on top of the zero-baseline + statDerived above.
+    // Resilience isn't one of enemy.derived's fields (it lives in
+    // gearEffects.resilience, read by the weakness-buildup reduction at
+    // ~line 5893) so it's special-cased to route there instead.
+    if (template.derivedBonus) {
+      for (const [key, val] of Object.entries(template.derivedBonus)) {
+        if (!Number.isFinite(val)) continue;
+        if (key === 'Resilience') {
+          enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + val;
+        } else if (key in enemy.derived) {
+          enemy.derived[key] += val;
+        }
       }
+    }
 
-      // Normalize base stats
-      const maxHP = Number.isFinite(template.maxHP) ? template.maxHP : 1;
-      const maxMP = Number.isFinite(template.maxMP) ? template.maxMP : 0;
-
-      const enemy = {
-        ...template,                       // base stats / ai / sprites, etc.
-        type: config.type,
-        name: config.name || template.name || config.type,
-        currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
-        maxHP,
-        currentMP: maxMP,
-        maxMP,
-        slotId: config.slotId,
-        status: 'alive',
-        isEnemy: true,                     // ✅ critical flag
-        team: 'enemy',
-        actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
-
-        // Ensure skills is an array (some templates may omit)
-        skills: Array.isArray(template.skills) ? [...template.skills] : [],
-
-        // Initialize weakness + per-turn derived bag
-        weakness: makeWeaknessState(),
-        _weaknessDerived: { maxHPDown: 0, evasionDown: 0, initiativeSlow: 0 },
-        healingReceivedBonus: 1.0,
-        // healMissingHpBonusMax: desperation-healing dial (e.g. Gorrek) — his
-        // own healing/lifesteal received scales up linearly with missing
-        // HP%, read by _startTurnWeakness. initiativeSlowAuraPct: aura dial
-        // (e.g. Gorrek's Reckoning IV+) — flat % cut to the WHOLE opposing
-        // party's Initiative Gauge regen, read the same way. Both generic,
-        // not hardcoded to one boss.
-        healMissingHpBonusMax: Number.isFinite(template.healMissingHpBonusMax) ? template.healMissingHpBonusMax : 0,
-        initiativeSlowAuraPct: Number.isFinite(template.initiativeSlowAuraPct) ? template.initiativeSlowAuraPct : 0,
-
-        // Equipment dict (populated below if config.drops present)
-        equipment: {},
-        // baseline derived stats enemies need for DR calculation
-        derived: { PhysicalResist: 0, ElementalResist: 0, NecroticResist: 0, Evasion: 0, Accuracy: 0, Initiative: 0, CritChance: 0, CritMult: 1.5 },
-        // Base core stats (STR/DEX/CON/INT/WIS/CHA), optional per template —
-        // gear-rolled stat bonuses accumulate on top of this in
-        // _equipEnemyItem, same field either way. Most enemy types still
-        // have no baseStats at all (empty object), which is intentionally
-        // equivalent to their old zero-stat behavior — see the
-        // calculateDerivedStats() pass after the drops loop below.
-        totalStats: { ...(template.baseStats || {}) },
-        // Optional flat per-turn MP regen + overall damage multiplier
-        // declared directly on the enemy template (not gear-derived).
-        // mpRegenPerTurn: for MP-hungry bosses that shouldn't be able to run
-        // completely dry and stop acting — reuses the same gearEffects.
-        // mpPerTurn field _applyGearStartOfTurn already reads for everyone;
-        // _equipEnemyItem's own mpPerTurn writes stack additively on top.
-        // damageMultiplierPct: a blunt overall damage dial (e.g. -20 = 80%
-        // damage on everything) without touching stats or gear — reuses
-        // gearEffects.hiddenDamagePercent, a CombatLogic.js field that
-        // affects real damage output the same way globalDamagePercent does,
-        // but is deliberately NOT read by the character sheet's PD/ED/ND
-        // display — this is a dev balance lever, not a user-facing buff/debuff.
-        // buildupMultiplierPct: sibling dial to damageMultiplierPct above —
-        // a flat template-level bonus to buildup THIS enemy applies to
-        // others (e.g. Gorrek's Reckoning tiers), reusing the same
-        // physicalBuildupPercent field armor affixes already write into
-        // gearEffects (read generically by _applyWeaknessBuildup). Scoped to
-        // physical since every berserker_boss skill only ever applies
-        // Expose/Lacerate/Disorient — a future boss dealing a different
-        // family's buildup would need its own category field added here.
-        gearEffects: {
-          ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
-            ? { mpPerTurn: template.mpRegenPerTurn } : {}),
-          ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
-            ? { hiddenDamagePercent: template.damageMultiplierPct } : {}),
-          ...(Number.isFinite(template.buildupMultiplierPct) && template.buildupMultiplierPct !== 0
-            ? { physicalBuildupPercent: template.buildupMultiplierPct } : {}),
-        },
-      };
-
-      // Equip any configured drops (random item + rarity per entry)
-      if (Array.isArray(config.drops)) {
-        config.drops.forEach(dropCfg => {
-          this._equipEnemyItem(enemy, dropCfg);
-        });
+    // Scenario-level scaling (scenarioData.enemyScale) — how Reckoning tiers
+    // of multi-enemy encounters are built without cloning every archetype
+    // into N near-identical templates. Deliberately MULTIPLICATIVE on HP and
+    // ADDITIVE on resists, applied on top of the template's own derivedBonus
+    // above, so each archetype keeps its identity (the fighter stays the
+    // physical wall, the wizard the elemental one) instead of every enemy
+    // collapsing to one uniform profile at higher tiers.
+    const eScale = this.scenarioData?.enemyScale;
+    if (eScale) {
+      // Adds are skipped here as well as on resists: a summon spec sets its
+      // own maxHP per tier (maxHPOverride below), so multiplying it again
+      // would double-apply tier scaling and undo that explicit control.
+      if (Number.isFinite(eScale.hpMult) && eScale.hpMult > 0 && !enemy.isAdd) {
+        enemy.maxHP = Math.max(1, Math.round(enemy.maxHP * eScale.hpMult));
+        enemy.currentHP = enemy.maxHP;
       }
-
-      // Resolve base + gear core stats (enemy.totalStats, now fully
-      // accumulated) through the SAME calculateDerivedStats() players use —
-      // replaces the old ad-hoc CON/WIS-only branches that used to live in
-      // _equipEnemyItem. Applied ADDITIVELY on top of the template's flat
-      // maxHP/maxMP and the zero-baseline derived stats (direct armor
-      // affixes from _derivedMods already landed in enemy.derived per-item
-      // above) — for an enemy with no baseStats and no stat-granting gear,
-      // every field here is 0 except calculateDerivedStats' own Math.max(1,...)
-      // floor on maxHP, so this is a no-op in practice for the common case.
-      {
-        const statDerived = calculateDerivedStats(enemy.totalStats || {});
-        enemy.maxHP += statDerived.maxHP;
-        enemy.currentHP = Math.min(enemy.maxHP, enemy.currentHP + statDerived.maxHP);
-        enemy.maxMP += statDerived.maxMP;
-        enemy.currentMP = Math.min(enemy.maxMP, enemy.currentMP + statDerived.maxMP);
-        enemy.derived.Accuracy += statDerived.Accuracy;
-        enemy.derived.Evasion += statDerived.Evasion;
-        enemy.derived.CritChance += statDerived.CritChance;
-        enemy.derived.PhysicalResist += statDerived.PhysicalResist;
-        enemy.derived.ElementalResist += statDerived.ElementalResist;
-        enemy.derived.NecroticResist += statDerived.NecroticResist;
-        enemy.derived.Initiative += statDerived.Initiative;
-        enemy.gearEffects = enemy.gearEffects || {};
-        enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + (statDerived.Resilience || 0);
-        enemy.gearEffects.mpPerTurn = (enemy.gearEffects.mpPerTurn || 0) + (statDerived.MpRegenPerTurn || 0);
-      }
-
-      // Flat "natural" derived-stat bonus baked directly into the template —
-      // e.g. Mo's 20 base Evasion, Chad's 30% PDR, Gary's 30% NDR, Lenny's
-      // 30% EDR — distinct from anything baseStats/gear would grant, so a
-      // player can identify "this enemy resists physical, go find a weakness
-      // that doesn't" instead of every enemy having a flat, uniform profile.
-      // Applied additively on top of the zero-baseline + statDerived above.
-      // Resilience isn't one of enemy.derived's fields (it lives in
-      // gearEffects.resilience, read by the weakness-buildup reduction at
-      // ~line 5893) so it's special-cased to route there instead.
-      if (template.derivedBonus) {
-        for (const [key, val] of Object.entries(template.derivedBonus)) {
+      // Adds take the HP multiplier but NOT the resist bonus. An add is meant
+      // to stay focusable at every tier; inheriting tier III's +30 resists
+      // made a 78 HP spawn behave like ~111 effective HP against physical and
+      // turned "clear the add" into a real time sink instead of one action.
+      if (eScale.derivedBonus && !enemy.isAdd) {
+        for (const [key, val] of Object.entries(eScale.derivedBonus)) {
           if (!Number.isFinite(val)) continue;
           if (key === 'Resilience') {
+            enemy.gearEffects = enemy.gearEffects || {};
             enemy.gearEffects.resilience = (enemy.gearEffects.resilience || 0) + val;
           } else if (key in enemy.derived) {
             enemy.derived[key] += val;
           }
         }
       }
+    }
 
-      // Find target slot
-      const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
-      if (!slot) {
-        console.error(`Enemy slot not found: ${config.slotId}`);
-        return;
-      }
+    // Explicit per-tier HP for summons. Deriving an add's HP from the tier's
+    // hpMult gave awkward numbers and no direct control; a summon spec now
+    // simply states what it wants at that tier.
+    if (Number.isFinite(config.maxHPOverride) && config.maxHPOverride > 0) {
+      enemy.maxHP = Math.max(1, Math.round(config.maxHPOverride));
+      enemy.currentHP = enemy.maxHP;
+    }
 
-      slot.occupied = true;
-      slot.char = enemy;
-      enemy._slot = slot;
+    // Find target slot
+    const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
+    if (!slot) {
+      console.error(`Enemy slot not found: ${config.slotId}`);
+      return null;
+    }
 
-      this._placePortrait(enemy, slot);
-      this._refreshStatusEffectIcons?.(enemy);
-      this.enemies.push(enemy);
-    });
+    slot.occupied = true;
+    slot.char = enemy;
+    enemy._slot = slot;
+
+    this._placePortrait(enemy, slot);
+    this._refreshStatusEffectIcons?.(enemy);
+    this.enemies.push(enemy);
+    return enemy;
   }
 
   /**
@@ -3497,6 +3566,13 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _updateHealthBars() {
+    // Every HP change funnels through here, which makes it the one reliable
+    // place to notice an enemy crossing a summon threshold. Guarded to fire
+    // each threshold once, and the spawn itself is deferred, so calling this
+    // purely to repaint bars is harmless. Wrapped so a summon problem can
+    // never take the health bars down with it.
+    try { this._checkSummonThresholds?.(); } catch (err) { console.error('[summon]', err); }
+
     const getEffMax = (u) => {
       const down = u?._weaknessDerived?.maxHPDown || 0;
       const base = u?.maxHP | 0;
@@ -4141,8 +4217,18 @@ export default class CombatScene extends Phaser.Scene {
     // data (the raw list can hold thin {id} stubs).
     const hydrated = abilities.map(a => SKILLS[a?.id] || a);
 
-    const anyFilterActive = !!this._activeFilterTags?.size;
-    let shown = hydrated.filter(sk => this._skillMatchesFilters(sk, actor));
+    // The pills only mean anything for the WEAPON list. Class, Special and
+    // Items carry no weakness families, no builds/spends split and usually
+    // only a couple of entries, so leaving a weapon filter applied there just
+    // emptied the menu and forced a trip back to clear it. Those submenus now
+    // ignore the filters entirely and hide the pills, the same way the
+    // Reactions list already behaves. Filter state itself is preserved, so
+    // returning to Weapon still has the pills the player set.
+    const filterable = type === 'weapon';
+    const anyFilterActive = filterable && !!this._activeFilterTags?.size;
+    let shown = filterable
+      ? hydrated.filter(sk => this._skillMatchesFilters(sk, actor))
+      : hydrated;
 
     // Sort: action cost first, then stat requirement, then name.
     //
@@ -4227,7 +4313,7 @@ export default class CombatScene extends Phaser.Scene {
       // player was left with only [ Clear filters ] and no way to un-toggle the
       // single pill that hid everything. The controls that caused the empty
       // state have to stay reachable from inside it.
-      this._showSkillFilterPills?.();
+      if (filterable) this._showSkillFilterPills?.(); else this._hideSkillFilterPills?.();
       // Was missing before the fixed-Back-button refactor too — scroll
       // bounds never got (re)computed for the empty-list case.
       this._finalizeActionMenuLayout();
@@ -4268,9 +4354,9 @@ export default class CombatScene extends Phaser.Scene {
 
     this._finalizeActionMenuLayout();
 
-    // Show filter pills for skill submenus. Filtering itself happens above,
-    // when the list is built -- there's no separate highlight pass any more.
-    this._showSkillFilterPills?.();
+    // Show filter pills for the weapon submenu only. Filtering itself happens
+    // above, when the list is built -- there's no separate highlight pass.
+    if (filterable) this._showSkillFilterPills?.(); else this._hideSkillFilterPills?.();
   }
 
 
@@ -4326,6 +4412,13 @@ export default class CombatScene extends Phaser.Scene {
       if (!isItemInstance(inst)) continue;
       const base = Items[inst.id];
       if (!base?.combatUse) continue;
+      // Skip anything that provably cannot affect ANY living enemy right now.
+      // There are 12 combat items and nine of them are one-per-slot Severing
+      // Chants, so listing them all unconditionally buried the menu in nine
+      // near-identical rows — most of which would only have fizzled. They are
+      // hidden rather than greyed because _useCombatItem already treats "no
+      // eligible target" as a free no-op, so there is nothing to spend here.
+      if (!this._combatItemHasEligibleTarget(base.combatUse)) continue;
       counts.set(inst.id, (counts.get(inst.id) || 0) + 1);
     }
     return Array.from(counts.entries()).map(([id, count]) => {
@@ -4401,6 +4494,32 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} uses ${itemName} — severs the soul-bond on ${target.name}'s ${cfg.slot}!`);
       return;
     }
+  }
+
+  // Mirrors _useCombatItem's own eligibility tests, evaluated across every
+  // living enemy — kept deliberately in step with it: if this says yes, the
+  // item can do something to at least ONE target. It is still per-target at
+  // use time (eligible on enemy A, not on B), so _useCombatItem keeps its own
+  // fizzle guard; this only decides menu visibility.
+  _combatItemHasEligibleTarget(cfg) {
+    if (!cfg) return false;
+    const rarityRank = (r) => Math.max(0, RARITY_ORDER.indexOf(r));
+    const maxRank = rarityRank(cfg.maxRarity || 'epic');
+    const foes = (this.enemies || []).filter(e => e && e.status !== 'incapacitated');
+    for (const t of foes) {
+      if (cfg.kind === 'identify') {
+        const slots = ITEM_CATEGORY_SLOTS[cfg.category] || [];
+        const hit = slots.some(slot => {
+          const eq = t.equipment?.[slot];
+          return isItemInstance(eq) && !eq._identified && rarityRank(eq.rarity) <= maxRank;
+        });
+        if (hit) return true;
+      } else if (cfg.kind === 'sever') {
+        const eq = t.equipment?.[cfg.slot];
+        if (isItemInstance(eq) && !eq._droppable && rarityRank(eq.rarity) <= maxRank) return true;
+      }
+    }
+    return false;
   }
 
   _spendBonusActionAndItem(user, inst) {
@@ -4728,8 +4847,123 @@ export default class CombatScene extends Phaser.Scene {
       }
     });
   }
+  /**
+   * HP-threshold summons. Declared per scenario entry as
+   *   summon: { type, name, thresholds: [{ atPct, count }] }
+   * Each threshold fires AT MOST ONCE per enemy (tracked on _summonsFired),
+   * so repeated health-bar refreshes — or healing back above the line and
+   * dropping through it again — cannot re-trigger it.
+   *
+   * Called from _updateHealthBars because that is the one place every HP
+   * change funnels through; _checkVictoryCondition only runs on knockouts.
+   * The spawn itself is deferred a beat so it lands after the current damage
+   * resolution finishes rather than re-entering it mid-flight.
+   */
+  /**
+   * Releases a held Transpose charge once a multi-hit skill has finished all
+   * of its strikes. See the multi-hit note in _applyAbilityToTarget: the
+   * charge is meant to cover one ATTACK, so a flurry holds it across every
+   * cut and drops it here rather than on the first one.
+   */
+  _releaseTranspose(user) {
+    if (!Array.isArray(user?.statusEffects)) return;
+    const i = user.statusEffects.findIndex(se => se?.transposeBuildupTo);
+    if (i !== -1) user.statusEffects.splice(i, 1);
+  }
+
+  /**
+   * Called by a multi-hit skill's apply() to declare how many strikes the
+   * whole attack will make. Each strike decrements the count in
+   * _applyAbilityToTarget; the Transpose charge drops on the last one.
+   *
+   * `fallbackMs` is a safety net only: a cut is skipped entirely if the target
+   * dies mid-flurry, so the counter could otherwise never reach zero and the
+   * charge would linger onto an unrelated later attack.
+   */
+  _beginMultiHit(user, strikes, fallbackMs = 4000) {
+    if (!user || !(strikes > 0)) return;
+    user._multiHitPending = strikes;
+    // Tag this run. Without it, a stale fallback from an EARLIER flurry fires
+    // partway through a LATER one and releases that flurry's Transpose charge
+    // early — cutting a clean 5-cut conversion down to a mix of lightning and
+    // lacerate. Casting the same multi-hit twice inside the fallback window is
+    // perfectly ordinary, so the timer has to know which run it belongs to.
+    const token = (user._multiHitToken = (user._multiHitToken || 0) + 1);
+    this.time?.delayedCall(fallbackMs, () => {
+      if (user._multiHitToken !== token) return;   // superseded by a newer flurry
+      if (Number.isFinite(user._multiHitPending)) {
+        user._multiHitPending = null;
+        this._releaseTranspose(user);
+      }
+    });
+  }
+
+  _checkSummonThresholds() {
+    if (this.combatEnded || !Array.isArray(this.enemies)) return;
+    for (const e of this.enemies) {
+      if (!e || e.status === 'incapacitated' || !e.summon) continue;
+      const spec = e.summon;
+      const maxHP = e.maxHP || 0;
+      if (maxHP <= 0) continue;
+      const pct = ((e.currentHP || 0) / maxHP) * 100;
+      e._summonsFired = e._summonsFired || {};
+      for (const th of (spec.thresholds || [])) {
+        const key = String(th.atPct);
+        if (e._summonsFired[key]) continue;
+        if (pct > th.atPct) continue;
+        e._summonsFired[key] = true;
+        const count = Math.max(1, th.count || 1);
+        for (let i = 0; i < count; i++) {
+          this.time.delayedCall(180 * (i + 1), () => this._summonEnemy(spec, e));
+        }
+      }
+    }
+  }
+
+  /**
+   * Puts one summoned add on the board. Reuses _spawnEnemy so the add is
+   * built through the identical path as an initial-placement enemy (gear,
+   * derived stats, and the scenario's enemyScale all apply).
+   *
+   * Appended to the END of turnOrder rather than spliced next to its
+   * summoner: turnOrder is [...party, ...enemies], so appending keeps every
+   * existing index valid and cannot disturb currentTurnIndex — the exact
+   * bookkeeping that has bitten this file before.
+   */
+  _summonEnemy(spec, summoner) {
+    if (this.combatEnded || !spec?.type) return null;
+    const slot = (this.enemySlots || []).find(sl => sl && !sl.occupied);
+    if (!slot) {
+      this._log(`${summoner?.name || 'The summoner'} reaches for reinforcements — but there is no room.`);
+      return null;
+    }
+    const enemy = this._spawnEnemy({
+      type: spec.type,
+      slotId: slot.slotId,
+      name: spec.name || undefined,
+      // Passed through so a summon can be stat-equipped exactly like a
+      // scenario-placed enemy. Elemental adds need a real weapon for
+      // calculateDamage to have dice to roll — the same trick encounter 4's
+      // beasts use — otherwise they swing the 1-2 default and are harmless.
+      drops: spec.drops,
+      maxHPOverride: spec.maxHP,
+      isAdd: true,
+    });
+    if (!enemy) return null;
+
+    if (Array.isArray(this.turnOrder)) this.turnOrder.push(enemy);
+    this._refreshTurnOrderUI?.();
+    this._updateHealthBars?.();
+    this._log(`${summoner?.name || 'The summoner'} calls forth ${enemy.name}!`);
+    this._playStatusVFX?.(enemy, { kind: 'buff' });
+    return enemy;
+  }
+
   _checkVictoryCondition() {
-    const anyEnemiesAlive = this.enemies.some(e => e?.status !== 'incapacitated');
+    // Adds (summoned reinforcements) deliberately do NOT count — otherwise a
+    // summoner that keeps spawning could make a fight unwinnable, and the
+    // player would be forced to clear pressure rather than choosing to.
+    const anyEnemiesAlive = this.enemies.some(e => e?.status !== 'incapacitated' && !e.isAdd);
     const anyAlliesAlive = GameState.party.some(p => p?.status !== 'incapacitated');
 
     if (!anyEnemiesAlive) {
@@ -4847,6 +5081,30 @@ export default class CombatScene extends Phaser.Scene {
       return Math.round(20 * (1 + xpPercent / 100));
     }
     return 25;
+  }
+
+  // Timed-scenario loss. Deliberately NOT routed through _onCombatDefeat:
+  // the party is standing and nobody was knocked out, so a "you were
+  // defeated" screen (and its dead-party handling) would be wrong. Training
+  // scenarios already restore the party on both win and loss, so this just
+  // needs the flavour and a retry.
+  _onTurnLimitReached(turnLimit) {
+    this.combatEnded = true;
+    this._resetAllCooldowns();
+    const left = (this.enemies || []).filter(e => e && e.status !== 'incapacitated').length;
+    this._log(`⏳ Time! ${turnLimit} rounds gone and ${left} still standing.`);
+    this._log('😂 The crowd roars with laughter.');
+    this._restorePartyFull?.(GameState.party);
+    GameState.party.forEach(char => {
+      char.status = 'alive';
+      char.currentHP = char.maxHP;
+      char.currentMP = char.maxMP;
+    });
+    this._showDefeatScreen(
+      'Out of Time',
+      `${left} left standing after ${turnLimit} rounds. The crowd is in stitches.`,
+      { showRetry: true, showExit: true }
+    );
   }
 
   _onCombatDefeat() {
@@ -5013,6 +5271,18 @@ export default class CombatScene extends Phaser.Scene {
       for (const ally of survivors) {
         const cfg = ENEMY_TYPES[ally.type]?.enrageOnAllyDeath;
         if (!cfg) continue;
+        // A SUMMONED add dying must not set this off. Encounter 5's duelists
+        // enrage when their twin falls, which is a real turning point; once
+        // they gained lava/ice spawns, every disposable add's death was
+        // triggering that same permanent buff, so clearing the pressure they
+        // created was rewarding the boss. Adds are pressure, not allies whose
+        // loss means anything.
+        if (unit?.isAdd) continue;
+        // Optional narrowing: a template may name exactly whose death counts.
+        // Encounter 5 uses it so ONLY the other duelist matters, which also
+        // makes the rule explicit in the data rather than implied by the
+        // roster happening to contain nobody else.
+        if (Array.isArray(cfg.onlyFromTypes) && !cfg.onlyFromTypes.includes(unit?.type)) continue;
         if (cfg.statusId) {
           this._addStatusEffects(ally, [{ id: cfg.statusId, permanent: true, mods: cfg.mods || {} }]);
         }
@@ -5023,6 +5293,20 @@ export default class CombatScene extends Phaser.Scene {
           }
         }
         this._log(`${ally.name} is enraged by ${unit.name}'s fall!`);
+
+        // Visual enrage. Declarative via enrageOnAllyDeath.vfx so any future
+        // enrager gets it by declaring the field, not by new code here:
+        //   vfx: { kind, tint, shake }
+        // A one-shot burst alone reads as "something happened and is over",
+        // which is wrong — the buff is PERMANENT. So the burst is paired with
+        // a lasting tint pulse on the portrait (driven in update()), giving
+        // the player a standing reminder that this duelist is still enraged.
+        const evfx = cfg.vfx;
+        if (evfx) {
+          this._playStatusVFX?.(ally, { kind: evfx.kind || 'warcry', scale: 1.15, duration: 620 });
+          if (Number.isFinite(evfx.tint)) ally._enrageTint = evfx.tint;
+          if (evfx.shake !== false) this.cameras?.main?.shake?.(320, 0.006);
+        }
       }
     }
 
@@ -5096,6 +5380,14 @@ export default class CombatScene extends Phaser.Scene {
     // Just refreshing the UI is enough to stop it showing a corpse's menu.
     if (wasCurrentActor && !this.combatEnded) {
       this._buildActionMenuRoot?.();
+      // The bookkeeping above already repointed currentTurnIndex at whoever is
+      // now current, but only _advanceTurn used to repaint the turn HEADER —
+      // so the name above the action lights (and the lights themselves, and
+      // the green slot border) kept showing the unit that just died until the
+      // next natural turn transition. It read as "someone else is acting under
+      // the dead character's name". _highlightCurrentTurn cascades into
+      // _updateActionLights, so this covers all three.
+      this._highlightCurrentTurn?.();
     }
   }
 
@@ -6265,7 +6557,15 @@ export default class CombatScene extends Phaser.Scene {
         // the ability's own base roll. Generic: any ability declaring
         // critBleedPct gets this, not just Heartpiercer — same shape can be
         // reused by future skills.
-        if (isCrit && dmg > 0 && Number.isFinite(ability?.critBleedPct) && ability.critBleedPct > 0) {
+        // Normally crit-only, but an ability may also declare bleedAlsoAtTier
+        // to land the bleed unconditionally once the target is deep enough
+        // into a weakness family — so committing to setup buys reliability
+        // instead of leaving the rider to the crit roll. Generic: any ability
+        // declaring the field gets it, same as critBleedPct itself.
+        const bleedTier = ability?.bleedAlsoAtTier;
+        const bleedTierMet = !!bleedTier
+          && ((target?.weakness?.tiers?.[bleedTier.family] || 0) >= (bleedTier.tierAtLeast ?? 2));
+        if ((isCrit || bleedTierMet) && dmg > 0 && Number.isFinite(ability?.critBleedPct) && ability.critBleedPct > 0) {
           const tickDamage = Math.max(1, Math.floor(dmg * (ability.critBleedPct / 100)));
           const bleedTurns = Number.isFinite(ability?.critBleedTurns) ? ability.critBleedTurns : 2;
           const statusId = ability.critBleedStatusId || `${ability.id}_bleed`;
@@ -6653,7 +6953,32 @@ export default class CombatScene extends Phaser.Scene {
     // redirected every family this resolution actually applied; this just
     // removes the now-spent status so the NEXT unrelated hit stops
     // redirecting too.
-    if (!missed && target && user?.isEnemy !== target?.isEnemy && Array.isArray(user?.statusEffects)) {
+    //
+    // MULTI-HIT: a skill that resolves as several INDEPENDENT casts (Twin
+    // Fang's second blade, Arterial Rush's cuts — each a real
+    // _applyAbilityToTarget with its own hit roll) would otherwise burn the
+    // charge on hit one and leave the rest untransposed. Transpose reads as
+    // "your next ATTACK", not "your next damage instance", so the whole
+    // flurry has to count as one resolution. Both halves opt out here and the
+    // parent releases the charge once its last strike has landed
+    // (_consumeTransposeAfter).
+    const partOfMultiHit = !!options?.isSubCast || !!ability?.multiHit;
+    if (partOfMultiHit && user) {
+      // COUNT the strikes rather than timing them. The first attempt released
+      // the charge on a fixed timer sized from the hit count, but cuts roll to
+      // hit INDEPENDENTLY and their buildup does not all land inside a
+      // predictable window — measured 3 of 5 cuts landing, the last of them
+      // after the timer had already fired, so it arrived untransposed. The
+      // parent declares how many strikes it will make and each one decrements;
+      // the charge drops when the last is accounted for, whenever that is.
+      if (Number.isFinite(user._multiHitPending)) {
+        user._multiHitPending -= 1;
+        if (user._multiHitPending <= 0) {
+          user._multiHitPending = null;
+          this._releaseTranspose(user);
+        }
+      }
+    } else if (!missed && target && user?.isEnemy !== target?.isEnemy && Array.isArray(user?.statusEffects)) {
       const tIdx = user.statusEffects.findIndex(se => se?.transposeBuildupTo);
       if (tIdx !== -1) user.statusEffects.splice(tIdx, 1);
     }
@@ -6743,6 +7068,14 @@ export default class CombatScene extends Phaser.Scene {
       const activeZones = targetSid ? (this.slotEffects?.[targetSid] || []) : [];
       for (const ze of activeZones) {
         if (ze.onHitMpGain > 0 && !user.isEnemy) {
+          // A zone may gate its payout on the OCCUPANT's weakness state
+          // (Sanctified Slam: only while the target is Zapped). Declarative
+          // so any zone can use it; a zone without the field always pays.
+          const req = ze.onHitMpRequires;
+          if (req?.family) {
+            const tier = target?.weakness?.tiers?.[req.family] | 0;
+            if (tier < (req.tierAtLeast ?? 1)) continue;
+          }
           // Only player-controlled attackers benefit from sanctified zones
           const gain = ze.onHitMpGain;
           user.currentMP = Math.min(user.maxMP || 99, (user.currentMP || 0) + gain);
@@ -8279,7 +8612,18 @@ export default class CombatScene extends Phaser.Scene {
     if (!char) return;
     const slotKey = this._charSlotKey(char);
     const effects = slotKey ? (this.slotEffects?.[slotKey] || []) : [];
-    const vulnEff = effects.find(e => e?.elementalVulnPct > 0);
+    // A zone may gate its vulnerability on the OCCUPANT's own weakness state
+    // via elementalVulnRequires: { family, tierAtLeast }. Evaluated here, on
+    // every sync, so it tracks whoever is currently standing in it and their
+    // CURRENT buildup — crossing the breakpoint while stood in the zone turns
+    // it on, and dropping below (or a different unit stepping in) turns it
+    // off. A zone without the field applies unconditionally.
+    const vulnEff = effects.find(e => {
+      if (!(e?.elementalVulnPct > 0)) return false;
+      const req = e.elementalVulnRequires;
+      if (!req?.family) return true;
+      return ((char?.weakness?.tiers?.[req.family] | 0) >= (req.tierAtLeast ?? 1));
+    });
     if (vulnEff) {
       this._addStatusEffects(char, [{
         id: 'zone_elemental_vuln', permanent: true,
@@ -8411,7 +8755,12 @@ export default class CombatScene extends Phaser.Scene {
             if (fams) parts.push(fams);
           }
           if (e.immobilizes) parts.push('immobilizes');
-          if (e.onHitMpGain) parts.push(`+${e.onHitMpGain} MP to attackers hitting enemies here`);
+          if (e.onHitMpGain) {
+            const req = e.onHitMpRequires;
+            parts.push(req?.family
+              ? `+${e.onHitMpGain} MP to attackers hitting ${req.family}-afflicted enemies here`
+              : `+${e.onHitMpGain} MP to attackers hitting enemies here`);
+          }
           if (e.elementalVulnPct > 0) parts.push(`+${e.elementalVulnPct}% elemental damage taken`);
           if (e.fireBurnProc) {
             const preview = occupant ? this._zoneFireBurnPreview(e, occupant) : null;
@@ -8652,6 +9001,10 @@ export default class CombatScene extends Phaser.Scene {
   // vfx:{kind:'...'} / vfxHint:{kind:'...'} — there's no blind heuristic
   // guessing from mods, so this only ever lights up on skills that have
   // actually been reviewed and annotated, weapon type by weapon type.
+  // Neutral end of the enrage pulse — plain white, i.e. the portrait's
+  // untinted appearance.
+  static ENRAGE_BASE = 0xffffff;
+
   static STATUS_VFX_KINDS = {
     heal: { textureKey: 'fx_heal', tint: 0x55dd77 },
     buff_health: { textureKey: 'fx_buff_health', tint: 0x55dd77 },
@@ -8920,6 +9273,14 @@ export default class CombatScene extends Phaser.Scene {
     curse_of_needles: 'fx_hit_puncture',
     flash_overload: 'fx_hit_slash',
     vein_tap: 'fx_hit_puncture',
+    // The dagger pass's two ungated skills, plus the hidden sub-skills each
+    // one fires for its extra strikes — those cast through the normal VFX
+    // path under their OWN ids, so they need their own entries or they fall
+    // back to the generic slash mid-flurry and visibly mismatch the first hit.
+    twin_fang: 'fx_hit_puncture',
+    twin_fang_offhand: 'fx_hit_puncture',
+    arterial_rush: 'fx_hit_slash',
+    arterial_rush_cut: 'fx_hit_slash',
     // Encounter 3's dagger-wielders (Gary the warlock, Mo the rogue) — see
     // project_encounter3_vfx_sfx_pass. Same editorial pattern as the player
     // entries above, just extended with these enemy skill ids.
@@ -9140,6 +9501,12 @@ export default class CombatScene extends Phaser.Scene {
     kiro_venomous_swipe: 'fx_hit_claw',
     kiro_corrosive_bite: 'fx_hit_bite',
     kiro_poison_cloud: 'fx_hit_cloud',
+    // Laki (owl). Talons read as claws; the screech is a sound, so it uses
+    // the cloud burst rather than a physical impact sprite.
+    laki_silent_dive: 'fx_hit_claw',
+    laki_piercing_screech: 'fx_hit_cloud',
+    laki_hooting_taunt: 'fx_hit_cloud',
+    laki_startle: 'fx_hit_cloud',
   };
   _playBeastVFX(attacker, target, missed, ability, isCrit) {
     if (CombatScene.BEAST_PROJECTILE_SKILLS.has(ability?.id)) {
@@ -10297,6 +10664,10 @@ export default class CombatScene extends Phaser.Scene {
     // this force-hid it every single turn, even the player's own).
 
     const currentChar = this._currentChar();
+    // Can legitimately be undefined for an instant — this now also runs from
+    // the mid-turn-death path, where turnOrder was just filtered. Bail rather
+    // than dereference; the next real turn transition repaints everything.
+    if (!currentChar) return;
 
     // ✅ Update the current turn name display
     if (this.turnNameText) {
@@ -10642,6 +11013,20 @@ export default class CombatScene extends Phaser.Scene {
     // slot is skipped (the occupant's next turn will tick it instead).
     if (_isNewRound) {
       this.combatRound = (this.combatRound || 1) + 1;
+
+      // Timed scenarios (the Reckoning DPS races): a scenario may declare
+      // turnLimit = N full rounds. combatRound has just become N+1 here, i.e.
+      // the party has already HAD its N rounds, so the race is lost. Checked
+      // at the top of the new round rather than at the end of the old one so
+      // a kill landing on the very last action still wins — _checkCombatEnd
+      // fires victory first and sets combatEnded, which _advanceTurn returns
+      // on before ever reaching this.
+      const turnLimit = this.scenarioData?.turnLimit || 0;
+      const roundsPlayed = this.combatRound - (this._combatStartRound ?? 2);
+      if (turnLimit > 0 && roundsPlayed >= turnLimit) {
+        this._onTurnLimitReached(turnLimit);
+        return;
+      }
       const occupiedKeys = new Set(
         this.turnOrder.map(u => this._charSlotKey(u)).filter(Boolean)
       );
@@ -11386,6 +11771,21 @@ export default class CombatScene extends Phaser.Scene {
     for (let i = 0; i < party.length; i++) units.push(party[i]);
     const foes = this.enemies || [];
     for (let i = 0; i < foes.length; i++) units.push(foes[i]);
+
+    // Standing enrage glow — a slow breath between normal colour and the
+    // enrager's own tint, so "this one is enraged" stays readable for the
+    // rest of the fight rather than living only in the combat log.
+    for (const u of units) {
+      if (!u?._enrageTint) continue;
+      const icon = u.icon;
+      // Phaser nulls .scene on destroy; a knocked-out unit's portrait is
+      // destroyed by _clearPortrait, so this both skips and self-cleans.
+      if (!icon || !icon.scene) { u._enrageTint = 0; continue; }
+      const wave = (Math.sin((time / 900) * Math.PI * 2) + 1) / 2;
+      const c = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.IntegerToColor(CombatScene.ENRAGE_BASE), Phaser.Display.Color.IntegerToColor(u._enrageTint), 100, Math.round(wave * 100));
+      icon.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+    }
 
     for (const u of units) {
       const sprites = u?.weaknessOverlaySprites;
