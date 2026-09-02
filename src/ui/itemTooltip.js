@@ -11,13 +11,32 @@
 // `lines` entries are either plain strings or { text, color } objects — both
 // are natively supported by Tooltip.js's _renderBodyLines already.
 
-import { isItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
+import { isItemInstance, getItemComputedData, getAffixIndex } from '../systems/ItemFactory.js';
 import { Items } from '../../data/items.js';
 import { SKILLS } from '../../data/skills.js';
 
 // Matches Tooltip.js's existing _pillColorFor palette where a family overlaps
 // (fire/cold/lightning), so a skill's fire tag and a weapon's fire damage
 // read as the same color everywhere in the UI.
+// Tier ramp for the Alt view — T1 hottest, descending to grey. Mirrors the
+// ordering used in the item level design doc.
+// Base-type ladder. Warmer as it climbs, and deliberately NOT the same ramp as
+// the affix TIER_COLORS below - base tier counts UP (3 is best), affix tier
+// counts DOWN (1 is best), so sharing a ramp would read as a contradiction.
+const BASE_TIER_COLORS = {
+  1: '#8a8f9e',
+  2: '#9fc08a',
+  3: '#e0b04f',
+};
+
+const TIER_COLORS = {
+  1: '#e0703f',
+  2: '#d4a017',
+  3: '#b8bccf',
+  4: '#8a8f9e',
+  5: '#6e727d',
+};
+
 const TYPE_COLORS = {
   physical: '#dddddd',
   fire: '#D24E35',
@@ -27,6 +46,43 @@ const TYPE_COLORS = {
 };
 const typeColor = (t) => TYPE_COLORS[t] || '#dddddd';
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// ---- Detailed (Alt-held) affix view -------------------------------------
+// A module-level flag rather than a per-call option, because the same tooltip
+// is built from several scenes and the key can be pressed while one is already
+// on screen. Scenes call installAffixDetailKeys() and re-show the tooltip from
+// the callback; the builder just reads the flag.
+let _affixDetail = false;
+export function isAffixDetail() { return _affixDetail; }
+export function setAffixDetail(v) { _affixDetail = !!v; }
+
+/**
+ * Binds Alt (held) to the detailed affix view for a scene, and calls
+ * onChange() whenever it flips so the caller can redraw whatever tooltip is
+ * currently visible. Returns a teardown, and also self-removes on shutdown.
+ *
+ * Alt rather than Shift: Shift is already the inventory's compare modifier.
+ */
+export function installAffixDetailKeys(scene, onChange) {
+  if (!scene?.input?.keyboard) return () => {};
+  const set = (v) => { if (_affixDetail !== v) { _affixDetail = v; onChange?.(); } };
+  const down = (e) => { if (e.key === 'Alt' || e.altKey) set(true); };
+  const up   = (e) => { if (e.key === 'Alt' || !e.altKey) set(false); };
+  // Alt can be released while the window is unfocused, which would otherwise
+  // leave the view stuck on.
+  const blur = () => set(false);
+  scene.input.keyboard.on('keydown', down);
+  scene.input.keyboard.on('keyup', up);
+  window.addEventListener('blur', blur);
+  const teardown = () => {
+    scene.input.keyboard?.off('keydown', down);
+    scene.input.keyboard?.off('keyup', up);
+    window.removeEventListener('blur', blur);
+    _affixDetail = false;
+  };
+  scene.events?.once('shutdown', teardown);
+  return teardown;
+}
 
 export function buildItemTooltipLines(itemRef, opts = {}) {
   const instance = isItemInstance(itemRef) ? itemRef : null;
@@ -40,6 +96,22 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
 
   const lines = [];
   if (base.type) lines.push(`Type: ${base.type}${base.slot ? ` (${base.slot})` : ''}`);
+  // Item level. Only shown when the item actually carries one — anything
+  // created before item levels existed, or by a call site that has not been
+  // migrated yet, stamps null and simply omits the line rather than showing
+  // a misleading "Item Level 0".
+  if (Number.isFinite(instance?.itemLevel)) {
+    lines.push({ text: `Item Level: ${instance.itemLevel}`, color: '#9aa0b5' });
+  }
+  // Base tier (Crude/Hardened/Ancestral, Simple/Fitted). Shown on EVERY
+  // tiered item including tier 1 — Bone collapses all three tiers to the same
+  // name ("Bone Dagger"), so this line is the only thing distinguishing them
+  // and it has to be present at tier 1 too or the cheapest bone weapon is the
+  // one with no tier information at all. Jewelry, uniques and consumables
+  // carry no baseTier and are unaffected.
+  if (base.baseTier >= 1) {
+    lines.push({ text: `Base Tier: ${base.baseTier}`, color: BASE_TIER_COLORS[base.baseTier] || '#9aa0b5' });
+  }
   if (base.type === 'weapon') {
     if (base.weaponType) lines.push(`Weapon Type: ${capitalize(base.weaponType)}`);
     if (typeof base.hands === 'number') lines.push(`Hands: ${base.hands}`);
@@ -166,6 +238,34 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     const pct = Math.round(((instance.renown || 0) / (instance.renownMax || 1000)) * 100);
     lines.push('', `◆ Gaining Renown: ${instance.renown || 0} / ${instance.renownMax || 1000}  (${pct}%)`);
     lines.push('[ Use this item in combat to build Renown ]');
+  }
+
+  // ===== Affix detail (Alt) =====
+  // Tier and possible range per rolled affix, so a roll can be judged against
+  // what it could have been. Ranges are looked up by affix KEY rather than
+  // stored on the item, which means this works on items saved long before item
+  // levels existed. Hand count matters: weapon ranges are scaled for 1H vs 2H.
+  const detailed = opts.detailed ?? _affixDetail;
+  if (detailed && instance) {
+    const idx = getAffixIndex(base?.hands);
+    const rolled = [
+      ...(instance.prefixes || []).map(k => [k, 'prefix']),
+      ...(instance.suffixes || []).map(k => [k, 'suffix']),
+    ];
+    lines.push('');
+    lines.push({ text: 'Affix Detail  [Alt]', color: '#c8a060' });
+    if (!rolled.length) {
+      lines.push({ text: '  (no affixes — this item rolled none)', color: '#8a8a8a' });
+    }
+    for (const [key, kind] of rolled) {
+      const info = idx[key];
+      if (!info) { lines.push({ text: `  • ${key}  (${kind})`, color: '#aaaaaa' }); continue; }
+      const tierTxt = info.tier != null ? `T${info.tier}` : 'untiered';
+      const rangeTxt = info.range ? `  ${info.range[0]}–${info.range[1]}` : '';
+      const famTxt = info.family ? `  (${info.family})` : '';
+      lines.push({ text: `  • ${info.label || key}`, color: '#dddddd' });
+      lines.push({ text: `      ${tierTxt}${rangeTxt}${famTxt}`, color: TIER_COLORS[info.tier] || '#9aa0b5' });
+    }
   }
 
   return { title: name, titleColor, lines, name, color: titleColor };

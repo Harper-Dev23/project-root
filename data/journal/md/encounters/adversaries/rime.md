@@ -27,9 +27,9 @@ If Ember dies first, Rime enrages on the same terms: a real power spike, plus a 
 
 ## Profile
 
-**HP** 420 - **MP** 130 - **Resists** Physical 20% - **Resilience** 20 - **Stats** STR 10 / DEX 14 / CON 10 / INT 6 / WIS 12 / CHA 4
+**HP** 500 - **MP** 130 - **Resists** Physical 20% - **Resilience** 20 - **Stats** STR 10 / DEX 14 / CON 10 / INT 6 / WIS 12 / CHA 4
 
-**Appears in:** Elemental Duelists
+**Appears in:** Elemental Duelists, Elemental Duelists — Reckoning I, Elemental Duelists — Reckoning II, Elemental Duelists — Reckoning III
 
 ## Abilities
 

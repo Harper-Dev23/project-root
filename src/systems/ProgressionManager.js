@@ -84,6 +84,55 @@ const SCENARIO_ORDER = [
 ];
 
 // Hunt Tickets awarded on FIRST completion of each scenario.
+/**
+ * Reckoning Marks — earned ONLY from Reckoning tiers, spent only at the bone
+ * pile's Marked buttons.
+ *
+ * Unlike Hunt Tickets these are **repeatable**: they are awarded on every
+ * clear, not just the first. Reckoning tiers are the endgame grind and are
+ * meant to be re-run, so a first-clear-only reward would cap tier-2 gear at a
+ * fixed lifetime budget of 17 rolls and then leave the tiers with no payout
+ * at all.
+ *
+ * Scaled by BOTH the encounter and the tier, not the tier alone: an
+ * encounter-2 Reckoning and a Gorek Reckoning are not the same fight, and
+ * paying them identically for tier 1 made the easy one strictly the better
+ * farm. Encounter 2 is deliberately stingy.
+ *
+ * Encounters III, IV and V share one ramp (6/9/12) on purpose: playtesting
+ * could not separate them on difficulty, so inventing a difference would be
+ * guessing. Split them once there is evidence to split them on.
+ *
+ * Judge these PER FIGHT, not per full clear: Gorek's 25-mark total looks
+ * like an outlier against encounter 5's 11 only because he has five tiers
+ * to their three. Per fight it is 5.0 against 3.7, which is the gap the
+ * final boss should have.
+ */
+const MARK_REWARDS = {
+  'training_encounter_2_reckoning_1': 2,
+  'training_encounter_2_reckoning_2': 2,
+  'training_encounter_2_reckoning_3': 4,
+  'training_encounter_3_reckoning_1': 6,
+  'training_encounter_3_reckoning_2': 9,
+  'training_encounter_3_reckoning_3': 12,
+  'training_encounter_4_reckoning_1': 6,
+  'training_encounter_4_reckoning_2': 9,
+  'training_encounter_4_reckoning_3': 12,
+  'training_encounter_5_reckoning_1': 6,
+  'training_encounter_5_reckoning_2': 9,
+  'training_encounter_5_reckoning_3': 12,
+  'training_encounter_6_reckoning_1': 8,
+  'training_encounter_6_reckoning_2': 10,
+  'training_encounter_6_reckoning_3': 12,
+  'training_encounter_6_reckoning_4': 14,
+  'training_encounter_6_reckoning_5': 18,
+};
+
+// Hunt Tickets come from the BASE encounters only. Reckoning tiers
+// deliberately pay nothing here — they pay Reckoning Marks instead (see
+// MARK_REWARDS), which is what makes the two currencies mean different
+// things: Tickets are the one-off reward for progressing, Marks are the
+// repeatable reward for grinding.
 const TICKET_REWARDS = {
   'training_encounter_1': 12,
   'training_encounter_2': 12,
@@ -92,27 +141,10 @@ const TICKET_REWARDS = {
   'training_encounter_5': 24,
   'training_encounter_6': 30,
   // Reckoning I-V — increasing per tier, per request.
-  'training_encounter_6_reckoning_1': 35,
-  'training_encounter_6_reckoning_2': 40,
-  'training_encounter_6_reckoning_3': 50,
-  'training_encounter_6_reckoning_4': 60,
-  'training_encounter_6_reckoning_5': 75,
   // Encounter 2's Reckoning tiers — the timed DPS race.
-  'training_encounter_2_reckoning_1': 15,
-  'training_encounter_2_reckoning_2': 22,
-  'training_encounter_2_reckoning_3': 32,
   // Encounter 3's Reckoning tiers — pure toughness, no clock.
-  'training_encounter_3_reckoning_1': 20,
-  'training_encounter_3_reckoning_2': 30,
-  'training_encounter_3_reckoning_3': 45,
   // Encounters 4 and 5 — both gain a mechanic on top of the stat scaling
   // (an extra beast / summoned adds), so they pay a little more per tier.
-  'training_encounter_4_reckoning_1': 26,
-  'training_encounter_4_reckoning_2': 38,
-  'training_encounter_4_reckoning_3': 55,
-  'training_encounter_5_reckoning_1': 30,
-  'training_encounter_5_reckoning_2': 44,
-  'training_encounter_5_reckoning_3': 64,
 };
 
 // Quest flags auto-set on first clear of each scenario.
@@ -165,6 +197,8 @@ const ProgressionManager = {
   // ----- Runtime state (saved per slot via serialize/deserialize) -----------
   completedScenarios: [],   // e.g. ['training_encounter_1', 'training_encounter_2']
   huntTickets:  0,
+  // Reckoning-tier currency. See MARK_REWARDS above.
+  reckoningMarks: 0,
   tribeTickets: 0,
   huntPoints:   0,          // player-wide score from the Hunt loop — tracked via the Waystone
   tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
@@ -430,6 +464,12 @@ const ProgressionManager = {
    *
    * Returns { firstCompletion, huntTicketsEarned, huntTicketsTotal }
    */
+  /** Marks a scenario pays per clear. Exposed so the journal generator can
+   *  print the reward table without duplicating the numbers. */
+  getMarkReward(scenarioId) {
+    return MARK_REWARDS[scenarioId] ?? 0;
+  },
+
   onScenarioComplete(scenarioId) {
     const alreadyDone = this.completedScenarios.includes(scenarioId);
 
@@ -448,10 +488,17 @@ const ProgressionManager = {
     const ticketsEarned = alreadyDone ? 0 : (TICKET_REWARDS[scenarioId] ?? 0);
     this.huntTickets += ticketsEarned;
 
+    // Deliberately NOT gated on `alreadyDone` — Marks are a repeatable payout
+    // for re-running Reckoning tiers, which is the whole point of them.
+    const marksEarned = MARK_REWARDS[scenarioId] ?? 0;
+    this.reckoningMarks += marksEarned;
+
     return {
       firstCompletion: !alreadyDone,
       huntTicketsEarned: ticketsEarned,
       huntTicketsTotal: this.huntTickets,
+      marksEarned,
+      marksTotal: this.reckoningMarks,
     };
   },
 
@@ -461,6 +508,7 @@ const ProgressionManager = {
     return {
       completedScenarios:  [...this.completedScenarios],
       huntTickets:         this.huntTickets,
+      reckoningMarks:      this.reckoningMarks,
       tribeTickets:        this.tribeTickets,
       huntPoints:          this.huntPoints,
       questFlags:          [...this.questFlags],
@@ -483,6 +531,7 @@ const ProgressionManager = {
     if (!data) return;
     this.completedScenarios  = Array.isArray(data.completedScenarios)  ? [...data.completedScenarios]  : [];
     this.huntTickets         = typeof data.huntTickets  === 'number'    ? data.huntTickets              : 0;
+    this.reckoningMarks      = typeof data.reckoningMarks === 'number'  ? data.reckoningMarks           : 0;
     this.tribeTickets        = typeof data.tribeTickets === 'number'    ? data.tribeTickets             : 0;
     this.huntPoints          = typeof data.huntPoints   === 'number'    ? data.huntPoints               : 0;
     this.questFlags          = Array.isArray(data.questFlags)           ? [...data.questFlags]          : [];
@@ -510,6 +559,7 @@ const ProgressionManager = {
   reset() {
     this.completedScenarios  = [];
     this.huntTickets         = 0;
+    this.reckoningMarks      = 0;
     this.tribeTickets        = 0;
     this.huntPoints          = 0;
     this.questFlags          = [];

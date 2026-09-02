@@ -6,18 +6,38 @@ import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats } from './CharacterBuilder.js';
 import { getItemComputedData } from './ItemFactory.js';
 
+/**
+ * Flags an instance as not-yet-seen so the inventory can mark it.
+ *
+ * A plain boolean on the instance, so it survives a save/load — an item that
+ * arrived from a bone-pile roll should still read as new after a reload, and
+ * it is cleared the moment the player actually looks at it.
+ */
+function markNew(inst) {
+  if (inst && typeof inst === 'object') inst._isNew = true;
+  return inst;
+}
+
 export const InventorySystem = {
   // ===== Global inventory methods =====
-  addGlobalItem(item) {
+  /**
+   * @param {object} [opts]
+   * @param {boolean} [opts.isNew=true]  Flag it as an unseen ACQUISITION.
+   *   Pass false when the item is merely MOVING between inventories — a
+   *   transfer off a character is not a new find, and marking it made the
+   *   green dot meaningless on any pack that had been reorganised.
+   */
+  addGlobalItem(item, opts = {}) {
+    const flagNew = opts.isNew !== false;
     if (typeof item === 'string') {
       const base = Items[item];
       if (!base) {
         console.warn(`Item '${item}' not found.`);
         return;
       }
-      GameState.inventory = [...(GameState.inventory || []), createItemInstance(item)];
+      GameState.inventory = [...(GameState.inventory || []), flagNew ? markNew(createItemInstance(item)) : createItemInstance(item)];
     } else if (isItemInstance(item)) {
-      GameState.inventory = [...(GameState.inventory || []), item];
+      GameState.inventory = [...(GameState.inventory || []), (flagNew ? markNew(item) : item)];
     } else {
       console.warn('Invalid item passed to addGlobalItem:', item);
     }

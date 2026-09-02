@@ -31,7 +31,7 @@ Three things define him mechanically:
 
 ## Profile
 
-**HP** 850 - **MP** 150 - **Resists** Physical 20% - **Resilience** 30 - **Stats** STR 20 / DEX 10 / CON 16 / INT 8 / WIS 8 / CHA 12
+**HP** 1000 - **MP** 150 - **Resists** Physical 20% - **Resilience** 30 - **Stats** STR 20 / DEX 10 / CON 16 / INT 8 / WIS 8 / CHA 12
 
 **Appears in:** Gorrek
 

@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":1472,"h":816},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1472,"h":816},
+	"sourceSize": {"w":1472,"h":816}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":1472,"y":0,"w":1472,"h":816},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1472,"h":816},
+	"sourceSize": {"w":1472,"h":816}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":816,"w":1472,"h":816},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1472,"h":816},
+	"sourceSize": {"w":1472,"h":816}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":1472,"y":816,"w":1472,"h":816},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1472,"h":816},
+	"sourceSize": {"w":1472,"h":816}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_vendor_row.png",
+	"format": "RGBA8888",
+	"size": {"w":2944,"h":1632},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:11ce9803a34cc6791015f7eb74f0a907:4f35b0d9ff2f97000ce7de63d7ceddf9:1bf6c72000bf06881d367c2717f8b483$"
+}
+}

@@ -1,5 +1,5 @@
 import { SKILLS } from '../../data/skills.js'; // adjust path if needed
-import { getXPNeededForLevel } from '../../data/xpTable.js';
+import { getXPNeededForLevel, LEVEL_CAP } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
@@ -63,9 +63,108 @@ function deserializeEquipment(eq) {
 }
 
 // ---------- CHAR WRAPPERS ----------
+/**
+ * Constructor names that are never save data. Matching on the name rather than
+ * `instanceof` keeps this file free of a Phaser import, and covers subclasses
+ * (every StatusBar is a Container, every emitter a ParticleEmitter).
+ */
+const RUNTIME_CTORS = new Set([
+  'Scene', 'Systems', 'Tween', 'TweenManager', 'Timeline',
+  'Container', 'Sprite', 'Image', 'Text', 'Graphics', 'Rectangle', 'Arc',
+  'ParticleEmitter', 'ParticleEmitterManager', 'Camera', 'TimerEvent',
+  'EventEmitter', 'Group', 'Zone', 'RenderTexture', 'BitmapText',
+]);
+
+/** Is this a live engine object rather than plain save data? */
+function isRuntimeObject(v) {
+  if (!v || typeof v !== 'object') return false;
+  const ctor = v.constructor && v.constructor.name;
+  if (ctor && RUNTIME_CTORS.has(ctor)) return true;
+  // Duck-typing for anything the list misses: a scene back-reference, a game
+  // reference, or the shape of a tween.
+  if (v.scene && v.scene.sys) return true;
+  if (v.sys && v.sys.game) return true;
+  if (v.callbackScope !== undefined && Array.isArray(v.targets)) return true;
+  return false;
+}
+
+/**
+ * JSON.stringify that cannot throw on a cycle and never writes engine objects.
+ *
+ * Cycles are detected by tracking ANCESTORS rather than every object seen, so
+ * an object legitimately referenced twice in different branches still
+ * serialises — only a true loop is cut. Returns the JSON plus the list of
+ * paths that were dropped, so silent data loss is impossible to miss.
+ */
+function safeStringify(value) {
+  const dropped = [];
+  const ancestors = [];
+  const paths = [];
+  const json = JSON.stringify(value, function (key, val) {
+    // `this` is the object currently being serialised; unwind both stacks to
+    // it so `paths` always describes where we actually are.
+    while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) {
+      ancestors.pop(); paths.pop();
+    }
+    const base = paths.length ? paths[paths.length - 1] : '';
+    const here = key === '' ? '(root)' : (base ? base + '.' + key : key);
+
+    if (typeof val === 'function') return undefined;
+    if (!val || typeof val !== 'object') return val;
+    // Reported with the full path, because the useful question when a field
+    // disappears from a save is WHERE it was, not what it was called.
+    if (isRuntimeObject(val)) {
+      const ctor = (val.constructor && val.constructor.name) || 'object';
+      dropped.push(here + ' <' + ctor + '>');
+      return undefined;
+    }
+    if (ancestors.indexOf(val) !== -1) { dropped.push(here + ' [cycle]'); return undefined; }
+    ancestors.push(val); paths.push(here);
+    return val;
+  });
+  return { json, dropped };
+}
+
+// Live Phaser display objects that combat hangs directly on a character.
+// None of them is save data, and every one holds a `.scene` back-reference, so
+// leaving even one in place makes the whole payload un-stringifiable.
+const RUNTIME_CHAR_KEYS = [
+  'hpBar', 'mpBar', 'initBar',      // the three portrait status bars
+  'icon', '_slot',                  // portrait sprite and its slot container
+  'weaknessEmitters',               // particle emitters, one per weakness family
+  // Weakness portrait-overlay bookkeeping: { ghosts, tweens, gfx, timer } per
+  // family. Pure VFX state, rebuilt from the meters whenever combat starts, so
+  // it is never save data. Listed explicitly rather than left to the generic
+  // sweep so the "dropped fields" warning stays quiet for the expected case —
+  // a warning that fires on every single save would mask a real one.
+  '_wkProc',
+];
+
+/**
+ * Does this value look like a Phaser object (or a container of them)?
+ *
+ * A belt-and-braces sweep alongside the explicit list above: combat attaches
+ * display objects to characters from several places, and a future one would
+ * otherwise reintroduce this crash silently — the failure mode is a thrown
+ * save, not a warning. Cheap, since it only inspects one level.
+ */
+function looksLikePhaserObject(v, depth = 0) {
+  if (!v || typeof v !== 'object' || depth > 1) return false;
+  if (Array.isArray(v)) return v.some(x => looksLikePhaserObject(x, depth + 1));
+  return !!(v.scene && v.scene.sys) || !!(v.sys && v.sys.game);
+}
+
 function serializeCharacter(c) {
   // shallow clone to avoid mutating in-place
   const out = { ...c };
+
+  // Drop anything that cannot survive JSON. Deliberately done BEFORE the
+  // equipment/inventory rebuild below so the sweep never has to look inside
+  // item instances, which are plain data.
+  for (const k of RUNTIME_CHAR_KEYS) delete out[k];
+  for (const k of Object.keys(out)) {
+    if (looksLikePhaserObject(out[k])) delete out[k];
+  }
 
   // persist items as instances-with-metadata
   out.equipment = serializeEquipment(c.equipment);
@@ -316,10 +415,20 @@ const GameState = {
     chars.forEach(char => {
       if (!char || char.status === 'dead') return;
 
+      // At the cap XP stops accruing entirely rather than piling up invisibly:
+      // Reckoning tiers pay out every clear, so an uncapped counter would grow
+      // forever behind a bar that never moves. Experience is pinned to the
+      // requirement so the bar reads full.
+      if (char.level >= LEVEL_CAP) {
+        char.experience = getXPNeededForLevel(char.level);
+        summaries.push(`${char.name} is at the level cap (Lv ${LEVEL_CAP}).`);
+        return;
+      }
+
       char.experience = (char.experience || 0) + amount;
       let summary = `${char.name} gains ${amount} XP`;
 
-      while (char.experience >= getXPNeededForLevel(char.level)) {
+      while (char.level < LEVEL_CAP && char.experience >= getXPNeededForLevel(char.level)) {
         char.experience -= getXPNeededForLevel(char.level);
         char.level++;
         applyLevelUp(char);
@@ -352,10 +461,20 @@ const GameState = {
     this.party.forEach(char => {
       if (char.status === 'dead') return;
 
+      // At the cap XP stops accruing entirely rather than piling up invisibly:
+      // Reckoning tiers pay out every clear, so an uncapped counter would grow
+      // forever behind a bar that never moves. Experience is pinned to the
+      // requirement so the bar reads full.
+      if (char.level >= LEVEL_CAP) {
+        char.experience = getXPNeededForLevel(char.level);
+        summaries.push(`${char.name} is at the level cap (Lv ${LEVEL_CAP}).`);
+        return;
+      }
+
       char.experience += amount;
       let summary = `${char.name} gains ${amount} XP`;
 
-      while (char.experience >= getXPNeededForLevel(char.level)) {
+      while (char.level < LEVEL_CAP && char.experience >= getXPNeededForLevel(char.level)) {
         char.experience -= getXPNeededForLevel(char.level);
         char.level++;
         applyLevelUp(char);
@@ -409,19 +528,23 @@ const GameState = {
       partyOrder: Array.isArray(this.partyOrder) ? this.partyOrder.slice() : [],
       partySlots: this.partySlots ? { ...this.partySlots } : {}
     };
-    console.log('[SAVE] partyIds=', payload.partyIds);////for testing
-    (payload.characters || []).forEach((ch, i) => {
-      console.log(`[SAVE] char#${i} id=${ch.id} inv=${(ch.inventory || []).length}`, ch.inventory);
-      console.log(`[SAVE] char#${i} equip keys=`, Object.keys(ch.equipment || {}));
-      console.log(`[SAVE] char#${i} equip snapshot=`, ch.equipment);
-    });
-    console.log('>>> DEBUG SAVE snapshot:', JSON.stringify(payload.characters, null, 2));
+    // NOTE: no unguarded JSON.stringify above the try/catch below. A debug
+    // snapshot line used to live here and was what actually took the game
+    // down on a circular payload — the guarded write below would merely have
+    // logged and continued.
     // localStorage.setItem THROWS when storage is unavailable or full - most
     // commonly iOS Safari private browsing, where the quota is effectively
     // zero. Unguarded, that took down whatever triggered the save (autosave
     // fires from several places, including mid-scene transitions).
     try {
-      localStorage.setItem(`bmSave_${slot}`, JSON.stringify(payload));
+      const { json, dropped } = safeStringify(payload);
+      if (dropped.length) {
+        // Not fatal — these are engine objects that were never save data — but
+        // surfaced so an unexpected field going missing is caught early.
+        console.warn('[GameState] save dropped non-serialisable fields:',
+          Array.from(new Set(dropped)).join(', '));
+      }
+      localStorage.setItem(`bmSave_${slot}`, json);
     } catch (e) {
       const why = e && e.name === 'QuotaExceededError'
         ? 'Browser storage is full or unavailable (private browsing blocks saving).'

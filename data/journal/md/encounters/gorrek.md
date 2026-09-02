@@ -45,12 +45,12 @@ Overwhelmingly physical. Physical Resist and Resilience are the defensive stats 
 
 | Combatant | Type | HP | Abilities |
 |---|---|---|---|
-| **Gorrek** | `berserker_boss` | 850 | 12 |
+| **Gorrek** | `berserker_boss` | 1000 | 12 |
 
 
 ### Gorrek
 
-**HP** 850 - **MP** 150 - **Resists** Physical 20% - **Resilience** 30 - **Stats** STR 20 / DEX 10 / CON 16 / INT 8 / WIS 8 / CHA 12
+**HP** 1000 - **MP** 150 - **Resists** Physical 20% - **Resilience** 30 - **Stats** STR 20 / DEX 10 / CON 16 / INT 8 / WIS 8 / CHA 12
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
@@ -70,14 +70,29 @@ Overwhelmingly physical. Physical Resist and Resilience are the defensive stats 
 
 ## Reckoning Ladder
 
-Each tier unlocks by clearing the one before it. Toughness is the primary lever; the kit itself only grows at the marked tiers.
+Each tier is unlocked by clearing the BASE encounter, not the tier below it — the ladder is not a chain, so a tier can be attempted in any order.
+
+Toughness is the primary lever; the kit itself only grows at the marked tiers.
 
 | Tier | HP | Resists (P / E / N) | Resilience | New at this tier |
 |---|---|---|---|---|
-| Reckoning I | 950 | 30 / 8 / 8 | 42 | uncommon armour; wears the Zafaar Pendant of Lacerations |
-| Reckoning II | 1050 | 40 / 16 / 16 | 54 | gains Steel Mind; uncommon armour |
-| Reckoning III | 1150 | 50 / 24 / 24 | 66 | rare armour |
-| Reckoning IV | 1250 | 60 / 32 / 32 | 78 | Initiative-slow aura (40%); rare armour; wears the Zafaar Band of Warding |
-| Reckoning V | 1350 | 70 / 40 / 40 | 90 | Initiative-slow aura (40%); epic armour |
+| Reckoning I | 1480 | 30 / 8 / 8 | 42 | uncommon armour; wears the Zafaar Pendant of Lacerations |
+| Reckoning II | 1780 | 40 / 16 / 16 | 54 | gains Steel Mind; uncommon armour; wears the Zafaar Pendant of Lacerations |
+| Reckoning III | 2080 | 50 / 24 / 24 | 66 | rare armour; wears the Zafaar Pendant of Lacerations |
+| Reckoning IV | 2380 | 60 / 32 / 32 | 78 | Initiative-slow aura (40%); rare armour; wears the Zafaar Pendant of Lacerations; wears the Zafaar Band of Warding |
+| Reckoning V | 2680 | 70 / 40 / 40 | 90 | Initiative-slow aura (40%); epic armour; wears the Zafaar Pendant of Lacerations; wears the Zafaar Band of Warding |
+
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 60 | - | item level 3, base tier 1 |
+| Reckoning I | 60 | 8 | item level 3, up to base tier 2 |
+| Reckoning II | 75 | 10 | item level 3, up to base tier 2 |
+| Reckoning III | 90 | 12 | item level 3, up to base tier 2 |
+| Reckoning IV | 105 | 14 | item level 3, up to base tier 2 |
+| Reckoning V | 120 | 18 | item level 3, up to base tier 2 |
 
 <!-- GEN:END -->

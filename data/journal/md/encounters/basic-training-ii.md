@@ -54,7 +54,30 @@ After this, the pit stops being polite — [[The Animated Six]] hit back.
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
-| **Shuffle** | bonus | - | - | Bonus action. Shifts one column sideways, changing which of your ranks can reach it. |
+| **Shuffle** | bonus | - | - | Shifts one column sideways, changing which of your ranks can reach it. |
 
+
+## Reckoning Ladder
+
+Each tier is unlocked by clearing the BASE encounter, not the tier below it — the ladder is not a chain, so a tier can be attempted in any order.
+
+Toughness is the primary lever; the kit itself only grows at the marked tiers.
+
+| Tier | HP | Resists (P / E / N) | Resilience | New at this tier |
+|---|---|---|---|---|
+| Reckoning I | 45 | 0 / 0 / 0 | 0 | - |
+| Reckoning II | 80 | 20 / 0 / 0 | 30 | - |
+| Reckoning III | 110 | 60 / 32 / 32 | 78 | - |
+
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 30 | - | item level 1, base tier 1 |
+| Reckoning I | 25 | 2 | item level 3, up to base tier 2 |
+| Reckoning II | 35 | 2 | item level 3, up to base tier 2 |
+| Reckoning III | 45 | 4 | item level 3, up to base tier 2 |
 
 <!-- GEN:END -->

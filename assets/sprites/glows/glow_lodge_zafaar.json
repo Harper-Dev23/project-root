@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":876,"h":695},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":876,"h":695},
-	"sourceSize": {"w":876,"h":695}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":0,"y":695,"w":876,"h":695},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":876,"h":695},
-	"sourceSize": {"w":876,"h":695}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":0,"y":1390,"w":876,"h":695},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":876,"h":695},
-	"sourceSize": {"w":876,"h":695}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":0,"y":2085,"w":876,"h":695},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":876,"h":695},
-	"sourceSize": {"w":876,"h":695}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_lodge_zafaar.png",
-	"format": "RGBA8888",
-	"size": {"w":876,"h":2780},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:3b60d8c3190a5ae8fc167d483fbf1c23:2acb34236f3e5441710dfc08d80c7e07:b2a36de7888ad0f0e5765db48121636a$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 263,
+    "h": 208
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 263,
+    "h": 208
+   },
+   "sourceSize": {
+    "w": 263,
+    "h": 208
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 0,
+    "y": 208,
+    "w": 263,
+    "h": 208
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 263,
+    "h": 208
+   },
+   "sourceSize": {
+    "w": 263,
+    "h": 208
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 0,
+    "y": 416,
+    "w": 263,
+    "h": 208
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 263,
+    "h": 208
+   },
+   "sourceSize": {
+    "w": 263,
+    "h": 208
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 0,
+    "y": 624,
+    "w": 263,
+    "h": 208
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 263,
+    "h": 208
+   },
+   "sourceSize": {
+    "w": 263,
+    "h": 208
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_lodge_zafaar.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 263,
+   "h": 832
+  },
+  "scale": "1"
+ }
 }

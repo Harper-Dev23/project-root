@@ -620,6 +620,7 @@ class JournalOverlayView extends Phaser.GameObjects.Container {
             case 'huntTickets':  return ProgressionManager.huntTickets;
             case 'tribeTickets': return ProgressionManager.tribeTickets;
             case 'huntPoints':   return ProgressionManager.huntPoints;
+            case 'reckoningMarks': return ProgressionManager.reckoningMarks;
             default:             return undefined;
         }
     }

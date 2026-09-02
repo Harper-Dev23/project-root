@@ -31,6 +31,7 @@ const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { ENEMY_TYPES } = await import('../data/enemyTypes.js');
 const { SKILLS } = await import('../data/skills.js');
 const { Items: ITEMS } = await import('../data/items.js');
+const PM = (await import('../src/systems/ProgressionManager.js')).default;
 
 /** 'zafaar_amulet_lacerate' -> "Zafaar Pendant of Lacerations" */
 function itemName(id) {
@@ -47,16 +48,16 @@ const GEN_END = '<!-- GEN:END -->';
 // Encounter entries to emit. `extraTiers` folds variant scenarios (Gorrek's
 // Reckoning ladder) into the parent entry instead of spawning 5 near-identical
 // pages. `slug`/`order` drive placement in the journal tree.
+const tiers = (enc, n) =>
+  Array.from({ length: n }, (_, i) => `training_encounter_${enc}_reckoning_${i + 1}`);
+
 const SCENARIO_DOCS = [
   { id: 'training_encounter_1', slug: 'basic-training-i', order: 10 },
-  { id: 'training_encounter_2', slug: 'basic-training-ii', order: 20 },
-  { id: 'training_encounter_3', slug: 'the-animated-six', order: 30 },
-  { id: 'training_encounter_4', slug: 'huntsman-and-beasts', order: 40 },
-  { id: 'training_encounter_5', slug: 'elemental-duelists', order: 50 },
-  {
-    id: 'training_encounter_6', slug: 'gorrek', order: 60,
-    extraTiers: [1, 2, 3, 4, 5].map(n => 'training_encounter_6_reckoning_' + n),
-  },
+  { id: 'training_encounter_2', slug: 'basic-training-ii', order: 20, extraTiers: tiers(2, 3) },
+  { id: 'training_encounter_3', slug: 'the-animated-six', order: 30, extraTiers: tiers(3, 3) },
+  { id: 'training_encounter_4', slug: 'huntsman-and-beasts', order: 40, extraTiers: tiers(4, 3) },
+  { id: 'training_encounter_5', slug: 'elemental-duelists', order: 50, extraTiers: tiers(5, 3) },
+  { id: 'training_encounter_6', slug: 'gorrek', order: 60, extraTiers: tiers(6, 5) },
 ];
 
 // Individual adversary entries. Keyed by enemy type; one page each, reusable
@@ -71,6 +72,7 @@ const ADVERSARY_DOCS = [
   { type: 'huntsman_commander', slug: 'cade', order: 70 },
   { type: 'beast_oskar', slug: 'oskar', order: 80 },
   { type: 'beast_kiro', slug: 'kiro', order: 90 },
+  { type: 'beast_laki', slug: 'laki', order: 95 },
   { type: 'fire_duelist', slug: 'ember', order: 100 },
   { type: 'ice_duelist', slug: 'rime', order: 110 },
   // title override: the encounter page is also called "Gorrek", and a
@@ -156,10 +158,58 @@ function encounterBody(doc) {
   });
 
   if (doc.extraTiers && doc.extraTiers.length) {
-    out.push('## Reckoning Ladder' + NL);
-    out.push('Each tier unlocks by clearing the one before it. Toughness is the primary lever; the kit itself only grows at the marked tiers.' + NL);
+    out.push(reckoningLadder(doc));
+  }
+  out.push(rewardsBlock(doc));
+  return out.join(NL);
+}
+
+/**
+ * Reckoning ladder.
+ *
+ * Two different shapes exist in the data and both have to render:
+ *  - Gorrek's tiers are DISTINCT ENEMY TYPES (berserker_boss_reckoning_N), so
+ *    absolute HP/resists are read straight off the type.
+ *  - Encounters 2-5 reuse the SAME enemy types and scale them at the scenario
+ *    level via `enemyScale` { hpMult, derivedBonus }, so the honest thing to
+ *    print is the multiplier and the added resists, not a fake absolute.
+ * Detected per scenario rather than declared, so a tier that later switches
+ * approach needs no change here.
+ */
+function reckoningLadder(doc) {
+  const base = COMBAT_SCENARIOS[doc.id];
+  const usesScale = doc.extraTiers.some(id => COMBAT_SCENARIOS[id] && COMBAT_SCENARIOS[id].enemyScale);
+  const out = [];
+  out.push('## Reckoning Ladder' + NL);
+  out.push('Each tier is unlocked by clearing the BASE encounter, not the tier below it — '
+    + 'the ladder is not a chain, so a tier can be attempted in any order.' + NL);
+
+  if (usesScale) {
+    out.push('This ladder scales the same roster rather than replacing it. '
+      + 'Health is a multiplier on each combatant; resists and Resilience are added on top of whatever they already had.' + NL);
+    const rows = ['| Tier | Health | Added resists (P / E / N) | Added Resilience | New at this tier |', '|---|---|---|---|---|'];
+    const baseTypes = new Set((base.enemies || []).map(e => e.type));
+    doc.extraTiers.forEach(tierId => {
+      const tsc = COMBAT_SCENARIOS[tierId];
+      if (!tsc) return;
+      const sc = tsc.enemyScale || {};
+      const db = sc.derivedBonus || {};
+      const notes = [];
+      (tsc.enemies || []).forEach(e => {
+        if (!baseTypes.has(e.type)) notes.push('joined by ' + (e.name || (ENEMY_TYPES[e.type] || {}).name || e.type));
+      });
+      if (tsc.turnLimit) notes.push('must be finished inside ' + tsc.turnLimit + ' rounds');
+      const chest = ((tsc.enemies[0] || {}).drops || []).find(d => d.equip === 'chest');
+      if (chest && chest.rarity) notes.push(chest.rarity + ' armour');
+      rows.push('| ' + tierName(tsc) + ' | ' + (sc.hpMult ? '\u00d7' + sc.hpMult : 'unchanged')
+        + ' | +' + (db.PhysicalResist || 0) + ' / +' + (db.ElementalResist || 0) + ' / +' + (db.NecroticResist || 0)
+        + ' | +' + (db.Resilience || 0) + ' | ' + (notes.join('; ') || '-') + ' |');
+    });
+    out.push(rows.join(NL) + NL);
+  } else {
+    out.push('Toughness is the primary lever; the kit itself only grows at the marked tiers.' + NL);
     const rows = ['| Tier | HP | Resists (P / E / N) | Resilience | New at this tier |', '|---|---|---|---|---|'];
-    let prevSkills = new Set(ENEMY_TYPES[COMBAT_SCENARIOS[doc.id].enemies[0].type].skills || []);
+    let prevSkills = new Set(ENEMY_TYPES[base.enemies[0].type].skills || []);
     doc.extraTiers.forEach(tierId => {
       const tsc = COMBAT_SCENARIOS[tierId];
       if (!tsc) return;
@@ -174,7 +224,7 @@ function encounterBody(doc) {
       (tsc.enemies[0].drops || [])
         .filter(d => d.equip === 'amulet' || d.equip === 'ring')
         .forEach(j => notes.push('wears the ' + itemName(j.itemId)));
-      rows.push('| ' + tsc.name.replace(/^.*—\s*/, '') + ' | ' + t.maxHP + ' | '
+      rows.push('| ' + tierName(tsc) + ' | ' + t.maxHP + ' | '
         + (db.PhysicalResist || 0) + ' / ' + (db.ElementalResist || 0) + ' / ' + (db.NecroticResist || 0)
         + ' | ' + (db.Resilience || 0) + ' | ' + (notes.join('; ') || '-') + ' |');
       prevSkills = new Set(t.skills || []);
@@ -182,6 +232,32 @@ function encounterBody(doc) {
     out.push(rows.join(NL) + NL);
   }
   return out.join(NL);
+}
+
+function tierName(sc) {
+  return String(sc.name || '').replace(/^.*\u2014\s*/, '') || sc.id || '?';
+}
+
+/** XP, Marks and what the loot rolls as — all read from the data. */
+function rewardsBlock(doc) {
+  const ids = [doc.id, ...(doc.extraTiers || [])];
+  const rows = ['| Fight | XP | Reckoning Marks | Gear rolls as |', '|---|---|---|---|'];
+  ids.forEach(id => {
+    const sc = COMBAT_SCENARIOS[id];
+    if (!sc) return;
+    const marks = PM.getMarkReward ? PM.getMarkReward(id) : 0;
+    const loot = sc.loot || {};
+    const lvl = loot.itemLevel != null ? 'item level ' + loot.itemLevel : 'item level 1';
+    const cap = loot.maxBaseTier === 1 ? 'base tier 1'
+      : loot.maxBaseTier === 2 ? 'up to base tier 2' : 'base tier 1';
+    const label = id === doc.id ? 'Base encounter' : tierName(sc);
+    rows.push('| ' + label + ' | ' + (sc.xpReward || 0) + ' | ' + (marks || '-') + ' | ' + lvl + ', ' + cap + ' |');
+  });
+  return ['## Rewards' + NL,
+    'XP is awarded every time the fight is cleared, not only the first. '
+    + 'Reckoning Marks are the same — they are the currency the pit pays out for '
+    + 'repeating its harder work, and they are spent at the bone pile.' + NL,
+    rows.join(NL) + NL].join(NL);
 }
 
 function adversaryBody(doc) {

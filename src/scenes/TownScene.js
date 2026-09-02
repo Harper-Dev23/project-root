@@ -4,7 +4,7 @@ import { LEADER_QUEST_REP_GAIN } from '../systems/TribeRelations.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import { Items } from '../../data/items.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
-import { createItemInstance, getItemComputedData } from '../systems/ItemFactory.js';
+import { createItemInstance, getItemComputedData, pickBaseId } from '../systems/ItemFactory.js';
 import Tooltip from '../ui/Tooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
@@ -165,6 +165,16 @@ function randomRarityForGamble() {
   return 'epic';
 }
 
+// Reckoning Marks buy a better roll than a Hunt Ticket does, on both axes:
+// this rarity table (which decides affix COUNT) and a higher item level plus
+// a tier-2 base cap at the call site (which decide affix TIER and base type).
+function randomRarityForMarkedGamble() {
+  const r = Math.random();
+  if (r < 0.30) return 'uncommon';
+  if (r < 0.75) return 'rare';
+  return 'epic';
+}
+
 // Weapon types actually brought up to the current v3.23 skill standard (see
 // project memory) — sword_1h/dagger/staff/mace_2h/bow/axe_2h are done.
 // Everything else (sword_2h, spear_1h, whip, sling, gun, wand, shield) is
@@ -180,23 +190,21 @@ const BONE_DROP_CHANCE = 0.01;
 function getWeaponIdPool() {
   return Object.entries(Items)
     .filter(([, it]) => it?.type === 'weapon' && !it?.locked && !it?.unique && !it?.renownOrigin
+      && !it?.natural
       && GAMBLE_WEAPON_TYPES.includes(it?.weaponType))
     .map(([id]) => id);
 }
 
-// Bone weapons are a parallel base type, not an upgrade path off Crude. They
-// share the same droppable weapon types so a Bone drop is always something the
-// player could otherwise have received, just rarer and stronger.
-function getBoneWeaponIdPool() {
-  return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'weapon' && it?.renownOrigin === 'bone'
-      && GAMBLE_WEAPON_TYPES.includes(it?.weaponType))
-    .map(([id]) => id);
-}
+// Bone is no longer a separate pool of base items — it is an OVERLAY stamped
+// onto whatever base the normal draw picked (see RENOWN_ORIGINS.bone in
+// ItemFactory.js), which is what lets it appear on any base tier. The 13
+// legacy bone_* items still exist so saved copies resolve, but nothing draws
+// from them any more; getWeaponIdPool already excludes anything carrying a
+// renownOrigin, so they cannot come up as an ordinary base either.
 
 function getArmorIdPool() {
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === 'armor' && it?.slot !== 'ring' && it?.slot !== 'amulet' && !it?.locked && !it?.unique)
+    .filter(([, it]) => it?.type === 'armor' && it?.slot !== 'ring' && it?.slot !== 'amulet' && !it?.locked && !it?.unique && !it?.natural)
     .map(([id]) => id);
 }
 
@@ -612,7 +620,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_bonfire',
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 649, y: 330,
-      scale: 0.14,
+      scale: 0.5003,
       fps: 4,
       alpha: 0.9
     }, {
@@ -633,7 +641,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_mourne_hut',  // <-- MUST match LoadingScene GLOW_KEYS
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 888, y: 497,          // <-- GLOW's visual position (adjust here for glow placement)
-      scale: 0.15,
+      scale: 0.4989,
       fps: 4,
       alpha: 0.9
     }, {
@@ -648,7 +656,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_tribe_vendor',
       frames: COMMON_FRAMES,
       x: 521, y: 438,
-      scale: 0.15,
+      scale: 0.4993,
       fps: 4,
       alpha: 0.8
     }, {
@@ -663,7 +671,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_vendor_row',            // TEMP art; swap to a vendor-row glow when you have one
       frames: COMMON_FRAMES,
       x: 483, y: 393,                 // GLOW position (adjust here)
-      scale: 0.15,
+      scale: 0.4995,
       fps: 4,
       alpha: 0.8
     }, {
@@ -680,7 +688,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_lodge_styx',                          // TEMP art; swap to your lodge atlas when ready
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 351, y: 219,                               // GLOW position (adjust here to nudge the glow)
-      scale: 0.15,                                  // GLOW size
+      scale: 0.5006,                                  // GLOW size
       fps: 4,
       alpha: 0.9                                    // GLOW intensity (lower = dimmer)
     }, {
@@ -694,7 +702,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_lodge_zafaar',                          // TEMP art
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 729, y: 66,                                // adjust glow here
-      scale: 0.15,
+      scale: 0.4996,
       fps: 4,
       alpha: 0.9
     }, {
@@ -708,7 +716,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_lodge_elseth',                          // TEMP art
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 995, y: 190,                              // adjust glow here
-      scale: 0.15,
+      scale: 0.5003,
       fps: 4,
       alpha: 0.9
     }, {
@@ -722,7 +730,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_lodge_lesse',                          // TEMP art
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 638, y: 498,                               // adjust glow here
-      scale: 0.15,
+      scale: 0.4999,
       fps: 4,
       alpha: 0.9
     }, {
@@ -737,7 +745,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_seers_tent',
       frames: COMMON_FRAMES,
       x: 999, y: 435,
-      scale: 0.15,
+      scale: 0.4993,
       fps: 4,
       alpha: 0.9
     }, {
@@ -752,7 +760,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_waystone',
       frames: COMMON_FRAMES,
       x: 935, y: 426,
-      scale: 0.16,
+      scale: 0.499,
       fps: 4,
       alpha: 0.8
     }, {
@@ -767,7 +775,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_elders_tower',
       frames: COMMON_FRAMES,
       x: 897, y: 372,
-      scale: 0.15,
+      scale: 0.501,
       fps: 4,
       alpha: 0.9
     }, {
@@ -787,7 +795,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_leader_hut_styx',  // TEMP art; swap to your own atlas when you have it
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 308, y: 325,       // GLOW position (adjust this to nudge the visual glow)
-      scale: 0.16,
+      scale: 0.5006,
       fps: 4,
       alpha: 0.9
     }, {
@@ -801,7 +809,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_leader_hut_zafaar',
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 894, y: 110,       // adjust glow here
-      scale: 0.16,
+      scale: 0.5013,
       fps: 4,
       alpha: 0.9
     }, {
@@ -815,7 +823,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_leader_hut_elseth',
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 1055, y: 341,      // adjust glow here
-      scale: 0.16,
+      scale: 0.501,
       fps: 4,
       alpha: 0.8
     }, {
@@ -829,7 +837,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_leader_hut_lesse',
       frames: ['frame0000.png', 'frame0001.png', 'frame0002.png', 'frame0003.png'],
       x: 524, y: 493,       // adjust glow here
-      scale: 0.16,
+      scale: 0.5006,
       fps: 4,
       alpha: 0.9
     }, {
@@ -844,7 +852,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_combat_pit',
       frames: COMMON_FRAMES,
       x: 824, y: 71,
-      scale: 0.15,
+      scale: 0.5,
       fps: 4,
       alpha: 0.9
     }, {
@@ -859,7 +867,7 @@ export default class TownScene extends Phaser.Scene {
       key: 'glow_exit_gate',
       frames: COMMON_FRAMES,
       x: 505, y: 147,
-      scale: 0.16,
+      scale: 0.4997,
       fps: 4,
       alpha: 0.9
     }, {
@@ -1047,7 +1055,7 @@ export default class TownScene extends Phaser.Scene {
 
   /** Returns a formatted currency string for vendor panel headers. */
   _currencyLine() {
-    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}`;
+    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Marks: ${ProgressionManager.reckoningMarks}`;
   }
 
   /** Updates any live vendor currency text objects. */
@@ -1604,7 +1612,7 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.y = 0;
 
       const PANEL_BOTTOM = 595;
-      const BONEPILE_LOG_START_Y = 300; // <-- adjust this single number
+      const BONEPILE_LOG_START_Y = 345; // <-- adjust this single number (4 buttons above it)
       const LOG_X = 590;
       const LOG_LINE_H = 24;
       // The inventory mask spans x 550..1050 (see _setInventoryMaskTop), and the
@@ -1626,22 +1634,30 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.lineHeight = LOG_LINE_H;
       this.vendorInventoryContainer.y = 0;
 
-      const createGambleButton = ({ label, y, cost, poolGetter, emptyMessage, pickPool }) => {
-        const ticketWord = cost === 1 ? 'Hunt Ticket' : 'Hunt Tickets';
-        const btn = this.add.text(620, y, `[ Gamble ${label} — ${cost} ${ticketWord} ]`, {
+      // `currency` selects which counter is charged and how the button reads.
+      // `itemLevel` / `maxBaseTier` / `rarityRoller` are what actually separate
+      // a Marked roll from a Ticket roll — see the two Marked buttons below.
+      const createGambleButton = ({
+        label, y, cost, poolGetter, emptyMessage, rollOrigin,
+        currency = 'huntTickets', currencyName = 'Hunt Ticket',
+        itemLevel = null, maxBaseTier = null, minBaseTier = null,
+        rarityRoller = randomRarityForGamble, color = '#ffddaa',
+      }) => {
+        const currencyWord = cost === 1 ? currencyName : `${currencyName}s`;
+        const btn = this.add.text(620, y, `[ Gamble ${label} — ${cost} ${currencyWord} ]`, {
           fontSize: '20px',
-          color: '#ffddaa'
+          color
         })
           .setDepth(13)
           .setInteractive({ useHandCursor: true })
           .on('pointerover', function () { this.setColor('#ffffff'); })
-          .on('pointerout', function () { this.setColor('#ffddaa'); })
+          .on('pointerout', function () { this.setColor(color); })
           .on('pointerdown', () => {
-            if (ProgressionManager.huntTickets < cost) {
-              this.vendorInventoryText.setText(`You need at least ${cost} Hunt Ticket${cost > 1 ? 's' : ''} to gamble here.`);
+            if ((ProgressionManager[currency] || 0) < cost) {
+              this.vendorInventoryText.setText(`You need at least ${cost} ${currencyWord} to gamble here.`);
               return;
             }
-            ProgressionManager.huntTickets -= cost;
+            ProgressionManager[currency] -= cost;
             GameState.save('autosave');
             this._updateVendorCurrencyDisplay();
 
@@ -1651,16 +1667,41 @@ export default class TownScene extends Phaser.Scene {
               return;
             }
 
-            // A renown drop replaces the pool outright rather than upgrading the
-            // rolled item, so the Bone weapon is simply a different base type
-            // that happened to come up. Rarity is rolled independently, so a
-            // common Bone Dagger is a perfectly good outcome.
-            const activePool = (typeof pickPool === 'function' && pickPool()) || pool;
-            const baseId = activePool[(Math.random() * activePool.length) | 0];
-            const q = randomRarityForGamble();
+            // A renown origin is now an OVERLAY on the base that was going to
+            // drop anyway, not a swap to a separate pool of 13 hand-written
+            // Bone items. That is what lets Bone appear on ANY base tier —
+            // under the old swap it was permanently stuck at tier 1, so the
+            // rarest drop in the game had the weakest base. Rarity is still
+            // rolled independently, so a common Bone Dagger is a fine outcome.
+            const origin = (typeof rollOrigin === 'function' && rollOrigin()) || null;
+            const q = rarityRoller();
             // droppedFrom is threaded through so the renown history log records
             // where the item came from; harmless on non-renown items.
-            const inst = createItemInstance(baseId, { rarity: q, droppedFrom: 'bonepile' });
+            // Item level for a bone-pile roll is the party's highest character
+            // level. Computed HERE and passed in: createItemInstance never
+            // looks it up itself, so a future zone or hunt can supply its own
+            // level through the same argument without touching the factory.
+            // A Marked roll declares its own item level rather than reading the
+            // party's, so Marks stay worth spending at the level cap.
+            const partyLevel = itemLevel
+              ?? Math.max(1, ...(GameState.party || []).map(c => c?.level || 1));
+            // Base type is drawn AFTER the level is known, so item level gates
+            // which tiers of base were in the pool at all -- the same axis it
+            // already gates affix tiers on. Bone is picked before this (see
+            // pickPool) and is a one-entry-per-type pool, so weighting it is a
+            // no-op rather than a special case.
+            // maxBaseTier passed EXPLICITLY rather than relying on the level
+            // cap to keep tier 3 out of reach. Ancestral is meant to be late
+            // game; leaning on "level 3 < minItemLevel 5" would silently open
+            // it the day the XP cap moves.
+            const baseId = pickBaseId(pool, partyLevel,
+              (maxBaseTier || minBaseTier) ? { maxBaseTier, minBaseTier } : undefined);
+            const inst = createItemInstance(baseId, {
+              rarity: q, droppedFrom: 'bonepile', itemLevel: partyLevel,
+              // undefined rather than null when there is no overlay, so
+              // createItemInstance falls through to base.renownOrigin.
+              renownOrigin: origin || undefined,
+            });
             if (!inst) {
               this.vendorInventoryText.setText(`Failed to create instance for ${baseId}.`);
               return;
@@ -1721,20 +1762,29 @@ export default class TownScene extends Phaser.Scene {
         else this.add.existing(btn);
       };
 
+      // The two button sets map ONE-TO-ONE onto the two base tiers: a Hunt
+      // Ticket always buys a tier-1 base, a Reckoning Mark always buys a
+      // tier-2 one. Deliberately NOT the weighted item-level draw the rest of
+      // the game uses — that system stays exactly as it is for drops, party
+      // finds and (later) hunting. This is a shop, and a shop should say what
+      // it sells. Without the cap a Ticket roll drifted into tier 2 as the
+      // party levelled, which blurred the only thing separating the two
+      // currencies.
+      const TICKET_MAX_BASE_TIER = 1;
+
       createGambleButton({
         label: 'Weapons',
         y: 220,
         cost: 1,
+        maxBaseTier: TICKET_MAX_BASE_TIER,
         poolGetter: () => getWeaponIdPool(),
         // 1-in-100: the pile gives up something that remembers being alive.
-        // createItemInstance stamps the renown fields off the base's own
-        // renownOrigin, so nothing further is needed here.
-        pickPool: () => {
+        // Returns an ORIGIN to overlay on whatever base the normal draw picks,
+        // so a Bone roll can land on a Crude, Hardened or Ancestral base.
+        rollOrigin: () => {
           if (Math.random() >= BONE_DROP_CHANCE) return null;
-          const bones = getBoneWeaponIdPool();
-          if (!bones.length) return null;
           SoundManager.play('gambleEpic');
-          return bones;
+          return 'bone';
         },
         emptyMessage: 'No weapon IDs found in Items.js.'
       });
@@ -1743,6 +1793,63 @@ export default class TownScene extends Phaser.Scene {
         label: 'Armor',
         y: 250,
         cost: 1,
+        maxBaseTier: TICKET_MAX_BASE_TIER,
+        poolGetter: () => getArmorIdPool(),
+        emptyMessage: 'No armor IDs found in Items.js.'
+      });
+
+      // === Reckoning Marks ===================================================
+      // Earned only from Reckoning tiers (MARK_REWARDS in ProgressionManager),
+      // and the only way to reliably buy a tier-2 base. Item level 3 matches
+      // what the Reckoning encounters themselves drop; the tier-2 cap is
+      // explicit so Ancestral stays out of the game until it is meant to be in
+      // it. Bone can still overlay these, which is how a Bone Hardened weapon
+      // becomes reachable at all.
+      // Floor, not a fixed value: a Marked roll is worth at least what the
+      // Reckoning encounters themselves drop (item level 3), and rises with
+      // the party once the level cap moves — so Marks keep pace instead of
+      // becoming the worse currency the moment levelling opens up.
+      const MARK_ITEM_LEVEL = Math.max(
+        3, ...(GameState.party || []).map(c => c?.level || 1));
+      // Floor AND ceiling, both 2: a Mark always buys a tier-2 base, never a
+      // Crude one and never an Ancestral one. Without the floor a Mark bought
+      // the same 75%-tier-1 spread a Hunt Ticket does — measured identical —
+      // because the level cap was already keeping tier 3 out on its own, so
+      // the ceiling alone bought nothing.
+      const MARK_MIN_BASE_TIER = 2;
+      const MARK_MAX_BASE_TIER = 2;
+
+      createGambleButton({
+        label: 'Marked Weapons',
+        y: 285,
+        cost: 1,
+        currency: 'reckoningMarks',
+        currencyName: 'Reckoning Mark',
+        color: '#c8a0ff',
+        itemLevel: MARK_ITEM_LEVEL,
+        minBaseTier: MARK_MIN_BASE_TIER,
+        maxBaseTier: MARK_MAX_BASE_TIER,
+        rarityRoller: randomRarityForMarkedGamble,
+        poolGetter: () => getWeaponIdPool(),
+        rollOrigin: () => {
+          if (Math.random() >= BONE_DROP_CHANCE) return null;
+          SoundManager.play('gambleEpic');
+          return 'bone';
+        },
+        emptyMessage: 'No weapon IDs found in Items.js.'
+      });
+
+      createGambleButton({
+        label: 'Marked Armor',
+        y: 315,
+        cost: 1,
+        currency: 'reckoningMarks',
+        currencyName: 'Reckoning Mark',
+        color: '#c8a0ff',
+        itemLevel: MARK_ITEM_LEVEL,
+        minBaseTier: MARK_MIN_BASE_TIER,
+        maxBaseTier: MARK_MAX_BASE_TIER,
+        rarityRoller: randomRarityForMarkedGamble,
         poolGetter: () => getArmorIdPool(),
         emptyMessage: 'No armor IDs found in Items.js.'
       });
@@ -3151,9 +3258,9 @@ export default class TownScene extends Phaser.Scene {
           procDoubleDamage:     `${lo}–${hi}% Chance: Double Damage`,
           procHalfDamageTaken:  `${lo}–${hi}% Chance: Halve Damage Taken`,
           procHealOnHeal:       `${lo}–${hi}% Chance: Double Heal`,
-          procPhysFlat:         `${lo}–${hi}% Chance: +20 Physical Damage`,
-          procElemFlat:         `${lo}–${hi}% Chance: +20 Elemental Damage`,
-          procNecroFlat:        `${lo}–${hi}% Chance: +20 Necrotic Damage`,
+          procPhysFlat:         `${lo}–${hi}% Chance: +10 Physical Damage`,
+          procElemFlat:         `${lo}–${hi}% Chance: +10 Elemental Damage`,
+          procNecroFlat:        `${lo}–${hi}% Chance: +10 Necrotic Damage`,
         };
         if (MAP[affix.family]) tipLines.push(MAP[affix.family]);
       }

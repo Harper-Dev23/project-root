@@ -216,9 +216,11 @@ _renderPills(tags = []) {
    * (x 1100-1280) belongs to UIScene and renders ABOVE TownScene -- a tooltip
    * clamped only to the canvas edge slid underneath it and became unreadable.
    */
-  setBounds(left, right) {
+  setBounds(left, right, top, bottom) {
     this.boundsLeft = left;
     this.boundsRight = right;
+    if (Number.isFinite(top)) this.boundsTop = top;
+    if (Number.isFinite(bottom)) this.boundsBottom = bottom;
     return this;
   }
 
@@ -244,7 +246,17 @@ _renderPills(tags = []) {
         px = Math.max(left + 8, right - w - 8);
       }
     }
-    const py = (y - h - margin >= 8) ? y - h - margin : y + margin;
+    // Vertical placement had NO bottom clamp: it flipped above the cursor when
+    // there was room and otherwise dropped below, so a tall tooltip (a weapon
+    // with the Alt affix breakdown open is the usual offender) simply ran off
+    // the bottom of the screen. Now it prefers above, then below, and finally
+    // clamps inside the allowed band — matching how the horizontal axis has
+    // always behaved.
+    const top = this.boundsTop ?? 0;
+    const bottom = this.boundsBottom ?? (this.scene?.scale?.height ?? 720);
+    let py = (y - h - margin >= top + 8) ? y - h - margin : y + margin;
+    if (py + h > bottom - 8) py = bottom - h - 8;
+    if (py < top + 8) py = top + 8;
     this.container.setPosition(px, py);
   }
 

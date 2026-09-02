@@ -1124,14 +1124,20 @@ const NPC_ONLY_SKILLS = {
     apply: (_user, target, scene) => {
       if (!target?.weakness) return { amount: 0 };
       const w = target.weakness;
+      // Caps at CLEANSE_MAX per family rather than wiping the meters. A full
+      // clear meant a whole turn of necrotic pressure could be undone by one
+      // cast, which made stacking those families against Stan pointless
+      // rather than merely harder.
+      const CLEANSE_MAX = 200;
       let removed = false;
       for (const fam of ['curse', 'disease', 'toxic']) {
-        if ((w.meters?.[fam] || 0) > 0) {
-          w.meters[fam] = 0;
-          w.tiers[fam] = 0;
+        const cur = w.meters?.[fam] || 0;
+        if (cur > 0) {
+          w.meters[fam] = Math.max(0, cur - CLEANSE_MAX);
           removed = true;
         }
       }
+      scene?._recomputeWeaknessTiers?.(target);
       if (removed) {
         scene?._log?.(`${target.name} is cleansed of maladies.`);
         target.currentMP = Math.min(target.maxMP || 0, (target.currentMP || 0) + 4);
@@ -1139,7 +1145,7 @@ const NPC_ONLY_SKILLS = {
       }
       return { amount: 0 };
     },
-    description: "Clears an ally's Curse, Disease, and Toxic buildup entirely. Restores 4 MP if anything was cleansed."
+    description: "Removes up to 200 Curse, Disease and Toxic buildup from an ally. Restores 4 MP if anything was cleansed."
   },
   // Display name changed from "Blessing" to avoid colliding with the
   // player Acolyte's own class skill of the same original name — same
@@ -2038,12 +2044,18 @@ const NPC_ONLY_SKILLS = {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: 90, skillLabel: `${ability?.name || 'Skill'} weapon damage (90%)`,
+          skillPct: 75, skillLabel: `${ability?.name || 'Skill'} weapon damage (75%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
           skillConversion: { physToElemPct: 100 },
         }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Consume the channel. The AI gates this release on `channeling_inferno`
+      // (AIProfiles) but nothing removed it, and the status lasts 2 turns — so
+      // a single channel bought TWO Infernos back to back, at 0 MP and no
+      // cooldown. One channel, one release.
+      scene?._clearScopedStatus?.(attacker, 'channeling_inferno');
 
       // Was scene.turnOrder?.filter(...) — silently bypassed Blockade's wall
       // (see CombatScene._getTargetableEnemiesFor).
@@ -17124,6 +17136,10 @@ Object.assign(RAW_SKILLS, {
       target.statusEffects = target.statusEffects || [];
       target.statusEffects.push({
         id: 'lodged', baseHeal, healScalingBonus: 0.10, healOnCrit: true, stackable: true,
+        // Bleeds weakness off the host every turn it stays lodged, so the barb
+        // is worth planting early rather than only mattering at the moment it
+        // pops. Stacks with itself, since lodges are stackable.
+        tickWeaknessRelief: 25,
         // Soft blue-white hue — visually distinct from a damage lodge's
         // reds/golds on the portrait (see _refreshLodgeSprites).
         tint: 0x9fd6ff,
@@ -17135,7 +17151,7 @@ Object.assign(RAW_SKILLS, {
         log: `${attacker?.name ?? 'Archer'} lodges a mending barb in ${target?.name ?? 'the ally'} (${lodgeCount} lodge${lodgeCount !== 1 ? 's' : ''}).`,
       };
     },
-    description: "Bonus: lodge a mending barb in an ally. The next time they take a critical hit, every mending barb on them bursts at once, healing them — each one's own payout growing 10% per OTHER lodge (of any kind) present."
+    description: "Bonus: lodge a mending barb in an ally. While lodged it eases 25 of every weakness buildup on them each turn. The next time they take a critical hit, every mending barb on them bursts at once, healing them — each one's own payout growing 10% per OTHER lodge (of any kind) present."
   },
 
   // Same shape as Barbed Shaft, re-themed to Lightning — a charged

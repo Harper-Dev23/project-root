@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":729,"h":577},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":729,"h":577},
-	"sourceSize": {"w":729,"h":577}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":729,"y":0,"w":729,"h":577},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":729,"h":577},
-	"sourceSize": {"w":729,"h":577}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":0,"y":577,"w":729,"h":577},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":729,"h":577},
-	"sourceSize": {"w":729,"h":577}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":729,"y":577,"w":729,"h":577},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":729,"h":577},
-	"sourceSize": {"w":729,"h":577}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_seer's_tent.png",
-	"format": "RGBA8888",
-	"size": {"w":1458,"h":1154},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:556649f38f4a466c1fc65e54adc48655:fe9ba25f07bf3073d47cbce3317361d2:2ae82cec04d28b20d64a6a4d1ec64b32$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 219,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 219,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 219,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 0,
+    "y": 173,
+    "w": 219,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 219,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 219,
+    "y": 173,
+    "w": 219,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 219,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 219,
+    "h": 173
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_seer's_tent.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 438,
+   "h": 346
+  },
+  "scale": "1"
+ }
 }

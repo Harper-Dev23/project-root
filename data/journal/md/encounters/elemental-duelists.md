@@ -41,13 +41,13 @@ Almost entirely elemental. Elemental Resist is the stat that matters here; Physi
 
 | Combatant | Type | HP | Abilities |
 |---|---|---|---|
-| **Ember** | `fire_duelist` | 420 | 8 |
-| **Rime** | `ice_duelist` | 420 | 8 |
+| **Ember** | `fire_duelist` | 500 | 8 |
+| **Rime** | `ice_duelist` | 500 | 8 |
 
 
 ### Ember
 
-**HP** 420 - **MP** 130 - **Resists** Elemental 20% - **Resilience** 20 - **Stats** STR 14 / DEX 10 / CON 10 / INT 6 / WIS 4 / CHA 12
+**HP** 500 - **MP** 130 - **Resists** Elemental 20% - **Resilience** 20 - **Stats** STR 14 / DEX 10 / CON 10 / INT 6 / WIS 4 / CHA 12
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
@@ -63,7 +63,7 @@ Almost entirely elemental. Elemental Resist is the stat that matters here; Physi
 
 ### Rime
 
-**HP** 420 - **MP** 130 - **Resists** Physical 20% - **Resilience** 20 - **Stats** STR 10 / DEX 14 / CON 10 / INT 6 / WIS 12 / CHA 4
+**HP** 500 - **MP** 130 - **Resists** Physical 20% - **Resilience** 20 - **Stats** STR 10 / DEX 14 / CON 10 / INT 6 / WIS 12 / CHA 4
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
@@ -76,5 +76,28 @@ Almost entirely elemental. Elemental Resist is the stat that matters here; Physi
 | **Frost Retaliation** | reaction | - | 1 | Reaction: while Icy Guard is active, retaliate against an attacker for 60% weapon damage as Cold. |
 | **Basic Attack** | major | - | - | A quick physical strike. |
 
+
+## Reckoning Ladder
+
+Each tier is unlocked by clearing the BASE encounter, not the tier below it — the ladder is not a chain, so a tier can be attempted in any order.
+
+This ladder scales the same roster rather than replacing it. Health is a multiplier on each combatant; resists and Resilience are added on top of whatever they already had.
+
+| Tier | Health | Added resists (P / E / N) | Added Resilience | New at this tier |
+|---|---|---|---|---|
+| Reckoning I | ×1.35 | +8 / +8 / +8 | +20 | rare armour |
+| Reckoning II | ×1.7 | +18 / +18 / +18 | +40 | rare armour |
+| Reckoning III | ×2.1 | +30 / +30 / +30 | +62 | rare armour |
+
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 55 | - | item level 2, base tier 1 |
+| Reckoning I | 65 | 6 | item level 3, up to base tier 2 |
+| Reckoning II | 80 | 9 | item level 3, up to base tier 2 |
+| Reckoning III | 95 | 12 | item level 3, up to base tier 2 |
 
 <!-- GEN:END -->

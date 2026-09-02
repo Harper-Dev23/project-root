@@ -27,9 +27,9 @@ If Rime dies first, Ember enrages: attack power, crit and Resilience all climb, 
 
 ## Profile
 
-**HP** 420 - **MP** 130 - **Resists** Elemental 20% - **Resilience** 20 - **Stats** STR 14 / DEX 10 / CON 10 / INT 6 / WIS 4 / CHA 12
+**HP** 500 - **MP** 130 - **Resists** Elemental 20% - **Resilience** 20 - **Stats** STR 14 / DEX 10 / CON 10 / INT 6 / WIS 4 / CHA 12
 
-**Appears in:** Elemental Duelists
+**Appears in:** Elemental Duelists, Elemental Duelists — Reckoning I, Elemental Duelists — Reckoning II, Elemental Duelists — Reckoning III
 
 ## Abilities
 

@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":1058,"h":724},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1058,"h":724},
+	"sourceSize": {"w":1058,"h":724}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":0,"y":724,"w":1058,"h":724},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1058,"h":724},
+	"sourceSize": {"w":1058,"h":724}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":1448,"w":1058,"h":724},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1058,"h":724},
+	"sourceSize": {"w":1058,"h":724}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":0,"y":2172,"w":1058,"h":724},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1058,"h":724},
+	"sourceSize": {"w":1058,"h":724}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_lodge_styx.png",
+	"format": "RGBA8888",
+	"size": {"w":1058,"h":2896},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:a57a922b505a77e50b3823d7eaa75db5:0ea755fa13d639e6ba274f95be340520:1701c1121d05f4797a16e3ce4647aa4a$"
+}
+}

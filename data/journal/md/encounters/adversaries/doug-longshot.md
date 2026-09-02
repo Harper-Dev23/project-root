@@ -25,18 +25,18 @@ Doug answers when an ally is struck, adding damage from the back rank. He is les
 
 ## Profile
 
-**HP** 113 - **MP** 80 - **Stats** STR 6 / DEX 16 / CON 7 / INT 6 / WIS 7 / CHA 6
+**HP** 103 - **MP** 80 - **Stats** STR 6 / DEX 16 / CON 7 / INT 6 / WIS 7 / CHA 6
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Quick Shot** | bonus | 3 MP | - | Deals 4 damage and applies 60 Expose buildup. |
-| **Frost Arrow** | major | 5 MP | 1 | Deals 4 damage and applies 90 Cold buildup. |
-| **Volley** | class | 8 MP | 2 | Deals 3 damage to the target and 2 damage to every other party member. |
-| **Aimed Shot** | major | 8 MP | 2 | Requires the target to be Exposed (T1+). Deals 7 damage and consumes their Expose buildup. |
+| **Quick Shot** | bonus | 3 MP | - | Deals 34% weapon damage and applies 60 Expose buildup. |
+| **Frost Arrow** | major | 5 MP | 1 | Deals 34% weapon damage as Cold and applies 90 Cold buildup. |
+| **Volley** | class | 8 MP | 2 | Deals 25% weapon damage to the target and 67% of that to every other party member. |
+| **Aimed Shot** | major | 8 MP | 2 | Requires the target to be Exposed (T1+). Deals 59% weapon damage and consumes their Expose buildup. |
 | **Covering Shot** | reaction | 4 MP | 3 | Reaction: when you or an ally in your rank is struck by a projectile, 50% chance to shoot it down entirely — no damage, no effects. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 

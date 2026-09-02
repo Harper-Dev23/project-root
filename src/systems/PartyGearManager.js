@@ -3,8 +3,9 @@
 // Gear persists via ProgressionManager.partyGear; this module is pure logic.
 
 import { Items } from '../../data/items.js';
-import { createItemInstance } from './ItemFactory.js';
+import { createItemInstance, pickBaseId } from './ItemFactory.js';
 import ProgressionManager from './ProgressionManager.js';
+import GameState from './GameState.js';
 
 // The eight equippable slots available to a party (weaponOff omitted for simplicity).
 export const PARTY_EQUIP_SLOTS = [
@@ -27,8 +28,11 @@ export const PARTY_STASH_CAP = 8;
 const RARITY_SCORE = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
 
 // Items eligible for party drops: non-unique equippable gear only.
+// `natural` excludes beasts' fangs/claws/talons -- they are damage dice with a
+// name, never loot, and this is the one pool that does not already filter by
+// weapon type and so would otherwise have handed the player a set of Claws.
 export const DROP_POOL = Object.values(Items).filter(item =>
-  !item.unique && !item.locked &&
+  !item.unique && !item.locked && !item.natural &&
   (item.type === 'weapon' ||
    (item.type === 'armor' && PARTY_EQUIP_SLOTS.includes(item.slot)))
 ).map(item => item.id);
@@ -129,7 +133,14 @@ export function tryPartyItemFind(tribeId, partyId) {
   if (Math.random() > 0.25) return null; // 25% base find chance per day
   const gearScore = getPartyGearScore(tribeId, partyId);
   const rarity = rollDropRarity(gearScore);
-  const itemId = DROP_POOL[Math.floor(Math.random() * DROP_POOL.length)];
+  // Sent parties have no level of their own, so the player's own progress is
+  // what opens higher base tiers here -- the same number the bone pile uses.
+  // Without this the uniform draw would hand out Fitted/Ancestral bases from
+  // day one, which is the one way a passive daily find could outpace the
+  // gamble entirely.
+  const findLevel = Math.max(1, ...(GameState.party || []).map(ch => ch?.level || 1));
+  const itemId = pickBaseId(DROP_POOL, findLevel);
+  if (!itemId) return null;
   const item = createItemInstance(itemId, { rarity });
   if (!item) return null;
   gear.stash.push(item);

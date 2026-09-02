@@ -27,7 +27,7 @@ Cade deals comparatively little damage himself. What he does is **make his beast
 
 **HP** 330 - **MP** 100 - **Resists** Elemental 20% - **Stats** STR 8 / DEX 14 / CON 10 / INT 5 / WIS 6 / CHA 12
 
-**Appears in:** Huntsman & Beasts
+**Appears in:** Huntsman & Beasts, Huntsman & Beasts — Reckoning I, Huntsman & Beasts — Reckoning II, Huntsman & Beasts — Reckoning III
 
 ## Abilities
 

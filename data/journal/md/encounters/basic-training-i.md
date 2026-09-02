@@ -58,4 +58,12 @@ Move on to [[Basic Training II]] once targeting feels automatic.
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
 
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 25 | - | item level 1, base tier 1 |
+
 <!-- GEN:END -->

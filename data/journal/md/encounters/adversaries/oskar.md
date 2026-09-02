@@ -27,7 +27,7 @@ Oskar is a brute: high health, physical output, and a straightforward threat pro
 
 **HP** 390 - **MP** 60 - **Resists** Physical 20% - **Resilience** 25 - **Stats** STR 16 / DEX 8 / CON 14 / INT 3 / WIS 5 / CHA 4
 
-**Appears in:** Huntsman & Beasts
+**Appears in:** Huntsman & Beasts, Huntsman & Beasts — Reckoning I, Huntsman & Beasts — Reckoning II, Huntsman & Beasts — Reckoning III
 
 ## Abilities
 

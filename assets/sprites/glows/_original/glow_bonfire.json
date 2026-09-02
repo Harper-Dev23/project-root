@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":1290,"h":810},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1290,"h":810},
+	"sourceSize": {"w":1290,"h":810}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":1290,"y":0,"w":1290,"h":810},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1290,"h":810},
+	"sourceSize": {"w":1290,"h":810}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":810,"w":1290,"h":810},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1290,"h":810},
+	"sourceSize": {"w":1290,"h":810}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":1290,"y":810,"w":1290,"h":810},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":1290,"h":810},
+	"sourceSize": {"w":1290,"h":810}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_bonfire.png",
+	"format": "RGBA8888",
+	"size": {"w":2580,"h":1620},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:74bd88e6ba674abba61035710cf7c4af:fa00f8ec63421c5026cd4562c7cbaabf:f50db8cfc5504f5caecb1370217b3979$"
+}
+}

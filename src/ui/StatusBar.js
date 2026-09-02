@@ -36,6 +36,22 @@ export default class StatusBar extends Phaser.GameObjects.Container {
     this.updateCurrent(this.val);
   }
 
+  /**
+   * Set value AND maximum together.
+   *
+   * Callers were already doing `bar.update(value, max)` — but no such method
+   * existed, so those calls silently hit Phaser.GameObjects.Container's own
+   * inherited no-op `update()` and did nothing at all. Bars stayed correct
+   * only because _updateHPMPBars separately calls updateCurrent(). Defining
+   * it here makes those call sites do what they always read as doing, which
+   * also means a changed maximum (weakness maxHP-down, a modified Initiative
+   * gauge cap) is finally reflected in the bar.
+   */
+  update(newValue, newMax) {
+    if (Number.isFinite(newMax)) this.max = Math.max(1, newMax);
+    this.updateCurrent(newValue);
+  }
+
   updateCurrent(newValue) {
     this.val = Phaser.Math.Clamp(newValue, 0, this.max);
     const pct = this.val / this.max;

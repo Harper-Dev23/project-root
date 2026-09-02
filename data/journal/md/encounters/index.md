@@ -11,7 +11,7 @@ teaser: false
 requires: []
 sort: 1
 version: 1
-updatedAt: 2026-08-25
+updatedAt: 2026-09-02
 ---
 # The Pit and Its Occupants
 
@@ -43,5 +43,13 @@ Six encounters, arranged as a curriculum rather than a difficulty ladder:
 | IV | [[Huntsman & Beasts]] | Priority targeting; damage types actually mattering |
 | V | [[Elemental Duelists]] | Weakness meters as a liability, not just a resource |
 | VI | [[Gorrek]] | Action economy under pressure, plus a rematch ladder |
+
+## The Reckoning
+
+Every encounter from the second onward carries a **Reckoning ladder** — harder versions of the same fight, each recorded in that encounter's own entry.
+
+Two things about them are worth knowing before you start one. They unlock from the **base encounter only**, so the ladder is not a chain and its tiers can be taken in any order. And unlike the base six, they pay out **every time they are cleared**, not just the first — both experience and **Reckoning Marks**, the currency the bone pile's Marked buttons take.
+
+They are also the only fights that field gear above the starting bases. Where the base six drop Crude and Simple equipment, a Reckoning tier drops Hardened and Fitted. See [[Levelling and the Awakening]] for what they pay, and [[Item Level & Base Types]] for what that gear rolls as.
 
 Fights beyond the pit — beasts met on the hunt, rival parties, whatever the cult fields — will be recorded here as they are survived.

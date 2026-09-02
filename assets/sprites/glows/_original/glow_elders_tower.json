@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":678,"h":956},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":678,"h":956},
+	"sourceSize": {"w":678,"h":956}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":678,"y":0,"w":678,"h":956},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":678,"h":956},
+	"sourceSize": {"w":678,"h":956}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":956,"w":678,"h":956},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":678,"h":956},
+	"sourceSize": {"w":678,"h":956}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":678,"y":956,"w":678,"h":956},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":678,"h":956},
+	"sourceSize": {"w":678,"h":956}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_elders_tower.png",
+	"format": "RGBA8888",
+	"size": {"w":1356,"h":1912},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:ca8ae1bbf950ba0280c9748118253a7a:0982b8f6197b0e799f6a0b81357aefa4:09194c6f0616a3311ba8d769e581e1b0$"
+}
+}

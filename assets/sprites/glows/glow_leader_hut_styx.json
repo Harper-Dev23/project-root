@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":413,"h":400},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":413,"h":400},
-	"sourceSize": {"w":413,"h":400}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":413,"y":0,"w":413,"h":400},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":413,"h":400},
-	"sourceSize": {"w":413,"h":400}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":826,"y":0,"w":413,"h":400},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":413,"h":400},
-	"sourceSize": {"w":413,"h":400}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":1239,"y":0,"w":413,"h":400},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":413,"h":400},
-	"sourceSize": {"w":413,"h":400}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_leader_hut_styx.png",
-	"format": "RGBA8888",
-	"size": {"w":1652,"h":400},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:9e2afa21a29c3d8c21823d7d4e692164:836c2cf93b78b9e8b28a0bb1b732ab8a:f192b1832110da01e84d3e217bea0b61$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 132,
+    "h": 128
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 132,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 132,
+    "h": 128
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 264,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 132,
+    "h": 128
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 396,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 132,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 132,
+    "h": 128
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_leader_hut_styx.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 528,
+   "h": 128
+  },
+  "scale": "1"
+ }
 }

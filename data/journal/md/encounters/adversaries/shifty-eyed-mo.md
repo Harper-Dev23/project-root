@@ -25,21 +25,21 @@ Mo is reactive: he answers the instant an ally is struck. The important detail i
 
 ## Profile
 
-**HP** 105 - **MP** 70 - **Evasion** 20 - **Stats** STR 5 / DEX 14 / CON 6 / INT 6 / WIS 6 / CHA 11
+**HP** 95 - **MP** 70 - **Evasion** 20 - **Stats** STR 5 / DEX 14 / CON 6 / INT 6 / WIS 6 / CHA 11
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Poisoned Knife** | bonus | 3 MP | 1 | Deals 3 damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+). |
-| **Hamstring** | major | 5 MP | 1 | Deals 5 damage and applies 80 Lacerate buildup. Slows the target (-10 Initiative for 2 turns). |
+| **Poisoned Knife** | bonus | 3 MP | 1 | Deals 37% weapon damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+). |
+| **Hamstring** | major | 5 MP | 1 | Deals 62% weapon damage and applies 80 Lacerate buildup. Slows the target (-3 Initiative for 2 turns). |
 | **Evasion** | bonus | 4 MP | 2 | Grants +20 Evasion for 1 turn. Also restores 3 MP if any party member is Cursed or Poisoned (Toxic T1+). |
-| **Sneak Attack** | major | 7 MP | 1 | Requires the target to be Exposed (T1+). Deals 9 damage. |
-| **Finishing Strike** | class | 10 MP | 2 | Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 13 damage and consumes their Expose and Toxic buildup. |
+| **Sneak Attack** | major | 7 MP | 1 | Requires the target to be Exposed (T1+). Deals 111% weapon damage. |
+| **Finishing Strike** | class | 10 MP | 2 | Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 160% weapon damage and consumes their Expose and Toxic buildup. |
 | **Distracting Feint** | reaction | 3 MP | 2 | Reaction: when an ally behind you is targeted, distract the attacker — this attack's damage is reduced by 50% AttackPower. |
-| **Curse Twist** | bonus | 3 MP | 2 | Bonus action. Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup. |
+| **Curse Twist** | bonus | 3 MP | 2 | Requires the target already afflicted by Curse of Needles. Deals 49% weapon damage as Necrotic and applies 50 Curse buildup. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
 <!-- GEN:END -->

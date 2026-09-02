@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":984,"h":664},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":984,"h":664},
-	"sourceSize": {"w":984,"h":664}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":984,"y":0,"w":984,"h":664},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":984,"h":664},
-	"sourceSize": {"w":984,"h":664}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":0,"y":664,"w":984,"h":664},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":984,"h":664},
-	"sourceSize": {"w":984,"h":664}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":984,"y":664,"w":984,"h":664},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":984,"h":664},
-	"sourceSize": {"w":984,"h":664}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_lodge_elseth.png",
-	"format": "RGBA8888",
-	"size": {"w":1968,"h":1328},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:04ea62dbf45af92a7c7143c113820c55:a3bbb31d5c5632c20a8832140e6b226a:3f7faabfa4dbc03614086e6e498ef3ba$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "sourceSize": {
+    "w": 295,
+    "h": 199
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 295,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "sourceSize": {
+    "w": 295,
+    "h": 199
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 0,
+    "y": 199,
+    "w": 295,
+    "h": 199
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "sourceSize": {
+    "w": 295,
+    "h": 199
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 295,
+    "y": 199,
+    "w": 295,
+    "h": 199
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 295,
+    "h": 199
+   },
+   "sourceSize": {
+    "w": 295,
+    "h": 199
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_lodge_elseth.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 590,
+   "h": 398
+  },
+  "scale": "1"
+ }
 }

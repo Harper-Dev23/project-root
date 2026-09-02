@@ -1,0 +1,44 @@
+{"frames": [
+
+{
+	"filename": "frame0000.png",
+	"frame": {"x":0,"y":0,"w":725,"h":753},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":725,"h":753},
+	"sourceSize": {"w":725,"h":753}
+},
+{
+	"filename": "frame0001.png",
+	"frame": {"x":725,"y":0,"w":725,"h":753},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":725,"h":753},
+	"sourceSize": {"w":725,"h":753}
+},
+{
+	"filename": "frame0002.png",
+	"frame": {"x":0,"y":753,"w":725,"h":753},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":725,"h":753},
+	"sourceSize": {"w":725,"h":753}
+},
+{
+	"filename": "frame0003.png",
+	"frame": {"x":725,"y":753,"w":725,"h":753},
+	"rotated": false,
+	"trimmed": false,
+	"spriteSourceSize": {"x":0,"y":0,"w":725,"h":753},
+	"sourceSize": {"w":725,"h":753}
+}],
+"meta": {
+	"app": "https://www.codeandweb.com/texturepacker",
+	"version": "1.0",
+	"image": "glow_mourne_hut.png",
+	"format": "RGBA8888",
+	"size": {"w":1450,"h":1506},
+	"scale": "1",
+	"smartupdate": "$TexturePacker:SmartUpdate:0e627004ee621a0cdcdb9b829f3d2f4e:c42bce83c49917d46fd583e147f91c16:bfd08df28cf679f5ac9dc91ee58e13a2$"
+}
+}

@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":438,"h":540},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":438,"h":540},
-	"sourceSize": {"w":438,"h":540}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":438,"y":0,"w":438,"h":540},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":438,"h":540},
-	"sourceSize": {"w":438,"h":540}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":876,"y":0,"w":438,"h":540},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":438,"h":540},
-	"sourceSize": {"w":438,"h":540}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":1314,"y":0,"w":438,"h":540},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":438,"h":540},
-	"sourceSize": {"w":438,"h":540}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_leader_hut_lesse.png",
-	"format": "RGBA8888",
-	"size": {"w":1752,"h":540},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:8fc82ace1bc5ca6f55a5880e8a08ea3b:1316e8e20994b54806fb841449f0f348:2ad20e02768193865a3c69dbc2d183f8$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 140,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 140,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 140,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 280,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 140,
+    "h": 173
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 420,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 140,
+    "h": 173
+   },
+   "sourceSize": {
+    "w": 140,
+    "h": 173
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_leader_hut_lesse.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 560,
+   "h": 173
+  },
+  "scale": "1"
+ }
 }

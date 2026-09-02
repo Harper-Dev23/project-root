@@ -38,6 +38,7 @@ export const Items = {
   // === Crude Weapons (Common Rarity) ===
   crude_dagger: {
     id: 'crude_dagger',
+    baseTier: 1,
     name: 'Crude Dagger',
     type: 'weapon',
     weaponType: 'dagger',
@@ -50,6 +51,7 @@ export const Items = {
 
   crude_sword_1h: {
     id: 'crude_sword_1h',
+    baseTier: 1,
     name: 'Crude Sword',
     type: 'weapon',
     weaponType: 'sword_1h',
@@ -62,6 +64,7 @@ export const Items = {
 
   crude_sword_2h: {
     id: 'crude_sword_2h',
+    baseTier: 1,
     name: 'Crude Greatsword',
     type: 'weapon',
     weaponType: 'sword_2h',
@@ -74,6 +77,7 @@ export const Items = {
 
   crude_spear_1h: {
     id: 'crude_spear_1h',
+    baseTier: 1,
     name: 'Crude Spear',
     type: 'weapon',
     weaponType: 'spear_1h',
@@ -86,6 +90,7 @@ export const Items = {
 
   crude_whip: {
     id: 'crude_whip',
+    baseTier: 1,
     name: 'Crude Whip',
     type: 'weapon',
     weaponType: 'whip',
@@ -98,6 +103,7 @@ export const Items = {
 
   crude_shield: {
     id: 'crude_shield',
+    baseTier: 1,
     name: 'Crude Shield',
     type: 'weapon',
     weaponType: 'shield',
@@ -109,6 +115,7 @@ export const Items = {
 
   crude_sling: {
     id: 'crude_sling',
+    baseTier: 1,
     name: 'Crude Sling',
     type: 'weapon',
     weaponType: 'sling',
@@ -121,6 +128,7 @@ export const Items = {
 
   crude_bow: {
     id: 'crude_bow',
+    baseTier: 1,
     name: 'Crude Bow',
     type: 'weapon',
     weaponType: 'bow',
@@ -133,6 +141,7 @@ export const Items = {
 
   crude_gun: {
     id: 'crude_gun',
+    baseTier: 1,
     name: 'Crude Gun',
     type: 'weapon',
     weaponType: 'gun',
@@ -145,6 +154,7 @@ export const Items = {
 
   crude_staff: {
     id: 'crude_staff',
+    baseTier: 1,
     name: 'Crude Staff',
     type: 'weapon',
     weaponType: 'staff',
@@ -157,6 +167,7 @@ export const Items = {
 
   crude_wand: {
     id: 'crude_wand',
+    baseTier: 1,
     name: 'Crude Wand',
     type: 'weapon',
     weaponType: 'wand',
@@ -169,6 +180,7 @@ export const Items = {
 
   crude_mace_2h: {
     id: 'crude_mace_2h',
+    baseTier: 1,
     name: 'Crude War Mace',
     type: 'weapon',
     weaponType: 'mace_2h',
@@ -181,6 +193,7 @@ export const Items = {
 
   crude_axe_2h: {
     id: 'crude_axe_2h',
+    baseTier: 1,
     name: 'Crude Battle Axe',
     type: 'weapon',
     weaponType: 'axe_2h',
@@ -193,6 +206,233 @@ export const Items = {
     damage: { min: 7, max: 12 },
     description: 'A brutal axe with a chipped but deadly edge.'
   },
+  // === Natural Weapons (beasts) ==============================================
+  // Beasts do not wield gear. They were previously stat-equipped with a
+  // `crude_dagger` purely so calculateDamage() had real weapon dice to roll,
+  // which meant a Severing Chant could cut a literal dagger off an animal.
+  // These exist so the dice are real and the FICTION is too.
+  //
+  // `natural: true` is the flag every pool and the sever/identify paths check.
+  // They are never dropped, never gambled, never found, and never severed.
+  // Damage matches the crude_dagger they replace exactly, so this is a
+  // presentation fix with no balance change -- but each beast now has its own
+  // item, so the dice CAN be dialled per beast without touching the others.
+  natural_fangs: {
+    id: 'natural_fangs',
+    baseTier: 1,
+    natural: true,
+    name: 'Fangs',
+    type: 'weapon',
+    weaponType: 'natural',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 7 },
+    description: 'A jaw built for closing on something and not letting go.'
+  },
+  natural_claws: {
+    id: 'natural_claws',
+    baseTier: 1,
+    natural: true,
+    name: 'Claws',
+    type: 'weapon',
+    weaponType: 'natural',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 7 },
+    description: 'Four points of horn that were never made, only grown.'
+  },
+  natural_talons: {
+    id: 'natural_talons',
+    baseTier: 1,
+    natural: true,
+    name: 'Talons',
+    type: 'weapon',
+    weaponType: 'natural',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 7 },
+    description: 'They close before the bird has finished arriving.'
+  },
+
+  // === Hardened Weapons (base tier 2) =========================================
+  // Tier 2 of the base ladder: ~20% over Crude on both ends, and nothing else.
+  // The tier buys raw base damage, which every '% weapon damage' affix then
+  // scales -- same reason Bone's bonus lives in `damage` rather than as a mod.
+  // Bone stays a separate, PARALLEL base and is untouched by this ladder.
+  hardened_dagger: {
+    id: 'hardened_dagger',
+    baseTier: 2,
+    name: 'Hardened Dagger',
+    type: 'weapon',
+    weaponType: 'dagger',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 7, max: 8 },
+    description: 'Properly tempered and set in a fitted grip. It no longer turns in the hand.'
+  },
+  hardened_sword_1h: {
+    id: 'hardened_sword_1h',
+    baseTier: 2,
+    name: 'Hardened Sword',
+    type: 'weapon',
+    weaponType: 'sword_1h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 6, max: 10 },
+    description: 'Hammered flat, edged and balanced by someone who knew the trade.'
+  },
+  hardened_bow: {
+    id: 'hardened_bow',
+    baseTier: 2,
+    name: 'Hardened Bow',
+    type: 'weapon',
+    weaponType: 'bow',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 7, max: 16 },
+    description: 'Laminated horn over seasoned wood. It throws a shaft further than it has any right to.'
+  },
+  hardened_staff: {
+    id: 'hardened_staff',
+    baseTier: 2,
+    name: 'Hardened Staff',
+    type: 'weapon',
+    weaponType: 'staff',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 14 },
+    description: 'Cut on the right day and bound at both ends. The channel runs clean through it.'
+  },
+  hardened_mace_2h: {
+    id: 'hardened_mace_2h',
+    baseTier: 2,
+    name: 'Hardened War Mace',
+    type: 'weapon',
+    weaponType: 'mace_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 10, max: 13 },
+    description: 'A banded head sunk onto a haft that was chosen, not found.'
+  },
+  hardened_axe_2h: {
+    id: 'hardened_axe_2h',
+    baseTier: 2,
+    name: 'Hardened Battle Axe',
+    type: 'weapon',
+    weaponType: 'axe_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 8, max: 14 },
+    description: 'Forge-set and wedged tight. The bit holds its edge through bone.'
+  },
+  hardened_shield: {
+    id: 'hardened_shield',
+    baseTier: 2,
+    name: 'Hardened Shield',
+    type: 'weapon',
+    weaponType: 'shield',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    description: 'Planked, glued crosswise and rimmed in hide. It takes a blow without splitting.'
+  },
+
+  // === Ancestral Weapons (base tier 3) =======================================
+  // ~45% over Crude. Gated past the current level ceiling on purpose --
+  // see BASE_TIER_RULES in ItemFactory.js.
+  ancestral_dagger: {
+    id: 'ancestral_dagger',
+    baseTier: 3,
+    name: 'Ancestral Dagger',
+    type: 'weapon',
+    weaponType: 'dagger',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 9, max: 10 },
+    description: 'Passed down long enough that nobody living remembers the name on it.'
+  },
+  ancestral_sword_1h: {
+    id: 'ancestral_sword_1h',
+    baseTier: 3,
+    name: 'Ancestral Sword',
+    type: 'weapon',
+    weaponType: 'sword_1h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    damage: { min: 7, max: 12 },
+    description: 'Old steel, folded and refolded. The edge has outlasted every hand that held it.'
+  },
+  ancestral_bow: {
+    id: 'ancestral_bow',
+    baseTier: 3,
+    name: 'Ancestral Bow',
+    type: 'weapon',
+    weaponType: 'bow',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 9, max: 19 },
+    description: 'Strung with the same cord for three generations. It knows the draw before you do.'
+  },
+  ancestral_staff: {
+    id: 'ancestral_staff',
+    baseTier: 3,
+    name: 'Ancestral Staff',
+    type: 'weapon',
+    weaponType: 'staff',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 10, max: 17 },
+    description: 'Worn smooth by hands that are all dead now. What they channelled is still in the grain.'
+  },
+  ancestral_mace_2h: {
+    id: 'ancestral_mace_2h',
+    baseTier: 3,
+    name: 'Ancestral War Mace',
+    type: 'weapon',
+    weaponType: 'mace_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 12, max: 16 },
+    description: 'The head is older than the haft, and the haft is older than the tribe.'
+  },
+  ancestral_axe_2h: {
+    id: 'ancestral_axe_2h',
+    baseTier: 3,
+    name: 'Ancestral Battle Axe',
+    type: 'weapon',
+    weaponType: 'axe_2h',
+    rarity: 'common',
+    bonuses: {},
+    hands: 2,
+    damage: { min: 10, max: 17 },
+    description: 'It has taken more than it was ever given, and it remembers the difference.'
+  },
+  ancestral_shield: {
+    id: 'ancestral_shield',
+    baseTier: 3,
+    name: 'Ancestral Shield',
+    type: 'weapon',
+    weaponType: 'shield',
+    rarity: 'common',
+    bonuses: {},
+    hands: 1,
+    description: 'Every dent in it stopped something. None of them went through.'
+  },
+
   // === Bone Weapons (renown-capable) =========================================
   // Their own base type, NOT a Crude weapon with a bonus attached. Damage is
   // ~20% above the Crude equivalent and is ordinary base damage, so "% weapon
@@ -204,6 +444,7 @@ export const Items = {
 
   bone_dagger: {
     id: 'bone_dagger',
+    baseTier: 1,
     name: 'Bone Dagger',
     type: 'weapon',
     weaponType: 'dagger',
@@ -217,6 +458,7 @@ export const Items = {
 
   bone_sword_1h: {
     id: 'bone_sword_1h',
+    baseTier: 1,
     name: 'Bone Sword',
     type: 'weapon',
     weaponType: 'sword_1h',
@@ -230,6 +472,7 @@ export const Items = {
 
   bone_sword_2h: {
     id: 'bone_sword_2h',
+    baseTier: 1,
     name: 'Bone Greatsword',
     type: 'weapon',
     weaponType: 'sword_2h',
@@ -243,6 +486,7 @@ export const Items = {
 
   bone_spear_1h: {
     id: 'bone_spear_1h',
+    baseTier: 1,
     name: 'Bone Spear',
     type: 'weapon',
     weaponType: 'spear_1h',
@@ -256,6 +500,7 @@ export const Items = {
 
   bone_whip: {
     id: 'bone_whip',
+    baseTier: 1,
     name: 'Bone Whip',
     type: 'weapon',
     weaponType: 'whip',
@@ -269,6 +514,7 @@ export const Items = {
 
   bone_shield: {
     id: 'bone_shield',
+    baseTier: 1,
     name: 'Bone Shield',
     type: 'weapon',
     weaponType: 'shield',
@@ -281,6 +527,7 @@ export const Items = {
 
   bone_sling: {
     id: 'bone_sling',
+    baseTier: 1,
     name: 'Bone Sling',
     type: 'weapon',
     weaponType: 'sling',
@@ -294,6 +541,7 @@ export const Items = {
 
   bone_bow: {
     id: 'bone_bow',
+    baseTier: 1,
     name: 'Bone Bow',
     type: 'weapon',
     weaponType: 'bow',
@@ -307,6 +555,7 @@ export const Items = {
 
   bone_gun: {
     id: 'bone_gun',
+    baseTier: 1,
     name: 'Bone Gun',
     type: 'weapon',
     weaponType: 'gun',
@@ -320,6 +569,7 @@ export const Items = {
 
   bone_staff: {
     id: 'bone_staff',
+    baseTier: 1,
     name: 'Bone Staff',
     type: 'weapon',
     weaponType: 'staff',
@@ -333,6 +583,7 @@ export const Items = {
 
   bone_wand: {
     id: 'bone_wand',
+    baseTier: 1,
     name: 'Bone Wand',
     type: 'weapon',
     weaponType: 'wand',
@@ -346,6 +597,7 @@ export const Items = {
 
   bone_mace_2h: {
     id: 'bone_mace_2h',
+    baseTier: 1,
     name: 'Bone War Mace',
     type: 'weapon',
     weaponType: 'mace_2h',
@@ -359,6 +611,7 @@ export const Items = {
 
   bone_axe_2h: {
     id: 'bone_axe_2h',
+    baseTier: 1,
     name: 'Bone Battle Axe',
     type: 'weapon',
     weaponType: 'axe_2h',
@@ -374,6 +627,7 @@ export const Items = {
   // === Common Armor (Watershade) ===
   simple_helm_str: {
     id: 'simple_helm_str',
+    baseTier: 1,
     name: 'Simple Helm',
     type: 'armor',
     slot: 'head',
@@ -383,6 +637,7 @@ export const Items = {
   },
   simple_helm_dex: {
     id: 'simple_helm_dex',
+    baseTier: 1,
     name: 'Light Cap',
     type: 'armor',
     slot: 'head',
@@ -392,6 +647,7 @@ export const Items = {
   },
   simple_helm_int: {
     id: 'simple_helm_int',
+    baseTier: 1,
     name: 'Mystic Hood',
     type: 'armor',
     slot: 'head',
@@ -402,6 +658,7 @@ export const Items = {
 
   simple_chest_con_str: {
     id: 'simple_chest_con_str',
+    baseTier: 1,
     name: 'Tough Vest',
     type: 'armor',
     slot: 'chest',
@@ -411,6 +668,7 @@ export const Items = {
   },
   simple_chest_dex_int: {
     id: 'simple_chest_dex_int',
+    baseTier: 1,
     name: 'Balanced Robe',
     type: 'armor',
     slot: 'chest',
@@ -420,6 +678,7 @@ export const Items = {
   },
   simple_chest_wis_con: {
     id: 'simple_chest_wis_con',
+    baseTier: 1,
     name: 'Padded Tunic',
     type: 'armor',
     slot: 'chest',
@@ -430,6 +689,7 @@ export const Items = {
 
   simple_legs_con: {
     id: 'simple_legs_con',
+    baseTier: 1,
     name: "Traveler's Pants",
     type: 'armor',
     slot: 'legs',
@@ -439,6 +699,7 @@ export const Items = {
   },
   simple_legs_dex: {
     id: 'simple_legs_dex',
+    baseTier: 1,
     name: 'Tight Slacks',
     type: 'armor',
     slot: 'legs',
@@ -448,6 +709,7 @@ export const Items = {
   },
   simple_legs_wis: {
     id: 'simple_legs_wis',
+    baseTier: 1,
     name: "Seer's Wraps",
     type: 'armor',
     slot: 'legs',
@@ -458,6 +720,7 @@ export const Items = {
 
   simple_gloves_dex: {
     id: 'simple_gloves_dex',
+    baseTier: 1,
     name: 'Leather Gloves',
     type: 'armor',
     slot: 'gloves',
@@ -467,6 +730,7 @@ export const Items = {
   },
   simple_gloves_str: {
     id: 'simple_gloves_str',
+    baseTier: 1,
     name: 'Thick Gloves',
     type: 'armor',
     slot: 'gloves',
@@ -476,6 +740,7 @@ export const Items = {
   },
   simple_gloves_int: {
     id: 'simple_gloves_int',
+    baseTier: 1,
     name: 'Mage Mitts',
     type: 'armor',
     slot: 'gloves',
@@ -486,6 +751,7 @@ export const Items = {
 
   simple_boots_con: {
     id: 'simple_boots_con',
+    baseTier: 1,
     name: 'Sturdy Boots',
     type: 'armor',
     slot: 'boots',
@@ -495,6 +761,7 @@ export const Items = {
   },
   simple_boots_dex: {
     id: 'simple_boots_dex',
+    baseTier: 1,
     name: 'Silent Footwraps',
     type: 'armor',
     slot: 'boots',
@@ -504,12 +771,168 @@ export const Items = {
   },
   simple_boots_wis: {
     id: 'simple_boots_wis',
+    baseTier: 1,
     name: 'Pilgrim Sandals',
     type: 'armor',
     slot: 'boots',
     rarity: 'common',
     bonuses: { WIS: 1 },
     description: 'Open-toed sandals used in meditation rituals.'
+  },
+
+  // === Fitted Armor (base tier 2) ============================================
+  // Tier 2 of the armour ladder: the same slots, each carrying ONE more stat
+  // than its Simple counterpart (three on chest, two everywhere else).
+  // `bonuses` is already summed generically, so this needs no new mechanic.
+  fitted_head_str_con: {
+    id: 'fitted_head_str_con',
+    baseTier: 2,
+    name: "Ridged Helm",
+    type: 'armor',
+    slot: 'head',
+    rarity: 'common',
+    bonuses: { STR: 1, CON: 1 },
+    description: 'A helm with a raised spine, beaten thick over the crown.'
+  },
+  fitted_head_dex_wis: {
+    id: 'fitted_head_dex_wis',
+    baseTier: 2,
+    name: "Hunter's Cowl",
+    type: 'armor',
+    slot: 'head',
+    rarity: 'common',
+    bonuses: { DEX: 1, WIS: 1 },
+    description: 'Cut close to the ears so nothing in the brush goes unheard.'
+  },
+  fitted_head_int_wis: {
+    id: 'fitted_head_int_wis',
+    baseTier: 2,
+    name: "Augur's Circlet",
+    type: 'armor',
+    slot: 'head',
+    rarity: 'common',
+    bonuses: { INT: 1, WIS: 1 },
+    description: 'A thin band that sits where the sight is said to gather.'
+  },
+  fitted_chest_con_str_dex: {
+    id: 'fitted_chest_con_str_dex',
+    baseTier: 2,
+    name: "Banded Hauberk",
+    type: 'armor',
+    slot: 'chest',
+    rarity: 'common',
+    bonuses: { CON: 1, STR: 1, DEX: 1 },
+    description: 'Overlapping bands that carry weight without locking the shoulder.'
+  },
+  fitted_chest_dex_int_wis: {
+    id: 'fitted_chest_dex_int_wis',
+    baseTier: 2,
+    name: "Woven Mantle",
+    type: 'armor',
+    slot: 'chest',
+    rarity: 'common',
+    bonuses: { DEX: 1, INT: 1, WIS: 1 },
+    description: 'Layered weave, light enough to forget and dense enough to matter.'
+  },
+  fitted_chest_wis_con_int: {
+    id: 'fitted_chest_wis_con_int',
+    baseTier: 2,
+    name: "Ritual Vestment",
+    type: 'armor',
+    slot: 'chest',
+    rarity: 'common',
+    bonuses: { WIS: 1, CON: 1, INT: 1 },
+    description: 'Marked at the seams in a hand no living seer writes in.'
+  },
+  fitted_legs_con_str: {
+    id: 'fitted_legs_con_str',
+    baseTier: 2,
+    name: "Marching Greaves",
+    type: 'armor',
+    slot: 'legs',
+    rarity: 'common',
+    bonuses: { CON: 1, STR: 1 },
+    description: 'Built for long ground, and for standing at the end of it.'
+  },
+  fitted_legs_dex_con: {
+    id: 'fitted_legs_dex_con',
+    baseTier: 2,
+    name: "Stalker's Leggings",
+    type: 'armor',
+    slot: 'legs',
+    rarity: 'common',
+    bonuses: { DEX: 1, CON: 1 },
+    description: 'Soft at the seam so the step lands quiet and still stays under you.'
+  },
+  fitted_legs_wis_int: {
+    id: 'fitted_legs_wis_int',
+    baseTier: 2,
+    name: "Oracle Drapes",
+    type: 'armor',
+    slot: 'legs',
+    rarity: 'common',
+    bonuses: { WIS: 1, INT: 1 },
+    description: 'Loose enough to sit in for a very long time without moving.'
+  },
+  fitted_gloves_dex_str: {
+    id: 'fitted_gloves_dex_str',
+    baseTier: 2,
+    name: "Gripped Handguards",
+    type: 'armor',
+    slot: 'gloves',
+    rarity: 'common',
+    bonuses: { DEX: 1, STR: 1 },
+    description: 'Cross-stitched palms that hold a wet haft.'
+  },
+  fitted_gloves_str_con: {
+    id: 'fitted_gloves_str_con',
+    baseTier: 2,
+    name: "Ironbound Gauntlets",
+    type: 'armor',
+    slot: 'gloves',
+    rarity: 'common',
+    bonuses: { STR: 1, CON: 1 },
+    description: 'Plated across the knuckle, laced tight at the wrist.'
+  },
+  fitted_gloves_int_dex: {
+    id: 'fitted_gloves_int_dex',
+    baseTier: 2,
+    name: "Channeler's Vambraces",
+    type: 'armor',
+    slot: 'gloves',
+    rarity: 'common',
+    bonuses: { INT: 1, DEX: 1 },
+    description: 'Bound forearm to fingertip so nothing leaks at the wrist.'
+  },
+  fitted_boots_con_str: {
+    id: 'fitted_boots_con_str',
+    baseTier: 2,
+    name: "Anchored Boots",
+    type: 'armor',
+    slot: 'boots',
+    rarity: 'common',
+    bonuses: { CON: 1, STR: 1 },
+    description: 'Heavy at the heel. Hard to move, and harder to move off.'
+  },
+  fitted_boots_dex_wis: {
+    id: 'fitted_boots_dex_wis',
+    baseTier: 2,
+    name: "Trailrunner Boots",
+    type: 'armor',
+    slot: 'boots',
+    rarity: 'common',
+    bonuses: { DEX: 1, WIS: 1 },
+    description: 'Broken in over more country than most people ever see.'
+  },
+  fitted_boots_wis_con: {
+    id: 'fitted_boots_wis_con',
+    baseTier: 2,
+    name: "Warden's Treads",
+    type: 'armor',
+    slot: 'boots',
+    rarity: 'common',
+    bonuses: { WIS: 1, CON: 1 },
+    description: 'Made for the watch: for staying awake, and for staying put.'
   },
 
   // ═══════════════════════════════════════════════════════════════════════════

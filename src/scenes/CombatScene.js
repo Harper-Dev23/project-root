@@ -1,7 +1,7 @@
 // Core state & UI
 import GameState from '../systems/GameState.js';
 import { COLORS, UI_DEPTH, CLASS_COLORS, RARITY_COLORS } from '../ui/styles.js';
-import { buildItemTooltipLines } from '../ui/itemTooltip.js';
+import { buildItemTooltipLines, installAffixDetailKeys } from '../ui/itemTooltip.js';
 import { createPanel } from '../ui/GamePanel.js';
 import Tooltip from '../ui/Tooltip.js';
 import StatusBar from '../ui/StatusBar.js';
@@ -23,7 +23,7 @@ import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
-import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin } from '../systems/ItemFactory.js';
+import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase } from '../systems/ItemFactory.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
@@ -406,6 +406,11 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Bars were constructed before this reset ran (see
+    // _updateInitiativeBars) — repaint them now that the gauge is
+    // actually the gauge for THIS fight.
+    this._updateInitiativeBars();
+
     // Destroy any lingering ground/lodge sprites from the previous combat session
     Object.values(this.groundSprites).forEach(arr => arr.forEach(s => s?.destroy?.()));
     this.groundSprites = {};
@@ -462,6 +467,20 @@ export default class CombatScene extends Phaser.Scene {
       this._log('🏋️ Training begins…');
       console.log('Training begins…');
     }
+
+    // Alt-to-inspect, same binding the inventory uses. Combat tooltips are
+    // built at render time, so the callback re-shows whatever is hovered.
+    // Unrevealed ENEMY gear is unaffected by design: _buildItemTooltipData
+    // returns its "?? [Rarity]" placeholder and never reaches
+    // buildItemTooltipLines, so Alt cannot leak affixes the player has not
+    // paid an Identify tonic to see. Once revealed (_identified) it falls
+    // through to the shared builder and Alt works exactly as in the inventory.
+    installAffixDetailKeys(this, () => {
+      const h = this._hoveredEquipTip;
+      if (!h) return;
+      const data = this._buildItemTooltipData(h.inst, h.isEnemy);
+      if (data) this.tooltip?.show(h.x, h.y, data);
+    });
 
     this.turnOrderVisible = true;
     if (this.isTraining) this._addExitButton();
@@ -1546,31 +1565,76 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
+  // Portrait status bars. Three vertical bars stacked outward from the left
+  // edge of the 64px portrait (which ends at -32), thinnest-first spacing so
+  // they read as one group rather than three separate widgets. Was 6px thick
+  // at 8px spacing for two bars, which was the heaviest element on screen for
+  // the least information; 4px at 6px pitch fits a third bar in barely more
+  // room and stops them dominating the portrait.
+  static BAR_LEN = 60;
+  static BAR_THICK = 4;
+  static BAR_X = { hp: -52, mp: -46, init: -40 };
+  static BAR_COLOR = { hp: 0xff4444, mp: 0x4444ff, init: 0xffcc44 };
+
+  /**
+   * Repaint every Initiative bar from the live gauge.
+   *
+   * The bars are BUILT in _placePartyMembers (create() line ~359) but the
+   * gauge is not zeroed and re-seeded until the per-combat reset ~20 lines
+   * later, so at construction they snapshot whatever the gauge held at the
+   * end of the LAST fight — party members are persistent objects on
+   * GameState.party and that value is saved. Nothing repainted them until an
+   * enemy attack happened to call _updateHealthBars, which is why they read
+   * as "randomly filled" at the start and only corrected once the enemies
+   * acted, and why they were FULLER after dying and retrying than on a cold
+   * load. Called after the reset, on every turn change, and after the
+   * per-turn regen.
+   */
+  _updateInitiativeBars() {
+    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+      u?.initBar?.update(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
+    });
+  }
+
+  /** Build the three portrait bars for a unit at a given local origin. */
+  _makeStatusBars(unit, ox = 0, oy = 0) {
+    const L = CombatScene.BAR_LEN, T = CombatScene.BAR_THICK;
+    const X = CombatScene.BAR_X, C = CombatScene.BAR_COLOR;
+    const gaugeMax = unit.initiativeGaugeMax ?? 100;
+    const hpBar = new StatusBar(this, ox + X.hp, oy, L, T, unit.currentHP, unit.maxHP, C.hp, 'HP');
+    const mpBar = new StatusBar(this, ox + X.mp, oy, L, T, unit.currentMP, unit.maxMP, C.mp, 'MP');
+    // Initiative is a spendable resource, not a pool that kills you when it
+    // empties, so it sits outermost and in its own colour family.
+    const initBar = new StatusBar(this, ox + X.init, oy, L, T,
+      unit.initiativeGauge ?? 0, gaugeMax, C.init, 'INIT');
+    hpBar.setAngle(-90);
+    mpBar.setAngle(-90);
+    initBar.setAngle(-90);
+    unit.hpBar = hpBar;
+    unit.mpBar = mpBar;
+    unit.initBar = initBar;
+    return [hpBar, mpBar, initBar];
+  }
+
   _assignCharToSlot(char, slot) {
     // Sprite is purely visual — the slot CONTAINER handles all clicks.
     const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64);
     const classColor = CLASS_COLORS?.[char.baseClass] || '#ffffff';
     const nameText = this.add.text(0, 32, char.name, { fontSize: '14px', color: classColor }).setOrigin(0.5, 0);
 
-    const barY = 0;
-    const hpBar = new StatusBar(this, -50, barY, 60, 6, char.currentHP, char.maxHP, 0xff4444, 'HP');
-    const mpBar = new StatusBar(this, -42, barY, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
-    hpBar.setAngle(-90);
-    mpBar.setAngle(-90);
+    const bars = this._makeStatusBars(char, 0, 0);
     // Overlays go directly ABOVE the portrait but BELOW the name/bars/dots, so
     // they never obscure readable UI.
     const weaknessOverlays = this._createWeaknessOverlays(char);
 
     slot.removeAllListeners();
-    slot.add([sprite, weaknessOverlays, nameText, hpBar, mpBar]);
+    slot.add([sprite, weaknessOverlays, nameText, ...bars]);
     slot.occupied = true;
     slot.char = char;
     this._wireSlotInfoClick(slot, char);
 
     char._slot = slot;
     char.icon = sprite;
-    char.hpBar = hpBar;
-    char.mpBar = mpBar;
     this._updateWeaknessOverlays(char);
   }
 
@@ -1817,15 +1881,30 @@ export default class CombatScene extends Phaser.Scene {
     const droppable = dropCfg.droppable ?? false;
     const isWeaponSlot = equipSlot === 'weaponMain' || equipSlot === 'weaponOff';
 
+    // How good this fight's loot is allowed to be. Declared per scenario so a
+    // Reckoning tier and its base fight can differ without either one's enemy
+    // list changing. Falls back to the weakest setting rather than to
+    // "ungated" — before this existed enemy gear carried NO item level at
+    // all, which meant affix gating was skipped entirely and an encounter-3
+    // head could roll a tier-1 affix.
+    const loot = this.scenarioData?.loot || {};
+    const itemLevel = loot.itemLevel ?? 1;
+    const maxBaseTier = loot.maxBaseTier ?? 1;
+
     // Pick a specific item ID or choose randomly from the slot pool
     let itemId = dropCfg.itemId;
-    if (!itemId) {
+    if (itemId) {
+      // Named weapons are raised to the tier this fight allows. No-op for the
+      // scripted historic gear and the tribe jewelry scenarios also name.
+      itemId = upgradeWeaponBase(itemId, maxBaseTier);
+    } else {
       // Weapons need an explicit itemId — no generic random-weapon pool here
       // (armor's random fallback below assumes an armor slot).
       if (isWeaponSlot) return;
       const pool = getItemIdsByTypeSlot('armor', equipSlot);
       if (!pool.length) return;
-      itemId = pool[Math.floor(Math.random() * pool.length)];
+      itemId = pickBaseId(pool, itemLevel, { maxBaseTier });
+      if (!itemId) return;
     }
 
     let rarity = dropCfg.rarity;
@@ -1842,7 +1921,7 @@ export default class CombatScene extends Phaser.Scene {
     // forgot to pass an explicit rarity, matching how the quest-reward copy
     // of this same item is created (rollAffixes: false) in TownScene.js.
     const rollAffixes = dropCfg.rollAffixes ?? (rarity !== 'common' && rarity !== 'historic');
-    const inst = createItemInstance(itemId, { rarity, rollAffixes });
+    const inst = createItemInstance(itemId, { rarity, rollAffixes, itemLevel });
     if (!inst) return;
 
     // Mark whether this instance should drop on victory
@@ -2559,7 +2638,10 @@ export default class CombatScene extends Phaser.Scene {
         // scripted quest/story gear, not random loot, and shouldn't drop on
         // defeat like a normal encounter's would. Show a lock so that's
         // visible instead of just silently not dropping.
-        const lockIcon = inst._droppable === false ? ' 🔒' : '';
+        // Natural weapons show no lock: nothing is being kept from the
+        // player, and a lock invites a wasted Severing Chant.
+        const lockIcon = Items[inst.id]?.natural ? ''
+          : (inst._droppable === false ? ' 🔒' : '');
         label = `${labelMap[slot]}: [${rarityLabel}]${lockIcon}`;
       } else {
         // Allied gear, OR an enemy slot revealed by an Identify tonic
@@ -2581,10 +2663,14 @@ export default class CombatScene extends Phaser.Scene {
       if (inst) {
         t.setInteractive({ useHandCursor: false });
         t.on('pointerover', (pointer) => {
+          // Remembered so holding Alt can rebuild THIS tooltip in place —
+          // tooltip contents are built at render time, so the toggle has no
+          // way to refresh without knowing what the pointer is over.
+          this._hoveredEquipTip = { inst, isEnemy: char.isEnemy, x: pointer.worldX, y: pointer.worldY };
           const tipData = this._buildItemTooltipData(inst, char.isEnemy);
           if (tipData) this.tooltip?.show(pointer.worldX, pointer.worldY, tipData);
         });
-        t.on('pointerout', () => this.tooltip?.hide());
+        t.on('pointerout', () => { this._hoveredEquipTip = null; this.tooltip?.hide(); });
       }
 
       this.characterInfoPanel.add(t);
@@ -2617,9 +2703,14 @@ export default class CombatScene extends Phaser.Scene {
       // (inst._droppable === false) — was saying "defeat this enemy to loot
       // this item" unconditionally, even on soulbound/historic gear that's
       // locked and will never actually drop.
-      lines.push(inst._droppable === false
-        ? '🔒 Soulbound — will not drop on defeat.'
-        : 'Defeat this enemy to loot this item.');
+      // A natural weapon is not withheld loot, it is part of the animal, so it
+      // gets its own line rather than the soulbound lock — which would read as
+      // "there is a dagger here you are not allowed to have".
+      lines.push(Items[inst.id]?.natural
+        ? 'Part of the creature — cannot be looted or severed.'
+        : inst._droppable === false
+          ? '🔒 Soulbound — will not drop on defeat.'
+          : 'Defeat this enemy to loot this item.');
       return { title: `?? [${rarityLabel}]`, titleColor: color, lines };
     }
 
@@ -2632,6 +2723,47 @@ export default class CombatScene extends Phaser.Scene {
     // builder instead so combat shows the exact same modifier breakdown as
     // everywhere else.
     return buildItemTooltipLines(inst, { rarityColors: RARITY_COLORS });
+  }
+
+  /**
+   * Re-render the inspected unit's info panel if what it shows has changed.
+   *
+   * The panel was only ever built by _showCharacterInfo, i.e. on CLICK. Every
+   * mid-resolution change was therefore invisible until the player clicked the
+   * unit again — most obviously a tier-cross reward's bonus buildup, which
+   * lands AFTER the primary hit and so left the numbers reading one hit
+   * behind. The portrait overlays refreshed (they ride _updateHealthBars), so
+   * the two readouts openly disagreed.
+   *
+   * Guarded by a cheap signature rather than re-rendering unconditionally:
+   * _updateHealthBars fires constantly, the body is destroyed and rebuilt each
+   * time, and rebuilding under the pointer would drop a row's open tooltip
+   * mid-hover. Equipment identity is in the signature too — Severing Chants
+   * and Identify tonics mutate the equipment tab live and had exactly the same
+   * staleness.
+   */
+  _weaknessPanelSignature(char) {
+    if (!char) return '';
+    const w = char.weakness || {};
+    const m = w.meters || {}, t = w.tiers || {};
+    const fams = ['fire', 'cold', 'lightning', 'toxic', 'disease', 'curse',
+                  'disorient', 'lacerate', 'expose'];
+    let sig = fams.map(f => `${m[f] | 0}:${t[f] | 0}`).join(',');
+    const eq = char.equipment || {};
+    sig += '|' + Object.keys(eq).sort().map(k => {
+      const i = eq[k];
+      return i ? `${k}=${i.id}${i._identified ? 'I' : ''}${i._droppable ? 'D' : ''}` : '';
+    }).join(',');
+    return sig;
+  }
+
+  _refreshInspectedCharacterInfo() {
+    const char = this._inspectedChar;
+    if (!char || !this.characterInfoPanel?.visible) return;
+    const sig = this._weaknessPanelSignature(char);
+    if (sig === this._inspectedInfoSig) return;
+    this._inspectedInfoSig = sig;
+    this._renderCharacterInfoBody(char);
   }
 
   /** Entry point for (re)building the body based on active tab */
@@ -2666,6 +2798,9 @@ export default class CombatScene extends Phaser.Scene {
     this.characterInfoPanel.add(bg);
     //Who's shown
     this._inspectedChar = char;
+    // Seed the signature so the first post-open refresh compares against what
+    // was actually drawn, not against the previous unit's state.
+    this._inspectedInfoSig = this._weaknessPanelSignature(char);
     // Refresh slot borders now — this char's border needs to show (they're
     // now the inspected one), and whoever was previously inspected (if
     // anyone, and if not also mid-turn/targeted) needs theirs to hide again.
@@ -2766,7 +2901,11 @@ export default class CombatScene extends Phaser.Scene {
           `−${loss} Fire buildup per action taken, +${incPct}% incoming Fire buildup.`);
         const tickBase = cfg.t2?.startTickBase ?? 10;
         const tickPerHundred = cfg.t2?.startTickPerHundred ?? 0;
-        const tick = Math.max(1, Math.floor(tickBase * I + tickPerHundred * (m / 100)));
+        // Must mirror _startTurnWeakness's own formula exactly — overflow
+        // past T2, not total meter — or the tooltip advertises a number the
+        // fight does not deal.
+        const fireT2Tip = WeaknessFamilies?.fire?.t2 ?? 200;
+        const tick = Math.max(1, Math.floor(tickBase * I + tickPerHundred * (Math.max(0, m - fireT2Tip) / 100)));
         add(2, 'End-of-turn burn tick scales with overflow, plus a flat add-on from current buildup; can consume meter.',
           `${tick} burn damage at end of turn.`);
         break;
@@ -3054,7 +3193,9 @@ export default class CombatScene extends Phaser.Scene {
     this.endTurnButton = new UIButton(this, x, y, 'End Turn', () => {
       const actor = this._currentChar?.();
       if (actor?.isEnemy) return;  // don't let players skip NPCs
-      this._advanceTurn();
+      // Flagged so _advanceTurn knows this is a player ending their own turn,
+      // not the NPC loop's auto-advance — see the mid-turn-death flag there.
+      this._advanceTurn({ playerEndedTurn: true });
     });
     this.endTurnButton.setDepth(UI_DEPTH.overlay + 1);
     this.add.existing(this.endTurnButton);
@@ -3587,6 +3728,10 @@ export default class CombatScene extends Phaser.Scene {
       if (enemy?.hpBar) enemy.hpBar.update(enemy.currentHP, getEffMax(enemy));
     });
 
+    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+      u?.initBar?.update(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
+    });
+
     // Piggybacks on this same broad "something changed, refresh the portrait
     // chrome" hook rather than threading a call through every individual
     // buildup-application site — every caller of _updateHealthBars already
@@ -3595,6 +3740,11 @@ export default class CombatScene extends Phaser.Scene {
     [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
       this._updateWeaknessOverlays(u);
     });
+
+    // Same reasoning as the overlay refresh above: this is the one hook every
+    // hit/heal/tick already calls, so the open info panel rides it rather than
+    // needing a call threaded through every buildup site.
+    this._refreshInspectedCharacterInfo();
   }
 
   // The canonical per-family weakness colour. Shared by the portrait overlays
@@ -4412,13 +4562,12 @@ export default class CombatScene extends Phaser.Scene {
       if (!isItemInstance(inst)) continue;
       const base = Items[inst.id];
       if (!base?.combatUse) continue;
-      // Skip anything that provably cannot affect ANY living enemy right now.
-      // There are 12 combat items and nine of them are one-per-slot Severing
-      // Chants, so listing them all unconditionally buried the menu in nine
-      // near-identical rows — most of which would only have fizzled. They are
-      // hidden rather than greyed because _useCombatItem already treats "no
-      // eligible target" as a free no-op, so there is nothing to spend here.
-      if (!this._combatItemHasEligibleTarget(base.combatUse)) continue;
+      // Deliberately NOT filtered by whether a target exists right now. An
+      // earlier pass hid items with no eligible target to stop nine
+      // near-identical Severing Chants burying the menu, but a player who
+      // owns an item and cannot see it reads that as having lost it. Every
+      // owned combat item is always listed; _useCombatItem's own fizzle guard
+      // makes a pointless use a free no-op, so nothing is ever spent.
       counts.set(inst.id, (counts.get(inst.id) || 0) + 1);
     }
     return Array.from(counts.entries()).map(([id, count]) => {
@@ -4467,6 +4616,10 @@ export default class CombatScene extends Phaser.Scene {
       const slots = ITEM_CATEGORY_SLOTS[cfg.category] || [];
       const eligible = slots.filter(slot => {
         const eq = target.equipment?.[slot];
+        // Natural weapons have nothing to reveal and cannot be taken, so they
+        // are not a valid target for either chant. See the Natural Weapons
+        // block in data/items.js.
+        if (Items[eq?.id]?.natural) return false;
         return isItemInstance(eq) && !eq._identified && rarityRank(eq.rarity) <= maxRank;
       });
       if (!eligible.length) {
@@ -4481,7 +4634,8 @@ export default class CombatScene extends Phaser.Scene {
 
     if (cfg.kind === 'sever') {
       const eq = target.equipment?.[cfg.slot];
-      if (!isItemInstance(eq) || eq._droppable || rarityRank(eq.rarity) > maxRank) {
+      if (!isItemInstance(eq) || eq._droppable || Items[eq.id]?.natural
+          || rarityRank(eq.rarity) > maxRank) {
         this._log(`${itemName} fizzles — nothing eligible in ${target.name}'s ${cfg.slot} slot.`);
         return;
       }
@@ -4494,32 +4648,6 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`${user.name} uses ${itemName} — severs the soul-bond on ${target.name}'s ${cfg.slot}!`);
       return;
     }
-  }
-
-  // Mirrors _useCombatItem's own eligibility tests, evaluated across every
-  // living enemy — kept deliberately in step with it: if this says yes, the
-  // item can do something to at least ONE target. It is still per-target at
-  // use time (eligible on enemy A, not on B), so _useCombatItem keeps its own
-  // fizzle guard; this only decides menu visibility.
-  _combatItemHasEligibleTarget(cfg) {
-    if (!cfg) return false;
-    const rarityRank = (r) => Math.max(0, RARITY_ORDER.indexOf(r));
-    const maxRank = rarityRank(cfg.maxRarity || 'epic');
-    const foes = (this.enemies || []).filter(e => e && e.status !== 'incapacitated');
-    for (const t of foes) {
-      if (cfg.kind === 'identify') {
-        const slots = ITEM_CATEGORY_SLOTS[cfg.category] || [];
-        const hit = slots.some(slot => {
-          const eq = t.equipment?.[slot];
-          return isItemInstance(eq) && !eq._identified && rarityRank(eq.rarity) <= maxRank;
-        });
-        if (hit) return true;
-      } else if (cfg.kind === 'sever') {
-        const eq = t.equipment?.[cfg.slot];
-        if (isItemInstance(eq) && !eq._droppable && rarityRank(eq.rarity) <= maxRank) return true;
-      }
-    }
-    return false;
   }
 
   _spendBonusActionAndItem(user, inst) {
@@ -4844,6 +4972,12 @@ export default class CombatScene extends Phaser.Scene {
         slot.char.hpBar?.updateCurrent(slot.char.currentHP);
         slot.char.hpBar?.setShield?.(slot.char.shieldHP || 0);
         slot.char.mpBar?.updateCurrent(slot.char.currentMP);
+        // Initiative is spent and regained constantly (gauge skills, Cold's
+        // drain, Storm Barb's restore), so it rides the same refresh as HP/MP
+        // rather than needing its own hook. update() not updateCurrent(),
+        // because initiativeGaugeMax is itself modifiable by gear/effects.
+        slot.char.initBar?.update(slot.char.initiativeGauge ?? 0,
+                                  slot.char.initiativeGaugeMax ?? 100);
       }
     });
   }
@@ -4974,14 +5108,12 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   // XP granted on FIRST clear of each training scenario. No reward on repeats.
-  static SCENARIO_XP = {
-    'training_encounter_1': 20,
-    'training_encounter_2': 30,
-    'training_encounter_3': 50,  // brings Lv1 → Lv2 (20+30+50 = 100)
-    'training_encounter_4': 60,  // Styx huntsman
-    'training_encounter_5': 60,  // Le'sse duelists
-    'training_encounter_6': 80,  // Zafaar berserker — pushes through Lv3 (60+60+80=200 > 150)
-  };
+  // XP lives on the scenario itself (data/combatScenarios.js `xpReward`), NOT
+  // in a table here. There used to be a static SCENARIO_XP with only the six
+  // base encounters in it, which meant every Reckoning tier silently awarded
+  // ZERO -- the `?? 0` fallback swallowed it -- and the whole pit was worth
+  // 300 XP, capping a character at level 3. Two tables for one number is how
+  // that happened, so there is now only one.
 
   _onCombatVictory() {
     this.combatEnded = true;
@@ -5012,17 +5144,32 @@ export default class CombatScene extends Phaser.Scene {
     let leveledUpNames = [];
 
     if (this.isTraining) {
-      const perClear = CombatScene.SCENARIO_XP[this.scenarioId] ?? 0;
+      const perClear = this.scenarioData?.xpReward ?? 0;
       const survivors = GameState.party.filter(c => c && c.status !== 'dead');
-      const first = survivors.filter(c => !GameState.hasCharacterCleared(c, this.scenarioId));
-      const repeat = survivors.filter(c => GameState.hasCharacterCleared(c, this.scenarioId));
 
-      if (perClear > 0 && first.length) {
-        const result = GameState.awardXPTo(first, perClear);
+      // Reckoning tiers pay EVERY clear, to everyone. The base six still pay
+      // only a character's first personal clear.
+      //
+      // The reason is legibility, not generosity: with a per-character record,
+      // a mixed party where some members had already run a tier would silently
+      // pay some of them and not others, and nothing on screen tells the
+      // player which is which. Asking them to track that per character per
+      // tier is a worse tax than the XP is worth — and the level cap already
+      // stops it running away.
+      const repeatable = !!this.scenarioData?.xpRepeatable;
+      const earners = repeatable
+        ? survivors
+        : survivors.filter(c => !GameState.hasCharacterCleared(c, this.scenarioId));
+      const skipped = repeatable
+        ? []
+        : survivors.filter(c => GameState.hasCharacterCleared(c, this.scenarioId));
+
+      if (perClear > 0 && earners.length) {
+        const result = GameState.awardXPTo(earners, perClear);
         leveledUpNames = result.leveledUpNames;
         xpSummary.push(...result.summaries);
       }
-      repeat.forEach(c => xpSummary.push(`${c.name} - already cleared (no XP)`));
+      skipped.forEach(c => xpSummary.push(`${c.name} - already cleared (no XP)`));
 
       // Everyone who survived now owns this clear, first-timers included.
       survivors.forEach(c => GameState.markCharacterCleared(c, this.scenarioId));
@@ -5080,7 +5227,10 @@ export default class CombatScene extends Phaser.Scene {
       const xpPercent = HuntManager.getState()?.combinedModifiers?.xpPercent || 0;
       return Math.round(20 * (1 + xpPercent / 100));
     }
-    return 25;
+    // Per-scenario, so a long Reckoning tier is worth more than a training
+    // dummy. Falls back to the old flat 25 for anything without a value
+    // (hunts handled above, plus any scenario added later).
+    return this.scenarioData?.xpReward ?? 25;
   }
 
   // Timed-scenario loss. Deliberately NOT routed through _onCombatDefeat:
@@ -5356,7 +5506,31 @@ export default class CombatScene extends Phaser.Scene {
     // retaliation proc, self-damage like Reckless Immolation - never set it,
     // so the index (already correctly repointed at the next unit by the
     // filter below) got incremented again and skipped that unit entirely.
-    if (wasCurrentActor) this._currentActorDiedMidTurn = true;
+    // The flag tells _advanceTurn "the index already points at the next unit,
+    // do not increment past them". It is set for ANY mid-turn death.
+    //
+    // What differs is who DRIVES the advance. An enemy dying mid-turn has one
+    // coming already (the NPC AI loop calls _advanceTurn when it runs out of
+    // actions), so scheduling another here would consume the flag twice. A
+    // PLAYER dying mid-turn has nothing coming — their turn normally ends on
+    // the End Turn button, and a corpse never presses it. Leaving that case
+    // unscheduled meant _removeUnit repainted the UI for the next unit but
+    // nothing ever STARTED their turn: no start-of-turn effects, and — if that
+    // unit was an enemy — no AI at all. The fight soft-locked with an enemy
+    // sitting in the order doing nothing. Reproduced by a Rune Channel
+    // self-jolt killing its own caster.
+    // NOT while _advanceTurn is running its own end-of-turn ticks. A death
+    // there (an Ablaze/bleed/zone tick finishing the actor off) is ALREADY
+    // handled by that function's `previousCharDied`, and the flag was read and
+    // cleared at the top of the very call we are inside — so arming it here
+    // leaves it set with nothing left to consume it. The next End Turn press
+    // then hits the "defer to the pending advance" guard and does nothing, for
+    // the rest of the fight: every button works except the one that matters,
+    // and nothing is logged because it is an early return, not a throw.
+    if (wasCurrentActor && !this._inEndOfTurnTicks) {
+      this._currentActorDiedMidTurn = true;
+      if (!unit.isEnemy) this._advanceAfterPlayerDeath = true;
+    }
     this.turnOrder = this.turnOrder.filter(u => u !== unit);
     if (removedIndex !== -1 && removedIndex < this.currentTurnIndex) {
       this.currentTurnIndex = Math.max(0, this.currentTurnIndex - 1);
@@ -5378,6 +5552,17 @@ export default class CombatScene extends Phaser.Scene {
     // their own turn; skipping that here is deliberate, since a unit who
     // died mid-action has no "rest of their turn" for those to apply to.
     // Just refreshing the UI is enough to stop it showing a corpse's menu.
+    // Drive the transition ourselves when nothing else will (see above).
+    // Deferred a beat so the death's own VFX and log line land first, and
+    // guarded on combatEnded so a death that WON the fight cannot advance
+    // into a finished battle.
+    if (this._advanceAfterPlayerDeath) {
+      this._advanceAfterPlayerDeath = false;
+      this.time?.delayedCall?.(320, () => {
+        if (!this.combatEnded) this._advanceTurn();
+      });
+    }
+
     if (wasCurrentActor && !this.combatEnded) {
       this._buildActionMenuRoot?.();
       // The bookkeeping above already repointed currentTurnIndex at whoever is
@@ -7802,6 +7987,25 @@ export default class CombatScene extends Phaser.Scene {
         this._applyWeaknessBuildup(char, se.tickBuildup, { user: char });
       }
 
+      // The inverse: a MENDING lodge bleeds weakness back off its host each
+      // turn. Deliberately not routed through _applyWeaknessBuildup — that
+      // path is for INCOMING buildup and would run the whole gear/mark/
+      // resilience stack on what is meant to be a flat, friendly removal.
+      if (se?.id === 'lodged' && se.tickWeaknessRelief > 0 && !died && char?.weakness?.meters) {
+        const amt = se.tickWeaknessRelief;
+        let eased = 0;
+        for (const fam of Object.keys(char.weakness.meters)) {
+          const cur = char.weakness.meters[fam] | 0;
+          if (cur <= 0) continue;
+          char.weakness.meters[fam] = Math.max(0, cur - amt);
+          eased += cur - char.weakness.meters[fam];
+        }
+        if (eased > 0) {
+          this._recomputeWeaknessTiers?.(char);
+          this._log(`${char.name}'s mending barb eases ${eased} weakness buildup.`);
+        }
+      }
+
       // runic zone per-turn effects
       if (se.id === 'runic_zone' && (se.turns || 0) > 0) {
         const maxMP = char.maxMP ?? char.derivedStats?.maxMP ?? 0;
@@ -8338,6 +8542,14 @@ export default class CombatScene extends Phaser.Scene {
         this._log(`${target.name} ${fam} ${before.m}→${afterM}  T${before.t}→T${afterT} (I=${I})`);
       }
     }
+
+    // Every buildup change in the game funnels through here, including a
+    // tier-cross reward's bonus buildup — which lands AFTER the primary hit
+    // and was the case where the open info panel most visibly read one hit
+    // behind. _updateHealthBars also drives this, but not every buildup source
+    // is followed by one, so the choke point refreshes directly. The signature
+    // guard inside makes the duplicate call free.
+    this._refreshInspectedCharacterInfo?.();
   }
 
 
@@ -9694,7 +9906,13 @@ export default class CombatScene extends Phaser.Scene {
           WeaknessV3?.families?.fire?.t2?.startTickFlat ?? 10);
         const mult = familyIntensityMult('fire', m);
         const perHundred = WeaknessV3?.families?.fire?.t2?.startTickPerHundred ?? 0;
-        const buildupAddOn = perHundred * (m / 100);
+        // Counts OVERFLOW past the T2 threshold, not total meter. Charging it
+        // on total meant crossing into Ablaze already cost 5 x 2 = 10 on top
+        // of the base tick, so the entry burn was double the base and landed
+        // as ~50-67% of a player's whole pool for merely reaching the tier.
+        // Both terms now measure how far PAST Ablaze the target is.
+        const fireT2 = WeaknessFamilies?.fire?.t2 ?? 200;
+        const buildupAddOn = perHundred * (Math.max(0, m - fireT2) / 100);
         const burnRaw = Math.max(1, Math.floor((+base || 0) * mult + buildupAddOn));
 
         // MAGIC-typed ; route through magic modifiers if desired
@@ -9898,6 +10116,10 @@ export default class CombatScene extends Phaser.Scene {
     const after = Math.max(0, Math.min(max, before + regen - drain));
 
     char.initiativeGauge = after;
+    // The gauge filling on End Turn was invisible without this: the regen
+    // path touches neither _updateHealthBars nor _updateHPMPBars, so the bar
+    // sat still through an entire player round.
+    this._updateInitiativeBars();
 
     // Logging for visibility while tuning
     this._log(`${char.name} Initiative Gauge: +${regen}${drain ? ` -${drain}` : ''} = ${after}/${max}${t ? ` (Cold I=${I.toFixed(2)})` : ''}`);
@@ -10659,6 +10881,12 @@ export default class CombatScene extends Phaser.Scene {
 
   _highlightCurrentTurn() {
     this._clearSlotHighlights(); // ✅ Update green slot border
+    // Cheap catch-all for the Initiative bars: the gauge is spent and gained
+    // from ~11 different sites (gauge skills, Cold drain, steals, grants) and
+    // threading a repaint through each one would rot. Every one of them
+    // happens inside somebody's turn, so repainting on each turn change
+    // keeps the bars honest without that maintenance burden.
+    this._updateInitiativeBars?.();
     // Info panel deliberately stays open across turn transitions now — only
     // the X button or selecting a different character closes it (previously
     // this force-hid it every single turn, even the player's own).
@@ -10925,18 +11153,36 @@ export default class CombatScene extends Phaser.Scene {
     tryAct();
   }
 
-  _advanceTurn() {
+  _advanceTurn(opts = {}) {
     if (this.combatEnded) return;
 
     // 1) Apply END-OF-TURN consequences for the actor who just acted
     const previousChar = this._currentChar?.();
     let previousCharDied = false;
-    // Consume the mid-turn-death flag exactly once, here, so a stale value
-    // can never suppress a later legitimate increment (which would let a
-    // unit act twice).
+    // If a mid-turn death left an AI-owned advance pending, that advance owns
+    // the transition: it is what actually STARTS the next unit's turn
+    // (_startTurnStatusEffects / _startTurnWeakness / _applyGearStartOfTurn --
+    // _removeUnit only repaints the UI). A player who presses End Turn inside
+    // that ~200-300ms window would otherwise consume the flag, suppress their
+    // own increment and act twice, leaving every later turn shifted by one.
+    // Ignoring the press is safe and invisible: the pending advance lands
+    // immediately and hands them a properly-started turn to end.
+    if (opts.playerEndedTurn && this._currentActorDiedMidTurn) return;
     const actorDiedMidTurn = !!this._currentActorDiedMidTurn;
     this._currentActorDiedMidTurn = false;
-    if (previousChar) {
+    // `previousChar` is read off currentTurnIndex, which still points at the
+    // unit that just acted -- EXCEPT after a mid-turn death, where
+    // _removeUnit has already spliced the corpse out and repointed the index
+    // at the NEXT unit. Running the end-of-turn block then charged that
+    // unit's cooldowns, status durations and DOT ticks before it had taken a
+    // turn at all, which read as "all my one-turn buffs fell off for no
+    // reason". A unit that died mid-action has no rest-of-turn for any of
+    // this to apply to, and the unit now under the index has not finished a
+    // turn yet, so there is nobody to tick: skip the block entirely.
+    // Marks the window in which a death is the END-OF-TURN kind. _removeUnit
+    // checks this so it does not arm a flag that nothing can consume.
+    this._inEndOfTurnTicks = true;
+    if (previousChar && !actorDiedMidTurn) {
       // tick centralized cooldowns for the actor who just acted
       this._tickCooldownsEndOfTurn(previousChar);
 
@@ -10978,6 +11224,8 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // 2) Advance to next actor
+    this._inEndOfTurnTicks = false;
+
     if (!this.turnOrder?.length) return;                  // avoid modulo 0
     if (previousCharDied || actorDiedMidTurn) {
       // previousChar was just removed from turnOrder by _onUnitKnockedOut,
@@ -10995,6 +11243,11 @@ export default class CombatScene extends Phaser.Scene {
 
     const char = this._currentChar?.();
     if (!char) return;
+    // Belt and braces: a new actor is now established, so ANY value still
+    // sitting in the mid-turn-death flag is stale by definition — this call
+    // already consumed the one it was given. Clearing it here means End Turn
+    // can never be permanently dead, whatever future path arms the flag late.
+    this._currentActorDiedMidTurn = false;
     if (typeof char.isEnemy !== 'boolean') {
       char.isEnemy = !!this.enemies?.includes(char);
     }
@@ -11482,18 +11735,11 @@ export default class CombatScene extends Phaser.Scene {
     const localX = 0;  // match container-relative positioning
     const localY = 0;
 
-    const hpBar = new StatusBar(this, localX - 50, localY, 60, 6, unit.currentHP, unit.maxHP, 0xff4444, 'HP');
-    const mpBar = new StatusBar(this, localX - 42, localY, 60, 6, unit.currentMP, unit.maxMP, 0x4444ff, 'MP');
-
-    hpBar.setAngle(-90);
-    mpBar.setAngle(-90);
+    // Handles (unit.hpBar / mpBar / initBar) are assigned inside the helper.
+    const bars = this._makeStatusBars(unit, localX, localY);
     const weaknessOverlays = this._createWeaknessOverlays(unit);
 
-    unit._slot.add([weaknessOverlays, hpBar, mpBar]);
-
-    // Maintain handles for updates
-    unit.hpBar = hpBar;
-    unit.mpBar = mpBar;
+    unit._slot.add([weaknessOverlays, ...bars]);
   }
 
   // Shared by _showVictoryScreen/_showDefeatScreen: dims and input-blocks
@@ -11563,6 +11809,18 @@ export default class CombatScene extends Phaser.Scene {
       this.add.text(width / 2, cursorY,
         `+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, {
           fontSize: '18px', color: '#ffe066', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(2001);
+      cursorY += 28;
+    }
+
+    // Reckoning Marks — NOT gated on firstCompletion, unlike Hunt Tickets
+    // above: re-running a Reckoning tier is supposed to pay, and this line is
+    // the only feedback that it did.
+    if (progressReward?.marksEarned > 0) {
+      cursorY += 6;
+      this.add.text(width / 2, cursorY,
+        `+${progressReward.marksEarned} Reckoning Mark${progressReward.marksEarned > 1 ? 's' : ''}  (Total: ${progressReward.marksTotal})`, {
+          fontSize: '18px', color: '#c8a0ff', fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(2001);
       cursorY += 28;
     }
@@ -11720,19 +11978,15 @@ export default class CombatScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     // Vertical HP/MP bars
-    const hpBar = new StatusBar(this, -50, 0, 60, 6, char.currentHP, char.maxHP, 0xff4444, 'HP');
-    const mpBar = new StatusBar(this, -42, 0, 60, 6, char.currentMP, char.maxMP, 0x4444ff, 'MP');
-    hpBar.setAngle(-90);
-    mpBar.setAngle(-90);
+    const bars = this._makeStatusBars(char, 0, 0);
     const weaknessOverlays = this._createWeaknessOverlays(char);
 
     // Add to container — overlays sit directly above the portrait, below UI.
-    slot.add([sprite, weaknessOverlays, nameTxt, hpBar, mpBar]);
+    slot.add([sprite, weaknessOverlays, nameTxt, ...bars]);
 
-    // Store references for later updates
+    // Store references for later updates (bar handles are set by
+    // _makeStatusBars itself, so only the sprite is needed here).
     char.icon = sprite;
-    char.hpBar = hpBar;
-    char.mpBar = mpBar;
 
     // NEW: ensure status icons render now that slot/icon exist
     this._refreshStatusEffectIcons?.(char);

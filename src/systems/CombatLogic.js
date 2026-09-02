@@ -519,7 +519,18 @@ export function calculateDamage(attacker, target, ability = null) {
     const wLocalMult = 1 + ((wMods.localDamagePercent || 0) / 100);
 
     const wDieRoll = Phaser.Math.Between(wMin, wMax);
-    const physicalRoll = Math.floor(wDieRoll * wLocalMult);
+    // NOT multiplied by wLocalMult. wd.damage already has the weapon's own
+    // damage% folded in by getItemComputedData ((base + flat) * (1 + pct)),
+    // and this rolls FROM that range — so applying it again squared the
+    // affix. Verified with the die pinned: a 6-7 base with a 26% affix rolled
+    // dice of 7-8 (correct) and then reported a base of 8 (floor(7 * 1.26)),
+    // i.e. ~38.5% delivered from a 26% roll, and ~96% from a 40% "Merciless".
+    //
+    // The elemental flats below DO still need wLocalMult: _weaponMods
+    // .elementalFlat is stored RAW (only the tooltip's separate
+    // displayScaledElementalFlat is pre-scaled), so this is their only
+    // application, not a second one.
+    const physicalRoll = wDieRoll;
 
     const elementalRolls = {};
     for (const [element, range] of Object.entries(wMods.elementalFlat || {})) {
@@ -567,7 +578,11 @@ export function calculateDamage(attacker, target, ability = null) {
   } else {
     baseDamage = mainSwing.physicalRoll;
     Object.assign(elementalRolls, mainSwing.elementalRolls);
-    try { _pushBreakdown({ label: 'base', value: baseDamage }); } catch { }
+    // NOTE: the 'base' breakdown line is pushed AFTER the STR bonus below, not
+    // here. It used to be pushed here, which was correct only while STR was
+    // added inside rollWeaponSwing; once the dual-wield fix moved STR out to a
+    // single per-attack add, this line started reporting the bare die roll and
+    // the logged base no longer matched the number the hit actually used.
   }
 
   // STR bonus is a character stat, not a per-weapon roll — added once per
@@ -580,6 +595,18 @@ export function calculateDamage(attacker, target, ability = null) {
   if (strBonus > 0) {
     baseDamage += strBonus;
   }
+  // Logged only now that STR is in it. Single-wield reports one 'base' with
+  // STR baked in (so the number in the log is the number the maths uses, and
+  // a die roll can legitimately read above the weapon's printed range).
+  // Dual-wield already itemised each blade's dice above, so there is no single
+  // base to bake into and STR gets its own line instead.
+  try {
+    if (dualWielding) {
+      if (strBonus > 0) _pushBreakdown({ label: 'Strength', flat: strBonus });
+    } else {
+      _pushBreakdown({ label: 'base', value: baseDamage });
+    }
+  } catch { }
 
   // Tier-1 "+X weapon damage" riders (e.g. Curse of Needles) — baked in here,
   // before gear/skill%/buffs/crit, so they ride the whole multiplicative stack.

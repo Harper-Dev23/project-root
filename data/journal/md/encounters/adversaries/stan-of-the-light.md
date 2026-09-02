@@ -27,18 +27,18 @@ The practical consequence is that **spread chip damage is close to worthless** a
 
 ## Profile
 
-**HP** 105 - **MP** 120 - **Stats** STR 5 / DEX 5 / CON 8 / INT 6 / WIS 14 / CHA 10
+**HP** 95 - **MP** 120 - **Stats** STR 5 / DEX 5 / CON 8 / INT 6 / WIS 14 / CHA 10
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
 | **Restore** | major | 10 MP | 1 | Restores 35% of an ally's max HP (minimum 14). |
-| **Cleanse Weakness** | class | 8 MP | 2 | Clears an ally's Curse, Disease, and Toxic buildup entirely. Restores 4 MP if anything was cleansed. |
+| **Cleanse Weakness** | class | 8 MP | 2 | Removes up to 200 Curse, Disease and Toxic buildup from an ally. Restores 4 MP if anything was cleansed. |
 | **Sacred Ward** | bonus | 6 MP | 3 | Grants an ally +10 Accuracy for 3 turns. |
-| **Flame Flick** | bonus | 3 MP | 1 | Deals 3 damage and applies 70 Fire buildup. |
+| **Flame Flick** | bonus | 3 MP | 1 | Deals 27% weapon damage as Fire and applies 70 Fire buildup. |
 | **Mending Wave** | class | 6 MP | 4 | Spends 30-60 Initiative to heal the whole party at once — the more Initiative spent, the stronger the heal. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 

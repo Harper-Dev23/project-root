@@ -89,4 +89,27 @@ Deliberately mixed: Oskar is mostly physical with necrotic riders, Kiro is heavi
 | **Basic Attack** | major | - | - | A quick physical strike. |
 
 
+## Reckoning Ladder
+
+Each tier is unlocked by clearing the BASE encounter, not the tier below it — the ladder is not a chain, so a tier can be attempted in any order.
+
+This ladder scales the same roster rather than replacing it. Health is a multiplier on each combatant; resists and Resilience are added on top of whatever they already had.
+
+| Tier | Health | Added resists (P / E / N) | Added Resilience | New at this tier |
+|---|---|---|---|---|
+| Reckoning I | ×1.3 | +8 / +8 / +8 | +20 | joined by Laki; uncommon armour |
+| Reckoning II | ×1.65 | +18 / +18 / +18 | +40 | joined by Laki; uncommon armour |
+| Reckoning III | ×2 | +30 / +30 / +30 | +62 | joined by Laki; uncommon armour |
+
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 50 | - | item level 2, base tier 1 |
+| Reckoning I | 60 | 6 | item level 3, up to base tier 2 |
+| Reckoning II | 75 | 9 | item level 3, up to base tier 2 |
+| Reckoning III | 90 | 12 | item level 3, up to base tier 2 |
+
 <!-- GEN:END -->

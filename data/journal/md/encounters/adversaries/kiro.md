@@ -29,7 +29,7 @@ The practical consequence: a build stacked entirely into Physical Resist takes c
 
 **HP** 330 - **MP** 80 - **Resists** Necrotic 20% - **Evasion** 25 - **Stats** STR 10 / DEX 10 / CON 12 / INT 6 / WIS 6 / CHA 8
 
-**Appears in:** Huntsman & Beasts
+**Appears in:** Huntsman & Beasts, Huntsman & Beasts — Reckoning I, Huntsman & Beasts — Reckoning II, Huntsman & Beasts — Reckoning III
 
 ## Abilities
 

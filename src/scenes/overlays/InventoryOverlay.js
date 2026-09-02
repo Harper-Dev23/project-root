@@ -8,7 +8,7 @@ import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
-import { buildItemTooltipLines } from '../../ui/itemTooltip.js';
+import { buildItemTooltipLines, installAffixDetailKeys } from '../../ui/itemTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 
 
@@ -25,6 +25,19 @@ export default class InventoryOverlay extends Phaser.Scene {
     // than in init(), because scene.restart() re-runs init but NOT the
     // constructor — that's how every filter here survives a rebuild.
     this.searchQuery = '';
+    // Scroll offsets, on the instance for exactly the same reason as the
+    // filters above: every interaction here calls scene.restart(), which
+    // re-runs init() but NOT the constructor. Without these the list snapped
+    // back to the top on every equip/transfer, so working down a long list
+    // meant re-scrolling after each item — the same fault the tribe stash had.
+    // Sort controls for the global list. On the instance like every other
+    // filter, because scene.restart() re-runs init() but not the constructor.
+    this.sortKey = 'None';
+    this.sortDir = 'Desc';
+    // Which row's [Discard] is currently armed (awaiting confirm).
+    this._armedDiscard = null;
+    this._globalScrollY = 0;
+    this._personalScrollY = 0;
     this.tooltip = null;
   }
 
@@ -60,6 +73,22 @@ export default class InventoryOverlay extends Phaser.Scene {
   // instead of three independently-maintained (and previously drifted) copies.
   _formatItemDisplay(item) {
     return buildItemTooltipLines(item, { rarityColors: RARITY_COLORS });
+  }
+
+  /** Re-render the primary tooltip in place — used when Alt flips mid-hover. */
+  _reshowPrimaryTooltip() {
+    // Prefers _hoveredPrimaryItem, which the EQUIPPED rows set. They cannot
+    // reuse _hoveredCompareItem: that one drives Shift-to-compare, and an
+    // equipped row comparing against itself is meaningless. Falls back to it
+    // so the inventory-list rows keep working exactly as before.
+    const hovered = this._hoveredPrimaryItem || this._hoveredCompareItem?.item;
+    if (!hovered || !this.tooltip?.container?.visible) return;
+    const disp = this._formatItemDisplay(hovered);
+    this.tooltip.show(this._lastPointer.x, this._lastPointer.y, {
+      title: disp.title || disp.name,
+      titleColor: disp.titleColor || disp.color,
+      lines: disp.lines,
+    });
   }
 
   // Shift-to-compare: shows the selected character's currently equipped
@@ -124,6 +153,16 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.compareTooltip = new Tooltip(this);
     this._shiftHeld = false;
     this._hoveredCompareItem = null;
+            this._hoveredPrimaryItem = null;
+
+    // Alt-to-inspect: rebuilds the PRIMARY tooltip with each affix's tier and
+    // possible range. The display objects are built at render time, so an Alt
+    // press mid-hover has to rebuild from the hovered item rather than reuse
+    // the captured one — same reason the Shift compare above re-reads
+    // _hoveredCompareItem instead of waiting for the next pointermove.
+    this._lastPointer = { x: 0, y: 0 };
+    this.input.on('pointermove', (p) => { this._lastPointer = { x: p.worldX, y: p.worldY }; });
+    installAffixDetailKeys(this, () => this._reshowPrimaryTooltip());
     this.input.keyboard.on('keydown-SHIFT', () => {
       this._shiftHeld = true;
       if (this._hoveredCompareItem) {
@@ -148,12 +187,22 @@ export default class InventoryOverlay extends Phaser.Scene {
     const safeHeight = frame.bounds.height;
     const contentDepth = frame.depth;
 
+    // Keep both tooltips inside the overlay frame. A long weapon tooltip with
+    // the Alt affix breakdown open is tall enough to run off the bottom of the
+    // screen, and until now nothing clamped the vertical axis at all.
+    [this.tooltip, this.compareTooltip].forEach(t => t?.setBounds?.(
+      frame.bounds.x + 8,
+      frame.bounds.x + frame.bounds.width - 8,
+      frame.bounds.y + 8,
+      frame.bounds.y + frame.bounds.height - 8,
+    ));
+
     // Currency strip — top-right corner of the overlay.
     // Reminds the player of spendable tickets without leaving the inventory screen.
     this.add.text(
       frame.bounds.x + frame.bounds.width - 16,
       frame.bounds.y + 14,
-      `🎟 Hunt Tickets: ${ProgressionManager.huntTickets}   🏷 Tribe Tickets: ${ProgressionManager.tribeTickets}`,
+      `🎟 Hunt Tickets: ${ProgressionManager.huntTickets}   🏷 Tribe Tickets: ${ProgressionManager.tribeTickets}   ✵ Reckoning Marks: ${ProgressionManager.reckoningMarks}`,
       { fontSize: '13px', color: '#ffddaa' }
     ).setOrigin(1, 0).setDepth(contentDepth + 1);
 
@@ -282,17 +331,29 @@ export default class InventoryOverlay extends Phaser.Scene {
         wordWrap: { width: EQUIPPED_TEXT_WIDTH, useAdvancedWrap: true }
       }).setDepth(contentDepth)
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: disp.title || disp.name,
-          titleColor: disp.titleColor || disp.color,
-          lines: disp.lines
-        }))
-        .on('pointerout', () => this.tooltip.hide())
-        .on('pointermove', (p) => this.tooltip.show(p.worldX, p.worldY, {
-          title: disp.title || disp.name,
-          titleColor: disp.titleColor || disp.color,
-          lines: disp.lines
-        }))
+        // `disp` is captured when the row is BUILT, so reusing it here renders
+        // the Alt-detail state as it was at build time — which is exactly why
+        // Alt appeared to do nothing on equipped gear. Rebuilt per hover, and
+        // the item recorded so an Alt press mid-hover redraws without the
+        // pointer having to move.
+        .on('pointerover', (p) => {
+          if (isItemInstance(equippedItem)) this._hoveredPrimaryItem = equippedItem;
+          const d = isItemInstance(equippedItem) ? this._formatItemDisplay(equippedItem) : disp;
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: d.title || d.name,
+            titleColor: d.titleColor || d.color,
+            lines: d.lines
+          });
+        })
+        .on('pointerout', () => { this._hoveredPrimaryItem = null; this.tooltip.hide(); })
+        .on('pointermove', (p) => {
+          const d = isItemInstance(equippedItem) ? this._formatItemDisplay(equippedItem) : disp;
+          this.tooltip.show(p.worldX, p.worldY, {
+            title: d.title || d.name,
+            titleColor: d.titleColor || d.color,
+            lines: d.lines
+          });
+        })
 
 
       if (equippedItem) {
@@ -384,17 +445,20 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispP.lines
           });
           this._hoveredCompareItem = { baseItem, item };
+          this._hoveredPrimaryItem = item;
           this._updateCompareTooltip(baseItem, item);
         })
         .on('pointerout', () => {
           this.tooltip.hide();
           this._hoveredCompareItem = null;
+            this._hoveredPrimaryItem = null;
           this.compareTooltip?.hide();
         })
         .on('pointermove', (p) => {
           if (!this._isPointerWithinArea(p, pArea)) {
             this.tooltip.hide();
             this._hoveredCompareItem = null;
+            this._hoveredPrimaryItem = null;
             this.compareTooltip?.hide();
             return;
           }
@@ -404,6 +468,7 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispP.lines
           });
           this._hoveredCompareItem = { baseItem, item };
+          this._hoveredPrimaryItem = item;
           this._updateCompareTooltip(baseItem, item);
         });
 
@@ -421,7 +486,9 @@ export default class InventoryOverlay extends Phaser.Scene {
           if (!this._isPointerWithinArea(p, pArea)) return;
           SoundManager.play('dullClick');
           const updatedChar = InventorySystem.removeItemFromCharacter(char, item);
-          InventorySystem.addGlobalItem(item);
+          // Not a new acquisition — it was already the player's, just held by
+          // a character. Marking it would make the unseen dot meaningless.
+          InventorySystem.addGlobalItem(item, { isNew: false });
           this._commitChar(updatedChar);
           this.scene.restart();
         });
@@ -480,6 +547,13 @@ export default class InventoryOverlay extends Phaser.Scene {
     pVisibleHeight = pMaskHeight;
     // anchor the list to the mask origin (don't move it to 0)
     pList.setPosition(pMaskX, pMaskY);
+    // Same remembered-offset restore as the global list above.
+    if (pContentHeight > pVisibleHeight) {
+      const maxScrollP = pContentHeight - pVisibleHeight;
+      pList.y = Phaser.Math.Clamp(
+        pMaskY - Phaser.Math.Clamp(this._personalScrollY, 0, maxScrollP),
+        pMaskY - maxScrollP, pMaskY);
+    }
 
     // define personal area rect for scrolling (no Graphics object needed)
     pArea = { x: pMaskX, y: pMaskY, w: pMaskWidth, h: pVisibleHeight };
@@ -543,6 +617,31 @@ export default class InventoryOverlay extends Phaser.Scene {
         .setOrigin(0.5, 0).setDepth(contentDepth);
     }
     makeCycler(cyclerCX, gToggleY + 22, 'Rarity:', this.currentRarity, RARITIES, v => { this.currentRarity = v; });
+    // Sort. Placed to the LEFT of the Type/Rarity column, on the same two
+    // rows — stacking them underneath pushed the controls down into the item
+    // list and overlapped the scroll area. Two cyclers rather than one
+    // combined control so the direction can be flipped without walking the
+    // whole key list back around.
+    const SORT_KEYS = ['None', 'Item Level', 'Base Tier', 'Rarity', 'Name', 'STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+    const sortCX = cyclerCX - 200;
+    makeCycler(sortCX, gToggleY, 'Sort:', this.sortKey, SORT_KEYS, v => { this.sortKey = v; });
+    if (this.sortKey !== 'None') {
+      // A single toggle rather than a cycler: with only two states, ◀ ▶ around
+      // the word "Desc" was three controls for one bit of information.
+      const arrow = this.sortDir === 'Asc' ? '▲' : '▼';
+      const dirBtn = this.add.text(sortCX, gToggleY + 22, arrow, { fontSize: '16px', color: '#ffff88' })
+        .setOrigin(0.5, 0).setDepth(contentDepth)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => dirBtn.setStyle({ color: '#ffffff' }))
+        .on('pointerout', () => dirBtn.setStyle({ color: '#ffff88' }))
+        .on('pointerdown', () => {
+          SoundManager.play('select');
+          this.sortDir = this.sortDir === 'Asc' ? 'Desc' : 'Asc';
+          this.scene.restart();
+        });
+      this.add.text(sortCX - 68, gToggleY + 22, 'Order:', { fontSize: '11px', color: '#999999' })
+        .setOrigin(0, 0).setDepth(contentDepth);
+    }
 
     // ---- Search bar --------------------------------------------------------
     // Sits on the left of the second header row, opposite the Rarity cycler.
@@ -556,6 +655,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     let inventoryItems = [...(GameState.inventory || [])];
     inventoryItems = this._applyGlobalFilters(inventoryItems);
+    inventoryItems = this._applyGlobalSort(inventoryItems);
 
     const safeHeightAdj = safeHeight - 264;
     const newWidth = globalListWidth;
@@ -583,8 +683,17 @@ export default class InventoryOverlay extends Phaser.Scene {
       const y = globalCursorY;
 
       const dispG = this._formatItemDisplay(item);
+      // Unseen-item marker. Cleared the moment the row is hovered, which is
+      // when the player has actually looked at it — so it answers "which of
+      // these did I just pick up" without needing the list sorted by
+      // acquisition. Drawn as a text prefix rather than a separate object so
+      // it cannot drift out of alignment when a long name wraps.
+      const isNew = !!item._isNew;
       const rowG = this.add.text(20, y, `• ${dispG.name}`, {
         fontSize: '16px',
+        // Rarity colour ALWAYS. The unseen state is carried entirely by the
+        // dot drawn over the bullet below — tinting the whole row green threw
+        // away the rarity read, which is the more valuable signal.
         color: dispG.color,
         wordWrap: { width: GLOBAL_TEXT_WIDTH, useAdvancedWrap: true }
       })
@@ -597,17 +706,20 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispG.lines
           });
           this._hoveredCompareItem = { baseItem, item };
+          this._hoveredPrimaryItem = item;
           this._updateCompareTooltip(baseItem, item);
         })
         .on('pointerout', () => {
           this.tooltip.hide();
           this._hoveredCompareItem = null;
+            this._hoveredPrimaryItem = null;
           this.compareTooltip?.hide();
         })
         .on('pointermove', (p) => {
           if (!this._isPointerWithinArea(p, gArea)) {
             this.tooltip.hide();
             this._hoveredCompareItem = null;
+            this._hoveredPrimaryItem = null;
             this.compareTooltip?.hide();
             return;
           }
@@ -617,6 +729,10 @@ export default class InventoryOverlay extends Phaser.Scene {
             lines: dispG.lines
           });
           this._hoveredCompareItem = { baseItem, item };
+          this._hoveredPrimaryItem = item;
+          // Seen. Updated in place rather than via scene.restart() so the list
+          // does not jump under the cursor mid-hover.
+          clearNew();
           this._updateCompareTooltip(baseItem, item);
         })
       const rowBgHeight = rowG.height + 10;
@@ -626,6 +742,87 @@ export default class InventoryOverlay extends Phaser.Scene {
 
       listContainer.add(rowBg);
       listContainer.add(rowG);
+
+      // Unseen marker: a slightly larger dot sitting exactly where the bullet
+      // is, so a new row reads as "same row, louder bullet" rather than a
+      // differently-coloured row. Pulsed so it catches the eye in a long list.
+      // Destroyed on hover, after which the row is indistinguishable from one
+      // that has always been there.
+      let newDot = null;
+      if (isNew) {
+        newDot = this.add.circle(25, y + 9, 5, 0x7dff9b).setDepth(contentDepth + 1);
+        listContainer.add(newDot);
+        this.tweens.add({
+          targets: newDot,
+          scale: { from: 0.72, to: 1.12 },
+          alpha: { from: 0.7, to: 1 },
+          duration: 620, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+      }
+      const clearNew = () => {
+        if (!item._isNew) return;
+        item._isNew = false;
+        if (newDot) { this.tweens.killTweensOf(newDot); newDot.destroy(); newDot = null; }
+      };
+
+      // [Discard] — permanent removal, no refund. There is no economy yet, so
+      // this exists purely so a full pack can be emptied; selling to vendors
+      // comes later once favour/currency exist.
+      //
+      // Two-step confirm on the button itself rather than a modal: the row is
+      // the thing being destroyed, so the confirmation belongs on it, and a
+      // popup here would cover the list you are working down. The armed state
+      // is per-row and dies with the next rebuild, so it cannot leak.
+      // Locked and historic gear is exempt — losing the Bloodthirster to a
+      // mis-click is not a recoverable mistake.
+      const discardable = !baseItem.locked && !item.historic;
+      if (discardable) {
+        const dx = Math.max(576, newWidth - 90);
+        if (this._armedDiscard === item) {
+          // Armed: an explicit pair. The previous version turned the button
+          // into "[Sure?]" with no way back — the only exits were discarding
+          // or leaving the overlay, so a mis-click stranded the row in a
+          // confirm state permanently.
+          const yes = this.add.text(dx - 4, y, '[Yes]', { fontSize: '13px', color: '#ff6666' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => yes.setStyle({ color: '#ff9d9d' }))
+            .on('pointerout', () => yes.setStyle({ color: '#ff6666' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              InventorySystem.removeGlobalItem(item);
+              this._armedDiscard = null;
+              GameState.save('autosave');
+              this.scene.restart();
+            });
+          const no = this.add.text(dx + 38, y, '[No]', { fontSize: '13px', color: '#aaaaaa' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => no.setStyle({ color: '#ffffff' }))
+            .on('pointerout', () => no.setStyle({ color: '#aaaaaa' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              this._armedDiscard = null;
+              this.scene.restart();
+            });
+          listContainer.add(yes);
+          listContainer.add(no);
+        } else {
+          const dBtn = this.add.text(dx, y, '[Discard]', { fontSize: '13px', color: '#c98a8a' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => dBtn.setStyle({ color: '#ff9d9d' }))
+            .on('pointerout', () => dBtn.setStyle({ color: '#c98a8a' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              // Arms THIS row and disarms any other, so only one confirm can
+              // ever be open at a time.
+              this._armedDiscard = item;
+              this.scene.restart();
+            });
+          listContainer.add(dBtn);
+        }
+      }
 
       // [✦ Inspect] used to live inside the `baseItem.locked` branch below,
       // which was fine when the only renown item was the Bloodthirster (locked
@@ -752,6 +949,15 @@ export default class InventoryOverlay extends Phaser.Scene {
     const gVisibleHeight = gArea.h;
     // viewport = mask height for global
     listContainer.setPosition(newX, listStartY);
+    // Re-apply the remembered offset, clamped to the CURRENT content height so
+    // a list that shrank (item consumed, filter narrowed) cannot leave the view
+    // stranded past the end.
+    if (gContentHeight > gVisibleHeight) {
+      const maxScrollG = gContentHeight - gVisibleHeight;
+      listContainer.y = Phaser.Math.Clamp(
+        listStartY - Phaser.Math.Clamp(this._globalScrollY, 0, maxScrollG),
+        listStartY - maxScrollG, listStartY);
+    }
 
     // static global scroll hitbox (reuse gArea defined above)
 
@@ -793,6 +999,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         } else {
           listContainer.y = listStartY;
         }
+        this._globalScrollY = listStartY - listContainer.y;
         _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
       }
 
@@ -806,6 +1013,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         } else {
           pList.y = pMaskY;
         }
+        this._personalScrollY = pMaskY - pList.y;
         _syncInteractivity(pList, pMaskY, pMaskY + pMaskHeight);
       }
 
@@ -1012,6 +1220,47 @@ export default class InventoryOverlay extends Phaser.Scene {
     GameState.save('autosave');
     this.scene.restart();
   }
+  /** Stat contributed by an item: base bonuses plus rolled stat suffixes. */
+  _itemStatValue(item, stat) {
+    const base = Items[item?.id] || {};
+    const fromBase = (base.bonuses || {})[stat] || 0;
+    const fromAffix = (item?.instanceMods?.stats || {})[stat] || 0;
+    return fromBase + fromAffix;
+  }
+
+  /**
+   * Sort the global list. Applied AFTER filtering so the ordering is always of
+   * what is actually on screen.
+   *
+   * Ties fall back to name, so a sort never reshuffles equal rows between
+   * rebuilds — the list restarts constantly here, and an unstable order would
+   * make items appear to jump while the player is working down it.
+   */
+  _applyGlobalSort(list) {
+    const key = this.sortKey;
+    if (!key || key === 'None') return list;
+    const RARITY = ['common', 'uncommon', 'rare', 'epic', 'historic'];
+    const nameOf = (it) => String(this._formatItemDisplay(it)?.name || Items[it.id]?.name || it.id || '');
+    const valueOf = (it) => {
+      if (key === 'Item Level') return Number.isFinite(it?.itemLevel) ? it.itemLevel : -1;
+      // Base tier is the item UNDERNEATH the modifiers (Crude/Hardened/
+      // Ancestral, Simple/Fitted) and is independent of item level — a tier-2
+      // base can carry weak affixes and vice versa, so they sort differently.
+      // Jewelry and consumables carry no baseTier; they sort last.
+      if (key === 'Base Tier') return Items[it?.id]?.baseTier ?? -1;
+      if (key === 'Rarity') return RARITY.indexOf(it?.rarity || it?.quality || 'common');
+      if (key === 'Name') return null;                       // handled by the tie-break
+      return this._itemStatValue(it, key);                   // STR / DEX / ...
+    };
+    const dir = this.sortDir === 'Asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const va = valueOf(a), vb = valueOf(b);
+      if (va !== null && va !== vb) return (va - vb) * dir;
+      const cmp = nameOf(a).localeCompare(nameOf(b));
+      return key === 'Name' ? cmp * dir : cmp;
+    });
+  }
+
   _applyGlobalFilters(items) {
     let result = this._filterByCategory(items, this.currentGlobalCategory);
 

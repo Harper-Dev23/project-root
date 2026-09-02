@@ -25,16 +25,16 @@ Gary works in layered affliction rather than raw output — curses, needles, and
 
 ## Profile
 
-**HP** 98 - **MP** 120 - **Resists** Necrotic 30% - **Stats** STR 5 / DEX 6 / CON 7 / INT 9 / WIS 6 / CHA 15
+**HP** 88 - **MP** 120 - **Resists** Necrotic 30% - **Stats** STR 5 / DEX 6 / CON 7 / INT 9 / WIS 6 / CHA 15
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Hex** | major | 5 MP | - | Deals 2 damage and applies 100 Curse buildup. |
-| **Dark Bolts** | bonus | 4 MP | 1 | Deals 3 damage and applies 70 Disease buildup. |
+| **Hex** | major | 5 MP | - | Deals 25% weapon damage as Necrotic and applies 100 Curse buildup. |
+| **Dark Bolts** | bonus | 4 MP | 1 | Deals 38% weapon damage as Necrotic and applies 70 Disease buildup. |
 | **Curse Amplify** | class | 8 MP | 2 | Requires the target to be Cursed (T1+). Doubles their current Curse buildup meter. No damage of its own. |
 | **Drain Life** | major | 10 MP | 2 | Requires the target to be Cursed (T1+). Deals 4 damage and heals Gary for 10 — 18 if the target is Afflicted (Curse T2+). |
 | **Curse of Needles** | major | 7 MP | 3 | Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while cursed, amplified while Afflicted. |

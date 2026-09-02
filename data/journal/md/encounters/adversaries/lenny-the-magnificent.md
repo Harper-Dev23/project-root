@@ -25,18 +25,18 @@ Lenny channels a large area effect that has to be answered — left alone, it hi
 
 ## Profile
 
-**HP** 98 - **MP** 110 - **Resists** Elemental 30% - **Stats** STR 4 / DEX 6 / CON 7 / INT 16 / WIS 9 / CHA 6
+**HP** 88 - **MP** 110 - **Resists** Elemental 30% - **Stats** STR 4 / DEX 6 / CON 7 / INT 16 / WIS 9 / CHA 6
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Arcane Bolt** | bonus | 3 MP | - | Deals 4 damage and applies 60 Lightning buildup. |
-| **Static Field** | major | 5 MP | 1 | Deals 4 damage and applies 90 Lightning buildup. |
+| **Arcane Bolt** | bonus | 3 MP | - | Deals 39% weapon damage as Lightning and applies 60 Lightning buildup. |
+| **Static Field** | major | 5 MP | 1 | Deals 39% weapon damage as Lightning and applies 90 Lightning buildup. |
 | **Mana Shield** | bonus | 4 MP | 3 | Grants +20 Elemental Resist for 2 turns. |
-| **Overload** | class | 8 MP | 2 | Requires the target to be Zapped (Lightning T1+). Deals 9 damage and consumes their Lightning buildup. |
+| **Overload** | class | 8 MP | 2 | Requires the target to be Zapped (Lightning T1+). Deals 88% weapon damage as Lightning and consumes their Lightning buildup. |
 | **Channel: Inferno** | major | 4 MP | 5 | Begins channeling a massive Fire AoE — unleashed automatically on your next turn. |
 | **Inferno** | major | - | - | Unleashes the channeled inferno — 90% weapon damage as Fire to the entire party. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |

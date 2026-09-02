@@ -25,18 +25,18 @@ Chad's defining trick is **redirection**: he can pull an incoming attack onto hi
 
 ## Profile
 
-**HP** 135 - **MP** 60 - **Resists** Physical 30% - **Stats** STR 10 / DEX 6 / CON 12 / INT 5 / WIS 6 / CHA 9
+**HP** 125 - **MP** 60 - **Resists** Physical 30% - **Stats** STR 10 / DEX 6 / CON 12 / INT 5 / WIS 6 / CHA 9
 
-**Appears in:** The Animated Six
+**Appears in:** The Animated Six, The Animated Six — Reckoning I, The Animated Six — Reckoning II, The Animated Six — Reckoning III
 
 ## Abilities
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Heavy Slash** | major | 5 MP | - | Deals 6 damage and applies 90 Expose buildup. |
-| **Guarded Blow** | bonus | 4 MP | 2 | Deals 3 damage and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist). |
+| **Heavy Slash** | major | 5 MP | - | Deals 66% weapon damage and applies 90 Expose buildup. |
+| **Guarded Blow** | bonus | 4 MP | 2 | Deals 33% weapon damage as Cold and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist). |
 | **Taunting Cry** | class | 4 MP | 1 | Requires the target to be Exposed (T1+). Forces them to attack you on their next turn — no damage of its own. |
-| **Executioner's Strike** | major | 8 MP | 2 | Requires the target to be Flayed (Expose T2+). Deals 11 damage and consumes their Expose buildup. |
+| **Executioner's Strike** | major | 8 MP | 2 | Requires the target to be Flayed (Expose T2+). Deals 121% weapon damage and consumes their Expose buildup. |
 | **Guardian's Stand** | reaction | 4 MP | 3 | Reaction: when an ally in your rank is targeted by a single-target attack, intercept it — the attack resolves against you instead. |
 | **Bulwark Call** | class | 6 MP | 4 | Spends 30-60 Initiative to bolster the whole party: +10 to +20 all Resists for 2 turns, and restores 25% MP to everyone. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |

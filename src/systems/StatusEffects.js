@@ -297,10 +297,16 @@ export const WeaknessV3 = {
         startTickBase: 10,
 
         // A second, INDEPENDENT damage term added on top of (startTickBase ×
-        // intensity) — X per 100 current Fire meter, NOT itself multiplied by
-        // intensity. Keeping it additive-only (rather than also riding the
-        // intensity curve) avoids the two terms compounding into a quadratic
-        // — total damage stays linear in meter. See startTickPerHundred
+        // intensity) — X per 100 Fire meter ABOVE the T2 threshold, NOT itself
+        // multiplied by intensity. Keeping it additive-only (rather than also
+        // riding the intensity curve) avoids the two terms compounding into a
+        // quadratic — total damage stays linear in meter.
+        //
+        // It counts OVERFLOW, not total meter. On total, simply reaching
+        // Ablaze charged 5 × 2 = 10 before any overflow existed, doubling the
+        // entry tick to 20 — around half a player's entire HP pool for
+        // crossing the threshold, against 4% of a 500 HP duelist's. Both
+        // terms now measure distance past Ablaze. See startTickPerHundred
         // handling in _startTurnWeakness (CombatScene.js).
         startTickPerHundred: 5,
 

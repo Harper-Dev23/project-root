@@ -11,13 +11,17 @@ teaser: false
 requires: []
 sort: 30
 version: 2
-updatedAt: 2026-08-23
+updatedAt: 2026-09-02
 ---
 # Armor
 
 Armor covers **seven slots** -- head, chest, legs, gloves, boots, **amulet** and **ring**. Watershade's starting stock is simple common-rarity gear, each piece leaning toward a specific attribute (STR, DEX, INT, CON, WIS), so a build can gear toward what it actually uses.
 
-Above common, armor rolls from the same affix system weapons use -- more affixes at higher rarity. Beyond raw stats, armor affixes are where you find weakness-buildup bonuses (physical, elemental and necrotic), healing received, MP per turn and Resilience.
+Above common, armor rolls from the same modifier system weapons use -- more modifiers at higher rarity. Beyond raw stats, armor modifiers are where you find weakness-buildup bonuses (physical, elemental and necrotic), healing done, mana per turn and Resilience.
+
+## Base types
+
+Armour has two bases. **Simple** is the Watershade baseline. **Fitted** carries **one more stat on every slot** -- two on head, legs, gloves and boots, three on chest -- before a single modifier is rolled. Fitted pieces come from the Reckoning tiers and from the bone pile's Marked buttons; see [[Item Level & Base Types]].
 
 ## Tribe jewellery
 

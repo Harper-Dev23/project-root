@@ -44,24 +44,24 @@ Weighted toward physical, with genuine necrotic pressure from Gary's curse kit. 
 
 | Combatant | Type | HP | Abilities |
 |---|---|---|---|
-| **Chad the Unbreakable** | `animated_fighter_dummy` | 135 | 7 |
-| **Stan, of the Light** | `animated_healer_dummy` | 105 | 6 |
-| **Gary the Grim** | `animated_warlock_dummy` | 98 | 7 |
-| **Doug Longshot** | `animated_ranger_dummy` | 113 | 6 |
-| **Shifty-Eyed Mo** | `animated_rogue_dummy` | 105 | 8 |
-| **Lenny the Magnificent** | `animated_wizard_dummy` | 98 | 7 |
+| **Chad the Unbreakable** | `animated_fighter_dummy` | 125 | 7 |
+| **Stan, of the Light** | `animated_healer_dummy` | 95 | 6 |
+| **Gary the Grim** | `animated_warlock_dummy` | 88 | 7 |
+| **Doug Longshot** | `animated_ranger_dummy` | 103 | 6 |
+| **Shifty-Eyed Mo** | `animated_rogue_dummy` | 95 | 8 |
+| **Lenny the Magnificent** | `animated_wizard_dummy` | 88 | 7 |
 
 
 ### Chad the Unbreakable
 
-**HP** 135 - **MP** 60 - **Resists** Physical 30% - **Stats** STR 10 / DEX 6 / CON 12 / INT 5 / WIS 6 / CHA 9
+**HP** 125 - **MP** 60 - **Resists** Physical 30% - **Stats** STR 10 / DEX 6 / CON 12 / INT 5 / WIS 6 / CHA 9
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Heavy Slash** | major | 5 MP | - | Deals 6 damage and applies 90 Expose buildup. |
-| **Guarded Blow** | bonus | 4 MP | 2 | Deals 3 damage and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist). |
+| **Heavy Slash** | major | 5 MP | - | Deals 66% weapon damage and applies 90 Expose buildup. |
+| **Guarded Blow** | bonus | 4 MP | 2 | Deals 33% weapon damage as Cold and applies 60 Cold buildup, while bracing itself for 2 turns (+15 Physical Resist). |
 | **Taunting Cry** | class | 4 MP | 1 | Requires the target to be Exposed (T1+). Forces them to attack you on their next turn — no damage of its own. |
-| **Executioner's Strike** | major | 8 MP | 2 | Requires the target to be Flayed (Expose T2+). Deals 11 damage and consumes their Expose buildup. |
+| **Executioner's Strike** | major | 8 MP | 2 | Requires the target to be Flayed (Expose T2+). Deals 121% weapon damage and consumes their Expose buildup. |
 | **Guardian's Stand** | reaction | 4 MP | 3 | Reaction: when an ally in your rank is targeted by a single-target attack, intercept it — the attack resolves against you instead. |
 | **Bulwark Call** | class | 6 MP | 4 | Spends 30-60 Initiative to bolster the whole party: +10 to +20 all Resists for 2 turns, and restores 25% MP to everyone. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
@@ -69,26 +69,26 @@ Weighted toward physical, with genuine necrotic pressure from Gary's curse kit. 
 
 ### Stan, of the Light
 
-**HP** 105 - **MP** 120 - **Stats** STR 5 / DEX 5 / CON 8 / INT 6 / WIS 14 / CHA 10
+**HP** 95 - **MP** 120 - **Stats** STR 5 / DEX 5 / CON 8 / INT 6 / WIS 14 / CHA 10
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
 | **Restore** | major | 10 MP | 1 | Restores 35% of an ally's max HP (minimum 14). |
-| **Cleanse Weakness** | class | 8 MP | 2 | Clears an ally's Curse, Disease, and Toxic buildup entirely. Restores 4 MP if anything was cleansed. |
+| **Cleanse Weakness** | class | 8 MP | 2 | Removes up to 200 Curse, Disease and Toxic buildup from an ally. Restores 4 MP if anything was cleansed. |
 | **Sacred Ward** | bonus | 6 MP | 3 | Grants an ally +10 Accuracy for 3 turns. |
-| **Flame Flick** | bonus | 3 MP | 1 | Deals 3 damage and applies 70 Fire buildup. |
+| **Flame Flick** | bonus | 3 MP | 1 | Deals 27% weapon damage as Fire and applies 70 Fire buildup. |
 | **Mending Wave** | class | 6 MP | 4 | Spends 30-60 Initiative to heal the whole party at once — the more Initiative spent, the stronger the heal. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
 
 ### Gary the Grim
 
-**HP** 98 - **MP** 120 - **Resists** Necrotic 30% - **Stats** STR 5 / DEX 6 / CON 7 / INT 9 / WIS 6 / CHA 15
+**HP** 88 - **MP** 120 - **Resists** Necrotic 30% - **Stats** STR 5 / DEX 6 / CON 7 / INT 9 / WIS 6 / CHA 15
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Hex** | major | 5 MP | - | Deals 2 damage and applies 100 Curse buildup. |
-| **Dark Bolts** | bonus | 4 MP | 1 | Deals 3 damage and applies 70 Disease buildup. |
+| **Hex** | major | 5 MP | - | Deals 25% weapon damage as Necrotic and applies 100 Curse buildup. |
+| **Dark Bolts** | bonus | 4 MP | 1 | Deals 38% weapon damage as Necrotic and applies 70 Disease buildup. |
 | **Curse Amplify** | class | 8 MP | 2 | Requires the target to be Cursed (T1+). Doubles their current Curse buildup meter. No damage of its own. |
 | **Drain Life** | major | 10 MP | 2 | Requires the target to be Cursed (T1+). Deals 4 damage and heals Gary for 10 — 18 if the target is Afflicted (Curse T2+). |
 | **Curse of Needles** | major | 7 MP | 3 | Deals 110% weapon damage. Requires target at least Hexed. Applies a permanent rider: hits against the target deal +2 weapon damage while cursed, amplified while Afflicted. |
@@ -98,47 +98,70 @@ Weighted toward physical, with genuine necrotic pressure from Gary's curse kit. 
 
 ### Doug Longshot
 
-**HP** 113 - **MP** 80 - **Stats** STR 6 / DEX 16 / CON 7 / INT 6 / WIS 7 / CHA 6
+**HP** 103 - **MP** 80 - **Stats** STR 6 / DEX 16 / CON 7 / INT 6 / WIS 7 / CHA 6
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Quick Shot** | bonus | 3 MP | - | Deals 4 damage and applies 60 Expose buildup. |
-| **Frost Arrow** | major | 5 MP | 1 | Deals 4 damage and applies 90 Cold buildup. |
-| **Volley** | class | 8 MP | 2 | Deals 3 damage to the target and 2 damage to every other party member. |
-| **Aimed Shot** | major | 8 MP | 2 | Requires the target to be Exposed (T1+). Deals 7 damage and consumes their Expose buildup. |
+| **Quick Shot** | bonus | 3 MP | - | Deals 34% weapon damage and applies 60 Expose buildup. |
+| **Frost Arrow** | major | 5 MP | 1 | Deals 34% weapon damage as Cold and applies 90 Cold buildup. |
+| **Volley** | class | 8 MP | 2 | Deals 25% weapon damage to the target and 67% of that to every other party member. |
+| **Aimed Shot** | major | 8 MP | 2 | Requires the target to be Exposed (T1+). Deals 59% weapon damage and consumes their Expose buildup. |
 | **Covering Shot** | reaction | 4 MP | 3 | Reaction: when you or an ally in your rank is struck by a projectile, 50% chance to shoot it down entirely — no damage, no effects. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
 
 ### Shifty-Eyed Mo
 
-**HP** 105 - **MP** 70 - **Evasion** 20 - **Stats** STR 5 / DEX 14 / CON 6 / INT 6 / WIS 6 / CHA 11
+**HP** 95 - **MP** 70 - **Evasion** 20 - **Stats** STR 5 / DEX 14 / CON 6 / INT 6 / WIS 6 / CHA 11
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Poisoned Knife** | bonus | 3 MP | 1 | Deals 3 damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+). |
-| **Hamstring** | major | 5 MP | 1 | Deals 5 damage and applies 80 Lacerate buildup. Slows the target (-10 Initiative for 2 turns). |
+| **Poisoned Knife** | bonus | 3 MP | 1 | Deals 37% weapon damage and applies 70 Toxic buildup — 110 if the target is already Exposed (T1+). |
+| **Hamstring** | major | 5 MP | 1 | Deals 62% weapon damage and applies 80 Lacerate buildup. Slows the target (-3 Initiative for 2 turns). |
 | **Evasion** | bonus | 4 MP | 2 | Grants +20 Evasion for 1 turn. Also restores 3 MP if any party member is Cursed or Poisoned (Toxic T1+). |
-| **Sneak Attack** | major | 7 MP | 1 | Requires the target to be Exposed (T1+). Deals 9 damage. |
-| **Finishing Strike** | class | 10 MP | 2 | Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 13 damage and consumes their Expose and Toxic buildup. |
+| **Sneak Attack** | major | 7 MP | 1 | Requires the target to be Exposed (T1+). Deals 111% weapon damage. |
+| **Finishing Strike** | class | 10 MP | 2 | Requires the target to have at least 2 active weaknesses (Expose/Toxic/Curse/Disease/Cold/Fire/Lacerate). Deals 160% weapon damage and consumes their Expose and Toxic buildup. |
 | **Distracting Feint** | reaction | 3 MP | 2 | Reaction: when an ally behind you is targeted, distract the attacker — this attack's damage is reduced by 50% AttackPower. |
-| **Curse Twist** | bonus | 3 MP | 2 | Bonus action. Requires the target already afflicted by Curse of Needles. Twists the curse deeper — moderate Curse buildup. |
+| **Curse Twist** | bonus | 3 MP | 2 | Requires the target already afflicted by Curse of Needles. Deals 49% weapon damage as Necrotic and applies 50 Curse buildup. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
 
 ### Lenny the Magnificent
 
-**HP** 98 - **MP** 110 - **Resists** Elemental 30% - **Stats** STR 4 / DEX 6 / CON 7 / INT 16 / WIS 9 / CHA 6
+**HP** 88 - **MP** 110 - **Resists** Elemental 30% - **Stats** STR 4 / DEX 6 / CON 7 / INT 16 / WIS 9 / CHA 6
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Arcane Bolt** | bonus | 3 MP | - | Deals 4 damage and applies 60 Lightning buildup. |
-| **Static Field** | major | 5 MP | 1 | Deals 4 damage and applies 90 Lightning buildup. |
+| **Arcane Bolt** | bonus | 3 MP | - | Deals 39% weapon damage as Lightning and applies 60 Lightning buildup. |
+| **Static Field** | major | 5 MP | 1 | Deals 39% weapon damage as Lightning and applies 90 Lightning buildup. |
 | **Mana Shield** | bonus | 4 MP | 3 | Grants +20 Elemental Resist for 2 turns. |
-| **Overload** | class | 8 MP | 2 | Requires the target to be Zapped (Lightning T1+). Deals 9 damage and consumes their Lightning buildup. |
+| **Overload** | class | 8 MP | 2 | Requires the target to be Zapped (Lightning T1+). Deals 88% weapon damage as Lightning and consumes their Lightning buildup. |
 | **Channel: Inferno** | major | 4 MP | 5 | Begins channeling a massive Fire AoE — unleashed automatically on your next turn. |
 | **Inferno** | major | - | - | Unleashes the channeled inferno — 90% weapon damage as Fire to the entire party. |
 | **Sway** | major | - | - | Idles theatrically, consuming time. |
 
+
+## Reckoning Ladder
+
+Each tier is unlocked by clearing the BASE encounter, not the tier below it — the ladder is not a chain, so a tier can be attempted in any order.
+
+This ladder scales the same roster rather than replacing it. Health is a multiplier on each combatant; resists and Resilience are added on top of whatever they already had.
+
+| Tier | Health | Added resists (P / E / N) | Added Resilience | New at this tier |
+|---|---|---|---|---|
+| Reckoning I | ×1.5 | +8 / +8 / +8 | +20 | - |
+| Reckoning II | ×2.2 | +20 / +20 / +20 | +45 | - |
+| Reckoning III | ×3 | +35 / +35 / +35 | +70 | - |
+
+## Rewards
+
+XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+
+| Fight | XP | Reckoning Marks | Gear rolls as |
+|---|---|---|---|
+| Base encounter | 40 | - | item level 1, base tier 1 |
+| Reckoning I | 30 | 6 | item level 3, up to base tier 2 |
+| Reckoning II | 40 | 9 | item level 3, up to base tier 2 |
+| Reckoning III | 50 | 12 | item level 3, up to base tier 2 |
 
 <!-- GEN:END -->

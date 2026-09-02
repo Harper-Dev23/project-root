@@ -1,44 +1,99 @@
-{"frames": [
-
 {
-	"filename": "frame0000.png",
-	"frame": {"x":0,"y":0,"w":1265,"h":843},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":1265,"h":843},
-	"sourceSize": {"w":1265,"h":843}
-},
-{
-	"filename": "frame0001.png",
-	"frame": {"x":0,"y":843,"w":1265,"h":843},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":1265,"h":843},
-	"sourceSize": {"w":1265,"h":843}
-},
-{
-	"filename": "frame0002.png",
-	"frame": {"x":0,"y":1686,"w":1265,"h":843},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":1265,"h":843},
-	"sourceSize": {"w":1265,"h":843}
-},
-{
-	"filename": "frame0003.png",
-	"frame": {"x":0,"y":2529,"w":1265,"h":843},
-	"rotated": false,
-	"trimmed": false,
-	"spriteSourceSize": {"x":0,"y":0,"w":1265,"h":843},
-	"sourceSize": {"w":1265,"h":843}
-}],
-"meta": {
-	"app": "https://www.codeandweb.com/texturepacker",
-	"version": "1.0",
-	"image": "glow_tribe_vendor.png",
-	"format": "RGBA8888",
-	"size": {"w":1265,"h":3372},
-	"scale": "1",
-	"smartupdate": "$TexturePacker:SmartUpdate:ae9252b5f90888b8fb4f9a592728c9c2:024e2020f42c1939b4736f908c847221:b0b8e969cc3c3282b3cdaa2e1553ddde$"
-}
+ "frames": [
+  {
+   "filename": "frame0000.png",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 380,
+    "h": 253
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 380,
+    "h": 253
+   },
+   "sourceSize": {
+    "w": 380,
+    "h": 253
+   }
+  },
+  {
+   "filename": "frame0001.png",
+   "frame": {
+    "x": 0,
+    "y": 253,
+    "w": 380,
+    "h": 253
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 380,
+    "h": 253
+   },
+   "sourceSize": {
+    "w": 380,
+    "h": 253
+   }
+  },
+  {
+   "filename": "frame0002.png",
+   "frame": {
+    "x": 0,
+    "y": 506,
+    "w": 380,
+    "h": 253
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 380,
+    "h": 253
+   },
+   "sourceSize": {
+    "w": 380,
+    "h": 253
+   }
+  },
+  {
+   "filename": "frame0003.png",
+   "frame": {
+    "x": 0,
+    "y": 759,
+    "w": 380,
+    "h": 253
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 380,
+    "h": 253
+   },
+   "sourceSize": {
+    "w": 380,
+    "h": 253
+   }
+  }
+ ],
+ "meta": {
+  "app": "https://www.codeandweb.com/texturepacker",
+  "version": "1.0",
+  "image": "glow_tribe_vendor.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 380,
+   "h": 1012
+  },
+  "scale": "1"
+ }
 }

@@ -21,13 +21,20 @@ const ENC3_DROPS = {
 // Encounter 4 — Cade carries a full uncommon set; the beasts are stat-equipped
 // with a weapon only (they need real dice, not gear).
 const ENC4_CADE_DROPS  = [W('crude_bow'), ...ARMOUR('uncommon')];
-const ENC4_BEAST_DROPS = [W('crude_dagger')];
+// Beasts get NATURAL weapons, not gear -- see the Natural Weapons block in
+// data/items.js. Per-beast rather than shared, so Laki's talons and Oskar's
+// jaw can diverge later without one edit hitting all three.
+const OSKAR_DROPS = [W('natural_fangs')];
+const KIRO_DROPS  = [W('natural_claws')];
+const LAKI_DROPS  = [W('natural_talons')];
 
 // Encounter 5 — common weapon plus a full soulbound RARE armour set.
 const ENC5_DUELIST_DROPS = [W('crude_sword_1h'), ...ARMOUR('rare')];
 
 export const COMBAT_SCENARIOS = {
   training_encounter_1: {
+    xpReward: 25,
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Basic Training I',
     description: 'Six stationary dummies for safe sparring.',
     longDescription: 'Start with fundamentals against practice dummies that simply sway in place. Perfect for verifying positioning, targeting and basic skill flow with no incoming pressure.',
@@ -43,6 +50,8 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_2: {
+    xpReward: 30,
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Basic Training II',
     description: "Six shuffling dummies — practice AOE.",
     longDescription: 'These sturdier targets deal no damage but move erratically and dodge out of ground hazards, giving you a safe way to practice range, positioning, and AOE shapes before facing anything that hits back.',
@@ -58,6 +67,8 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_3: {
+    xpReward: 40,
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'The Animated Six',
     description: "Six constructs, real combat AI.",
     longDescription: "Six constructs with real class roles and real combat AI. They guard, heal and answer each other — damage alone won't close this one.",
@@ -77,6 +88,8 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_4: {
+    xpReward: 50,
+    loot: { itemLevel: 2, maxBaseTier: 1 },
     name: 'Huntsman & Beasts',
     description: 'A huntsman commander leads two beasts.',
     longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
@@ -101,12 +114,14 @@ export const COMBAT_SCENARIOS = {
       // displaying their raw type string ("beast_oskar"/"beast_kiro") in
       // combat despite the encounter's own longDescription already calling
       // them "Oskar the ripper"/"Kiro the venom-spewer".
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: ENC4_BEAST_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: ENC4_BEAST_DROPS }
+      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS }
     ]
   },
 
   training_encounter_5: {
+    xpReward: 55,
+    loot: { itemLevel: 2, maxBaseTier: 1 },
     name: 'Elemental Duelists',
     description: "Elite fire and ice duelists.",
     longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
@@ -122,6 +137,8 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_6: {
+    xpReward: 60,
+    loot: { itemLevel: 3, maxBaseTier: 1 },
     name: 'Gorrek',
     description: "A relentless solo berserker.",
     // Rewritten alongside this session's kit expansion — the old text
@@ -157,6 +174,9 @@ export const COMBAT_SCENARIOS = {
   // Surfaced as a tier picker beside Gorrek's row in the training menu, not
   // as 5 more rows in the main list.
   training_encounter_2_reckoning_1: {
+    xpRepeatable: true,
+    xpReward: 25,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Basic Training II — Reckoning I',
     description: 'The same six dummies, tougher — and now on a clock.',
     longDescription: "Reckoning I: the crowd has started betting on the clock. Six dummies, five rounds, no excuses. They still cannot hurt you; the only thing that can beat you here is being too slow.",
@@ -175,6 +195,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_2_reckoning_2: {
+    xpRepeatable: true,
+    xpReward: 35,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Basic Training II — Reckoning II',
     description: 'Sturdier dummies, same five rounds.',
     longDescription: "Reckoning II: someone has been reinforcing them between bouts. Same five rounds, half again as much to chew through.",
@@ -193,6 +216,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_2_reckoning_3: {
+    xpRepeatable: true,
+    xpReward: 45,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Basic Training II — Reckoning III',
     description: 'The thickest dummies in the pit, still five rounds.',
     longDescription: "Reckoning III: the pit's heaviest practice stock, and not one second more to deal with it. Bring your whole turn every round.",
@@ -211,6 +237,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_3_reckoning_1: {
+    xpRepeatable: true,
+    xpReward: 30,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'The Animated Six — Reckoning I',
     description: 'The Animated Six, reinforced.',
     longDescription: "Reckoning I: the constructs have been rebuilt with denser cores. Same six minds, noticeably more to cut through.",
@@ -235,6 +264,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_3_reckoning_2: {
+    xpRepeatable: true,
+    xpReward: 40,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'The Animated Six — Reckoning II',
     description: 'The Animated Six at siege weight.',
     longDescription: "Reckoning II: reinforced to the point of absurdity, and warded on top of it. Chip damage will not finish this.",
@@ -259,6 +291,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_3_reckoning_3: {
+    xpRepeatable: true,
+    xpReward: 50,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'The Animated Six — Reckoning III',
     description: 'The Animated Six as siege engines. Bring everything.',
     longDescription: "Reckoning III: barely constructs any more. Every one of them shrugs off a third of what you throw, the wall in front shrugs off two thirds, and there is three times the mass behind it. This is the deep end.",
@@ -283,6 +318,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_5_reckoning_1: {
+    xpRepeatable: true,
+    xpReward: 65,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Elemental Duelists — Reckoning I',
     description: 'Ember and Rime, and the things they call up.',
     longDescription: "Reckoning I: they have stopped duelling you honestly. Each of them tears a piece of their own element loose when pressed.",
@@ -321,6 +359,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_5_reckoning_2: {
+    xpRepeatable: true,
+    xpReward: 80,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Elemental Duelists — Reckoning II',
     description: 'Hardier duelists, same summoning trick.',
     longDescription: "Reckoning II: tougher, better warded, and no less willing to flood the floor with their own element.",
@@ -359,6 +400,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_5_reckoning_3: {
+    xpRepeatable: true,
+    xpReward: 95,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Elemental Duelists — Reckoning III',
     description: 'Both duelists at their peak, and the floor is never empty.',
     longDescription: "Reckoning III: at the brink each of them tears loose not one fragment but two. Expect the field to be crowded, and expect to have to choose what you are actually killing.",
@@ -397,6 +441,9 @@ export const COMBAT_SCENARIOS = {
     ]
   },
   training_encounter_4_reckoning_1: {
+    xpRepeatable: true,
+    xpReward: 60,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Huntsman & Beasts — Reckoning I',
     description: 'Cade brings a third beast to the hunt.',
     longDescription: "Reckoning I: the huntsman does not make the same mistake twice. He brings more of the pack.",
@@ -407,16 +454,19 @@ export const COMBAT_SCENARIOS = {
     },
     enemies: [
       { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: ENC4_CADE_DROPS },
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: ENC4_BEAST_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS },
       // Laki, the third beast — present from Reckoning I, and NOT marked
       // isAdd, so she counts toward victory like Oskar and Kiro. Stat-equipped
       // with a weapon only (same as the other beasts) so calculateDamage has
       // real dice; enemyScale above applies to her too.
-      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: LAKI_DROPS },
     ]
   },
   training_encounter_4_reckoning_2: {
+    xpRepeatable: true,
+    xpReward: 75,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Huntsman & Beasts — Reckoning II',
     description: 'A hardier pack, better commanded.',
     longDescription: "Reckoning II: the beasts are heavier and Cade has stopped holding anything back.",
@@ -427,16 +477,19 @@ export const COMBAT_SCENARIOS = {
     },
     enemies: [
       { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: ENC4_CADE_DROPS },
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: ENC4_BEAST_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS },
       // Laki, the third beast — present from Reckoning I, and NOT marked
       // isAdd, so she counts toward victory like Oskar and Kiro. Stat-equipped
       // with a weapon only (same as the other beasts) so calculateDamage has
       // real dice; enemyScale above applies to her too.
-      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: LAKI_DROPS },
     ]
   },
   training_encounter_4_reckoning_3: {
+    xpRepeatable: true,
+    xpReward: 90,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Huntsman & Beasts — Reckoning III',
     description: 'The full pack, at full strength.',
     longDescription: "Reckoning III: every beast at its peak and a commander who expects to win. Killing the pack first is a choice, not a formality.",
@@ -447,16 +500,19 @@ export const COMBAT_SCENARIOS = {
     },
     enemies: [
       { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: ENC4_CADE_DROPS },
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: ENC4_BEAST_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS },
       // Laki, the third beast — present from Reckoning I, and NOT marked
       // isAdd, so she counts toward victory like Oskar and Kiro. Stat-equipped
       // with a weapon only (same as the other beasts) so calculateDamage has
       // real dice; enemyScale above applies to her too.
-      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: ENC4_BEAST_DROPS },
+      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: LAKI_DROPS },
     ]
   },
   training_encounter_6_reckoning_1: {
+    xpRepeatable: true,
+    xpReward: 60,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Gorrek — Reckoning I',
     description: 'A tougher Gorrek — the first rematch tier.',
     longDescription: "He remembers losing. Reckoning I: noticeably harder to put down, though his kit hasn't grown yet.",
@@ -481,6 +537,9 @@ export const COMBAT_SCENARIOS = {
     }]
   },
   training_encounter_6_reckoning_2: {
+    xpRepeatable: true,
+    xpReward: 75,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Gorrek — Reckoning II',
     description: 'A tougher Gorrek, now able to shake off Disorient.',
     longDescription: "Reckoning II: tougher still, and he's learned to clear his own head — Disorient alone won't hold him down anymore.",
@@ -501,6 +560,9 @@ export const COMBAT_SCENARIOS = {
     }]
   },
   training_encounter_6_reckoning_3: {
+    xpRepeatable: true,
+    xpReward: 90,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Gorrek — Reckoning III',
     description: 'A tougher Gorrek — the third rematch tier.',
     longDescription: "Reckoning III: even harder to wear down. Expect a long fight.",
@@ -523,6 +585,9 @@ export const COMBAT_SCENARIOS = {
     }]
   },
   training_encounter_6_reckoning_4: {
+    xpRepeatable: true,
+    xpReward: 105,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Gorrek — Reckoning IV',
     description: 'A tougher Gorrek — the fourth rematch tier.',
     longDescription: "Reckoning IV: brutally resilient. Bring everything you have.",
@@ -547,6 +612,9 @@ export const COMBAT_SCENARIOS = {
     }]
   },
   training_encounter_6_reckoning_5: {
+    xpRepeatable: true,
+    xpReward: 120,
+    loot: { itemLevel: 3, maxBaseTier: 2 },
     name: 'Gorrek — Reckoning V',
     description: 'The final rematch tier — the hardest Gorrek gets.',
     longDescription: "Reckoning V: as tough as he gets. If you can put him down here, you've earned it.",
@@ -571,6 +639,7 @@ export const COMBAT_SCENARIOS = {
 
   // === Hunt encounters (placeholder — no real enemy roster yet) ===
   hunt_beast_solo: {
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Beast Encounter',
     description: 'A lone beast blocks the path.',
     portraitKey: 'beast_portrait',
@@ -580,6 +649,7 @@ export const COMBAT_SCENARIOS = {
   },
 
   hunt_cultist_solo: {
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Cultist Ambush',
     description: 'A lone cultist springs from cover.',
     portraitKey: 'soldier_portrait',
@@ -589,6 +659,7 @@ export const COMBAT_SCENARIOS = {
   },
 
   hunt_beast_marked: {
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Marked Beast',
     description: 'A beast bearing a faint sacred mark blocks the path.',
     portraitKey: 'beast_portrait',
@@ -598,6 +669,7 @@ export const COMBAT_SCENARIOS = {
   },
 
   hunt_cultist_acolyte: {
+    loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'Cultist Acolyte',
     description: 'A lone acolyte strikes from the shadows.',
     portraitKey: 'rogue_portrait',
