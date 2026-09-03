@@ -59,7 +59,7 @@ Every fight in the pit is worth a fixed amount, awarded each time it is cleared.
 |---|---|---|
 | Basic Training I | 25 | — |
 | Basic Training II | 30 | — |
-| The Animated Six | 40 | — |
+| The Animated Six | 45 | — |
 | Huntsman & Beasts | 50 | — |
 | Elemental Duelists | 55 | — |
 | Gorrek | 60 | — |
@@ -87,10 +87,10 @@ Clearing everything once is not the only way there. Each of these is a full firs
 
 | Route | XP | Reaches |
 |---|---|---|
-| The base six alone | 260 | level 3 |
-| Base six + all of Gorrek’s Reckoning | 710 | level 5 |
-| Base six + all of IV and V’s Reckoning | 725 | level 5 |
-| Base six + only II and III’s Reckoning | 485 | level 4 |
+| The base six alone | 265 | level 3 |
+| Base six + all of Gorrek’s Reckoning | 715 | level 5 |
+| Base six + all of IV and V’s Reckoning | 730 | level 5 |
+| Base six + only II and III’s Reckoning | 490 | level 4 |
 
 Anything short of the cap can be closed by repeating a tier — they pay every time.
 

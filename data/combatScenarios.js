@@ -67,7 +67,7 @@ export const COMBAT_SCENARIOS = {
   },
 
   training_encounter_3: {
-    xpReward: 40,
+    xpReward: 45,
     loot: { itemLevel: 1, maxBaseTier: 1 },
     name: 'The Animated Six',
     description: "Six constructs, real combat AI.",

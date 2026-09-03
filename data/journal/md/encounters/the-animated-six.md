@@ -159,7 +159,7 @@ XP is awarded every time the fight is cleared, not only the first. Reckoning Mar
 
 | Fight | XP | Reckoning Marks | Gear rolls as |
 |---|---|---|---|
-| Base encounter | 40 | - | item level 1, base tier 1 |
+| Base encounter | 45 | - | item level 1, base tier 1 |
 | Reckoning I | 30 | 6 | item level 3, up to base tier 2 |
 | Reckoning II | 40 | 9 | item level 3, up to base tier 2 |
 | Reckoning III | 50 | 12 | item level 3, up to base tier 2 |
