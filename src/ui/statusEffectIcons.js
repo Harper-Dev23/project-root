@@ -1,6 +1,11 @@
 import { StatusEffects } from '../systems/StatusEffects.js';
 
 const STATUS_ICON_LIBRARY = {
+  // The runic zone had NO entry, so it fell through to the id-prettifier and
+  // rendered as a bare "Runic Zone" with no description at all — the player
+  // could see the ring and the icon but nothing told them what it cost or
+  // what was attached to it.
+  runic_zone: { glyph: 'RZ', name: 'Runic Zone', fg: '#cbb6ff', bg: '#241b38', border: '#7a5fbf', description: 'A circle of power at your feet. Drains MP each turn to sustain and dissipates if you move. Rites, wards and channels layer onto it.' },
   taunted: { glyph: 'T!', name: 'Taunted', fg: '#ffd166', bg: '#3a2a0b', border: '#c08c2a', description: 'Forced to focus the provocateur.' },
   slowed: { glyph: 'SL', name: 'Slowed', fg: '#b3d9ff', bg: '#0d2236', border: '#3c6289', description: 'Reduced initiative and speed.' },
   frozen: { glyph: 'FR', name: 'Frozen', fg: '#d5f1ff', bg: '#17344b', border: '#5fa0c8', description: 'Encased in ice and likely to skip actions.' },

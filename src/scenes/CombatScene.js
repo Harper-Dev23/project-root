@@ -34,7 +34,7 @@ import { resolveAOESplash } from '../systems/aoeResolver.js';
 
 // Status / Weakness framework
 import {
-  makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult,
+  makeWeaknessState, weaknessDecayAmount, weaknessIntensityMult, intensityForEffect,
   WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
   WeaknessAliases, familyIntensityMult,
   WeaknessBuildupCategory,
@@ -678,7 +678,12 @@ export default class CombatScene extends Phaser.Scene {
   _buildLocalChatCtx(extra = {}) {
     return {
       scene: this, scenarioId: this.scenarioId,
-      round: this.combatRound, state: this.localChatState,
+      // Relative to the combat's own start, matching what the round counter
+      // shows the player — combatRound is already 2 during the first turn
+      // because of the bootstrap _advanceTurn(), so scripts comparing the raw
+      // value would be off by one.
+      round: Math.max(1, (this.combatRound || 1) - (this._combatStartRound ?? 2) + 1),
+      state: this.localChatState,
       ...extra,
     };
   }
@@ -1394,19 +1399,18 @@ export default class CombatScene extends Phaser.Scene {
     // status effect is removed here, and the ground sprite refresh clears
     // the now-stale visual (previously it stuck around at the old position
     // until some unrelated skill cast happened to trigger a redraw).
-    if (Array.isArray(unit.statusEffects)) {
-      const zoneIdx = unit.statusEffects.findIndex(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
-      if (zoneIdx !== -1) {
-        unit.statusEffects.splice(zoneIdx, 1);
-        this._log?.(`${unit?.name ?? 'The mage'}'s runic circle dissipates as they move.`);
-        this._refreshRunicZoneSprite?.(unit);
-      }
-    }
+    this._dissolveRunicZoneOnMove(unit);
 
     // --- assign new slot ---
     newSlot.char = unit;
     newSlot.occupied = true;
     unit._slot = newSlot;
+
+    // Redraw the runic zone AFTER the slot swap. _dissolveRunicZoneOnMove ran
+    // before it and, for an ANCHORED zone that survives (Sigil Step), redrew
+    // the ring at the slot the caster was leaving — so the buff travelled but
+    // the circle visibly stayed behind.
+    this._refreshRunicZoneSprite?.(unit);
 
     // Track movement for momentum_strike and similar skills
     const actor = this._currentChar?.();
@@ -1425,14 +1429,9 @@ export default class CombatScene extends Phaser.Scene {
     // Reposition lodge arrows to the new slot
     this._refreshLodgeSprites(unit);
 
-    // Runic zone dissolves when the caster moves
-    if (Array.isArray(unit.statusEffects)) {
-      const zoneIdx = unit.statusEffects.findIndex(se => se?.id === 'runic_zone');
-      if (zoneIdx !== -1) {
-        unit.statusEffects.splice(zoneIdx, 1);
-        this._log?.(`${unit?.name ?? 'Mage'}'s runic zone dissolves as they move.`);
-      }
-    }
+    // (The second, duplicate removal that used to sit here is gone — the call
+    // above already handles it, and having two sites meant an anchored zone
+    // would survive the first and be destroyed by the second.)
 
     // Immediately re-sync any occupancy-continuous zone effect (e.g. Frozen
     // Quake's elemental vulnerability) against the DESTINATION tile — same
@@ -2271,10 +2270,15 @@ export default class CombatScene extends Phaser.Scene {
     // breakdown-tooltip line during an actual cast, never as a standing bonus.
     const kindZone = (char?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.kindlingRite);
     const kindlingRitePct = 20 * (kindZone?.mods?.kindlingRiteStacks || 0);
+    // Withering Rite is Kindling's necrotic twin and was missing from this
+    // panel entirely — the bonus applied in combat but the character sheet
+    // never showed it, so a player running the rite saw no reason it helped.
+    const withZone = (char?.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.witheringRite);
+    const witheringRitePct = 20 * (withZone?.mods?.witheringRiteStacks || 0);
 
     const pdPct = Math.round((ge.globalDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
     const edPct = Math.round((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0) + atkPowerPct + kindlingRitePct - coldDealtPenaltyPct);
-    const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct - coldDealtPenaltyPct);
+    const ndPct = Math.round((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0) + atkPowerPct + witheringRitePct - coldDealtPenaltyPct);
 
     // Same "Gear vs Combat Bonus" split as drBreakdown above, mirrored onto
     // the OUTGOING side. Cold's penalty is folded directly into Combat Bonus
@@ -2282,19 +2286,19 @@ export default class CombatScene extends Phaser.Scene {
     // AttackPower/Kindling Rite in the real pipeline now, unlike Exposed on
     // the DR side, which stays its own line there for display clarity, not
     // because the math treats it any differently.
-    const dmgBreakdown = (gearPct, kindlingBonus = 0) => {
+    const dmgBreakdown = (gearPct, kindlingBonus = 0, riteLabel = 'Kindling Rite') => {
       const combatVal = atkPowerPct + kindlingBonus - coldDealtPenaltyPct;
       const lines = [
         `Gear: ${gearPct >= 0 ? '+' : ''}${gearPct}%`,
         `Combat Bonus: ${combatVal >= 0 ? '+' : ''}${combatVal}%`,
       ];
-      if (kindlingBonus > 0) lines.push(`  includes Kindling Rite: +${kindlingBonus}%`);
+      if (kindlingBonus > 0) lines.push(`  includes ${riteLabel}: +${kindlingBonus}%`);
       if (coldDealtPenaltyPct > 0) lines.push(`  includes Chilled/Frostbitten (self): -${coldDealtPenaltyPct}%`);
       return lines;
     };
     const pdLines = dmgBreakdown(ge.globalDamagePercent || 0);
     const edLines = dmgBreakdown((ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0), kindlingRitePct);
-    const ndLines = dmgBreakdown((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0));
+    const ndLines = dmgBreakdown((ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0), witheringRitePct, 'Withering Rite');
 
     // Net MP change at the start of this character's turn: gear/INT regen
     // MINUS Concussed's flat drain (Disorient T2) — mirrors the exact
@@ -3282,8 +3286,16 @@ export default class CombatScene extends Phaser.Scene {
     // used to sit. Submenus set _actionMenuBackCallback instead of each
     // building their own in-list Back button.
     this._actionMenuBackCallback = null;
-    const rightColLeft = viewportX + viewportWidth;   // 224 local — list's new right edge
-    const rightColRight = viewportX + PANEL_WIDTH;     // 256 local — panel's original inner right edge
+    // Anchored to the BUTTONS, not the panel edge. The list's buttons are
+    // UIButton's default 140 wide centred on actionMenuContentX (20), so they
+    // span local x -50..90 — while the viewport runs to 224 and the panel to
+    // 256. Hanging the scrollbar off the panel edge put it ~147px clear of the
+    // thing it scrolls, which is why it read as unrelated furniture. A
+    // scrollbar belongs immediately beside its content.
+    const BTN_HALF_WIDTH = 70;                                  // UIButton default 140 / 2
+    const buttonsRightEdge = (this.actionMenuContentX ?? 0) + BTN_HALF_WIDTH;  // 90 local
+    const rightColLeft = buttonsRightEdge + 6;                  // small breathing gap
+    const rightColRight = rightColLeft + 24;
     const backCenterX = (rightColLeft + rightColRight) / 2;
     const backY = viewportY + 14;
     this._actionMenuBackBtn = new UIButton(
@@ -3306,8 +3318,18 @@ export default class CombatScene extends Phaser.Scene {
     // Red-tinted idle state (per request) — distinct from the amber
     // selected-state UIButton already uses elsewhere, so it doesn't get
     // confused with an "active/selected" skill button.
-    this._actionMenuBackBtn.background.setStrokeStyle(1.5, 0xaa2222);
-    this._actionMenuBackBtn.text.setStyle({ color: '#ff9999', fontSize: '11px' });
+    // UIButton's own pointerout calls _applyState(), which repaints the
+    // DEFAULT silver and wipes anything set after construction — so the red
+    // survived until the first hover and then went grey forever. Re-applying
+    // it in our own handlers (registered after the constructor's, so they run
+    // second) keeps Back visually distinct in every state.
+    const paintBack = (hover) => {
+      this._actionMenuBackBtn.background.setStrokeStyle(1.5, hover ? 0xff4444 : 0xaa2222);
+      this._actionMenuBackBtn.text.setStyle({ color: hover ? '#ffdddd' : '#ff9999', fontSize: '11px' });
+    };
+    paintBack(false);
+    this._actionMenuBackBtn.on('pointerover', () => paintBack(true));
+    this._actionMenuBackBtn.on('pointerout', () => paintBack(false));
     this._actionMenuBackBtn.setVisible(false);
     this.actionMenu.add(this._actionMenuBackBtn);
 
@@ -3372,6 +3394,43 @@ export default class CombatScene extends Phaser.Scene {
       fontStyle: 'bold',
       color: '#ffffff'
     }).setOrigin(0.5, 1).setDepth(UI_DEPTH.overlay);
+
+    // Round counter, sitting just above the current actor's name. One "round"
+    // is one full pass through the turn order, which is exactly what
+    // combatRound counts. Timed scenarios (the Reckoning DPS races) show it as
+    // "Round N / LIMIT" instead, so the clock the player is racing is visible
+    // rather than something they have to track in their head.
+    this.roundText = this.add.text(turnNamePos.x, turnNamePos.y - 21, '', {
+      fontSize: '13px',
+      fontStyle: 'bold',
+      color: '#bbbbbb'
+    }).setOrigin(0.5, 1).setDepth(UI_DEPTH.overlay);
+    this._updateRoundDisplay();
+  }
+
+  /**
+   * Repaints the round counter. Called from _highlightCurrentTurn, which
+   * already runs on every turn transition (and therefore after _advanceTurn
+   * bumps combatRound).
+   *
+   * Rounds are measured RELATIVE to _combatStartRound, not from combatRound
+   * directly: the bootstrap _advanceTurn() in create() wraps the turn index to
+   * 0, which counts as a new round and leaves combatRound at 2 during the
+   * party's very first turn. The same offset the turnLimit check uses.
+   */
+  _updateRoundDisplay() {
+    if (!this.roundText) return;
+    const limit = this.scenarioData?.turnLimit || 0;
+    const round = Math.max(1, (this.combatRound || 1) - (this._combatStartRound ?? 2) + 1);
+    if (limit > 0) {
+      const remaining = Math.max(0, limit - round + 1);
+      // Escalating colour as the clock runs out — the last round reads red,
+      // the one before it amber, so the pressure is visible at a glance.
+      const color = remaining <= 1 ? '#ff6666' : (remaining <= 2 ? '#ffcc55' : '#bbbbbb');
+      this.roundText.setText(`Round ${Math.min(round, limit)} / ${limit}`).setColor(color);
+    } else {
+      this.roundText.setText(`Round ${round}`).setColor('#bbbbbb');
+    }
   }
 
   // ─── Skill Filter Pills ───────────────────────────────────────────────────
@@ -5191,7 +5250,13 @@ export default class CombatScene extends Phaser.Scene {
       const equip = enemy.equipment || {};
       for (const inst of Object.values(equip)) {
         if (isItemInstance(inst) && inst._droppable) {
-          GameState.addToInventory(inst);
+          // addGlobalItem, NOT GameState.addToInventory — the former flags the
+          // instance as unseen so the inventory's green "new" dot appears.
+          // Combat loot (including anything cut free with a Severing Chant,
+          // which reaches this same loop via _droppable) was the ONLY
+          // acquisition path that skipped that flag; bone-pile rolls, vendor
+          // purchases and quest rewards all already went through here.
+          InventorySystem.addGlobalItem(inst);
           loot.push(inst);
         }
       }
@@ -5395,9 +5460,97 @@ export default class CombatScene extends Phaser.Scene {
   }
 
 
+  /**
+   * The runic zone normally dies the moment its caster moves — that is the
+   * whole cost of the mechanic. Sigil Step buys exceptions: an `anchored`
+   * counter on the zone absorbs that many moves before it finally gives.
+   *
+   * This used to be TWO separate removal blocks inside _moveUnitToSlot (one
+   * before the slot swap, one after) doing nearly the same thing. Consolidated
+   * here so there is a single place that decides whether a zone survives —
+   * with the old pair, an anchored zone would have survived the first check
+   * and then been destroyed by the second.
+   */
+  _dissolveRunicZoneOnMove(unit) {
+    if (!Array.isArray(unit?.statusEffects)) return;
+    const zone = unit.statusEffects.find(se => se?.id === 'runic_zone');
+    if (!zone) return;
+
+    if ((zone.anchored | 0) > 0) {
+      zone.anchored -= 1;
+      this._log?.(`${unit?.name ?? 'The mage'}'s sigil travels with them (${zone.anchored} step${zone.anchored === 1 ? '' : 's'} left).`);
+      this._refreshRunicZoneSprite?.(unit);
+      return;
+    }
+    unit.statusEffects = unit.statusEffects.filter(se => se !== zone);
+    this._log?.(`${unit?.name ?? 'The mage'}'s runic circle dissipates as they move.`);
+    this._refreshRunicZoneSprite?.(unit);
+  }
+
+  /**
+   * Multiplier a unit's active statuses apply to one Toxic sub-mechanic.
+   * `key` is 'toxicTickMul' or 'toxicDecayMul'.
+   *
+   * Multiplicative across sources rather than additive, so two virulence
+   * effects genuinely compound — the fantasy is a strain getting worse, not
+   * two flat bonuses being summed.
+   */
+  _toxicMul(unit, key) {
+    let mul = 1;
+    for (const se of (unit?.statusEffects || [])) {
+      if (!se) continue;
+      if (!se.permanent && (se.turns || 0) <= 0) continue;
+      const v = se[key];
+      if (Number.isFinite(v) && v > 0) mul *= v;
+    }
+    return mul;
+  }
+
   _onUnitKnockedOut(unit) {
     this._log(`${unit.name} has been knocked out!`);
     unit.status = 'incapacitated';
+
+    // ---- onDeathBurst: statuses that DETONATE when their carrier dies ----
+    // Deliberately NOT the `onKill` path in _applyAbilityToTarget: that one
+    // belongs to the killing SKILL, so it only fires when that specific skill
+    // lands the final blow. This belongs to the VICTIM's own status, so the
+    // burst still happens when a DOT tick, a reaction, or an ally's stray AOE
+    // is what actually finished them off.
+    //
+    // Damage is expressed as a multiple of the status's own tickDamage
+    // (`tickMult`) rather than a baked number, so a burst is always worth
+    // exactly the ticks the target did NOT live long enough to take.
+    const bursting = (unit.statusEffects || []).filter(se => se?.onDeathBurst);
+    for (const se of bursting) {
+      const b = se.onDeathBurst;
+      // Clear it FIRST. _applyWeaknessBuildup and the damage below can knock
+      // out a neighbour, which re-enters this method; without this the same
+      // status could detonate twice if anything ever re-checks the corpse.
+      delete se.onDeathBurst;
+
+      const remaining = Math.max(0, se.turns | 0);
+      const perTarget = Math.floor((se.tickDamage | 0) * remaining * (b.tickMult ?? 1));
+      const victims = resolveAOESplash(this, unit, { shape: b.shape || 'adjacent' })
+        .filter(v => v && v !== unit && v.status !== 'incapacitated');
+      if (!victims.length) continue;
+
+      for (const v of victims) {
+        if (perTarget > 0) {
+          const before = v.currentHP | 0;
+          v.currentHP = Math.max(0, before - perTarget);
+          this._showFloatingNumber?.(perTarget, v, /*isHeal=*/false, /*isCrit=*/false);
+          if (v.currentHP === 0 && v.status !== 'incapacitated') {
+            v.status = 'incapacitated';
+            this._onUnitKnockedOut(v);
+          }
+        }
+        if (b.buildup) this._applyWeaknessBuildup(v, b.buildup, { user: null });
+      }
+      this._updateHealthBars?.(); this._updateHPMPBars?.();
+      this._log(b.log
+        ? b.log.replace('{n}', String(victims.length)).replace('{dmg}', String(perTarget))
+        : `${unit.name}'s wound bursts — ${perTarget} damage to ${victims.length} adjacent.`);
+    }
     // Track enemy kills for skills like trophy_cry that require a kill this turn
     if (unit.isEnemy) {
       this.enemyDiedThisTurn = true;
@@ -6238,7 +6391,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
-    // Snipe Pose: consumed on first attack — inject expose buildup.
+    // Drawn Bead: consumed on first attack — inject expose buildup.
     // Its damage bonus is NO LONGER applied here — it's mods.AttackPower on
     // the status itself now, already read (and already summed additively
     // with Rhythm/War Cry/etc.) by applyDamageModifiers/applyTypedDamageModifiers
@@ -6247,14 +6400,20 @@ export default class CombatScene extends Phaser.Scene {
     // block now only handles the parts that AREN'T generic stat mods: the
     // bonus Expose buildup, and consuming (removing) the status after the
     // first qualifying hit so it doesn't linger for a 2nd action this turn.
-    if ((result?.amount || 0) > 0 && !isMovement) {
-      const snipeIdx = (user?.statusEffects || []).findIndex(se => se?.id === 'snipe_pose' && (se.turns || 0) > 0);
+    // Gated on a HOSTILE DAMAGING action. `result.amount > 0` alone is not
+    // enough: a heal also returns a positive amount, so aiming and then
+    // healing an ally consumed the pose for nothing.
+    const snipeIsAttack = (result?.amount || 0) > 0 && !isMovement
+      && result?.isHeal !== true
+      && !!user?.isEnemy !== !!target?.isEnemy;
+    if (snipeIsAttack) {
+      const snipeIdx = (user?.statusEffects || []).findIndex(se => se?.id === 'drawn_bead' && (se.turns || 0) > 0);
       if (snipeIdx !== -1) {
         const sp = user.statusEffects[snipeIdx];
         result.buildup = result.buildup || {};
         result.buildup.expose = (result.buildup.expose || 0) + (sp.exposeBuildup ?? 80);
         user.statusEffects.splice(snipeIdx, 1);
-        this._log(`${user?.name ?? 'Attacker'} channels their Snipe Pose!`);
+        this._log(`${user?.name ?? 'Attacker'} looses the drawn bead!`);
       }
     }
 
@@ -6688,6 +6847,7 @@ export default class CombatScene extends Phaser.Scene {
         if (raw > 0) {
           const { bonusDamage } = this._processTargetHitRiders(target, user, {
             rawDamage: raw, mitigatedDamage: dmg, ignoreDR, preHitRiderRefs, isCrit,
+            sourceAbility: ability,
           });
           dmg += bonusDamage;
         }
@@ -6729,6 +6889,53 @@ export default class CombatScene extends Phaser.Scene {
             // unit lands a hit, not when they're hit).
             if (proc.buildup && target?.weakness) {
               this._applyWeaknessBuildup(target, proc.buildup, { user });
+            }
+            // Self-heal on landing a hit (Scent of Blood). Flat and baked at
+            // the time the rider was granted, matching the target-side
+            // `healAttacker` rider's shape rather than re-running the heal
+            // pipeline per swing — the caster's stats are already folded into
+            // the number by whatever granted it.
+            if (proc.healUser > 0 && user) {
+              const beforeHP = user.currentHP | 0;
+              user.currentHP = Math.min(user.maxHP | 0, beforeHP + proc.healUser);
+              const healed = user.currentHP - beforeHP;
+              if (healed > 0) {
+                this._showFloatingNumber?.(healed, user, /*isHeal=*/true);
+                this._playStatusVFX?.(user, { kind: 'heal' });
+                this._log(`${user.name}'s ${se.name || 'rider'} draws ${healed} HP from the kill-scent.`);
+              }
+            }
+            // Adjacent burst on landing a hit (Charged Quiver). Splashes off
+            // the struck target using the same resolver every AOE skill uses,
+            // so it respects the real formation instead of guessing.
+            if (proc.adjacentBurst && target) {
+              const b = proc.adjacentBurst;
+              const neighbours = resolveAOESplash(this, target, { shape: b.shape || 'adjacent' })
+                .filter(v => v && v.status !== 'incapacitated');
+              for (const v of neighbours) {
+                if (b.damage > 0) {
+                  const beforeHP = v.currentHP | 0;
+                  v.currentHP = Math.max(0, beforeHP - b.damage);
+                  this._showFloatingNumber?.(b.damage, v, false, false);
+                  if (v.currentHP === 0 && v.status !== 'incapacitated') {
+                    v.status = 'incapacitated';
+                    this._onUnitKnockedOut(v);
+                  }
+                }
+                if (b.buildup) this._applyWeaknessBuildup(v, b.buildup, { user });
+              }
+              if (neighbours.length) {
+                this._updateHealthBars?.(); this._updateHPMPBars?.();
+                this._log(`${user.name}'s charged arrow bursts — ${neighbours.length} adjacent caught in it.`);
+              }
+            }
+            // `charges` generalises nextHitOnly: a rider that lasts N hits
+            // rather than exactly one. Decremented here and removed at zero,
+            // independently of the status's own turn timer, so a quiver can
+            // run out mid-turn.
+            if (Number.isFinite(se.charges)) {
+              se.charges -= 1;
+              if (se.charges <= 0) onHitToRemove.push(i);
             }
             if (se.nextHitOnly) onHitToRemove.push(i);
           }
@@ -6851,6 +7058,19 @@ export default class CombatScene extends Phaser.Scene {
           // Lifesteal: heal attacker for % of actual damage dealt. Bonus
           // lifesteal from a temporary status effect (e.g. the berserker's
           // Bloodrite) stacks additively on top of the permanent gear value.
+          // ---- post_damage window (RULE 1) ----
+          // The third and last reaction window: the hit has fully landed and
+          // its number is on screen. Revenge effects and death triggers
+          // belong here — anything that wants to answer damage AFTER it is
+          // real rather than shaping it on the way in.
+          //
+          // The reactor is the unit that took the damage (see _onEvent's
+          // owner resolution). No incomingMutable: by rule 2 a post_damage
+          // reaction may not reach back and un-resolve the hit that woke it.
+          this.bus?.emit('post_damage', {
+            attacker: user, target, ability, intent, damage: dmg, isCrit,
+          });
+
           const bonusLifeStealPct = (_sumStatusEffectMods(user)?.LifeStealPct || 0) / 100;
           const lifeStealPct = (user?.gearEffects?.lifeStealPct || user?.lifeStealPct || 0) + bonusLifeStealPct;
           if (lifeStealPct > 0 && dmg > 0 && user?.currentHP != null && user?.maxHP != null) {
@@ -7361,36 +7581,17 @@ export default class CombatScene extends Phaser.Scene {
       breaking.forEach(se => this._clearScopedStatus(user, se.id));
     }
 
-    // ---- Volley reaction: allies with volley_armed echo this ranged skill ----
-    // Scalable: any skill with the 'ranged' tag triggers this. The volley copy fires
-    // _applyDirectResult directly (bypasses gates/costs/cooldowns) at reduced effectiveness.
-    if (!missed && !options?.isVolleyCopy && (ability.tags || []).includes('ranged')) {
-      const mySlots = user.isEnemy ? this.enemySlots : this.allySlots;
-      for (const slot of (mySlots || [])) {
-        const ally = slot?.char;
-        if (!ally || ally === user || ally.status === 'incapacitated') continue;
-        const vIdx = (ally.statusEffects || []).findIndex(se => se?.id === 'volley_armed' && (se.turns || 0) > 0);
-        if (vIdx === -1) continue;
-        const vollCfg = ally.statusEffects[vIdx].onAllyProjectile || {};
-        const copies  = vollCfg.copyCount      ?? 2;
-        const eff     = vollCfg.effectiveness  ?? 0.35;
-        ally.statusEffects.splice(vIdx, 1); // consume
-        this._log(`${ally.name} volleys with ${user.name}'s ${ability.name}!`);
-        for (let i = 0; i < copies; i++) {
-          this.time.delayedCall(280 * (i + 1) * GameplaySettings.animDurationMult(), () => {
-            if (this.combatEnded || !target || target.status === 'incapacitated') return;
-            this._applyDirectResult(ally, target, {
-              amount: Math.floor((result?.amount || 0) * eff),
-              buildup: result?.buildup
-                ? Object.fromEntries(Object.entries(result.buildup).map(([k, v]) => [k, Math.floor(v * eff)]))
-                : undefined,
-              element: result?.element,
-              isMagic: result?.isMagic,
-            }, { ability, isVolleyCopy: true });
-          });
-        }
-      }
-    }
+    // The `volley_armed` echo that used to live here is GONE — it was a dead
+    // first implementation of Volley. Nothing ever applied the `volley_armed`
+    // status and nothing declared its `onAllyProjectile` config, so the whole
+    // block could never fire. Volley now works entirely through the
+    // `ally_projectile_used` event + ReactionSystem (see the emit around line
+    // 6120), which is also what Flash Ignite and Covering Arc hang off.
+    //
+    // Removing it matters beyond tidiness: it was the ONLY consumer that
+    // treated the bare 'ranged' tag as a trigger, so it would have started
+    // firing on 47 more skills the moment the tag audit added 'ranged' to
+    // every projectile.
 
     // ---- Repeat mechanic: scalable for any skill returning result.repeatChance ----
     // Repeats fire _applyDirectResult directly (same damage/buildup, no costs/cooldown).
@@ -7398,7 +7599,14 @@ export default class CombatScene extends Phaser.Scene {
     // Optional result.repeatScale (default 1 = full power) lets a skill declare
     // a reduced-power repeat instead of always repeating at 100% — e.g.
     // Boulder Toss's Shocked proc repeats at 50% damage.
-    if (!missed && !options?.isRepeat && (result?.repeatChance || 0) > 0) {
+    // A RECAST may still roll its own single echo. `isRepeat` here means "this
+    // is Rune Channel's recast" — plain echoes never re-enter this function at
+    // all, they go through _applyDirectResult. The intent of the original gate
+    // was to stop one skill echoing repeatedly, NOT to stop a separate effect
+    // like a recast having the same one-echo allowance a normal cast gets.
+    // So Galvanic Touch can reach 4 hits: cast + echo, recast + echo.
+    const repeatBlocked = !!options?.isRepeat && !options?.isRecast;
+    if (!missed && !repeatBlocked && (result?.repeatChance || 0) > 0) {
       if (Math.random() < result.repeatChance) {
         this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
         this.time.delayedCall(380 * GameplaySettings.animDurationMult(), () => {
@@ -7447,7 +7655,7 @@ export default class CombatScene extends Phaser.Scene {
         this._log(`${user?.name ?? 'Mage'}'s rune channel recasts the spell at reduced power!`);
         this.time.delayedCall(480 * GameplaySettings.animDurationMult(), () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;
-          this._applyAbilityToTarget(user, target, ability, null, { isRepeat: true, powerScale: 0.60 });
+          this._applyAbilityToTarget(user, target, ability, null, { isRepeat: true, isRecast: true, powerScale: 0.60 });
         });
       }
     }
@@ -7587,6 +7795,7 @@ export default class CombatScene extends Phaser.Scene {
       );
       const { bonusDamage } = this._processTargetHitRiders(target, user, {
         rawDamage: rawAmt, mitigatedDamage: amt, ignoreDR: !!payload.ignoreDR, preHitRiderRefs, isCrit: payload?.isCrit === true,
+        sourceAbility: opts?.ability || null,
       });
       amt += bonusDamage;
       resultInfo.mitigatedAmount = amt;
@@ -8030,6 +8239,27 @@ export default class CombatScene extends Phaser.Scene {
           this._log(`${char.name}'s kindling rite pulses — ${fireAmt} fire buildup (${kindStacks}/3 stacks).`);
         }
 
+        // Withering Rite — necrotic mirror of the above. Same double-edged
+        // shape: the caster eats Disease on themselves each turn in exchange
+        // for the necrotic damage bonus (CombatLogic).
+        if (se.mods?.witheringRite) {
+          const withStacks = se.mods.witheringRiteStacks || 1;
+          // The rite deals in TOXIC on both ends now — same family it inflicts
+          // on its victims, so the double-edged trade is one meter the player
+          // watches rather than two.
+          const toxicAmt = 60 * withStacks;   // matches kindling's 60/stack
+          this._applyWeaknessBuildup(char, { toxic: toxicAmt }, { user: char });
+          this._log(`${char.name}'s withering rite seeps — ${toxicAmt} toxic buildup (${withStacks}/3 stacks).`);
+        }
+
+        // Storm Ward — the heaviest upkeep of any augment, on top of the
+        // zone's own mpPerTurn AND any Ward Weave initiative drain. It pays
+        // for a passive retaliation rider rather than a stat bonus.
+        // Storm Ward's cost is no longer drained here — it is folded into the
+        // zone's own mpPerTurn when the ward is woven, so the single upkeep
+        // line above already includes it and the player sees one honest
+        // number instead of two separate deductions.
+
         // Rune Channel's lightning buildup moved to a PER-CAST trigger
         // instead of a per-turn passive tick (see the runeChannel block in
         // _applyAbilityToTarget) — per the user's explicit call, the per-turn
@@ -8152,7 +8382,21 @@ export default class CombatScene extends Phaser.Scene {
    * the hit before final HP subtraction (onNextDamageTaken only).
    */
   _processTargetHitRiders(target, attacker, opts = {}) {
-    const { rawDamage = 0, mitigatedDamage = rawDamage, ignoreDR = false, preHitRiderRefs = null, isCrit = false } = opts;
+    const { rawDamage = 0, mitigatedDamage = rawDamage, ignoreDR = false, preHitRiderRefs = null, isCrit = false, sourceAbility = null } = opts;
+
+    // Melee/ranged classification for riders that care (Storm Ward). Mirrors
+    // Blinding Glint's proven test rather than inventing a second one: an
+    // explicit 'melee' tag wins; otherwise anything tagged ranged/projectile
+    // OR wielded by a ranged weapon type counts as ranged; everything else
+    // falls back to melee. Fail-OPEN on untagged skills is deliberate — of
+    // the handful of damaging skills carrying neither tag, nearly all are
+    // melee, so defaulting the other way would silently disable the rider
+    // against them.
+    const RANGED_WEAPON_TYPES = ['bow', 'sling', 'gun'];
+    const srcTags = sourceAbility?.tags || [];
+    const isMeleeSource = srcTags.includes('melee')
+      || !(srcTags.includes('ranged') || srcTags.includes('projectile')
+           || RANGED_WEAPON_TYPES.includes(attacker?.weaponType));
     let bonusDamage = 0;
     const list = Array.isArray(target?.statusEffects) ? target.statusEffects : [];
     const toRemove = [];
@@ -8214,6 +8458,30 @@ export default class CombatScene extends Phaser.Scene {
           attacker.currentHP = Math.min(attacker.maxHP, attacker.currentHP + r.healAttacker);
           this._showFloatingNumber?.(r.healAttacker, attacker, true);
           this._log(`${attacker?.name ?? 'Attacker'} is healed for ${r.healAttacker} HP by ${target?.name ?? 'target'}'s ${displayName}.`);
+        }
+        // retaliate: hurt the ATTACKER back. Distinct from r.buildup below,
+        // which lands on the DEFENDER — a pre-existing shape kept as-is so
+        // nothing that relies on it changes. Storm Ward is the first user.
+        // meleeOnly: Storm Ward only answers someone who closed the distance.
+        // An archer across the field shouldn't be shocked by a circle they
+        // never stepped into.
+        if (r.retaliate && (!r.retaliate.meleeOnly || isMeleeSource)
+            && attacker && attacker.status !== 'incapacitated') {
+          const dmg = r.retaliate.damage | 0;
+          if (dmg > 0) {
+            const beforeHP = attacker.currentHP | 0;
+            attacker.currentHP = Math.max(0, beforeHP - dmg);
+            this._showFloatingNumber?.(dmg, attacker, false, false);
+            this._log(`${target?.name ?? 'The mage'}'s ${displayName} lashes back — ${dmg} damage to ${attacker.name}.`);
+            if (attacker.currentHP === 0 && attacker.status !== 'incapacitated') {
+              attacker.status = 'incapacitated';
+              this._onUnitKnockedOut(attacker);
+            }
+          }
+          if (r.retaliate.buildup && attacker?.weakness) {
+            this._applyWeaknessBuildup(attacker, r.retaliate.buildup, { user: target });
+          }
+          this._updateHealthBars?.(); this._updateHPMPBars?.();
         }
         if (r.buildup) this._applyWeaknessBuildup(target, r.buildup, { user: attacker });
         if (r.buildupAdjacent) {
@@ -8612,11 +8880,33 @@ export default class CombatScene extends Phaser.Scene {
       // 4) TOXIC T1+: chance to bypass ALL Toxic decay for THIS tick, scaling
       // with overflow intensity (capped) — a heavier overflow is MORE likely
       // to dodge decay, not a flat chance regardless of how far past T2 it is.
+      // Virulence's other half: the same effect that makes the poison hit
+      // harder also makes it burn out faster. Applied BEFORE the bypass roll
+      // below, so a bypass still skips the whole (larger) decay — which is
+      // what makes stacking Toxic high the real counterplay to the downside.
+      if (fam === 'toxic') {
+        const decayMul = this._toxicMul(u, 'toxicDecayMul');
+        if (decayMul !== 1) decay = Math.max(1, Math.floor(decay * decayMul));
+      }
+
       if (fam === 'toxic' && ((u.weakness.tiers.toxic | 0) >= 1)) {
         const baseChance = WeaknessV3?.families?.toxic?.t1?.decayBypassChance ?? 0;
         const cap = WeaknessV3?.families?.toxic?.t1?.decayBypassChanceCap ?? 1;
-        const I = weaknessIntensityMult(m);
-        const chance = Math.min(cap, baseChance * (I > 0 ? I : 1));
+        // Curve choice now comes from the CONFIG (toxic declares
+        // `effectCurve: { 't1.decayBypassChance': 'global' }`) rather than
+        // being hardcoded here. Same value as the previous direct
+        // weaknessIntensityMult call — this is the one effect in the game
+        // whose family curve and actual curve disagree, and having that fact
+        // live at the call site instead of beside the numbers is what caused
+        // a bad tuning change. See intensityForEffect's header.
+        const I = intensityForEffect('toxic', 't1.decayBypassChance', m);
+        // Virulence (and anything else carrying toxicBypassMul) cuts the
+        // skip chance. Without this the trade is hollow: bypass hits its 75%
+        // cap the moment the meter reaches T2 — 0.30 x 2.5 — which is exactly
+        // when a T2-gated skill becomes usable, so the doubled decay would be
+        // skipped three times in four and the drawback would be decorative.
+        const bypassMul = this._toxicMul(u, 'toxicBypassMul');
+        const chance = Math.min(cap, baseChance * (I > 0 ? I : 1)) * bypassMul;
         if (Math.random() < chance) {
           this._log(`${u.name} Toxic: decay bypassed (${Math.round(chance * 100)}% chance, I=${I.toFixed(2)}).`);
           continue; // NO DECAY THIS TICK
@@ -9016,6 +9306,11 @@ export default class CombatScene extends Phaser.Scene {
     kindlingRite: { key: 'fx_runic_zone_addition_1', tint: 0xff7733 }, // fire
     wardWeave: { key: 'fx_runic_zone_addition_2', tint: 0x66ddaa }, // warding green
     runeChannel: { key: 'fx_runic_zone_addition_3', tint: 0xaa77ee }, // arcane purple
+    // Only three addition textures exist, so the two augments added in the
+    // 2026-09 staff pass REUSE a ring and separate themselves by tint. Both
+    // previously had no visual at all — the zone showed no sign they were on.
+    witheringRite: { key: 'fx_runic_zone_addition_2', tint: 0x4a7a2f }, // sickly, darker green than wardWeave's
+    stormWard: { key: 'fx_runic_zone_addition_3', tint: 0x9fd8ff },     // pale storm-blue
   };
   // Corner offsets for Kindling Rite's stacked overlays (up to 3) — spread to
   // opposite corners instead of all piling up dead-center once it can stack.
@@ -9035,6 +9330,8 @@ export default class CombatScene extends Phaser.Scene {
     kindlingRite: { label: 'Kindling Rite', desc: '+20%/stack elemental damage dealt, 80/stack Fire buildup/turn to caster (max 3 stacks)' },
     wardWeave: { label: 'Ward Weave', desc: 'Heals the whole party for a basic amount at the end of your turn, drains 3 Initiative/turn (replaces MP regen)' },
     runeChannel: { label: 'Rune Channel', desc: '25% chance to recast spells at 60% power, 80 Lightning buildup + 1 lightning damage on cast/recast' },
+    witheringRite: { label: 'Withering Rite', desc: '+20%/stack necrotic damage dealt, 60/stack Toxic buildup/turn to caster (max 3 stacks)' },
+    stormWard: { label: 'Storm Ward', desc: 'Anyone striking you in melee takes Lightning damage and 70 Lightning buildup. Adds 4 MP to the zone upkeep.' },
   };
 
   _refreshRunicZoneSprite(owner) {
@@ -9103,7 +9400,11 @@ export default class CombatScene extends Phaser.Scene {
       // further than runeChannel — it was still reading as too tucked
       // behind the portrait at the shared default distance.
       const angle = (i / Math.max(1, activeMods.length)) * Math.PI * 2;
-      const dist = modKey === 'wardWeave' ? 18 : 10;
+      // The zone sits at depth ~1, BELOW the slot containers at depth 2 — which
+      // is right for a ring on the ground but means anything orbiting close to
+      // centre hides behind the portrait. Pushed out to 24 so the runes ride
+      // clear of the silhouette instead of peeking from under it.
+      const dist = modKey === 'wardWeave' ? 24 : 24;
       const ox = Math.cos(angle) * dist;
       const oy = Math.sin(angle) * dist;
 
@@ -9127,13 +9428,22 @@ export default class CombatScene extends Phaser.Scene {
       const liveZone = (owner.statusEffects || []).find(se => se?.id === 'runic_zone' && (se.turns || 0) > 0);
       if (!liveZone) { this.tooltip?.hide(); return; }
       const lines = [`${liveZone.turns ?? '?'} turn${liveZone.turns === 1 ? '' : 's'} left`];
-      if (liveZone.mpPerTurn) lines.push(`+${liveZone.mpPerTurn} MP/turn to ${owner.name || 'owner'}`);
+      // DRAIN, not a gain — the zone costs MP to sustain. The old wording read
+      // as though it granted mana.
+      if (liveZone.mpPerTurn) lines.push(`Upkeep: -${liveZone.mpPerTurn} MP/turn`);
       const liveActive = MOD_KEYS.filter(k => liveZone.mods?.[k]);
       if (liveActive.length) {
         liveActive.forEach(modKey => {
           if (modKey === 'kindlingRite') {
             const stacks = liveZone.mods.kindlingRiteStacks || 1;
             lines.push(`Kindling Rite (${stacks}/3 stacks): +${stacks * 20}% elemental damage dealt, ${stacks * 80} Fire buildup/turn to caster`);
+            return;
+          }
+          // Same stack-aware treatment as Kindling — its numbers scale too, so
+          // the static RUNIC_ZONE_MOD_INFO line would understate it.
+          if (modKey === 'witheringRite') {
+            const stacks = liveZone.mods.witheringRiteStacks || 1;
+            lines.push(`Withering Rite (${stacks}/3 stacks): +${stacks * 20}% necrotic damage dealt, ${stacks * 60} Toxic buildup/turn to caster`);
             return;
           }
           const info = CombatScene.RUNIC_ZONE_MOD_INFO[modKey];
@@ -9348,6 +9658,34 @@ export default class CombatScene extends Phaser.Scene {
     const toY = missed ? targetY + (targetY - fromY) * 0.25 : targetY;
     const angle = Math.atan2(toY - fromY, toX - fromX);
 
+    // Ignited shots carry a flame under them for the whole flight. Reuses
+    // fx_inflict_burn (the same sheet Pressure Point's ignition uses) rather
+    // than a new asset, tinted hot orange and drawn one depth BELOW the
+    // projectile so the arrow/bolt still reads clearly on top of it.
+    //
+    // Sized off `scale` rather than a constant so it tracks whatever is being
+    // thrown — projectiles vary from arrows to thrown blades to spell bolts.
+    // Deliberately SMALLER than the projectile (0.7x): at parity it swamped
+    // even Boulder Toss, the largest one in the game.
+    const ignited = (attacker?.statusEffects || []).some(
+      se => se?.id === 'ignited' && (se.permanent || (se.turns || 0) > 0)
+    );
+    let flame = null;
+    if (ignited && this.textures?.exists('fx_inflict_burn')) {
+      flame = this.add.image(fromX, fromY, 'fx_inflict_burn')
+        .setScale(scale * 0.7)
+        .setDepth(2.9)
+        .setAlpha(0.9)
+        .setTint(0xff8833);
+      this.tweens.add({
+        targets: flame,
+        scaleX: scale * 0.85, scaleY: scale * 0.85,
+        alpha: 0.65,
+        duration: duration / 2,
+        yoyo: true, repeat: -1,
+      });
+    }
+
     const proj = this.add.image(fromX, fromY, textureKey)
       .setScale(scale)
       .setDepth(3) // above slot containers (depth 2) — flies in front of portraits
@@ -9358,6 +9696,12 @@ export default class CombatScene extends Phaser.Scene {
     // regardless of shape — a crit should always read as "bigger," not just
     // whatever this texture normally plays.
     const resolvedSound = isCrit ? 'critHurt' : (landingSound || CombatScene.HIT_SOUND_BY_TEXTURE[textureKey] || 'hitHurt');
+
+    // The flame rides the same tween so it can never drift off the projectile.
+    if (flame) {
+      this.tweens.add({ targets: flame, x: toX, y: toY, duration, ease: 'Quad.easeIn',
+        onComplete: () => flame.destroy() });
+    }
 
     this.tweens.add({
       targets: proj,
@@ -9471,7 +9815,7 @@ export default class CombatScene extends Phaser.Scene {
   // effect (tint, timing, sound) still comes from the shared, data-driven
   // helpers above.
   static DAGGER_HIT_TEXTURES = {
-    needle_feint: 'fx_hit_puncture',
+    probing_cut: 'fx_hit_puncture',
     vital_mark: 'fx_hit_puncture',
     ember_strike: 'fx_hit_slash',
     needle_venom: 'fx_hit_puncture',
@@ -9720,6 +10064,22 @@ export default class CombatScene extends Phaser.Scene {
     laki_hooting_taunt: 'fx_hit_cloud',
     laki_startle: 'fx_hit_cloud',
   };
+
+  // Per-skill sound overrides, taking priority over the shape default in
+  // HIT_SOUND_BY_TEXTURE. Needed because shape and sound don't always agree:
+  // three separate encounter-4 skills mapped to fx_hit_claw and therefore all
+  // played 'screech', which made the whole fight sound the same.
+  static BEAST_HIT_SOUNDS = {
+    // Oskar is a rotting wolf — every one of his other attacks is a bite, and
+    // a screeching claw sat oddly against them. 'bumpHurt' reads as a heavy
+    // physical swipe and keeps him distinct from Laki, who should own the
+    // bird noises in this encounter.
+    oskar_infectious_claw: 'bumpHurt',
+    // The owl's signature. Was falling through fx_hit_cloud to 'hiss', which
+    // sounded like a gas cloud rather than a bird.
+    laki_piercing_screech: 'creatureSound2',
+  };
+
   _playBeastVFX(attacker, target, missed, ability, isCrit) {
     if (CombatScene.BEAST_PROJECTILE_SKILLS.has(ability?.id)) {
       this._playProjectileVFX(attacker, target, {
@@ -9740,6 +10100,7 @@ export default class CombatScene extends Phaser.Scene {
     this._playMeleeImpactVFX(target, {
       textureKey,
       tint: this._tintForAbility(ability),
+      sound: CombatScene.BEAST_HIT_SOUNDS[ability?.id] || null,
       isCrit,
     });
   }
@@ -10007,7 +10368,12 @@ export default class CombatScene extends Phaser.Scene {
           ? familyIntensityMult('toxic', m)
           : (typeof weaknessIntensityMult === 'function' ? weaknessIntensityMult(m) : 1);
 
-        const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1)));
+        // Virulence and anything like it scales the tick itself (see
+        // _toxicMul). Applied to `raw` BEFORE applyDamageModifiers below, so
+        // the boosted tick is still mitigated by the target's resistances
+        // like any other necrotic damage rather than bypassing them.
+        const tickMul = this._toxicMul(char, 'toxicTickMul');
+        const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1) * tickMul));
 
         let dmg = raw;
         try {
@@ -10887,6 +11253,7 @@ export default class CombatScene extends Phaser.Scene {
     // happens inside somebody's turn, so repainting on each turn change
     // keeps the bars honest without that maintenance burden.
     this._updateInitiativeBars?.();
+    this._updateRoundDisplay?.();
     // Info panel deliberately stays open across turn transitions now — only
     // the X button or selecting a different character closes it (previously
     // this force-hid it every single turn, even the player's own).
@@ -11280,6 +11647,14 @@ export default class CombatScene extends Phaser.Scene {
         this._onTurnLimitReached(turnLimit);
         return;
       }
+
+      // Local-tab chatter for the new round. Posted AFTER the turnLimit check
+      // so a lost race ends on _onTurnLimitReached's own message rather than a
+      // countdown line for a round that will never be played.
+      this._postLocalChatLines(this.localChatScript?.onRoundStart?.(this._buildLocalChatCtx({
+        turnLimit,
+        roundsRemaining: turnLimit > 0 ? Math.max(0, turnLimit - roundsPlayed) : null,
+      })));
       const occupiedKeys = new Set(
         this.turnOrder.map(u => this._charSlotKey(u)).filter(Boolean)
       );

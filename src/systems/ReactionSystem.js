@@ -84,6 +84,11 @@ export default class ReactionSystem {
     // whatever cause — see _onWeaknessTierCross below for why this can't
     // reuse _onEvent's self_hit/ally_hit shape.
     this.bus?.on?.('weakness_tier_cross', payload => this._onWeaknessTierCross(payload));
+    // post_damage — the third window (see WINDOW_OF). Fires once the hit has
+    // fully landed, for revenge effects and death triggers. Routed through
+    // the same _onEvent shape as self_hit/ally_hit, minus incomingMutable:
+    // by rule 2 nothing here may reach back and reshape the hit.
+    this.bus?.on?.('post_damage', payload => this._onEvent('post_damage', payload));
   }
 
 
@@ -155,6 +160,20 @@ export default class ReactionSystem {
     return this._state(unit)?.triggersRemaining ?? this.defaults.triggersPerRound;
   }
 
+  /**
+   * Burn a unit's reaction budget without them having reacted to anything —
+   * how Feint provokes a guard out of position. Returns how many were
+   * actually spent, so the caller can report a whiff honestly rather than
+   * claiming a bait that never landed.
+   */
+  spendTriggers(unit, n = 1) {
+    const st = this._state(unit);
+    if (!st) return 0;
+    const before = st.triggersRemaining | 0;
+    st.triggersRemaining = Math.max(0, before - n);
+    return before - st.triggersRemaining;
+  }
+
 
 
   _onSelfHit(payload) {
@@ -217,6 +236,11 @@ export default class ReactionSystem {
     let owner = null;
     if (evt === 'self_hit') owner = target;
     else if (evt === 'ally_hit') owner = ally;
+    // post_damage: the unit that just TOOK the damage is the reactor. Revenge
+    // effects answer their own wounding, so this needs no ally fan-out — an
+    // ally-flavoured version would be a separate event, the same way ally_hit
+    // is separate from self_hit.
+    else if (evt === 'post_damage') owner = target;
     else return;
 
     if (!owner || owner.status === 'incapacitated') return;
@@ -300,8 +324,122 @@ export default class ReactionSystem {
     st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
   }
 
+  /**
+   * Which WINDOW a reaction resolves in. The window — not the trigger name —
+   * is what ordering rules are written against, because several triggers can
+   * share a window (self_hit and ally_hit are both "the hit has rolled but
+   * damage has not committed").
+   *
+   *   pre_hit      before the attack is computed. Redirects and attacker
+   *                debuffs live here (Guardian's Stand, Distracting Feint).
+   *   on_hit       after the hit roll, before damage commits. Counterattacks
+   *                and damage-negation live here (Reflex Bite, Covering Shot).
+   *   post_damage  after damage has landed. Revenge and death triggers.
+   */
+  static WINDOW_OF = {
+    pre_hit: 'pre_hit',
+    self_hit: 'on_hit',
+    ally_hit: 'on_hit',
+    ally_projectile_used: 'on_hit',
+    weakness_tier_cross: 'post_damage',
+    post_damage: 'post_damage',
+  };
+  static windowFor(evt) { return ReactionSystem.WINDOW_OF[evt] || 'on_hit'; }
+
+  /**
+   * RULE 5 — a reaction may be answered by another reaction, resolving in the
+   * SAME window, immediately after it. A responder may VETO its parent, in
+   * which case the parent's exec never runs.
+   *
+   * Vetoing before exec (rather than trying to undo afterwards) is the whole
+   * reason this is tractable: a counterattack applies its damage inside its
+   * own exec, so there is nothing to unwind once it has run. Answering it
+   * beforehand needs no cooperation from the counterattack skill itself.
+   *
+   * The parent still SPENDS its trigger even when vetoed — it committed. That
+   * is exactly what makes a responder worth preparing.
+   *
+   * Termination: a responder is itself a reaction, so firing one costs its
+   * owner their one trigger for the round (triggersPerRound: 1). Chain depth
+   * is therefore bounded by the number of living units, with no cycle
+   * detection needed. `_respondDepth` is a belt-and-braces cap in case that
+   * budget is ever raised.
+   */
+  _checkReactionResponders({ parentOwner, parentSkill, evt, sourceAbility, sourceIntent }) {
+    if ((this._respondDepth | 0) >= 2) return null;
+    const parentWindow = ReactionSystem.windowFor(evt);
+    const sides = [this.scene?.allySlots, this.scene?.enemySlots];
+
+    for (const slots of sides) {
+      for (const slot of (slots || [])) {
+        const responder = slot?.char;
+        if (!responder || responder === parentOwner) continue;
+        if (responder.status === 'incapacitated') continue;
+        // A responder answers the OPPOSING side by default. Without this an
+        // ally's reaction counts as a valid parent — which is how Sidestep
+        // ended up firing on a friendly Ignite, logging a dodge of something
+        // that was never an attack. `respondsTo` can opt into 'ally' or 'any'
+        // if a future skill genuinely wants to answer its own side.
+
+        // RULE 3: one trigger per unit per round, same gate as any reaction.
+        const st = this._state(responder);
+        if (!st || (st.triggersRemaining | 0) <= 0) continue;
+        if (Array.isArray(responder.statusEffects) && responder.statusEffects.some(se => se?.blocksAction)) continue;
+
+        for (const id of this._resolvePrepared(responder)) {
+          const rs = SKILLS[id];
+          const trig = rs && getTriggerForEvent(rs, 'reaction_fired');
+          if (!trig) continue;
+          // RULE 2: a responder may only answer its own window or later. A
+          // skill scoped to on_hit must not reach back into pre_hit.
+          const scope = rs.reaction?.respondsToWindow;
+          if (scope && scope !== parentWindow) continue;
+          // Side gate (see the note above): 'enemy' by default.
+          const side = rs.reaction?.respondsTo || 'enemy';
+          if (side === 'enemy' && !!responder.isEnemy === !!parentOwner.isEnemy) continue;
+          if (side === 'ally' && !!responder.isEnemy !== !!parentOwner.isEnemy) continue;
+          if (!this._meetsReqs(responder, rs)) continue;
+          if (!(DevFlags.isNoCooldownEnabled() || !this.scene?._isSkillOnCooldown?.(responder, rs.id))) continue;
+
+          let outcome = null;
+          this._respondDepth = (this._respondDepth | 0) + 1;
+          try {
+            outcome = rs.reaction?.exec?.({
+              owner: responder,
+              attacker: parentOwner,
+              target: parentOwner,
+              scene: this.scene,
+              event: 'reaction_fired',
+              parentSkill,
+              parentWindow,
+              sourceAbility,
+              sourceIntent,
+            }) || null;
+          } catch (e) {
+            console.error('[Reaction Error: reaction_fired exec()]', rs.id, e);
+          } finally {
+            this._respondDepth = Math.max(0, (this._respondDepth | 0) - 1);
+          }
+
+          st.triggersRemaining = Math.max(0, (st.triggersRemaining | 0) - 1);
+          if ((rs.reaction?.cooldownOn || 'trigger') === 'trigger') this._startCD(responder, rs);
+          if (outcome?.prevent) return { prevented: true, by: responder, skill: rs };
+          return null; // one responder per parent, same stop-at-first shape as everywhere else
+        }
+      }
+    }
+    return null;
+  }
+
   _fireReaction({ owner, attacker, target, reactSkill, evt, incomingMutable, sourceAbility, sourceIntent }) {
     const cooldownOn = reactSkill?.reaction?.cooldownOn || 'trigger';
+
+    // RULE 5 — give the other side a chance to answer this reaction BEFORE it
+    // resolves. A veto stops exec entirely; the parent still pays its costs
+    // below, because it committed to acting.
+    const answer = this._checkReactionResponders({
+      parentOwner: owner, parentSkill: reactSkill, evt, sourceAbility, sourceIntent,
+    });
 
     // Reaction action point + MP cost are both paid HERE, at trigger time —
     // preparing is free; only an actual trigger spends anything. The action
@@ -317,6 +455,12 @@ export default class ReactionSystem {
         owner.currentMP = Math.max(0, (owner.currentMP || 0) - mpCost);
         this.scene?._log?.(`${owner.name} spends ${mpCost} MP on ${reactSkill.name}.`);
       }
+    }
+
+    if (answer?.prevented) {
+      this.scene?._log?.(`${answer.by?.name ?? 'Someone'} reads the movement — ${owner?.name ?? 'the attacker'}'s ${reactSkill?.name ?? 'reaction'} is slipped entirely!`);
+      if (cooldownOn === 'trigger') this._startCD(owner, reactSkill);
+      return;
     }
 
     // explicit executor hook

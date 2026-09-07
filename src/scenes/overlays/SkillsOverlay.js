@@ -351,9 +351,10 @@ export default class SkillsOverlay extends Phaser.Scene {
       const s = SKILLS[id];
       if (!s || s.type !== 'weapon') continue;
       // Mirror getWeaponSkillsFor's own exclusions. Without the `hidden` check
-      // the six sub-skills that back multi-strike abilities (volley_arrow,
-      // hail_of_arrows_shot, farsight_volley_shot, carrion_strike_swing,
-      // twin_fang_offhand, arterial_rush_cut) were each listed as a SECOND
+      // the sub-skills that back multi-strike and reaction abilities
+      // (volley_arrow, hail_of_arrows_shot, farsight_volley_shot,
+      // carrion_strike_swing, twin_fang_offhand, arterial_rush_cut,
+      // aftershock_slam) were each listed as a SECOND
       // card under the same display name as their parent — they are engine
       // plumbing, not skills a player can pick.
       if (s.hidden || s.disabled || s.enemyOnly) continue;

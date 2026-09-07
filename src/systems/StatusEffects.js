@@ -12,8 +12,8 @@ export const StatusEffects = {
     description: 'Acting no longer drains Fire buildup — it builds Fire instead, scaling with Curse intensity.',
     icon: '☠🔥'   // placeholder icon; you’ll swap to a sprite later
   },
-  reward_needle_feint_crit: {
-    id: 'reward_needle_feint_crit',
+  reward_probing_cut_crit: {
+    id: 'reward_probing_cut_crit',
     name: 'Feint Advantage',
     icon: '✦'
   },
@@ -197,8 +197,14 @@ export const WeaknessTierNames = {
 export const WeaknessV3 = {
   globals: {
     // overflow -> intensity multiplier: 1 + (overflow / S), clamped at CAP
-    INTENSITY_S: 300,
-    INTENSITY_CAP: 2.5,
+    // Shared by weaknessIntensityMult AND every family's own `pow` block.
+    // INTENSITY_CAP is deliberately null: intensity is UNBOUNDED now, and
+    // each individual EFFECT carries its own ceiling instead. That split is
+    // the point — a probability must never reach 100%, but a damage tick
+    // should keep climbing as long as the player keeps investing.
+    INTENSITY_S: 250,
+    INTENSITY_EXP: 0.78,
+    INTENSITY_CAP: null,
 
     // Decay curve shaping (applies to all families, scaled by each family's baseDecay)
     //  - 0-100: light chip decay, capped low so buildup can stick
@@ -211,17 +217,24 @@ export const WeaknessV3 = {
     DECAY_LOW_BASE: 2,       // tuned so most land ~2-3 decay below T1
     DECAY_LOW_FLOOR: 1,
     DECAY_LOW_CAP: 3,
-    DECAY_MID_START: 8,      // decay around 8 at 100 (pre-scaling)
-    DECAY_MID_END: 12,       // decay approaches ~12 near T2 (pre-scaling)
-    DECAY_MID_CAP: 14,
+    DECAY_MID_START: 12,      // decay around 8 at 100 (pre-scaling)
+    DECAY_MID_END: 18,       // decay approaches ~12 near T2 (pre-scaling)
+    DECAY_MID_CAP: 22,
     DECAY_HIGH_BASE: 28,     // baseline decay once T2 is reached
-    DECAY_HIGH_PER_100: 20,  // additional decay per 100 overflow (before scaling)
-    DECAY_HIGH_CAP: 140,     // soft cap so even extreme overflow stays sane
+    DECAY_HIGH_PER_100: 40,  // additional decay per 100 overflow (before scaling)
+    DECAY_HIGH_CAP: 180,     // soft cap so even extreme overflow stays sane
   },
 
   families: {
     // === Elemental ============================================================
     lightning: {
+      // Explicit restatement of the GLOBAL curve (1 + (meter-200)/300, cap
+      // 2.5) rather than relying on familyIntensityMult's silent fallback.
+      // Behaviour-identical — verified by tools/weakness_snapshot.js — but it
+      // means every family now declares its own shape, so "which curve does
+      // this family use" is answerable by reading one block instead of
+      // knowing an engine default.
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
       baseDecay: 35,
       t1: {
         // Change from flat 4 to a d4 roll
@@ -230,34 +243,34 @@ export const WeaknessV3 = {
       },
       t2: {
         // Bump chance so you can actually see extra procs while testing
-        multiJoltChance: 0.40,             // base chance per extra jolt; scales with intensity (min(base*I, cap))
-        multiJoltChanceCap: 0.95,          // never exceed 95% per extra roll
+        multiJoltChance: 0.3188,             // base chance per extra jolt; scales with intensity (min(base*I, cap))
+        multiJoltChanceCap: 0.90,          // never exceed 95% per extra roll
         extraJoltsMax: 4,                  // up to 4 extra jolts (so total 1..5)
       },
     },
 
     cold: {
       // Linear intensity ramp: ~+0.7 per 100 overflow, caps at 3.0
-      intensity: { formula: 'linear', slope: 0.007, cap: 3.0 },
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
 
       t1: {
-        initiativePenalty: 0.15,
-        initiativePenaltyCap: 0.50,
+        initiativePenalty: 0.151,
+        initiativePenaltyCap: 0.900,
 
         // NEW: reduce Initiative Gauge gain each start of turn
         // final penalty = min(gaugeRegenPenalty * I_cold, gaugeRegenPenaltyCap)
-        gaugeRegenPenalty: 0.35,
-        gaugeRegenPenaltyCap: 0.75
+        gaugeRegenPenalty: 0.2517,
+        gaugeRegenPenaltyCap: 0.90
       },
       t2: {
-        dmgDealtPenalty: 0.10,
-        dmgDealtPenaltyCap: 0.35,
-        evasionPenalty: 0.25,
-        evasionPenaltyCap: 0.60,
+        dmgDealtPenalty: 0.1007,
+        dmgDealtPenaltyCap: 0.90,
+        evasionPenalty: 0.2014,
+        evasionPenaltyCap: 0.900,
 
         // NEW: flat drain from the Initiative Gauge at start of turn
         // actual drain = floor(gaugeStartDrainBase * I_cold), clamped by gaugeStartDrainCap
-        gaugeStartDrainBase: 4,
+        gaugeStartDrainBase: 4.0275,
         gaugeStartDrainCap: 35
       }
     },
@@ -269,7 +282,7 @@ export const WeaknessV3 = {
       //  - At t2 (e.g. 200) -> 1.0x intensity (no overflow yet)
       //  - +0.01 per overflow point (e.g., +2.0 at +200 overflow => 3.0 total)
       //  - Caps at 8.0 around ~700 overflow
-      intensity: { formula: 'linear', slope: 0.01, cap: 8.0 },
+      intensity: { formula: 'pow', S: 149, exp: 0.78 },  // own S: see startTickBase
 
       // Fire's own high-band decay (meter 200+), replacing the old t2.startConsume.
       // Fire used to lose meter from TWO sources at once - ordinary decay plus a
@@ -285,16 +298,20 @@ export const WeaknessV3 = {
       decayCurve: { highBase: 60, highPer100: 50, highCap: 340 },
 
       t1: {
-        onActLoss: 10,         // was 3; stronger on-act burn loss
+        onActLoss: 23.4935,         // was 3; stronger on-act burn loss
         // Was flat regardless of how far into Fire overflow the target was —
         // now scales with Fire's own intensity curve (up to 8.0x, so the cap
         // matters a lot more here than most families' 2.5x global cap).
-        incomingFireBonus: 0.25,
-        incomingFireBonusCap: 1.0,
+        incomingFireBonus: 0.3356,
+        incomingFireBonusCap: 2.0,
       },
       t2: {
         // Start-of-turn base burn before multiplier (we'll multiply by the intensity curve above)
-        startTickBase: 10,
+        // Base IS the meter-200 value (intensity is 1.0 at T2), so this
+        // number alone sets how punishing a freshly-applied burn is. Cut ~25%
+        // because these ticks hit PLAYERS as hard as enemies, and enemies have
+        // far more HP — a shallow burn should sting, not threaten.
+        startTickBase: 19.0,
 
         // A second, INDEPENDENT damage term added on top of (startTickBase ×
         // intensity) — X per 100 Fire meter ABOVE the T2 threshold, NOT itself
@@ -308,6 +325,10 @@ export const WeaknessV3 = {
         // crossing the threshold, against 4% of a 500 HP duelist's. Both
         // terms now measure distance past Ablaze. See startTickPerHundred
         // handling in _startTurnWeakness (CombatScene.js).
+        // NOT intensity-scaled — the engine computes this as
+        // `perHundred * (meter - 200) / 100`, a separate linear term added to
+        // `base * intensity`. Left at its original 5; rebasing it against the
+        // intensity curve (as the 2026-09 pass first did) inflates it 2.3x.
         startTickPerHundred: 5,
 
       },
@@ -317,18 +338,18 @@ export const WeaknessV3 = {
     // === Physical =============================================================
     disorient: {
       // Linear intensity ramp: ~+0.7 per 100 overflow, caps at 3.0
-      intensity: { formula: 'linear', slope: 0.007, cap: 3.0 },
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
 
       t1: {
         // T1: Skill cost multiplier (applies to MP now; you can extend to HP/etc later)
         // final multiplier = 1 + min(costMultiplier * I, costMultiplierCap)
-        costMultiplier: 0.25,       // +25% at I=1.0
-        costMultiplierCap: 0.75     // up to +75%
+        costMultiplier: 0.2517,       // +25% at I=1.0
+        costMultiplierCap: 0.90     // up to +75%
       },
       t2: {
         // T2: Start-of-turn MP drain (scaled, capped)
         // drain = floor(startDrainMPBase * I), clamped by startDrainMPCap
-        startDrainMPBase: 6,
+        startDrainMPBase: 6.0412,
         startDrainMPCap: 40
       }
     },
@@ -337,7 +358,7 @@ export const WeaknessV3 = {
       baseDecay: 35,
       t1: {
         // was effectively 0 (unset); set to 10 = 50% of the old 20 baseline
-        onActBuildupFlat: 10,
+        onActBuildupFlat: 8.1756,
       },
       // These previously existed ONLY as inline `?? 0.06` / `?? 0.20`
       // fallbacks at the Hemorrhaging tick in CombatScene.js, making
@@ -359,31 +380,38 @@ export const WeaknessV3 = {
       // meter-200 entry point, which was already fine. The 22% startPctCap is
       // unreachable in practice (needs meter 1270 against a decay ceiling of
       // 140), so the slope is the only lever that actually bites here.
-      intensity: { formula: 'linear', slope: 0.002, cap: 4.0 },
+      intensity: { formula: 'pow', S: 250, exp: 0.60 },
       t2: {
-        startPctHP: 0.06,   // fraction of the target's MAX HP per end-of-turn tick
-        startPctCap: 0.22,  // soft ceiling, reached around meter 1270
+        startPctHP: 0.0491,   // fraction of the target's MAX HP per end-of-turn tick
+        startPctCap: 0.20,  // soft ceiling, reached around meter 1270
       },
     },
 
 
     expose: {
+      // Explicit restatement of the GLOBAL curve (1 + (meter-200)/300, cap
+      // 2.5) rather than relying on familyIntensityMult's silent fallback.
+      // Behaviour-identical — verified by tools/weakness_snapshot.js — but it
+      // means every family now declares its own shape, so "which curve does
+      // this family use" is answerable by reading one block instead of
+      // knowing an engine default.
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
       baseDecay: 35,
       t1: {
-        physDRPen: 0.10,        // fraction of defender DR ignored (scales with intensity)
-        physDRPenCap: 0.20,     // was uncapped — at max intensity (2.5x) this scaled to
+        physDRPen: 0.0671,        // fraction of defender DR ignored (scales with intensity)
+        physDRPenCap: 0.90,     // was uncapped — at max intensity (2.5x) this scaled to
                                 // -25% PDR; capped at same convention Cold/Toxic/Disorient
                                 // already use for their own intensity-scaled effects.
-        physBuildupAmp: 0.15,   // extra physical-family buildup taken (Disorient/Lacerate)
+        physBuildupAmp: 0.1259,   // extra physical-family buildup taken (Disorient/Lacerate)
       },
       t2: {
-        critChanceBonus: 0.15,  // extra absolute crit chance (scales with intensity)
-        critChanceBonusCap: 0.25,  // was uncapped — scaled to +37.5% crit chance at max
+        critChanceBonus: 0.0839,  // extra absolute crit chance (scales with intensity)
+        critChanceBonusCap: 0.90,  // was uncapped — scaled to +37.5% crit chance at max
                                     // intensity, stacking with T1's PDR loss above on the
                                     // same heavily-Exposed target. Softened per user report
                                     // (encounter 6 Death Spiral one-shot investigation).
-        critDamageBonus: 0.25,  // extra crit damage multiplier
-        critDamageBonusCap: 0.35,  // was uncapped — scaled to +0.625 (1.5x crit -> ~2.13x)
+        critDamageBonus: 0.1175,  // extra crit damage multiplier
+        critDamageBonusCap: 0.90,  // was uncapped — scaled to +0.625 (1.5x crit -> ~2.13x)
                                     // at max intensity. Capped so the worst case is 1.5x ->
                                     // 1.85x instead.
       },
@@ -391,39 +419,69 @@ export const WeaknessV3 = {
 
     // === Necrotic ================================================================
     disease: {
+      // Explicit restatement of the GLOBAL curve (1 + (meter-200)/300, cap
+      // 2.5) rather than relying on familyIntensityMult's silent fallback.
+      // Behaviour-identical — verified by tools/weakness_snapshot.js — but it
+      // means every family now declares its own shape, so "which curve does
+      // this family use" is answerable by reading one block instead of
+      // knowing an engine default.
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
       baseDecay: 35,
       // healRecvPenalty now scales with intensity (was a flat 25% regardless
       // of overflow) — matches maxHPDown below, which was already scaled.
-      t1: { healRecvPenalty: 0.25, healRecvPenaltyCap: 0.60 }, // incoming healing reduced
-      t2: { maxHPDown: 0.10 },       // temporary max HP reduction
+      t1: { healRecvPenalty: 0.2014, healRecvPenaltyCap: 0.90 }, // incoming healing reduced
+      t2: { maxHPDown: 0.0839 },       // temporary max HP reduction
     },
 
     curse: {
+      // Explicit restatement of the GLOBAL curve (1 + (meter-200)/300, cap
+      // 2.5) rather than relying on familyIntensityMult's silent fallback.
+      // Behaviour-identical — verified by tools/weakness_snapshot.js — but it
+      // means every family now declares its own shape, so "which curve does
+      // this family use" is answerable by reading one block instead of
+      // knowing an engine default.
+      intensity: { formula: 'pow', S: 250, exp: 0.78 },
       name: 'Curse',
-      decay: { base: 35, overflow: 0.40 },   // optional; if you keep families.*.decay elsewhere, you can remove this line
+      // Was `decay: { base: 35, overflow: 0.40 }` — a DEAD object. Nothing
+      // read it; the engine takes baseDecay (or the `?? 35` fallback), so
+      // curse silently ran on 35 while this looked like a live tuning knob.
+      // Stated explicitly now, same value, no behaviour change.
+      baseDecay: 35,
       t1: {
         name: 'Hexed',
         // Was a flat 25% regardless of overflow — now scales with intensity,
         // same pattern as curseAmpMult below.
-        decayReduction: 0.25,                 // slows CURSE meter decay
-        decayReductionCap: 0.60,
+        decayReduction: 0.201,                // slows CURSE meter decay
+        // NOT the shared 0.90 probability ceiling. This one reduces DECAY, so
+        // 0.90 leaves a mere 10% of it and a deep curse never falls off at
+        // all (13/turn against a raw 140 at meter 1200). 0.70 keeps curse the
+        // stickiest family without making it permanent.
+        decayReductionCap: 0.70,
       },
       t2: {
         name: 'Afflicted',
-        decayReduction: 0.50,                 // even slower
-        decayReductionCap: 0.85,
+        // Tuned so curse clears 800 -> below T2 in ~11 turns, roughly DOUBLE
+        // the 6-turn baseline: deeply cursed should be hard to shake, but not
+        // permanent. Ramp is 37% at meter 400, 60% at 800, 70% at 1200 — the
+        // "somewhat cursed leaves you hope, deeply cursed does not" shape.
+        decayReduction: 0.20,
+        decayReductionCap: 0.70,
         // Amplifies the flat bonus damage of active CURSE RIDER status effects
         // (e.g. Curse of Needles' onHit.flatDamage) — NOT a curse-tagged
         // skill's own damage roll. See onHit.curseScaled handling in
         // CombatScene.js. A "curse" tag on a skill just means it interacts
         // with this weakness (e.g. applies a rider), same as any other family.
-        curseAmpMult: 1.25
+        curseAmpMult: 1.0488
       },
       // Curse of Cinders rider: while active (Curse T1+), the target's own
       // Fire-T1 "acting loses Fire buildup" penalty is overridden into a GAIN
       // instead — see the per-action trigger in CombatScene.js. Base amount
       // before Curse's own intensity scaling (familyIntensityMult).
-      cinders: { onActFireGainBase: 10 }
+      // 10 -> 20 per action. A cursed target burning itself down is the whole
+      // point of the rider, and at 10 it took 5+ actions to reach Fire T1 —
+      // long enough that the curse usually decayed first. Deliberately
+      // UNCAPPED: deep curse should make ignition inevitable, not gradual.
+      cinders: { onActFireGainBase: 20 }
     },
 
 
@@ -439,9 +497,20 @@ export const WeaknessV3 = {
       // "sustained grind" role intended. Slope 0.0075 puts Toxic at ~50% of
       // Fire's tick across the meaningful range (200-1000), and the 8.0 cap
       // matches Fire's own so it never becomes the binding constraint.
-      intensity: { formula: 'linear', slope: 0.0075, cap: 8.0 },
-      t1: { decayBypassChance: 0.30, decayBypassChanceCap: 0.75 },
-      t2: { startTickBase: 10 },       // matches Fire's base start-of-turn tick
+      intensity: { formula: 'pow', S: 151, exp: 0.78 },  // own S: see startTickBase
+      // decayBypassChance is computed with the GLOBAL curve at its call
+      // site (CombatScene), NOT toxic's own `intensity` above. Declared here so
+      // that is visible where the numbers are tuned.
+      effectCurve: { 't1.decayBypassChance': 'global' },
+      t1: {
+        // Tuned so toxic clears 800 -> below T2 in ~12 turns, double the
+        // 6-turn baseline — the same stickiness budget curse gets, bought a
+        // different way (skipping decay outright rather than shrinking it).
+        decayBypassChance: 0.20,
+        decayBypassChanceCap: 0.60,
+      },
+      // Same ~25% cut to the meter-200 value as Fire's, for the same reason.
+      t2: { startTickBase: 13.85 },
     },
   },
 };
@@ -475,10 +544,19 @@ export function makeWeaknessState() {
 
 /** Overflow -> effect intensity multiplier */
 export function weaknessIntensityMult(m) {
-  const S = WeaknessV3.globals.INTENSITY_S;
-  const cap = WeaknessV3.globals.INTENSITY_CAP;
+  // Now the SAME sublinear unbounded shape every family declares, so there is
+  // exactly one intensity curve in the game rather than a global one and a
+  // per-family one that could disagree. That disagreement was real: toxic's
+  // decayBypassChance ran on the old capped-2.5 global curve while the rest
+  // of toxic ran its own 8.0-cap linear one, and nothing said so.
+  //
+  // INTENSITY_S / INTENSITY_CAP are retained in globals as the tuning knobs.
+  const g = WeaknessV3.globals || {};
+  const S = g.INTENSITY_S ?? 250;
+  const exp = g.INTENSITY_EXP ?? 0.78;
   const overflow = Math.max(0, m - WEAKNESS_T2);
-  return Math.min(cap, 1 + (overflow / S));
+  const raw = 1 + Math.pow(overflow / Math.max(1, S), exp);
+  return g.INTENSITY_CAP ? Math.min(g.INTENSITY_CAP, raw) : raw;
 }
 
 /** Overflow-aware decay amount (piecewise curve keeping low tiers modest) */
@@ -488,6 +566,38 @@ export function weaknessIntensityMult(m) {
 // the one family losing meter from two sources at once. That is now expressed
 // as what it always should have been - a steeper decay curve - so every family
 // loses meter through exactly one path.
+/**
+ * Which intensity curve a specific EFFECT uses.
+ *
+ * This exists because the answer used to live only at each call site, spread
+ * across CombatScene.js and CombatLogic.js, and disagreed with what the
+ * family's own config implied. Toxic is the cautionary case: it HAS a custom
+ * `intensity` curve, but `t1.decayBypassChance` is computed with the GLOBAL
+ * one — so a tuning pass that reasonably assumed otherwise produced a change
+ * with roughly a third of its intended effect. Nothing in the config hinted
+ * at the discrepancy.
+ *
+ * Now the config states it. A family may declare:
+ *
+ *   effectCurve: { 't1.decayBypassChance': 'global' }
+ *
+ * Anything unlisted uses the family's own `intensity` if it has one, else the
+ * global curve — which is exactly the pre-existing default, so declaring
+ * nothing preserves current behaviour.
+ *
+ * @param {string} family  e.g. 'toxic'
+ * @param {string} effect  tier-qualified key, e.g. 't1.decayBypassChance'
+ * @param {number} meter   the family's current meter value
+ */
+export function intensityForEffect(family, effect, meter, v3 = WeaknessV3) {
+  const declared = v3?.families?.[family]?.effectCurve?.[effect];
+  if (declared === 'global') return weaknessIntensityMult(meter);
+  if (declared === 'family') return familyIntensityMult(family, meter);
+  // Undeclared: familyIntensityMult already falls back to the global curve
+  // for a family with no `intensity` block, so this one call covers both.
+  return familyIntensityMult(family, meter);
+}
+
 export function weaknessDecayAmount(baseDecay, m, curve = null) {
   const g = WeaknessV3.globals || {};
   const baseline = g.DECAY_BASELINE || 35;
@@ -588,6 +698,21 @@ export function familyIntensityMult(family, meters, families = WeaknessFamilies,
       const cap = cfg.cap ?? (v3?.globals?.INTENSITY_CAP ?? 2.5);
       const x = overflow / Math.max(1, S);
       return Math.min(cap, 1 + a * x + b * x * x);
+    }
+    // Sublinear, UNBOUNDED: I = 1 + (overflow / S) ^ exp
+    //
+    // The shared shape as of the 2026-09 curve pass. Unbounded so investment
+    // past T2 always buys something — the old per-family caps meant a meter
+    // of 1200 was worth exactly the same as 650 for most families. Sublinear
+    // so that an effect which DOUBLES a meter cannot double the outcome:
+    // at exp 0.78, doubling 1200 -> 2400 raises intensity only ~1.5x. That
+    // matters because buildup can be applied by six characters at once and
+    // some skills multiply it outright.
+    if (cfg.formula === 'pow') {
+      const S = cfg.S ?? 250;
+      const exp = cfg.exp ?? 0.78;
+      const raw = 1 + Math.pow(overflow / Math.max(1, S), exp);
+      return cfg.cap ? Math.min(cfg.cap, raw) : raw;
     }
     if (cfg.formula === 'linear') {
       const cap = cfg.cap ?? (v3?.globals?.INTENSITY_CAP ?? 2.5);

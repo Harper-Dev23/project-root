@@ -90,12 +90,18 @@ export const ENEMY_TYPES = {
   //   tier     live HP   x6     PhysRes   effective x6   anchor
   //   base       30      180      0%          180        trivial
   //   Reck I     55      330      0%          330        playable straight after base
-  //   Reck II    90      540     20%          675        ~base Gorrek's defences
-  //   Reck III  120      720     60%         1800        ~Gorrek Reckoning IV
+  //   Reck II    90      540     10%          600        a step up, not a wall
+  //   Reck III  120      720     30%         1029        hard, but finishable
   //
-  // Resilience cuts BUILDUP, not damage (78 => ~44% via the resilience/
-  // (resilience+100) curve), so it taxes weakness-driven kits specifically
-  // rather than raw throughput. First-pass numbers, meant to be tuned by feel.
+  // Resilience cuts BUILDUP, not damage (via the resilience/(resilience+100)
+  // curve: 40 => ~29%, 15 => ~13%), so it taxes weakness-driven kits
+  // specifically rather than raw throughput.
+  //
+  // Resists were HALVED across tiers II and III after playtesting — the
+  // originals (20/30 and 60/78/32) were lifted wholesale from Gorrek's own
+  // profiles, but a boss's defences assume one target and an open-ended
+  // fight. Spread over six dummies on a 5-round clock they compounded:
+  // tier III's effective pool was 1800, five times tier I's.
   mobile_training_dummy_reckoning_1: {
     skin: 'dummy_portrait',
     maxHP: 45,
@@ -112,9 +118,12 @@ export const ENEMY_TYPES = {
     maxHP: 80,
     maxMP: 0,
     baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
-    // Base Gorrek's own defensive profile (PhysicalResist 20 /
-    // Resilience 30), per request that this tier feel like fighting him.
-    derivedBonus: { PhysicalResist: 20, Resilience: 30, ElementalResist: 0, NecroticResist: 0 },
+    // Halved from the original PhysicalResist 20 / Resilience 30 (base
+    // Gorrek's profile). Borrowing a boss's defences worked on paper but
+    // played badly against a 5-round clock: the resist cut throughput at the
+    // same time the Resilience cut buildup, so both halves of a kit were
+    // taxed at once with no time to work around either.
+    derivedBonus: { PhysicalResist: 10, Resilience: 15, ElementalResist: 0, NecroticResist: 0 },
     skills: ['dummy_sway', 'dummy_shuffle'],
     aiProfile: 'mobile_dummy',
     isEnemy: true,
@@ -126,10 +135,12 @@ export const ENEMY_TYPES = {
     maxHP: 110,
     maxMP: 0,
     baseStats: { STR: 5, DEX: 5, CON: 5, INT: 5, WIS: 5, CHA: 5 },
-    // Gorrek Reckoning IV's profile — the 'very hard' anchor. PhysicalResist
-    // is a FLAT damage cut, so 60 means physical hits land at 40%, which is
-    // what makes this tier brutal rather than the raw HP.
-    derivedBonus: { PhysicalResist: 60, Resilience: 78, ElementalResist: 32, NecroticResist: 32 },
+    // Halved from PhysicalResist 60 / Resilience 78 / 32-32 (Gorrek
+    // Reckoning IV's profile). PhysicalResist is a FLAT damage cut, so the
+    // old 60 meant physical hits landed at 40% — against six targets on a
+    // 5-round clock that was the single biggest reason this tier read as
+    // impossible rather than hard. At 30 they land at 70%.
+    derivedBonus: { PhysicalResist: 30, Resilience: 40, ElementalResist: 16, NecroticResist: 16 },
     skills: ['dummy_sway', 'dummy_shuffle'],
     aiProfile: 'mobile_dummy',
     isEnemy: true,

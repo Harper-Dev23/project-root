@@ -426,7 +426,12 @@ export function applyLightningJolt(target) {
   if (t >= 2) {
     const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
     const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
-    const extraMax = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
+    // Jolt COUNT scales with intensity; the jolt DIE stays a flat 1-4 because
+    // skills read that die size directly. So deep Lightning buys more chances
+    // at a jolt rather than bigger jolts — which keeps the die a stable number
+    // for those skills to build on.
+    const extraBase = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
+    const extraMax = Math.max(1, Math.floor(extraBase * I));
     const p = Math.min(capP, baseP * I);
     let extra = 0;
     for (let i = 0; i < extraMax; i++) {
@@ -1381,6 +1386,22 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
     const prev = elemental;
     elemental *= mult;
     try { _pushBreakdown({ label: `Kindling Rite (+${20 * kindlingStacks}% elemental)`, mult, from: Math.round(prev), to: Math.round(elemental) }); } catch { }
+  }
+
+  // Withering Rite — the necrotic mirror of Kindling Rite above. Same zone,
+  // same stack cap, same +20%/stack, just gated on the necrotic component
+  // instead of the elemental one. Deliberately a separate block rather than a
+  // parameterised loop: the two rites can BOTH be active on one zone, and a
+  // hybrid fire/necrotic hit should get each bonus on its own damage type.
+  const witheringZone = (attacker?.statusEffects || []).find(
+    se => se?.id === 'runic_zone' && (se.turns || 0) > 0 && se.mods?.witheringRite
+  );
+  const witheringStacks = witheringZone?.mods?.witheringRiteStacks || 0;
+  if (witheringStacks > 0 && necrotic > 0) {
+    const mult = 1 + (0.20 * witheringStacks);
+    const prev = necrotic;
+    necrotic *= mult;
+    try { _pushBreakdown({ label: `Withering Rite (+${20 * witheringStacks}% necrotic)`, mult, from: Math.round(prev), to: Math.round(necrotic) }); } catch { }
   }
 
   // (No Expose/Flay entry here — see the Category B note above. Its T1/T2 effects

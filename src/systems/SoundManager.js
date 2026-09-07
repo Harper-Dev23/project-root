@@ -18,6 +18,9 @@ export const AUDIO_MANIFEST = [
   { id: 'snekHurt',  file: 'snekHurt.wav',  volume: 0.5 },
   { id: 'hiss',      file: 'hiss.wav',      volume: 0.45 },
   { id: 'screech',   file: 'screech.wav',   volume: 0.5 },
+  // Present in assets/audio since before the manifest existed but never
+  // registered, so nothing could play it. Laki's Piercing Screech uses it.
+  { id: 'creatureSound2', file: 'creatureSound2.wav', volume: 0.5 },
   // Was 0.6, tied for the loudest multiplier in the manifest alongside
   // hugeHit — found too loud specifically via Gorrek's AOE/finisher hits,
   // but this ONE number is the single shared volume for every 'explosion'

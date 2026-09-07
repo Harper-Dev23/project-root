@@ -308,24 +308,123 @@ export default class PartyManagementScene extends Phaser.Scene {
         .setDepth(1001)
     );
 
-    // Current party list (click to remove)
+    // Current party list. The NAME used to be the remove button: a plain left
+    // click spliced the character straight out of GameState.party with no
+    // confirmation, no label, and nothing on screen showing where they went —
+    // they simply vanished, which reads as "deleted" rather than "benched".
+    // They were in fact still alive in GameState.characters and reachable from
+    // the Camp Roster, but nothing here said so. Now the name only inspects
+    // (matching what clicking a portrait does) and an explicit, labelled
+    // button does the move.
     party.forEach((char, i) => {
+      const rowY = partyY + 30 + i * pad;
       const t = this.add.text(
-        LEFT_MARGIN, partyY + 30 + i * pad,
+        LEFT_MARGIN, rowY,
         `• ${char.name} (${char.baseClass})`,
         { fontSize: '18px', color: '#64ff64' }
       )
         .setDepth(1001)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => {
-          const idx = GameState.party.indexOf(char);
-          if (idx >= 0) GameState.party.splice(idx, 1);
+          if (this._clearAllPortraitHighlights) this._clearAllPortraitHighlights();
+          if (this._showCharInfo) this._showCharInfo(char);
+        });
+      this.memberTexts.push(t);
+
+      const toCamp = this.add.text(LEFT_MARGIN + 250, rowY + 2, '[ → Camp ]', {
+        fontSize: '13px', color: '#ffaa66',
+      })
+        .setDepth(1001)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => toCamp.setColor('#ffffff'))
+        .on('pointerout', () => toCamp.setColor('#ffaa66'))
+        .on('pointerdown', () => {
+          SoundManager.play('handsClick');
+          // GameState.removeFromParty rather than a raw splice, so this matches
+          // the Camp Roster overlay's own transfer button exactly.
+          GameState.removeFromParty(char);
           const sidx = this.slotAssignments.findIndex(id => id === char.instanceId);
           if (sidx >= 0) this.slotAssignments[sidx] = null;
           this.refreshListsAndPortraits();
         });
-      this.memberTexts.push(t);
+      this.memberTexts.push(toCamp);
     });
+
+    // Resting at Camp — everyone alive who is NOT in the party. This section
+    // is the actual fix for "where did they go": the character visibly moves
+    // from one list to the other instead of disappearing, and can be moved
+    // back from here without opening another screen.
+    //
+    // Placed as a SECOND COLUMN rather than below the party list. Stacked
+    // vertically it would have run into the bench portraits, which start at
+    // BENCH_Y_BASE (395) around x 257-313 — with a full party of 6 the camp
+    // list only had one row of clearance. x 340-620 / y 100-360 is clear of
+    // the bench, the slot quadrant (x >= 640) and the info panel (x >= 870).
+    const CAMP_X = 350;
+    const CAMP_BTN_W = 92;      // button sits FIRST at a fixed width, so a long
+    const CAMP_ROW_PITCH = 26;  // name can never push it into the quadrant
+    const CAMP_MAX_ROWS = 8;
+
+    const inParty = new Set(party.map(c => c.id));
+    const resting = (GameState.characters || []).filter(c => c && !inParty.has(c.id));
+
+    this.memberTexts.push(
+      this.add.text(CAMP_X, partyY, `Resting at Camp (${resting.length}):`, {
+        fontSize: '20px', color: '#fff',
+      }).setDepth(1001)
+    );
+
+    if (!resting.length) {
+      this.memberTexts.push(
+        this.add.text(CAMP_X, partyY + 30, 'everyone is in the party', {
+          fontSize: '14px', color: '#8a8a8a', fontStyle: 'italic',
+        }).setDepth(1001)
+      );
+    }
+
+    resting.slice(0, CAMP_MAX_ROWS).forEach((char, i) => {
+      const rowY = partyY + 30 + i * CAMP_ROW_PITCH;
+
+      // Party is capped at 6 (GameState.addToParty enforces it silently) —
+      // say why the button is unavailable rather than offering one that
+      // would quietly do nothing.
+      if (party.length >= 6) {
+        this.memberTexts.push(
+          this.add.text(CAMP_X, rowY, '[ Party Full ]', {
+            fontSize: '13px', color: '#6a6a6a',
+          }).setDepth(1001)
+        );
+      } else {
+        const toParty = this.add.text(CAMP_X, rowY, '[ → Party ]', {
+          fontSize: '13px', color: '#66aaff',
+        })
+          .setDepth(1001)
+          .setInteractive({ useHandCursor: true })
+          .on('pointerover', () => toParty.setColor('#ffffff'))
+          .on('pointerout', () => toParty.setColor('#66aaff'))
+          .on('pointerdown', () => {
+            SoundManager.play('handsClick');
+            GameState.addToParty(char);
+            this.refreshListsAndPortraits();
+          });
+        this.memberTexts.push(toParty);
+      }
+
+      this.memberTexts.push(
+        this.add.text(CAMP_X + CAMP_BTN_W, rowY - 1, `${char.name} (${char.baseClass})`, {
+          fontSize: '15px', color: '#9aa4b0',
+        }).setDepth(1001)
+      );
+    });
+
+    if (resting.length > CAMP_MAX_ROWS) {
+      this.memberTexts.push(
+        this.add.text(CAMP_X, partyY + 30 + CAMP_MAX_ROWS * CAMP_ROW_PITCH,
+          `+${resting.length - CAMP_MAX_ROWS} more — see the Camp Roster`, {
+            fontSize: '13px', color: '#8a8a8a', fontStyle: 'italic',
+          }).setDepth(1001)
+      );
+    }
 
     // Save button
     this.memberTexts.push(

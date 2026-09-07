@@ -66,8 +66,8 @@ Toughness is the primary lever; the kit itself only grows at the marked tiers.
 | Tier | HP | Resists (P / E / N) | Resilience | New at this tier |
 |---|---|---|---|---|
 | Reckoning I | 45 | 0 / 0 / 0 | 0 | - |
-| Reckoning II | 80 | 20 / 0 / 0 | 30 | - |
-| Reckoning III | 110 | 60 / 32 / 32 | 78 | - |
+| Reckoning II | 80 | 10 / 0 / 0 | 15 | - |
+| Reckoning III | 110 | 30 / 16 / 16 | 40 | - |
 
 ## Rewards
 

@@ -68,7 +68,7 @@ Shields are exempt — they carry no damage budget to balance against.
 | **Maximum Damage** | Crushing<br>11–12 | Tempered<br>7–8 | Weighted<br>4–5 | Heavy<br>2–3 | Solid<br>1–2 |
 | **Minimum Damage** | Razor-edged<br>11–12 | Sharpened<br>7–8 | Honed<br>4–5 | Whetted<br>2–3 | Trued<br>1–2 |
 | **Necrotic Damage** | Unholy<br>24–30 | Profane<br>16–20 | Foul<br>10–14 | Tainting<br>6–8 | Grubby<br>2–4 |
-| **Weapon Damage** | Merciless<br>43–55 | Brutal<br>28–40 | Vicious<br>16–27 | Rugged<br>7–15 | Blunt<br>2–6 |
+| **Weapon Damage** | Merciless<br>58–72 | Brutal<br>42–57 | Vicious<br>30–41 | Rugged<br>15–29 | Blunt<br>7–14 |
 
 ### Suffixes — single family
 

@@ -477,19 +477,36 @@ function buildWeaponPrefixPool(hands) {
     makeWeaponFlatPrefix({ key: 'Tempered', tier: 2, field: 'max', range: [7, 8] }, local),
     makeWeaponFlatPrefix({ key: 'Crushing', tier: 1, field: 'max', range: [11, 12] }, local),
 
-    // % weapon damage (local) — was topping out at 7-10%, vastly outcomputed by
-    // flat damage adds; new top tier reaches up to 40% so this stat has room to
-    // actually matter on the item once flat numbers scale up too. Gapless: each
-    // tier's max is exactly one less than the next tier's min.
-    // Renumbered off the old 0-3 scheme onto the same 1 = best convention every
-    // other family uses. This family is the only one that ever had a tier 0,
-    // and once item level gates on tier NUMBER a stray 0 would read as an
-    // unusually weak affix rather than the strongest one. Ranges unchanged.
-    makeWeaponPercentPrefix({ key: 'Rugged', tier: 4, range: [7, 15] }, local),
-    makeWeaponPercentPrefix({ key: 'Blunt', tier: 5, range: [2, 6] }, local),
-    makeWeaponPercentPrefix({ key: 'Vicious', tier: 3, range: [16, 27] }, local),
-    makeWeaponPercentPrefix({ key: 'Brutal', tier: 2, range: [28, 40] }, local),
-    makeWeaponPercentPrefix({ key: 'Merciless', tier: 1, range: [43, 55] }, local),
+    // % weapon damage (local). Renumbered off the old 0-3 scheme onto the same
+    // 1 = best convention every other family uses — this family is the only
+    // one that ever had a tier 0, and once item level gates on tier NUMBER a
+    // stray 0 would read as an unusually weak affix rather than the strongest.
+    //
+    // Moved up TWICE (2-6 / 7-15 / 16-27 / 28-40 / 43-55 originally, then
+    // 4-9 / 10-21 / 22-33 / 34-48 / 49-64) — the whole ladder read weak for
+    // the prefix slot it occupies, worst at the bottom where a T5 roll of 2%
+    // was indistinguishable from no affix at all. Both passes used the same
+    // shape: the lift is largest at the low tiers (T5 midpoint +62%, T1 +15%
+    // each time) so a weak roll is worth something without inflating the top.
+    // Cumulative vs the original: T5 midpoint 4 -> 10.5, T1 49 -> 65.
+    //
+    // Gapless: each tier's max is exactly one less than the next tier's min.
+    // That was CLAIMED before but not true — T2 ended at 40 and T1 started at
+    // 43, leaving 41-42 unrollable. Genuinely gapless now.
+    //
+    // NOTE: these are the canonical 2H numbers. One-handers roll LOCAL_1H_SCALE
+    // (2/3) of them, since a dual-wielder gets two rolls to a 2H's one.
+    //
+    // Every tier max here is chosen so it is NOT ≡ 1 (mod 3). scaleRange
+    // rounds (Math.round(n * 2/3)), and for n ≡ 1 (mod 3) the boundary pair
+    // n / n+1 rounds to the SAME 1H value — which would let a T5 roll tie a
+    // T4 one on a one-hander. 4-10/11-21 and 22-34/35-48 both did exactly
+    // that before this was caught; 9, 21, 33 and 48 all scale cleanly.
+    makeWeaponPercentPrefix({ key: 'Blunt', tier: 5, range: [7, 14] }, local),
+    makeWeaponPercentPrefix({ key: 'Rugged', tier: 4, range: [15, 29] }, local),
+    makeWeaponPercentPrefix({ key: 'Vicious', tier: 3, range: [30, 41] }, local),
+    makeWeaponPercentPrefix({ key: 'Brutal', tier: 2, range: [42, 57] }, local),
+    makeWeaponPercentPrefix({ key: 'Merciless', tier: 1, range: [58, 72] }, local),
 
     // Flat elemental damage
     makeWeaponElementFlatPrefix({ key: 'Smoldering', tier: 3, element: 'fire', range: [3, 4] }, local),

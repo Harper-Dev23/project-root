@@ -45,6 +45,15 @@
 //     critical. ctx.user/ctx.target/ctx.ability as above. Splash/DOT/repeat
 //     hits don't go through this specific path — primary hits only.
 //
+//   onRoundStart(ctx) -> string | string[] | null
+//     Called once at the top of each new round (when the turn order wraps
+//     back to the first actor), INCLUDING round 1. On a scenario that
+//     declares a turnLimit it is deliberately NOT called for the round the
+//     clock runs out on — that combat ends on _onTurnLimitReached's own
+//     message instead. ctx.turnLimit is the scenario's limit (0 if untimed)
+//     and ctx.roundsRemaining counts the current round as remaining, so it
+//     reads 1 on the final round and is null when untimed.
+//
 //   onAbilityUsed(ctx) -> string | string[] | null
 //     Called whenever ANY unit (either side) successfully uses ANY ability —
 //     broader than onInitiativeAbilityUsed (not limited to
@@ -58,11 +67,13 @@
 //   scene/scenarioId — as above.
 //   round            — 1-indexed, bumped whenever turn order wraps back to
 //                       the first actor (i.e. once per full "everyone acted"
-//                       cycle). Off by one internally on the very first call
-//                       (same quirk the engine's own existing per-round zone
-//                       tick already tolerates) — fine for relative "did I
-//                       already do X this round" checks, don't surface the
-//                       raw number to the player.
+//                       cycle). Measured relative to the combat's own start,
+//                       so it matches the "Round N" counter the player sees
+//                       and IS safe to surface directly. (The engine's raw
+//                       combatRound is 2 during the first turn because the
+//                       bootstrap _advanceTurn wraps the index to 0 — that
+//                       offset is corrected in _buildLocalChatCtx.)
+//   turnLimit / roundsRemaining — only set for onRoundStart.
 //   state            — a plain object, fresh each combat, yours to stash
 //                       whatever this script needs to remember between
 //                       calls (last-triggered round, a line index, etc.).
@@ -70,6 +81,70 @@
 //   user/target/ability — only set for onInitiativeAbilityUsed/onCrit/onAbilityUsed.
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+/**
+ * Builds the three training_encounter_2_reckoning_* entries.
+ *
+ * `heat` is how invested the crowd is (1 = idle betting, 3 = a proper mob).
+ * Every tier gets the same countdown structure; only the wording escalates.
+ */
+function reckoningChat() {
+  const OPENING = {
+    1: ['Odds go up around the pit. Someone starts a count.'],
+    2: ['The pit is fuller than last time. Coin changes hands before you have swung once.'],
+    3: ['The whole pit has turned out for this one. A bookmaker climbs onto a barrel to see over the crowd.'],
+  };
+  // Indexed by roundsRemaining (5 down to 1), per tier.
+  const COUNTDOWN = {
+    1: {
+      5: ['"Five rounds!" someone calls. "Five, and not one more!"'],
+      4: ['A hunter near the rail counts down four on his fingers.'],
+      3: ['"Halfway," someone says, unimpressed.'],
+      2: ['The counting picks up. Two rounds left.'],
+      1: ['"Last round!" The crowd leans in.'],
+    },
+    2: {
+      5: ['"Five rounds on the reinforced stock!" The betting turns loud.'],
+      4: ['Four. The bookmaker shortens the odds against you.'],
+      3: ['Three rounds. Someone asks, loudly, whether you have brought enough.'],
+      2: ['Two rounds. Half the pit is counting out loud now.'],
+      1: ['"LAST ROUND!" The counting becomes a chant.'],
+    },
+    3: {
+      5: ['"Five rounds against the heaviest stock in the pit!" The crowd howls.'],
+      4: ['Four rounds. The chant has already started, and it is not for you.'],
+      3: ['Three. The bookmaker stops taking bets on you finishing.'],
+      2: ['Two rounds left. The noise is genuinely difficult to think through.'],
+      1: ['"LAST ROUND!" The whole pit is on its feet, counting every swing.'],
+    },
+  };
+  const DEFEATED = {
+    1: ['A cheer, and the sound of coin moving.', 'Someone marks a tally on the rail.'],
+    2: ['The crowd roars. Odds shift mid-count.', 'A bookmaker swears and re-chalks his board.'],
+    3: ['The pit erupts.', 'Someone tears up a betting slip.', 'The chant stumbles, then comes back louder.'],
+  };
+  const CONFUSED = {
+    1: '??', 2: '?!', 3: '???',
+  };
+
+  const entries = {};
+  for (const heat of [1, 2, 3]) {
+    entries[`training_encounter_2_reckoning_${heat}`] = {
+      onCombatStart: () => OPENING[heat],
+      onRoundStart: (ctx) => COUNTDOWN[heat][ctx.roundsRemaining] || null,
+      onEnemyDefeated: () => pick(DEFEATED[heat]),
+      // Same throttle the base encounter uses — the constructs still have no
+      // idea what you are saying, they are just under more pressure about it.
+      onPlayerInput: (_text, ctx) => {
+        if (ctx.state.confusedRound === ctx.round) return null;
+        ctx.state.confusedRound = ctx.round;
+        const dummy = pick(['Lenny', 'Gary', 'Stan', 'Doug', 'Mo', 'Chad']);
+        return `Dummy ${dummy}: ${CONFUSED[heat]}`;
+      },
+    };
+  }
+  return entries;
+}
 
 export const LOCAL_CHAT_SCRIPTS = {
   training_encounter_1: {
@@ -116,6 +191,21 @@ export const LOCAL_CHAT_SCRIPTS = {
       ]);
     },
   },
+
+  // Encounter 2's Reckoning tiers — the timed DPS races. Unlike the base
+  // fight (where the crowd is barely paying attention), here they have money
+  // on the clock, so the countdown itself is the flavour: onRoundStart calls
+  // the remaining rounds like a bookmaker calling odds.
+  //
+  // All three tiers share one factory rather than triplicating the hooks —
+  // only the crowd's INTENSITY changes per tier, so that is the only
+  // parameter. If a tier ever needs genuinely different content, give it its
+  // own object; this is a convenience, not a constraint.
+  //
+  // Keyed on roundsRemaining (which counts the current round, so it reads 1
+  // on the final round) rather than on the round number, so these lines stay
+  // correct if a tier's turnLimit is ever retuned away from 5.
+  ...reckoningChat(),
 
   // Same crowd, now actually invested — plus the Elseth Animancer herself is
   // watching (revealed to the player in her pre-encounter briefing: "I
