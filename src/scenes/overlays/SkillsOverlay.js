@@ -6,6 +6,8 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { buildSkillTooltipLines } from '../../ui/skillTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createScrollbar } from '../../ui/Scrollbar.js';
+import GameState from '../../systems/GameState.js';
+import { getProficiencyMap } from '../../systems/CombatLogic.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -16,6 +18,8 @@ export default class SkillsOverlay extends Phaser.Scene {
 
     this.items = []; // metrics only
     this.filter = { weapon: 'Any', stats: new Set(), search: '' };
+    // -1 = nobody selected; the browser then behaves exactly as before.
+    this.selectedCharIndex = -1;
     this._searchFocused = false;
     this.weaponOptions = ['Any'];
     this.statOptions = [];
@@ -52,7 +56,15 @@ export default class SkillsOverlay extends Phaser.Scene {
     this._panelRect = new Phaser.Geom.Rectangle(panelX, panelY, panelW, panelH);
 
 
-    const viewport = new Phaser.Geom.Rectangle(panelX + 16, panelY + 84, panelW - 32, panelH - 120);
+    // Viewport top is +110, not +84.
+    //
+    // The header occupies two rows starting at panelY+48 (it cannot start any
+    // higher -- the frame's own title runs from +18 to roughly +48). Its second
+    // row holds the stat chips and the Hunter selector: chips are 24px tall
+    // centred at chipsY+14, so that row ends at panelY+100. With the list
+    // starting at +84 the chips and the selector were drawn straddling the
+    // viewport's top edge, i.e. half inside the scrolling window.
+    const viewport = new Phaser.Geom.Rectangle(panelX + 16, panelY + 110, panelW - 32, panelH - 146);
     this.graphViewport = viewport;
 
     const maskShape = this.add.rectangle(
@@ -186,6 +198,45 @@ export default class SkillsOverlay extends Phaser.Scene {
       chipsX += padW + 8;
     });
 
+    // ── Hunter selector (beneath the weapon cycler, centre) ──
+    // Sits on the chips row rather than a new one: the header is only 36px
+    // tall before the list viewport starts, and the right half of that row is
+    // empty because the chips run from the left edge.
+    //
+    // Picking a Hunter dims every skill their Proficiency cannot reach, and
+    // prints their per-stat Proficiency beside the name. That per-stat part is
+    // the whole point -- Proficiency is not one number, so "can I use this"
+    // can only be answered against the specific stat a skill asks for.
+    // Arrows and label use the SAME x offsets as the weapon cycler directly
+    // above (cx-120 / cx-100 / cx+120) so the two controls read as one column.
+    // The Proficiency readout then starts past the right arrow at cx+140; the
+    // search box is on row 1, so this half of row 2 is free.
+    const charY = y + 26;
+    this._charLeft = this.add.text(cx - 120, charY + 4, '◀', { fontSize: '16px', color: '#ffffff' })
+      .setInteractive({ useHandCursor: true });
+    this._charLabel = this.add.text(cx - 100, charY + 6, '', { fontSize: '14px', color: '#ffffff' });
+    this._charRight = this.add.text(cx + 120, charY + 4, '▶', { fontSize: '16px', color: '#ffffff' })
+      .setInteractive({ useHandCursor: true });
+    // Per-stat Proficiency for the selected Hunter, tinted with the game's own
+    // stat colours so a glance tells you which requirement you actually meet.
+    this._charProf = this.add.text(cx + 140, charY + 7, '', { fontSize: '12px', color: '#9a9186' });
+
+    const cycleChar = (dir) => {
+      const n = (GameState.party || []).length;
+      // -1 (None) is a real position in the cycle, so a player can always get
+      // back to the plain browser without hunting for a "clear" control.
+      const span = n + 1;
+      let i = this.selectedCharIndex + 1 + dir;   // shift so None is index 0
+      i = ((i % span) + span) % span;
+      this.selectedCharIndex = i - 1;
+      this._renderCharSelector();
+      this._buildCards();
+    };
+    this._charLeft.on('pointerdown', () => cycleChar(-1));
+    this._charRight.on('pointerdown', () => cycleChar(1));
+    this.header.add([this._charLeft, this._charLabel, this._charRight, this._charProf]);
+    this._renderCharSelector();
+
     // ── Search box ──
     // Phaser has no native text input, so this is a drawn box plus a raw
     // keydown handler. Click to focus (caret shows); Enter or a click outside
@@ -193,7 +244,9 @@ export default class SkillsOverlay extends Phaser.Scene {
     // for closing the overlay, and stealing it would break that everywhere.
     const searchW = Math.min(320, Math.max(180, w - 32 - (chipsX - x) - 90));
     const searchX = x + w - 16 - searchW;
-    const searchY = y - 4;
+    // y-4 put the box's top edge at panelY+45, just under the frame title's
+    // descender. Aligned to the row instead.
+    const searchY = y;
     this._searchBox = this.add.rectangle(searchX + searchW / 2, searchY + 14, searchW, 26, 0x1e1e1e, 1)
       .setStrokeStyle(1, 0x555555)
       .setInteractive({ useHandCursor: true });
@@ -399,6 +452,13 @@ export default class SkillsOverlay extends Phaser.Scene {
     // question a player actually has: what do I get if I put my next points
     // here? Cards are now GROUPED under the Proficiency that unlocks them and
     // flowed into as many columns as the panel is wide.
+    // Measured against the selected Hunter, if there is one. Locked skills are
+    // DIMMED rather than hidden: the point of the grouped ladder is to show
+    // what you are working toward, and filtering them out would delete exactly
+    // that information.
+    const selChar = this._selectedChar();
+    const selProf = selChar ? getProficiencyMap(selChar) : null;
+
     const STAT_TINT = {
       STR: 0xff7755, DEX: 0x88dd88, CON: 0xcc9955,
       INT: 0x5599ff, WIS: 0xbb88ff, CHA: 0xffcc44,
@@ -446,26 +506,36 @@ export default class SkillsOverlay extends Phaser.Scene {
         const cx = left + GUTTER_W + (i % cols) * (cardW + GAP);
         const cy = y + Math.floor(i / cols) * (CARD_H + GAP);
         const tint = STAT_TINT[sk.reqStat] || 0x888888;
+        const have = selProf ? (selProf[sk.reqStat] ?? 0) : null;
+        const locked = have != null && have < sk.reqVal;
 
-        const bg = this.add.rectangle(cx + cardW / 2, cy + CARD_H / 2, cardW, CARD_H, 0x262626, 1)
-          .setStrokeStyle(1, 0x555555)
+        const bg = this.add.rectangle(cx + cardW / 2, cy + CARD_H / 2, cardW, CARD_H,
+          locked ? 0x1b1b1b : 0x262626, 1)
+          .setStrokeStyle(1, locked ? 0x3a3a3a : 0x555555)
           .setInteractive({ useHandCursor: true });
         // Stat is carried by a colored edge rather than a word, so the card can
         // spend its width on the skill's name.
-        const edge = this.add.rectangle(cx + 1.5, cy + CARD_H / 2, 3, CARD_H, tint, 1);
+        const edge = this.add.rectangle(cx + 1.5, cy + CARD_H / 2, 3, CARD_H, tint, 1)
+          .setAlpha(locked ? 0.35 : 1);
 
-        const name = this.add.text(cx + 10, cy + 6, sk.name, { fontSize: '14px', color: '#ffffff' });
-        const meta = this.add.text(cx + 10, cy + 25,
-          `${sk.reqStat}  ·  ${sk.weaponList.length ? sk.weaponList.join(', ') : 'Any'}`,
-          { fontSize: '10px', color: '#9a9186' });
+        const name = this.add.text(cx + 10, cy + 6, sk.name,
+          { fontSize: '14px', color: locked ? '#7c7468' : '#ffffff' });
+        // With a Hunter selected the meta line shows their standing in the
+        // gate's own stat ("DEX 5 / 9"), which is the only form of the
+        // question that means anything -- Proficiency differs per stat.
+        const metaText = have != null
+          ? `${sk.reqStat} ${have} / ${sk.reqVal}  ·  ${sk.weaponList.length ? sk.weaponList.join(', ') : 'Any'}`
+          : `${sk.reqStat}  ·  ${sk.weaponList.length ? sk.weaponList.join(', ') : 'Any'}`;
+        const meta = this.add.text(cx + 10, cy + 25, metaText,
+          { fontSize: '10px', color: locked ? '#6d6459' : (have != null ? '#8fbf7a' : '#9a9186') });
 
         const showTip = () => {
           const { x, y: py } = this.input.activePointer;
           const { lines, tags, titleColor, aoeGrid } = buildSkillTooltipLines(sk.raw, null);
           this._showTooltipAt(x, py, { title: sk.name, titleColor, lines, tags, aoeGrid });
-          bg.setFillStyle(0x303030, 1);
+          bg.setFillStyle(locked ? 0x242424 : 0x303030, 1);
         };
-        const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };
+        const hideTip = () => { this._hideTooltip(); bg.setFillStyle(locked ? 0x1b1b1b : 0x262626, 1); };
 
         // Only the BACKGROUND is interactive — the text and edge sit on top but
         // stay non-interactive, so Phaser's hit test falls through to bg. Making
@@ -475,7 +545,7 @@ export default class SkillsOverlay extends Phaser.Scene {
         bg.on('pointerout', hideTip);
         bg.on('pointerdown', () => {
           bg.setStrokeStyle(2, 0xffffff);
-          this.time.delayedCall(120, () => bg.setStrokeStyle(1, 0x555555));
+          this.time.delayedCall(120, () => bg.setStrokeStyle(1, locked ? 0x3a3a3a : 0x555555));
         });
 
         this.content.add([bg, edge, name, meta]);
@@ -533,6 +603,25 @@ export default class SkillsOverlay extends Phaser.Scene {
       setScroll: (v) => this._setScroll(v),
       viewRatio: () => (total > 0 ? vp.height / total : 1),
     });
+  }
+
+  /** The Hunter the list is being measured against, or null for none. */
+  _selectedChar() {
+    const party = GameState.party || [];
+    return this.selectedCharIndex >= 0 ? (party[this.selectedCharIndex] || null) : null;
+  }
+
+  _renderCharSelector() {
+    const char = this._selectedChar();
+    if (!char) {
+      this._charLabel.setText('Hunter: None');
+      this._charProf.setText('');
+      return;
+    }
+    this._charLabel.setText(`Hunter: ${char.name}`);
+    const m = getProficiencyMap(char);
+    this._charProf.setText(
+      ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(k => `${k} ${m[k] ?? 0}`).join('   '));
   }
 
   // ---------- Tooltip helpers ----------

@@ -301,11 +301,36 @@ export default class PartyManagementScene extends Phaser.Scene {
     const startY = 100;
     const pad = 30;
 
-    // Current Party header
+    // ---- Column geometry -------------------------------------------------
+    // These two columns used to collide. LEFT_MARGIN is 0 (the panel spans the
+    // whole 1280px screen), so the party column started flush against the
+    // screen edge, and its header -- "Current Party (drag portraits into
+    // positions):" at 20px -- ran roughly 430px wide. The camp column began at
+    // x=350, so the camp heading was printed straight through the tail of the
+    // party heading, and the two lists' rows overlapped for 80px besides.
+    //
+    // Fixed by giving the party column a real margin, splitting the long
+    // heading into a heading plus a smaller hint line beneath it, and moving
+    // the camp column clear of the party column's widest element (its
+    // "[ → Camp ]" button). The slot quadrant starts at x=640 and the info
+    // panel at x=870, so the camp column has to fit between 420 and 640.
+    const PARTY_X = 40;
+    // 240, not 210: a row reads "• Cassandra (Shepherd)" at 18px, which is
+    // ~200px wide, so a 210 offset put the button on top of the longest names.
+    const PARTY_BTN_X = PARTY_X + 240;   // "[ → Camp ]" ends ~360, clear of CAMP_X
+    const LIST_TOP = startY + 48;        // both lists start below the two-line header
+
     const partyY = startY;
     this.memberTexts.push(
-      this.add.text(LEFT_MARGIN, partyY, 'Current Party (drag portraits into positions):', { fontSize: '20px', color: '#fff' })
+      this.add.text(PARTY_X, partyY, 'Current Party', { fontSize: '20px', color: '#fff' })
         .setDepth(1001)
+    );
+    // The drag instruction is a hint, not a heading -- as part of the heading it
+    // was what made that line overrun the column.
+    this.memberTexts.push(
+      this.add.text(PARTY_X, partyY + 26, 'Drag portraits into the position slots.', {
+        fontSize: '13px', color: '#9a9a9a', fontStyle: 'italic',
+      }).setDepth(1001)
     );
 
     // Current party list. The NAME used to be the remove button: a plain left
@@ -317,9 +342,9 @@ export default class PartyManagementScene extends Phaser.Scene {
     // (matching what clicking a portrait does) and an explicit, labelled
     // button does the move.
     party.forEach((char, i) => {
-      const rowY = partyY + 30 + i * pad;
+      const rowY = LIST_TOP + i * pad;
       const t = this.add.text(
-        LEFT_MARGIN, rowY,
+        PARTY_X, rowY,
         `• ${char.name} (${char.baseClass})`,
         { fontSize: '18px', color: '#64ff64' }
       )
@@ -331,7 +356,7 @@ export default class PartyManagementScene extends Phaser.Scene {
         });
       this.memberTexts.push(t);
 
-      const toCamp = this.add.text(LEFT_MARGIN + 250, rowY + 2, '[ → Camp ]', {
+      const toCamp = this.add.text(PARTY_BTN_X, rowY + 2, '[ → Camp ]', {
         fontSize: '13px', color: '#ffaa66',
       })
         .setDepth(1001)
@@ -360,7 +385,7 @@ export default class PartyManagementScene extends Phaser.Scene {
     // BENCH_Y_BASE (395) around x 257-313 — with a full party of 6 the camp
     // list only had one row of clearance. x 340-620 / y 100-360 is clear of
     // the bench, the slot quadrant (x >= 640) and the info panel (x >= 870).
-    const CAMP_X = 350;
+    const CAMP_X = 420;   // clear of PARTY_BTN_X + its label width
     const CAMP_BTN_W = 92;      // button sits FIRST at a fixed width, so a long
     const CAMP_ROW_PITCH = 26;  // name can never push it into the quadrant
     const CAMP_MAX_ROWS = 8;
@@ -369,21 +394,21 @@ export default class PartyManagementScene extends Phaser.Scene {
     const resting = (GameState.characters || []).filter(c => c && !inParty.has(c.id));
 
     this.memberTexts.push(
-      this.add.text(CAMP_X, partyY, `Resting at Camp (${resting.length}):`, {
+      this.add.text(CAMP_X, partyY, `Resting at Camp (${resting.length})`, {
         fontSize: '20px', color: '#fff',
       }).setDepth(1001)
     );
 
     if (!resting.length) {
       this.memberTexts.push(
-        this.add.text(CAMP_X, partyY + 30, 'everyone is in the party', {
+        this.add.text(CAMP_X, LIST_TOP, 'everyone is in the party', {
           fontSize: '14px', color: '#8a8a8a', fontStyle: 'italic',
         }).setDepth(1001)
       );
     }
 
     resting.slice(0, CAMP_MAX_ROWS).forEach((char, i) => {
-      const rowY = partyY + 30 + i * CAMP_ROW_PITCH;
+      const rowY = LIST_TOP + i * CAMP_ROW_PITCH;
 
       // Party is capped at 6 (GameState.addToParty enforces it silently) —
       // say why the button is unavailable rather than offering one that
@@ -419,7 +444,7 @@ export default class PartyManagementScene extends Phaser.Scene {
 
     if (resting.length > CAMP_MAX_ROWS) {
       this.memberTexts.push(
-        this.add.text(CAMP_X, partyY + 30 + CAMP_MAX_ROWS * CAMP_ROW_PITCH,
+        this.add.text(CAMP_X, LIST_TOP + CAMP_MAX_ROWS * CAMP_ROW_PITCH,
           `+${resting.length - CAMP_MAX_ROWS} more — see the Camp Roster`, {
             fontSize: '13px', color: '#8a8a8a', fontStyle: 'italic',
           }).setDepth(1001)
@@ -428,7 +453,7 @@ export default class PartyManagementScene extends Phaser.Scene {
 
     // Save button
     this.memberTexts.push(
-      this.add.text(LEFT_MARGIN, this.scale.height - 50, '[ Save Party Order ]', { fontSize: '20px', color: '#88ff88' })
+      this.add.text(PARTY_X, this.scale.height - 50, '[ Save Party Order ]', { fontSize: '20px', color: '#88ff88' })
         .setDepth(1001)
         .setInteractive({ useHandCursor: true })
         .on('pointerdown', () => this._commitPartyOrder())
