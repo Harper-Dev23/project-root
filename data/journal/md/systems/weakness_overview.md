@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 10
-version: 3
-updatedAt: 2026-08-23
+version: 4
+updatedAt: 2026-09-07
 ---
 # Weakness System Overview
 
@@ -47,6 +47,18 @@ For the exact thresholds, the intensity curve, the Resilience formula and every 
 ## Consuming buildup
 
 Many of the strongest abilities do not merely *apply* buildup -- they **consume** it, spending an accumulated meter for a large one-off payoff, then leaving the target's meter reduced or emptied. A few require a specific tier before they can be used at all, and fizzle for free if that tier is not met.
+
+### The hit lands first, then the meter is spent
+
+This is the rule that makes consumers worth building toward, and it holds everywhere:
+
+> **A consuming ability deals its damage while the weakness is still on the target. Only afterwards is the meter spent.**
+
+So a strike that eats 400 Expose is still striking a fully Exposed enemy, and benefits in full from the reduced physical defence that Expose was providing. The meter empties after the blow has already been resolved. Setting a family as deep as you can before cashing it in is never wasted effort -- the deeper the meter, the harder the consuming hit lands *and* the larger the payoff it buys.
+
+The same applies to abilities that **shatter defences as part of their own blow**. Armour reduction from the strike itself is in place before that strike's damage is worked out, so the hit that breaks the armour is also the first hit to exploit it.
+
+What a consumer spends is only ever the buildup itself. Whatever the meter was doing for you at the moment of impact, you keep.
 
 ## What actually reduces buildup
 

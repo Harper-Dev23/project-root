@@ -73,6 +73,37 @@ Candidates are sorted by `reaction.priority` (default 0) and the first eligible
 one fires. Other prepared reactions stay armed but cannot fire until the
 budget refreshes.
 
+**Eligibility falls through.** If the highest-priority candidate's
+`canTrigger` returns false, the next one is tried, and so on. This is not
+cosmetic: the old code tested only `candidates[0]` and returned outright if it
+declined, which made preparing a second reaction *strictly worse* than
+preparing one — a conditional reaction whose condition was unmet silently
+blocked a general one that would have fired. Skipping a declined candidate
+costs nothing, because the trigger budget is only spent once something
+actually fires.
+
+### Convention: the more CONDITIONAL reaction takes the higher priority
+
+It gets first refusal; the general one catches whatever it declines. Two
+reactions sharing a trigger should therefore be authored as a pair, not left
+on the default 0 where prepare order silently decides.
+
+The sword kit is the reference case. Both answer `self_hit`:
+
+| skill | priority | condition | effect |
+|---|---|---|---|
+| Practiced Eye | 5 | attacker carries any weakness | -35% damage, +3 MP |
+| Riposte | 0 | any melee hit | 70% counter, +1 Rhythm |
+
+Arming both reads as one plan: *if they're weakened, read the flaw; otherwise,
+hit back.* Note the balance constraint this implies — a reaction that is both
+the better defensive AND the better offensive option makes the priority order
+meaningless. Riposte deliberately carries no mitigation for that reason.
+
+**Reaction capacity is 2 and `triggersPerRound` is 1**, so at most two are
+armed and at most one resolves per round. There is no stacking case to guard
+against, and no need for tag-based mutual exclusion.
+
 ## Rule 5 — A reaction may be ANSWERED by another, in the same window
 
 Handled by `ReactionSystem._checkReactionResponders()`, which runs inside

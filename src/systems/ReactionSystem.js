@@ -290,24 +290,48 @@ export default class ReactionSystem {
 
     if (!candidates.length) return;
 
-    const chosen = candidates[0].s;
-
-    if (typeof chosen?.reaction?.canTrigger === 'function') {
-      const ok = chosen.reaction.canTrigger({
-        owner, attacker, target, scene: this.scene,
-        incoming: incomingMutable, event: evt,
-        // sourceAbility/sourceIntent weren't passed here before (only exec()
-        // got them) — added so a canTrigger can gate on the hit's own tags
-        // (e.g. Read and React needing to confirm the hit was melee).
-        sourceAbility: ability, sourceIntent: intent,
-      });
-      if (!ok) return;
+    // Walk the sorted list until one actually QUALIFIES.
+    //
+    // This used to test only candidates[0] and `return` outright if its
+    // canTrigger failed, which made preparing a second reaction strictly
+    // WORSE than preparing one: a higher-priority reaction whose condition
+    // was unmet silently blocked a lower-priority one that would have fired.
+    // Concretely — prepare Practiced Eye (needs the attacker to carry a
+    // weakness) alongside a plain counterattack, get hit by an unweakened
+    // enemy, and NOTHING fired, even though the counter was eligible.
+    //
+    // Skipping a candidate here costs nothing: the trigger budget is only
+    // spent below, once something has actually fired.
+    let chosen = null;
+    for (const cand of candidates) {
+      const s = cand.s;
+      if (typeof s?.reaction?.canTrigger === 'function') {
+        const ok = s.reaction.canTrigger({
+          owner, attacker, target, scene: this.scene,
+          incoming: incomingMutable, event: evt,
+          // sourceAbility/sourceIntent weren't passed here before (only exec()
+          // got them) — added so a canTrigger can gate on the hit's own tags
+          // (e.g. Practiced Eye needing to confirm the hit was melee).
+          sourceAbility: ability, sourceIntent: intent,
+        });
+        if (!ok) continue;
+      }
+      chosen = s;
+      break;
     }
+    if (!chosen) return;
 
     // Execute
     this._fireReaction({
       owner,
       attacker,
+      // `target` was omitted here while BOTH other _fireReaction call sites
+      // pass it, so exec() received target:undefined for every self_hit /
+      // ally_hit / post_damage reaction even though its documented signature
+      // includes it. canTrigger got the real value the whole time, which is
+      // why the gap went unnoticed. Matters most for ally_hit, where `owner`
+      // is the RESPONDER and `target` is the teammate who actually got hit.
+      target,
       reactSkill: chosen,
       evt,
       incomingMutable,

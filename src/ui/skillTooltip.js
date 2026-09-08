@@ -431,14 +431,18 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
     lines.push(`Consumes: ${sk.consumeWeakness.join(', ')} weakness`);
   }
 
-  // Weakness consumption for a scaling damage bonus (e.g. Power Stab) —
-  // distinct from the flat consumeWeakness list above since this one has a
-  // real rate/cap to show, not just "drains this family."
-  if (sk.consumeWeaknessBonus) {
-    const cfg = sk.consumeWeaknessBonus;
-    const maxBonusPct = Math.floor(cfg.maxConsume / 100) * cfg.pctPer100;
-    lines.push(`Consumes up to ${cfg.maxConsume} ${capitalize(cfg.family)}: +${cfg.pctPer100}% damage per 100 consumed (up to +${maxBonusPct}%).`);
-  }
+  // NOTE: `consumeWeaknessBonus` deliberately renders NOTHING here.
+  //
+  // It used to print its own rate/cap line, which landed between the
+  // "Damage:" figure and "Requirements:" — a slot that on every other skill
+  // in the game holds plain stats, never a calculation. Power Stab is the
+  // only skill that declares the field, so it was the only tooltip with a
+  // formula sitting in that block, and it merely restated the skill's own
+  // description a few lines above.
+  //
+  // The field is still LIVE — power_stab's apply() reads pctPer100 and
+  // maxConsume from it for the real numbers. It is data for the skill, not
+  // for the tooltip, so do not "clean it up" as an unused declaration.
 
   // Transform weakness
   if (sk.transformWeakness) {

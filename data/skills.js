@@ -12,6 +12,7 @@ import {
 import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, WeaknessV3 } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
+import { GameplaySettings } from '../src/systems/GameplaySettings.js';
 
 
 // Transpose Fire/Lightning/Cold (Performer class skills) share one
@@ -11279,8 +11280,12 @@ Object.assign(RAW_SKILLS, {
     // full rationale on why this can't be safely self-computed in apply()).
     // Fires on crossing EITHER threshold (Raw or Flayed), same bonus either way.
     rewardIfTierCross: [
-      { family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 1, statusId: "reward_probing_cut_crit" } },
-      { family: "expose", tier: 2, buff: { critChanceBonusPct: 15, turns: 1, statusId: "reward_probing_cut_crit" } },
+      // turns 1 -> 2. Same bug as Guarded Slash's guard and Fel Chant: a
+      // self-buff granted by your OWN attack is ticked away at the end of
+      // that same turn by _tickDownStatusDurations, so the crit bonus could
+      // never reach the next attack it was meant to reward.
+      { family: "expose", tier: 1, buff: { critChanceBonusPct: 15, turns: 2, statusId: "reward_probing_cut_crit" } },
+      { family: "expose", tier: 2, buff: { critChanceBonusPct: 15, turns: 2, statusId: "reward_probing_cut_crit" } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.probing_cut;
@@ -11303,7 +11308,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage."
+    description: "Bonus: deals 100% weapon damage and applies Expose. Reaching Raw or Flayed grants +15% Crit Chance for 2 turns."
   },
 
   // Same formula/shape as Marked Cut (sword_1h): weapon damage + a primary
@@ -13130,7 +13135,15 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
     requiredValue: 10,
-    actionCost: "major",
+    // Major -> Bonus at 65% (matching Guarded Slash and Broken Cadence, the
+    // established sword bonus-action rate). Chosen over Storm Cut for the
+    // same treatment because Expose is sword's one healthy generator/consumer
+    // loop - Power Stab consumes it and Rally Blow gates on it - whereas
+    // Storm Cut's Lightning has NO reader anywhere in the sword kit, so
+    // cheapening it would only make a dead end cheaper. This is also sword's
+    // lowest gate (DEX 10), and the entry-level skill should not cost a
+    // player their whole turn.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -13156,7 +13169,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const amount = Math.max(1, physical + elemental + necrotic);
@@ -13169,7 +13182,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage. Applies Expose. Crossing a tier also opens a bleeding wound (bonus Lacerate)."
+    description: "Bonus: deals 65% weapon damage. Applies Expose. Crossing a tier also opens a bleeding wound (bonus Lacerate)."
   },
 
   'guarded_slash': {
@@ -13182,7 +13195,10 @@ Object.assign(RAW_SKILLS, {
     requiredWeapon: ["sword_1h"],
     requiredStat: "STR",
     requiredValue: 11,
-    actionCost: "major",
+    // Major -> Bonus with a base-damage cut (100% -> 65%), per the sword kit
+    // pass. Sword was running 13 majors to 5 bonuses; this is a defensive
+    // generator, not a turn's main event.
+    actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
     targetRequirement: "enemy",
@@ -13199,8 +13215,14 @@ Object.assign(RAW_SKILLS, {
     // guardPct is _applyRewardBuff's existing PhysicalResist mapping — no
     // engine changes needed, just declaring the reward.
     rewardIfTierCross: [
-      { family: "cold", tier: 1, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
-      { family: "cold", tier: 2, buff: { guardPct: 15, turns: 1, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
+      // turns was 1, which meant this guard NEVER defended anything.
+      // _applyRewardBuff passes `turns` straight to _addStatusEffects with no
+      // compensation, and _tickDownStatusDurations fires at the end of the
+      // OWNER'S OWN turn - so a 1-turn self-buff granted by your own attack
+      // is removed before any enemy can swing at you. Fourth confirmed
+      // instance of this bug class (Watch Over, Blockade, Fel Chant).
+      { family: "cold", tier: 1, buff: { guardPct: 15, turns: 2, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
+      { family: "cold", tier: 2, buff: { guardPct: 15, turns: 2, statusId: "guarded_stance", vfx: { kind: 'buff_harden' } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.guarded_slash;
@@ -13209,7 +13231,7 @@ Object.assign(RAW_SKILLS, {
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 65, isCrit: roll.isCrit, critMult: roll.critMult }
       );
 
       const amount = Math.max(1, physical + elemental + necrotic);
@@ -13222,7 +13244,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfTierCross: cloneRewardList(ability?.rewardIfTierCross),
       };
     },
-    description: "Deals 100% weapon damage. Applies Cold. Reaching Chilled or Frostbitten grants +15% Physical Resist for 1 turn."
+    description: "Bonus: deals 65% weapon damage and applies Cold. Reaching Chilled or Frostbitten grants +15% Physical Resist for 2 turns."
   },
 
   // Same formula/shape as Marked Cut — see Vital Mark's (dagger) comment for
@@ -13445,12 +13467,12 @@ Object.assign(RAW_SKILLS, {
       {
         family: "disorient", tier: 1,
         buff: { grantsRhythm: true },
-        debuff: { initiativeGaugeDrop: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
+        debuff: { initiativeGaugeSteal: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
       },
       {
         family: "disorient", tier: 2,
         buff: { grantsRhythm: true },
-        debuff: { initiativeGaugeDrop: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
+        debuff: { initiativeGaugeSteal: 8, alsoRequires: { family: "cold", tierAtLeast: 1 } },
       },
     ],
     apply: (attacker, target, scene) => {
@@ -13481,13 +13503,232 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, splash: splash.length ? splash : undefined };
     },
-    description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to their rank. If this pushes a rank-mate into a new Disorient tier: builds Rhythm, and also drains their Initiative Gauge if they're at least Chilled."
+    description: "Deals 100% weapon damage to the primary target. Spreads their full Disorient meter to their rank. If this pushes a rank-mate into a new Disorient tier: builds Rhythm, and if they are at least Chilled, steals 8 Initiative Gauge from them and gives it to you."
   },
 
-  // --- Sword (1h) Reactions ---
+  // Sword's Lightning SETUP half. Storm Cut applies Lightning to one target
+  // and, until now, nothing in the kit read it -- Lightning was sword's dead
+  // end (Disorient is the other). This spreads a built-up meter sideways so
+  // Thunderstep below has somewhere to chain to.
+  //
+  // Proliferates rather than transfers: the source keeps its own meter, the
+  // same "copy, don't drain" rule Miasma Crush and Rune Diffusion follow.
+  // Draining it here would strip the chain of its own starting point.
+  'storm_relay': {
+    id: "storm_relay",
+    name: "Storm Relay",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 17,
+    actionCost: "bonus",
+    mpCost: 3,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "lightning", "proliferate", "aoe", "initiative"],
+    cooldown: 3,
+    // The spread carries no damage of its own -- this is a pure setup bonus
+    // action, like Fel Chant or Blazing Fervor.
+    aoe: { shape: "adjacent", scale: 1.0, damage: false },
+    // Spend-tiered like Overhead Hew / Blazing Fervor: takes the highest of
+    // 10/20/30/40 the gauge can afford, not a player prompt (no UI exists for
+    // one, and every other spender in the game works this way).
+    requiresInitiativeGauge: 10,
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.storm_relay;
+      const gauge = attacker?.initiativeGauge || 0;
+      const spend = gauge >= 40 ? 40 : gauge >= 30 ? 30 : gauge >= 20 ? 20 : 10;
+      const pct = (spend / 10) * 50;          // 50 / 100 / 150 / 200
+      const sourceMeter = target?.weakness?.meters?.lightning || 0;
+      const relayed = Math.floor(sourceMeter * pct / 100);
+
+      const neighbours = resolveAOESplash(scene, target, ability?.aoe);
+      if (!neighbours.length || relayed <= 0) {
+        return {
+          amount: 0, fizzle: true,
+          log: relayed <= 0
+            ? `${target?.name || "The target"} carries no Lightning to relay.`
+            : `${attacker?.name || "The swordsman"} finds no one adjacent to relay the storm to.`,
+        };
+      }
+
+      attacker.initiativeGauge = Math.max(0, gauge - spend);
+      const splash = neighbours.map(char => ({
+        target: char,
+        amount: 0,
+        buildup: { lightning: relayed },
+        tags: ability?.tags,
+      }));
+
+      return {
+        amount: 0,
+        splash,
+        log: `${attacker?.name || "The swordsman"} relays the storm (spent ${spend} Initiative) - ${relayed} Lightning to ${neighbours.length} adjacent foe${neighbours.length === 1 ? "" : "s"}.`,
+      };
+    },
+    description: "Bonus: spend Initiative (10/20/30/40, based on your current gauge) to relay the target's Lightning outward, copying 50% to 200% of their meter to every adjacent enemy. The target keeps their own Lightning."
+  },
+
+  // Sword's Lightning PAYOFF, and its first band-III skill. A chain finisher:
+  // strike a Shocked target, consume 200 of their Lightning, then hop to the
+  // most heavily Shocked OTHER enemy and repeat, until nothing eligible is
+  // left. Never hits the same enemy twice IN A ROW, but will come back around,
+  // so three foes at 400 each take six hits (A>B>C>A>B>C) rather than
+  // stranding buildup the way a naive "first eligible" pick would.
+  //
+  // TERMINATION: every hop subtracts 200 from a LOCAL copy of the meters, so
+  // the total strictly decreases toward zero and the loop is bounded by
+  // (total Lightning / 200). No iteration cap is needed or wanted.
+  //
+  // Single-target it lands ONE hit and stops -- it cannot chain to itself.
+  // That is deliberate: this is an AOE finisher, not a nuke.
+  // One arc of Thunderstep's chain. A hidden sub-skill fired through
+  // _applyAbilityToTarget, NOT a pre-computed splash payload -- that
+  // distinction is the whole point:
+  //
+  //   splash entry  -> no hit roll, no crit roll, no attacker on-hit riders
+  //                    (Blazing Fervor / Withering Fervor never proc, because
+  //                    that block lives in _applyAbilityToTarget), and a
+  //                    condensed "splash" damage readout.
+  //   sub-skill     -> a real, complete hit: own hit roll, own crit roll, own
+  //                    Lightning Jolt, own rider procs, full damage breakdown.
+  //
+  // Thunderstep originally used splash and was the odd one out; Hail of
+  // Arrows, Farsight Volley, Arterial Rush, Twin Fang and Volley all use this
+  // path. Each arc also drains its OWN 200 through the normal consumeWeakness
+  // step, so the drain happens after that arc's damage rather than all at once
+  // up front.
+  'thunderstep_arc': {
+    id: "thunderstep_arc",
+    name: "Thunderstep",
+    type: "weapon",
+    hidden: true,
+    typedDamage: true,
+    tags: ["melee", "attack", "lightning"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.thunderstep_arc;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 70, skillLabel: "Thunderstep arc (70%)",
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const meter = target?.weakness?.meters?.lightning || 0;
+      return {
+        ...roll, physical, elemental, necrotic, amount,
+        // Deferred to the engine, so this arc's own Jolt (read after apply())
+        // still sees the Lightning it is about to spend.
+        consumeWeakness: meter >= 200 ? [{ family: "lightning", amount: 200 }] : undefined,
+      };
+    },
+    description: "A single arc of Thunderstep's chain."
+  },
+
+  // Sword's Lightning PAYOFF and its first band-III skill. Strike a Shocked
+  // target, consume 200 of their Lightning, then step to the most heavily
+  // Shocked OTHER enemy and strike again, until nothing eligible is left.
+  // Never the same enemy twice IN A ROW, but it comes back around, so three
+  // foes at 400 each take six arcs (A>B>C>A>B>C) instead of stranding buildup
+  // the way a naive "first eligible" pick would.
+  //
+  // The hop ORDER is planned up front from the live meters, then each arc is
+  // fired on a timer as a full hit. Planning first is what bounds the loop:
+  // every planned hop removes 200 from a local copy, so the plan length is
+  // (total Lightning / 200) and cannot run away. Firing them one at a time is
+  // also what makes it read as a chain rather than one instantaneous blast.
+  //
+  // An arc that MISSES deals nothing and consumes nothing; the remaining
+  // planned arcs still fire. That can leave a target holding 200 the plan
+  // expected to spend, which is correct-enough and keeps the whole thing
+  // free of feedback loops.
+  //
+  // Single-target it lands ONE arc and stops -- it cannot chain to itself.
+  // That is deliberate: this is an AOE finisher, not a nuke.
+  'thunderstep': {
+    id: "thunderstep",
+    name: "Thunderstep",
+    type: "weapon",
+    mechanic: "active",
+    versionTag: "v3.23",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 24,
+    actionCost: "major",
+    mpCost: 5,
+    requiresTarget: true,
+    targetRequirement: "enemy",
+    tags: ["melee", "attack", "consume", "lightning", "finisher"],
+    cooldown: 6,
+    requiresWeakness: { family: "lightning", tierAtLeast: 2 },
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.thunderstep;
+      const arc = SKILLS?.thunderstep_arc;
+      if (!arc) return { amount: 0, fizzle: true };
+
+      const sideSlots = target?.isEnemy ? scene?.enemySlots : scene?.allySlots;
+      const pool = (sideSlots || [])
+        .map(sl => sl?.char)
+        .filter(c => c && c.status !== "incapacitated");
+
+      // Plan the hop order against a LOCAL copy of the meters. Nothing is
+      // mutated here -- each arc does its own draining when it lands.
+      const meters = new Map(pool.map(c => [c, c?.weakness?.meters?.lightning || 0]));
+      const hops = [];
+      let current = target;
+      while (true) {
+        if ((meters.get(current) || 0) < 200) break;
+        meters.set(current, meters.get(current) - 200);
+        hops.push(current);
+        let next = null, best = -1;
+        for (const c of pool) {
+          if (c === current) continue;
+          const m = meters.get(c) || 0;
+          if (m >= 200 && m > best) { best = m; next = c; }
+        }
+        if (!next) break;
+        current = next;
+      }
+      if (!hops.length) {
+        return { amount: 0, fizzle: true, log: `${target?.name || "The target"} is not Shocked enough to step the storm.` };
+      }
+
+      // Fire each arc as a real hit, spaced out so the chain reads as a chain.
+      // 150ms base; GameplaySettings.animDurationMult() is 4 unless Quick
+      // Combat is on, so a real gap is ~600ms and six arcs run about 3s.
+      const STEP_MS = 150;
+      const mult = GameplaySettings.animDurationMult();
+      hops.forEach((victim, idx) => {
+        scene?.time?.delayedCall?.(idx * STEP_MS * mult, () => {
+          if (scene.combatEnded) return;
+          if (!victim || victim.status === "incapacitated") return;
+          if (!attacker || attacker.status === "incapacitated") return;
+          scene._applyAbilityToTarget(attacker, victim, arc, { isSubSkill: true, tags: arc.tags || [] });
+        });
+      });
+
+      const distinct = new Set(hops).size;
+      // The parent itself deals NO damage -- every strike is an arc above.
+      return {
+        amount: 0,
+        log: `${attacker?.name || "The swordsman"} steps the storm - ${hops.length} arc${hops.length === 1 ? "" : "s"} across ${distinct} foe${distinct === 1 ? "" : "s"}.`,
+      };
+    },
+    description: "Requires Shocked (Lightning T2). Strike for 70% weapon damage and consume 200 Lightning, then step to the most heavily Shocked other enemy and strike again, repeating until no Shocked enemy remains. Each arc is a separate strike with its own hit roll, crit and on-hit effects. Never strikes the same enemy twice in a row, but will return to one. Against a lone enemy it strikes only once."
+  },
+
   'read_and_react': {
     id: "read_and_react",
-    name: "Read and React",
+    // Display name only -- the id stays `read_and_react` because saved
+    // characters store skill IDs in their own skills array, so renaming the
+    // key would silently drop the skill from every existing save.
+    name: "Practiced Eye",
     type: "weapon",
     mechanic: "reaction",
     versionTag: "v3.22",
@@ -13502,6 +13743,12 @@ Object.assign(RAW_SKILLS, {
     reaction: {
       trigger: "self_hit",
       cooldownOn: "trigger",
+      // HIGHER priority than Riposte, which shares this trigger. Convention:
+      // the more CONDITIONAL reaction gets first refusal, and the general one
+      // catches whatever it declines (ReactionSystem walks the sorted list
+      // until a canTrigger passes). This one needs the attacker to carry a
+      // weakness; Riposte answers any melee hit.
+      priority: 5,
       // Broadened from "attacker is Exposed" to "attacker has ANY active
       // weakness (any family, tier 1+)" per request.
       //
@@ -13523,16 +13770,23 @@ Object.assign(RAW_SKILLS, {
       },
       exec: ({ owner, scene, incoming }) => {
         if (incoming) {
-          incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.25);
+          // 25% -> 35%. At 25% this was worth ~2.8x LESS than simply
+          // counterattacking: mitigation scales with the incoming hit while a
+          // counter scales with your own swing, and a typical enemy attack is
+          // only ~0.85x a comparable swing. 35% moves break-even to a hit
+          // worth 2.0x your own swing -- which elites and bosses exceed and
+          // trash does not, so "read the big one, counter the small one"
+          // becomes a real decision instead of a trap.
+          incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.35);
         }
         const mpRestore = 3;
         const maxMP = owner.maxMP ?? 0;
         owner.currentMP = Math.min(maxMP, (owner.currentMP || 0) + mpRestore);
         scene?._playStatusVFX?.(owner, { kind: 'mana' });
-        scene?._log?.(`${owner.name} reads the attack — damage reduced 25%, ${mpRestore} MP restored!`);
+        scene?._log?.(`${owner.name}'s practiced eye finds the flaw - damage reduced 35%, ${mpRestore} MP restored!`);
       },
     },
-    description: "Reaction: prepare to read an incoming melee hit. If the attacker has any active weakness, the hit is reduced 25% and restores 3 MP."
+    description: "Reaction: watch for a flaw in an incoming melee attack. If the attacker carries any active weakness, the hit is reduced 35% and restores 3 MP."
   },
 
   'blazing_fervor': {
@@ -13635,26 +13889,49 @@ Object.assign(RAW_SKILLS, {
         attacker, target,
         {
           ability, tags: ability?.tags, skipGearMultiplier: true,
-          skillPct: basePct + bonusPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct}% base + ${bonusPct}% Expose consumed)`,
+          // Label shows the TOTAL only - it used to spell out the base/bonus
+          // split, restating the skill's own description inside the damage
+          // breakdown panel.
+          skillPct: basePct + bonusPct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${basePct + bonusPct}%)`,
           isCrit: roll.isCrit, critMult: roll.critMult,
         }
       );
 
-      if (consumed > 0 && target?.weakness?.meters) {
-        target.weakness.meters[cfg.family] = Math.max(0, currentMeter - consumed);
-        if (target.weakness.tiers) target.weakness.tiers[cfg.family] = weaknessTierFromMeter(target.weakness.meters[cfg.family]);
-      }
-
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Crit reapplies 63 Expose — was reading roll.crit, a field that
-      // doesn't exist on calculateDamage()'s return (the real field is
-      // isCrit), so this never actually fired before.
-      const buildup = roll.isCrit ? { expose: 63 } : undefined;
+      // The drain is handed to the engine rather than done here, via the
+      // SAME `consumeWeakness` field a dozen other consumers already use --
+      // just in its object form, which carries a capped amount instead of
+      // draining the whole meter. The engine performs it late in the hit
+      // (CombatScene, step 3 of the post-apply block).
+      //
+      // This ordering is the whole point. Doing the drain inside apply()
+      // meant the meter was already gone by the time the engine read Expose
+      // to cut the target's Physical DR, so the hit landed into full armour.
+      // Measured: a target on 400 Expose gave up the entire -12.3% PDR, and
+      // the loss GREW with the setup (-16.4% at 600). Expose T2's crit bonus
+      // was never affected -- that is a pre-roll bonus read inside
+      // calculateDamage(), which runs at the top of this function.
 
-      return { ...roll, physical, elemental, necrotic, amount, buildup };
+      // Crits reapply HALF of what was consumed, rather than a flat 63. At the
+      // 400 cap that is 200 Expose straight back onto the target - enough to
+      // restore Flayed (T2) outright, so a crit turns this from a one-shot
+      // cash-out into something the party can keep spending. 400 is an
+      // enormous amount of buildup to demand; the payoff has to be
+      // conditional-but-large rather than a token refund.
+      //
+      // (The old flat number also read `roll.crit`, a field calculateDamage()
+      // does not return - the real field is isCrit - so it never fired at all.)
+      const buildup = roll.isCrit && consumed > 0
+        ? { expose: Math.floor(consumed / 2) }
+        : undefined;
+
+      return {
+        ...roll, physical, elemental, necrotic, amount, buildup,
+        consumeWeakness: consumed > 0 ? [{ family: cfg.family, amount: consumed }] : undefined,
+      };
     },
-    description: "Deals 150% weapon damage. Consumes up to 400 Expose for +25% damage per 100 consumed (up to +100%). Crits reapply 63 Expose."
+    description: "Deals 150% weapon damage. Consumes up to 400 Expose for +25% damage per 100 consumed (up to +100%). Crits reapply half the amount consumed, up to 200."
   },
 
   'glacial_strike': {
@@ -13671,85 +13948,95 @@ Object.assign(RAW_SKILLS, {
     mpCost: 5,
     requiresTarget: true,
     targetRequirement: "enemy",
-    tags: ["melee", "attack", "consume", "cold", "control"],
+    tags: ["melee", "attack", "consume", "cold", "elemental", "control"],
     cooldown: 6,
     requiresWeakness: { family: "cold", tierAtLeast: 2 },
+    // Rebuilt as Shattering Cut's elemental twin. It used to be TWO skills in
+    // one shell: a Cold consumer that locked the bonus action, plus a wholly
+    // separate Fire consumer (gated on Fire T2, converting Fire into Cold,
+    // stacking a fire-vulnerability, AND planting a delayed "trapped fire"
+    // burn). Two independent consume conditions on two different families in
+    // one description is more than a skill can carry, so the Fire half and the
+    // delayed burn are gone.
+    //
+    // What remains mirrors Shattering Cut exactly, one family over:
+    //   Shattering Cut  physical dmg, eats Lacerate, -13% PhysicalResist,  +25% Lacerate taken
+    //   Glacial Strike  COLD dmg,     eats Cold,     -13% ElementalResist, +25% Fire taken
+    // Both self-benefit: statusEffects land before mitigation is resolved, so
+    // each shreds the very resist its own damage is typed against.
     apply: (attacker, target) => {
       const ability = SKILLS?.glacial_strike;
       const roll = calculateDamage(attacker, target, ability);
+
+      // 160% -> 130%. Measured against Shattering Cut across the real enemy
+      // profiles in data/enemyTypes.js: enemies carry roughly DOUBLE the
+      // Physical Resist they carry Elemental (Gorrek runs 60/32), so identical
+      // percentages are not identical damage. Parity with Shattering Cut's
+      // 155% physical needed 113-145% here depending on the foe, ~133% mean.
+      // 130% sits a shade under that, which is the price of the bonus-action
+      // lock below -- an effect Shattering Cut has no equivalent of.
+      const skillPct = 130;
+
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
-        attacker, target, { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 160, isCrit: roll.isCrit, critMult: roll.critMult }
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true, skillPct,
+          // Whole hit lands as Cold. Same skillConversion mechanism Miasma
+          // Crush uses to force necrotic typing.
+          skillConversion: { physToElemPct: 100 },
+          skillLabel: `${ability?.name || 'Skill'} weapon damage (${skillPct}%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
       );
+      const amount = Math.max(1, physical + elemental + necrotic);
+
+      // Whole 100-increments, capped at 400 -- identical rule to Shattering
+      // Cut. The T2 gate means at least 2 steps always land.
+      const coldMeter = target?.weakness?.meters?.cold || 0;
+      const consumed = Math.min(400, Math.floor(coldMeter / 100) * 100);
+      const steps = Math.floor(consumed / 100);
 
       const statusEffects = [];
-
-      // Cold locks the target's bonus action once it reaches the 200
-      // threshold — the same T2 floor that already gates casting this skill
-      // at all, so landing the hit now always locks the bonus action.
-      // Consumption is capped at 200 even if the target is sitting on more
-      // (e.g. T3+) — any excess above 200 is left behind. Frost-Numbed
-      // (turns:1) is checked once at the start of the target's own next
-      // turn (see the actionsLeft reset in _advanceTurn/_takeEnemyTurn),
-      // so it fires exactly once, then expires — same timing model as
-      // Trapped Fire below.
-      const coldMeter = target?.weakness?.meters?.cold || 0;
-      let consumedCold = 0;
-      if (coldMeter >= 200) {
-        consumedCold = 200;
-        if (target?.weakness?.meters) {
-          target.weakness.meters.cold = Math.max(0, coldMeter - consumedCold);
-          if (target.weakness.tiers) target.weakness.tiers.cold = weaknessTierFromMeter(target.weakness.meters.cold);
-        }
+      if (steps > 0) {
+        statusEffects.push({
+          id: "glacial_scorch", turns: 3,
+          mods: { ElementalResist: -(steps * 13) },
+          vfx: { kind: 'debuff_decrease' },
+        });
+        // COLD, not Fire. The skill eats Cold, so the vulnerability it leaves
+        // should feed the same family back -- consume, then rebuild faster.
+        // (Was fireBuildupMul, a leftover from the old Fire-consuming design
+        // that no longer exists.)
+        statusEffects.push({
+          id: "deepening_frost", turns: 2,
+          coldBuildupMul: 1 + steps * 0.25,
+          vfx: { kind: 'debuff_decrease' },
+        });
+      }
+      // The tempo half: a FULL 400 consumed locks the target's bonus action
+      // (was 200). At 200 it came free with the T2 gate, so it fired on every
+      // cast and read as part of the base effect rather than a reward for a
+      // deep meter. 400 is the consumption cap, so this is now the top end. Checked once at the start of their own next
+      // turn (see the actionsLeft reset in _advanceTurn/_takeEnemyTurn), then
+      // it expires -- turns:1 is CORRECT here because this sits on the ENEMY,
+      // whose duration tick fires at the end of THEIR turn, not the caster's.
+      if (consumed >= 400) {
         statusEffects.push({ id: "frost_numbed", turns: 1, vfx: { kind: 'debuff_shock' } });
       }
 
-      // Fire T2+: consume up to 400 fire, independent of the cold threshold above.
-      const buildup = {};
-      const hasFireT2 = (target?.weakness?.tiers?.fire || 0) >= 2;
-      let consumedFire = 0;
-      if (hasFireT2) {
-        const currentFire = target?.weakness?.meters?.fire || 0;
-        // Consumes only whole 100-increments (same rule as Toxic Bloom) — a
-        // target sitting on 350 fire only has 300 drained, leaving the
-        // leftover 50 behind rather than destroying it for no extra `steps`
-        // (the buildup.cold conversion below is per-point anyway, but the
-        // vuln/resist/delayed-burn rider effects are all step-based).
-        consumedFire = Math.min(400, Math.floor(currentFire / 100) * 100);
-        if (target?.weakness?.meters) {
-          target.weakness.meters.fire = Math.max(0, currentFire - consumedFire);
-          if (target.weakness.tiers) target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
-        }
-        // Added afterward — this cold does NOT count toward this cast's own 400 threshold above.
-        buildup.cold = Math.floor(consumedFire * 0.625);
-        const steps = Math.floor(consumedFire / 100);
-        if (steps > 0) {
-          statusEffects.push({
-            id: "glacial_scorch",
-            turns: 1,
-            fireBuildupMul: 1 + steps * 0.125,
-            // General elemental vulnerability (not fire-only) — reuses the same
-            // Resist-as-mitigation-points convention as torn_defenses/rallied_vulnerability.
-            mods: { ElementalResist: -(steps * 13) },
-            onTurnEndOnce: { damage: steps * 13, isMagic: true },
-            vfx: { kind: 'debuff_burn' },
-          });
-        }
-      }
-
-      const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
         statusEffects: statusEffects.length ? statusEffects : undefined,
-        buildup: Object.keys(buildup).length ? buildup : undefined,
-        log: `${attacker?.name || "The swordsman"} strikes with glacial force!`
-          + (consumedCold ? ` The frost numbs ${target?.name || 'the target'}'s reflexes!` : "")
-          + (consumedFire ? " Trapped fire will flare at the end of their next turn." : ""),
+        // Deferred to the engine so the drain happens AFTER the hit is shaped.
+        consumeWeakness: consumed > 0 ? [{ family: 'cold', amount: consumed }] : undefined,
+        log: `${attacker?.name || "The swordsman"} strikes with glacial force`
+          + (steps > 0 ? ` -- armour frosts over (-${steps * 13}% Elemental Resist).` : '.')
+          + (consumed >= 400 ? ` The frost numbs ${target?.name || 'the target'}'s reflexes!` : ''),
       };
     },
-    description: "Deals 160% weapon damage. If the target has 200+ Cold, consumes up to 200 to disable their bonus action for their next turn (Frost-Numbed). If the target has Fire T2+, consumes up to 400 Fire: adds Cold buildup equal to 62.5% consumed, increases Fire buildup taken by 12.5% per 100 consumed, and makes the target vulnerable to all Elemental damage by 13% per 100 consumed for 1 turn — at the end of their next turn, the trapped fire deals 13 damage per 100 consumed."
+    description: "Requires Frostbitten (Cold T2). Deals 130% weapon damage as Cold and consumes up to 400 Cold in increments of 100. Each 100 consumed reduces the target's Elemental Resist by 13% for 3 turns and increases the Cold buildup they take by 25% for 2 turns. If at least 400 was consumed, the target also loses their bonus action on their next turn."
   },
-
   'taunting_cry': {
     id: "taunting_cry",
     name: "Taunting Cry",
@@ -13855,7 +14142,7 @@ Object.assign(RAW_SKILLS, {
         log: healAmt > 0 ? `${attacker?.name || "The swordsman"} cleaves the arc and drains ${healAmt} HP from lacerated foes!` : undefined,
       };
     },
-    description: "Arc cleave at 110% (+20% vs Lacerated) against an enemy in either flank arc — top (8,4,3) or bottom (6,5,1); hits the other two enemies in that same arc for 85% damage. Heals 30% of damage dealt to any Lacerated enemy hit."
+    description: "Arc cleave at 110% (+20% vs Lacerated) against an enemy in either flank arc; hits the other two enemies in that same arc for 85% damage. Heals 30% of damage dealt to any Lacerated enemy hit."
   },
 
   'momentum_strike': {
@@ -13872,7 +14159,10 @@ Object.assign(RAW_SKILLS, {
     // apart. Expect this shape to recur on future skills.
     rankVariants: {
       front: { damagePct: 25 },
-      middle: { initiativePerRhythmStack: 10, consumesRhythm: true },
+      // 10 -> 15 per stack. The stacks are SPENT for this, not merely read:
+      // consumesRhythm strips every rhythm_stack below, so the ceiling is
+      // 3 stacks x 15 = 45 Initiative, paid for by giving up 3 x +5% damage.
+      middle: { initiativePerRhythmStack: 15, consumesRhythm: true },
       back: { grantsRhythm: true },
     },
     requiredWeapon: ["sword_1h"],
@@ -13928,7 +14218,7 @@ Object.assign(RAW_SKILLS, {
 
       return { ...roll, physical, elemental, necrotic, amount, log };
     },
-    description: "FREE action after moving this turn: 100% weapon damage. The bonus depends on your current rank."
+    description: "FREE action, usable only after moving this turn: 100% weapon damage. The bonus depends on the rank you are standing in. Front: +25% damage. Middle: consume all your Rhythm stacks for 15 Initiative each. Back: build a Rhythm stack."
   },
 
   'balancing_blow': {
@@ -13986,7 +14276,7 @@ Object.assign(RAW_SKILLS, {
         log: healAmt > 0 ? `${attacker?.name || "The swordsman"} siphons life — heals ${healAmt} HP from ${totalNecrotic} necrotic buildup.` : undefined,
       };
     },
-    description: "100% damage vs necrotically afflicted; siphons HP from the target's total necrotic buildup (toxic + disease + curse). Wisdom improves the rate."
+    description: "100% damage vs necrotically afflicted; siphons HP from the target's total necrotic buildup (toxic + disease + curse)."
   },
 
   // Sword's curse-rider — same intensity-scaling shape as Curse of
@@ -14123,6 +14413,13 @@ Object.assign(RAW_SKILLS, {
     targetRequirement: "enemy",
     tags: ["melee", "attack", "consume", "lacerate"],
     cooldown: 6,
+    // T2 gate added. Not a nerf: consumption moves in whole 100s, so a T2
+    // target (200+) always yields at least 2 steps, and the old and new
+    // vulnerability formulas only ever disagreed at meter 100-199 -- which
+    // this gate makes unreachable. The gate is what lets the vulnerability
+    // term below drop its `steps >= 2` special case, which only existed
+    // BECAUSE the skill used to be castable at T1.
+    requiresWeakness: { family: "lacerate", tierAtLeast: 2 },
     apply: (attacker, target) => {
       const ability = SKILLS?.shattering_cut;
       const roll = calculateDamage(attacker, target, ability);
@@ -14147,12 +14444,11 @@ Object.assign(RAW_SKILLS, {
       if (pdrReduction > 0) {
         statusEffects.push({ id: "shattered_defenses", turns: 3, mods: { PhysicalResist: -pdrReduction }, vfx: { kind: 'debuff_decrease' } });
       }
-      // Lacerate-buildup vulnerability now scales continuously with steps
-      // instead of a flat +50% at the 200 breakpoint — +25% per 100 past
-      // 100, capping at +100% (double) at the full 400 consumed. Uses the
-      // same generic <family>BuildupMul enforcement added for Glacial
-      // Strike's Trapped Fire (_applyWeaknessBuildup in CombatScene.js).
-      const lacerateVulnPct = steps >= 2 ? steps * 25 : 0;
+      // A flat +25% Lacerate vulnerability per 100 consumed, matching the
+      // -13% PDR per 100 exactly, so both halves of the payoff read off the
+      // same number. Uses the generic <family>BuildupMul enforcement added
+      // for Glacial Strike's Trapped Fire (_applyWeaknessBuildup).
+      const lacerateVulnPct = steps * 25;
       if (lacerateVulnPct > 0) {
         statusEffects.push({ id: "torn_defenses", turns: 2, lacerateBuildupMul: 1 + lacerateVulnPct / 100, vfx: { kind: 'debuff_sick' } });
       }
@@ -14164,97 +14460,141 @@ Object.assign(RAW_SKILLS, {
           : undefined,
       };
     },
-    description: "155% damage; consume up to 400 lacerate for -13% PDR per 100 for 3 turns. 200+ consumed also makes the target take extra Lacerate buildup for 2 turns, scaling from +50% at 200 up to +100% at 400."
+    description: "Requires Hemorrhaging (Lacerate T2). Deals 155% weapon damage and consumes up to 400 Lacerate in increments of 100. Each 100 consumed reduces the target's Physical Resist by 13% for 3 turns and increases the Lacerate buildup they take by 25% for 2 turns."
   },
 
-  // --- Sword (1h) Reactions ---
-  // Disabled by explicit user request — believed to no longer belong in
-  // the current sword_1h kit (sword_1h's reaction trio is the last one in
-  // the file still at v3.21/v3.22, never modernized alongside everything
-  // else). Kept in the file (not deleted) so it can be restored if that
-  // turns out to be wrong. See read_and_react below for the still-live
-  // self_hit sword reaction.
-  'cover_strike': {
-    id: "cover_strike",
-    name: "Cover Strike",
+  'riposte_thrust': {
+    id: "riposte_thrust",
+    name: "Riposte",
     type: "weapon",
-    mechanic: "reaction",
-    versionTag: "v3.21",
-    disabled: true,
-    actionCost: "reaction",
-    requiredStat: "DEX",
-    requiredValue: 16,
-    requiredWeapon: ["sword_1h"],
-    mpCost: 0,
-    cooldown: 0,
-    requiresTarget: false,
-    positionRequirement: ["front", "mid"],
-    apply: (attacker) => {
-      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} watches over their rank.` };
-    },
-    reaction: {
-      trigger: "ally_hit",
-      priority: 1,
-      canTrigger: ({ owner, target, scene }) => {
-        const colA = scene?._getUnitColumn?.(owner);
-        const colB = scene?._getUnitColumn?.(target);
-        return colA && colB && colA === colB;
-      },
-      exec: ({ owner, attacker, scene }) => {
-        scene?._log?.(`${owner.name} strikes back to protect their ally!`);
-        const basic = SKILLS?.basic_attack;
-        if (basic) {
-          scene.time?.delayedCall(50, () => {
-            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
-          });
+    hidden: true,
+    typedDamage: true,
+    tags: ["melee", "attack"],
+    apply: (attacker, target) => {
+      const ability = SKILLS?.riposte_thrust;
+      const roll = calculateDamage(attacker, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: 70, skillLabel: 'Riposte counter (70%)',
+          isCrit: roll.isCrit, critMult: roll.critMult,
         }
-      }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
     },
-    description: "Arm yourself to strike back when an ally in your rank is attacked."
+    description: "A free counter-thrust, granted by Riposte's reaction."
   },
 
-  // Disabled by explicit user request — same reasoning as cover_strike
-  // above. read_and_react (v3.22) is the currently-live self_hit reaction
-  // for sword_1h.
+  // Re-enabled and rebuilt. The old version was `disabled: true`, armed itself
+  // through an apply()/armReaction stub no current reaction uses, countered
+  // with basic_attack, and -- the real problem -- gave 50% damage reduction
+  // AND a counterattack at mpCost 0 / cooldown 1. That was strictly better
+  // than Practiced Eye (25% + 3 MP at mp3/cd3) on every axis at once.
+  //
+  // It now carries NO mitigation at all. Practiced Eye is the defensive
+  // answer; this is the aggressive one, and the two share a trigger so the
+  // priority order has to mean something. It is also the ONLY reaction that
+  // feeds Rhythm, which Momentum Strike now cashes at 15 Initiative a stack.
   'riposte': {
     id: "riposte",
     name: "Riposte",
     type: "weapon",
     mechanic: "reaction",
-    versionTag: "v3.21",
-    disabled: true,
-    actionCost: "reaction",
-    requiredStat: "DEX",
-    requiredValue: 15,
+    versionTag: "v3.23",
     requiredWeapon: ["sword_1h"],
-    mpCost: 0,
-    cooldown: 1,
+    requiredStat: "DEX",
+    requiredValue: 16,
+    actionCost: "reaction",
+    mpCost: 3,
+    cooldown: 4,
     requiresTarget: false,
     positionRequirement: ["front", "mid"],
-    apply: (attacker) => {
-      return { armReaction: true, consumeOn: "trigger", log: `${attacker.name} prepares a riposte.` };
-    },
+    tags: ["melee", "attack", "rhythm"],
     reaction: {
       trigger: "self_hit",
-      canTrigger: ({ owner }) => {
-        const w = owner?.weaponType;
-        return w === "sword_1h";
+      cooldownOn: "trigger",
+      // Lower than Practiced Eye's 5 on purpose: that one is conditional and
+      // gets first refusal, this one catches every melee hit it declines.
+      priority: 0,
+      // Same melee test Practiced Eye uses, and for the same reason:
+      // basic_attack (which most enemies swing) carries no tags at all, so
+      // relying on a 'melee' tag alone fails 100% of the time against it.
+      // Falls back to the attacker's equipped weapon type.
+      canTrigger: ({ attacker, sourceAbility, sourceIntent }) => {
+        const RANGED_WEAPON_TYPES = ['bow', 'sling', 'gun'];
+        const hitTags = sourceIntent?.tags || sourceAbility?.tags || [];
+        const taggedRanged = Array.isArray(hitTags) && hitTags.includes('ranged');
+        const taggedMelee = Array.isArray(hitTags) && hitTags.includes('melee');
+        return !taggedRanged && (taggedMelee || !RANGED_WEAPON_TYPES.includes(attacker?.weaponType));
       },
-      exec: ({ owner, attacker, scene, incoming }) => {
-        incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.5);
-        scene?._log?.(`${owner.name} parries!`);
-        const basic = SKILLS?.basic_attack;
-        if (basic) {
-          scene.time?.delayedCall(50, () => {
-            scene._applyAbilityToTarget(owner, attacker, basic, { isReaction: true, tags: basic.tags || [] });
-          });
-        }
-      }
+      exec: ({ owner, attacker, scene }) => {
+        const thrust = SKILLS?.riposte_thrust;
+        if (!owner || !attacker || !thrust) return;
+        applyRhythmStack(owner, scene);
+        scene?._log?.(`${owner.name} turns the blade aside and answers in kind!`);
+        scene.time?.delayedCall?.(50, () => {
+          scene._applyAbilityToTarget(owner, attacker, thrust, { isReaction: true, tags: thrust.tags || [] });
+        });
+      },
     },
-    description: "Arm a parry stance; the first hit until your next turn is reduced and countered."
+    description: "Reaction: when a melee attack hits you, strike back for free at 70% weapon damage and build a Rhythm stack. Does not reduce the incoming damage."
   },
 
-  // --- Sword (2h) ---
+  // Re-enabled and rebuilt. Same structural problems as Riposte (disabled,
+  // armReaction stub, basic_attack counter), but reimagined rather than
+  // retuned: a second counterattack would have duplicated Riposte, so this
+  // now protects a rank-mate AND feeds Expose -- sword's one healthy
+  // generator/consumer loop, which Power Stab and Rally Blow both read.
+  // Occupies the ally_hit window, which nothing else in the sword kit uses,
+  // so it never competes with the other two for a trigger.
+  'cover_strike': {
+    id: "cover_strike",
+    name: "Cover Strike",
+    type: "weapon",
+    mechanic: "reaction",
+    versionTag: "v3.23",
+    requiredWeapon: ["sword_1h"],
+    requiredStat: "DEX",
+    requiredValue: 18,
+    actionCost: "reaction",
+    mpCost: 3,
+    cooldown: 4,
+    requiresTarget: false,
+    positionRequirement: ["front", "mid"],
+    tags: ["melee", "support", "expose"],
+    buildupHint: { expose: 88 },
+    reaction: {
+      trigger: "ally_hit",
+      cooldownOn: "trigger",
+      priority: 0,
+      // ally_hit is emitted for EVERY living teammate of the victim, so the
+      // spatial rule lives here: only cover someone sharing your rank.
+      canTrigger: ({ owner, target, scene }) => {
+        const a = scene?._getUnitColumn?.(owner);
+        const b = scene?._getUnitColumn?.(target);
+        return !!a && !!b && a === b;
+      },
+      exec: ({ owner, attacker, target, scene, incoming }) => {
+        if (!owner || !attacker) return;
+        // Covering a rank-mate blunts the blow as well as marking the
+        // attacker. Lower than Practiced Eye's 35% because it protects
+        // SOMEONE ELSE and lands a full Expose application on top -- and
+        // unlike the two self_hit reactions, nothing competes with it for
+        // the ally_hit window, so it fires whenever its rank rule is met.
+        if (incoming) {
+          incoming.damageReduction = Math.max(incoming.damageReduction || 0, 0.25);
+        }
+        const expose = SKILLS?.cover_strike?.buildupHint?.expose ?? 88;
+        scene?._applyWeaknessBuildup?.(attacker, { expose }, { user: owner, ability: SKILLS?.cover_strike });
+        scene?._playStatusVFX?.(attacker, { kind: 'debuff_decrease' });
+        scene?._log?.(`${owner.name} steps across to cover ${target?.name || 'their rank'} and lays ${attacker.name} open!`);
+      },
+    },
+    description: "Reaction: when an enemy attacks an ally sharing your rank, cut at the opening they leave. The hit on your ally is reduced 25%, and the attacker takes 88 Expose."
+  },
   'searing_brand': {
     id: "searing_brand",
     name: "Searing Brand",
@@ -14998,16 +15338,19 @@ Object.assign(RAW_SKILLS, {
         { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 150 + bonusPct, isCrit: roll.isCrit, critMult: roll.critMult }
       );
       const amount = Math.max(1, physical + elemental + necrotic);
-      if (target?.weakness?.meters) {
-        target.weakness.meters.expose = Math.max(0, expMeter - expConsumed);
-        target.weakness.meters.fire = Math.max(0, fireMeter - fireConsumed);
-        if (target.weakness.tiers) {
-          target.weakness.tiers.expose = weaknessTierFromMeter(target.weakness.meters.expose);
-          target.weakness.tiers.fire = weaknessTierFromMeter(target.weakness.meters.fire);
-        }
-      }
+      // Drain handed to the engine rather than done here. Doing it inline
+      // emptied Expose before applyExposePreDamage ran, so this hit lost the
+      // target's Physical DR reduction -- the deeper the Expose, the more it
+      // threw away. Fire has no same-hit read (its T2 effect is an end-of-turn
+      // burn), so that half was never affected; both go through the same field
+      // for consistency.
+      const consumeWeakness = [];
+      if (expConsumed > 0) consumeWeakness.push({ family: 'expose', amount: expConsumed });
+      if (fireConsumed > 0) consumeWeakness.push({ family: 'fire', amount: fireConsumed });
+
       return {
         ...roll, physical, elemental, necrotic, amount,
+        consumeWeakness: consumeWeakness.length ? consumeWeakness : undefined,
         log: `${attacker?.name || "The headsman"} delivers the Death Blow — ${totalConsumed} buildup consumed.`,
       };
     },

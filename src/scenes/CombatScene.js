@@ -3612,7 +3612,7 @@ export default class CombatScene extends Phaser.Scene {
     // Balancing Blow, which heals off necrotic meters it never requires).
     asArrayFams(skill.relatesToFamilies).forEach(addFam);
     addBuildupKeys(skill.buildupHint);
-    asArray(skill.consumeWeakness).forEach(f => { if (typeof f === 'string') addFam(f); });
+    asArray(skill.consumeWeakness).forEach(f => addFam(typeof f === 'string' ? f : f?.family));
 
     for (const req of asArray(skill.requiresWeakness)) {
       if (!req) continue;
@@ -6680,6 +6680,7 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+
     // Debug log: show what Expose actually did this hit (T1 PDR reduction only —
     // T2 crit vulnerability is a pre-roll bonus inside calculateDamage, logged
     // there via the normal 'critChance'/'crit' breakdown entries instead).
@@ -7415,19 +7416,34 @@ export default class CombatScene extends Phaser.Scene {
     // rogue_finishing_strike, kiro_poison_cloud, kiro_corrosive_bite, etc).
     if (!missed && Array.isArray(result?.consumeWeakness)) {
       let lodgeConsumed = false;
-      for (const fam of result.consumeWeakness) {
+      for (const entry of result.consumeWeakness) {
+        // Two accepted shapes, deliberately ONE field rather than two:
+        //   'expose'                    -> drain the whole meter (original)
+        //   { family:'expose', amount:400 } -> drain exactly that much
+        // The partial form exists for capped consumers like Power Stab, which
+        // eats up to 400 in whole 100s and must leave the remainder behind.
+        const fam = typeof entry === 'string' ? entry : entry?.family;
+        const cap = typeof entry === 'string' ? null : (entry?.amount | 0);
+        if (!fam) continue;
+        const victim = target;
         // Clear traditional weakness meter if present
-        if (target.weakness?.meters?.[fam] != null) {
-          target.weakness.meters[fam] = 0;
-          target.weakness.tiers[fam] = 0;
-          this._log(`${target.name}'s ${fam} weakness is consumed!`);
+        if (victim?.weakness?.meters?.[fam] != null) {
+          const before = victim.weakness.meters[fam] | 0;
+          const drained = cap == null ? before : Math.min(cap, before);
+          victim.weakness.meters[fam] = Math.max(0, before - drained);
+          this._recomputeWeaknessTiers?.(victim);
+          if (drained > 0) {
+            this._log(cap == null
+              ? `${victim.name}'s ${fam} weakness is consumed!`
+              : `${victim.name}'s ${fam} weakness is consumed (${before} -> ${victim.weakness.meters[fam]}).`);
+          }
         }
         // Always strip stackable status entries for this family (covers lodged which has no meter)
-        if (Array.isArray(target.statusEffects)) {
-          const before = target.statusEffects.length;
-          target.statusEffects = target.statusEffects.filter(e => e.id !== fam);
-          if (target.statusEffects.length < before) {
-            this._log(`${target.name}'s ${fam} stacks are cleared!`);
+        if (Array.isArray(victim.statusEffects)) {
+          const before = victim.statusEffects.length;
+          victim.statusEffects = victim.statusEffects.filter(e => e.id !== fam);
+          if (victim.statusEffects.length < before) {
+            this._log(`${victim.name}'s ${fam} stacks are cleared!`);
             if (fam === 'lodged') lodgeConsumed = true;
           }
         }
@@ -11864,6 +11880,25 @@ export default class CombatScene extends Phaser.Scene {
       target.initiativeGauge = Math.max(0, before - debuff.initiativeGaugeDrop);
       if (target.initiativeGauge !== before) {
         this._log(`${target.name} loses ${before - target.initiativeGauge} Initiative Gauge from ${ability?.name || 'the skill'}.`);
+      }
+    }
+
+    // Initiative Gauge THEFT — the drain above only destroys the target's
+    // gauge; this moves it. Mirrors the `stealInitiative` rule handled in the
+    // primary-target tier-cross path, which the splash path never had access
+    // to. Capped by what the target actually has, so draining an empty gauge
+    // is a no-op rather than a free grant to the attacker.
+    if (Number.isFinite(debuff.initiativeGaugeSteal) && debuff.initiativeGaugeSteal > 0) {
+      const thief = context?.attacker;
+      const avail = target.initiativeGauge | 0;
+      const stolen = Math.min(debuff.initiativeGaugeSteal, avail);
+      if (stolen > 0) {
+        target.initiativeGauge = Math.max(0, avail - stolen);
+        if (thief) {
+          const cap = thief.initiativeGaugeMax ?? 100;
+          thief.initiativeGauge = Math.min(cap, (thief.initiativeGauge || 0) + stolen);
+        }
+        this._log(`${thief?.name || 'The attacker'} steals ${stolen} Initiative Gauge from ${target.name}.`);
       }
     }
 
