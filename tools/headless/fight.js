@@ -51,64 +51,23 @@ export function setActor(host, actor) {
  */
 export function cast(host, actor, ability, target = null) {
   const before = host.combatEntries.length;
-  const refuse = (reason) => ({ ok: false, reason, log: host.__logLines().slice(before) });
+  const tail = () => host.__logLines().slice(before);
 
-  if (!ability) return refuse('no such ability');
-  if (host.combatEnded) return refuse('combat already ended');
+  if (!ability) return { ok: false, reason: 'no such ability', log: tail() };
 
   setActor(host, actor);
 
-  // --- _useAbility gate 1: the action economy -------------------------------
-  const type = ability.actionCost || 'major';
-  if (type !== 'free') {
-    const ok = Array.isArray(type)
-      ? type.every(t => host._canUseActionType(t))
-      : host._canUseActionType(type);
-    if (!ok) return refuse('no ' + (Array.isArray(type) ? type.join('+') : type) + ' action left');
+  // A slotId is a convenience this harness accepts and the engine does not,
+  // since a bare number is ambiguous across the two sides. Resolve it here.
+  let ref = target;
+  if (typeof target === 'number') {
+    ref = (host.enemySlots.find(s => s.slotId === target && s.char)
+      || host.allySlots.find(s => s.slotId === target && s.char))?.char ?? target;
   }
 
-  // --- _useAbility gate 2: cooldown -----------------------------------------
-  const cd = actor.cooldowns?.[ability.id] || 0;
-  if (cd > 0 && !DevFlags.isNoCooldownEnabled()) return refuse('on cooldown (' + cd + ')');
-
-  // --- _useAbility gate 3: the attacker's own position ----------------------
-  if (ability.positionRequirement?.length && !DevFlags.isNoRangeEnabled()) {
-    const col = host._getUnitColumn(actor);
-    if (!ability.positionRequirement.includes(col)) {
-      return refuse('cannot be used from ' + col);
-    }
-  }
-
-  // --- untargeted skills resolve on the caster (CombatScene.js:4808) --------
-  if (!ability.requiresTarget) {
-    host._applyAbilityToTarget(actor, actor, ability);
-    host.__drain();
-    return { ok: true, target: actor, log: host.__logLines().slice(before) };
-  }
-
-  // --- _enterTargetingMode gates -------------------------------------------
-  const actorReason = host._abilityActorGateReason?.(actor, ability);
-  if (actorReason) return refuse(actorReason);
-
-  const validSlots = host._validTargetsFor(actor, ability) || [];
-  if (!validSlots.length) {
-    return refuse(host._abilityUnavailableReason?.(actor, ability) || 'no valid targets');
-  }
-
-  // Resolve the target the click would have chosen.
-  let slot;
-  if (target == null) {
-    slot = validSlots[0];
-  } else {
-    slot = validSlots.find(s => s.char === target)
-      || validSlots.find(s => s.char?.name === target)
-      || validSlots.find(s => s.slotId === target);
-    if (!slot) return refuse('target not in the valid set');
-  }
-
-  host._applyAbilityToTarget(actor, slot.char, ability);
+  const verdict = host._resolveAction({ actor, skill: ability, target: ref });
   host.__drain();
-  return { ok: true, target: slot.char, log: host.__logLines().slice(before) };
+  return { ...verdict, log: tail() };
 }
 
 /** Ends the current actor's turn the way the End Turn button does. */

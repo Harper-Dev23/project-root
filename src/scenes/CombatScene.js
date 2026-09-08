@@ -4805,7 +4805,14 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // --- Non-target skills: assume self (expand later if needed) ---
-    this._applyAbilityToTarget(actor, actor, ability);
+    // Same reason as the targeted path below: one sequence of gates, three
+    // callers. _resolveAction re-checks the action pool, cooldown and position
+    // gates this function just checked, which is harmless and keeps the rule
+    // in exactly one place.
+    {
+      const verdict = this._resolveAction({ actor, skill: ability, target: null });
+      if (!verdict.ok) this._log(verdict.reason);
+    }
 
     // NOTE: Do NOT decrement actions here; _applyAbilityToTarget handles action spending
     // for all non-reaction, non-class skills. Keep the UI refresh only.
@@ -4815,6 +4822,131 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
 
+
+  // ─── Actions as data ──────────────────────────────────────────────────────
+  //
+  // _useAbility above is a BUTTON HANDLER. It checks its gates, then calls
+  // _enterTargetingMode, which attaches a pointerdown listener to every valid
+  // slot and returns -- the ability only resolves when a click arrives. That
+  // works fine for one person at one keyboard and is unusable for anything
+  // else: a headless test has no pointer, and neither does a remote player.
+  //
+  // _resolveAction is the same sequence with the target supplied as data
+  // instead of arriving as a click. It is deliberately the ONLY place that
+  // sequence is written down, so the UI, the harness and (later) a network
+  // message all resolve an action through identical gates and cannot drift
+  // apart. It returns a verdict rather than throwing, because "refused, and
+  // here is why" is a normal outcome that a caller needs to show or log.
+
+  /**
+   * Finds a combatant from a wire-safe reference.
+   *
+   * Enemies have no unique id of their own -- six Training Dummies spawned
+   * from one template share a name and a template id -- so the slot key
+   * ("E4"/"A2") is the only thing guaranteed unique per side. An ambiguous
+   * reference returns null rather than guessing, since guessing would target
+   * the wrong unit and look like a rules bug.
+   */
+  _findUnitByRef(ref) {
+    if (!ref) return null;
+    if (typeof ref === 'object') return ref;         // already a unit
+    const units = (this.turnOrder || []).filter(Boolean);
+
+    const bySlotKey = units.filter(u => this._charSlotKey?.(u) === ref);
+    if (bySlotKey.length === 1) return bySlotKey[0];
+
+    const byInstance = units.filter(u => u.instanceId && u.instanceId === ref);
+    if (byInstance.length === 1) return byInstance[0];
+
+    const byName = units.filter(u => u.name === ref);
+    if (byName.length === 1) return byName[0];
+
+    return null;
+  }
+
+  /** The skill object for an id, preferring the actor's own granted copy. */
+  _findSkillFor(actor, skillRef) {
+    if (!skillRef) return null;
+    if (typeof skillRef === 'object') return skillRef;
+    return (actor?.skills || []).find(s => s?.id === skillRef) || SKILLS[skillRef] || null;
+  }
+
+  /**
+   * Resolve one combat action described as data.
+   *
+   * intent: { actor, skill, target }, each either a live object or a
+   *         wire-safe reference (slot key, instanceId, or unambiguous name).
+   * opts:   { requireCurrentTurn } -- defaults true. The harness and the
+   *         action menu both act on whoever's turn it is; only a deliberate
+   *         out-of-turn caller should pass false.
+   *
+   * Returns { ok: true, actor, skill, target } or { ok: false, reason }.
+   */
+  _resolveAction(intent = {}, opts = {}) {
+    const requireCurrentTurn = opts.requireCurrentTurn !== false;
+    const refuse = (reason) => ({ ok: false, reason });
+
+    if (this.combatEnded) return refuse('combat has ended');
+
+    const actor = this._findUnitByRef(intent.actor) || this._currentChar?.();
+    if (!actor) return refuse('no such actor');
+    if (requireCurrentTurn && actor !== this._currentChar?.()) {
+      return refuse(`it is not ${actor.name}'s turn`);
+    }
+    if (actor.status === 'incapacitated') return refuse(`${actor.name} is down`);
+
+    const ability = this._findSkillFor(actor, intent.skill);
+    if (!ability) return refuse('no such skill');
+
+    // --- the gates _useAbility applies before targeting ---------------------
+    const type = ability.actionCost || 'major';
+    if (type !== 'free') {
+      const affordable = Array.isArray(type)
+        ? type.every(t => this._canUseActionType(t))
+        : this._canUseActionType(type);
+      if (!affordable) {
+        return refuse(`no ${Array.isArray(type) ? type.join(' + ') : type} action left`);
+      }
+    }
+
+    const cd = actor.cooldowns?.[ability.id] || 0;
+    if (cd > 0 && !DevFlags.isNoCooldownEnabled()) {
+      return refuse(`${ability.name} is on cooldown (${cd} turn${cd > 1 ? 's' : ''} left)`);
+    }
+
+    if (ability.positionRequirement?.length && !DevFlags.isNoRangeEnabled()) {
+      const col = this._getUnitColumn(actor);
+      if (!ability.positionRequirement.includes(col)) {
+        return refuse(`${actor.name} cannot use ${ability.name} from ${col}`);
+      }
+    }
+
+    // --- untargeted skills resolve on the caster ----------------------------
+    if (!ability.requiresTarget) {
+      this._applyAbilityToTarget(actor, actor, ability);
+      return { ok: true, actor, skill: ability, target: actor };
+    }
+
+    // --- the gates _enterTargetingMode applies ------------------------------
+    const actorReason = this._abilityActorGateReason(actor, ability);
+    if (actorReason) return refuse(`${ability.name} unavailable: ${actorReason}`);
+
+    const validSlots = this._validTargetsFor(actor, ability) || [];
+    if (!validSlots.length) {
+      const why = this._abilityUnavailableReason?.(actor, ability);
+      return refuse(`${ability.name} has no valid targets${why ? ` — ${why}` : ''}`);
+    }
+
+    const wanted = this._findUnitByRef(intent.target);
+    const slot = wanted
+      ? validSlots.find(s => s.char === wanted)
+      : null;
+    if (intent.target && !slot) return refuse('that target is not valid for this skill');
+    const chosen = slot || validSlots[0];
+
+    this._applyAbilityToTarget(actor, chosen.char, ability);
+    return { ok: true, actor, skill: ability, target: chosen.char };
+  }
 
 
   // ─── Ability gating, split by what it depends on ──────────────────────────
@@ -4997,7 +5129,18 @@ export default class CombatScene extends Phaser.Scene {
       /* ---- 1️⃣  Make the container clickable for this ability ---- */
       slot.removeAllListeners();          // safety
       slot.once('pointerdown', () => {
-        this._applyAbilityToTarget(this._currentChar(), slot.char, ability);
+        // Goes through _resolveAction rather than straight to
+        // _applyAbilityToTarget so the click path, the headless harness and a
+        // future network message all resolve an action through ONE sequence of
+        // gates. Re-running the gates here is intentional and cheap: they are
+        // pure predicates, and a target can stop qualifying between arming the
+        // ability and clicking it.
+        const verdict = this._resolveAction({
+          actor: this._currentChar(),
+          skill: ability,
+          target: slot.char,
+        });
+        if (!verdict.ok) this._log(verdict.reason);
         // _buildActionMenuRoot (called inside _applyAbilityToTarget) handles _exitTargetingMode
       });
 

@@ -83,10 +83,32 @@ function makeSlot(side, slotId, pos) {
     setVisible() { return this; },
     setScale() { return this; },
     setPosition(x, y) { this.x = x; this.y = y; return this; },
-    on() { return this; },
-    off() { return this; },
-    once() { return this; },
-    emit() { return this; },
+
+    // Listeners are REAL, not no-ops. The engine's targeting mode works by
+    // attaching a `pointerdown` to every valid slot and waiting; without
+    // somewhere for that handler to live, the harness can exercise the rules
+    // but never the path a player's click actually takes. Storing them lets
+    // __click() drive the genuine UI flow - _useAbility, _enterTargetingMode,
+    // then the click - which is the only way to prove the single-player path
+    // still works without opening a browser.
+    _handlers: Object.create(null),
+    on(evt, fn) { (this._handlers[evt] || (this._handlers[evt] = [])).push({ fn, once: false }); return this; },
+    once(evt, fn) { (this._handlers[evt] || (this._handlers[evt] = [])).push({ fn, once: true }); return this; },
+    off(evt, fn) {
+      if (this._handlers[evt]) this._handlers[evt] = this._handlers[evt].filter(h => h.fn !== fn);
+      return this;
+    },
+    removeAllListeners() { this._handlers = Object.create(null); return this; },
+    emit(evt, ...args) {
+      const list = (this._handlers[evt] || []).slice();
+      this._handlers[evt] = list.filter(h => !h.once);
+      for (const h of list) h.fn(...args);
+      return this;
+    },
+    /** Simulate a player clicking this slot. */
+    __click() { return this.emit('pointerdown'); },
+    __listenerCount(evt) { return (this._handlers[evt] || []).length; },
+
     getBounds() { return { x: this.x - 32, y: this.y - 32, width: 64, height: 64 }; },
     destroy() { },
   };
