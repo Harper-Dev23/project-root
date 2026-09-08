@@ -46,7 +46,7 @@ import {
   computeEffectiveInitiative, getEffectiveDerived, applyColdEvasionPenalty,
   getEffectivePDR, getEffectiveMDR, getEffectiveEDR, getEffectiveNDR, getHealingReceivedMult, applyExposePreDamage,
   getDamageReductionFraction, _pushBreakdown, _sumStatusEffectMods,
-  getProficiencyBreakdown, getProficiencyMultiplier,
+  getMasteryBreakdown, getMasteryMultiplier, getProficiencyMap, getHighestProficiency,
   applyGearConversionAndPercent, applyLightningJolt, getColdDealtPenaltyPct,
   calculateHealRoll, applyHealModifiers,
 } from '../systems/CombatLogic.js';
@@ -222,7 +222,7 @@ const DAMAGE_TOOLTIP_COLORS = {
   cold: '#3BA3D9',
   lightning: '#E6C447',
   // Generic multiplicative buffs that aren't crit and aren't tied to a
-  // specific element (gear damage%, Proficiency, skill%, "Generic increased
+  // specific element (gear damage%, Mastery, skill%, "Generic increased
   // damage") — a distinct green so "this is a buff scaling the hit" reads
   // differently from "this is raw typed damage".
   buff: '#7fd88f',
@@ -1152,7 +1152,7 @@ export default class CombatScene extends Phaser.Scene {
 
   // Heal-side counterpart to _buildDamageTooltipData — no "Type:" line (heals
   // aren't typed physical/elemental/necrotic) and no Damage Reduction; the
-  // target-side equivalent (healingReceivedBonus + Proficiency, applied
+  // target-side equivalent (healingReceivedBonus + Mastery, applied
   // together outside the skill's own apply()) is shown as one combined
   // "Healing Modifier" percentage instead, same idea as DR but framed as a
   // bonus/penalty rather than a reduction.
@@ -1183,7 +1183,7 @@ export default class CombatScene extends Phaser.Scene {
       if (raw > 0) {
         const pct = Math.round(((amount / raw) - 1) * 100);
         const sign = pct >= 0 ? '+' : '';
-        lines.push(`Healing Modifier: ${sign}${pct}% (Proficiency + target healing received)`);
+        lines.push(`Healing Modifier: ${sign}${pct}% (Mastery + target healing received)`);
       }
     }
 
@@ -1942,7 +1942,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // CON/WIS/DEX/STR derived-stat effects (HP, resists, Accuracy, Evasion,
-    // Initiative, weapon damage, Proficiency, ...) all now come from the
+    // Initiative, weapon damage, Mastery, ...) all now come from the
     // single calculateDerivedStats() pass in _placeEnemies, run once after
     // every drop for this enemy has been equipped and totalStats is fully
     // accumulated — same formulas players use, no separate ad-hoc branches
@@ -2316,7 +2316,7 @@ export default class CombatScene extends Phaser.Scene {
     }
     const mpPerTurn = baseMpPerTurn - concussedDrain;
     const lifeStealPct = Math.round((char?.gearEffects?.lifeStealPct || 0) * 100);
-    // Separate from Proficiency (a highest-core-stat bonus that ALSO affects
+    // Separate from Mastery (a highest-Proficiency bonus that ALSO affects
     // healing, shown on the Equipment tab) — this combines the HealingPower
     // combat-buff status mod with gear's healingPercent (armor/weapon
     // affixes — see ItemFactory.js), matching applyHealModifiers'
@@ -2342,7 +2342,7 @@ export default class CombatScene extends Phaser.Scene {
       },
       {
         label: 'PD/ED/ND:', value: `${pdPct >= 0 ? '+' : ''}${pdPct}% / ${edPct >= 0 ? '+' : ''}${edPct}% / ${ndPct >= 0 ? '+' : ''}${ndPct}%`,
-        desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Proficiency, which is a highest-core-stat bonus shown on the Equipment tab. Hover for the gear vs. combat-bonus breakdown.',
+        desc: 'Physical / Elemental / Necrotic Damage — % bonus (or, if Cold T2, penalty) applied to this character\'s own outgoing damage of each type. Separate from Mastery, which is a highest-Proficiency bonus shown on the Equipment tab. Hover for the gear vs. combat-bonus breakdown.',
         descLines: [
           'Physical / Elemental / Necrotic Damage:', '',
           `Physical (${pdPct >= 0 ? '+' : ''}${pdPct}%):`, ...pdLines.map(l => `  ${l}`), '',
@@ -2371,7 +2371,7 @@ export default class CombatScene extends Phaser.Scene {
       { label: 'HP:', value: `${dispHP}/${effMaxHP}`, desc: 'Current / maximum Hit Points. Reaching 0 knocks the character out.' },
       null,
       null,
-      { label: 'H.Given:', value: `${healGivenPct >= 0 ? '+' : ''}${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — gear healingPercent + Healing Power combat buffs. Separate from Proficiency (Equipment tab), which also affects healing but isn\'t added in here.' },
+      { label: 'H.Given:', value: `${healGivenPct >= 0 ? '+' : ''}${healGivenPct}%`, desc: 'Bonus applied to healing this character casts on others — gear healingPercent + Healing Power combat buffs. Separate from Mastery (Equipment tab), which also affects healing but isn\'t added in here.' },
       {
         label: 'MP/Trn:', value: `${mpPerTurn >= 0 ? '+' : ''}${mpPerTurn}`,
         valueColor: concussedDrain > 0 ? '#ff6666' : '#eeeeee',
@@ -2534,13 +2534,20 @@ export default class CombatScene extends Phaser.Scene {
     const statsLineH = 18;
 
     const stats = char.totalStats || {};
+    // Each row shows the live stat (gear included) and, in parentheses, that
+    // stat's PROFICIENCY -- permanent stats only, halved. Skill requirements
+    // read the parenthesised number, never the first one, so both have to be
+    // visible side by side or a player cannot tell why a skill is locked.
+    const profMap = getProficiencyMap(char);
+    const statVal = (k) => `${stats[k] ?? 0}  (${profMap[k] ?? 0})`;
+    const PROF_NOTE = ' Proficiency (in brackets) is half your permanent value, gear excluded; skills gate on it.';
     const statRows = [
-      { label: 'STR:', value: `${stats.STR ?? 0}`, desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT).' },
-      { label: 'DEX:', value: `${stats.DEX ?? 0}`, desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT).' },
-      { label: 'CON:', value: `${stats.CON ?? 0}`, desc: '+2 Max HP and +0.5 Physical Resist per point.' },
-      { label: 'INT:', value: `${stats.INT ?? 0}`, desc: '+2 Max MP per point, +1 MP regen per turn per 5 points. Feeds Crit Chance (with STR/DEX).' },
-      { label: 'WIS:', value: `${stats.WIS ?? 0}`, desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point. +1 healing per 5 points.' },
-      { label: 'CHA:', value: `${stats.CHA ?? 0}`, desc: '+1 Max MP, +1 Initiative per point (sets turn order and Initiative Gauge regen), +0.5 Elemental Resist, +0.5 Necrotic Resist per point.' },
+      { label: 'STR:', value: statVal('STR'), desc: '+1 weapon damage per 5 points. Feeds Crit Chance (with DEX/INT).' + PROF_NOTE },
+      { label: 'DEX:', value: statVal('DEX'), desc: '+1 Accuracy per point. Feeds Crit Chance (with STR/INT).' + PROF_NOTE },
+      { label: 'CON:', value: statVal('CON'), desc: '+2 Max HP and +0.5 Physical Resist per point.' + PROF_NOTE },
+      { label: 'INT:', value: statVal('INT'), desc: '+2 Max MP per point, +1 MP regen per turn per 5 points. Feeds Crit Chance (with STR/DEX).' + PROF_NOTE },
+      { label: 'WIS:', value: statVal('WIS'), desc: '+1 Max MP, +0.5 Elemental Resist, +0.5 Resilience per point. +1 healing per 5 points.' + PROF_NOTE },
+      { label: 'CHA:', value: statVal('CHA'), desc: '+1 Max MP, +1 Initiative per point (sets turn order and Initiative Gauge regen), +0.5 Elemental Resist, +0.5 Necrotic Resist per point.' + PROF_NOTE },
     ];
 
     const statLabelStyle = { fontSize: '14px', color: '#cccccc', align: 'right' };
@@ -2573,11 +2580,12 @@ export default class CombatScene extends Phaser.Scene {
       });
     });
 
-    // Proficiency — %damage bonus off the highest of the 6 core stats above,
-    // shown directly beneath them since it's derived straight from this list.
+    // Mastery — %damage/healing bonus off the highest PROFICIENCY (permanent
+    // stats halved, gear excluded). Formerly called Proficiency; that name now
+    // belongs to the per-stat gate currency shown on the row below this one.
     const profGap = 8;
     const profY = startY + statRows.length * statsLineH + profGap;
-    const prof = getProficiencyBreakdown(char);
+    const prof = getMasteryBreakdown(char);
     const profValueText = this.add.text(statsColumnRight, profY, `+${prof.bonusPct}%`, {
       ...statValueStyle,
       color: prof.bonusPct > 0 ? '#66ff66' : '#eeeeee'
@@ -2586,19 +2594,22 @@ export default class CombatScene extends Phaser.Scene {
     this._charInfoBodyGroup.push(profValueText);
 
     const profLabelX = statsColumnRight - profValueText.width - 6;
-    const profLabelText = this.add.text(profLabelX, profY, 'Proficiency:', statLabelStyle).setOrigin(1, 0);
+    const profLabelText = this.add.text(profLabelX, profY, 'Mastery:', statLabelStyle).setOrigin(1, 0);
     this.characterInfoPanel.add(profLabelText);
     this._charInfoBodyGroup.push(profLabelText);
 
     const showProfTip = (pointer) => {
       this.tooltip?.show(pointer.worldX, pointer.worldY, {
-        title: 'Proficiency',
+        title: 'Mastery',
         lines: [
-          'A separate %bonus based on your single highest core stat',
-          '(whichever of STR/DEX/CON/INT/WIS/CHA is highest).',
-          '+1% per point above 10 — applies to outgoing damage and healing.',
+          'A %bonus to outgoing damage AND healing, based on your single',
+          'highest Proficiency (whichever of STR/DEX/CON/INT/WIS/CHA leads).',
+          '+2% per Proficiency above 5.',
           '',
-          { text: `Driving stat: ${prof.stat} (${prof.value})`, color: '#66ff66' },
+          'Proficiency comes from permanent stats only — allocated points,',
+          'race and class. Gear raises your stats but never your Mastery.',
+          '',
+          { text: `Driving stat: ${prof.stat} — Proficiency ${prof.proficiency}`, color: '#66ff66' },
         ]
       });
     };
@@ -6731,7 +6742,7 @@ export default class CombatScene extends Phaser.Scene {
         // Proficiency (highest-core-stat %bonus) applies to healing output the
         // same as it does to damage — caster-side, so healers aren't left
         // without a use for a high stat the way pure-damage builds have one.
-        const healed = Math.floor(amount * (target.healingReceivedBonus || 1.0) * getProficiencyMultiplier(user));
+        const healed = Math.floor(amount * (target.healingReceivedBonus || 1.0) * getMasteryMultiplier(user));
         target.currentHP = Math.min(target.maxHP, target.currentHP + healed);
         if (healed > 0) {
           // Not passing isCrit through here — _showFloatingNumber's isCrit
@@ -7820,7 +7831,7 @@ export default class CombatScene extends Phaser.Scene {
     if (amt !== 0 || isHeal) {
       if (isHeal) {
         const before = target.currentHP | 0;
-        const profHealAmt = Math.floor(rawAmt * getProficiencyMultiplier(user));
+        const profHealAmt = Math.floor(rawAmt * getMasteryMultiplier(user));
         const after = Math.min((target.maxHP | 0) || before, before + Math.max(0, profHealAmt));
         const healed = after - before;
         target.currentHP = after;

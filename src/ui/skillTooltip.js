@@ -454,7 +454,9 @@ export function buildSkillTooltipLines(sk, actor = null, opts = {}) {
   const reqParts = [];
   const reqStat = sk.requiredStat;
   const reqVal  = sk.requiredValue;
-  if (reqStat && Number.isFinite(reqVal) && reqVal > 0) reqParts.push(`${reqStat} ${reqVal}`);
+  // Gates are PROFICIENCY now (permanent stats halved, gear excluded), so the
+  // unit has to be named or a player will compare it against their sheet stat.
+  if (reqStat && Number.isFinite(reqVal) && reqVal > 0) reqParts.push(`${reqStat} Proficiency ${reqVal}`);
   const weaponList = Array.isArray(sk.requiredWeapon)
     ? sk.requiredWeapon
     : (sk.requiredWeapon ? [sk.requiredWeapon] : []);

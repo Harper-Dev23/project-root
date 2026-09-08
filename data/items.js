@@ -1316,6 +1316,76 @@ export const Items = {
     onUse: 'respec_stats',
     description: 'Drink to unmake every choice since your first breath. Refunds all level-up stat points and returns your attributes to what they were at creation. (Testing item.)',
   },
+  // ---- Proficiency tokens (Ember Cart, 2 Reckoning Marks each) ----------
+  // PERMANENT +1 Proficiency in one stat. Deliberately additive to the
+  // half-of-permanent-stat figure rather than a stat bonus, so Proficiency
+  // can drift away from the attributes that first drove it -- a Hunter who
+  // grinds Reckonings can reach a kit their raw stats would never open.
+  //
+  // Consumed on use. Does NOT survive the Tonic of Reflection resetting
+  // stats: these were paid for in Marks, so a respec keeps them (see
+  // _respecCharacter, which clears baseStats but leaves proficiencyBonus).
+  prof_token_str: {
+    id: 'prof_token_str',
+    name: 'Token of Strength',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'STR',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s STR Proficiency by 1. A whetstone worn concave by decades of use.',
+  },
+  prof_token_dex: {
+    id: 'prof_token_dex',
+    name: 'Token of Dexterity',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'DEX',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s DEX Proficiency by 1. A set of weighted throwing pins, balanced past reason.',
+  },
+  prof_token_con: {
+    id: 'prof_token_con',
+    name: 'Token of Constitution',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'CON',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s CON Proficiency by 1. A knot of tanned hide, chewed soft by someone who outlasted a winter.',
+  },
+  prof_token_int: {
+    id: 'prof_token_int',
+    name: 'Token of Intelligence',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'INT',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s INT Proficiency by 1. A page torn from a ledger nobody has been able to finish reading.',
+  },
+  prof_token_wis: {
+    id: 'prof_token_wis',
+    name: 'Token of Wisdom',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'WIS',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s WIS Proficiency by 1. A jar of grave-silt, sifted and re-sifted.',
+  },
+  prof_token_cha: {
+    id: 'prof_token_cha',
+    name: 'Token of Charisma',
+    type: 'consumable',
+    rarity: 'rare',
+    onUse: 'grant_proficiency',
+    proficiencyStat: 'CHA',
+    proficiencyAmount: 1,
+    description: 'Permanently raises one Hunter\'s CHA Proficiency by 1. A brass call, dented where it was struck to be heard over a crowd.',
+  },
+
   tabula_rasa: {
     id: 'tabula_rasa',
     name: 'Tabula Rasa',

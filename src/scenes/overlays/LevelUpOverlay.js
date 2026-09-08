@@ -9,6 +9,7 @@
  *   Talents     — Decorative locked talent tree, awaiting the Awakening system.
  */
 
+import { getPermanentStats } from '../../systems/CombatLogic.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import GameState from '../../systems/GameState.js';
 import { rebuildCharacterStats, calculateDerivedStats } from '../../systems/CharacterBuilder.js';
@@ -255,6 +256,19 @@ export default class LevelUpOverlay extends Phaser.Scene {
     this._buildActionBtns(group, b, b.bottom - 48, d);
   }
 
+  /**
+   * "Proficiency 9" or, when the pending points would move it, "Proficiency
+   * 9 -> 10". Allocated points land in baseStats, which feeds permanentStats,
+   * so a pending point raises Proficiency only on every SECOND point -- that
+   * is exactly what this line makes visible rather than surprising.
+   */
+  _profLabel(permVal, pending) {
+    const now = Math.floor(permVal / 2);
+    if (!pending) return `Proficiency ${now}`;
+    const next = Math.floor((permVal + pending) / 2);
+    return next === now ? `Proficiency ${now}` : `Proficiency ${now} \u2192 ${next}`;
+  }
+
   _buildStatCard(group, stat, cx, cy, d) {
     const char     = this._char;
     const totalVal = char.totalStats[stat] || 0;
@@ -308,6 +322,18 @@ export default class LevelUpOverlay extends Phaser.Scene {
     ).setOrigin(1, 0.5).setDepth(d);
     group.add(previewTxt);
 
+    // PROFICIENCY readout. This is the number every skill requirement is
+    // measured against (half the PERMANENT stat, gear excluded), so it belongs
+    // on the card where the point is actually being spent -- otherwise a
+    // player cannot see that this +1 is the one that unlocks something, or
+    // that it is the odd point that changes nothing.
+    const permVal = getPermanentStats(char)[stat] || 0;
+    const profTxt = this.add.text(cx + CARD_W / 2 - 10, cy - CARD_H / 2 + 54,
+      this._profLabel(permVal, pending),
+      { fontSize: '11px', color: '#9fb3c8' }
+    ).setOrigin(1, 0.5).setDepth(d);
+    group.add(profTxt);
+
     // Effects label (bottom)
     const effectTxt = this.add.text(cx - CARD_W / 2 + 14, cy + CARD_H / 2 - 32,
       STAT_EFFECTS[stat], { fontSize: '11px', color: '#555566' }
@@ -338,7 +364,7 @@ export default class LevelUpOverlay extends Phaser.Scene {
 
     // Store refs for live updates
     this._statCards[stat] = {
-      valTxt, pendTxt, previewTxt,
+      valTxt, pendTxt, previewTxt, profTxt,
       minusBtn, plusBtn,
       minusColor, plusColor,
     };
@@ -408,6 +434,8 @@ export default class LevelUpOverlay extends Phaser.Scene {
     const totalVal = this._char.totalStats[stat] || 0;
     const pend     = this._pending[stat];
 
+    const permVal = getPermanentStats(this._char)[stat] || 0;
+    card.profTxt?.setText(this._profLabel(permVal, pend));
     card.pendTxt.setText(pend > 0 ? `+${pend}` : '');
     card.previewTxt.setText(pend > 0 ? `→ ${totalVal + pend}` : '');
     card.minusBtn.setStyle({ color: card.minusColor() });

@@ -20,6 +20,7 @@
 // - this.time.delayedCall(ms, fn) (optional)
 
 import { SKILLS } from '../../data/skills.js';
+import { getProficiency } from './CombatLogic.js';
 import { DevFlags } from './DevFlags.js';
 
 /**
@@ -698,8 +699,9 @@ export default class ReactionSystem {
     // menu) already respects it. That mismatch let a character prepare a
     // reaction under Breakthrough that could then never actually fire,
     // silently, since this real gate didn't know about the cheat at all.
+    // Proficiency, not totalStats -- gear must not grant or revoke a reaction.
     if (s.requiredStat && !DevFlags.isBreakthroughEnabled()
-      && ((u.totalStats?.[s.requiredStat] || 0) < (s.requiredValue || 0))) return false;
+      && (getProficiency(u, s.requiredStat) < (s.requiredValue || 0))) return false;
 
     // weapon
     if (Array.isArray(s.requiredWeapon) && s.requiredWeapon.length) {
@@ -724,8 +726,8 @@ export default class ReactionSystem {
   // Only used for the log message above; the real gate stays _meetsReqs.
   _reqFailureReason(u, s) {
     if (s.requiredStat && !DevFlags.isBreakthroughEnabled()
-      && ((u.totalStats?.[s.requiredStat] || 0) < (s.requiredValue || 0))) {
-      return `needs ${s.requiredStat} ${s.requiredValue} (has ${u.totalStats?.[s.requiredStat] || 0})`;
+      && (getProficiency(u, s.requiredStat) < (s.requiredValue || 0))) {
+      return `needs ${s.requiredStat} Proficiency ${s.requiredValue} (has ${getProficiency(u, s.requiredStat)})`;
     }
     if (Array.isArray(s.requiredWeapon) && s.requiredWeapon.length) {
       const wType = u.weaponType || u.equipment?.weaponMain?.type || u.equipment?.weaponMain?.weaponType;

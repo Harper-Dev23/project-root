@@ -99,31 +99,110 @@ function getAttackerDamageMultiplier(attacker, opts = {}) {
   return 1 + pct / 100;
 }
 
-// Proficiency — a %damage multiplier off the attacker's single highest core
-// stat (STR/DEX/CON/INT/WIS/CHA), deliberately its own multiplicative step,
-// separate from gear's globalDamagePercent above. Lets any build raise
-// damage without specifically pumping STR (which still gates the flat
-// base-damage floor in calculateDamage()) — a build's best stat, whatever it
-// is, contributes here. +1% per point above 10, floored at 0 (no penalty for
-// a low peak stat — that's the future "Deficiency" stat's job, not this one).
-export function getProficiencyMultiplier(attacker) {
-  const s = attacker?.totalStats || {};
-  const highest = Math.max(s.STR || 0, s.DEX || 0, s.CON || 0, s.INT || 0, s.WIS || 0, s.CHA || 0);
-  const bonusPct = Math.max(0, highest - 10);
+// ============================================================================
+// PROFICIENCY and MASTERY
+// ============================================================================
+//
+// PROFICIENCY is the per-stat currency that skill requirements gate on. It is
+// derived from a character's PERMANENT stats only -- allocated points, race
+// bonus and class bonus -- and deliberately NOT from gear, temporary combat
+// buffs, or anything else transient.
+//
+//   proficiency(stat) = floor(permanentStat / 2)
+//
+// Why gear is excluded: gates were previously read off totalStats, which
+// includes an unpredictable 15-25 points of gear. That made the gate ladder
+// impossible to design against (nobody could say what a level-N character
+// actually had) and meant swapping a ring could add or remove skills from your
+// action menu mid-fight. Base-derived Proficiency is fully computable from the
+// progression curve, so the ladder can be tuned honestly.
+//
+// The halved scale is a CLARITY feature, not just compression: it makes the
+// gate unit visibly different from the stat on your sheet, so "requires 8 STR
+// Proficiency" can never be misread as "requires STR 8".
+//
+// The stat-reset potion resets allocated points and therefore resets
+// Proficiency, which is what makes respeccing into a different weapon work.
+const PROFICIENCY_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+/**
+ * The permanent (gear-free) core stats Proficiency derives from.
+ * Players get `permanentStats`, stamped by rebuildCharacterStats BEFORE gear is
+ * merged in. Enemies have no such split -- their totalStats starts as the
+ * template's baseStats and gear accumulates onto that same field -- so they
+ * fall back to `baseStats` when present, then totalStats.
+ */
+export function getPermanentStats(char) {
+  return char?.permanentStats || char?.baseStats || char?.totalStats || {};
+}
+
+/**
+ * Proficiency in one stat: half the permanent stat, PLUS any permanent bonus
+ * bought or awarded outright (Ember Cart's Proficiency tokens write into
+ * char.proficiencyBonus).
+ *
+ * The bonus is deliberately additive here rather than a stat grant, so
+ * Proficiency can drift away from the attributes that first drove it -- that
+ * drift is the point, and it is what lets a player grind toward a kit their
+ * raw allocation would never reach.
+ */
+export function getProficiency(char, stat) {
+  const key = String(stat || '').toUpperCase();
+  const base = Math.floor((getPermanentStats(char)[key] || 0) / 2);
+  return base + (char?.proficiencyBonus?.[key] | 0);
+}
+
+/** Every stat's Proficiency, for display. */
+export function getProficiencyMap(char) {
+  const src = getPermanentStats(char);
+  const bonus = char?.proficiencyBonus || {};
+  const out = {};
+  for (const k of PROFICIENCY_STATS) out[k] = Math.floor((src[k] || 0) / 2) + (bonus[k] | 0);
+  return out;
+}
+
+/** Highest Proficiency across the six core stats, and which stat it came from. */
+export function getHighestProficiency(char) {
+  const map = getProficiencyMap(char);
+  let stat = 'STR', value = -Infinity;
+  for (const k of PROFICIENCY_STATS) {
+    if ((map[k] || 0) > value) { value = map[k] || 0; stat = k; }
+  }
+  return { stat, value: Math.max(0, value) };
+}
+
+// MASTERY is the %damage-and-healing bonus that used to be called Proficiency.
+// Same role as before -- a build's single best stat contributes, so any build
+// can raise damage without pumping STR specifically -- but it now reads off
+// PROFICIENCY rather than the raw gear-inclusive stat.
+//
+//   mastery% = 2 x (highest Proficiency - 5)
+//
+// The "- 5" matters. Proficiency 5 corresponds to a permanent stat of 10, which
+// was the old formula's zero point, so this reproduces the OLD numbers exactly
+// for anything carrying no gear. That keeps all 23 enemy templates untouched:
+// a plain `2 x proficiency` would have handed every enemy in the game +4 to
+// +10% damage as an accidental side effect of a stat refactor.
+//
+// For players the one real change is that gear stats no longer feed this,
+// which is the entire intent. Floored at 0 -- no penalty for a low peak stat.
+export const MASTERY_PCT_PER_PROFICIENCY = 2;
+export const MASTERY_PROFICIENCY_FLOOR = 5;
+
+export function getMasteryMultiplier(attacker) {
+  const { value } = getHighestProficiency(attacker);
+  const bonusPct = Math.max(0, (value - MASTERY_PROFICIENCY_FLOOR) * MASTERY_PCT_PER_PROFICIENCY);
   return 1 + (bonusPct / 100);
 }
-// Display-only helper (CombatScene.js equipment tab) — same formula as
-// getProficiencyMultiplier above, but returns the raw %/driving-stat pair
-// instead of a multiplier, so the UI doesn't need to reverse-engineer it.
-export function getProficiencyBreakdown(char) {
-  const s = char?.totalStats || {};
-  const keys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
-  let bestKey = 'STR', bestVal = -Infinity;
-  for (const k of keys) {
-    const v = s[k] || 0;
-    if (v > bestVal) { bestVal = v; bestKey = k; }
-  }
-  return { stat: bestKey, value: bestVal, bonusPct: Math.max(0, bestVal - 10) };
+
+/** Display-only twin of getMasteryMultiplier -- raw %/driving-stat pair. */
+export function getMasteryBreakdown(char) {
+  const { stat, value } = getHighestProficiency(char);
+  return {
+    stat,
+    proficiency: value,
+    bonusPct: Math.max(0, (value - MASTERY_PROFICIENCY_FLOOR) * MASTERY_PCT_PER_PROFICIENCY),
+  };
 }
 
 // Excess Accuracy beyond what's needed to reach 100% hit chance converts
@@ -764,7 +843,7 @@ export function calculateDamage(attacker, target, ability = null) {
   // components (same "whole hit" treatment as crit below), applied to both
   // legacy and typed-pipeline skills since it happens here in the shared
   // calculateDamage() rather than in either path's own finalize step.
-  const profMult = getProficiencyMultiplier(attacker);
+  const profMult = getMasteryMultiplier(attacker);
   if (profMult !== 1) {
     const prevSum = physical + elemental + necrotic;
     physical = Math.floor(physical * profMult);

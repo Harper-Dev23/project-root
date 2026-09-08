@@ -3,7 +3,7 @@ import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { MENU_THEME } from '../../ui/styles.js';
-import { getEffectivePDR, getEffectiveEDR, getEffectiveNDR } from '../../systems/CombatLogic.js';
+import { getEffectivePDR, getEffectiveEDR, getEffectiveNDR, getProficiencyMap, getMasteryBreakdown } from '../../systems/CombatLogic.js';
 import { WeaknessBuildupCategory } from '../../systems/StatusEffects.js';
 
 export default class CharacterListOverlay extends Phaser.Scene {
@@ -413,7 +413,15 @@ export default class CharacterListOverlay extends Phaser.Scene {
       const value = statSource?.[key];
       return value ?? character.baseStats?.[key] ?? '—';
     };
-    const coreStats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(key => `${key}: ${statValue(key)}`);
+    // Each stat is shown with its PROFICIENCY in brackets. Proficiency is half
+    // the character's PERMANENT value (allocated points + race + class, gear
+    // excluded) and is the number every skill requirement is measured against,
+    // so it has to be visible next to the stat it derives from -- otherwise a
+    // player comparing "DEX 22" against "requires DEX Proficiency 12" has no
+    // way to see why a skill is locked.
+    const profMap = getProficiencyMap(character);
+    const coreStats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+      .map(key => `${key}: ${statValue(key)}   (Proficiency ${profMap[key] ?? 0})`);
     cursorY = this._writeSection(0, cursorY, 'Core Stats', coreStats, scrollWidth);
 
     const vitals = [
@@ -446,9 +454,14 @@ export default class CharacterListOverlay extends Phaser.Scene {
     // same formulas the combat character-info panel uses (PDR/EDR/NDR,
     // PD/ED/ND), just read at baseline (no active combat buffs/weakness).
     const ge = character.gearEffects || {};
+    // Mastery belongs with outgoing damage rather than with the core stats: it
+    // is a %bonus to damage AND healing, driven by the single highest
+    // Proficiency above. Gear raises stats but never Mastery.
+    const mastery = getMasteryBreakdown(character);
     const mitigation = [
       `PDR / EDR / NDR: ${getEffectivePDR(character)}% / ${getEffectiveEDR(character)}% / ${getEffectiveNDR(character)}%`,
       `Outgoing Dmg (P/E/N): ${ge.globalDamagePercent || 0}% / ${(ge.globalDamagePercent || 0) + (ge.elementalDamagePercent || 0)}% / ${(ge.globalDamagePercent || 0) + (ge.necroticDamagePercent || 0)}%`,
+      `Mastery: +${mastery.bonusPct}%  (from ${mastery.stat} Proficiency ${mastery.proficiency})`,
     ];
     cursorY = this._writeSection(0, cursorY, 'Mitigation & Damage', mitigation, scrollWidth);
 

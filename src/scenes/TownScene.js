@@ -1,5 +1,6 @@
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { createScrollbar } from '../ui/Scrollbar.js';
 import { LEADER_QUEST_REP_GAIN } from '../systems/TribeRelations.js';
 import InventorySystem from '../systems/InventorySystem.js';
 import { Items } from '../../data/items.js';
@@ -359,6 +360,9 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.topPadding = 0;
       this.vendorInventoryContainer.lineHeight = 36;
       this._resetInventoryMask();
+      // Clear the bar too, or it lingers from the previous vendor over an
+      // empty list.
+      this._refreshVendorScrollbar();
     }
 
     if (this.vendorInventoryTitle) {
@@ -1335,6 +1339,59 @@ export default class TownScene extends Phaser.Scene {
     this._inventoryMaskBottom = bottomY;
   }
 
+  /**
+   * Draggable scrollbar for the vendor list, plus the click-blocking the wheel
+   * path never had.
+   *
+   * The list was already masked and clamped, so it LOOKED right, but a geometry
+   * mask clips rendering and not pointer events: rows scrolled out of the panel
+   * stayed clickable and kept stealing clicks from whatever sat above or below
+   * them. That is the "items outside the bounds" trouble -- the rows were
+   * invisible, not gone. Matches how InventoryOverlay already handles it.
+   *
+   * Rebuilt on every list render because the content height changes with the
+   * vendor and the tab.
+   */
+  _refreshVendorScrollbar() {
+    const c = this.vendorInventoryContainer;
+    if (!c) return;
+
+    const top = this._inventoryMaskTop ?? 220;
+    const bottom = this._inventoryMaskBottom ?? 595;
+    const visibleH = Math.max(0, bottom - top);
+    const totalH = (c.topPadding || 0) + (c.listHeight || 0);
+    const maxScroll = Math.max(0, totalH - visibleH);
+
+    this._vendorSyncRows = () => {
+      c.list.forEach(child => {
+        if (!child || !child.input) return;   // never interactive — skip
+        const h = child.height || 16;
+        const worldTop = c.y + child.y;
+        const worldBot = worldTop + h;
+        const inView = worldBot > top && worldTop < bottom;
+        if (inView) child.setInteractive({ useHandCursor: true });
+        else child.disableInteractive();
+      });
+    };
+    this._vendorSyncRows();
+
+    this._vendorScrollbar?.destroy();
+    this._vendorScrollbar = createScrollbar(this, {
+      // Just inside the panel's right edge (panel spans x 550-1050).
+      x: 1036,
+      y: top,
+      height: visibleH,
+      depth: 14,
+      getScroll: () => -(c.y || 0),
+      getMax: () => maxScroll,
+      setScroll: (v) => {
+        c.y = -Phaser.Math.Clamp(v, 0, maxScroll);
+        this._vendorSyncRows();
+      },
+      viewRatio: () => (totalH > 0 ? visibleH / totalH : 1),
+    });
+  }
+
   _resetInventoryMask() {
     // Default panel clip (top=220, bottom=595)
     if (!this.vendorInventoryContainer) return;
@@ -1461,6 +1518,13 @@ export default class TownScene extends Phaser.Scene {
         if (lineHeight > 0) {
           maxScroll = Math.ceil(maxScroll / lineHeight) * lineHeight;
         }
+
+        // Refresh the thumb and re-run the off-screen click-blocking after the
+        // clamp below settles the final y.
+        this.time?.delayedCall?.(0, () => {
+          this._vendorScrollbar?.refresh();
+          this._vendorSyncRows?.();
+        });
 
         // Clamp scrolling
         if (this.vendorInventoryContainer.y > 0) {
@@ -1747,6 +1811,7 @@ export default class TownScene extends Phaser.Scene {
             // actually measures rather than a fixed constant - otherwise a
             // wrapped line overlaps the next one.
             this.vendorInventoryContainer.listHeight += Math.max(LOG_LINE_H, line.height + 4);
+            this._refreshVendorScrollbar();
 
             const visibleH = (this._inventoryMaskBottom - this._inventoryMaskTop);
             // No snap-to-row here any more: rows can be one or two lines tall,
@@ -1921,7 +1986,19 @@ export default class TownScene extends Phaser.Scene {
         const color = RARITY_COLORS[rowRarity] || '#cccccc';
         const rarityTag = entry.rarity ? ` (${formatLabel(entry.rarity)})` : '';
 
-        const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name}${rarityTag} — ${entry.cost}g`, {
+        // Vendor rows are priced in gold by default. An entry may name another
+        // ProgressionManager counter via `currency` (e.g. reckoningMarks), in
+        // which case the row shows that currency and is charged against it.
+        // Gold rows still do not deduct anything -- that is pre-existing
+        // behaviour and deliberately left alone here.
+        const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Mark', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket' };
+        const cur = entry.currency;
+        const curName = cur ? CURRENCY_LABEL[cur] || cur : null;
+        const priceText = cur
+          ? `${entry.cost} ${curName}${entry.cost === 1 ? '' : 's'}`
+          : `${entry.cost}g`;
+
+        const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name}${rarityTag} — ${priceText}`, {
           fontSize: '18px',
           color
         })
@@ -1932,6 +2009,18 @@ export default class TownScene extends Phaser.Scene {
             if (!itemId) {
               console.warn("No item ID found for vendor item:", entry);
               return;
+            }
+
+            // Charge a non-gold currency before handing anything over.
+            if (cur) {
+              const held = ProgressionManager[cur] || 0;
+              if (held < entry.cost) {
+                this.vendorInventoryText.setText(
+                  `You need ${entry.cost} ${curName}${entry.cost === 1 ? '' : 's'} — you have ${held}.`);
+                SoundManager.play('dullClick');
+                return;
+              }
+              ProgressionManager[cur] = held - entry.cost;
             }
 
             const instance = createItemInstance(itemId, entry.rarity ? { rarity: entry.rarity } : undefined);
@@ -1965,6 +2054,7 @@ export default class TownScene extends Phaser.Scene {
 
     // Store total height for scrolling clamp
     this.vendorInventoryContainer.listHeight = yOffset;
+    this._refreshVendorScrollbar();
   }
 
 
@@ -2050,7 +2140,16 @@ export default class TownScene extends Phaser.Scene {
         inventory: [
           { id: "coal_scuttle", cost: 20, desc: "Fuel item." },
           { id: "phoenix_ash", cost: 95, desc: "Revive at 1 HP (future mechanic)." },
-          { id: "cinder_oil", cost: 70, desc: "Adds fire DOT to next attack." }
+          { id: "cinder_oil", cost: 70, desc: "Adds fire DOT to next attack." },
+          // Proficiency tokens. These are the first vendor stock priced in a
+          // currency other than gold, hence the `currency` field below --
+          // without it the row would read "2g" and charge nothing.
+          { id: "prof_token_str", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 STR Proficiency for one Hunter." },
+          { id: "prof_token_dex", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 DEX Proficiency for one Hunter." },
+          { id: "prof_token_con", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 CON Proficiency for one Hunter." },
+          { id: "prof_token_int", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 INT Proficiency for one Hunter." },
+          { id: "prof_token_wis", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 WIS Proficiency for one Hunter." },
+          { id: "prof_token_cha", cost: 2, currency: "reckoningMarks", desc: "Permanently +1 CHA Proficiency for one Hunter." }
         ]
       },
       whispercloth: {

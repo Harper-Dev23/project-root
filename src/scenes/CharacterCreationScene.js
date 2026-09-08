@@ -187,6 +187,12 @@ export default class CharacterCreationScene extends Phaser.Scene {
     const statXValue = statXMinus + 50;
     const statXPlus = statXValue + 50;
 
+    // Legend for the bracketed number the stat rows print below. Without it the
+    // "(7)" reads as noise, and it is the number every skill requirement is
+    // actually measured against.
+    this.add.text(statXValue, statStartY - 34, 'stat  (Proficiency)',
+      { ...FONTS.muted, color: '#9fb3c8' }).setOrigin(0.5, 0.5);
+
     statKeys.forEach((key, i) => {
       const y = statStartY + i * 48;
 
@@ -310,7 +316,11 @@ export default class CharacterCreationScene extends Phaser.Scene {
       const r = raceB[key] || 0;
       const c = classB[key] || 0;
       const total = base + r + c;
-      this.statTexts[key].setText(`${total}`);
+      // base + race + class IS the permanent stat total, so Proficiency can be
+      // shown here directly: floor(total / 2). Skill requirements gate on the
+      // bracketed number, so it has to be visible while allocating points --
+      // that is the moment the choice is actually being made.
+      this.statTexts[key].setText(`${total}  (${Math.floor(total / 2)})`);
     });
 
     this.pointsText.setText(`Points Remaining: ${this.availablePoints}`);

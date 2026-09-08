@@ -1,5 +1,6 @@
 import GameState from '../../systems/GameState.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
+import { createScrollbar } from '../../ui/Scrollbar.js';
 import { Items } from '../../../data/items.js';
 import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.js';
 import InventorySystem from '../../systems/InventorySystem.js';
@@ -917,6 +918,20 @@ export default class InventoryOverlay extends Phaser.Scene {
             });
 
           listContainer.add([transferBtn, eqBtn]);
+        } else if (baseItem.onUse === 'grant_proficiency') {
+          // Proficiency token: permanent +1 to one stat's Proficiency for this
+          // character. Writes to char.proficiencyBonus, which getProficiency
+          // adds on top of half-the-permanent-stat.
+          const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#c8a0ff' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => useBtn.setStyle({ color: '#e0c8ff' }))
+            .on('pointerout', () => useBtn.setStyle({ color: '#c8a0ff' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('select');
+              this._grantProficiency(char, item, baseItem);
+            });
+          listContainer.add([transferBtn, useBtn]);
         } else if (baseItem.onUse === 'respec_stats') {
           // TESTING ITEM (Tonic of Reflection). This whole branch and the item
           // definition are the only support it needs - remove both and nothing
@@ -957,6 +972,52 @@ export default class InventoryOverlay extends Phaser.Scene {
       listContainer.y = Phaser.Math.Clamp(
         listStartY - Phaser.Math.Clamp(this._globalScrollY, 0, maxScrollG),
         listStartY - maxScrollG, listStartY);
+    }
+
+    // === Draggable scrollbars for both lists ==============================
+    // The wheel already scrolled these, but with no visible rail there was no
+    // indication either list COULD scroll, nor any way to move it without a
+    // wheel. Each bar drives its own list's container position directly, since
+    // the two lists clamp independently and neither shares a scroll model with
+    // the other (or with SkillsOverlay, hence the accessor-based widget).
+    this._invScrollbars?.forEach(b => b.destroy());
+    this._invScrollbars = [];
+
+    const gMaxScroll = Math.max(0, gContentHeight - gVisibleHeight);
+    this._invScrollbars.push(createScrollbar(this, {
+      x: gArea.x + gArea.w - 10,
+      y: gArea.y,
+      height: gVisibleHeight,
+      depth: contentDepth + 2,
+      getScroll: () => listStartY - listContainer.y,
+      getMax: () => gMaxScroll,
+      setScroll: (v) => {
+        listContainer.y = listStartY - Phaser.Math.Clamp(v, 0, gMaxScroll);
+        this._globalScrollY = listStartY - listContainer.y;
+        // Same off-screen click-blocking the wheel path does: a geometry mask
+        // clips rendering but NOT pointer events, so scrolled-away rows would
+        // otherwise keep stealing clicks meant for the UI above and below.
+        _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
+      },
+      viewRatio: () => (gContentHeight > 0 ? gVisibleHeight / gContentHeight : 1),
+    }));
+
+    if (pList && pArea) {
+      const pMaxScroll = Math.max(0, pContentHeight - pVisibleHeight);
+      this._invScrollbars.push(createScrollbar(this, {
+        x: pArea.x + pArea.w - 10,
+        y: pArea.y,
+        height: pVisibleHeight,
+        depth: contentDepth + 2,
+        getScroll: () => pMaskY - pList.y,
+        getMax: () => pMaxScroll,
+        setScroll: (v) => {
+          pList.y = pMaskY - Phaser.Math.Clamp(v, 0, pMaxScroll);
+          this._personalScrollY = pMaskY - pList.y;
+          _syncInteractivity(pList, pMaskY, pMaskY + pMaskHeight);
+        },
+        viewRatio: () => (pContentHeight > 0 ? pVisibleHeight / pContentHeight : 1),
+      }));
     }
 
     // static global scroll hitbox (reuse gArea defined above)
@@ -1001,6 +1062,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         }
         this._globalScrollY = listStartY - listContainer.y;
         _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
+        this._invScrollbars?.forEach(b => b.refresh());
       }
 
       // PERSONAL scroll/clamp (only when a party member is selected)
@@ -1015,6 +1077,7 @@ export default class InventoryOverlay extends Phaser.Scene {
         }
         this._personalScrollY = pMaskY - pList.y;
         _syncInteractivity(pList, pMaskY, pMaskY + pMaskHeight);
+        this._invScrollbars?.forEach(b => b.refresh());
       }
 
     };
@@ -1203,6 +1266,26 @@ export default class InventoryOverlay extends Phaser.Scene {
    * Refuses on characters created before `creationStats` existed rather than
    * guessing a baseline - a wrong guess would silently corrupt their stats.
    */
+  /**
+   * Consume a Proficiency token: permanent +1 Proficiency in one stat.
+   *
+   * Stored separately from stats on purpose. Proficiency normally derives from
+   * permanent stats, so a bonus here lets it DRIFT from them -- which is the
+   * whole point of the token, and is why a respec deliberately leaves it alone
+   * (see _respecCharacter: it rewrites baseStats and never touches this).
+   */
+  _grantProficiency(char, item, baseItem) {
+    if (!char || !baseItem?.proficiencyStat) return;
+    const stat = String(baseItem.proficiencyStat).toUpperCase();
+    const amount = Math.max(1, baseItem.proficiencyAmount | 0);
+    char.proficiencyBonus = char.proficiencyBonus || {};
+    char.proficiencyBonus[stat] = (char.proficiencyBonus[stat] | 0) + amount;
+    InventorySystem.removeGlobalItem(item);
+    this._commitChar(char);
+    GameState.save('autosave');
+    this.scene.restart();
+  }
+
   _respecCharacter(char, item) {
     if (!char) return;
     if (!char.creationStats) {

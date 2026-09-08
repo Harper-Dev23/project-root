@@ -14,6 +14,7 @@ import { Items } from '../../../data/items.js';
 import { isItemInstance } from '../../systems/ItemFactory.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { MENU_THEME } from '../../ui/styles.js';
+import { getProficiencyMap, getMasteryBreakdown } from '../../systems/CombatLogic.js';
 
 export default class CampRosterOverlay extends Phaser.Scene {
   constructor() {
@@ -310,9 +311,15 @@ export default class CampRosterOverlay extends Phaser.Scene {
     const statSource = character.totalStats || character.baseStats || {};
     const sv = k => statSource[k] ?? character.baseStats?.[k] ?? '—';
 
-    curY = this._writeSection(curY, 'Core Stats', [
-      `STR: ${sv('STR')}   DEX: ${sv('DEX')}   CON: ${sv('CON')}`,
-      `INT: ${sv('INT')}   WIS: ${sv('WIS')}   CHA: ${sv('CHA')}`,
+    // Bracketed value is PROFICIENCY -- half the permanent stat, gear excluded.
+    // Skill requirements gate on it, so it is shown wherever the stat is.
+    const pm = getProficiencyMap(character);
+    const mb = getMasteryBreakdown(character);
+    const sp = k => `${sv(k)} (${pm[k] ?? 0})`;
+    curY = this._writeSection(curY, 'Core Stats  -  stat (Proficiency)', [
+      `STR: ${sp('STR')}   DEX: ${sp('DEX')}   CON: ${sp('CON')}`,
+      `INT: ${sp('INT')}   WIS: ${sp('WIS')}   CHA: ${sp('CHA')}`,
+      `Mastery: +${mb.bonusPct}% damage and healing (from ${mb.stat} Proficiency ${mb.proficiency})`,
     ], scrollW);
 
     curY = this._writeSection(curY, 'Vitals', [

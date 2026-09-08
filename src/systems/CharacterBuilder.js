@@ -195,6 +195,10 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
   const raceBonus = RACE_BONUSES[race] || {};
   const classBonus = CLASS_BONUSES[baseClass] || {};
   const totalStats = mergeStats(mergeStats({ ...stats }, raceBonus), classBonus);
+  // Same snapshot as rebuildCharacterStats -- at creation there is no gear
+  // yet, so these are identical, but the field must exist from turn one or
+  // Proficiency reads 0 until the first equip triggers a rebuild.
+  const permanentStats = { ...totalStats };
   const derived = calculateDerivedStats(totalStats, { basePlayerHP: 16 });
   const maxHP = derived.maxHP || 1;
   const maxMP = derived.maxMP || 0;
@@ -251,6 +255,7 @@ export function buildCharacter({ name, race, baseClass, stats, skin }) {
 
     cooldowns: {},
     baseStats: { ...stats },
+    permanentStats,
     // Snapshot of the stats this character was CREATED with, before any
     // level-up allocation. Only consumer today is the respec tonic, which
     // needs a baseline to restore to - nothing else reads it, so deleting
@@ -430,6 +435,18 @@ export function rebuildCharacterStats(character) {
   // Combine raw stats
   let total = mergeStats(baseStatPoints, raceBonus);
   total = mergeStats(total, classBonus);
+
+  // PERMANENT stats -- allocated points + race + class, snapshotted HERE,
+  // before any gear is merged in below. This is the sole basis for
+  // Proficiency (see getProficiency in CombatLogic.js), which is what skill
+  // requirements gate on. Gear deliberately does not contribute: gates used
+  // to read the gear-inclusive totalStats, so equipping or removing a ring
+  // could add or drop skills from the action menu, and the gate ladder could
+  // not be designed against a knowable curve.
+  //
+  // The stat-reset potion clears character.baseStats, so it clears this too,
+  // which is exactly what lets a player respec into another weapon.
+  character.permanentStats = { ...total };
 
   const gearDerived = {};
   const gearEffects = {

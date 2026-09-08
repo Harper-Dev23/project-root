@@ -5,6 +5,7 @@ import { SKILLS } from '../../../data/skills.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { buildSkillTooltipLines } from '../../ui/skillTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { createScrollbar } from '../../ui/Scrollbar.js';
 
 export default class SkillsOverlay extends Phaser.Scene {
   constructor() {
@@ -391,54 +392,100 @@ export default class SkillsOverlay extends Phaser.Scene {
     // Sort ascending (lowest first), then name
     all.sort((a, b) => (a.reqVal - b.reqVal) || a.name.localeCompare(b.name));
 
-    // Layout
+    // ---- Layout: grouped Proficiency ladder ------------------------------
+    //
+    // Was one full-width card per skill, stacked. At ~150 skills that is a very
+    // long scroll where each card is mostly empty, and it never answers the
+    // question a player actually has: what do I get if I put my next points
+    // here? Cards are now GROUPED under the Proficiency that unlocks them and
+    // flowed into as many columns as the panel is wide.
+    const STAT_TINT = {
+      STR: 0xff7755, DEX: 0x88dd88, CON: 0xcc9955,
+      INT: 0x5599ff, WIS: 0xbb88ff, CHA: 0xffcc44,
+    };
     const left = this.graphViewport.x + 12;
     const top = this.graphViewport.y + 12;
-    const cardH = 70;
-    const cardW = this.graphViewport.width - 24;
+    // 14px reserved on the right for the scrollbar, so the bar sits beside
+    // the cards rather than on top of them.
+    const availW = this.graphViewport.width - 24 - 14;
 
-    all.forEach((s, i) => {
-      const y = top + i * (cardH + 8);
+    const GUTTER_W = 62;          // left rail holding the Proficiency number
+    const CARD_MIN = 210;
+    const CARD_H = 46;
+    const GAP = 7;
 
-      const bg = this.add.rectangle(left + cardW / 2, y + cardH / 2, cardW, cardH, 0x262626, 1)
-        .setStrokeStyle(1, 0x555555)
-        .setInteractive({ useHandCursor: true });
+    const gridW = availW - GUTTER_W;
+    const cols = Math.max(1, Math.floor((gridW + GAP) / (CARD_MIN + GAP)));
+    const cardW = Math.floor((gridW - GAP * (cols - 1)) / cols);
 
-      const name = this.add.text(left + 10, y + 6, s.name, { fontSize: '15px', color: '#ffffff' });
-      const meta = this.add.text(
-        left + 10, y + 30,
-        `Required: ${s.reqStat} ${s.reqVal || 0}   •   Weapon: ${s.weaponList.length ? s.weaponList.join(', ') : 'Any'}`,
-        { fontSize: '12px', color: '#bbbbbb' }
-      );
+    // Group by required Proficiency, ascending.
+    const groups = new Map();
+    for (const sk of all) {
+      if (!groups.has(sk.reqVal)) groups.set(sk.reqVal, []);
+      groups.get(sk.reqVal).push(sk);
+    }
+    const gateKeys = [...groups.keys()].sort((a, b) => a - b);
 
-      const showTip = () => {
-        const { x, y } = this.input.activePointer;
-        // Generic mode (no actor) — shows formula text, not live numbers
-        const { lines, tags, titleColor, aoeGrid } = buildSkillTooltipLines(s.raw, null);
-        this._showTooltipAt(x, y, { title: s.name, titleColor, lines, tags, aoeGrid });
-        bg.setFillStyle(0x303030, 1);
-      };
-      const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };
+    let y = top;
+    for (const gate of gateKeys) {
+      const inGroup = groups.get(gate);
+      const rows = Math.ceil(inGroup.length / cols);
+      const blockH = rows * CARD_H + (rows - 1) * GAP;
 
-      // Only the BACKGROUND is interactive. The two Text objects sit on top of
-      // it but are left non-interactive, and Phaser's hit test only considers
-      // interactive objects — so the pointer falls straight through to bg and
-      // hover still works everywhere on the card. Making all three interactive
-      // meant 3 input zones and 6 listeners per card; across ~240 skills that
-      // is ~1450 listeners torn down and rebuilt on EVERY keystroke, which is
-      // what made the search bar lag.
-      bg.on('pointerover', showTip);
-      bg.on('pointerout', hideTip);
+      // Left rail: the gate value, once per group, instead of repeating
+      // "Required: X" on every single card.
+      const gnum = this.add.text(left + GUTTER_W - 14, y, String(gate), {
+        fontSize: '22px', color: '#c8a060', fontStyle: 'bold',
+      }).setOrigin(1, 0);
+      const glab = this.add.text(left + GUTTER_W - 14, y + 24, 'PROF', {
+        fontSize: '9px', color: '#7d7368',
+      }).setOrigin(1, 0);
+      this.content.add([gnum, glab]);
 
-      // No-op click for now
-      bg.on('pointerdown', () => {
-        bg.setStrokeStyle(2, 0xffffff);
-        this.time.delayedCall(120, () => bg.setStrokeStyle(1, 0x555555));
+      inGroup.forEach((sk, i) => {
+        const cx = left + GUTTER_W + (i % cols) * (cardW + GAP);
+        const cy = y + Math.floor(i / cols) * (CARD_H + GAP);
+        const tint = STAT_TINT[sk.reqStat] || 0x888888;
+
+        const bg = this.add.rectangle(cx + cardW / 2, cy + CARD_H / 2, cardW, CARD_H, 0x262626, 1)
+          .setStrokeStyle(1, 0x555555)
+          .setInteractive({ useHandCursor: true });
+        // Stat is carried by a colored edge rather than a word, so the card can
+        // spend its width on the skill's name.
+        const edge = this.add.rectangle(cx + 1.5, cy + CARD_H / 2, 3, CARD_H, tint, 1);
+
+        const name = this.add.text(cx + 10, cy + 6, sk.name, { fontSize: '14px', color: '#ffffff' });
+        const meta = this.add.text(cx + 10, cy + 25,
+          `${sk.reqStat}  ·  ${sk.weaponList.length ? sk.weaponList.join(', ') : 'Any'}`,
+          { fontSize: '10px', color: '#9a9186' });
+
+        const showTip = () => {
+          const { x, y: py } = this.input.activePointer;
+          const { lines, tags, titleColor, aoeGrid } = buildSkillTooltipLines(sk.raw, null);
+          this._showTooltipAt(x, py, { title: sk.name, titleColor, lines, tags, aoeGrid });
+          bg.setFillStyle(0x303030, 1);
+        };
+        const hideTip = () => { this._hideTooltip(); bg.setFillStyle(0x262626, 1); };
+
+        // Only the BACKGROUND is interactive — the text and edge sit on top but
+        // stay non-interactive, so Phaser's hit test falls through to bg. Making
+        // each element interactive meant 4 input zones per card, which is what
+        // made the search bar lag across ~240 skills.
+        bg.on('pointerover', showTip);
+        bg.on('pointerout', hideTip);
+        bg.on('pointerdown', () => {
+          bg.setStrokeStyle(2, 0xffffff);
+          this.time.delayedCall(120, () => bg.setStrokeStyle(1, 0x555555));
+        });
+
+        this.content.add([bg, edge, name, meta]);
       });
 
-      this.content.add([bg, name, meta]);
-      this.items.push({ y, h: cardH + 8 });
-    });
+      // One scroll entry per GROUP, not per card — the list is now 2-D, so a
+      // per-card entry would report a content height several times too tall.
+      this.items.push({ y, h: blockH + 22 });
+      y += blockH + 22;
+    }
 
     // Empty state
     if (this.items.length === 0) {
@@ -451,6 +498,7 @@ export default class SkillsOverlay extends Phaser.Scene {
         { fontSize: '14px', color: '#aaaaaa' });
       this.content.add(t);
       this.scrollMin = 0; this.scrollMax = 0; this._setScroll(0);
+      this._buildScrollbar();
       return;
     }
 
@@ -464,6 +512,27 @@ export default class SkillsOverlay extends Phaser.Scene {
     this.scrollMin = 0;
     this.scrollMax = Math.max(0, totalContentHeight - this.graphViewport.height);
     this._setScroll(this.scrollY);
+    this._buildScrollbar();
+  }
+
+  /**
+   * Draggable scrollbar down the right edge of the list viewport. Rebuilt with
+   * the list because scrollMax changes whenever a filter or the search text
+   * does, and a stale bar would scrub against the wrong range.
+   */
+  _buildScrollbar() {
+    this._scrollbar?.destroy();
+    const vp = this.graphViewport;
+    const total = vp.height + (this.scrollMax || 0);
+    this._scrollbar = createScrollbar(this, {
+      x: vp.x + vp.width - 10,
+      y: vp.y,
+      height: vp.height,
+      getScroll: () => this.scrollY,
+      getMax: () => this.scrollMax,
+      setScroll: (v) => this._setScroll(v),
+      viewRatio: () => (total > 0 ? vp.height / total : 1),
+    });
   }
 
   // ---------- Tooltip helpers ----------
@@ -485,6 +554,7 @@ export default class SkillsOverlay extends Phaser.Scene {
   _setScroll(y) {
     const ny = Number.isFinite(y) ? y : 0;
     this.scrollY = Phaser.Math.Clamp(ny, this.scrollMin, this.scrollMax);
+    this._scrollbar?.refresh();
     this.content.y = -this.scrollY;
   }
 }

@@ -43,7 +43,7 @@ The second: **damage is carried as a floating-point number through every step an
 
 **8. Gear conversions.** In fixed order: physical → elemental, then physical → necrotic, then elemental → necrotic.
 
-**9. Proficiency.** A multiplier derived from the character's highest core attribute.
+**9. Mastery.** A multiplier derived from the character's highest **Proficiency** -- +2% per Proficiency above 5. Gear raises your attributes but never your Mastery.
 
 ---
 

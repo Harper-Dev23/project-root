@@ -10,12 +10,34 @@ status: "approved"
 teaser: false
 requires: []
 sort: 10
-version: 2
-updatedAt: 2026-08-23
+version: 3
+updatedAt: 2026-09-08
 ---
 # Stat Calculations Overview
 
 Every character has six core attributes -- **STR, DEX, CON, INT, WIS, CHA** -- chosen at creation, then adjusted by race and class. Everything below is derived from those six.
+
+## Proficiency
+
+**Proficiency** is what skill requirements are measured against, and it is deliberately *not* the number on your character sheet.
+
+    Proficiency in a stat = half that stat's PERMANENT value, rounded down
+
+Permanent means the points you allocated, plus your race bonus, plus your class bonus. **Gear does not count.** A ring that grants +4 STR raises your Strength and everything Strength derives, but it does not move your Strength Proficiency, and it will never unlock a skill.
+
+That is the point. Access to a skill is something you build toward and keep; it does not appear and vanish as you swap equipment mid-hunt. It also means the requirements can be written against a curve that actually exists, rather than guessing how much a Hunter of a given level happens to be wearing.
+
+Proficiency is shown in brackets beside each attribute, both at creation and on the character panel: `18  (9)`.
+
+Resetting your allocated points -- as the vendor's draught does -- resets Proficiency with them. That is what makes it possible to abandon one weapon and train honestly into another.
+
+## Mastery
+
+**Mastery** is a percentage bonus to all outgoing damage *and* healing, driven by your single best Proficiency, whichever attribute that happens to be.
+
+    Mastery = 2% per point of your highest Proficiency above 5
+
+A Hunter with 20 permanent Dexterity has 10 Dexterity Proficiency, and so +10% Mastery. Because it keys off your best attribute rather than a specific one, no build is forced through Strength to hit respectably.
 
 ## Derived values
 
