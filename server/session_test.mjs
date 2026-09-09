@@ -122,6 +122,46 @@ const session = createSession({
   check('the combat log was produced', s.logLength > 0, s.logLength + ' lines');
 }
 
+// ---- recording pace --------------------------------------------------------
+console.log('=== the recording is paced by the host, and replayed one to one ===');
+{
+  const { GameplaySettings } = await import('../src/systems/GameplaySettings.js');
+
+  // The recording is made at the pace it will be watched at, taken from the
+  // lobby host. Clients replay one to one, so this number IS the on-screen
+  // duration — there is no second multiplier anywhere.
+  createSession({ CombatScene, players: [alice], scenarioId: 'training_encounter_1', quickCombat: true });
+  check('quickCombat: true records at 1x', GameplaySettings.animDurationMult() === 1,
+    'animDurationMult() = ' + GameplaySettings.animDurationMult());
+  createSession({ CombatScene, players: [alice], scenarioId: 'training_encounter_1', quickCombat: false });
+  check('the default records at the game default 4x', GameplaySettings.animDurationMult() === 4,
+    'animDurationMult() = ' + GameplaySettings.animDurationMult());
+
+  // Measure a real enemy round, so the number can be sanity-checked against
+  // how long it ought to feel rather than merely asserted to exist.
+  const s2 = createSession({
+    CombatScene,
+    players: [{ id: 'solo', name: 'Solo', hunters: wire.slice(0, 3).map(w => JSON.parse(JSON.stringify(w))) }],
+    scenarioId: 'training_encounter_3', seed: 7, quickCombat: true,
+  });
+  let span = 0, count = 0;
+  for (let i = 0; i < 12 && !s2.isOver; i++) {
+    const cur = s2.current();
+    if (!cur || cur.ownerId == null) break;
+    const foe = s2.state().units.find(u => u.side === 'enemy' && u.hp > 0);
+    if (foe) s2.act('solo', { actor: cur.ref, skill: 'basic_attack', target: foe.ref });
+    const r = s2.endTurn('solo');
+    const evs = r.events || [];
+    if (evs.length > count) {
+      count = evs.length;
+      span = (evs[evs.length - 1].at || 0) - (evs[0].at || 0);
+    }
+  }
+  // Replayed one to one, so this is literally how long it takes on screen.
+  check('a Quick Combat enemy round is seconds, not half a minute',
+    span < 12000, span + 'ms on screen across ' + count + ' events');
+}
+
 // ---- solo through the same code path ---------------------------------------
 console.log('=== one player, six hunters (co-op code path, solo) ===');
 {

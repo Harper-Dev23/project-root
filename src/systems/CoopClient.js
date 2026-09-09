@@ -110,8 +110,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return true;
     },
 
-    createLobby({ name, scenarioId, hunters }) {
-      return client.send({ t: 'create', name, scenarioId, hunters });
+    createLobby({ name, scenarioId, hunters, quickCombat = false }) {
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat });
     },
     joinLobby({ code, name, hunters }) {
       return client.send({ t: 'join', code, name, hunters });

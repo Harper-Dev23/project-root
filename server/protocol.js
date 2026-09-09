@@ -112,6 +112,8 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
         hostId: playerId,
         players: [],
         session: null,
+        // The host's combat-speed preference paces the recording for everyone.
+        quickCombat: !!msg.quickCombat,
       };
       lobbies.set(code, lobby);
       return handlers._seat(conn, lobby, playerId, msg);
@@ -195,6 +197,7 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
           CombatScene,
           players: lobby.players.map(p => ({ id: p.id, name: p.name, hunters: p.hunters })),
           scenarioId: lobby.scenarioId,
+          quickCombat: lobby.quickCombat,
           // No seed: the server leaves ambient randomness alone, so concurrent
           // hunts cannot reset each other's stream. See useSystemRandom.
           seed: null,

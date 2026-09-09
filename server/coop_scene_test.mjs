@@ -176,6 +176,10 @@ try {
       // board turns any refusal into an eight-second hang that reports nothing.
       await until(() => client.state.version > v || refusals.length > errs || over,
         'the board, or a reason it did not move');
+      // Run the client's scheduled replay. In the browser this happens on its
+      // own clock; here it has to be drained, and doing so proves the recorded
+      // events actually execute rather than merely arriving.
+      scenes.p1.__drain(); scenes.p2.__drain();
     }
     if (over) break;
 
@@ -214,6 +218,13 @@ try {
   check('an attack VFX is among them',
     seenEvents.some(e => e.fn === '_playAttackVFX'),
     [...new Set(seenEvents.map(e => e.fn))].join(', '));
+
+  // Arriving is not the same as playing. This asserts the scene actually
+  // invoked the VFX methods while replaying, rather than silently swallowing
+  // them on an unresolvable reference or a bad argument.
+  check('the client REPLAYED them, not just received them',
+    (scenes.p1.__skipped._playAttackVFX || 0) > 0,
+    (scenes.p1.__skipped._playAttackVFX || 0) + ' attack VFX played back');
 
   alice.disconnect(); bob.disconnect();
 

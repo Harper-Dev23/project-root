@@ -24,6 +24,7 @@ import { createCombatHost } from '../tools/headless/combatHost.js';
 import { seed as seedRng } from '../tools/headless/phaserStub.js';
 import { startCombat, snapshotBoard } from '../tools/headless/fight.js';
 import { fromWireCharacter } from '../src/systems/CoopWire.js';
+import { GameplaySettings } from '../src/systems/GameplaySettings.js';
 
 /** The shared party cap. Already the game's own limit in five places. */
 export const PARTY_LIMIT = 6;
@@ -57,7 +58,7 @@ export { toWireCharacter, fromWireCharacter } from '../src/systems/CoopWire.js';
  * replaces the global Math.random, so a server that seeded every session would
  * have each new hunt reset the randomness of every hunt already in progress.
  */
-export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null }) {
+export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null, quickCombat = false }) {
   if (!CombatScene) throw new Error('createSession needs the CombatScene class');
   if (!players.length) throw new Error('a session needs at least one player');
 
@@ -90,6 +91,24 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   }
 
   if (seed != null) seedRng(seed);
+
+  // The recording is made at the pace it will be WATCHED at, and clients replay
+  // it one to one.
+  //
+  // Scaling on the client cannot work, because the engine's delays are a
+  // deliberate mix: VFX waits are multiplied by animDurationMult, while the
+  // structural gaps between enemy actions (150ms, 200ms, 400ms) are explicitly
+  // NOT. Multiplying the whole recorded timeline stretches waits that single
+  // player never stretches, so the fight drifts further from its own rhythm the
+  // longer it runs. Applying the multiplier on BOTH sides made it worse again:
+  // four times four, which is how an enemy round came to take half a minute.
+  //
+  // So the pace is set once, here, from the lobby host's own setting, and the
+  // timeline that goes out is exactly what the engine would have produced on
+  // that player's screen. Everyone in the hunt watches the same thing at the
+  // same speed, which is the right answer for a shared fight anyway.
+  GameplaySettings.set('quickCombat', !!quickCombat);
+
   const host = createCombatHost(CombatScene);
 
   // Stamp ownership as the party is assembled. Every hunter gets an owner

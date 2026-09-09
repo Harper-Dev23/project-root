@@ -19,6 +19,7 @@ import { createPanel } from '../ui/GamePanel.js';
 import { createButton } from '../ui/Button.js';
 import { createCoopClient, CoopStatus } from '../systems/CoopClient.js';
 import { toWireCharacter } from '../systems/CoopWire.js';
+import { GameplaySettings } from '../systems/GameplaySettings.js';
 
 const SERVER_KEY = 'coop_server_url';
 const DEFAULT_SERVER = 'ws://localhost:8787';
@@ -273,6 +274,9 @@ export default class CoopLobbyScene extends Phaser.Scene {
       name: this._playerName('Host'),
       scenarioId: this.scenarioId,
       hunters: this._hunters(),
+      // The host's combat speed paces the recording for the whole hunt, so
+      // everyone watches the same fight at the same rate.
+      quickCombat: GameplaySettings.quickCombat,
     });
   }
 

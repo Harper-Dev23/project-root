@@ -5068,13 +5068,17 @@ export default class CombatScene extends Phaser.Scene {
   _replayCoopEvents(events) {
     if (!Array.isArray(events) || !events.length) return;
 
+    // Replayed ONE TO ONE. The recording was already made at the pace it is
+    // meant to be watched at (the lobby host's setting), and the engine's
+    // delays are a deliberate mix of scaled and unscaled — so multiplying here
+    // would stretch the structural gaps between enemy actions that single
+    // player never stretches, and the fight would drift out of its own rhythm.
     const base = events[0].at || 0;
-    // The player's own combat-speed setting, so co-op respects Quick Combat
-    // exactly as single player does.
-    const pace = GameplaySettings.animDurationMult();
 
+    let last = 0;
     for (const ev of events) {
-      const delay = Math.max(0, ((ev.at || 0) - base)) * pace;
+      const delay = Math.max(0, ((ev.at || 0) - base));
+      last = Math.max(last, delay);
       const run = () => {
         if (this.combatEnded && ev.fn !== '_showFloatingNumber') return;
         const args = (ev.args || []).map(a => this._fromWireArg(a));
@@ -5084,6 +5088,28 @@ export default class CombatScene extends Phaser.Scene {
       if (delay <= 0) run();
       else this.time.delayedCall(delay, run);
     }
+
+    // Hold this player's controls until the replay finishes.
+    //
+    // Without it the board — which lands immediately, and must — says "your
+    // turn" while the previous round is still visibly playing out, so a player
+    // acts into an animation that has not caught up, and the two drift further
+    // apart with every turn. Single player never has this problem because the
+    // thing being animated IS the thing being simulated; here they are
+    // deliberately separated, so the wait has to be put back by hand.
+    //
+    // The tail covers the last effect's own duration, since an event's
+    // timestamp is when it STARTS.
+    const tail = 320;
+    this._coopReplayUntil = Math.max(this._coopReplayUntil || 0, this.time.now + last + tail);
+    this._coopReplaying = true;
+    this._afterCoopState();
+
+    this.time.delayedCall(last + tail, () => {
+      if (this.time.now + 1 < (this._coopReplayUntil || 0)) return;  // a later batch owns it
+      this._coopReplaying = false;
+      this._afterCoopState();
+    });
   }
 
   /** Turn a recorded argument back into something this scene can use. */
@@ -5101,9 +5127,15 @@ export default class CombatScene extends Phaser.Scene {
     return out;
   }
 
-  /** Re-gate the local player's controls after any authoritative board. */
+  /**
+   * Re-gate the local player's controls after any authoritative board.
+   *
+   * Gated on the replay as well as on the turn: it may be your turn according
+   * to the server while the previous round is still animating on your screen,
+   * and letting you act then is what put the visuals and the fight out of step.
+   */
   _afterCoopState() {
-    const mine = this.coopClient?.isMyTurn;
+    const mine = this.coopClient?.isMyTurn && !this._coopReplaying;
     this.endTurnButton?.setVisible(!!mine);
     if (mine) this._buildActionMenuRoot?.();
     else this._exitTargetingMode?.();
