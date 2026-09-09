@@ -39,7 +39,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.client = null;
     this.chosen = new Set();      // instanceIds of hunters we are bringing
     this.statusLine = '';
-    this._rows = [];
+    this._unsubs = [];
+    this._handingOff = false;
   }
 
   create() {
@@ -68,7 +69,17 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this._refresh();
 
     this.events.once('shutdown', () => {
-      this.client?.disconnect();
+      // Always drop the listeners; this scene is about to stop existing.
+      for (const off of this._unsubs) { try { off(); } catch { } }
+      this._unsubs = [];
+
+      // But do NOT close the socket when we are handing the fight over.
+      // scene.start('CombatScene') shuts this scene down, so disconnecting
+      // here killed the very connection the fight was about to use — the
+      // players reached combat and immediately "lost connection to the
+      // server". Only a real exit closes it.
+      if (!this._handingOff) this.client?.disconnect();
+
       this.serverInput?.destroy();
       this.codeInput?.destroy();
       this.nameInput?.destroy();
@@ -188,7 +199,10 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
   _say(msg) {
     this.statusLine = msg || '';
-    this.status?.setText(this.statusLine);
+    // `.scene` goes null once Phaser destroys a GameObject. Unsubscribing on
+    // shutdown is the real fix; this is the guard for anything that still
+    // reaches here during teardown.
+    if (this.status?.scene) this.status.setText(this.statusLine);
   }
 
   /** The hunters we are bringing, packed for the wire. */
@@ -225,11 +239,18 @@ export default class CoopLobbyScene extends Phaser.Scene {
     if (this.client) return this.client;
     this.client = createCoopClient({ url });
 
-    this.client.on('lobby', () => this._refresh());
-    this.client.on('joined', () => { this._say(''); this._refresh(); });
-    this.client.on('error', reason => this._say(reason));
-    this.client.on('closed', () => this._say('Disconnected from the server.'));
-    this.client.on('started', () => this._enterFight());
+    // Every subscription is kept so it can be cancelled on shutdown. Leaving
+    // them attached meant a socket event after this scene was gone still tried
+    // to write to its Text objects, which Phaser had already destroyed:
+    // "Cannot read properties of null (reading 'cut')". A listener that
+    // outlives its scene is a crash waiting for the next event.
+    this._unsubs.push(
+      this.client.on('lobby', () => this._refresh()),
+      this.client.on('joined', () => { this._say(''); this._refresh(); }),
+      this.client.on('error', reason => this._say(reason)),
+      this.client.on('closed', () => this._say('Disconnected from the server.')),
+      this.client.on('started', () => this._enterFight()),
+    );
 
     this._say('Connecting…');
     try {
@@ -286,6 +307,10 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _enterFight() {
+    // Marks the shutdown below as a HANDOFF rather than an exit, so the socket
+    // survives into the fight.
+    this._handingOff = true;
+
     // Hand the live client to CombatScene, which renders what the server says
     // rather than simulating alongside it.
     this.scene.start('CombatScene', {

@@ -5009,8 +5009,18 @@ export default class CombatScene extends Phaser.Scene {
 
     this._coopUnsubs = off;
     this.events.once('shutdown', () => {
+      // Drop the listeners first. A subscription that outlives its scene will
+      // happily try to write to Text objects Phaser has already destroyed,
+      // which is where "Cannot read properties of null (reading 'cut')" comes
+      // from — the lobby hit exactly that before it started unsubscribing.
       for (const fn of this._coopUnsubs) { try { fn(); } catch { } }
       this._coopUnsubs = [];
+
+      // Leaving the fight ends the session. The lobby deliberately does NOT
+      // close the socket when it hands off to this scene, so closing it here
+      // is what finally releases it.
+      this.coopClient?.disconnect();
+      this.coopClient = null;
     });
 
     // The opening board arrived before this scene existed, so apply it now.
