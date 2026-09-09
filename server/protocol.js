@@ -190,7 +190,17 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       } catch (e) {
         return fail(conn, e.message);
       }
-      broadcast(lobby, { t: 'started', state: lobby.session.state() });
+      // The roster goes out ONCE, with the opening board.
+      //
+      // A client only ever learned the NAMES of the other player's hunters
+      // from the lobby view, which is not enough to draw them: it needs their
+      // real stats, gear and skill ids to build the same board the server
+      // built. Sent once at the start rather than with every broadcast, since
+      // none of it changes during a fight - the per-action `state` stays small.
+      const roster = lobby.players.flatMap(p =>
+        (p.hunters || []).map(h => ({ ...h, ownerId: p.id })));
+
+      broadcast(lobby, { t: 'started', state: lobby.session.state(), roster });
     },
 
     /** { t:'act', actor, skill, target } */

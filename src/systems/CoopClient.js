@@ -42,6 +42,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     code: null,
     lobby: null,
     state: null,      // newest board
+    roster: [],       // every player's hunters, from the 'started' message
     log: [],          // combat log accumulated across broadcasts
     lastError: null,
 
@@ -156,8 +157,11 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
       case 'started':
         client.state = msg.state;
+        // The full hunter data for EVERY player, sent once. The board cannot
+        // be built from the lobby view alone, which carries only names.
+        client.roster = msg.roster || [];
         client.status = CoopStatus.FIGHTING;
-        emit('started', msg.state);
+        emit('started', { state: msg.state, roster: client.roster });
         emit('status', client.status);
         break;
 

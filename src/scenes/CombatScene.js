@@ -27,6 +27,7 @@ import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOri
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
+import { fromWireCharacter } from '../systems/CoopWire.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
 import ReactionSystem, { isReactableAttackSource } from '../systems/ReactionSystem.js';
@@ -314,6 +315,19 @@ export default class CombatScene extends Phaser.Scene {
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
     this.isHunt = (this.combatType === 'hunt');
+
+    // Co-op: this scene DISPLAYS a fight the server is simulating.
+    //
+    // The distinction runs through everything below. A co-op client never
+    // resolves an action, never advances a turn and never decides a winner --
+    // it sends intents and draws whatever comes back. Simulating alongside the
+    // server would work right up until one roll differed, and then the two
+    // players would be looking at different games with no way to tell which
+    // was real.
+    this.isCoop = (this.combatType === 'coop');
+    this.coopClient = data.coopClient || null;
+    this.coopParty = [];        // every player's hunters, ours and theirs
+    this._coopUnsubs = [];
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
     this.scenarioId = data.scenarioId || 'training_encounter_1';
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
@@ -356,7 +370,8 @@ export default class CombatScene extends Phaser.Scene {
 
     // Setup battlefield and units
     this._createBattleSlots();
-    this._placePartyMembers();
+    if (this.isCoop) this._placeCoopParty();
+    else this._placePartyMembers();
     this._placeEnemies(this.scenarioId);
 
     // Build fixed turn order (decided at combat start) — grouped by TEAM
@@ -365,12 +380,23 @@ export default class CombatScene extends Phaser.Scene {
     // first is currently hardcoded to the player party for the combat pit;
     // a real circumstance-based rule (ambush, enemy initiative, etc.) is a
     // separate, later decision — this is a deliberate placeholder for that.
-    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
-    const partyOrder = [...GameState.party].sort(byInitiativeDesc);
-    const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
-    this.turnOrder = [...partyOrder, ...enemyOrder];
+    if (this.isCoop) {
+      // A placeholder only. The server decides the real order and sends it
+      // with the opening board; this just gives _findUnitByRef something to
+      // resolve against until that arrives a moment later.
+      this.turnOrder = [...this.coopParty, ...(this.enemies || [])];
+    } else {
+      const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
+      const partyOrder = [...GameState.party].sort(byInitiativeDesc);
+      const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
+      this.turnOrder = [...partyOrder, ...enemyOrder];
 
-    this._resetAllCooldowns();
+      // Skipped in co-op: this reads GameState.party, which holds the LOCAL
+      // player's real characters rather than the fight's roster, so running it
+      // would zero cooldowns on saved characters that are not even in this
+      // battle. The server owns cooldowns here anyway.
+      this._resetAllCooldowns();
+    }
 
     // Clean all per-combat transient state off every combatant.
     // Party members are persistent objects (GameState.party) so leftover statuses,
@@ -448,8 +474,16 @@ export default class CombatScene extends Phaser.Scene {
     // === IMPORTANT CHANGE ===
     // Do NOT hand-roll the first turn. Use the same pipeline as every other turn.
     // This ensures the first actor gets start-of-turn effects and the initiative gauge tick.
-    this.currentTurnIndex = -1;      // so _advanceTurn() moves to index 0
-    this._advanceTurn();             // handles UI gating + AI on enemy turns
+    //
+    // Co-op takes neither path. _advanceTurn ticks cooldowns, runs DOTs and
+    // drives the AI — all of which the server has already done. Running it here
+    // would be a second simulation racing the real one.
+    if (this.isCoop) {
+      this._wireCoopClient();
+    } else {
+      this.currentTurnIndex = -1;      // so _advanceTurn() moves to index 0
+      this._advanceTurn();             // handles UI gating + AI on enemy turns
+    }
 
     // That bootstrap _advanceTurn() wraps the index to 0, which counts as a
     // new round and leaves combatRound at 2 during the party's FIRST turn.
@@ -3223,6 +3257,16 @@ export default class CombatScene extends Phaser.Scene {
     this.endTurnButton = new UIButton(this, x, y, 'End Turn', () => {
       const actor = this._currentChar?.();
       if (actor?.isEnemy) return;  // don't let players skip NPCs
+
+      // Co-op: ask, do not act. Advancing locally would tick cooldowns and
+      // DOTs the server has already ticked, and the next broadcast would
+      // overwrite the result anyway — but not before the player had seen a
+      // board that never existed.
+      if (this.isCoop) {
+        this.coopClient?.endTurn();
+        return;
+      }
+
       // Flagged so _advanceTurn knows this is a player ending their own turn,
       // not the NPC loop's auto-advance — see the mid-turn-death flag there.
       this._advanceTurn({ playerEndedTurn: true });
@@ -4886,6 +4930,107 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   /**
+   * Build the shared party from the roster the server sent with the opening
+   * board — every player's hunters, not just this client's.
+   *
+   * Deliberately does NOT touch `GameState.party`. That is the local player's
+   * saved roster, and a co-op fight contains characters that belong to someone
+   * else; assigning them would put another player's hunters into this player's
+   * save the next time anything autosaved.
+   */
+  _placeCoopParty() {
+    const roster = this.coopClient?.roster || [];
+    this.coopParty = [];
+
+    roster.forEach((wire, i) => {
+      let char;
+      try {
+        char = fromWireCharacter(wire);
+      } catch (err) {
+        // A hunter we cannot rebuild is not something to paper over: it means
+        // the two sides disagree about what the game contains.
+        console.error('[coop] could not rebuild a hunter from the wire', err);
+        return;
+      }
+      char.ownerId = wire.ownerId ?? null;
+      char.isLocal = char.ownerId === this.coopClient?.playerId;
+
+      const slot = this.allySlots.find(s => !s.occupied);
+      if (!slot) return;
+      this._prepareCharForBattle(char);
+      this._assignCharToSlot(char, slot);
+      this._refreshStatusEffectIcons?.(char);
+      this.coopParty.push(char);
+    });
+  }
+
+  /**
+   * Listen to the server. Every board this client draws arrives here.
+   */
+  _wireCoopClient() {
+    const client = this.coopClient;
+    if (!client) return;
+
+    const off = [];
+    off.push(client.on('state', (state) => {
+      const report = this._applyNetState(state);
+      if (!report.ok) {
+        // Rather than draw a board we know is incomplete, ask for the whole
+        // thing again. A silent partial apply is how two players end up
+        // looking at different fights.
+        console.warn('[coop] unresolved units, resyncing', report.unknown);
+        client.requestSync();
+      }
+      this._afterCoopState();
+    }));
+
+    off.push(client.on('log', (lines) => {
+      for (const line of lines) this._log(line);
+    }));
+
+    off.push(client.on('error', (reason) => this._log(`⚠ ${reason}`)));
+
+    off.push(client.on('over', (msg) => {
+      this.combatEnded = true;
+      // v1 has no consequences: no XP, no loot, no clear flags, nothing
+      // written to a save. The fight is the whole of it, so this reports the
+      // outcome and stops rather than running the reward path.
+      if (msg.outcome === 'victory') {
+        this._showVictoryScreen('Victory!', ['Co-op — nothing was kept.'], null, [], []);
+      } else {
+        this._showDefeatScreen('Defeat', 'Co-op — nothing was lost.', { showExit: true });
+      }
+    }));
+
+    off.push(client.on('closed', () => {
+      this._log('⚠ Lost the connection to the server.');
+      this.combatEnded = true;
+    }));
+
+    this._coopUnsubs = off;
+    this.events.once('shutdown', () => {
+      for (const fn of this._coopUnsubs) { try { fn(); } catch { } }
+      this._coopUnsubs = [];
+    });
+
+    // The opening board arrived before this scene existed, so apply it now.
+    if (client.state) {
+      this._applyNetState(client.state);
+      this._afterCoopState();
+    }
+  }
+
+  /** Re-gate the local player's controls after any authoritative board. */
+  _afterCoopState() {
+    const mine = this.coopClient?.isMyTurn;
+    this.endTurnButton?.setVisible(!!mine);
+    if (mine) this._buildActionMenuRoot?.();
+    else this._exitTargetingMode?.();
+    this.actionMenu?.setVisible(!!mine);
+    this._updateActionLights?.();
+  }
+
+  /**
    * Apply an authoritative board from a co-op server.
    *
    * In co-op the client must DISPLAY a fight it is not simulating. Letting it
@@ -5017,6 +5162,31 @@ export default class CombatScene extends Phaser.Scene {
 
     const actor = this._findUnitByRef(intent.actor) || this._currentChar?.();
     if (!actor) return refuse('no such actor');
+
+    // --- co-op: send the intent, do not resolve it --------------------------
+    //
+    // This is the whole client/server split, and it lands here because this is
+    // already the single chokepoint every action passes through — the menu
+    // click, the harness and now the network all meet at this line. Resolving
+    // locally as well would be a second simulation, and the first roll that
+    // differed would silently desync the two players.
+    //
+    // The local gates below are deliberately NOT run first. The server applies
+    // them all and is the only opinion that counts; duplicating them here
+    // would mean two places to keep in step, and a client that disagreed would
+    // refuse actions the server would have allowed.
+    if (this.isCoop && !opts.fromServer) {
+      const ability = this._findSkillFor(actor, intent.skill);
+      if (!ability) return refuse('no such skill');
+      const target = this._findUnitByRef(intent.target);
+      this.coopClient?.act({
+        actor: this._unitRef(actor),
+        skill: ability.id,
+        target: target ? this._unitRef(target) : null,
+      });
+      this._exitTargetingMode?.();
+      return { ok: true, sent: true, actor, skill: ability, target };
+    }
 
     // --- ownership ----------------------------------------------------------
     // Opt-in, and FAIL-CLOSED once opted in.
