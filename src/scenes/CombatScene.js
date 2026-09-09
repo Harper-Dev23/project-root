@@ -5032,6 +5032,11 @@ export default class CombatScene extends Phaser.Scene {
       for (const fn of this._coopUnsubs) { try { fn(); } catch { } }
       this._coopUnsubs = [];
 
+      // The unlock runs on a wall-clock timer that Phaser knows nothing about,
+      // so it has to be cancelled by hand or it will fire into a dead scene.
+      clearTimeout(this._coopUnlockTimer);
+      this._coopUnlockTimer = null;
+
       // Leaving the fight ends the session. The lobby deliberately does NOT
       // close the socket when it hands off to this scene, so closing it here
       // is what finally releases it.
@@ -5100,16 +5105,24 @@ export default class CombatScene extends Phaser.Scene {
     //
     // The tail covers the last effect's own duration, since an event's
     // timestamp is when it STARTS.
+    //
+    // The UNLOCK runs on a wall clock, not on the scene clock the animations
+    // use. Phaser's clock stops whenever the game is paused, and a lock
+    // released by a frozen timer is a lock that never releases — the player is
+    // left staring at their own turn with no controls and nothing in the log
+    // to explain it. Wall time cannot be frozen, so the controls always come
+    // back even if the visuals were interrupted.
     const tail = 320;
-    this._coopReplayUntil = Math.max(this._coopReplayUntil || 0, this.time.now + last + tail);
+    const deadline = Date.now() + last + tail;
+    this._coopReplayDeadline = Math.max(this._coopReplayDeadline || 0, deadline);
     this._coopReplaying = true;
     this._afterCoopState();
 
-    this.time.delayedCall(last + tail, () => {
-      if (this.time.now + 1 < (this._coopReplayUntil || 0)) return;  // a later batch owns it
+    clearTimeout(this._coopUnlockTimer);
+    this._coopUnlockTimer = setTimeout(() => {
       this._coopReplaying = false;
       this._afterCoopState();
-    });
+    }, Math.max(0, this._coopReplayDeadline - Date.now()));
   }
 
   /** Turn a recorded argument back into something this scene can use. */
@@ -5135,11 +5148,28 @@ export default class CombatScene extends Phaser.Scene {
    * and letting you act then is what put the visuals and the fight out of step.
    */
   _afterCoopState() {
-    const mine = this.coopClient?.isMyTurn && !this._coopReplaying;
-    this.endTurnButton?.setVisible(!!mine);
-    if (mine) this._buildActionMenuRoot?.();
-    else this._exitTargetingMode?.();
-    this.actionMenu?.setVisible(!!mine);
+    // Self-healing on wall time. If the deadline has passed, the replay is over
+    // whatever the flag says — a lock that outlives its own deadline is a bug
+    // that presents as a player with no controls and no explanation.
+    if (this._coopReplaying && Date.now() >= (this._coopReplayDeadline || 0)) {
+      this._coopReplaying = false;
+    }
+
+    const mine = !!(this.coopClient?.isMyTurn) && !this._coopReplaying;
+
+    // Building the menu must never be able to leave the controls hidden. It
+    // reads the current actor, their slot and their targets, any of which can
+    // be mid-change right after a knockout; if it throws, the visibility calls
+    // below would never run and the player would be stuck on their own turn.
+    if (mine) {
+      try { this._buildActionMenuRoot?.(); }
+      catch (err) { console.error('[coop] action menu failed to build', err); }
+    } else {
+      try { this._exitTargetingMode?.(); } catch { /* nothing armed */ }
+    }
+
+    this.endTurnButton?.setVisible(mine);
+    this.actionMenu?.setVisible(mine);
     this._updateActionLights?.();
   }
 

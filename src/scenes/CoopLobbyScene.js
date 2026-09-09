@@ -42,6 +42,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.statusLine = '';
     this._unsubs = [];
     this._handingOff = false;
+    this.wantPublic = false;      // private unless the host opts in
+    this.browsing = false;
   }
 
   create() {
@@ -90,11 +92,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
   // ---- layout -------------------------------------------------------------
 
   _buildConnectRow(width) {
-    createPanel(this, 40, 100, width - 80, 86, 'silverMenu');
+    createPanel(this, 40, 96, width - 80, 120, 'silverMenu');
 
     // One row, everything on the same baseline. Labels sat above their fields
     // in the first pass, which read as two unrelated rows of controls.
-    const rowY = 143;
+    const rowY = 134;
     const label = (x, text) => this.add.text(x, rowY, text,
       { ...FONTS.body, fontSize: '16px', color: '#c8ccd4' }).setOrigin(0, 0.5);
 
@@ -125,15 +127,26 @@ export default class CoopLobbyScene extends Phaser.Scene {
                background-color:#22242a;color:#e8eaf0;border:1px solid #555;">
     `);
     this.joinBtn = createButton(this, 1055, rowY, 'Join', () => this._join());
+
+    // Browsing sits beside joining by code, not instead of it. A code is still
+    // the only way into a private lobby, and the only thing you can read to a
+    // friend over voice.
+    // Second row inside the same panel, so the connection controls read as one
+    // group rather than spilling over the border.
+    const rowY2 = 186;
+    this.browseBtn = createButton(this, 1055, rowY2, 'Browse open hunts', () => this._browse());
+    this.publicToggle = this.add.text(60, rowY2, '', { ...FONTS.body, fontSize: '15px' })
+      .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+    this.publicToggle.on('pointerdown', () => this._togglePublic());
   }
 
   _buildRoster(width) {
-    createPanel(this, 40, 200, 560, 300, 'silverMenu');
-    this.add.text(60, 214, 'Bring which hunters?', { ...FONTS.body, color: '#c8ccd4' });
-    this.rosterHint = this.add.text(60, 240, '', { ...FONTS.muted, color: '#8a8f98' });
+    createPanel(this, 40, 230, 560, 270, 'silverMenu');
+    this.add.text(60, 244, 'Bring which hunters?', { ...FONTS.body, color: '#c8ccd4' });
+    this.rosterHint = this.add.text(60, 268, '', { ...FONTS.muted, color: '#8a8f98' });
 
     this.rosterRows = (GameState.party || []).slice(0, 8).map((char, i) => {
-      const y = 272 + i * 28;
+      const y = 298 + i * 28;
       const label = this.add.text(66, y, '', { ...FONTS.body, fontSize: '16px' })
         .setInteractive({ useHandCursor: true });
       label.on('pointerdown', () => this._toggleHunter(char));
@@ -142,22 +155,37 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _buildLobbyPanel(width) {
-    createPanel(this, 620, 200, width - 660, 300, 'silverMenu');
-    this.lobbyTitle = this.add.text(640, 214, 'Not connected',
+    createPanel(this, 620, 230, width - 660, 270, 'silverMenu');
+    this.lobbyTitle = this.add.text(640, 244, 'Not connected',
       { ...FONTS.body, color: '#c8ccd4' });
-    this.partyCount = this.add.text(width - 60, 214, '', { ...FONTS.body, color: '#c8ccd4' })
+    this.partyCount = this.add.text(width - 60, 244, '', { ...FONTS.body, color: '#c8ccd4' })
       .setOrigin(1, 0);
 
     // An empty bordered box tells a player nothing. This says what to do.
-    this.lobbyHint = this.add.text(646, 252,
+    this.lobbyHint = this.add.text(646, 280,
       ['Host a hunt, then read the code to a friend.',
        'Or type their code and Join.'],
       { ...FONTS.body, fontSize: '15px', color: '#7d838d', lineSpacing: 6 });
 
     this.playerRows = [];
     for (let i = 0; i < 6; i++) {
-      this.playerRows.push(this.add.text(646, 250 + i * 30, '',
+      this.playerRows.push(this.add.text(646, 278 + i * 30, '',
         { ...FONTS.body, fontSize: '16px' }));
+    }
+
+    // The same panel shows open lobbies when browsing. One list at a time:
+    // before you are seated it shows where you could go, after it shows who
+    // is with you.
+    this.browseRows = [];
+    for (let i = 0; i < 7; i++) {
+      const row = this.add.text(646, 276 + i * 30, '', { ...FONTS.body, fontSize: '15px' })
+        .setInteractive({ useHandCursor: true });
+      row.on('pointerdown', () => {
+        const entry = this._browseList?.[i];
+        if (entry) this._joinCode(entry.code);
+      });
+      row.setVisible(false);
+      this.browseRows.push(row);
     }
   }
 
@@ -251,6 +279,12 @@ export default class CoopLobbyScene extends Phaser.Scene {
       this.client.on('error', reason => this._say(reason)),
       this.client.on('closed', () => this._say('Disconnected from the server.')),
       this.client.on('started', () => this._enterFight()),
+      this.client.on('lobbies', (list) => {
+        this._browseList = list;
+        this.browsing = true;
+        this._say(list.length ? '' : 'No open hunts right now.');
+        this._refresh();
+      }),
     );
 
     this._say('Connecting…');
@@ -277,6 +311,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       // The host's combat speed paces the recording for the whole hunt, so
       // everyone watches the same fight at the same rate.
       quickCombat: GameplaySettings.quickCombat,
+      isPublic: this.wantPublic,
     });
   }
 
@@ -285,6 +320,29 @@ export default class CoopLobbyScene extends Phaser.Scene {
     if (!code) return this._say('Enter a lobby code.');
     if (!this._hunters().length) return this._say('Bring at least one hunter.');
     try { await this._connect(); } catch { return; }
+    this._joinCode(code);
+  }
+
+  _togglePublic() {
+    if (this.client?.playerId && !this.client.isHost) {
+      return this._say('Only the host chooses that.');
+    }
+    this.wantPublic = !this.wantPublic;
+    // If the lobby already exists, tell the server; otherwise this is just the
+    // setting the lobby will be created with.
+    if (this.client?.playerId && this.client.isHost) this.client.setPublic(this.wantPublic);
+    this._refresh();
+  }
+
+  async _browse() {
+    try { await this._connect(); } catch { return; }
+    this.browsing = true;
+    this._say('Looking for open hunts...');
+    this.client.browse();
+  }
+
+  _joinCode(code) {
+    if (!this._hunters().length) return this._say('Bring at least one hunter.');
     this.client.joinLobby({
       code,
       name: this._playerName('Hunter'),
@@ -350,11 +408,31 @@ export default class CoopLobbyScene extends Phaser.Scene {
     }
 
     // Lobby
-    this.lobbyTitle.setText(inLobby ? `Lobby ${this.client.code}` : 'Not connected');
+    this.lobbyTitle.setText(inLobby
+      ? `Lobby ${this.client.code}${lobby?.isPublic ? '  (public)' : ''}`
+      : 'Not connected');
     this.partyCount.setText(inLobby ? `${lobby?.used ?? 0} / ${PARTY_LIMIT}` : '');
 
+    // Public/private is the host's call, shown wherever they are in the flow.
+    const canSetPublic = !inLobby || this.client.isHost;
+    this.publicToggle.setVisible(canSetPublic);
+    this.publicToggle.setText((this.wantPublic ? '[x]' : '[ ]') + '  List publicly');
+    this.publicToggle.setColor(this.wantPublic ? MENU_THEME.accentHover : '#8a8f98');
+
+    // One panel, two lists: open hunts before you are seated, teammates after.
+    const showBrowse = !inLobby && this.browsing;
+    this.browseRows.forEach((row, i) => {
+      const e = this._browseList?.[i];
+      row.setVisible(showBrowse && !!e);
+      if (!e) return;
+      row.setText(`${e.code}   ${e.host}   ${e.used}/${e.limit}   ` +
+        (COMBAT_SCENARIOS[e.scenarioId]?.name || e.scenarioId));
+      row.setColor('#c8ccd4');
+    });
+    if (showBrowse) this.lobbyTitle.setText('Open hunts  (click one to join)');
+
     const players = lobby?.players || [];
-    this.lobbyHint.setVisible(!inLobby);
+    this.lobbyHint.setVisible(!inLobby && !showBrowse);
     this.playerRows.forEach((row, i) => {
       const p = players[i];
       if (!p) { row.setText(''); return; }

@@ -43,6 +43,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     lobby: null,
     state: null,      // newest board
     roster: [],       // every player's hunters, from the 'started' message
+    openLobbies: [],  // public lobbies, from the last browse()
     log: [],          // combat log accumulated across broadcasts
     lastError: null,
 
@@ -110,8 +111,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return true;
     },
 
-    createLobby({ name, scenarioId, hunters, quickCombat = false }) {
-      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat });
+    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false }) {
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic });
     },
     joinLobby({ code, name, hunters }) {
       return client.send({ t: 'join', code, name, hunters });
@@ -122,6 +123,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     endTurn() { return client.send({ t: 'endTurn' }); },
     requestSync() { return client.send({ t: 'sync' }); },
     say(text) { return client.send({ t: 'say', text }); },
+    browse() { return client.send({ t: 'browse' }); },
+    setPublic(isPublic) { return client.send({ t: 'setPublic', isPublic }); },
 
     /**
      * Send one action. Refusals come back as an 'error' event rather than a
@@ -184,6 +187,11 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
         // animation and then let the authoritative state land underneath it.
         if (Array.isArray(msg.events) && msg.events.length) emit('events', msg.events);
         emit('state', msg.state);
+        break;
+
+      case 'lobbies':
+        client.openLobbies = msg.lobbies || [];
+        emit('lobbies', client.openLobbies);
         break;
 
       case 'said':

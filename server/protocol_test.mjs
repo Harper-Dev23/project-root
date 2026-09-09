@@ -219,6 +219,55 @@ console.log('=== chat and private feedback ===');
     b.last('said')?.from);
 }
 
+// ---- public lobbies and browsing -------------------------------------------
+console.log('=== public lobbies ===');
+{
+  const h5 = createHub({ CombatScene, codeFactory: () => 'PUB1' });
+  const host1 = conn('host1');
+  h5.handle(host1, { t: 'create', name: 'Pat', hunters: clone(2, 0), isPublic: true });
+
+  const browser = conn('browser');
+  h5.handle(browser, { t: 'browse' });
+  const list = browser.last('lobbies')?.lobbies || [];
+  check('a public lobby is listed', list.length === 1 && list[0].code === 'PUB1',
+    JSON.stringify(list));
+  check('the listing says who is hosting and how full it is',
+    list[0]?.host === 'Pat' && list[0]?.used === 2 && list[0]?.limit === 6,
+    list[0]?.host + ' ' + list[0]?.used + '/' + list[0]?.limit);
+  check('browsing works WITHOUT being seated first',
+    browser.errors().length === 0, browser.errors()[0] || '');
+
+  // Private is the default, and the host can change their mind.
+  const h6 = createHub({ CombatScene, codeFactory: () => 'PRIV' });
+  const host2 = conn('host2');
+  h6.handle(host2, { t: 'create', name: 'Quinn', hunters: clone(1, 0) });
+  const b2 = conn('b2');
+  h6.handle(b2, { t: 'browse' });
+  check('a lobby is PRIVATE unless the host says otherwise',
+    (b2.last('lobbies')?.lobbies || []).length === 0);
+
+  h6.handle(host2, { t: 'setPublic', isPublic: true });
+  b2.clear(); h6.handle(b2, { t: 'browse' });
+  check('the host can open it up later',
+    (b2.last('lobbies')?.lobbies || []).length === 1);
+
+  // A guest must not be able to expose someone else's lobby.
+  const guest = conn('guest');
+  h6.handle(guest, { t: 'join', code: 'PRIV', name: 'G', hunters: clone(1, 1) });
+  guest.clear();
+  h6.handle(guest, { t: 'setPublic', isPublic: false });
+  check('a guest cannot change who can see the lobby',
+    /only the host/.test(guest.errors()[0] || ''), guest.errors()[0]);
+
+  // Started hunts drop off the list: they cannot be joined.
+  h6.handle(host2, { t: 'ready', ready: true });
+  h6.handle(guest, { t: 'ready', ready: true });
+  h6.handle(host2, { t: 'start' });
+  b2.clear(); h6.handle(b2, { t: 'browse' });
+  check('a hunt already under way is not listed',
+    (b2.last('lobbies')?.lobbies || []).length === 0);
+}
+
 // ---- malformed input -------------------------------------------------------
 console.log('=== malformed input ===');
 {

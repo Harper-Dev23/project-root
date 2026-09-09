@@ -52,6 +52,7 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
     limit: PARTY_LIMIT,
     used: lobby.players.reduce((n, p) => n + p.hunters.length, 0),
     started: !!lobby.session,
+    isPublic: !!lobby.isPublic,
     players: lobby.players.map(p => ({
       id: p.id,
       name: p.name,
@@ -114,6 +115,10 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
         session: null,
         // The host's combat-speed preference paces the recording for everyone.
         quickCombat: !!msg.quickCombat,
+        // Private by default. A lobby only appears in the public list if its
+        // host asked for that — defaulting the other way would put every
+        // private game between friends on a list for strangers.
+        isPublic: msg.isPublic === true,
       };
       lobbies.set(code, lobby);
       return handlers._seat(conn, lobby, playerId, msg);
@@ -239,6 +244,43 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       pushResult(lobby, result);
     },
 
+    /**
+     * { t:'browse' } - the list of joinable public lobbies.
+     *
+     * Deliberately answered for ANY connection, seated or not: browsing is how
+     * a player finds their first lobby, so requiring one first would be
+     * circular. Handled before the seat lookup in `handle` for that reason.
+     *
+     * Codes are included because joining still goes through the same code
+     * path — the list is a convenience on top of join-by-code, not a second
+     * way in. A private lobby never appears here, so its code stays the only
+     * way to reach it.
+     */
+    browse(conn) {
+      const open = [...lobbies.values()]
+        .filter(l => l.isPublic && !l.session)
+        .filter(l => l.players.some(p => p.conn))
+        .map(l => ({
+          code: l.code,
+          scenarioId: l.scenarioId,
+          host: l.players.find(p => p.id === l.hostId)?.name || '?',
+          players: l.players.length,
+          used: l.players.reduce((n, p) => n + p.hunters.length, 0),
+          limit: PARTY_LIMIT,
+          quickCombat: !!l.quickCombat,
+        }))
+        .sort((a, b) => a.code.localeCompare(b.code));
+      send(conn, { t: 'lobbies', lobbies: open });
+    },
+
+    /** { t:'setPublic', isPublic } - host only. */
+    setPublic(conn, msg, lobby, player) {
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host can do that');
+      if (lobby.session) return fail(conn, 'the hunt has started');
+      lobby.isPublic = msg.isPublic === true;
+      broadcast(lobby, lobbyView(lobby));
+    },
+
     /** { t:'say', text } - Local-tab chat, relayed to everyone in the lobby. */
     say(conn, msg, lobby, player) {
       const text = String(msg.text ?? '').slice(0, 200).trim();
@@ -267,7 +309,10 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       }
       if (!msg || typeof msg.t !== 'string') return fail(conn, 'missing message type');
 
-      if (msg.t === 'create' || msg.t === 'join') return handlers[msg.t](conn, msg);
+      // These three need no seat: they are how a player finds or takes one.
+      if (msg.t === 'create' || msg.t === 'join' || msg.t === 'browse') {
+        return handlers[msg.t](conn, msg);
+      }
 
       const seat = byConn.get(conn);
       if (!seat) return fail(conn, 'you are not in a lobby');
