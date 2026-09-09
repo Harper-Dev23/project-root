@@ -9,8 +9,22 @@ a harness problem until a separate, deliberate decision says otherwise.
 
 ```
 node tools/headless/smoke.mjs        does the whole chain still stand up?
+node tools/headless/verify.mjs       what the golden master structurally can't check
 node tools/combat_snapshot.js        the golden master built on top of it
 ```
+
+**Before and after any change to combat, run both of these.** They cover
+different things and neither substitutes for the other:
+
+```
+node tools/combat_snapshot.js --diff tools/snapshots/combat-golden.json
+node tools/headless/verify.mjs
+```
+
+The snapshot records damage numbers, meters and refusals across every skill.
+`verify.mjs` covers the click path, identity, and the co-op ownership gate —
+none of which the snapshot can see, because it calls `_resolveAction` directly
+and records outcomes rather than permissions.
 
 ## How it works
 
@@ -70,10 +84,29 @@ is why `Saved → autosave` appears in the output. It writes into the throwaway
 
 ## Adding a gate
 
-`fight.js`'s `cast()` re-composes the sequence `_useAbility` →
-`_enterTargetingMode` → click, because that path only resolves on a real
-`pointerdown` and there is no pointer here. It calls the engine's own
-predicates rather than reimplementing them, but the *sequence* is copied, so a
-NEW gate added to `_useAbility` will not be enforced here until it is added to
-`cast()` as well. That is the one place this harness can fall out of step with
-the game.
+This used to be the one place the harness could fall out of step with the
+game: `cast()` re-composed the `_useAbility` → `_enterTargetingMode` → click
+sequence by hand, so a new gate added to `_useAbility` would not be enforced
+here until someone remembered to copy it.
+
+That gap is closed. `CombatScene._resolveAction()` is now the single place the
+sequence is written down, and the click path, `cast()` and any future network
+message all go through it. **Add a new gate to `_resolveAction` and all three
+callers get it.**
+
+## Identity and ownership
+
+`_unitRef(unit)` gives the reference a network message should carry: players
+keep the `instanceId` their save already uses, enemies get a per-combat `uid`
+assigned in spawn order (`e1`, `e2`, …). Spawn order rather than random, so a
+seeded replay reproduces the same ids and a log line stays readable.
+
+Enemy templates carry no id of their own and several enemies share a name, so
+before this an enemy could only be named by object reference — fine in one
+process, useless once an action arrives as data.
+
+`_resolveAction(intent, { playerId })` enforces co-op ownership. It is opt-in
+and fail-closed: single player passes no `playerId` and the gate is inert, but
+once one is supplied the actor must carry a matching `ownerId`. An *unowned*
+hunter is refused rather than allowed, so one missed stamp during lobby setup
+cannot silently let anyone drive that character.

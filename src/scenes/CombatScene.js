@@ -1641,6 +1641,9 @@ export default class CombatScene extends Phaser.Scene {
 
   _placeEnemies(scenarioId = 'training_encounter_1') {
     this.enemies = [];
+    // Restart uid numbering per combat so the same fight always produces the
+    // same ids. Summons keep counting up from wherever placement finished.
+    this._nextEnemyUid = 0;
 
     const scenario = COMBAT_SCENARIOS[scenarioId];
     if (!scenario) {
@@ -1674,6 +1677,18 @@ export default class CombatScene extends Phaser.Scene {
 
     const enemy = {
       ...template,                       // base stats / ai / sprites, etc.
+      // Stable per-combat identity. Enemy TEMPLATES carry no `id` field at
+      // all, and several enemies routinely share a name (six "Training
+      // Dummy"s), so before this an enemy could only be referred to by object
+      // reference. That is fine inside one process and useless the moment an
+      // action has to arrive as DATA — from the headless harness, or later
+      // from another player's browser.
+      //
+      // Numbered in spawn order rather than randomly, for two reasons: a
+      // seeded replay reproduces the same ids, and "e3" in a log line is
+      // something a human can follow. Survives movement between slots, which
+      // is why this exists rather than leaning on the slot key.
+      uid: 'e' + (this._nextEnemyUid = (this._nextEnemyUid || 0) + 1),
       type: config.type,
       name: config.name || template.name || config.type,
       currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
@@ -4852,16 +4867,36 @@ export default class CombatScene extends Phaser.Scene {
     if (typeof ref === 'object') return ref;         // already a unit
     const units = (this.turnOrder || []).filter(Boolean);
 
-    const bySlotKey = units.filter(u => this._charSlotKey?.(u) === ref);
-    if (bySlotKey.length === 1) return bySlotKey[0];
+    // Most specific first. Each match must be UNIQUE to count: two units
+    // answering to the same reference means the caller was ambiguous, and
+    // picking one of them would hit the wrong unit and read as a rules bug.
+    const byUid = units.filter(u => u.uid && u.uid === ref);
+    if (byUid.length === 1) return byUid[0];
 
     const byInstance = units.filter(u => u.instanceId && u.instanceId === ref);
     if (byInstance.length === 1) return byInstance[0];
+
+    const bySlotKey = units.filter(u => this._charSlotKey?.(u) === ref);
+    if (bySlotKey.length === 1) return bySlotKey[0];
 
     const byName = units.filter(u => u.name === ref);
     if (byName.length === 1) return byName[0];
 
     return null;
+  }
+
+  /**
+   * The canonical wire reference for a unit — what a network message should
+   * carry to name it. Players keep the `instanceId` their save already uses;
+   * enemies use the per-combat `uid` assigned at spawn.
+   *
+   * Falls back to the slot key so this never returns nothing for a unit that
+   * is genuinely on the board, but a caller relying on that fallback is
+   * addressing something that will move.
+   */
+  _unitRef(unit) {
+    if (!unit) return null;
+    return unit.instanceId || unit.uid || this._charSlotKey?.(unit) || null;
   }
 
   /** The skill object for an id, preferring the actor's own granted copy. */
@@ -4879,6 +4914,7 @@ export default class CombatScene extends Phaser.Scene {
    * opts:   { requireCurrentTurn } -- defaults true. The harness and the
    *         action menu both act on whoever's turn it is; only a deliberate
    *         out-of-turn caller should pass false.
+   *         { playerId } -- who is asking. See the ownership note below.
    *
    * Returns { ok: true, actor, skill, target } or { ok: false, reason }.
    */
@@ -4890,6 +4926,25 @@ export default class CombatScene extends Phaser.Scene {
 
     const actor = this._findUnitByRef(intent.actor) || this._currentChar?.();
     if (!actor) return refuse('no such actor');
+
+    // --- ownership ----------------------------------------------------------
+    // Opt-in, and FAIL-CLOSED once opted in.
+    //
+    // Single player never passes a playerId, so this whole block is inert and
+    // the local player keeps commanding every hunter — which is why adding it
+    // changes nothing about the existing game.
+    //
+    // A co-op server passes one on every action it receives, and then the
+    // actor MUST carry a matching ownerId. An unowned hunter is refused rather
+    // than allowed: the alternative fails open, so forgetting to stamp
+    // ownership on one character during lobby setup would silently let anyone
+    // drive it. Enemies are unowned by design and never reach here with a
+    // playerId, since the AI acts through _performNPCAction.
+    if (opts.playerId != null) {
+      if (actor.ownerId == null) return refuse(`${actor.name} has no owner`);
+      if (actor.ownerId !== opts.playerId) return refuse(`${actor.name} is not yours to command`);
+    }
+
     if (requireCurrentTurn && actor !== this._currentChar?.()) {
       return refuse(`it is not ${actor.name}'s turn`);
     }

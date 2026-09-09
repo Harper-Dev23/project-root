@@ -1,16 +1,20 @@
 // @ts-nocheck
-// tools/headless/click_path.mjs
+// tools/headless/verify.mjs
 //
-// Proves the SINGLE-PLAYER path still works, by driving it the way a player
-// does: call _useAbility (the real button handler), let it arm targeting, then
-// fire the pointerdown on a slot.
+// Checks what the golden master structurally CANNOT.
 //
-// The golden master cannot cover this. It calls _resolveAction directly, so it
-// verifies the rules but never the click that reaches them. When the targeting
-// click was rewired to go through _resolveAction, this is the file that says
-// whether that rewire actually held.
+// combat_snapshot.js calls _resolveAction directly, so it verifies the rules
+// but never the click that reaches them, and it records damage numbers rather
+// than identity or permission. This file covers the rest:
 //
-// Run: node tools/headless/click_path.mjs
+//   1. the single-player click path  — _useAbility arms targeting, the
+//      pointerdown lands damage and spends the action
+//   2. refusals                      — gates still refuse, and say why
+//   3. wire-safe references          — an action resolves from strings alone
+//   4. identity                      — every combatant is uniquely addressable
+//   5. ownership                     — the co-op permission gate, fail-closed
+//
+// Run: node tools/headless/verify.mjs
 
 import { installPhaserStub } from './phaserStub.js';
 installPhaserStub(777);
@@ -154,7 +158,85 @@ console.log('=== wire-safe references (what a network message carries) ===');
     ambiguous.ok === false, ambiguous.reason);
 }
 
+// ---- 5. identity: every combatant uniquely addressable --------------------
+console.log('=== identity ===');
+{
+  const { host, party } = board();
+  const uids = host.enemies.map(e => e.uid);
+  check('every enemy has a uid', uids.every(Boolean), uids.join(','));
+  check('enemy uids are unique', new Set(uids).size === uids.length,
+    uids.length + ' enemies, ' + new Set(uids).size + ' distinct');
+
+  // Six identical Training Dummies: the case that motivated this.
+  const names = new Set(host.enemies.map(e => e.name));
+  check('...even though they share one name', names.size < host.enemies.length,
+    host.enemies.length + ' enemies, ' + names.size + ' distinct name(s)');
+
+  const bran = party.find(c => c.name === 'Bran');
+  check('_unitRef gives players their save instanceId',
+    host._unitRef(bran) === bran.instanceId, host._unitRef(bran));
+  check('_unitRef gives enemies their uid',
+    host._unitRef(host.enemies[0]) === host.enemies[0].uid, host._unitRef(host.enemies[0]));
+
+  // Deterministic across a fresh build with the same seed.
+  installPhaserStub(777);
+  const again = createCombatHost(CombatScene);
+  const party2 = makeParty();
+  again.__begin({ party: party2, partySlots: slotMapFor(party2), scenarioId: 'training_encounter_1' });
+  check('uids are deterministic, not random',
+    again.enemies.map(e => e.uid).join(',') === uids.join(','),
+    again.enemies.map(e => e.uid).join(','));
+}
+
+// ---- 6. ownership: the co-op permission gate ------------------------------
+console.log('=== ownership (co-op permission gate) ===');
+{
+  const { host, party } = board();
+  const bran = party.find(c => c.name === 'Bran');
+  const foe = host.enemies[0];
+  setActor(host, bran);
+
+  const refill = () => { bran.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 }; };
+  const act = (opts) => host._resolveAction(
+    { actor: bran, skill: skillFor(bran, 'basic_attack'), target: foe }, opts);
+
+  // Single player passes no playerId at all: the gate must be inert.
+  refill();
+  check('no playerId => unaffected (this is single player)', act({}).ok === true);
+
+  bran.ownerId = 'player-1';
+
+  refill();
+  check('owner may command their own hunter',
+    act({ playerId: 'player-1' }).ok === true);
+
+  refill();
+  const stolen = act({ playerId: 'player-2' });
+  check('another player may NOT', stolen.ok === false, stolen.reason);
+
+  // Fail-closed: an unowned hunter is refused, not allowed. Failing open would
+  // mean one missed stamp during lobby setup silently shares a character.
+  refill();
+  delete bran.ownerId;
+  const unowned = act({ playerId: 'player-1' });
+  check('an UNOWNED hunter is refused, not allowed (fail-closed)',
+    unowned.ok === false, unowned.reason);
+
+  // And ownership is checked before the turn gate, so a stolen action cannot
+  // be distinguished from a mistimed one by probing.
+  refill();
+  bran.ownerId = 'player-1';
+  const sable = party.find(c => c.name === 'Sable');
+  sable.ownerId = 'player-2';
+  const wrongTurnWrongOwner = host._resolveAction(
+    { actor: sable, skill: skillFor(sable, 'basic_attack'), target: foe },
+    { playerId: 'player-1' });
+  check('ownership is judged before whose turn it is',
+    wrongTurnWrongOwner.ok === false && /not yours/.test(wrongTurnWrongOwner.reason),
+    wrongTurnWrongOwner.reason);
+}
+
 console.log('\n' + (failures === 0
-  ? 'ALL CHECKS PASSED - the single-player click path is intact.'
+  ? 'ALL CHECKS PASSED'
   : failures + ' CHECK(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);
