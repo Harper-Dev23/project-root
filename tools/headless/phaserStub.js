@@ -46,6 +46,25 @@ export function seed(n) {
   Math.random = _rng;          // deliberate: node-only process, see header
 }
 
+/**
+ * Hand randomness back to the platform, leaving `Math.random` untouched.
+ *
+ * A SERVER must use this. Seeding is exactly right for a snapshot and exactly
+ * wrong for a long-running process, in two ways that are easy to miss:
+ *
+ *   1. `seed()` replaces the GLOBAL Math.random, so two concurrent hunts share
+ *      one stream. Starting a second fight resets the first one's randomness
+ *      mid-combat, and the two interfere.
+ *   2. Seeding at startup means every restart replays the same sequence -
+ *      the same crits, the same loot, forever.
+ *
+ * Determinism is still available per fight when it is wanted (a replay, a bug
+ * report); it just cannot be the default for a process serving real players.
+ */
+export function useSystemRandom() {
+  _rng = () => Math.random();
+}
+
 /** The current stream, for anything that wants to draw directly. */
 export function rng() { return _rng(); }
 
@@ -66,8 +85,12 @@ class SceneShim {
  * Install the shim on globalThis. MUST be called before importing any file
  * that reaches for Phaser at module scope.
  */
-export function installPhaserStub(seedValue = 1) {
-  seed(seedValue);
+export function installPhaserStub(seedValue = 1, { deterministic = true } = {}) {
+  // Deterministic by default, because every existing caller is a test or a
+  // snapshot and silently losing reproducibility would be the worse failure.
+  // A server passes { deterministic: false } - see useSystemRandom above.
+  if (deterministic) seed(seedValue);
+  else useSystemRandom();
 
   globalThis.localStorage = globalThis.localStorage || {
     _v: {},

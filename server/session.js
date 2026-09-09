@@ -92,8 +92,13 @@ export function fromWireCharacter(wire) {
  * is already the game's own cap. Because the party size is fixed, the turn
  * order does not grow with the player count -- a six-player session resolves
  * exactly as fast as a two-player one.
+ *
+ * `seed` is for REPRODUCING a fight (a replay, a bug report). Pass null - as a
+ * server should - and the ambient randomness is left alone. Seeding here
+ * replaces the global Math.random, so a server that seeded every session would
+ * have each new hunt reset the randomness of every hunt already in progress.
  */
-export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = 1 }) {
+export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null }) {
   if (!CombatScene) throw new Error('createSession needs the CombatScene class');
   if (!players.length) throw new Error('a session needs at least one player');
 
@@ -106,7 +111,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     throw new Error(`the party is ${total} hunters; the shared limit is ${PARTY_LIMIT}`);
   }
 
-  seedRng(seed);
+  if (seed != null) seedRng(seed);
   const host = createCombatHost(CombatScene);
 
   // Stamp ownership as the party is assembled. Every hunter gets an owner
@@ -132,6 +137,16 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
 
   host.__begin({ party, partySlots: slotMap, scenarioId });
   startCombat(host);
+
+  // Every state that goes out carries a version, bumped once per mutation.
+  //
+  // Without it a client cannot tell a fresh board from a stale one. Two
+  // broadcasts are routinely in flight at once — an action and the end of turn
+  // that follows it — and a client that simply takes "the next state message"
+  // can act twice on the older of the two. That is not hypothetical: it is
+  // exactly how the first end-to-end run failed, with a player told it was
+  // still their turn after they had ended it.
+  let version = 0;
 
   const session = {
     scenarioId,
@@ -181,6 +196,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
 
       return {
         scenarioId,
+        version,
         round: host.combatRound,
         ended: host.combatEnded,
         current: session.current(),
@@ -211,6 +227,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         { playerId }
       );
       host.__drain();
+      if (verdict.ok) version++;
 
       return {
         ok: verdict.ok,
@@ -237,6 +254,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       if (actor.ownerId !== playerId) return { ok: false, reason: `it is not your turn` };
 
       const from = host.combatEntries.length;
+      version++;
       host._advanceTurn({ playerEndedTurn: true });
       host.__drain();
 
