@@ -8,6 +8,7 @@ import CharacterCreationScene from './scenes/CharacterCreationScene.js';
 import PartyManagementScene from './scenes/PartyManagementScene.js';
 import CharacterListOverlay from './scenes/overlays/CharacterListOverlay.js';
 import CombatScene from './scenes/CombatScene.js';
+import CoopLobbyScene from './scenes/CoopLobbyScene.js';
 import InventoryOverlay from './scenes/overlays/InventoryOverlay.js';
 import SkillsOverlay from './scenes/overlays/SkillsOverlay.js';
 import MapOverlay from './scenes/overlays/MapOverlay.js';
