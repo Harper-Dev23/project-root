@@ -42,6 +42,7 @@ const config = {
     PartyManagementScene,
     CharacterListOverlay,
     CombatScene,
+    CoopLobbyScene,
     InventoryOverlay,
     SkillsOverlay,
     MapOverlay,

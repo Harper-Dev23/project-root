@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!--
+  tools/lobby_preview.html — a dev harness, not part of the game.
+
+  Boots Phaser with ONLY the co-op lobby, plus a fake party, so the screen can
+  be looked at (and screenshotted) without clicking through the main menu, a
+  save, the town and the combat pit every time.
+
+  Serve the PROJECT ROOT and open /tools/lobby_preview.html.
+-->
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Co-op lobby preview</title>
+  <style>
+    html, body { margin: 0; background: #111; }
+    #game { width: 1280px; height: 720px; }
+  </style>
+</head>
+
+<body>
+  <div id="game"></div>
+  <script src="../phaser.js"></script>
+  <script type="module">
+    import GameState from '../src/systems/GameState.js';
+    import { buildCharacter } from '../src/systems/CharacterBuilder.js';
+    import CoopLobbyScene from '../src/scenes/CoopLobbyScene.js';
+
+    // A believable party, so the roster column has something real in it.
+    const SPECS = [
+      ['Bran', 'Dwarf', 'Grunt'],
+      ['Sable', 'Skith', 'Beggar'],
+      ['Wren', 'Elf', 'Scholar'],
+      ['Halvard', 'Dwarf', 'Acolyte'],
+      ['Ilse', 'Ferrow', 'Shepherd'],
+      ['Torg', 'Wylett', 'Grunt'],
+    ];
+    GameState.party = SPECS.map(([name, race, baseClass]) => buildCharacter({
+      name, race, baseClass,
+      stats: { STR: 10, DEX: 10, CON: 10, INT: 10, WIS: 10, CHA: 10 },
+      skin: null,
+    }));
+
+    // The lobby calls this on Leave; stub it so the preview does not explode.
+    window.sceneManager = { loadScene: (k) => console.log('[preview] loadScene', k) };
+
+    new Phaser.Game({
+      type: Phaser.CANVAS,
+      width: 1280,
+      height: 720,
+      parent: 'game',
+      backgroundColor: '#1a1a1a',
+      dom: { createContainer: true },
+      scene: [CoopLobbyScene],
+    });
+
+    // A flag the screenshot driver waits on, so it never captures a blank frame.
+    setTimeout(() => { document.title = 'READY — Co-op lobby preview'; }, 1200);
+  </script>
+</body>
+
+</html>

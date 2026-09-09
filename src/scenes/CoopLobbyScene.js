@@ -80,32 +80,39 @@ export default class CoopLobbyScene extends Phaser.Scene {
   _buildConnectRow(width) {
     createPanel(this, 40, 100, width - 80, 86, 'silverMenu');
 
-    this.add.text(60, 116, 'Server', { ...FONTS.body, color: '#c8ccd4' });
+    // One row, everything on the same baseline. Labels sat above their fields
+    // in the first pass, which read as two unrelated rows of controls.
+    const rowY = 143;
+    const label = (x, text) => this.add.text(x, rowY, text,
+      { ...FONTS.body, fontSize: '16px', color: '#c8ccd4' }).setOrigin(0, 0.5);
 
     const saved = (() => {
       try { return localStorage.getItem(SERVER_KEY); } catch { return null; }
     })() || DEFAULT_SERVER;
 
-    this.serverInput = this.add.dom(300, 150).createFromHTML(`
+    label(60, 'Server');
+    this.serverInput = this.add.dom(320, rowY).createFromHTML(`
       <input type="text" name="server" value="${saved}" spellcheck="false"
-        style="font-size:15px;padding:6px;width:380px;
+        style="font-size:15px;padding:6px;width:340px;
                background-color:#22242a;color:#e8eaf0;border:1px solid #555;">
     `);
 
-    this.nameInput = this.add.dom(620, 116).createFromHTML(`
+    label(520, 'You');
+    this.nameInput = this.add.dom(645, rowY).createFromHTML(`
       <input type="text" name="playerName" maxlength="18" placeholder="Your name"
         spellcheck="false"
-        style="font-size:15px;padding:5px;width:150px;
+        style="font-size:15px;padding:6px;width:150px;
                background-color:#22242a;color:#e8eaf0;border:1px solid #555;">
     `);
 
-    this.hostBtn = createButton(this, 620, 150, 'Host', () => this._host());
-    this.codeInput = this.add.dom(790, 150).createFromHTML(`
+    this.hostBtn = createButton(this, 810, rowY, 'Host', () => this._host());
+    this.codeInput = this.add.dom(930, rowY).createFromHTML(`
       <input type="text" name="code" maxlength="6" placeholder="CODE" spellcheck="false"
-        style="font-size:15px;padding:6px;width:96px;text-transform:uppercase;
+        style="font-size:15px;padding:6px;width:90px;text-transform:uppercase;
+               text-align:center;letter-spacing:2px;
                background-color:#22242a;color:#e8eaf0;border:1px solid #555;">
     `);
-    this.joinBtn = createButton(this, 900, 150, 'Join', () => this._join());
+    this.joinBtn = createButton(this, 1055, rowY, 'Join', () => this._join());
   }
 
   _buildRoster(width) {
@@ -129,6 +136,12 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.partyCount = this.add.text(width - 60, 214, '', { ...FONTS.body, color: '#c8ccd4' })
       .setOrigin(1, 0);
 
+    // An empty bordered box tells a player nothing. This says what to do.
+    this.lobbyHint = this.add.text(646, 252,
+      ['Host a hunt, then read the code to a friend.',
+       'Or type their code and Join.'],
+      { ...FONTS.body, fontSize: '15px', color: '#7d838d', lineSpacing: 6 });
+
     this.playerRows = [];
     for (let i = 0; i < 6; i++) {
       this.playerRows.push(this.add.text(646, 250 + i * 30, '',
@@ -137,23 +150,25 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _buildFooter(width, height) {
-    this.scenarioText = this.add.text(width / 2, 526, '', { ...FONTS.body })
-      .setOrigin(0.5);
-    this.prevScenario = createButton(this, width / 2 - 260, 526, '<',
+    this.add.text(width / 2, 528, 'FIGHT',
+      { ...FONTS.muted, fontSize: '12px', color: '#7d838d' }).setOrigin(0.5);
+    this.scenarioText = this.add.text(width / 2, 552,
+      '', { ...FONTS.body, fontSize: '20px', color: MENU_THEME.titleColor }).setOrigin(0.5);
+    this.prevScenario = createButton(this, width / 2 - 180, 548, '<',
       () => this._cycleScenario(-1));
-    this.nextScenario = createButton(this, width / 2 + 260, 526, '>',
+    this.nextScenario = createButton(this, width / 2 + 180, 548, '>',
       () => this._cycleScenario(1));
 
-    this.status = this.add.text(width / 2, 566, '', { ...FONTS.body, color: '#d08c8c' })
+    this.status = this.add.text(width / 2, 588, '', { ...FONTS.body, color: '#d08c8c' })
       .setOrigin(0.5);
 
     // Labelled statically on purpose. createButton returns a Container with no
     // setText, and it auto-sizes its background from the label at creation, so
     // a toggling label would either be a silent no-op or overflow its box. The
     // player list already shows who is ready with a tick.
-    this.readyBtn = createButton(this, width / 2 - 150, 620, 'Toggle Ready', () => this._toggleReady());
-    this.startBtn = createButton(this, width / 2, 620, 'Start Hunt', () => this._start());
-    createButton(this, width / 2 + 170, 620, 'Leave', () => this._leave(), 'danger');
+    this.readyBtn = createButton(this, width / 2 - 150, 634, 'Toggle Ready', () => this._toggleReady());
+    this.startBtn = createButton(this, width / 2, 634, 'Start Hunt', () => this._start());
+    createButton(this, width / 2 + 170, 634, 'Leave', () => this._leave());
   }
 
   // ---- helpers ------------------------------------------------------------
@@ -310,6 +325,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.partyCount.setText(inLobby ? `${lobby?.used ?? 0} / ${PARTY_LIMIT}` : '');
 
     const players = lobby?.players || [];
+    this.lobbyHint.setVisible(!inLobby);
     this.playerRows.forEach((row, i) => {
       const p = players[i];
       if (!p) { row.setText(''); return; }

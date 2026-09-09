@@ -55,6 +55,22 @@ console.log('=== the shared party of six ===');
   let dup = null;
   try { createSession({ CombatScene, players: [alice, alice] }); } catch (e) { dup = e.message; }
   check('duplicate player ids are refused', !!dup, dup || '');
+
+  // Two tabs on one machine share localStorage, so both players load the same
+  // save and can pick the same character. Two units under one instanceId makes
+  // every reference to them ambiguous.
+  let sameHunter = null;
+  try {
+    createSession({
+      CombatScene,
+      players: [
+        { id: 'a', name: 'A', hunters: [JSON.parse(JSON.stringify(wire[0]))] },
+        { id: 'b', name: 'B', hunters: [JSON.parse(JSON.stringify(wire[0]))] },
+      ],
+    });
+  } catch (e) { sameHunter = e.message; }
+  check('the same hunter cannot be brought twice',
+    !!sameHunter && /twice/.test(sameHunter), sameHunter || '');
 }
 
 // ---- a real co-op fight ----------------------------------------------------

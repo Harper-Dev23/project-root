@@ -70,6 +70,25 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     throw new Error(`the party is ${total} hunters; the shared limit is ${PARTY_LIMIT}`);
   }
 
+  // The SAME hunter cannot be brought twice.
+  //
+  // This is not hypothetical, and it is the first thing local testing hits:
+  // two browser tabs on one machine share localStorage, so both players load
+  // the same save and can each pick the same character. Two units answering to
+  // one instanceId makes every reference to them ambiguous, and
+  // _findUnitByRef correctly refuses to guess — so actions would simply stop
+  // working, with nothing on screen explaining why. Better to refuse at the
+  // door and say so.
+  const hunterIds = players.flatMap(p => (p.hunters || []).map(h => h.instanceId || h.id));
+  const dupes = hunterIds.filter((id, i) => hunterIds.indexOf(id) !== i);
+  if (dupes.length) {
+    const names = players
+      .flatMap(p => (p.hunters || []))
+      .filter(h => dupes.includes(h.instanceId || h.id))
+      .map(h => h.name);
+    throw new Error(`the same hunter cannot be brought twice: ${[...new Set(names)].join(', ')}`);
+  }
+
   if (seed != null) seedRng(seed);
   const host = createCombatHost(CombatScene);
 
