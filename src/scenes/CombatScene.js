@@ -5085,6 +5085,27 @@ export default class CombatScene extends Phaser.Scene {
       const unit = this._netUnits.get(u.ref) || this._findUnitByRef(u.ref);
       if (!unit) { unknown.push(u.ref); continue; }
 
+      // A unit that has just gone down needs its portrait moved off the board.
+      //
+      // Single player does this inside _onUnitKnockedOut, which a co-op client
+      // must NOT run: that method also detonates death-burst statuses, splices
+      // the turn order and checks for victory, all of which the server has
+      // already done. Only the VISUAL half belongs here.
+      const wasStanding = unit.status !== 'incapacitated';
+      if (wasStanding && u.status === 'incapacitated') {
+        const slot = unit._slot;
+        if (slot) {
+          this._clearPortrait?.(slot);
+          slot.occupied = false;
+          slot.char = null;
+        }
+        if (!this.koArea) this.koArea = [];
+        if (!this.koArea.includes(unit)) {
+          this.koArea.push(unit);
+          this._placeInKOArea?.(unit);
+        }
+      }
+
       unit.currentHP = u.hp;
       unit.maxHP = u.maxHP;
       unit.currentMP = u.mp;
@@ -5126,6 +5147,11 @@ export default class CombatScene extends Phaser.Scene {
     this._updateHPMPBars?.();
     this._updateInitiativeBars?.();
     for (const unit of this.turnOrder || []) this._refreshStatusEffectIcons?.(unit);
+    // The turn-order strip is built from this.turnOrder at create() time and
+    // does not notice it being replaced. Without this the list kept showing
+    // the placeholder order the client guessed before the server's real one
+    // arrived — the right people acted, but the strip named the wrong ones.
+    this._refreshTurnOrderUI?.();
     this._highlightCurrentTurn?.();
 
     return { applied, unknown, ok: unknown.length === 0 };
