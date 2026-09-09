@@ -1,22 +1,24 @@
 # Co-op hunt server
 
-The game stays a dependency-free static site on GitHub Pages. This directory is
-its own npm project so that stays true — nothing here is loaded by the browser,
-and `npm install` never touches the game.
+The GAME is still static ES modules with no build step and no runtime
+dependencies — the browser loads nothing from npm. The repo root now has a
+`package.json` because this server does, and because Railway needs one thing to
+install and one thing to start.
 
 ```
-cd server
 npm install          # one package (ws), zero transitive dependencies
 npm start            # listens on :8787, or $PORT
 ```
 
 ```
-node server/session_test.mjs     a co-op fight, no network at all
-node server/protocol_test.mjs    a whole hunt through protocol messages
-node server/e2e_test.mjs         the real server, real sockets, two clients
+npm run verify       golden master + the checks it cannot make
+npm test             every co-op suite, including two real sockets
 ```
 
-The first two need no `npm install`. Only the socket layer does.
+**The server cannot be deployed from this directory alone.** `index.js` imports
+`../tools/headless/` and `../src/scenes/CombatScene.js` — running the real
+engine is the entire point — so a host must take the whole repository and run
+`node server/index.js`. That is what `railway.json` at the root declares.
 
 ## Layers
 
