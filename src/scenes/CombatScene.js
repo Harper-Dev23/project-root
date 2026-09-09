@@ -5001,7 +5001,10 @@ export default class CombatScene extends Phaser.Scene {
     }));
 
     off.push(client.on('log', (lines) => {
-      for (const line of lines) this._log(line);
+      // Entries arrive STRUCTURED, so the detailed damage breakdown survives
+      // the trip and can still be hovered. Rehydrating turns the unit and
+      // skill references back into the real objects the tooltip code expects.
+      for (const line of lines) this._log(this._fromWireArg(line));
     }));
 
     off.push(client.on('error', (reason) => this._log(`⚠ ${reason}`)));

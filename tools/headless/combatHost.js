@@ -350,6 +350,23 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
    */
   host.__takeEvents = function () { return events.splice(0, events.length); };
 
+  /**
+   * A log entry made safe to send, WITH its tooltip payload intact.
+   *
+   * Flattening entries to plain text was fine until the detailed damage
+   * breakdown mattered: that lives on a segment as `tooltipData`, so a
+   * co-op client shown only text has nothing to hover. Entries cannot be sent
+   * raw either — a segment carries `actor` (a live unit, and therefore
+   * circular through _slot.char) and `ability` (a skill, whose apply()
+   * would be silently dropped). Both become references, exactly as the visual
+   * event stream does.
+   *
+   * The depth allowance is raised because a tooltip is entry -> segments ->
+   * segment -> tooltipData -> lines -> line, which is deeper than an event's
+   * arguments ever go. At the default depth the breakdown lines came back null.
+   */
+  host.__wireLogEntry = function (entry) { return wireArg(entry, host, 0, 8); };
+
   /** The combat log as plain comparable text. */
   host.__logLines = function () {
     return host.combatEntries.map(e => (
@@ -425,11 +442,11 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
  * Anything not recognised is passed through only if it is JSON-safe, so an
  * unexpected argument can never make a broadcast unserializable.
  */
-function wireArg(value, host, depth = 0) {
+function wireArg(value, host, depth = 0, maxDepth = 2) {
   if (value == null || typeof value !== 'object') {
     return typeof value === 'function' ? null : value;
   }
-  if (depth > 2) return null;
+  if (depth > maxDepth) return null;
 
   // A combatant: has a name and a health pool.
   if (typeof value.name === 'string' && value.currentHP !== undefined) {
@@ -439,11 +456,11 @@ function wireArg(value, host, depth = 0) {
   if (typeof value.id === 'string' && typeof value.apply === 'function') {
     return { __skill: value.id };
   }
-  if (Array.isArray(value)) return value.map(v => wireArg(v, host, depth + 1));
+  if (Array.isArray(value)) return value.map(v => wireArg(v, host, depth + 1, maxDepth));
 
   const out = {};
   for (const [k, v] of Object.entries(value)) {
-    const w = wireArg(v, host, depth + 1);
+    const w = wireArg(v, host, depth + 1, maxDepth);
     if (w !== undefined) out[k] = w;
   }
   return out;

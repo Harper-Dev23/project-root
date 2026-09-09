@@ -222,6 +222,18 @@ try {
   // Arriving is not the same as playing. This asserts the scene actually
   // invoked the VFX methods while replaying, rather than silently swallowing
   // them on an unresolvable reference or a bad argument.
+  // The detailed damage breakdown a player hovers lives on a log segment, so
+  // it only survives if entries cross STRUCTURED rather than flattened to text.
+  const tipSeg = scenes.p1.combatEntries
+    .flatMap(e => e.segments || [])
+    .find(g => g.tooltipData && (g.tooltipData.lines || []).length);
+  check('damage breakdowns survive the wire and reach the scene', !!tipSeg,
+    tipSeg ? tipSeg.tooltipData.title + ', ' + tipSeg.tooltipData.lines.length + ' lines' : 'none found');
+  check('a hovered ability resolves back to a real skill, not a reference',
+    scenes.p1.combatEntries.flatMap(e => e.segments || [])
+      .filter(g => g.ability).every(g => typeof g.ability === 'object' && g.ability.id),
+    'rehydrated');
+
   check('the client REPLAYED them, not just received them',
     (scenes.p1.__skipped._playAttackVFX || 0) > 0,
     (scenes.p1.__skipped._playAttackVFX || 0) + ' attack VFX played back');

@@ -204,9 +204,16 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       };
     },
 
-    /** Combat log lines from `from` onward, for incremental display. */
+    /**
+     * Combat log entries from `from` onward, for incremental display.
+     *
+     * STRUCTURED, not flattened. The detailed damage breakdown a player can
+     * hover lives on a segment as `tooltipData`, and a client sent only text
+     * has nothing to show. See host.__wireLogEntry for what has to be turned
+     * into a reference on the way out.
+     */
     logSince(from = 0) {
-      return host.__logLines().slice(from);
+      return host.combatEntries.slice(from).map(e => host.__wireLogEntry(e));
     },
 
     /**
