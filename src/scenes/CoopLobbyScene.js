@@ -55,9 +55,21 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   create() {
+    // Put the town to sleep, the same way CombatScene does on entry.
+    //
+    // Without this the town and its UI keep running underneath: their buttons
+    // stay live, so a click that misses a lobby control lands on a building or
+    // a menu behind it. A full-screen scene has to say so; Phaser will happily
+    // run both at once.
+    this.scene.sleep('TownScene');
+    this.scene.sleep('UIScene');
+
     const { width, height } = this.scale;
     this.add.rectangle(0, 0, width, height, COLORS.background)
-      .setOrigin(0).setDepth(-1);
+      .setOrigin(0).setDepth(-1)
+      // Swallows any click that lands on the background rather than a control,
+      // so nothing can reach a scene behind this one.
+      .setInteractive();
 
     this.add.text(width / 2, 44, 'CO-OP TRAINING', {
       ...FONTS.heading, color: MENU_THEME.titleColor,
@@ -79,7 +91,15 @@ export default class CoopLobbyScene extends Phaser.Scene {
     }
     this._refresh();
 
+    // Escape leaves, which is what a player reaches for first. Cleared on
+    // shutdown so the binding cannot fire into a dead scene.
+    this._escKey = this.input.keyboard?.addKey('ESC');
+    this._escKey?.on('down', () => this._leave());
+
     this.events.once('shutdown', () => {
+      this._escKey?.removeAllListeners();
+      this.input.keyboard?.removeKey('ESC');
+
       // Always drop the listeners; this scene is about to stop existing.
       for (const off of this._unsubs) { try { off(); } catch { } }
       this._unsubs = [];
@@ -244,7 +264,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // player list already shows who is ready with a tick.
     this.readyBtn = createButton(this, width / 2 - 150, 634, 'Toggle Ready', () => this._toggleReady());
     this.startBtn = createButton(this, width / 2, 634, 'Start Hunt', () => this._start());
-    createButton(this, width / 2 + 170, 634, 'Leave', () => this._leave());
+    createButton(this, width / 2 + 180, 634, 'Back to Town', () => this._leave());
   }
 
   // ---- helpers ------------------------------------------------------------
@@ -398,10 +418,20 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.client.startHunt();
   }
 
+  /**
+   * Back to town, mirroring how CombatScene exits.
+   *
+   * Deliberately NOT `loadScene('TownScene')`: the town was only slept, so
+   * loading it again would start a SECOND copy on top of the sleeping one.
+   * Waking the existing scene is what the rest of the game does.
+   */
   _leave() {
     this.client?.disconnect();
     this.client = null;
-    window.sceneManager?.loadScene('TownScene', 'Returning to Watershade…');
+    this.scene.stop('CoopLobbyScene');
+    this.scene.wake('TownScene');
+    this.scene.wake('UIScene');
+    this.scene.get('UIScene')?.refreshUI?.();
   }
 
   _enterFight() {
