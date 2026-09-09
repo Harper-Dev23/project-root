@@ -8,6 +8,7 @@ import CharacterCreationScene from './scenes/CharacterCreationScene.js';
 import PartyManagementScene from './scenes/PartyManagementScene.js';
 import CharacterListOverlay from './scenes/overlays/CharacterListOverlay.js';
 import CombatScene from './scenes/CombatScene.js';
+import CoopLobbyScene from './scenes/CoopLobbyScene.js';
 import InventoryOverlay from './scenes/overlays/InventoryOverlay.js';
 import SkillsOverlay from './scenes/overlays/SkillsOverlay.js';
 import MapOverlay from './scenes/overlays/MapOverlay.js';
@@ -41,6 +42,7 @@ const config = {
     PartyManagementScene,
     CharacterListOverlay,
     CombatScene,
+    CoopLobbyScene,
     InventoryOverlay,
     SkillsOverlay,
     MapOverlay,
@@ -67,6 +69,16 @@ const config = {
   dom: {
     createContainer: true
   },
+  // Keep running when the window is not focused.
+  //
+  // Phaser defaults this to true, which stops the whole scene clock the moment
+  // the tab loses focus. That is harmless in single player — a turn-based game
+  // does nothing without input — but in co-op the fight carries on without you:
+  // broadcasts keep arriving while every timer that would animate them is
+  // frozen, so the board silently falls behind and only "catches up" when the
+  // window is clicked back into. It also freezes the timer that hands your
+  // controls back after an animation.
+  pauseOnBlur: false,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

@@ -27,6 +27,7 @@ import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOri
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
+import { fromWireCharacter } from '../systems/CoopWire.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
 import EventBus from '../systems/EventBus.js';
 import ReactionSystem, { isReactableAttackSource } from '../systems/ReactionSystem.js';
@@ -314,6 +315,19 @@ export default class CombatScene extends Phaser.Scene {
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
     this.isHunt = (this.combatType === 'hunt');
+
+    // Co-op: this scene DISPLAYS a fight the server is simulating.
+    //
+    // The distinction runs through everything below. A co-op client never
+    // resolves an action, never advances a turn and never decides a winner --
+    // it sends intents and draws whatever comes back. Simulating alongside the
+    // server would work right up until one roll differed, and then the two
+    // players would be looking at different games with no way to tell which
+    // was real.
+    this.isCoop = (this.combatType === 'coop');
+    this.coopClient = data.coopClient || null;
+    this.coopParty = [];        // every player's hunters, ours and theirs
+    this._coopUnsubs = [];
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
     this.scenarioId = data.scenarioId || 'training_encounter_1';
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
@@ -356,7 +370,8 @@ export default class CombatScene extends Phaser.Scene {
 
     // Setup battlefield and units
     this._createBattleSlots();
-    this._placePartyMembers();
+    if (this.isCoop) this._placeCoopParty();
+    else this._placePartyMembers();
     this._placeEnemies(this.scenarioId);
 
     // Build fixed turn order (decided at combat start) — grouped by TEAM
@@ -365,12 +380,23 @@ export default class CombatScene extends Phaser.Scene {
     // first is currently hardcoded to the player party for the combat pit;
     // a real circumstance-based rule (ambush, enemy initiative, etc.) is a
     // separate, later decision — this is a deliberate placeholder for that.
-    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
-    const partyOrder = [...GameState.party].sort(byInitiativeDesc);
-    const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
-    this.turnOrder = [...partyOrder, ...enemyOrder];
+    if (this.isCoop) {
+      // A placeholder only. The server decides the real order and sends it
+      // with the opening board; this just gives _findUnitByRef something to
+      // resolve against until that arrives a moment later.
+      this.turnOrder = [...this.coopParty, ...(this.enemies || [])];
+    } else {
+      const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
+      const partyOrder = [...GameState.party].sort(byInitiativeDesc);
+      const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
+      this.turnOrder = [...partyOrder, ...enemyOrder];
 
-    this._resetAllCooldowns();
+      // Skipped in co-op: this reads GameState.party, which holds the LOCAL
+      // player's real characters rather than the fight's roster, so running it
+      // would zero cooldowns on saved characters that are not even in this
+      // battle. The server owns cooldowns here anyway.
+      this._resetAllCooldowns();
+    }
 
     // Clean all per-combat transient state off every combatant.
     // Party members are persistent objects (GameState.party) so leftover statuses,
@@ -448,8 +474,16 @@ export default class CombatScene extends Phaser.Scene {
     // === IMPORTANT CHANGE ===
     // Do NOT hand-roll the first turn. Use the same pipeline as every other turn.
     // This ensures the first actor gets start-of-turn effects and the initiative gauge tick.
-    this.currentTurnIndex = -1;      // so _advanceTurn() moves to index 0
-    this._advanceTurn();             // handles UI gating + AI on enemy turns
+    //
+    // Co-op takes neither path. _advanceTurn ticks cooldowns, runs DOTs and
+    // drives the AI — all of which the server has already done. Running it here
+    // would be a second simulation racing the real one.
+    if (this.isCoop) {
+      this._wireCoopClient();
+    } else {
+      this.currentTurnIndex = -1;      // so _advanceTurn() moves to index 0
+      this._advanceTurn();             // handles UI gating + AI on enemy turns
+    }
 
     // That bootstrap _advanceTurn() wraps the index to 0, which counts as a
     // new round and leaves combatRound at 2 during the party's FIRST turn.
@@ -670,6 +704,13 @@ export default class CombatScene extends Phaser.Scene {
     if (!text) return;
     inputNode.value = '';
     this._logLocal({ segments: [{ text: `You: ${text}`, color: '#9fd8ff' }] });
+
+    // In co-op the same line also goes to everyone else in the hunt. The
+    // scripted response stays LOCAL on purpose: each player is talking to
+    // their own encounter, and a trigger firing once per player is the same
+    // behaviour single player has, rather than one shared narrator.
+    if (this.isCoop) this.coopClient?.say(text);
+
     this._maybeRespondLocal(text);
   }
 
@@ -1641,6 +1682,9 @@ export default class CombatScene extends Phaser.Scene {
 
   _placeEnemies(scenarioId = 'training_encounter_1') {
     this.enemies = [];
+    // Restart uid numbering per combat so the same fight always produces the
+    // same ids. Summons keep counting up from wherever placement finished.
+    this._nextEnemyUid = 0;
 
     const scenario = COMBAT_SCENARIOS[scenarioId];
     if (!scenario) {
@@ -1674,6 +1718,18 @@ export default class CombatScene extends Phaser.Scene {
 
     const enemy = {
       ...template,                       // base stats / ai / sprites, etc.
+      // Stable per-combat identity. Enemy TEMPLATES carry no `id` field at
+      // all, and several enemies routinely share a name (six "Training
+      // Dummy"s), so before this an enemy could only be referred to by object
+      // reference. That is fine inside one process and useless the moment an
+      // action has to arrive as DATA — from the headless harness, or later
+      // from another player's browser.
+      //
+      // Numbered in spawn order rather than randomly, for two reasons: a
+      // seeded replay reproduces the same ids, and "e3" in a log line is
+      // something a human can follow. Survives movement between slots, which
+      // is why this exists rather than leaning on the slot key.
+      uid: 'e' + (this._nextEnemyUid = (this._nextEnemyUid || 0) + 1),
       type: config.type,
       name: config.name || template.name || config.type,
       currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
@@ -3208,6 +3264,16 @@ export default class CombatScene extends Phaser.Scene {
     this.endTurnButton = new UIButton(this, x, y, 'End Turn', () => {
       const actor = this._currentChar?.();
       if (actor?.isEnemy) return;  // don't let players skip NPCs
+
+      // Co-op: ask, do not act. Advancing locally would tick cooldowns and
+      // DOTs the server has already ticked, and the next broadcast would
+      // overwrite the result anyway — but not before the player had seen a
+      // board that never existed.
+      if (this.isCoop) {
+        this.coopClient?.endTurn();
+        return;
+      }
+
       // Flagged so _advanceTurn knows this is a player ending their own turn,
       // not the NPC loop's auto-advance — see the mid-turn-death flag there.
       this._advanceTurn({ playerEndedTurn: true });
@@ -4805,7 +4871,14 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // --- Non-target skills: assume self (expand later if needed) ---
-    this._applyAbilityToTarget(actor, actor, ability);
+    // Same reason as the targeted path below: one sequence of gates, three
+    // callers. _resolveAction re-checks the action pool, cooldown and position
+    // gates this function just checked, which is harmless and keeps the rule
+    // in exactly one place.
+    {
+      const verdict = this._resolveAction({ actor, skill: ability, target: null });
+      if (!verdict.ok) this._log(verdict.reason);
+    }
 
     // NOTE: Do NOT decrement actions here; _applyAbilityToTarget handles action spending
     // for all non-reaction, non-class skills. Keep the UI refresh only.
@@ -4815,6 +4888,553 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
 
+
+  // ─── Actions as data ──────────────────────────────────────────────────────
+  //
+  // _useAbility above is a BUTTON HANDLER. It checks its gates, then calls
+  // _enterTargetingMode, which attaches a pointerdown listener to every valid
+  // slot and returns -- the ability only resolves when a click arrives. That
+  // works fine for one person at one keyboard and is unusable for anything
+  // else: a headless test has no pointer, and neither does a remote player.
+  //
+  // _resolveAction is the same sequence with the target supplied as data
+  // instead of arriving as a click. It is deliberately the ONLY place that
+  // sequence is written down, so the UI, the harness and (later) a network
+  // message all resolve an action through identical gates and cannot drift
+  // apart. It returns a verdict rather than throwing, because "refused, and
+  // here is why" is a normal outcome that a caller needs to show or log.
+
+  /**
+   * Finds a combatant from a wire-safe reference.
+   *
+   * Enemies have no unique id of their own -- six Training Dummies spawned
+   * from one template share a name and a template id -- so the slot key
+   * ("E4"/"A2") is the only thing guaranteed unique per side. An ambiguous
+   * reference returns null rather than guessing, since guessing would target
+   * the wrong unit and look like a rules bug.
+   */
+  _findUnitByRef(ref) {
+    if (!ref) return null;
+    if (typeof ref === 'object') return ref;         // already a unit
+    const units = (this.turnOrder || []).filter(Boolean);
+
+    // Most specific first. Each match must be UNIQUE to count: two units
+    // answering to the same reference means the caller was ambiguous, and
+    // picking one of them would hit the wrong unit and read as a rules bug.
+    const byUid = units.filter(u => u.uid && u.uid === ref);
+    if (byUid.length === 1) return byUid[0];
+
+    const byInstance = units.filter(u => u.instanceId && u.instanceId === ref);
+    if (byInstance.length === 1) return byInstance[0];
+
+    const bySlotKey = units.filter(u => this._charSlotKey?.(u) === ref);
+    if (bySlotKey.length === 1) return bySlotKey[0];
+
+    const byName = units.filter(u => u.name === ref);
+    if (byName.length === 1) return byName[0];
+
+    return null;
+  }
+
+  /**
+   * Build the shared party from the roster the server sent with the opening
+   * board — every player's hunters, not just this client's.
+   *
+   * Deliberately does NOT touch `GameState.party`. That is the local player's
+   * saved roster, and a co-op fight contains characters that belong to someone
+   * else; assigning them would put another player's hunters into this player's
+   * save the next time anything autosaved.
+   */
+  _placeCoopParty() {
+    const roster = this.coopClient?.roster || [];
+    this.coopParty = [];
+
+    roster.forEach((wire, i) => {
+      let char;
+      try {
+        char = fromWireCharacter(wire);
+      } catch (err) {
+        // A hunter we cannot rebuild is not something to paper over: it means
+        // the two sides disagree about what the game contains.
+        console.error('[coop] could not rebuild a hunter from the wire', err);
+        return;
+      }
+      char.ownerId = wire.ownerId ?? null;
+      char.isLocal = char.ownerId === this.coopClient?.playerId;
+
+      const slot = this.allySlots.find(s => !s.occupied);
+      if (!slot) return;
+      this._prepareCharForBattle(char);
+      this._assignCharToSlot(char, slot);
+      this._refreshStatusEffectIcons?.(char);
+      this.coopParty.push(char);
+    });
+  }
+
+  /**
+   * Listen to the server. Every board this client draws arrives here.
+   */
+  _wireCoopClient() {
+    const client = this.coopClient;
+    if (!client) return;
+
+    const off = [];
+    off.push(client.on('state', (state) => {
+      const report = this._applyNetState(state);
+      if (!report.ok) {
+        // Rather than draw a board we know is incomplete, ask for the whole
+        // thing again. A silent partial apply is how two players end up
+        // looking at different fights.
+        console.warn('[coop] unresolved units, resyncing', report.unknown);
+        client.requestSync();
+      }
+      this._afterCoopState();
+    }));
+
+    off.push(client.on('events', (events) => this._replayCoopEvents(events)));
+
+    off.push(client.on('said', (msg) => {
+      // Our own line was already shown locally the moment it was typed, so
+      // echoing the relay back would print it twice.
+      if (msg.playerId === client.playerId) return;
+      this._logLocal({ segments: [{ text: `${msg.from}: ${msg.text}`, color: '#9fd8ff' }] });
+    }));
+
+    off.push(client.on('log', (lines) => {
+      // Entries arrive STRUCTURED, so the detailed damage breakdown survives
+      // the trip and can still be hovered. Rehydrating turns the unit and
+      // skill references back into the real objects the tooltip code expects.
+      for (const line of lines) this._log(this._fromWireArg(line));
+    }));
+
+    off.push(client.on('error', (reason) => this._log(`⚠ ${reason}`)));
+
+    off.push(client.on('over', (msg) => {
+      this.combatEnded = true;
+      // v1 has no consequences: no XP, no loot, no clear flags, nothing
+      // written to a save. The fight is the whole of it, so this reports the
+      // outcome and stops rather than running the reward path.
+      if (msg.outcome === 'victory') {
+        this._showVictoryScreen('Victory!', ['Co-op — nothing was kept.'], null, [], []);
+      } else {
+        this._showDefeatScreen('Defeat', 'Co-op — nothing was lost.', { showExit: true });
+      }
+    }));
+
+    off.push(client.on('closed', () => {
+      this._log('⚠ Lost the connection to the server.');
+      this.combatEnded = true;
+    }));
+
+    this._coopUnsubs = off;
+    this.events.once('shutdown', () => {
+      // Drop the listeners first. A subscription that outlives its scene will
+      // happily try to write to Text objects Phaser has already destroyed,
+      // which is where "Cannot read properties of null (reading 'cut')" comes
+      // from — the lobby hit exactly that before it started unsubscribing.
+      for (const fn of this._coopUnsubs) { try { fn(); } catch { } }
+      this._coopUnsubs = [];
+
+      // The unlock runs on a wall-clock timer that Phaser knows nothing about,
+      // so it has to be cancelled by hand or it will fire into a dead scene.
+      clearTimeout(this._coopUnlockTimer);
+      this._coopUnlockTimer = null;
+
+      // Leaving the fight ends the session. The lobby deliberately does NOT
+      // close the socket when it hands off to this scene, so closing it here
+      // is what finally releases it.
+      this.coopClient?.disconnect();
+      this.coopClient = null;
+    });
+
+    // The opening board arrived before this scene existed, so apply it now.
+    if (client.state) {
+      this._applyNetState(client.state);
+      this._afterCoopState();
+    }
+  }
+
+  /**
+   * Replay what the server's engine would have drawn.
+   *
+   * A co-op client never runs _applyAbilityToTarget, so it never learns that a
+   * hit was a crit, or how much damage to float over whose head, or that a
+   * status flared. The server's host records exactly those calls — see
+   * RECORDED_METHODS in tools/headless/combatHost.js — and this plays them
+   * back through the same methods single player uses.
+   *
+   * Timing comes from the recording. The engine staggers a chain of enemy
+   * turns across hundreds of milliseconds; replaying on those same offsets is
+   * what turns "the whole enemy round happened at once" back into the game's
+   * own rhythm. Offsets are relative to the first event in the batch, since
+   * the server's virtual clock counts from the start of the fight.
+   *
+   * Deliberately visual-only. The authoritative board is applied immediately
+   * and separately, so a slow animation can never delay or alter the truth —
+   * at worst a damage number floats a moment after the bar it belongs to.
+   */
+  _replayCoopEvents(events) {
+    if (!Array.isArray(events) || !events.length) return;
+
+    // Replayed ONE TO ONE. The recording was already made at the pace it is
+    // meant to be watched at (the lobby host's setting), and the engine's
+    // delays are a deliberate mix of scaled and unscaled — so multiplying here
+    // would stretch the structural gaps between enemy actions that single
+    // player never stretches, and the fight would drift out of its own rhythm.
+    const base = events[0].at || 0;
+
+    let last = 0;
+    for (const ev of events) {
+      const delay = Math.max(0, ((ev.at || 0) - base));
+      last = Math.max(last, delay);
+      const run = () => {
+        if (this.combatEnded && ev.fn !== '_showFloatingNumber') return;
+        const args = (ev.args || []).map(a => this._fromWireArg(a));
+        try { this[ev.fn]?.(...args); }
+        catch (err) { console.warn('[coop] could not replay ' + ev.fn, err); }
+      };
+      if (delay <= 0) run();
+      else this.time.delayedCall(delay, run);
+    }
+
+    // Hold this player's controls until the replay finishes.
+    //
+    // Without it the board — which lands immediately, and must — says "your
+    // turn" while the previous round is still visibly playing out, so a player
+    // acts into an animation that has not caught up, and the two drift further
+    // apart with every turn. Single player never has this problem because the
+    // thing being animated IS the thing being simulated; here they are
+    // deliberately separated, so the wait has to be put back by hand.
+    //
+    // The tail covers the last effect's own duration, since an event's
+    // timestamp is when it STARTS.
+    //
+    // The UNLOCK runs on a wall clock, not on the scene clock the animations
+    // use. Phaser's clock stops whenever the game is paused, and a lock
+    // released by a frozen timer is a lock that never releases — the player is
+    // left staring at their own turn with no controls and nothing in the log
+    // to explain it. Wall time cannot be frozen, so the controls always come
+    // back even if the visuals were interrupted.
+    const tail = 320;
+    const deadline = Date.now() + last + tail;
+    this._coopReplayDeadline = Math.max(this._coopReplayDeadline || 0, deadline);
+    this._coopReplaying = true;
+    this._afterCoopState();
+
+    clearTimeout(this._coopUnlockTimer);
+    this._coopUnlockTimer = setTimeout(() => {
+      this._coopReplaying = false;
+      this._afterCoopState();
+    }, Math.max(0, this._coopReplayDeadline - Date.now()));
+  }
+
+  /** Turn a recorded argument back into something this scene can use. */
+  _fromWireArg(value) {
+    if (value == null || typeof value !== 'object') return value;
+    // A unit the server named by reference; null if we have never seen it,
+    // which the VFX methods already tolerate by bailing out.
+    if (value.__unit !== undefined) {
+      return this._netUnits?.get(value.__unit) || this._findUnitByRef(value.__unit);
+    }
+    if (value.__skill !== undefined) return SKILLS[value.__skill] || null;
+    if (Array.isArray(value)) return value.map(v => this._fromWireArg(v));
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = this._fromWireArg(v);
+    return out;
+  }
+
+  /**
+   * Re-gate the local player's controls after any authoritative board.
+   *
+   * Gated on the replay as well as on the turn: it may be your turn according
+   * to the server while the previous round is still animating on your screen,
+   * and letting you act then is what put the visuals and the fight out of step.
+   */
+  _afterCoopState() {
+    // Self-healing on wall time. If the deadline has passed, the replay is over
+    // whatever the flag says — a lock that outlives its own deadline is a bug
+    // that presents as a player with no controls and no explanation.
+    if (this._coopReplaying && Date.now() >= (this._coopReplayDeadline || 0)) {
+      this._coopReplaying = false;
+    }
+
+    const mine = !!(this.coopClient?.isMyTurn) && !this._coopReplaying;
+
+    // Building the menu must never be able to leave the controls hidden. It
+    // reads the current actor, their slot and their targets, any of which can
+    // be mid-change right after a knockout; if it throws, the visibility calls
+    // below would never run and the player would be stuck on their own turn.
+    if (mine) {
+      try { this._buildActionMenuRoot?.(); }
+      catch (err) { console.error('[coop] action menu failed to build', err); }
+    } else {
+      try { this._exitTargetingMode?.(); } catch { /* nothing armed */ }
+    }
+
+    this.endTurnButton?.setVisible(mine);
+    this.actionMenu?.setVisible(mine);
+    this._updateActionLights?.();
+  }
+
+  /**
+   * Apply an authoritative board from a co-op server.
+   *
+   * In co-op the client must DISPLAY a fight it is not simulating. Letting it
+   * simulate alongside the server would work right up until one roll differed,
+   * and then the two players would be looking at different games with no way
+   * to tell which was real. So the server owns the rules and this writes what
+   * it says.
+   *
+   * Only mutable, per-fight fields are copied. Identity, stats, gear and
+   * skills are NOT touched: both sides built those from the same save data and
+   * the same data/skills.js, so overwriting them could only introduce drift.
+   *
+   * Unknown units are ignored rather than invented. A reference this client
+   * cannot resolve means the two sides disagree about who is on the board,
+   * which is a resync problem, not something to paper over by creating a
+   * ghost unit that nothing else knows about.
+   *
+   * Returns a report of what it could not apply, so a caller can decide to
+   * request a full resync instead of quietly rendering a wrong board.
+   */
+  _applyNetState(state) {
+    const unknown = [];
+    if (!state || !Array.isArray(state.units)) return { applied: 0, unknown, ok: false };
+
+    // A directory of everyone who has ever been on this board, refreshed
+    // before each apply and never pruned.
+    //
+    // _findUnitByRef searches the TURN ORDER, and the dead leave it — so a
+    // fallen hunter becomes unresolvable the moment they go down, and every
+    // later broadcast about them is dropped. The server keeps reporting them
+    // (a corpse still has HP 0, a status and a slot the client must draw), so
+    // the client needs to remember who it has seen rather than only who is
+    // still acting.
+    this._netUnits = this._netUnits || new Map();
+    for (const u of [...(this.turnOrder || []), ...(this.enemies || []), ...(this.koArea || [])]) {
+      const ref = this._unitRef(u);
+      if (ref) this._netUnits.set(ref, u);
+    }
+
+    let applied = 0;
+    for (const u of state.units) {
+      const unit = this._netUnits.get(u.ref) || this._findUnitByRef(u.ref);
+      if (!unit) { unknown.push(u.ref); continue; }
+
+      // A unit that has just gone down needs its portrait moved off the board.
+      //
+      // Single player does this inside _onUnitKnockedOut, which a co-op client
+      // must NOT run: that method also detonates death-burst statuses, splices
+      // the turn order and checks for victory, all of which the server has
+      // already done. Only the VISUAL half belongs here.
+      const wasStanding = unit.status !== 'incapacitated';
+      if (wasStanding && u.status === 'incapacitated') {
+        const slot = unit._slot;
+        if (slot) {
+          this._clearPortrait?.(slot);
+          slot.occupied = false;
+          slot.char = null;
+        }
+        if (!this.koArea) this.koArea = [];
+        if (!this.koArea.includes(unit)) {
+          this.koArea.push(unit);
+          this._placeInKOArea?.(unit);
+        }
+      }
+
+      unit.currentHP = u.hp;
+      unit.maxHP = u.maxHP;
+      unit.currentMP = u.mp;
+      unit.maxMP = u.maxMP;
+      unit.initiativeGauge = u.gauge ?? 0;
+      unit.shieldHP = u.shield || 0;
+      unit.status = u.status;
+      if (u.actions) unit.actionsLeft = { ...u.actions };
+
+      if (unit.weakness) {
+        if (u.meters) unit.weakness.meters = { ...u.meters };
+        if (u.tiers) unit.weakness.tiers = { ...u.tiers };
+      }
+
+      // Status effects are replaced wholesale rather than merged. A merge
+      // would have to guess at identity for effects that carry no id of their
+      // own, and the server's list is authoritative by definition.
+      unit.statusEffects = (u.effects || []).map(e => ({ ...e }));
+
+      unit.cooldowns = { ...(u.cooldowns || {}) };
+      applied++;
+    }
+
+    if (Number.isFinite(state.round)) this.combatRound = state.round;
+    this.combatEnded = !!state.ended;
+
+    // Turn order arrives as references so the client agrees with the server
+    // about who acts next, not merely about everyone's HP.
+    if (Array.isArray(state.turnOrder)) {
+      const resolved = state.turnOrder.map(ref => this._findUnitByRef(ref)).filter(Boolean);
+      if (resolved.length === state.turnOrder.length) this.turnOrder = resolved;
+    }
+    if (state.current?.ref) {
+      const idx = this.turnOrder.findIndex(x => this._unitRef(x) === state.current.ref);
+      if (idx >= 0) this.currentTurnIndex = idx;
+    }
+
+    this._updateHealthBars?.();
+    this._updateHPMPBars?.();
+    this._updateInitiativeBars?.();
+    for (const unit of this.turnOrder || []) this._refreshStatusEffectIcons?.(unit);
+    // The turn-order strip is built from this.turnOrder at create() time and
+    // does not notice it being replaced. Without this the list kept showing
+    // the placeholder order the client guessed before the server's real one
+    // arrived — the right people acted, but the strip named the wrong ones.
+    this._refreshTurnOrderUI?.();
+    this._highlightCurrentTurn?.();
+
+    return { applied, unknown, ok: unknown.length === 0 };
+  }
+
+  /**
+   * The canonical wire reference for a unit — what a network message should
+   * carry to name it. Players keep the `instanceId` their save already uses;
+   * enemies use the per-combat `uid` assigned at spawn.
+   *
+   * Falls back to the slot key so this never returns nothing for a unit that
+   * is genuinely on the board, but a caller relying on that fallback is
+   * addressing something that will move.
+   */
+  _unitRef(unit) {
+    if (!unit) return null;
+    return unit.instanceId || unit.uid || this._charSlotKey?.(unit) || null;
+  }
+
+  /** The skill object for an id, preferring the actor's own granted copy. */
+  _findSkillFor(actor, skillRef) {
+    if (!skillRef) return null;
+    if (typeof skillRef === 'object') return skillRef;
+    return (actor?.skills || []).find(s => s?.id === skillRef) || SKILLS[skillRef] || null;
+  }
+
+  /**
+   * Resolve one combat action described as data.
+   *
+   * intent: { actor, skill, target }, each either a live object or a
+   *         wire-safe reference (slot key, instanceId, or unambiguous name).
+   * opts:   { requireCurrentTurn } -- defaults true. The harness and the
+   *         action menu both act on whoever's turn it is; only a deliberate
+   *         out-of-turn caller should pass false.
+   *         { playerId } -- who is asking. See the ownership note below.
+   *
+   * Returns { ok: true, actor, skill, target } or { ok: false, reason }.
+   */
+  _resolveAction(intent = {}, opts = {}) {
+    const requireCurrentTurn = opts.requireCurrentTurn !== false;
+    const refuse = (reason) => ({ ok: false, reason });
+
+    if (this.combatEnded) return refuse('combat has ended');
+
+    const actor = this._findUnitByRef(intent.actor) || this._currentChar?.();
+    if (!actor) return refuse('no such actor');
+
+    // --- co-op: send the intent, do not resolve it --------------------------
+    //
+    // This is the whole client/server split, and it lands here because this is
+    // already the single chokepoint every action passes through — the menu
+    // click, the harness and now the network all meet at this line. Resolving
+    // locally as well would be a second simulation, and the first roll that
+    // differed would silently desync the two players.
+    //
+    // The local gates below are deliberately NOT run first. The server applies
+    // them all and is the only opinion that counts; duplicating them here
+    // would mean two places to keep in step, and a client that disagreed would
+    // refuse actions the server would have allowed.
+    if (this.isCoop && !opts.fromServer) {
+      const ability = this._findSkillFor(actor, intent.skill);
+      if (!ability) return refuse('no such skill');
+      const target = this._findUnitByRef(intent.target);
+      this.coopClient?.act({
+        actor: this._unitRef(actor),
+        skill: ability.id,
+        target: target ? this._unitRef(target) : null,
+      });
+      this._exitTargetingMode?.();
+      return { ok: true, sent: true, actor, skill: ability, target };
+    }
+
+    // --- ownership ----------------------------------------------------------
+    // Opt-in, and FAIL-CLOSED once opted in.
+    //
+    // Single player never passes a playerId, so this whole block is inert and
+    // the local player keeps commanding every hunter — which is why adding it
+    // changes nothing about the existing game.
+    //
+    // A co-op server passes one on every action it receives, and then the
+    // actor MUST carry a matching ownerId. An unowned hunter is refused rather
+    // than allowed: the alternative fails open, so forgetting to stamp
+    // ownership on one character during lobby setup would silently let anyone
+    // drive it. Enemies are unowned by design and never reach here with a
+    // playerId, since the AI acts through _performNPCAction.
+    if (opts.playerId != null) {
+      if (actor.ownerId == null) return refuse(`${actor.name} has no owner`);
+      if (actor.ownerId !== opts.playerId) return refuse(`${actor.name} is not yours to command`);
+    }
+
+    if (requireCurrentTurn && actor !== this._currentChar?.()) {
+      return refuse(`it is not ${actor.name}'s turn`);
+    }
+    if (actor.status === 'incapacitated') return refuse(`${actor.name} is down`);
+
+    const ability = this._findSkillFor(actor, intent.skill);
+    if (!ability) return refuse('no such skill');
+
+    // --- the gates _useAbility applies before targeting ---------------------
+    const type = ability.actionCost || 'major';
+    if (type !== 'free') {
+      const affordable = Array.isArray(type)
+        ? type.every(t => this._canUseActionType(t))
+        : this._canUseActionType(type);
+      if (!affordable) {
+        return refuse(`no ${Array.isArray(type) ? type.join(' + ') : type} action left`);
+      }
+    }
+
+    const cd = actor.cooldowns?.[ability.id] || 0;
+    if (cd > 0 && !DevFlags.isNoCooldownEnabled()) {
+      return refuse(`${ability.name} is on cooldown (${cd} turn${cd > 1 ? 's' : ''} left)`);
+    }
+
+    if (ability.positionRequirement?.length && !DevFlags.isNoRangeEnabled()) {
+      const col = this._getUnitColumn(actor);
+      if (!ability.positionRequirement.includes(col)) {
+        return refuse(`${actor.name} cannot use ${ability.name} from ${col}`);
+      }
+    }
+
+    // --- untargeted skills resolve on the caster ----------------------------
+    if (!ability.requiresTarget) {
+      this._applyAbilityToTarget(actor, actor, ability);
+      return { ok: true, actor, skill: ability, target: actor };
+    }
+
+    // --- the gates _enterTargetingMode applies ------------------------------
+    const actorReason = this._abilityActorGateReason(actor, ability);
+    if (actorReason) return refuse(`${ability.name} unavailable: ${actorReason}`);
+
+    const validSlots = this._validTargetsFor(actor, ability) || [];
+    if (!validSlots.length) {
+      const why = this._abilityUnavailableReason?.(actor, ability);
+      return refuse(`${ability.name} has no valid targets${why ? ` — ${why}` : ''}`);
+    }
+
+    const wanted = this._findUnitByRef(intent.target);
+    const slot = wanted
+      ? validSlots.find(s => s.char === wanted)
+      : null;
+    if (intent.target && !slot) return refuse('that target is not valid for this skill');
+    const chosen = slot || validSlots[0];
+
+    this._applyAbilityToTarget(actor, chosen.char, ability);
+    return { ok: true, actor, skill: ability, target: chosen.char };
+  }
 
 
   // ─── Ability gating, split by what it depends on ──────────────────────────
@@ -4997,7 +5617,18 @@ export default class CombatScene extends Phaser.Scene {
       /* ---- 1️⃣  Make the container clickable for this ability ---- */
       slot.removeAllListeners();          // safety
       slot.once('pointerdown', () => {
-        this._applyAbilityToTarget(this._currentChar(), slot.char, ability);
+        // Goes through _resolveAction rather than straight to
+        // _applyAbilityToTarget so the click path, the headless harness and a
+        // future network message all resolve an action through ONE sequence of
+        // gates. Re-running the gates here is intentional and cheap: they are
+        // pure predicates, and a target can stop qualifying between arming the
+        // ability and clicking it.
+        const verdict = this._resolveAction({
+          actor: this._currentChar(),
+          skill: ability,
+          target: slot.char,
+        });
+        if (!verdict.ok) this._log(verdict.reason);
         // _buildActionMenuRoot (called inside _applyAbilityToTarget) handles _exitTargetingMode
       });
 

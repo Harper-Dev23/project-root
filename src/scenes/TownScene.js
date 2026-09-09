@@ -3250,6 +3250,46 @@ export default class TownScene extends Phaser.Scene {
       };
     });
 
+    // Co-op entry. Sits with the scenarios rather than in its own menu,
+    // because the thing a player is choosing is still "which fight" — the
+    // only difference is who else is in it.
+    //
+    // Only UNLOCKED scenarios are offered, so joining a friend cannot skip
+    // your own progression. The lobby is handed the list rather than the
+    // rules, so it never has to know how unlocking works.
+    const unlockedIds = [
+      ...scenarioIds,
+      ...Object.values(RECKONING_TIERS).flat(),
+    ].filter(id => ProgressionManager.isScenarioUnlocked(id));
+
+    menuOptions.push({
+      label: 'Co-op Training',
+      baseName: 'Co-op Training',
+      completed: false,
+      description: 'Fight alongside another Hunter.',
+      longDescription:
+        'Host or join a hunt on a shared server. Six hunters between everyone, '
+        + 'split any way you like. Nothing you win here is kept yet — the fight '
+        + 'is the whole of it for now.',
+      portraitKey: null,
+      locked: unlockedIds.length === 0,
+      onSelect: unlockedIds.length
+        ? () => {
+          if (!GameState.party || GameState.party.length === 0) {
+            this.scene.get('UIScene')?.showDialogue(
+              'Assemble your party first.\nVisit the bonfire to create hunters, then add them to your party.'
+            );
+            return;
+          }
+          this.scene.get('UIScene')?.cleanupPopup();
+          window.sceneManager.loadScene('CoopLobbyScene', 'Opening the lobby…', {
+            scenarioIds: unlockedIds,
+            scenarioId: unlockedIds[0],
+          });
+        }
+        : null,
+    });
+
     // Dev bypass toggle — flips the bypass and re-opens the menu so the
     // locked/unlocked state refreshes immediately.
     const bypassToggle = {

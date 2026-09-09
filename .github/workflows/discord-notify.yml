@@ -23,7 +23,20 @@ jobs:
   notify:
     # deployment_status fires for every state change (queued/in_progress/
     # success/failure). Only announce real successes.
-    if: github.event.deployment_status.state == 'success'
+    #
+    # And only PAGES deployments. Any host that reports back to GitHub creates
+    # deployment records of its own — the co-op server on Railway does, and
+    # every build of it was posting patch notes to Discord as though the game
+    # had shipped. Announcing is about the SITE being live, so it is gated on
+    # the site's own environment.
+    #
+    # Both conditions are checked because the two are named differently
+    # depending on how Pages is configured; either one alone would be a way to
+    # go silent on a real deploy, which is the worse failure of the two.
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      (github.event.deployment_status.environment == 'github-pages' ||
+       contains(github.event.deployment_status.environment_url, 'github.io'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
