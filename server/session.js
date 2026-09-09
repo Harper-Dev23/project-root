@@ -25,6 +25,8 @@ import { seed as seedRng } from '../tools/headless/phaserStub.js';
 import { startCombat, snapshotBoard } from '../tools/headless/fight.js';
 import { fromWireCharacter } from '../src/systems/CoopWire.js';
 import { GameplaySettings } from '../src/systems/GameplaySettings.js';
+import { isItemInstance } from '../src/systems/ItemFactory.js';
+import { COMBAT_SCENARIOS } from '../data/combatScenarios.js';
 
 /** The shared party cap. Already the game's own limit in five places. */
 export const PARTY_LIMIT = 6;
@@ -201,6 +203,37 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         zones: host.slotEffects,
         units: [...party, ...(host.enemies || [])].map(lean),
         logLength: host.combatEntries.length,
+      };
+    },
+
+    /**
+     * What this fight is worth, for each client to apply to its OWN save.
+     *
+     * The server deliberately grants nothing. It reports the facts — which
+     * scenario, what it pays, and which items the defeated dropped — and every
+     * client runs the reward path it already has, for its own hunters. Saves
+     * stay entirely local, and there is one definition of what a clear is
+     * worth rather than a co-op copy that can drift.
+     *
+     * Loot is read exactly as `_onCombatVictory` reads it: every droppable
+     * item instance on a defeated enemy, which is also how anything cut free
+     * with a Severing Chant arrives.
+     */
+    rewards() {
+      const scenario = COMBAT_SCENARIOS[scenarioId] || {};
+      const loot = [];
+      for (const enemy of (host.enemies || [])) {
+        for (const inst of Object.values(enemy.equipment || {})) {
+          if (isItemInstance(inst) && inst._droppable) loot.push(inst);
+        }
+      }
+      return {
+        scenarioId,
+        xpReward: scenario.xpReward ?? 0,
+        xpRepeatable: !!scenario.xpRepeatable,
+        // Copied to everyone rather than split — the simplest thing that is
+        // not unfair, and what co-op games normally do among friends.
+        loot,
       };
     },
 

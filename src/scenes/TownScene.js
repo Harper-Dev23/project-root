@@ -3269,8 +3269,8 @@ export default class TownScene extends Phaser.Scene {
       description: 'Fight alongside another Hunter.',
       longDescription:
         'Host or join a hunt on a shared server. Six hunters between everyone, '
-        + 'split any way you like. Nothing you win here is kept yet — the fight '
-        + 'is the whole of it for now.',
+        + 'split any way you like. A win pays your own save in full — '
+        + 'experience, loot and quest progress. A loss costs nothing.',
       portraitKey: null,
       locked: unlockedIds.length === 0,
       onSelect: unlockedIds.length

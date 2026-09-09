@@ -815,7 +815,20 @@ export default class CombatScene extends Phaser.Scene {
       };
     }
 
-    const fallback = entry != null ? String(entry) : '';
+    // A turn separator is a SHAPE, not text. Single player pushes these
+    // straight into combatEntries and never brings them here, but a co-op
+    // client receives every entry the server logged — separators included —
+    // and routing one through the text path rendered it as "[object Object]"
+    // after every turn.
+    if (entry && typeof entry === 'object' && entry.separator) return { separator: true };
+
+    // Anything else unrecognised is shown as JSON rather than as
+    // "[object Object]", which says nothing and cannot be traced back.
+    let fallback = '';
+    if (entry != null) {
+      try { fallback = typeof entry === 'object' ? JSON.stringify(entry) : String(entry); }
+      catch { fallback = String(entry); }
+    }
     return { segments: [{ text: fallback, color: LOG_COLORS.default }] };
   }
 
@@ -1630,9 +1643,26 @@ export default class CombatScene extends Phaser.Scene {
    * load. Called after the reset, on every turn change, and after the
    * per-turn regen.
    */
+  /**
+   * The allies actually standing on THIS board.
+   *
+   * Not the same thing as `GameState.party`. In single player they are the
+   * same objects, but a co-op fight is made of the shared roster — including
+   * another player's hunters — while `GameState.party` still holds this
+   * player's own saved characters, who are not in the battle at all.
+   *
+   * Reaching for the saved party in a co-op fight is not merely wrong, it
+   * CRASHES: those characters keep a stale `hpBar` from whatever combat they
+   * were last in, so `if (char.hpBar)` passes on a destroyed object and the
+   * next `.update()` throws. That took out the whole of create().
+   */
+  _boardAllies() {
+    return this.isCoop ? (this.coopParty || []) : (GameState.party || []);
+  }
+
   _updateInitiativeBars() {
-    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
-      u?.initBar?.update(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
+    [...this._boardAllies(), ...(this.enemies || [])].forEach(u => {
+      u?.initBar?.update?.(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
     });
   }
 
@@ -3856,16 +3886,23 @@ export default class CombatScene extends Phaser.Scene {
       return Math.max(1, Math.floor(base * (1 - down)));
     };
 
-    (GameState.party || []).forEach(char => {
-      if (char?.hpBar) char.hpBar.update(char.currentHP, getEffMax(char));
+    // `typeof ... === 'function'` rather than a truthiness check: a bar handle
+    // outlives the scene that built it, so the property can be present and the
+    // object dead. Truthiness said "yes" and then threw.
+    this._boardAllies().forEach(char => {
+      if (typeof char?.hpBar?.update === 'function') {
+        char.hpBar.update(char.currentHP, getEffMax(char));
+      }
     });
 
     (this.enemies || []).forEach(enemy => {
-      if (enemy?.hpBar) enemy.hpBar.update(enemy.currentHP, getEffMax(enemy));
+      if (typeof enemy?.hpBar?.update === 'function') {
+        enemy.hpBar.update(enemy.currentHP, getEffMax(enemy));
+      }
     });
 
-    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
-      u?.initBar?.update(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
+    [...this._boardAllies(), ...(this.enemies || [])].forEach(u => {
+      u?.initBar?.update?.(u.initiativeGauge ?? 0, u.initiativeGaugeMax ?? 100);
     });
 
     // Piggybacks on this same broad "something changed, refresh the portrait
@@ -3873,7 +3910,7 @@ export default class CombatScene extends Phaser.Scene {
     // buildup-application site — every caller of _updateHealthBars already
     // wants the portrait refreshed after a hit/heal/tick, and weakness
     // buildup virtually always changes alongside one of those.
-    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+    [...this._boardAllies(), ...(this.enemies || [])].forEach(u => {
       this._updateWeaknessOverlays(u);
     });
 
@@ -5004,20 +5041,32 @@ export default class CombatScene extends Phaser.Scene {
       // Entries arrive STRUCTURED, so the detailed damage breakdown survives
       // the trip and can still be hovered. Rehydrating turns the unit and
       // skill references back into the real objects the tooltip code expects.
-      for (const line of lines) this._log(this._fromWireArg(line));
+      for (const line of lines) {
+        // Separators go in directly, exactly as _advanceTurn does in single
+        // player. They carry no text, so the text path has nothing to render.
+        if (line?.separator) {
+          this.combatEntries.push({ separator: true });
+          continue;
+        }
+        this._log(this._fromWireArg(line));
+      }
+      this._scheduleLogRender?.();
     }));
 
     off.push(client.on('error', (reason) => this._log(`⚠ ${reason}`)));
 
     off.push(client.on('over', (msg) => {
       this.combatEnded = true;
-      // v1 has no consequences: no XP, no loot, no clear flags, nothing
-      // written to a save. The fight is the whole of it, so this reports the
-      // outcome and stops rather than running the reward path.
       if (msg.outcome === 'victory') {
-        this._showVictoryScreen('Victory!', ['Co-op — nothing was kept.'], null, [], []);
+        const earned = this._applyCoopRewards(msg);
+        this._showVictoryScreen('Victory!', earned.xpSummary, earned.progressReward,
+          earned.loot, earned.leveledUpNames);
       } else {
-        this._showDefeatScreen('Defeat', 'Co-op — nothing was lost.', { showExit: true });
+        // Defeat costs nothing. A hunter downed in someone else's session does
+        // not die in your save — that is a decision, not an oversight, and it
+        // is why nothing is written here at all.
+        this._showDefeatScreen('Defeat', 'Your Hunters return, shaken but whole.',
+          { showExit: true });
       }
     }));
 
@@ -5052,6 +5101,92 @@ export default class CombatScene extends Phaser.Scene {
       this._applyNetState(client.state);
       this._afterCoopState();
     }
+  }
+
+  /**
+   * Apply a co-op victory to THIS player's save, and only to it.
+   *
+   * The server grants nothing. It reports what the fight was worth and what
+   * dropped; every client then runs the same reward rules single player runs,
+   * scoped to its own hunters. That is what keeps saves local, and it means
+   * there is one definition of what a clear is worth rather than two.
+   *
+   * The subtlety is that `coopParty` holds COPIES rebuilt from the wire, not
+   * the characters in the save. Awarding XP to a copy would be a no-op that
+   * looked like it worked, so every hunter is matched back to the real saved
+   * character by instanceId first, and anything that cannot be matched is
+   * skipped rather than guessed at.
+   */
+  _applyCoopRewards(msg) {
+    const out = { xpSummary: [], leveledUpNames: [], loot: [], progressReward: null };
+    const rewards = msg?.rewards;
+    if (!rewards) return out;
+
+    const saved = GameState.party || [];
+    const idOf = (c) => c?.instanceId || c?.id;
+    const mine = (this.coopParty || [])
+      .filter(c => c.isLocal)
+      .map(c => saved.find(p => idOf(p) === idOf(c)))
+      .filter(Boolean);
+
+    if (!mine.length) {
+      out.xpSummary.push('None of your Hunters could be matched to this save.');
+      return out;
+    }
+
+    // Training restores everyone, so everybody who came earns. This mirrors
+    // _onCombatVictory's own rule rather than inventing a co-op variant: pay
+    // the first personal clear, and pay Reckoning tiers every time.
+    const perClear = rewards.xpReward ?? 0;
+    const repeatable = !!rewards.xpRepeatable;
+    const earners = repeatable
+      ? mine
+      : mine.filter(c => !GameState.hasCharacterCleared(c, rewards.scenarioId));
+    const skipped = repeatable
+      ? []
+      : mine.filter(c => GameState.hasCharacterCleared(c, rewards.scenarioId));
+
+    for (const c of mine) {
+      c.status = 'alive';
+      c.currentHP = c.maxHP;
+      c.currentMP = c.maxMP;
+    }
+
+    if (perClear > 0 && earners.length) {
+      const result = GameState.awardXPTo(earners, perClear);
+      out.leveledUpNames = result.leveledUpNames || [];
+      out.xpSummary.push(...(result.summaries || []));
+    }
+    skipped.forEach(c => out.xpSummary.push(`${c.name} - already cleared (no XP)`));
+    mine.forEach(c => GameState.markCharacterCleared(c, rewards.scenarioId));
+
+    // Loot is copied to everyone rather than split, so each client takes the
+    // whole list. addGlobalItem, not addToInventory: the former flags an item
+    // unseen so the inventory's "new" dot appears, which every other
+    // acquisition path already does.
+    for (const inst of (rewards.loot || [])) {
+      try {
+        InventorySystem.addGlobalItem(inst);
+        out.loot.push(inst);
+      } catch (err) {
+        console.error('[coop] could not add dropped item', err);
+      }
+    }
+    if (out.loot.length) {
+      this._log(`Collected ${out.loot.length} item${out.loot.length > 1 ? 's' : ''} from defeated enemies.`);
+    }
+
+    // Quest flags, hunt tickets and Reckoning Marks all come from this one
+    // call, per save. It is why "each player gets their own marks" needed no
+    // new machinery.
+    try {
+      out.progressReward = ProgressionManager.onScenarioComplete(rewards.scenarioId);
+    } catch (err) {
+      console.error('[coop] progression failed', err);
+    }
+
+    GameState.save('autosave');
+    return out;
   }
 
   /**
@@ -13049,7 +13184,10 @@ export default class CombatScene extends Phaser.Scene {
     // outlive this scene (the party). Phaser disposes the scene-owned tween and
     // time managers itself, but the REFERENCES on those characters would stay,
     // so clear them here as well as on the next slot assignment.
-    [...(GameState.party || []), ...(this.enemies || [])].forEach(u => {
+    // BOTH rosters here, unlike the drawing code above. This is teardown, and
+    // a co-op fight leaves emitters on the shared roster while the saved party
+    // may still be carrying some from an earlier single-player combat.
+    [...(GameState.party || []), ...(this.coopParty || []), ...(this.enemies || [])].forEach(u => {
       try { this._destroyWeaknessEmitters(u); } catch { }
     });
     this.koArea = [];

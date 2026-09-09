@@ -118,6 +118,34 @@ try {
     !(GameState.party || []).some(c => coopIds.has(c.instanceId || c.id)),
     'GameState.party holds ' + (GameState.party || []).length);
 
+  // ---- the crash that took out create() ------------------------------------
+  //
+  // `_updateHealthBars` iterated GameState.party — this player's SAVED
+  // characters, who are not in a co-op fight at all. Those carry a stale
+  // `hpBar` from whatever combat they were last in, so `if (char.hpBar)`
+  // passed on a destroyed object and `.update()` threw, killing create() and
+  // leaving the lobby on screen with the fight never starting.
+  //
+  // The harness stubs the drawing methods, so this calls the REAL one.
+  console.log('=== drawing reads the board, not the saved party ===');
+  {
+    const scene = scenes.p1;
+    check('_boardAllies returns the shared roster in co-op',
+      scene._boardAllies().length === scene.coopParty.length && scene.coopParty.length > 0,
+      scene._boardAllies().length + ' allies');
+
+    // Plant exactly what a previous single-player combat leaves behind.
+    GameState.party = [{ name: 'Stale', currentHP: 1, maxHP: 1, hpBar: { destroyed: true } }];
+
+    let threw = null;
+    try { CombatScene.prototype._updateHealthBars.call(scene); }
+    catch (e) { threw = e.message; }
+    check('a stale bar handle on a saved character cannot crash the board',
+      threw === null, threw || 'no throw');
+
+    GameState.party = [];
+  }
+
   console.log('=== acting sends, and never resolves locally ===');
   {
     const client = alice.isMyTurn ? alice : bob;
@@ -191,6 +219,47 @@ try {
   await sleep(100);
 
   check('the fight finished', !!over, over?.outcome + ' after ' + turns + ' turns');
+
+  // ---- rewards reach the LOCAL save, and only the local hunters ------------
+  if (over?.outcome === 'victory') {
+    console.log('');
+    console.log('=== rewards ===');
+    check('the server reported what the fight was worth',
+      !!over.rewards && typeof over.rewards.xpReward === 'number',
+      'xp ' + over.rewards?.xpReward + ', loot ' + (over.rewards?.loot?.length ?? 0));
+
+    // Put Alice's three hunters in the save, as a real client would have them,
+    // and leave Bob's out entirely.
+    const scene = scenes.p1;
+    const mineIds = scene.coopParty.filter(c => c.isLocal).map(c => c.instanceId || c.id);
+    GameState.party = scene.coopParty
+      .filter(c => c.isLocal)
+      .map(c => ({ ...c, currentHP: 1, status: 'active', experience: 0, level: 1 }));
+    const before = GameState.party.map(c => c.experience || 0);
+
+    const earned = scene._applyCoopRewards(over);
+
+    check('only MY hunters were paid, never the other players',
+      GameState.party.every(c => mineIds.includes(c.instanceId || c.id))
+      && GameState.party.length === 3,
+      GameState.party.length + ' hunters in the save');
+    check('experience actually landed on the saved characters',
+      GameState.party.some((c, i) => (c.experience || 0) > before[i]),
+      GameState.party.map(c => c.experience || 0).join('/'));
+    check('the scenario was marked cleared for them',
+      GameState.party.every(c => GameState.hasCharacterCleared(c, over.rewards.scenarioId)));
+    check('the victory screen has something to show',
+      earned.xpSummary.length > 0, earned.xpSummary.slice(0, 2).join(' | '));
+
+    // A second clear must not pay again for a non-repeatable fight.
+    const after = GameState.party.map(c => c.experience || 0);
+    const second = scene._applyCoopRewards(over);
+    check('a repeat clear of a one-time fight pays nothing',
+      GameState.party.every((c, i) => (c.experience || 0) === after[i]),
+      second.xpSummary.slice(0, 1).join('') || 'no summary');
+
+    GameState.party = [];
+  }
   check('no action was refused along the way', refusals.length === 0,
     refusals.slice(0, 3).join(' | '));
   check('both scenes ended in agreement',
@@ -203,6 +272,17 @@ try {
     }));
   check('the combat log reached the scene', scenes.p1.combatEntries.length > 0,
     scenes.p1.combatEntries.length + ' lines');
+
+  // Turn separators are a SHAPE, not text. Routed through the text path they
+  // rendered as "[object Object]" after every single turn.
+  const rendered = scenes.p1.combatEntries
+    .flatMap(e => (e.segments || []).map(g => g.text || ''));
+  check('nothing in the log renders as [object Object]',
+    !rendered.some(t => t.includes('[object Object]')),
+    rendered.filter(t => t.includes('[object Object]')).length + ' bad lines');
+  check('separators arrived as separators',
+    scenes.p1.combatEntries.some(e => e.separator),
+    scenes.p1.combatEntries.filter(e => e.separator).length + ' separators');
 
   // The visual recording is what gives a co-op client its VFX and its pacing.
   // Without it the board simply jumps from before to after.

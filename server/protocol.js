@@ -93,9 +93,12 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
         t: 'over',
         outcome: won ? 'victory' : 'defeat',
         scenarioId: lobby.scenarioId,
-        // Reward DISTRIBUTION is deliberately not done here. Each client
-        // applies its own rewards through the save system it already has;
-        // the server only says what happened and who was present.
+        // Reward DISTRIBUTION is deliberately not done here. The server states
+        // what the fight was worth and what dropped; each client applies it to
+        // its OWN save through the reward path it already has. Saves stay
+        // entirely local, and there is only one implementation of what a clear
+        // is worth.
+        rewards: won ? lobby.session.rewards() : null,
         survivors: units.filter(u => u.side === 'ally' && u.hp > 0).map(u => u.ref),
         players: lobby.players.map(p => p.id),
       });

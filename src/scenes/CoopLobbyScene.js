@@ -165,14 +165,32 @@ export default class CoopLobbyScene extends Phaser.Scene {
       .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
     this.publicToggle.on('pointerdown', () => this._togglePublic());
 
-    // A quick way back to a local server while developing, since the field now
-    // defaults to the hosted one.
-    this.add.text(250, rowY2, 'use local server', { ...FONTS.muted, fontSize: '12px', color: '#6a6f78' })
+    // One-click switching between the two servers.
+    //
+    // Developing means bouncing between a local `npm start` and the hosted one
+    // constantly, and the hosted address is far too long to retype or remember.
+    // Both are offered rather than just the local one, because the field
+    // remembers whatever was last used and there was no way back.
+    const setServer = (url) => {
+      const node = this.serverInput?.getChildByName('server');
+      if (node) node.value = url;
+      try { localStorage.setItem(SERVER_KEY, url); } catch { /* private mode */ }
+      this._say('');
+      this._refresh();
+    };
+
+    this.add.text(250, rowY2, 'use hosted', { ...FONTS.muted, fontSize: '12px', color: '#8a8f98' })
       .setOrigin(0, 0.5).setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        const node = this.serverInput?.getChildByName('server');
-        if (node) node.value = LOCAL_SERVER;
-      });
+      .on('pointerdown', () => setServer(DEFAULT_SERVER));
+
+    this.add.text(340, rowY2, 'use local', { ...FONTS.muted, fontSize: '12px', color: '#8a8f98' })
+      .setOrigin(0, 0.5).setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => setServer(LOCAL_SERVER));
+
+    // Which one is in the box right now, so a failed connection is never a
+    // mystery about where it was even pointed.
+    this.serverKind = this.add.text(440, rowY2, '', { ...FONTS.muted, fontSize: '12px' })
+      .setOrigin(0, 0.5);
   }
 
   /**
@@ -478,6 +496,12 @@ export default class CoopLobbyScene extends Phaser.Scene {
       ? `Lobby ${this.client.code}${lobby?.isPublic ? '  (public)' : ''}`
       : 'Not connected');
     this.partyCount.setText(inLobby ? `${lobby?.used ?? 0} / ${PARTY_LIMIT}` : '');
+
+    // Which server the field is pointed at, in plain words.
+    const url = this._val(this.serverInput, 'server');
+    const local = /^wss?:\/\/(localhost|127\.0\.0\.1)/i.test(url);
+    this.serverKind?.setText(url ? (local ? '(local)' : '(hosted)') : '');
+    this.serverKind?.setColor(local ? '#c8a24a' : '#7d9a7d');
 
     // Public/private is the host's call, shown wherever they are in the flow.
     const canSetPublic = !inLobby || this.client.isHost;
