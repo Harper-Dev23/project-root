@@ -188,6 +188,31 @@ function makeClock() {
   };
 }
 
+/**
+ * Presentation calls worth RECORDING rather than merely dropping.
+ *
+ * A co-op client cannot produce these for itself: it never runs
+ * _applyAbilityToTarget, so it never learns that a hit was a crit, or that a
+ * status flared, or how much damage to float over whose head. But the server
+ * runs the real engine, and the real engine calls exactly these methods, in
+ * exactly the right order, with exactly the right arguments — and this host
+ * was already intercepting every one of them in order to throw them away.
+ *
+ * So they are captured instead, each stamped with the virtual clock's time.
+ * That timestamp is what restores PACING: the engine staggers a chain of
+ * enemy turns across hundreds of milliseconds, and replaying the recording on
+ * those same offsets gives the client the game's own rhythm rather than a
+ * board that jumps from before to after.
+ *
+ * Deliberately a small allowlist. These three carry the visual meaning; the
+ * rest are bars and panels the client redraws from state anyway.
+ */
+const RECORDED_METHODS = new Set([
+  '_playAttackVFX',        // (attacker, target, { missed, ability, isCrit })
+  '_showFloatingNumber',   // (amount, target, isHeal, isCrit)
+  '_playStatusVFX',        // (target, { kind, scale, duration, sound })
+]);
+
 /** Presentation methods replaced with counted no-ops returning `chain`. */
 const VISUAL_METHODS = [
   // combat VFX / SFX
@@ -217,6 +242,7 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
   const skipped = Object.create(null);
   const count = (name) => { skipped[name] = (skipped[name] || 0) + 1; };
   const clock = makeClock();
+  const events = [];
 
   const allySlots = ALLY_POS.map((pos, i) => makeSlot('ally', SLOT_IDS[i], pos));
   const enemySlots = ENEMY_POS.map((pos, i) => makeSlot('enemy', SLOT_IDS[i], pos));
@@ -284,10 +310,19 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
     // ---- harness bookkeeping -------------------------------------------------
     __skipped: skipped,
     __clock: clock,
+    __events: events,
   });
 
   for (const name of VISUAL_METHODS) {
-    host[name] = function () { count(name); return chain; };
+    if (RECORDED_METHODS.has(name)) {
+      host[name] = function (...args) {
+        count(name);
+        events.push({ at: clock.now, fn: name, args: args.map(a => wireArg(a, host)) });
+        return chain;
+      };
+    } else {
+      host[name] = function () { count(name); return chain; };
+    }
   }
   for (const name of VISUAL_METHODS_RETURNING_ARRAY) {
     host[name] = function () { count(name); return []; };
@@ -305,6 +340,15 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
 
   /** Drains the virtual clock. Every scripted action ends with one of these. */
   host.__drain = function (limit) { return clock.drain(limit); };
+
+  /**
+   * Hand over everything recorded since the last call, and start fresh.
+   *
+   * Taken rather than copied: each broadcast should carry the visuals for its
+   * OWN action. Leaving them to accumulate would make every message replay the
+   * whole fight from the beginning.
+   */
+  host.__takeEvents = function () { return events.splice(0, events.length); };
 
   /** The combat log as plain comparable text. */
   host.__logLines = function () {
@@ -368,4 +412,39 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
   };
 
   return host;
+}
+
+/**
+ * Make one argument safe to send.
+ *
+ * Units and skills cross as REFERENCES, never as copies: the client already
+ * has both, and shipping a whole character to say "this one got hit" would be
+ * absurd — and would give the client a second, divergent copy of a unit it is
+ * already tracking.
+ *
+ * Anything not recognised is passed through only if it is JSON-safe, so an
+ * unexpected argument can never make a broadcast unserializable.
+ */
+function wireArg(value, host, depth = 0) {
+  if (value == null || typeof value !== 'object') {
+    return typeof value === 'function' ? null : value;
+  }
+  if (depth > 2) return null;
+
+  // A combatant: has a name and a health pool.
+  if (typeof value.name === 'string' && value.currentHP !== undefined) {
+    return { __unit: host._unitRef(value) };
+  }
+  // A skill: has an id and something to run.
+  if (typeof value.id === 'string' && typeof value.apply === 'function') {
+    return { __skill: value.id };
+  }
+  if (Array.isArray(value)) return value.map(v => wireArg(v, host, depth + 1));
+
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    const w = wireArg(v, host, depth + 1);
+    if (w !== undefined) out[k] = w;
+  }
+  return out;
 }

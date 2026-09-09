@@ -704,6 +704,13 @@ export default class CombatScene extends Phaser.Scene {
     if (!text) return;
     inputNode.value = '';
     this._logLocal({ segments: [{ text: `You: ${text}`, color: '#9fd8ff' }] });
+
+    // In co-op the same line also goes to everyone else in the hunt. The
+    // scripted response stays LOCAL on purpose: each player is talking to
+    // their own encounter, and a trigger firing once per player is the same
+    // behaviour single player has, rather than one shared narrator.
+    if (this.isCoop) this.coopClient?.say(text);
+
     this._maybeRespondLocal(text);
   }
 
@@ -4984,6 +4991,15 @@ export default class CombatScene extends Phaser.Scene {
       this._afterCoopState();
     }));
 
+    off.push(client.on('events', (events) => this._replayCoopEvents(events)));
+
+    off.push(client.on('said', (msg) => {
+      // Our own line was already shown locally the moment it was typed, so
+      // echoing the relay back would print it twice.
+      if (msg.playerId === client.playerId) return;
+      this._logLocal({ segments: [{ text: `${msg.from}: ${msg.text}`, color: '#9fd8ff' }] });
+    }));
+
     off.push(client.on('log', (lines) => {
       for (const line of lines) this._log(line);
     }));
@@ -5028,6 +5044,61 @@ export default class CombatScene extends Phaser.Scene {
       this._applyNetState(client.state);
       this._afterCoopState();
     }
+  }
+
+  /**
+   * Replay what the server's engine would have drawn.
+   *
+   * A co-op client never runs _applyAbilityToTarget, so it never learns that a
+   * hit was a crit, or how much damage to float over whose head, or that a
+   * status flared. The server's host records exactly those calls — see
+   * RECORDED_METHODS in tools/headless/combatHost.js — and this plays them
+   * back through the same methods single player uses.
+   *
+   * Timing comes from the recording. The engine staggers a chain of enemy
+   * turns across hundreds of milliseconds; replaying on those same offsets is
+   * what turns "the whole enemy round happened at once" back into the game's
+   * own rhythm. Offsets are relative to the first event in the batch, since
+   * the server's virtual clock counts from the start of the fight.
+   *
+   * Deliberately visual-only. The authoritative board is applied immediately
+   * and separately, so a slow animation can never delay or alter the truth —
+   * at worst a damage number floats a moment after the bar it belongs to.
+   */
+  _replayCoopEvents(events) {
+    if (!Array.isArray(events) || !events.length) return;
+
+    const base = events[0].at || 0;
+    // The player's own combat-speed setting, so co-op respects Quick Combat
+    // exactly as single player does.
+    const pace = GameplaySettings.animDurationMult();
+
+    for (const ev of events) {
+      const delay = Math.max(0, ((ev.at || 0) - base)) * pace;
+      const run = () => {
+        if (this.combatEnded && ev.fn !== '_showFloatingNumber') return;
+        const args = (ev.args || []).map(a => this._fromWireArg(a));
+        try { this[ev.fn]?.(...args); }
+        catch (err) { console.warn('[coop] could not replay ' + ev.fn, err); }
+      };
+      if (delay <= 0) run();
+      else this.time.delayedCall(delay, run);
+    }
+  }
+
+  /** Turn a recorded argument back into something this scene can use. */
+  _fromWireArg(value) {
+    if (value == null || typeof value !== 'object') return value;
+    // A unit the server named by reference; null if we have never seen it,
+    // which the VFX methods already tolerate by bailing out.
+    if (value.__unit !== undefined) {
+      return this._netUnits?.get(value.__unit) || this._findUnitByRef(value.__unit);
+    }
+    if (value.__skill !== undefined) return SKILLS[value.__skill] || null;
+    if (Array.isArray(value)) return value.map(v => this._fromWireArg(v));
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = this._fromWireArg(v);
+    return out;
   }
 
   /** Re-gate the local player's controls after any authoritative board. */

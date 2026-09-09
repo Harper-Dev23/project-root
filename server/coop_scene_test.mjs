@@ -154,6 +154,8 @@ try {
   let over = null;
   alice.on('over', m => { over = m; });
   const refusals = [];
+  const seenEvents = [];
+  alice.on('events', evs => seenEvents.push(...evs));
   alice.on('error', r => refusals.push('alice: ' + r));
   bob.on('error', r => refusals.push('bob: ' + r));
 
@@ -197,6 +199,21 @@ try {
     }));
   check('the combat log reached the scene', scenes.p1.combatEntries.length > 0,
     scenes.p1.combatEntries.length + ' lines');
+
+  // The visual recording is what gives a co-op client its VFX and its pacing.
+  // Without it the board simply jumps from before to after.
+  check('visual events were recorded and delivered', seenEvents.length > 0,
+    seenEvents.length + ' events');
+  check('they name units by reference, never by copy',
+    seenEvents.every(e => (e.args || []).every(a =>
+      a == null || typeof a !== 'object' || !('currentHP' in a))),
+    'no whole characters on the wire');
+  check('they carry clock timestamps, so pacing can be restored',
+    seenEvents.some(e => typeof e.at === 'number'),
+    'first at=' + seenEvents[0]?.at);
+  check('an attack VFX is among them',
+    seenEvents.some(e => e.fn === '_playAttackVFX'),
+    [...new Set(seenEvents.map(e => e.fn))].join(', '));
 
   alice.disconnect(); bob.disconnect();
 

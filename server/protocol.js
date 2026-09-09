@@ -70,9 +70,21 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       .reduce((n, p) => n + p.hunters.length, 0);
 
   /** After any action, push the new state and the log it produced. */
-  const pushResult = (lobby, result) => {
+  const pushResult = (lobby, result, actorConn = null) => {
     if (!result?.state) return;
-    broadcast(lobby, { t: 'state', state: result.state, log: result.log || [] });
+    broadcast(lobby, {
+      t: 'state',
+      state: result.state,
+      log: result.log || [],
+      events: result.events || [],
+    });
+
+    // A skill that started and then gave up explained itself to the player who
+    // cast it, not to the room. See session.fingerprint for how those are told
+    // apart from real actions.
+    if (actorConn && result.privateLog?.length) {
+      send(actorConn, { t: 'privateLog', log: result.privateLog });
+    }
     if (result.state.ended) {
       const units = result.state.units;
       const won = units.filter(u => u.side === 'enemy').every(u => u.hp <= 0);
@@ -213,7 +225,7 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       // to see someone else's mis-click, and it keeps the broadcast a pure
       // record of what actually happened.
       if (!result.ok) return fail(conn, result.reason);
-      pushResult(lobby, result);
+      pushResult(lobby, result, conn);
     },
 
     /** { t:'endTurn' } */
@@ -222,6 +234,16 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       const result = lobby.session.endTurn(player.id);
       if (!result.ok) return fail(conn, result.reason);
       pushResult(lobby, result);
+    },
+
+    /** { t:'say', text } - Local-tab chat, relayed to everyone in the lobby. */
+    say(conn, msg, lobby, player) {
+      const text = String(msg.text ?? '').slice(0, 200).trim();
+      if (!text) return;
+      // Relayed verbatim and attributed by the SERVER, from the seat the
+      // message arrived on. Taking a name from the message body would let a
+      // client speak as anyone.
+      broadcast(lobby, { t: 'said', from: player.name, playerId: player.id, text });
     },
 
     /** { t:'sync' } - a client asking for the whole picture again. */

@@ -194,6 +194,31 @@ console.log('=== one live hunt per process ===');
     /already running a hunt/.test(b.errors()[0] || ''), b.errors()[0]);
 }
 
+// ---- chat and private feedback ---------------------------------------------
+console.log('=== chat and private feedback ===');
+{
+  const h4 = createHub({ CombatScene, codeFactory: () => 'CHAT' });
+  const a = conn('a'); const b = conn('b');
+  h4.handle(a, { t: 'create', name: 'Ann', hunters: clone(1, 0) });
+  h4.handle(b, { t: 'join', code: 'CHAT', name: 'Ben', hunters: clone(1, 1) });
+
+  a.clear(); b.clear();
+  h4.handle(a, { t: 'say', text: 'on my way' });
+  check('chat reaches the other player', b.last('said')?.text === 'on my way', b.last('said')?.text);
+  check('the sender is attributed by the SERVER, not the message',
+    b.last('said')?.from === 'Ann', b.last('said')?.from);
+
+  b.clear();
+  h4.handle(a, { t: 'say', text: '   ' });
+  check('an empty message is not relayed', !b.last('said'));
+
+  // A client must not be able to speak as someone else.
+  b.clear();
+  h4.handle(a, { t: 'say', text: 'hi', from: 'Ben', name: 'Ben' });
+  check('a client cannot forge who it is', b.last('said')?.from === 'Ann',
+    b.last('said')?.from);
+}
+
 // ---- malformed input -------------------------------------------------------
 console.log('=== malformed input ===');
 {

@@ -121,6 +121,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     startHunt() { return client.send({ t: 'start' }); },
     endTurn() { return client.send({ t: 'endTurn' }); },
     requestSync() { return client.send({ t: 'sync' }); },
+    say(text) { return client.send({ t: 'say', text }); },
 
     /**
      * Send one action. Refusals come back as an 'error' event rather than a
@@ -179,7 +180,24 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
           client.log.push(...msg.log);
           emit('log', msg.log);
         }
+        // Visuals are emitted BEFORE the board, so a listener can start the
+        // animation and then let the authoritative state land underneath it.
+        if (Array.isArray(msg.events) && msg.events.length) emit('events', msg.events);
         emit('state', msg.state);
+        break;
+
+      case 'said':
+        emit('said', msg);
+        break;
+
+      case 'privateLog':
+        // Only this player was sent these — the privacy is the server's doing,
+        // not a flag here. They go into the local log like any other lines, so
+        // the combat log reads normally for the player who caused them.
+        if (Array.isArray(msg.log) && msg.log.length) {
+          client.log.push(...msg.log);
+          emit('log', msg.log);
+        }
         break;
 
       case 'over':

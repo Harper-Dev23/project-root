@@ -191,6 +191,25 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     },
 
     /**
+     * Everything about the board that an action could change, as one string.
+     *
+     * Used to tell a real action from one that fizzled. A skill refused BEFORE
+     * it runs never reaches the log at all, but one that starts and then gives
+     * up logs its reason through the shared combat log, which broadcasts it to
+     * everybody — so a player is told, in public, why someone else's spell did
+     * not work. Comparing the board before and after separates the two without
+     * having to pattern-match the text of a message.
+     */
+    fingerprint() {
+      return JSON.stringify([...party, ...(host.enemies || [])].map(u => [
+        u.currentHP, u.currentMP, u.initiativeGauge, u.shieldHP || 0, u.status,
+        u.weakness?.meters, u.weakness?.tiers,
+        (u.statusEffects || []).map(e => e.id + ':' + e.turns),
+        u.actionsLeft, u.cooldowns,
+      ]));
+    },
+
+    /**
      * Apply one player's action.
      *
      * playerId is passed straight to _resolveAction, which owns the ownership
@@ -199,6 +218,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     act(playerId, intent = {}) {
       if (host.combatEnded) return { ok: false, reason: 'the fight is over' };
       const from = host.combatEntries.length;
+      const before = session.fingerprint();
 
       const verdict = host._resolveAction(
         { actor: intent.actor, skill: intent.skill, target: intent.target },
@@ -207,10 +227,21 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       host.__drain();
       if (verdict.ok) version++;
 
+      // Nothing moved: the skill started, gave up, and explained itself. That
+      // explanation belongs to the player who tried it, not to the room.
+      const changedNothing = session.fingerprint() === before;
+      const lines = session.logSince(from);
+
       return {
         ok: verdict.ok,
         reason: verdict.reason,
-        log: session.logSince(from),
+        log: changedNothing ? [] : lines,
+        privateLog: changedNothing ? lines : [],
+        // What the engine WOULD have drawn, in order, with the virtual clock's
+        // timestamps. The client replays this to get the game's own VFX and
+        // pacing back; without it a co-op board simply jumps from before to
+        // after. See RECORDED_METHODS in combatHost.js.
+        events: host.__takeEvents(),
         state: session.state(),
       };
     },
@@ -251,7 +282,12 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         }
       }
 
-      return { ok: true, log: session.logSince(from), state: session.state() };
+      return {
+        ok: true,
+        log: session.logSince(from),
+        events: host.__takeEvents(),
+        state: session.state(),
+      };
     },
   };
 
