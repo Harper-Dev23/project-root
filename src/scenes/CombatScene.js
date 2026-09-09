@@ -4886,6 +4886,97 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   /**
+   * Apply an authoritative board from a co-op server.
+   *
+   * In co-op the client must DISPLAY a fight it is not simulating. Letting it
+   * simulate alongside the server would work right up until one roll differed,
+   * and then the two players would be looking at different games with no way
+   * to tell which was real. So the server owns the rules and this writes what
+   * it says.
+   *
+   * Only mutable, per-fight fields are copied. Identity, stats, gear and
+   * skills are NOT touched: both sides built those from the same save data and
+   * the same data/skills.js, so overwriting them could only introduce drift.
+   *
+   * Unknown units are ignored rather than invented. A reference this client
+   * cannot resolve means the two sides disagree about who is on the board,
+   * which is a resync problem, not something to paper over by creating a
+   * ghost unit that nothing else knows about.
+   *
+   * Returns a report of what it could not apply, so a caller can decide to
+   * request a full resync instead of quietly rendering a wrong board.
+   */
+  _applyNetState(state) {
+    const unknown = [];
+    if (!state || !Array.isArray(state.units)) return { applied: 0, unknown, ok: false };
+
+    // A directory of everyone who has ever been on this board, refreshed
+    // before each apply and never pruned.
+    //
+    // _findUnitByRef searches the TURN ORDER, and the dead leave it — so a
+    // fallen hunter becomes unresolvable the moment they go down, and every
+    // later broadcast about them is dropped. The server keeps reporting them
+    // (a corpse still has HP 0, a status and a slot the client must draw), so
+    // the client needs to remember who it has seen rather than only who is
+    // still acting.
+    this._netUnits = this._netUnits || new Map();
+    for (const u of [...(this.turnOrder || []), ...(this.enemies || []), ...(this.koArea || [])]) {
+      const ref = this._unitRef(u);
+      if (ref) this._netUnits.set(ref, u);
+    }
+
+    let applied = 0;
+    for (const u of state.units) {
+      const unit = this._netUnits.get(u.ref) || this._findUnitByRef(u.ref);
+      if (!unit) { unknown.push(u.ref); continue; }
+
+      unit.currentHP = u.hp;
+      unit.maxHP = u.maxHP;
+      unit.currentMP = u.mp;
+      unit.maxMP = u.maxMP;
+      unit.initiativeGauge = u.gauge ?? 0;
+      unit.shieldHP = u.shield || 0;
+      unit.status = u.status;
+      if (u.actions) unit.actionsLeft = { ...u.actions };
+
+      if (unit.weakness) {
+        if (u.meters) unit.weakness.meters = { ...u.meters };
+        if (u.tiers) unit.weakness.tiers = { ...u.tiers };
+      }
+
+      // Status effects are replaced wholesale rather than merged. A merge
+      // would have to guess at identity for effects that carry no id of their
+      // own, and the server's list is authoritative by definition.
+      unit.statusEffects = (u.effects || []).map(e => ({ ...e }));
+
+      unit.cooldowns = { ...(u.cooldowns || {}) };
+      applied++;
+    }
+
+    if (Number.isFinite(state.round)) this.combatRound = state.round;
+    this.combatEnded = !!state.ended;
+
+    // Turn order arrives as references so the client agrees with the server
+    // about who acts next, not merely about everyone's HP.
+    if (Array.isArray(state.turnOrder)) {
+      const resolved = state.turnOrder.map(ref => this._findUnitByRef(ref)).filter(Boolean);
+      if (resolved.length === state.turnOrder.length) this.turnOrder = resolved;
+    }
+    if (state.current?.ref) {
+      const idx = this.turnOrder.findIndex(x => this._unitRef(x) === state.current.ref);
+      if (idx >= 0) this.currentTurnIndex = idx;
+    }
+
+    this._updateHealthBars?.();
+    this._updateHPMPBars?.();
+    this._updateInitiativeBars?.();
+    for (const unit of this.turnOrder || []) this._refreshStatusEffectIcons?.(unit);
+    this._highlightCurrentTurn?.();
+
+    return { applied, unknown, ok: unknown.length === 0 };
+  }
+
+  /**
    * The canonical wire reference for a unit — what a network message should
    * carry to name it. Players keep the `instanceId` their save already uses;
    * enemies use the per-combat `uid` assigned at spawn.

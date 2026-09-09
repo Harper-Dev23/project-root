@@ -168,6 +168,32 @@ console.log('=== disconnects ===');
   check('the lobby is dropped once nobody is connected', !h2.lobbies.has('DROP'));
 }
 
+// ---- one live hunt per process ---------------------------------------------
+// Not a policy choice: GameState is a module singleton, and a second board in
+// the same process makes the FIRST one check the wrong party for deaths. That
+// was observed directly — a wiped party kept "fighting" because defeat was
+// never detected — so the hub refuses rather than corrupting both fights.
+console.log('=== one live hunt per process ===');
+{
+  const h3 = createHub({ CombatScene, codeFactory: () => 'ONE1' });
+  const a = conn('a');
+  h3.handle(a, { t: 'create', name: 'A', hunters: clone(1, 0) });
+  h3.handle(a, { t: 'ready', ready: true });
+  h3.handle(a, { t: 'start' });
+  check('the first hunt starts', !!a.last('started'));
+
+  // A second lobby, in the same hub, tries to start while the first is live.
+  const h3b = h3;
+  const b = conn('b');
+  h3b.lobbies.set('TWO2', { code: 'TWO2', scenarioId: 'training_encounter_1', hostId: 'p1', players: [], session: null });
+  h3b.handle(b, { t: 'join', code: 'TWO2', name: 'B', hunters: clone(1, 1) });
+  h3b.handle(b, { t: 'ready', ready: true });
+  b.clear();
+  h3b.handle(b, { t: 'start' });
+  check('a second concurrent hunt is refused',
+    /already running a hunt/.test(b.errors()[0] || ''), b.errors()[0]);
+}
+
 // ---- malformed input -------------------------------------------------------
 console.log('=== malformed input ===');
 {
