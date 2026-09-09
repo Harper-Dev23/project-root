@@ -23,8 +23,7 @@ if (!globalThis.Phaser) {
 import { createCombatHost } from '../tools/headless/combatHost.js';
 import { seed as seedRng } from '../tools/headless/phaserStub.js';
 import { startCombat, snapshotBoard } from '../tools/headless/fight.js';
-import { SKILLS } from '../data/skills.js';
-import { rebuildCharacterStats } from '../src/systems/CharacterBuilder.js';
+import { fromWireCharacter } from '../src/systems/CoopWire.js';
 
 /** The shared party cap. Already the game's own limit in five places. */
 export const PARTY_LIMIT = 6;
@@ -32,54 +31,14 @@ export const PARTY_LIMIT = 6;
 // ---------------------------------------------------------------------------
 // The wire
 //
-// A character JSON round-trips WITHOUT ERROR and silently loses every skill's
-// apply() function -- 15 of 19 on a level-5 hunter. Sending a character
-// straight down a socket and using what comes out the other end would leave
-// every skill fizzling, and CombatScene's try/catch would swallow the
-// TypeError and log "fizzled" rather than anything diagnosable.
-//
-// So skills cross the wire as IDS and are rehydrated from SKILLS on arrival.
-// Both sides already have data/skills.js; there is nothing to send.
+// toWireCharacter / fromWireCharacter live in src/systems/CoopWire.js, not
+// here: the BROWSER needs them too (it packs its own hunters before joining a
+// lobby), and two implementations of "what a character is on the wire" would
+// eventually disagree. Re-exported so server code can keep importing them from
+// the session module it already uses.
 // ---------------------------------------------------------------------------
 
-/** A character reduced to what is safe to send. */
-export function toWireCharacter(char) {
-  const wire = {};
-  for (const [k, v] of Object.entries(char || {})) {
-    if (typeof v === 'function') continue;
-    if (k === 'skills' || k === '_slot' || k === 'icon') continue;
-    if (k === 'hpBar' || k === 'mpBar' || k === 'initBar') continue;
-    try { JSON.stringify(v); } catch { continue; }   // drop anything circular
-    wire[k] = v;
-  }
-  wire.skillIds = (char?.skills || []).map(s => s?.id).filter(Boolean);
-  return wire;
-}
-
-/**
- * Rebuild a usable character from wire data.
- *
- * Throws on an unknown skill id rather than dropping it. A hunter quietly
- * missing one skill is the kind of desync that surfaces ten minutes later as
- * "why did nothing happen", and it means the two clients disagree about what
- * the game contains.
- */
-export function fromWireCharacter(wire) {
-  const char = { ...wire };
-  delete char.skillIds;
-
-  char.skills = (wire?.skillIds || []).map(id => {
-    const skill = SKILLS[id];
-    if (!skill) throw new Error(`unknown skill id from the wire: ${id}`);
-    return { ...skill, id };
-  });
-
-  // Derived stats and gearEffects are recomputed rather than trusted. They are
-  // a pure function of stats and equipment, so recomputing costs nothing and
-  // removes a whole class of "the client said its Accuracy was 400".
-  rebuildCharacterStats(char);
-  return char;
-}
+export { toWireCharacter, fromWireCharacter } from '../src/systems/CoopWire.js';
 
 // ---------------------------------------------------------------------------
 // Session
