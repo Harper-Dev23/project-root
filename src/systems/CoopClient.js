@@ -119,6 +119,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     },
     setHunters(hunters) { return client.send({ t: 'setHunters', hunters }); },
     setReady(ready = true) { return client.send({ t: 'ready', ready }); },
+    /** Place one of YOUR hunters. `slotId: null` picks it back up. */
+    claimSlot(ref, slotId) { return client.send({ t: 'claimSlot', ref, slotId }); },
     startHunt() { return client.send({ t: 'start' }); },
     endTurn() { return client.send({ t: 'endTurn' }); },
     requestSync() { return client.send({ t: 'sync' }); },

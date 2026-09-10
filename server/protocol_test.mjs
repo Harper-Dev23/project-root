@@ -58,6 +58,61 @@ console.log('=== lobby ===');
     view?.players?.length === 2 && view.used === 6, 'used ' + view?.used + '/' + view?.limit);
 }
 
+// ---- claiming a slot -------------------------------------------------------
+//
+// Each player places their OWN hunters and nobody else's. There is no host
+// override on purpose: it is what makes the formation ungriefable, and it is
+// the only rule here worth getting wrong.
+console.log('');
+console.log('=== slot claims ===');
+{
+  const aliceHunters = alice.last('lobby').players.find(p => p.id === 'p1').hunters;
+  const bobHunters = alice.last('lobby').players.find(p => p.id === 'p2').hunters;
+
+  check('hunters start unplaced',
+    aliceHunters.every(h => h.slotId === null),
+    aliceHunters.map(h => h.name + ':' + h.slotId).join(' '));
+
+  alice.clear();
+  hub.handle(alice, { t: 'claimSlot', ref: aliceHunters[0].ref, slotId: 3 });
+  const placed = alice.last('lobby').players.find(p => p.id === 'p1').hunters;
+  check('a player can place their own hunter',
+    placed.find(h => h.ref === aliceHunters[0].ref)?.slotId === 3,
+    'slot ' + placed.find(h => h.ref === aliceHunters[0].ref)?.slotId);
+
+  bob.clear();
+  hub.handle(bob, { t: 'claimSlot', ref: bobHunters[0].ref, slotId: 3 });
+  check('a slot someone already holds is refused',
+    bob.errors().some(e => /already standing/.test(e)), bob.errors().join(' | '));
+
+  // The one that matters. Fail-closed: asking to move a hunter that is not
+  // yours must be REFUSED, not quietly ignored -- silence would read to the
+  // caller as success.
+  bob.clear();
+  hub.handle(bob, { t: 'claimSlot', ref: aliceHunters[1].ref, slotId: 5 });
+  check('you cannot place a hunter that is not yours',
+    bob.errors().some(e => /not yours/.test(e)), bob.errors().join(' | '));
+  check('and it did not move anyway',
+    alice.last('lobby').players.find(p => p.id === 'p1')
+      .hunters.find(h => h.ref === aliceHunters[1].ref)?.slotId === null);
+
+  alice.clear();
+  hub.handle(alice, { t: 'claimSlot', ref: aliceHunters[0].ref, slotId: 99 });
+  check('a slot the board does not have is refused',
+    alice.errors().some(e => /no such slot/.test(e)), alice.errors().join(' | '));
+
+  alice.clear();
+  hub.handle(alice, { t: 'claimSlot', ref: aliceHunters[0].ref, slotId: null });
+  check('a hunter can be picked back up',
+    alice.last('lobby').players.find(p => p.id === 'p1')
+      .hunters.find(h => h.ref === aliceHunters[0].ref)?.slotId === null);
+
+  // Claim it again so the start-of-hunt assertion below has something to prove.
+  hub.handle(alice, { t: 'claimSlot', ref: aliceHunters[0].ref, slotId: 6 });
+  check('changing the formation un-readies you',
+    alice.last('lobby').players.find(p => p.id === 'p1').ready === false);
+}
+
 // ---- the shared party budget ----------------------------------------------
 console.log('=== the shared six ===');
 {

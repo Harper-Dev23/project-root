@@ -90,6 +90,17 @@ try {
   await until(() => alice.code, 'a lobby code');
   bob.joinLobby({ code: alice.code, name: 'Bob', hunters: take(3, 3) });
   await until(() => bob.playerId, 'bob to join');
+  // Claim a slot before readying, so the fight has a formation somebody chose
+  // rather than the join order. Slot 1 is the front rank; without a claim
+  // Alice's first hunter would land there anyway, so pick the BACK for her
+  // first hunter -- a placement the fallback would never produce on its own.
+  const aliceHunters = alice.lobby.players.find(p => p.id === alice.playerId).hunters;
+  const claimedRef = aliceHunters[0].ref;
+  alice.claimSlot(claimedRef, 6);
+  await until(() => alice.lobby.players
+    .find(p => p.id === alice.playerId).hunters
+    .find(h => h.ref === claimedRef)?.slotId === 6, 'the claim to register');
+
   alice.setReady(true); bob.setReady(true);
   await until(() => alice.lobby?.players?.every(p => p.ready), 'everyone ready');
   alice.startHunt();
@@ -102,6 +113,37 @@ try {
     alice.roster.every(h => h.ownerId), [...new Set(alice.roster.map(h => h.ownerId))].join(' + '));
 
   const scenes = { p1: buildScene(alice), p2: buildScene(bob) };
+
+  // Positions must agree with the server's, or every VFX drawn between two
+  // slots flies between the wrong two points on screen -- and adjacency, AoE
+  // shapes and movement all read from the same place.
+  const slotDisagreements = () => {
+    const out = [];
+    for (const [who, sc] of [['p1', scenes.p1], ['p2', scenes.p2]]) {
+      const said = (who === 'p1' ? alice : bob).state?.units || [];
+      for (const c of sc.coopParty) {
+        const ref = c.instanceId || c.id;
+        const server = said.find(u => u.ref === ref);
+        const mine = c._slot?.slotId ?? null;
+        if (server && server.slot !== mine) {
+          out.push(`${who} ${c.name}: server ${server.slot}, client ${mine}`);
+        }
+      }
+    }
+    return out;
+  };
+  const bad = slotDisagreements();
+  check('every hunter stands where the server says they stand',
+    bad.length === 0, bad.slice(0, 4).join(' | ') || 'all agree');
+
+  // The claim has to survive three hops to mean anything: the lobby, the
+  // server's own board, and the client's drawing of it.
+  const claimedUnit = scenes.p1.coopParty.find(c => (c.instanceId || c.id) === claimedRef);
+  check('the slot chosen in the lobby is where that hunter actually stands',
+    claimedUnit?._slot?.slotId === 6,
+    claimedUnit?.name + ' in slot ' + (claimedUnit?._slot?.slotId ?? 'nowhere'));
+  check('and the server agrees that is where they are',
+    alice.state.units.find(u => u.ref === claimedRef)?.slot === 6);
 
   check('_placeCoopParty built the whole shared party',
     scenes.p1.coopParty.length === 6, scenes.p1.coopParty.length + ' hunters on the board');
@@ -288,6 +330,12 @@ try {
   }
   check('no action was refused along the way', refusals.length === 0,
     refusals.slice(0, 3).join(' | '));
+  // Again at the END, after a whole fight of enemy repositioning. The opening
+  // board agreeing proves placement; only this proves movement is applied.
+  const badLate = slotDisagreements();
+  check('positions still agree after the whole fight',
+    badLate.length === 0, badLate.slice(0, 4).join(' | ') || 'all agree');
+
   check('both scenes ended in agreement',
     JSON.stringify(scenes.p1.turnOrder.map(u => [u.name, u.currentHP])) ===
     JSON.stringify(scenes.p2.turnOrder.map(u => [u.name, u.currentHP])));

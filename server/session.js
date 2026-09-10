@@ -119,9 +119,18 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   // shows up immediately as "has no owner" rather than as shared control.
   const party = [];
   const slotMap = {};
-  let slotCursor = 0;
   const SLOT_ORDER = [1, 2, 3, 4, 5, 6];
 
+  // A hunter placed in the lobby stands where its player put it. Everyone
+  // else fills the remaining slots in order, which is what the whole party
+  // used to do unconditionally.
+  //
+  // Position is not decoration: front, middle and back change what
+  // rankVariants skills do, which shapes are in range, and who gets hit
+  // first. Deciding it by join order meant whoever connected first chose the
+  // formation for everyone.
+  const claimed = new Set();
+  const roster = [];
   for (const player of players) {
     for (const wire of (player.hunters || [])) {
       const char = fromWireCharacter(wire);
@@ -130,8 +139,26 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       char.currentMP = char.maxMP;
       char.status = 'active';
       party.push(char);
-      slotMap[SLOT_ORDER[slotCursor++]] = char.instanceId || char.id;
+
+      const want = Number(wire.slotId);
+      // Two hunters cannot hold one slot. The lobby refuses that, so a
+      // collision here means the guard failed; the second one falls through to
+      // the fill rather than overwriting the first.
+      if (SLOT_ORDER.includes(want) && !claimed.has(want)) {
+        claimed.add(want);
+        slotMap[want] = char.instanceId || char.id;
+      } else {
+        roster.push(char);
+      }
     }
+  }
+  let slotCursor = 0;
+  for (const char of roster) {
+    while (claimed.has(SLOT_ORDER[slotCursor])) slotCursor++;
+    const slot = SLOT_ORDER[slotCursor];
+    if (slot === undefined) break;
+    claimed.add(slot);
+    slotMap[slot] = char.instanceId || char.id;
   }
 
   host.__begin({ party, partySlots: slotMap, scenarioId });

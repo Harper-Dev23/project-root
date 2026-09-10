@@ -36,6 +36,11 @@ function makeCode(len = 4) {
 }
 
 export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
+  // The board publishes its own slot ids. Taking them from the class the hub
+  // was handed keeps one definition of the grid; a fallback exists only so a
+  // test double without the static still works.
+  const ALLY_SLOT_IDS = CombatScene?.ALLY_SLOT_IDS || [1, 2, 3, 4, 5, 6, 7, 8];
+
   if (!CombatScene) throw new Error('createHub needs the CombatScene class');
 
   const lobbies = new Map();   // code -> lobby
@@ -57,7 +62,13 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       id: p.id,
       name: p.name,
       ready: p.ready,
-      hunters: p.hunters.map(h => ({ ref: h.instanceId || h.id, name: h.name })),
+      hunters: p.hunters.map(h => ({
+        ref: h.instanceId || h.id,
+        name: h.name,
+        // null means "not placed yet"; the lobby fills those in left-to-right
+        // at the start, exactly as an unclaimed hunter has always been placed.
+        slotId: h.slotId ?? null,
+      })),
     })),
   });
 
@@ -163,8 +174,52 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       if (hunters.length > left) {
         return fail(conn, `only ${left} of the ${PARTY_LIMIT} party slots are left`);
       }
-      player.hunters = hunters;
+      // A placement is only ever granted by claimSlot, never accepted from the
+      // client's own payload -- otherwise a hunter could arrive pre-placed and
+      // skip the "is anyone already standing there" check entirely.
+      player.hunters = hunters.map(h => {
+        const { slotId, ...rest } = h || {};
+        return rest;
+      });
       player.ready = false;   // changing your party un-readies you
+      broadcast(lobby, lobbyView(lobby));
+    },
+
+    /**
+     * { t:'claimSlot', ref, slotId }  -- place ONE OF YOUR OWN hunters.
+     *
+     * Fail-closed in the same way the action gate is: a hunter that is not in
+     * the caller's own list is refused rather than ignored, so a client that
+     * asks to move someone else's hunter is told no instead of quietly doing
+     * nothing. Nobody can rearrange anybody else -- there is no host override
+     * here on purpose, which is what makes the formation ungriefable.
+     *
+     * `slotId: null` clears a placement, which is always allowed.
+     */
+    claimSlot(conn, msg, lobby, player) {
+      if (lobby.session) return fail(conn, 'the hunt has started');
+
+      const refOf = (h) => h.instanceId || h.id;
+      const hunter = player.hunters.find(h => refOf(h) === msg.ref);
+      if (!hunter) return fail(conn, 'that hunter is not yours to place');
+
+      if (msg.slotId === null || msg.slotId === undefined) {
+        delete hunter.slotId;
+        player.ready = false;      // changing the formation un-readies you
+        return broadcast(lobby, lobbyView(lobby));
+      }
+
+      const slotId = Number(msg.slotId);
+      // Validated against the board's own list rather than a hardcoded 1..8,
+      // so the lobby cannot offer a slot the board does not have.
+      if (!ALLY_SLOT_IDS.includes(slotId)) return fail(conn, 'no such slot');
+
+      const taken = lobby.players.some(p =>
+        p.hunters.some(h => h.slotId === slotId && refOf(h) !== msg.ref));
+      if (taken) return fail(conn, 'someone is already standing there');
+
+      hunter.slotId = slotId;
+      player.ready = false;
       broadcast(lobby, lobbyView(lobby));
     },
 

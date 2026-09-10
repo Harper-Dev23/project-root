@@ -297,6 +297,17 @@ function getItemIdsByTypeSlot(type, slot) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default class CombatScene extends Phaser.Scene {
+  /**
+   * The board's shape, published so nothing has to restate it.
+   *
+   * The co-op lobby draws its slot picker from this, and the server validates
+   * slot claims against it. Both used to be candidates for a hardcoded 1..8,
+   * which is three copies of one fact and exactly how a grid change turns into
+   * a silent mismatch between what the lobby offers and what the board has.
+   */
+  static SLOT_GRID = SLOT_COORDS;
+  static ALLY_SLOT_IDS = Object.keys(SLOT_COORDS).map(Number);
+
   constructor() {
     super({ key: 'CombatScene' });
     this.unitSlots = [];
@@ -4985,6 +4996,7 @@ export default class CombatScene extends Phaser.Scene {
   _placeCoopParty() {
     const roster = this.coopClient?.roster || [];
     this.coopParty = [];
+    const rebuilt = [];
 
     roster.forEach((wire, i) => {
       let char;
@@ -4998,14 +5010,40 @@ export default class CombatScene extends Phaser.Scene {
       }
       char.ownerId = wire.ownerId ?? null;
       char.isLocal = char.ownerId === this.coopClient?.playerId;
+      rebuilt.push(char);
+    });
 
-      const slot = this.allySlots.find(s => !s.occupied);
-      if (!slot) return;
+    // Two passes, mirroring _placePartyMembers exactly: everyone who claimed a
+    // slot in the lobby is placed there first, and only then is whatever is
+    // left filled in left-to-right.
+    //
+    // One pass is what made position first-come-first-served -- the roster
+    // order decided the whole formation, so whoever joined first chose where
+    // everyone else stood. Position is not cosmetic here: front/middle/back
+    // changes what rankVariants skills do.
+    const place = (char, slot) => {
+      if (!slot || slot.occupied) return false;
       this._prepareCharForBattle(char);
       this._assignCharToSlot(char, slot);
       this._refreshStatusEffectIcons?.(char);
       this.coopParty.push(char);
-    });
+      return true;
+    };
+
+    const unplaced = [];
+    for (const char of rebuilt) {
+      const wanted = char.slotId != null
+        ? this.allySlots.find(s => s.slotId === char.slotId)
+        : null;
+      if (!place(char, wanted)) unplaced.push(char);
+    }
+    // A claim the server let through can still lose a race here only if two
+    // hunters carry the same slotId, which the server refuses. Falling back
+    // rather than dropping the hunter means a bug in that guard costs a
+    // position, not a body.
+    for (const char of unplaced) {
+      place(char, this.allySlots.find(s => !s.occupied));
+    }
   }
 
   /**
@@ -5400,6 +5438,10 @@ export default class CombatScene extends Phaser.Scene {
       applied++;
     }
 
+    // Where everyone STANDS is authoritative too, and used not to be applied
+    // at all. See _applyNetSlots for what that cost.
+    this._applyNetSlots(state);
+
     if (Number.isFinite(state.round)) this.combatRound = state.round;
     this.combatEnded = !!state.ended;
 
@@ -5426,6 +5468,56 @@ export default class CombatScene extends Phaser.Scene {
     this._highlightCurrentTurn?.();
 
     return { applied, unknown, ok: unknown.length === 0 };
+  }
+
+  /**
+   * Move everyone to the slot the server says they occupy.
+   *
+   * The server sent `slot` on every unit from the very first broadcast and the
+   * client simply ignored it, so the two boards disagreed before a single
+   * action was taken: the server places hunters front-to-back (1, 2, 3...)
+   * while `_placeCoopParty` took the first FREE slot, and the ally array is
+   * ordered back-to-front (8, 7, 6...). Every hunter was therefore drawn in
+   * the mirror image of where the fight was actually being simulated.
+   *
+   * Two things broke, one loud and one silent. VFX are drawn between two
+   * slots' screen positions, so arrows and projectiles flew between the wrong
+   * two points — the reported "arrows sticking out in a random direction".
+   * And movement never appeared at all: a unit that repositioned on the server
+   * stayed put on screen, which also left adjacency and AoE previews reading
+   * from stale positions.
+   *
+   * Cleared and rebuilt in two passes rather than moved one at a time, because
+   * one at a time cannot express a swap: putting A into B's slot before B has
+   * left finds it occupied and silently gives up.
+   */
+  _applyNetSlots(state) {
+    const standing = (state.units || [])
+      .filter(u => u.slot != null && u.status !== 'incapacitated');
+    if (!standing.length) return;
+
+    // Do nothing at all in the common case where nobody moved. Rebuilding
+    // portraits every broadcast would churn sprites and flicker the board.
+    const moved = standing.some(u => {
+      const unit = this._netUnits?.get(u.ref);
+      return unit && (unit._slot?.slotId ?? null) !== u.slot;
+    });
+    if (!moved) return;
+
+    for (const slot of [...(this.allySlots || []), ...(this.enemySlots || [])]) {
+      if (!slot.occupied) continue;
+      this._clearPortrait?.(slot);
+      slot.occupied = false;
+      slot.char = null;
+    }
+
+    for (const u of standing) {
+      const unit = this._netUnits?.get(u.ref) || this._findUnitByRef(u.ref);
+      if (!unit) continue;
+      const side = unit.isEnemy ? this.enemySlots : this.allySlots;
+      const slot = (side || []).find(x => x.slotId === u.slot);
+      if (slot) this._assignCharToSlot(unit, slot);
+    }
   }
 
   /**

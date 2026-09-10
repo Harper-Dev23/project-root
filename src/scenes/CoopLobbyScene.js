@@ -20,6 +20,7 @@ import { createButton } from '../ui/Button.js';
 import { createCoopClient, CoopStatus } from '../systems/CoopClient.js';
 import { toWireCharacter } from '../systems/CoopWire.js';
 import { GameplaySettings } from '../systems/GameplaySettings.js';
+import CombatScene from './CombatScene.js';
 
 const SERVER_KEY = 'coop_server_url';
 // The hosted server, so a player never has to know it exists. The field stays
@@ -47,6 +48,10 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
     this.client = null;
     this.chosen = new Set();      // instanceIds of hunters we are bringing
+    // Which hunter the next slot click will place. Null means "the next one
+    // that has nowhere to stand", which is the sensible default when filling
+    // an empty formation from scratch.
+    this.selectedId = null;
     this.statusLine = '';
     this._unsubs = [];
     this._handingOff = false;
@@ -219,13 +224,93 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.add.text(60, 244, 'Bring which hunters?', { ...FONTS.body, color: '#c8ccd4' });
     this.rosterHint = this.add.text(60, 268, '', { ...FONTS.muted, color: '#8a8f98' });
 
+    // Two separate click targets per row, because the row has two jobs and one
+    // of them was unreachable: the box decides whether a hunter comes at all,
+    // the name decides which hunter you are about to place. Folding both into
+    // one label is what left "click a slot to place 3 more" with no way to say
+    // WHICH of the three.
     this.rosterRows = (GameState.party || []).slice(0, 8).map((char, i) => {
       const y = 298 + i * 28;
-      const label = this.add.text(66, y, '', { ...FONTS.body, fontSize: '16px' })
+      const box = this.add.text(66, y, '', { ...FONTS.body, fontSize: '16px' })
         .setInteractive({ useHandCursor: true });
-      label.on('pointerdown', () => this._toggleHunter(char));
-      return { char, label };
+      box.on('pointerdown', () => this._toggleHunter(char));
+
+      const label = this.add.text(100, y, '', { ...FONTS.body, fontSize: '16px' })
+        .setInteractive({ useHandCursor: true });
+      label.on('pointerdown', () => this._selectHunter(char));
+      return { char, box, label };
     });
+
+    this._buildFormation();
+  }
+
+  /**
+   * The formation picker: the combat board's own eight ally slots, drawn in
+   * the same brick-offset shape and the same orientation, so what you set here
+   * is recognisably where people will be standing.
+   *
+   * Geometry comes from CombatScene.SLOT_GRID rather than a copy of it. The
+   * board's back column is col 0 and the front is col 2, allies facing right,
+   * which is why the front rank is drawn on the RIGHT here too -- a mirrored
+   * picker would be worse than none.
+   *
+   * You may only place your own hunters, so there is no selection step to get
+   * wrong: clicking a free slot sends your next unplaced hunter to it, and
+   * clicking one of yours picks that hunter back up. The server refuses
+   * anything else, and says why.
+   */
+  _buildFormation() {
+    const ox = 366, oy = 300, cell = 42, gap = 5;
+    this.add.text(ox, 272, 'Formation', { ...FONTS.body, color: '#c8ccd4' });
+    this.formationHint = this.add.text(ox, 442, '',
+      { ...FONTS.muted, fontSize: '12px', color: '#7d838d', wordWrap: { width: 210 } });
+
+    this.slotCells = Object.entries(CombatScene.SLOT_GRID).map(([id, pos]) => {
+      const slotId = Number(id);
+      // Column 1 holds two slots where the others hold three; nudging it down
+      // half a cell reproduces the board's brick offset instead of pretending
+      // the grid is square.
+      const x = ox + pos.col * (cell + gap);
+      const y = oy + pos.row * (cell + gap) + (pos.col === 1 ? (cell + gap) / 2 : 0);
+
+      const box = this.add.rectangle(x, y, cell, cell, 0x000000, 0.25)
+        .setOrigin(0, 0).setStrokeStyle(1, 0x4a4f58)
+        .setInteractive({ useHandCursor: true });
+      box.on('pointerdown', () => this._clickSlot(slotId));
+
+      const name = this.add.text(x + cell / 2, y + cell / 2, '',
+        { ...FONTS.body, fontSize: '11px' }).setOrigin(0.5);
+      const num = this.add.text(x + 3, y + 2, String(slotId),
+        { ...FONTS.muted, fontSize: '9px', color: '#5a5f68' });
+      return { slotId, box, name, num };
+    });
+  }
+
+  /** Place your next unplaced hunter here, or pick up the one standing here. */
+  _clickSlot(slotId) {
+    if (!this.client?.playerId) return this._say('Join or host a lobby first.');
+    const lobby = this.client.lobby;
+    if (lobby?.started) return this._say('The hunt has already started.');
+
+    const me = lobby?.players?.find(p => p.id === this.client.playerId);
+    if (!me) return;
+
+    const here = me.hunters.find(h => h.slotId === slotId);
+    if (here) return this.client.claimSlot(here.ref, null);
+
+    // Someone else's hunter is standing there. Say so rather than sending a
+    // claim we know the server will refuse.
+    const theirs = (lobby.players || [])
+      .some(p => p.id !== me.id && p.hunters.some(h => h.slotId === slotId));
+    if (theirs) return this._say('Someone else is standing there.');
+
+    // The selected hunter if there is one -- including one already standing
+    // elsewhere, which is how you move somebody -- otherwise the next unplaced.
+    const picked = this.selectedId && me.hunters.find(h => h.ref === this.selectedId);
+    const next = picked || me.hunters.find(h => h.slotId == null);
+    if (!next) return this._say('All of your hunters are placed. Click a name to move one.');
+    this.client.claimSlot(next.ref, slotId);
+    this.selectedId = null;
   }
 
   _buildLobbyPanel(width) {
@@ -315,9 +400,27 @@ export default class CoopLobbyScene extends Phaser.Scene {
       .map(toWireCharacter);
   }
 
+  /**
+   * Choose which hunter the next slot click will place.
+   *
+   * Selecting one that is already standing somewhere is allowed and means
+   * "move them": the next slot click sends them there. Clicking the selected
+   * hunter again clears the selection.
+   */
+  _selectHunter(char) {
+    if (this.client?.status === CoopStatus.FIGHTING) return;
+    const id = char.instanceId || char.id;
+    if (!this.chosen.has(id)) return this._say('Tick the box to bring them first.');
+    this.selectedId = this.selectedId === id ? null : id;
+    this._refresh();
+  }
+
   _toggleHunter(char) {
     if (this.client?.status === CoopStatus.FIGHTING) return;
     const id = char.instanceId || char.id;
+    // Leaving a hunter selected after dropping them would point every slot
+    // click at somebody who is no longer coming.
+    if (this.selectedId === id) this.selectedId = null;
     if (this.chosen.has(id)) this.chosen.delete(id);
     else this.chosen.add(id);
 
@@ -484,12 +587,46 @@ export default class CoopLobbyScene extends Phaser.Scene {
       ? `You are bringing ${mine}. Lobby total ${lobby?.used ?? mine} of ${PARTY_LIMIT}.`
       : `You are bringing ${mine} of ${PARTY_LIMIT}.`);
 
+    const myHunters = lobby?.players?.find(p => p.id === this.client?.playerId)?.hunters || [];
     for (const row of this.rosterRows) {
       const id = row.char.instanceId || row.char.id;
       const on = this.chosen.has(id);
-      row.label.setText(`${on ? '[x]' : '[ ]'}  ${row.char.name}`);
-      row.label.setColor(on ? MENU_THEME.accentHover : '#8a8f98');
+      const at = myHunters.find(h => h.ref === id)?.slotId;
+      const picked = this.selectedId === id;
+
+      row.box.setText(on ? '[x]' : '[ ]');
+      row.box.setColor(on ? MENU_THEME.accentHover : '#8a8f98');
+      // The marker is what tells you which hunter a slot click will move.
+      row.label.setText(`${picked ? '> ' : '  '}${row.char.name}${at != null ? `  - slot ${at}` : ''}`);
+      row.label.setColor(!on ? '#8a8f98' : picked ? '#f0d9a0' : MENU_THEME.accentHover);
     }
+
+    // Formation
+    const me = lobby?.players?.find(p => p.id === this.client?.playerId);
+    const occupant = (slotId) => {
+      for (const p of (lobby?.players || [])) {
+        const h = p.hunters.find(x => x.slotId === slotId);
+        if (h) return { h, mine: p.id === this.client?.playerId };
+      }
+      return null;
+    };
+    for (const cell of (this.slotCells || [])) {
+      const who = occupant(cell.slotId);
+      cell.name.setText(who ? who.h.name.slice(0, 6) : '');
+      cell.name.setColor(who?.mine ? MENU_THEME.accentHover : '#8a8f98');
+      cell.box.setFillStyle(0x000000, who ? 0.45 : 0.25);
+      cell.box.setStrokeStyle(1, who?.mine ? 0x8a7a4a : 0x4a4f58);
+    }
+    const unplaced = me ? me.hunters.filter(h => h.slotId == null).length : 0;
+    const selName = this.selectedId
+      && this.rosterRows.find(r => (r.char.instanceId || r.char.id) === this.selectedId)?.char.name;
+    this.formationHint.setText(!inLobby
+      ? 'Join a lobby to choose where your Hunters stand.'
+      : selName
+        ? `Click a slot to put ${selName} there.`
+        : unplaced
+          ? `Click a name to choose, then a slot. ${unplaced} still unplaced. Front rank is on the right.`
+          : 'Click a name to move them, or a slot of yours to pick them up.');
 
     // Lobby
     this.lobbyTitle.setText(inLobby

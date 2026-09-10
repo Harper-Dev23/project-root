@@ -88,6 +88,28 @@ def previous_deployed_sha(repo, env, token, current):
     return ''
 
 
+# Commits that deploy but say nothing to players.
+#
+# Every push to main is a Pages deploy, and a Pages deploy is a Discord post.
+# That made infrastructure work -- a server fix, a test, a CI tweak -- cost a
+# patch note nobody wanted, which in practice discourages pushing at all. A
+# commit whose subject is prefixed `chore:` or `internal:`, or which contains
+# `[no-notes]` anywhere in its message, is dropped from the notes entirely.
+#
+# If EVERY commit in the range is silent, nothing is posted at all: the build
+# still deploys, Discord simply does not hear about it.
+SKIP_PREFIX = re.compile(r'^\s*(chore|internal|ci|test)\s*:', re.I)
+SKIP_TAG = re.compile(r'\[no[- ]?notes\]', re.I)
+
+
+def is_silent(msg):
+    """True if this whole commit should be left out of the notes."""
+    if SKIP_TAG.search(msg):
+        return True
+    first = next((l for l in msg.strip().splitlines() if l.strip()), '')
+    return bool(SKIP_PREFIX.match(first))
+
+
 def extract(raw):
     """Turn raw `git log %B` output into individual patch-note lines.
 
@@ -106,6 +128,8 @@ def extract(raw):
     lines = []
     drop = re.compile(r'^(Co-authored-by|Signed-off-by|Change-Id)\s*:', re.I)
     for msg in raw.split(chr(0)):
+        if is_silent(msg):
+            continue
         parts = [l.rstrip() for l in msg.strip().splitlines()]
         parts = [l for l in parts if l.strip() and not drop.match(l.strip())]
         if not parts:
@@ -195,7 +219,13 @@ def main():
         print('no previous deployment found - using the latest commit only')
 
     n_commits = len([m for m in out.split(chr(0)) if m.strip()]) or 1
-    subjects = extract(out) or ['new build']
+    subjects = extract(out)
+    if not subjects:
+        # Deployed, but nothing here is for players. Staying quiet is the whole
+        # point of the skip markers -- posting "new build" with no notes is
+        # exactly the noise they exist to prevent.
+        print('commits: %d   all of them silent - not posting.' % n_commits)
+        return
     print('commits: %d   patch-note lines: %d' % (n_commits, len(subjects)))
 
     order, buckets = group(subjects)
