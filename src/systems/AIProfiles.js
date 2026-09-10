@@ -793,7 +793,12 @@ export const AI_PROFILES = {
       // skill's own comment in skills.js) — checked early since it stacks on
       // top of whatever else he does this turn instead of competing with it.
       if (canUseSkill(npc, 'berserker_unstoppable_rush') && (npc.initiativeGauge || 0) >= 50) {
-        const target = weakest(foes);
+        // Aimed at the BACK rank. The glare is not an attack, so reach never
+        // restricts it -- which makes it the one tool Gorrek has for reaching
+        // a back line that is hiding behind a front-liner. Move, or eat 35% of
+        // max HP; and a Hunter who moves forward to escape it walks into his
+        // melee. Same scoring `weakest` used, plus the positional lean.
+        const target = pickTarget(foes, { preferLowHP: true, noise: 1.1, aim: 'back' });
         if (target) return buildAction('berserker_unstoppable_rush', target);
       }
       // Bonus pool now has 5 competitors (Roar/Sweep/Frenzy/Harvest/Bloodrite)
