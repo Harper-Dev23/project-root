@@ -23,6 +23,8 @@ import { GameplaySettings } from '../systems/GameplaySettings.js';
 import CombatScene from './CombatScene.js';
 
 const SERVER_KEY = 'coop_server_url';
+// The last lobby this browser was seated in, for reconnecting after a crash.
+const LAST_CODE_KEY = 'coop_last_code';
 // The hosted server, so a player never has to know it exists. The field stays
 // editable for local testing against `npm start` (ws://localhost:8787).
 //
@@ -157,6 +159,15 @@ export default class CoopLobbyScene extends Phaser.Scene {
                text-align:center;letter-spacing:2px;
                background-color:#22242a;color:#e8eaf0;border:1px solid #555;">
     `);
+    // Pre-filled with the last lobby this browser sat in, so coming back after
+    // a crash is Join rather than "what was the code again". Harmless if that
+    // hunt is long gone -- the server simply says there is no lobby with it.
+    try {
+      const last = localStorage.getItem(LAST_CODE_KEY);
+      const el = this.codeInput?.getChildByName?.('code');
+      if (last && el) el.value = last;
+    } catch { }
+
     this.joinBtn = createButton(this, 1055, rowY, 'Join', () => this._join());
 
     // Browsing sits beside joining by code, not instead of it. A code is still
@@ -452,7 +463,14 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // outlives its scene is a crash waiting for the next event.
     this._unsubs.push(
       this.client.on('lobby', () => this._refresh()),
-      this.client.on('joined', () => { this._say(''); this._refresh(); }),
+      this.client.on('joined', (msg) => {
+        // Remembered so a crashed or refreshed browser can be handed its own
+        // code back. Reconnecting needs the code, and nobody reads a lobby
+        // code expecting to have to write it down.
+        try { localStorage.setItem(LAST_CODE_KEY, this.client.code || ''); } catch { }
+        this._say(msg?.resumed ? 'Rejoined your hunt.' : '');
+        this._refresh();
+      }),
       this.client.on('error', reason => this._say(reason)),
       this.client.on('closed', () => this._say('Disconnected from the server.')),
       this.client.on('started', () => this._enterFight()),

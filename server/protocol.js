@@ -35,7 +35,18 @@ function makeCode(len = 4) {
   return out;
 }
 
-export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
+/**
+ * How long an in-progress hunt survives with nobody connected.
+ *
+ * All hunt state is in memory, so this is the whole of a fight's durability: a
+ * refresh, a dropped wifi, a laptop lid. Long enough to walk back from a
+ * dropped connection, short enough that an abandoned fight does not hold a
+ * seat on a one-hunt-per-process server forever.
+ */
+export const RESUME_GRACE_MS = 5 * 60 * 1000;
+
+export function createHub({ CombatScene, codeFactory = makeCode,
+  resumeGraceMs = RESUME_GRACE_MS } = {}) {
   // The board publishes its own slot ids. Taking them from the class the hub
   // was handed keeps one definition of the grid; a fallback exists only so a
   // test double without the static still works.
@@ -98,6 +109,11 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       send(actorConn, { t: 'privateLog', log: result.privateLog });
     }
     if (result.state.ended) {
+      // A finished hunt is not worth holding a seat for. The grace period on
+      // disconnect exists so a dropped connection can come back to a fight in
+      // progress; there is nothing to come back to once it is over, and on a
+      // one-hunt-per-process server holding it would block the next one.
+      lobby.finished = true;
       const units = result.state.units;
       const won = units.filter(u => u.side === 'enemy').every(u => u.hp <= 0);
       broadcast(lobby, {
@@ -138,13 +154,58 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       return handlers._seat(conn, lobby, playerId, msg);
     },
 
-    /** { t:'join', code, name, hunters } */
+    /** { t:'join', code, name, hunters, clientId } */
     join(conn, msg) {
       const lobby = lobbies.get(String(msg.code || '').toUpperCase());
       if (!lobby) return fail(conn, 'no lobby with that code');
+
+      // Coming back to a seat you already hold. A dropped socket leaves the
+      // player in place with conn: null -- their hunters are on the board and
+      // their turn still has to be taken -- but until now nothing could
+      // reattach to it, so a refresh or a flaky connection cost the fight.
+      // Matching on clientId is what makes the seat reclaimable; it is the
+      // browser's own id, not anything the player types.
+      const mine = msg.clientId
+        && lobby.players.find(p => p.clientId && p.clientId === msg.clientId);
+      if (mine) return handlers._resume(conn, lobby, mine);
+
       if (lobby.session) return fail(conn, 'that hunt has already started');
       const playerId = 'p' + (lobby.players.length + 1);
       return handlers._seat(conn, lobby, playerId, msg);
+    },
+
+    /**
+     * Reattach a returning player to the seat they already hold.
+     *
+     * Sends everything a fresh client needs to rebuild the fight from nothing:
+     * the seat, the lobby, and -- if a hunt is under way -- the roster and the
+     * current board, which is exactly what `start` sends. A reconnecting client
+     * has no history, so replaying the whole fight is neither possible nor
+     * needed; the authoritative board IS the state.
+     */
+    _resume(conn, lobby, player) {
+      if (player.conn && player.conn !== conn) {
+        // Someone else is already sitting here on a live socket. Refuse rather
+        // than boot them: two tabs open on one save should not fight over a
+        // seat, and silently stealing it would look like a desync.
+        return fail(conn, 'that seat is already connected');
+      }
+      player.conn = conn;
+      clearTimeout(lobby._reapTimer);
+      lobby._reapTimer = null;
+      byConn.set(conn, { code: lobby.code, playerId: player.id });
+      send(conn, { t: 'joined', code: lobby.code, playerId: player.id, hostId: lobby.hostId, resumed: true });
+      // The lobby view goes FIRST, before `started`. The scene reads the
+      // scenario off it when it hands over to the fight, and on a resume there
+      // is no earlier copy to fall back on -- the returning client has no
+      // history at all.
+      send(conn, lobbyView(lobby));
+      if (lobby.session) {
+        const roster = lobby.players.flatMap(p =>
+          (p.hunters || []).map(h => ({ ...h, ownerId: p.id })));
+        send(conn, { t: 'started', state: lobby.session.state(), roster });
+      }
+      broadcast(lobby, lobbyView(lobby));
     },
 
     _seat(conn, lobby, playerId, msg) {
@@ -159,6 +220,10 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
         conn,
         hunters,
         ready: false,
+        // The browser's own id, stored so this seat can be reclaimed after a
+        // dropped socket. Never shown, never typed, and only meaningful within
+        // this lobby -- it is not an account.
+        clientId: msg.clientId || null,
       };
       lobby.players.push(player);
       byConn.set(conn, { code: lobby.code, playerId });
@@ -413,8 +478,27 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       if (!lobby.session && player) {
         lobby.players = lobby.players.filter(p => p !== player);
       }
-      if (lobby.players.every(p => !p.conn)) lobbies.delete(lobby.code);
-      else broadcast(lobby, lobbyView(lobby));
+
+      if (!lobby.players.every(p => !p.conn)) {
+        return broadcast(lobby, lobbyView(lobby));
+      }
+
+      // Everyone is gone. An unstarted lobby is worth nothing, so it goes now.
+      // A hunt in progress is held for a grace period instead of deleted the
+      // instant the last socket drops -- which is what used to happen, so two
+      // players on one flaky connection, or one player refreshing while alone,
+      // destroyed the fight outright with no way back.
+      if (!lobby.session || lobby.finished) return lobbies.delete(lobby.code);
+
+      clearTimeout(lobby._reapTimer);
+      lobby._reapTimer = setTimeout(() => {
+        // Re-check rather than trust the timer: somebody may have come back.
+        if (lobbies.get(lobby.code) === lobby && lobby.players.every(p => !p.conn)) {
+          lobbies.delete(lobby.code);
+        }
+      }, resumeGraceMs);
+      // Never hold the process open on this alone.
+      lobby._reapTimer.unref?.();
     },
   };
 }

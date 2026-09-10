@@ -224,6 +224,70 @@ console.log('=== a hunt, played entirely through messages ===');
     (over?.survivors?.length ?? 0) + ' survivors, ' + over?.players?.join(' + '));
 }
 
+// ---- reconnecting to a fight in progress ----------------------------------
+//
+// All hunt state is in memory, so a dropped socket used to be the end of the
+// fight: the seat was held but nothing could reattach to it, and the lobby was
+// deleted outright the moment the last connection went away.
+console.log('');
+console.log('=== reconnecting ===');
+{
+  const hub2 = createHub({ CombatScene, codeFactory: () => 'RECON', resumeGraceMs: 60 });
+  const ann = conn('ann'), bo = conn('bo');
+  hub2.handle(ann, { t: 'create', name: 'Ann', scenarioId: 'training_encounter_1',
+    hunters: clone(2, 0), clientId: 'ann-browser' });
+  hub2.handle(bo, { t: 'join', code: 'RECON', name: 'Bo', hunters: clone(2, 2),
+    clientId: 'bo-browser' });
+  hub2.handle(ann, { t: 'ready', ready: true });
+  hub2.handle(bo, { t: 'ready', ready: true });
+  hub2.handle(ann, { t: 'start' });
+  check('a hunt is under way', !!ann.last('started'));
+
+  // Bo's laptop lid closes.
+  hub2.disconnect(bo);
+  check('the seat is held, not freed',
+    ann.last('lobby').players.length === 2, ann.last('lobby').players.length + ' players');
+
+  // A STRANGER cannot walk into a started hunt.
+  const nosy = conn('nosy');
+  hub2.handle(nosy, { t: 'join', code: 'RECON', name: 'Nosy', hunters: clone(1, 4),
+    clientId: 'someone-else' });
+  check('a stranger still cannot join a started hunt',
+    nosy.errors().some(e => /already started/.test(e)), nosy.errors().join(' | '));
+
+  // Bo comes back, same browser, same code. No special "rejoin" flow.
+  const bo2 = conn('bo2');
+  hub2.handle(bo2, { t: 'join', code: 'RECON', name: 'Bo', hunters: [],
+    clientId: 'bo-browser' });
+  check('Bo gets his OWN seat back, not a new one',
+    bo2.last('joined')?.playerId === 'p2' && bo2.last('joined')?.resumed === true,
+    bo2.last('joined')?.playerId + ' resumed=' + bo2.last('joined')?.resumed);
+  check('and is handed the fight in progress, board and all',
+    !!bo2.last('started')?.state?.units?.length,
+    (bo2.last('started')?.state?.units?.length ?? 0) + ' units');
+  check('his hunters are still his own on that board',
+    bo2.last('started').roster.filter(h => h.ownerId === 'p2').length === 2);
+  // Rejoining with empty hunters must not have wiped the party he is fighting with.
+  check('reconnecting did NOT replace his party with the empty list he sent',
+    ann.last('lobby').players.find(p => p.id === 'p2').hunters.length === 2);
+
+  // A second tab must not steal a live seat.
+  const bo3 = conn('bo3');
+  hub2.handle(bo3, { t: 'join', code: 'RECON', name: 'Bo', hunters: [],
+    clientId: 'bo-browser' });
+  check('a second tab cannot steal a seat that is already connected',
+    bo3.errors().some(e => /already connected/.test(e)), bo3.errors().join(' | '));
+
+  // Everyone drops. The fight must survive the grace period.
+  hub2.disconnect(ann); hub2.disconnect(bo2);
+  const backIn = conn('backIn');
+  hub2.handle(backIn, { t: 'join', code: 'RECON', name: 'Ann', hunters: [],
+    clientId: 'ann-browser' });
+  check('a hunt with NOBODY connected is still there to come back to',
+    backIn.last('joined')?.resumed === true, backIn.errors().join(' | ') || 'resumed');
+  hub2.disconnect(backIn);
+}
+
 // ---- disconnects -----------------------------------------------------------
 console.log('=== disconnects ===');
 {
@@ -235,10 +299,61 @@ console.log('=== disconnects ===');
   check('leaving BEFORE the start frees the seat',
     h2.lobbies.get('DROP').players.length === 1);
 
-  h2.handle(a, { t: 'ready', ready: true });
-  h2.handle(a, { t: 'start' });
+  // An UNSTARTED lobby with nobody in it is worth nothing and goes at once.
   h2.disconnect(a);
-  check('the lobby is dropped once nobody is connected', !h2.lobbies.has('DROP'));
+  check('an unstarted lobby is dropped once nobody is connected', !h2.lobbies.has('DROP'));
+}
+
+// A STARTED hunt is held instead, so a dropped connection is survivable -- but
+// only for a while, or an abandoned fight would hold the one hunt this process
+// allows forever.
+{
+  const h3 = createHub({ CombatScene, codeFactory: () => 'GRACE', resumeGraceMs: 120 });
+  const a = conn('a');
+  h3.handle(a, { t: 'create', name: 'A', hunters: clone(1, 0), clientId: 'a-browser' });
+  h3.handle(a, { t: 'ready', ready: true });
+  h3.handle(a, { t: 'start' });
+  h3.disconnect(a);
+  check('a started hunt is NOT dropped when the last player goes', h3.lobbies.has('GRACE'));
+
+  await new Promise(r => setTimeout(r, 200));
+  check('but it is reaped once the grace period passes', !h3.lobbies.has('GRACE'));
+}
+
+// Coming back inside the grace period must CANCEL the reap, not merely beat it.
+{
+  const h4 = createHub({ CombatScene, codeFactory: () => 'BACK', resumeGraceMs: 150 });
+  const a = conn('a');
+  h4.handle(a, { t: 'create', name: 'A', hunters: clone(1, 0), clientId: 'a-browser' });
+  h4.handle(a, { t: 'ready', ready: true });
+  h4.handle(a, { t: 'start' });
+  h4.disconnect(a);
+
+  const a2 = conn('a2');
+  h4.handle(a2, { t: 'join', code: 'BACK', name: 'A', hunters: [], clientId: 'a-browser' });
+  check('rejoining inside the grace period works', a2.last('joined')?.resumed === true);
+
+  await new Promise(r => setTimeout(r, 250));
+  check('and the pending reap was cancelled, not just outrun', h4.lobbies.has('BACK'),
+    h4.lobbies.has('BACK') ? 'still there' : 'DELETED OUT FROM UNDER A LIVE PLAYER');
+  h4.disconnect(a2);
+}
+
+// A FINISHED hunt is not held at all -- there is nothing to come back to, and
+// on a one-hunt-per-process server holding it would block the next fight for
+// the whole grace period.
+{
+  const h5 = createHub({ CombatScene, codeFactory: () => 'DONE', resumeGraceMs: 60000 });
+  const a = conn('a');
+  h5.handle(a, { t: 'create', name: 'A', hunters: clone(1, 0), clientId: 'a-browser' });
+  h5.handle(a, { t: 'ready', ready: true });
+  h5.handle(a, { t: 'start' });
+  const lobby = h5.lobbies.get('DONE');
+  // Drive it to a conclusion the blunt way: the party is wiped.
+  lobby.finished = true;
+  h5.disconnect(a);
+  check('a finished hunt is dropped at once, not held for the grace period',
+    !h5.lobbies.has('DONE'));
 }
 
 // ---- one live hunt per process ---------------------------------------------

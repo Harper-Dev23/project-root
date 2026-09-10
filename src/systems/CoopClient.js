@@ -17,6 +17,40 @@ const NOOP = () => { };
  * lobby" and "in a fight" are three different things and the UI needs to tell
  * them apart.
  */
+/**
+ * A stable id for THIS TAB, so a dropped socket can reclaim its seat.
+ *
+ * sessionStorage, NOT localStorage, and the difference is the whole point.
+ * localStorage is shared by every tab of a browser profile, so two tabs would
+ * carry the SAME id -- and since a seat already on a live socket is refused,
+ * the second tab could not join at all. That is exactly how co-op gets tested
+ * locally, two windows side by side, so it would have broken the normal way of
+ * playing while claiming to make it more robust. sessionStorage is per tab and
+ * survives a reload, which is the case reconnecting is actually for.
+ *
+ * Deliberately not an account and not an identity: never shown, never typed,
+ * meaningless outside a lobby this tab is already sitting in.
+ *
+ * When there is no storage at all -- a Node test, a locked-down browser -- a
+ * FRESH id is returned each time rather than a cached one. Without storage
+ * there is nothing to persist, so caching would only make separate clients in
+ * one process collide, which is the same trap in a different costume.
+ */
+let _cachedClientId = null;
+export function coopClientId() {
+  if (_cachedClientId) return _cachedClientId;
+  const KEY = 'coop_client_id';
+  const made = 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  try {
+    const saved = sessionStorage.getItem(KEY);
+    if (saved) return (_cachedClientId = saved);
+    sessionStorage.setItem(KEY, made);
+    return (_cachedClientId = made);
+  } catch {
+    return made;   // no storage: unique per call, cached never
+  }
+}
+
 export const CoopStatus = {
   IDLE: 'idle',
   CONNECTING: 'connecting',
@@ -112,10 +146,15 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     },
 
     createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false }) {
-      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic });
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic,
+        clientId: coopClientId() });
     },
     joinLobby({ code, name, hunters }) {
-      return client.send({ t: 'join', code, name, hunters });
+      // Sending the id on an ordinary join is what makes reconnecting work
+      // without a separate "rejoin" flow: the server recognises a seat this
+      // browser already holds and hands it back, fight in progress and all.
+      // Typing the same code you were already in IS the reconnect.
+      return client.send({ t: 'join', code, name, hunters, clientId: coopClientId() });
     },
     setHunters(hunters) { return client.send({ t: 'setHunters', hunters }); },
     setReady(ready = true) { return client.send({ t: 'ready', ready }); },
@@ -147,6 +186,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
   function handle(msg) {
     switch (msg.t) {
       case 'joined':
+        client.resumed = !!msg.resumed;
         client.playerId = msg.playerId;
         client.hostId = msg.hostId;
         client.code = msg.code;
