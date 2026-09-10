@@ -26,6 +26,9 @@ import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '.
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase } from '../systems/ItemFactory.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
+// The board's own geometry, shared so the AI and the scene cannot disagree
+// about which column is the front rank.
+import { SLOT_COORDS } from '../systems/boardGeometry.js';
 import { getLocalChatScript } from '../systems/LocalChatScripts.js';
 import { fromWireCharacter } from '../systems/CoopWire.js';
 import { chooseNPCAction } from '../systems/NPCLogic.js';
@@ -116,17 +119,6 @@ function calculateEffectiveResourceCost(user, baseCost, resource, opts = {}) {
   return result;
 }
 // === Grid helper =========================================
-// Kept for any legacy references (visual positioning, etc.)
-const SLOT_COORDS = {
-  8: { col: 0, row: 0 },
-  7: { col: 0, row: 1 },
-  6: { col: 0, row: 2 },
-  4: { col: 1, row: 0 },
-  5: { col: 1, row: 1 },
-  3: { col: 2, row: 0 },
-  2: { col: 2, row: 1 },
-  1: { col: 2, row: 2 }
-};
 
 /**
  * Adjacency map for the brick-offset grid.

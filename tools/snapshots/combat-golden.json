@@ -483,9 +483,9 @@
  "fights": {
   "training_encounter_1": "WIN turns=13 round=4 allies=6/6 foes=0/6 allyHP=58/38/32/50/40/58 foeHP=0/0/0/0/0/0 log=83",
   "training_encounter_2": "WIN turns=14 round=4 allies=6/6 foes=0/6 allyHP=58/38/32/50/40/58 foeHP=0/0/0/0/0/0 log=102",
-  "training_encounter_3": "LOSS turns=30 round=8 allies=0/6 foes=6/6 allyHP=0/0/0/0/0/0 foeHP=139/111/102/117/107/102 log=615",
-  "training_encounter_4": "LOSS turns=22 round=7 allies=0/6 foes=3/3 allyHP=0/0/0/0/0/0 foeHP=49/418/354 log=391",
-  "training_encounter_5": "LOSS turns=26 round=8 allies=0/6 foes=2/2 allyHP=0/0/0/0/0/0 foeHP=230/526 log=356",
-  "training_encounter_6": "LOSS turns=16 round=5 allies=0/6 foes=1/1 allyHP=0/0/0/0/0/0 foeHP=879 log=172"
+  "training_encounter_3": "LOSS turns=40 round=9 allies=0/6 foes=6/6 allyHP=0/0/0/0/0/0 foeHP=95/111/102/117/107/102 log=752",
+  "training_encounter_4": "LOSS turns=29 round=8 allies=0/6 foes=2/3 allyHP=0/0/0/0/0/0 foeHP=0/372/354 log=447",
+  "training_encounter_5": "LOSS turns=26 round=8 allies=0/6 foes=2/2 allyHP=0/0/0/0/0/0 foeHP=231/526 log=363",
+  "training_encounter_6": "LOSS turns=18 round=5 allies=0/6 foes=1/1 allyHP=0/0/0/0/0/0 foeHP=870 log=192"
  }
 }

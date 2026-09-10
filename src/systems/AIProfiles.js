@@ -1,4 +1,5 @@
 import { SKILLS } from '../../data/skills.js';
+import { frontness } from './boardGeometry.js';
 
 // Advanced encounter AI profiles
 //test
@@ -50,7 +51,37 @@ const weightedPick = (list, weightFn) => {
   return scored[scored.length - 1].item;
 };
 
-const targetScore = (target, opts = {}) => {
+/**
+ * How far FORWARD a unit stands, 0 (back rank) to 1 (front rank).
+ *
+ * Column 2 is the front for BOTH sides -- allies face right from x=560 and
+ * enemies face left from x=720, so the higher column is always the one nearer
+ * the middle of the board. That symmetry is why one number works for everyone
+ * and no side-specific branch is needed.
+ *
+ * A unit with no slot (in the KO area, mid-summon) reads as mid-rank rather
+ * than as either extreme, so it is never singled out by an accident of
+ * geometry.
+ */
+// frontness comes from boardGeometry so the AI and the board cannot disagree
+// about which end of the field is the front.
+
+/**
+ * How hard a positional preference pulls.
+ *
+ * Deliberately comparable to the low-HP bias (2.4 at its strongest) rather
+ * than larger. This is meant to be a LEAN, not a rule: an enemy that always
+ * hit the front rank would make the back rank a safe place to park a healer
+ * forever, which is duller than the randomness it replaces. Reach (Piece 2) is
+ * where hard restrictions belong.
+ */
+const AIM_WEIGHT = 1.6;
+
+// Exported so the positional lean can be MEASURED rather than argued about.
+// It is a pure function of a target and some options; nothing depends on it
+// staying private, and "four fights in the snapshot differ" is not an answer
+// to "how much more often does the front rank get hit".
+export const targetScore = (target, opts = {}) => {
   const noise = randomRange(0, opts.noise ?? 0.9);
   // preferHighHP is a genuine inversion (favors whoever's LEAST hurt) —
   // preferLowHP:false on its own still leans low-HP, just at half strength,
@@ -66,7 +97,25 @@ const targetScore = (target, opts = {}) => {
     return sum + tier * (opts.weaknessWeight ?? 1.4) + meter / 80;
   }, 0);
   const markBias = opts.preferMarked && Array.isArray(target?.statusEffects) && target.statusEffects.some(se => se?.id === 'huntsman_marked') ? 1.6 : 0;
-  return Math.max(0.1, 1 + noise + hpBias + weaknessBias + markBias);
+
+  // Where the target is STANDING. Nothing positional entered this score before,
+  // so every enemy in the game treated the front rank and the back rank as
+  // interchangeable -- which is why standing anywhere in particular never felt
+  // like a decision.
+  //
+  // Front-leaning by DEFAULT, because that is what a melee-heavy roster should
+  // do and making it opt-in would leave every existing profile behaving exactly
+  // as before. Pass `aim: 'back'` for skirmishers and marksmen who should shoot
+  // past the line, or `aim: null` when the list is ALLIES -- a healer picking
+  // whom to mend has no business preferring the front rank.
+  const aim = opts.aim === undefined ? 'front' : opts.aim;
+  const weight = opts.aimWeight ?? AIM_WEIGHT;
+  const rank = frontness(target);
+  const aimBias = aim === 'front' ? rank * weight
+    : aim === 'back' ? (1 - rank) * weight
+      : 0;
+
+  return Math.max(0.1, 1 + noise + hpBias + weaknessBias + markBias + aimBias);
 };
 
 const pickTarget = (list, opts = {}) => {
@@ -197,7 +246,7 @@ export const AI_PROFILES = {
       // reaction rather than a routine heal.
       const hurtAllies = allies.filter(a => hpRatio(a) < 0.7);
       if (canUseSkill(npc, 'healer_mending_wave') && (npc.initiativeGauge || 0) >= 30 && hurtAllies.length >= 2) {
-        const anchor = pickTarget(hurtAllies, { preferLowHP: true, noise: 0.4 }) || hurtAllies[0];
+        const anchor = pickTarget(hurtAllies, { preferLowHP: true, noise: 0.4, aim: null }) || hurtAllies[0];
         return buildAction('healer_mending_wave', anchor);
       }
 
@@ -208,7 +257,7 @@ export const AI_PROFILES = {
       // scratch (the old flat noise:1 diluted the low-HP weighting enough
       // that it could pick a barely-hurt ally over one at critical HP).
       const woundedAllies = allies.filter(a => hpRatio(a) < 1);
-      const lowAlly = pickTarget(woundedAllies, { preferLowHP: true, noise: 0.05 });
+      const lowAlly = pickTarget(woundedAllies, { preferLowHP: true, noise: 0.05, aim: null });
       if (canUseSkill(npc, 'healer_heal') && lowAlly) {
         return buildAction('healer_heal', lowAlly);
       }
@@ -220,12 +269,12 @@ export const AI_PROFILES = {
       const cleanseCandidates = allies.filter(a =>
         ['curse', 'disease', 'toxic'].some(fam => (a?.weakness?.meters?.[fam] || 0) > 0)
       );
-      const afflicted = pickTarget(cleanseCandidates, { preferWeakness: ['curse', 'disease', 'toxic'], preferLowHP: true, noise: 0.35 });
+      const afflicted = pickTarget(cleanseCandidates, { preferWeakness: ['curse', 'disease', 'toxic'], preferLowHP: true, noise: 0.35, aim: null });
       if (canUseSkill(npc, 'healer_cleanse') && afflicted) {
         return buildAction('healer_cleanse', afflicted);
       }
       if (canUseSkill(npc, 'healer_blessing')) {
-        const blessTarget = pickTarget(allies.filter(a => !hasStatus(a, 'healer_blessing')), { noise: 1, preferLowHP: false });
+        const blessTarget = pickTarget(allies.filter(a => !hasStatus(a, 'healer_blessing')), { noise: 1, preferLowHP: false, aim: null });
         if (blessTarget) {
           return buildAction('healer_blessing', blessTarget);
         }
@@ -308,8 +357,14 @@ export const AI_PROFILES = {
     }
   },
 
+  // Doug. A marksman shoots PAST the line, which is the whole point of having
+  // one -- so his picks lean back where everyone else's lean front. This is the
+  // shape any future skirmisher copies: one option on the target picks, no new
+  // machinery.
   ranger_dummy: {
+    aim: 'back',
     decide(npc, scene, enemies) {
+      const AIM = { aim: 'back' };
       // Covering Shot — armed once and left armed, same idempotent pattern
       // as every other enemy reaction this pass.
       const alreadyArmed = scene?.reactions?.listPrepared?.(npc)?.some(r => r.id === 'ranger_covering_shot');
@@ -323,15 +378,15 @@ export const AI_PROFILES = {
         return buildAction('ranger_aimed_shot', exposed);
       }
       if (canUseSkill(npc, 'ranger_volley') && foes.length >= 2) {
-        const focus = pickTarget(foes, { preferLowHP: true, noise: 0.9 }) || foes[0];
+        const focus = pickTarget(foes, { preferLowHP: true, noise: 0.9, ...AIM }) || foes[0];
         return buildAction('ranger_volley', focus);
       }
       if (canUseSkill(npc, 'ranger_frost_arrow')) {
-        const target = weakest(foes);
+        const target = pickTarget(foes, { preferLowHP: true, noise: 1.1, ...AIM });
         if (target) return buildAction('ranger_frost_arrow', target);
       }
       if (canUseSkill(npc, 'ranger_quick_shot')) {
-        const target = weakest(foes);
+        const target = pickTarget(foes, { preferLowHP: true, noise: 1.1, ...AIM });
         if (target) return buildAction('ranger_quick_shot', target);
       }
       if (canUseSkill(npc, 'dummy_sway')) {
