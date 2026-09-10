@@ -229,6 +229,11 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         turnOrder: (host.turnOrder || []).map(u => host._unitRef(u)),
         zones: host.slotEffects,
         units: [...party, ...(host.enemies || [])].map(lean),
+        // Ground zones -- Conclave Circle's runic ring, quake cracks, anything
+        // that persists on a tile rather than on a unit. These live in scene
+        // state keyed by slot, not on any unit, so nothing about them crossed
+        // the wire before and a co-op client simply never drew them.
+        slotEffects: host.slotEffects || {},
         logLength: host.combatEntries.length,
       };
     },

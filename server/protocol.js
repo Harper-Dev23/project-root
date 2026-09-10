@@ -177,9 +177,20 @@ export function createHub({ CombatScene, codeFactory = makeCode } = {}) {
       // A placement is only ever granted by claimSlot, never accepted from the
       // client's own payload -- otherwise a hunter could arrive pre-placed and
       // skip the "is anyone already standing there" check entirely.
+      //
+      // But placements already granted must SURVIVE this. Ticking one hunter in
+      // the roster resends the whole list, and rebuilding it from the payload
+      // wiped every slot anyone had chosen -- so the formation silently reset
+      // whenever the party changed, which is what "the slots are sticking"
+      // actually was. A hunter still in the list keeps where they were
+      // standing; one who has been dropped takes their placement with them.
+      const refOf = (h) => h?.instanceId || h?.id;
+      const held = new Map(
+        player.hunters.filter(h => h.slotId != null).map(h => [refOf(h), h.slotId]));
       player.hunters = hunters.map(h => {
         const { slotId, ...rest } = h || {};
-        return rest;
+        const kept = held.get(refOf(rest));
+        return kept != null ? { ...rest, slotId: kept } : rest;
       });
       player.ready = false;   // changing your party un-readies you
       broadcast(lobby, lobbyView(lobby));

@@ -111,6 +111,24 @@ console.log('=== slot claims ===');
   hub.handle(alice, { t: 'claimSlot', ref: aliceHunters[0].ref, slotId: 6 });
   check('changing the formation un-readies you',
     alice.last('lobby').players.find(p => p.id === 'p1').ready === false);
+
+  // The one that was actually reported as "the slots are sticking". Ticking a
+  // hunter in the roster resends the WHOLE list, and rebuilding it from that
+  // payload used to wipe every placement anyone had made.
+  hub.handle(alice, { t: 'setHunters', hunters: clone(3, 0) });
+  check('a roster change does NOT wipe placements already made',
+    alice.last('lobby').players.find(p => p.id === 'p1')
+      .hunters.find(h => h.ref === aliceHunters[0].ref)?.slotId === 6,
+    'slot ' + alice.last('lobby').players.find(p => p.id === 'p1')
+      .hunters.find(h => h.ref === aliceHunters[0].ref)?.slotId);
+
+  // ...but a hunter who leaves takes their placement with them, rather than
+  // leaving a slot held by somebody who is not coming.
+  hub.handle(alice, { t: 'setHunters', hunters: clone(2, 1) });
+  const stillHeld = alice.last('lobby').players.find(p => p.id === 'p1')
+    .hunters.some(h => h.slotId === 6);
+  check('a dropped hunter releases the slot they held', !stillHeld);
+  hub.handle(alice, { t: 'setHunters', hunters: clone(3, 0) });
 }
 
 // ---- the shared party budget ----------------------------------------------

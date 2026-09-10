@@ -328,6 +328,34 @@ try {
       GameState.party = [];
     }
   }
+  // ---- ground zones and lodged arrows ------------------------------------
+  //
+  // Both were invisible in co-op for different reasons. A ground zone lives in
+  // scene state keyed by SLOT rather than on any unit, so nothing about it
+  // crossed the wire at all. A lodged arrow needed no new data -- the client
+  // had the statusEffects all along -- only the redraw.
+  console.log('');
+  console.log('=== ground zones and lodged arrows ===');
+  {
+    check('the broadcast carries ground-zone state at all',
+      alice.state.slotEffects !== undefined,
+      typeof alice.state.slotEffects);
+
+    // Feed a board that has a zone on it and confirm the client takes it.
+    const sc = scenes.p1;
+    const fake = { ...alice.state, version: alice.state.version + 5000,
+      slotEffects: { ally_3: [{ id: 'runic_zone', element: 'arcane', turns: 2 }] } };
+    sc._applyNetState(fake);
+    check('a zone the server reports is mirrored onto the client',
+      sc.slotEffects?.ally_3?.[0]?.id === 'runic_zone',
+      JSON.stringify(sc.slotEffects));
+
+    // And it must GO AWAY again, or a dissipated ring would be drawn forever.
+    sc._applyNetState({ ...fake, version: fake.version + 1, slotEffects: {} });
+    check('and cleared again when the zone dissipates',
+      !sc.slotEffects?.ally_3?.length, JSON.stringify(sc.slotEffects));
+  }
+
   check('no action was refused along the way', refusals.length === 0,
     refusals.slice(0, 3).join(' | '));
   // Again at the END, after a whole fight of enemy repositioning. The opening

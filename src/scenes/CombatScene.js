@@ -5442,6 +5442,25 @@ export default class CombatScene extends Phaser.Scene {
     // at all. See _applyNetSlots for what that cost.
     this._applyNetSlots(state);
 
+    // Ground zones are scene state keyed by slot, not unit state, so they had
+    // no route to a client at all: a runic ring or a quake crack existed on the
+    // server and on nobody's screen. Redrawn after _applyNetSlots because the
+    // sprites are positioned from the slot containers.
+    if (state.slotEffects) {
+      const keys = new Set([
+        ...Object.keys(this.slotEffects || {}),
+        ...Object.keys(state.slotEffects),
+      ]);
+      this.slotEffects = state.slotEffects;
+      for (const key of keys) this._refreshGroundSprites?.(key);
+    }
+
+    // Lodged arrows needed no new data at all -- _refreshLodgeSprites counts
+    // 'lodged' entries in a unit's own statusEffects, which this method has
+    // been syncing all along. It was only ever the REDRAW that was missing,
+    // which is why arrows stuck to whoever had them when the fight began.
+    for (const unit of this._netUnits.values()) this._refreshLodgeSprites?.(unit);
+
     if (Number.isFinite(state.round)) this.combatRound = state.round;
     this.combatEnded = !!state.ended;
 
