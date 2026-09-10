@@ -95,11 +95,23 @@ try {
   // Alice's first hunter would land there anyway, so pick the BACK for her
   // first hunter -- a placement the fallback would never produce on its own.
   const aliceHunters = alice.lobby.players.find(p => p.id === alice.playerId).hunters;
+  const bobHunters = bob.lobby.players.find(p => p.id === bob.playerId).hunters;
   const claimedRef = aliceHunters[0].ref;
   alice.claimSlot(claimedRef, 6);
-  await until(() => alice.lobby.players
-    .find(p => p.id === alice.playerId).hunters
-    .find(h => h.ref === claimedRef)?.slotId === 6, 'the claim to register');
+
+  // Slots 7 and 8 specifically. The lobby offers all eight and the session
+  // used to honour only 1-6, so a guest's back rank was silently rewritten
+  // into whatever the fill handed out -- reported from real play as
+  // "eee moved from 7 to 4, fff from 8 to 5".
+  const backRank = [[bobHunters[0].ref, 7], [bobHunters[1].ref, 8]];
+  for (const [ref, slot] of backRank) bob.claimSlot(ref, slot);
+
+  await until(() => {
+    const a = alice.lobby.players.find(p => p.id === alice.playerId).hunters;
+    const b = alice.lobby.players.find(p => p.id === bob.playerId).hunters;
+    return a.find(h => h.ref === claimedRef)?.slotId === 6
+      && backRank.every(([ref, slot]) => b.find(h => h.ref === ref)?.slotId === slot);
+  }, 'the claims to register');
 
   alice.setReady(true); bob.setReady(true);
   await until(() => alice.lobby?.players?.every(p => p.ready), 'everyone ready');
@@ -144,6 +156,11 @@ try {
     claimedUnit?.name + ' in slot ' + (claimedUnit?._slot?.slotId ?? 'nowhere'));
   check('and the server agrees that is where they are',
     alice.state.units.find(u => u.ref === claimedRef)?.slot === 6);
+  check('the back rank -- slots 7 and 8 -- survives the start of the hunt',
+    backRank.every(([ref, slot]) =>
+      alice.state.units.find(u => u.ref === ref)?.slot === slot),
+    backRank.map(([ref, slot]) =>
+      `wanted ${slot}, got ${alice.state.units.find(u => u.ref === ref)?.slot}`).join(' | '));
 
   check('_placeCoopParty built the whole shared party',
     scenes.p1.coopParty.length === 6, scenes.p1.coopParty.length + ' hunters on the board');

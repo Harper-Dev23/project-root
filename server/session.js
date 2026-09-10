@@ -119,7 +119,6 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   // shows up immediately as "has no owner" rather than as shared control.
   const party = [];
   const slotMap = {};
-  const SLOT_ORDER = [1, 2, 3, 4, 5, 6];
 
   // A hunter placed in the lobby stands where its player put it. Everyone
   // else fills the remaining slots in order, which is what the whole party
@@ -129,6 +128,16 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   // rankVariants skills do, which shapes are in range, and who gets hit
   // first. Deciding it by join order meant whoever connected first chose the
   // formation for everyone.
+  // From the board itself, NOT a local list. A hardcoded [1..6] here was a
+  // FOURTH definition of the grid, kept while the commit that added
+  // ALLY_SLOT_IDS claimed to have reduced it to one -- and it silently
+  // disagreed with the lobby, which offers all eight. A guest who claimed
+  // slots 7 and 8 had them fall through to the fill and land in 4 and 5: the
+  // formation they chose was quietly overwritten between the lobby and the
+  // board. The party cap of six limits how many hunters there are, never which
+  // of the eight positions they may stand in.
+  const SLOT_ORDER = CombatScene?.ALLY_SLOT_IDS || [1, 2, 3, 4, 5, 6, 7, 8];
+
   const claimed = new Set();
   const roster = [];
   for (const player of players) {
