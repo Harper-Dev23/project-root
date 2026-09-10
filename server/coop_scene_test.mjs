@@ -367,6 +367,31 @@ try {
       sc.slotEffects?.ally_3?.[0]?.id === 'runic_zone',
       JSON.stringify(sc.slotEffects));
 
+    // Status-driven visuals redraw only when the effects CHANGE. Redrawing on
+    // every broadcast reshuffles lodged arrows, because each is positioned
+    // with Math.random() -- they visibly jump around the portrait.
+    let lodgeDraws = 0;
+    const realLodge = sc._refreshLodgeSprites;
+    sc._refreshLodgeSprites = function (u) { lodgeDraws++; return realLodge?.call(this, u); };
+
+    const withLodge = { ...alice.state, version: alice.state.version + 6000,
+      units: alice.state.units.map(u => u.side === 'ally'
+        ? { ...u, effects: [...(u.effects || []), { id: 'lodged', turns: 3 }] } : u) };
+    sc._applyNetState(withLodge);
+    const first = lodgeDraws;
+    check('a newly lodged arrow triggers a redraw', first > 0, first + ' redraws');
+
+    // The same board again: nothing changed, so nothing should be redrawn.
+    sc._applyNetState({ ...withLodge, version: withLodge.version + 1 });
+    check('an unchanged board does NOT reshuffle them',
+      lodgeDraws === first, (lodgeDraws - first) + ' extra redraws');
+
+    // Spending the lodge must redraw, or the arrow would stay on screen.
+    sc._applyNetState({ ...alice.state, version: withLodge.version + 2 });
+    check('spending a lodge redraws so the arrow can go', lodgeDraws > first,
+      (lodgeDraws - first) + ' redraws after it was spent');
+    sc._refreshLodgeSprites = realLodge;
+
     // And it must GO AWAY again, or a dissipated ring would be drawn forever.
     sc._applyNetState({ ...fake, version: fake.version + 1, slotEffects: {} });
     check('and cleared again when the zone dissipates',

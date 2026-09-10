@@ -5455,11 +5455,30 @@ export default class CombatScene extends Phaser.Scene {
       for (const key of keys) this._refreshGroundSprites?.(key);
     }
 
-    // Lodged arrows needed no new data at all -- _refreshLodgeSprites counts
-    // 'lodged' entries in a unit's own statusEffects, which this method has
-    // been syncing all along. It was only ever the REDRAW that was missing,
-    // which is why arrows stuck to whoever had them when the fight began.
-    for (const unit of this._netUnits.values()) this._refreshLodgeSprites?.(unit);
+    // Status-driven visuals: lodged arrows and the runic ring. Neither needs
+    // new data -- both are drawn from a unit's own statusEffects, which this
+    // method has been syncing all along. Only the REDRAW was missing, and a
+    // co-op client had no other reason to make it.
+    //
+    // Refreshed only when the effects that drive them actually CHANGE, which
+    // matters more than it looks: _refreshLodgeSprites positions every arrow
+    // with Math.random(), so redrawing on each broadcast reshuffles them
+    // several times a turn. Arrows that teleport around a portrait are exactly
+    // what "sticking out in a random direction" looks like from the outside.
+    //
+    // (The randomness also means two clients draw the same arrows at different
+    // angles. That is cosmetic and left alone deliberately -- making it
+    // deterministic would mean seeding it, and nothing about the fight depends
+    // on where a decorative shaft happens to sit.)
+    for (const unit of this._netUnits.values()) {
+      const fx = unit.statusEffects || [];
+      const sig = fx.filter(e => e.id === 'lodged').length
+        + '|' + (fx.find(e => e.id === 'runic_zone')?.turns ?? 0);
+      if (unit.__netFxSig === sig) continue;
+      unit.__netFxSig = sig;
+      this._refreshLodgeSprites?.(unit);
+      this._refreshRunicZoneSprite?.(unit);
+    }
 
     if (Number.isFinite(state.round)) this.combatRound = state.round;
     this.combatEnded = !!state.ended;
