@@ -311,25 +311,10 @@ export const WeaknessV3 = {
         // number alone sets how punishing a freshly-applied burn is. Cut ~25%
         // because these ticks hit PLAYERS as hard as enemies, and enemies have
         // far more HP — a shallow burn should sting, not threaten.
-        startTickBase: 19.0,
+        startTickBase: 10.0,
+        startTickCurveK: 4.0,
+        startTickCurveExp: 1.74,
 
-        // A second, INDEPENDENT damage term added on top of (startTickBase ×
-        // intensity) — X per 100 Fire meter ABOVE the T2 threshold, NOT itself
-        // multiplied by intensity. Keeping it additive-only (rather than also
-        // riding the intensity curve) avoids the two terms compounding into a
-        // quadratic — total damage stays linear in meter.
-        //
-        // It counts OVERFLOW, not total meter. On total, simply reaching
-        // Ablaze charged 5 × 2 = 10 before any overflow existed, doubling the
-        // entry tick to 20 — around half a player's entire HP pool for
-        // crossing the threshold, against 4% of a 500 HP duelist's. Both
-        // terms now measure distance past Ablaze. See startTickPerHundred
-        // handling in _startTurnWeakness (CombatScene.js).
-        // NOT intensity-scaled — the engine computes this as
-        // `perHundred * (meter - 200) / 100`, a separate linear term added to
-        // `base * intensity`. Left at its original 5; rebasing it against the
-        // intensity curve (as the 2026-09 pass first did) inflates it 2.3x.
-        startTickPerHundred: 5,
 
       },
     },
@@ -510,7 +495,11 @@ export const WeaknessV3 = {
         decayBypassChanceCap: 0.60,
       },
       // Same ~25% cut to the meter-200 value as Fire's, for the same reason.
-      t2: { startTickBase: 13.85 },
+      t2: {
+        startTickBase: 8.0,
+        startTickCurveK: 2.0,
+        startTickCurveExp: 1.74,
+      },
     },
   },
 };
@@ -596,6 +585,40 @@ export function intensityForEffect(family, effect, meter, v3 = WeaknessV3) {
   // Undeclared: familyIntensityMult already falls back to the global curve
   // for a family with no `intensity` block, so this one call covers both.
   return familyIntensityMult(family, meter);
+}
+
+/**
+ * The end-of-turn damage a T2 damaging weakness deals at `meter`.
+ *
+ *     base + K * (overflow / 100) ** exp        overflow = meter - 200
+ *
+ * Exported because FIVE places used to compute this: Fire's tick, Toxic's
+ * tick, both of their tooltips, and Venom Bloom, which re-uses the Toxic tick
+ * as its per-pulse damage. Four of them restated the formula and the fifth
+ * mirrored it in a comment. A tooltip that drifts from the tick advertises a
+ * number the fight does not deal, and the file already carries a warning about
+ * exactly that. One definition, five callers.
+ *
+ * Deliberately NOT intensity-scaled. Intensity is 1.0 at T2 and climbs steeply
+ * -- +73% by meter 300 for Fire -- which made a freshly applied burn nearly
+ * double in strength over one more application, far too sharp a ramp for
+ * something that hits players as hard as enemies. The shaped term starts flat
+ * and accelerates instead: 1.4x base at meter 300 rather than 1.95x, while the
+ * deep end climbs past where it used to. Intensity still governs every OTHER
+ * effect these families have (on-act burn loss, incoming buildup bonuses,
+ * decay bypass); only the tick was reshaped.
+ *
+ * A family with no curve fields simply gets its base back, so nothing else in
+ * the table changes behaviour by existing.
+ */
+export function weaknessDotTick(family, meter, v3 = WeaknessV3) {
+  const cfg = v3?.families?.[family]?.t2;
+  if (!cfg) return 0;
+  const base = +cfg.startTickBase || +cfg.startTickFlat || 0;
+  const K = +cfg.startTickCurveK || 0;
+  const exp = +cfg.startTickCurveExp || 1;
+  const overflow = Math.max(0, (meter | 0) - WEAKNESS_T2) / 100;
+  return base + K * Math.pow(overflow, exp);
 }
 
 export function weaknessDecayAmount(baseDecay, m, curve = null) {

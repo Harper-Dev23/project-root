@@ -9,7 +9,7 @@ import {
   calculateHealRoll, applyHealModifiers, getMasteryMultiplier, getProficiency,
   getLastDamageBreakdown, _resetDamageBreakdown,
 } from '../src/systems/CombatLogic.js';
-import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, WeaknessV3 } from '../src/systems/StatusEffects.js';
+import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, weaknessDotTick, WeaknessV3 } from '../src/systems/StatusEffects.js';
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
 import { GameplaySettings } from '../src/systems/GameplaySettings.js';
@@ -11986,18 +11986,20 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
-      // Snapshot the SAME formula the natural Envenomed (Toxic T2) start-of-
-      // turn tick uses (base x intensity, necrotic/magic, target's own magic
-      // DR) — see CombatScene's "TOXIC — Envenomed start-of-turn tick" block,
-      // which this mirrors rather than calls directly (that one is written
-      // for the afflicted unit's own turn, not an attacker-driven hit).
-      const tickBase = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
+      // The SAME tick the natural Envenomed (Toxic T2) start-of-turn burn
+      // deals, via the one exported formula rather than a copy of it — this
+      // used to mirror CombatScene's block by hand and would have silently
+      // kept the old intensity-scaled shape when the tick was reshaped.
+      // `intensity` below is still the decay-bypass chance's own input; it is
+      // deliberately NOT applied to the tick any more, because
+      // weaknessDotTick is not intensity-scaled.
+      const tickBase = weaknessDotTick('toxic', meter);
       // Venom Bloom re-uses the Toxic TICK as its per-pulse damage, so it must
       // also respect anything that scales that tick — otherwise Virulence
       // doubles the passive poison but does nothing for the skill built to
       // detonate it, which reads as a bug to anyone running both.
       const tickMul = scene?._toxicMul?.(target, 'toxicTickMul') ?? 1;
-      const raw = Math.max(1, Math.floor(tickBase * intensity * tickMul));
+      const raw = Math.max(1, Math.floor(tickBase * tickMul));
       let dmgEach = Math.max(1, applyDamageModifiers(raw, null, target, {
         ability, isMagic: true, element: 'necrotic', skipGearMultiplier: true,
       }));

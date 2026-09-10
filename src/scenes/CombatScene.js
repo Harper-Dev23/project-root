@@ -39,6 +39,7 @@ import {
   WeaknessFamilies, StatusEffects, WeaknessV3, WeaknessTierNames,
   WeaknessAliases, familyIntensityMult,
   WeaknessBuildupCategory,
+  weaknessDotTick,
 } from '../systems/StatusEffects.js';
 
 // Combat logic
@@ -3011,13 +3012,9 @@ export default class CombatScene extends Phaser.Scene {
         const incPct = Math.round(Math.min(incCap, incBase * I) * 100);
         add(1, 'Takes burn when acting; fire hits harder.',
           `−${loss} Fire buildup per action taken, +${incPct}% incoming Fire buildup.`);
-        const tickBase = cfg.t2?.startTickBase ?? 10;
-        const tickPerHundred = cfg.t2?.startTickPerHundred ?? 0;
-        // Must mirror _startTurnWeakness's own formula exactly — overflow
-        // past T2, not total meter — or the tooltip advertises a number the
-        // fight does not deal.
-        const fireT2Tip = WeaknessFamilies?.fire?.t2 ?? 200;
-        const tick = Math.max(1, Math.floor(tickBase * I + tickPerHundred * (Math.max(0, m - fireT2Tip) / 100)));
+        // The same function the tick itself calls, so the tooltip cannot
+        // drift from what the fight deals. It used to restate the formula.
+        const tick = Math.max(1, Math.floor(weaknessDotTick('fire', m)));
         add(2, 'End-of-turn burn tick scales with overflow, plus a flat add-on from current buildup; can consume meter.',
           `${tick} burn damage at end of turn.`);
         break;
@@ -3112,8 +3109,7 @@ export default class CombatScene extends Phaser.Scene {
         const bypassCap = cfg.t1?.decayBypassChanceCap ?? bypassBase;
         const bypassPct = Math.round(Math.min(bypassCap, bypassBase * I) * 100);
         add(1, 'Sometimes skips decay, letting poison linger.', `${bypassPct}% chance to skip a decay tick.`);
-        const tickBase = cfg.t2?.startTickBase ?? 0;
-        const tick = Math.max(1, Math.floor(tickBase * I));
+        const tick = Math.max(1, Math.floor(weaknessDotTick('toxic', m)));
         add(2, 'Flat poison tick at end of turn.', `${tick} poison damage at end of turn.`);
         break;
       }
@@ -11197,18 +11193,8 @@ export default class CombatScene extends Phaser.Scene {
         // on top WITHOUT going through the intensity multiplier — riding the
         // same curve twice would compound into a quadratic; keeping it a
         // flat add-on keeps total growth linear in meter.
-        const base = (WeaknessV3?.families?.fire?.t2?.startTickBase ??
-          WeaknessV3?.families?.fire?.t2?.startTickFlat ?? 10);
-        const mult = familyIntensityMult('fire', m);
-        const perHundred = WeaknessV3?.families?.fire?.t2?.startTickPerHundred ?? 0;
-        // Counts OVERFLOW past the T2 threshold, not total meter. Charging it
-        // on total meant crossing into Ablaze already cost 5 x 2 = 10 on top
-        // of the base tick, so the entry burn was double the base and landed
-        // as ~50-67% of a player's whole pool for merely reaching the tier.
-        // Both terms now measure how far PAST Ablaze the target is.
-        const fireT2 = WeaknessFamilies?.fire?.t2 ?? 200;
-        const buildupAddOn = perHundred * (Math.max(0, m - fireT2) / 100);
-        const burnRaw = Math.max(1, Math.floor((+base || 0) * mult + buildupAddOn));
+        const burnTick = weaknessDotTick('fire', m);
+        const burnRaw = Math.max(1, Math.floor(burnTick));
 
         // MAGIC-typed ; route through magic modifiers if desired
         let burn = burnRaw;
@@ -11228,7 +11214,7 @@ export default class CombatScene extends Phaser.Scene {
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - burn);
         this._showFloatingNumber?.(burn, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} Ablaze: (base ${base} × I_fire=${mult.toFixed(2)}) + ${buildupAddOn.toFixed(1)} buildup (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
+        this._log(`${char.name} Ablaze: tick ${burnTick.toFixed(1)} (m=${m}) ⇒ ${burnRaw} → ${burn} burn (magic).`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
         if (char.currentHP === 0 && char.status !== 'incapacitated') {
           char.status = 'incapacitated';
@@ -11292,7 +11278,7 @@ export default class CombatScene extends Phaser.Scene {
       if (t >= 2) {
         const m = w?.meters?.toxic | 0;
 
-        const base = WeaknessV3?.families?.toxic?.t2?.startTickBase ?? 0;
+        const toxTick = weaknessDotTick('toxic', m);
 
         // familyIntensityMult FIRST (same as Fire's burn tick above) so
         // Toxic's own intensity ramp in StatusEffects.js actually applies.
@@ -11307,7 +11293,7 @@ export default class CombatScene extends Phaser.Scene {
         // the boosted tick is still mitigated by the target's resistances
         // like any other necrotic damage rather than bypassing them.
         const tickMul = this._toxicMul(char, 'toxicTickMul');
-        const raw = Math.max(1, Math.floor((+base || 0) * (I > 0 ? I : 1) * tickMul));
+        const raw = Math.max(1, Math.floor(toxTick * tickMul));
 
         let dmg = raw;
         try {
@@ -11325,7 +11311,7 @@ export default class CombatScene extends Phaser.Scene {
 
         char.currentHP = Math.max(0, (char.currentHP | 0) - dmg);
         this._showFloatingNumber?.(dmg, char, /*isHeal=*/false, /*isCrit=*/false);
-        this._log(`${char.name} Envenomed: base ${base} × I_toxic=${I.toFixed(2)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
+        this._log(`${char.name} Envenomed: tick ${toxTick.toFixed(1)} (m=${m}) ⇒ ${raw} → ${dmg} necrotic.`);
         this._updateHealthBars?.(); this._updateHPMPBars?.();
 
         if (char.currentHP === 0 && char.status !== 'incapacitated') {

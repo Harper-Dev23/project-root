@@ -281,7 +281,7 @@
   "vein_tap @clean": "dmg=7 targets=1 mp=-4 gauge=0 cd=3 log=2",
   "vein_tap @loaded": "dmg=15 targets=1 mp=-4 gauge=0 cd=3 meters[lacerate-250 toxic+291] log=5",
   "venom_bloom @clean": "refused: Venom Bloom has no valid targets — needs TOXIC T2",
-  "venom_bloom @loaded": "dmg=62 targets=1 mp=-4 gauge=0 cd=4 log=7",
+  "venom_bloom @loaded": "dmg=35 targets=1 mp=-4 gauge=0 cd=4 log=7",
   "virulence @clean": "refused: Virulence has no valid targets — needs TOXIC T2",
   "virulence @loaded": "dmg=11 targets=1 mp=-4 gauge=0 cd=4 meters[toxic+58] onTarget[virulent] log=4",
   "vital_mark @clean": "dmg=4 targets=1 mp=-3 gauge=0 cd=2 meters[expose+82] log=4",
@@ -484,8 +484,8 @@
   "training_encounter_1": "WIN turns=13 round=4 allies=6/6 foes=0/6 allyHP=58/38/32/50/40/58 foeHP=0/0/0/0/0/0 log=83",
   "training_encounter_2": "WIN turns=14 round=4 allies=6/6 foes=0/6 allyHP=58/38/32/50/40/58 foeHP=0/0/0/0/0/0 log=102",
   "training_encounter_3": "LOSS turns=30 round=8 allies=0/6 foes=6/6 allyHP=0/0/0/0/0/0 foeHP=139/111/102/117/107/102 log=615",
-  "training_encounter_4": "LOSS turns=22 round=7 allies=0/6 foes=3/3 allyHP=0/0/0/0/0/0 foeHP=49/418/354 log=387",
-  "training_encounter_5": "LOSS turns=26 round=8 allies=0/6 foes=2/2 allyHP=0/0/0/0/0/0 foeHP=230/526 log=346",
+  "training_encounter_4": "LOSS turns=22 round=7 allies=0/6 foes=3/3 allyHP=0/0/0/0/0/0 foeHP=49/418/354 log=391",
+  "training_encounter_5": "LOSS turns=26 round=8 allies=0/6 foes=2/2 allyHP=0/0/0/0/0/0 foeHP=230/526 log=356",
   "training_encounter_6": "LOSS turns=16 round=5 allies=0/6 foes=1/1 allyHP=0/0/0/0/0/0 foeHP=879 log=172"
  }
 }

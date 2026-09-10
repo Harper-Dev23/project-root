@@ -35,7 +35,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.Phaser = { Math: { Between: (a, b) => Math.round((a + b) / 2) } };
 
 const SE = await import('../src/systems/StatusEffects.js');
-const { WeaknessV3, WeaknessFamilies, weaknessIntensityMult, familyIntensityMult, weaknessDecayAmount } = SE;
+const { WeaknessV3, WeaknessFamilies, weaknessIntensityMult, familyIntensityMult, weaknessDecayAmount, weaknessDotTick } = SE;
 
 // Read decay the way the ENGINE does — from the DERIVED WeaknessFamilies, not
 // from WeaknessV3.families directly. They disagree: curse has no `baseDecay`
@@ -54,8 +54,11 @@ const METERS = [200, 300, 400, 600, 800, 1000, 1200, 1600, 2400];
 // A '?' means the call site could not be determined and needs a human look.
 const EFFECT_CURVE = {
   'toxic.t1.decayBypassChance': 'global',   // CombatScene ~8833 — NOT toxic's own curve
-  'toxic.t2.startTickBase': 'family',       // CombatScene ~10259
-  'fire.t2.startTickBase': 'family',        // CombatScene ~10164
+  // Both DOT ticks are no longer intensity-scaled at all: they run the shaped
+  // curve in weaknessDotTick (base + K * (overflow/100)**exp). Reporting them
+  // as 'family' would show a multiplier the engine stopped applying.
+  'toxic.t2.startTickBase': 'none',         // see FLAT below
+  'fire.t2.startTickBase': 'none',          // see FLAT below
   'lacerate.t2.startPctHP': 'family',       // CombatScene ~10218
   'cold.t1.initiativePenalty': 'family',    // CombatLogic 151
   'cold.t1.gaugeRegenPenalty': 'family',    // CombatScene ~10359
@@ -73,24 +76,60 @@ const EFFECT_CURVE = {
   'curse.t2.curseAmpMult': 'global',        // CombatLogic ~482, weaknessIntensityMult
   'lightning.t2.extraJoltsMax': 'family',   // CombatLogic ~429, floor(base * I)
   'lightning.t1.joltDieMax': 'flat',        // read raw, never multiplied
-  'fire.t2.startTickPerHundred': 'flat',    // own formula, see CUSTOM_FORMULA
+  'fire.t2.startTickCurveK': 'flat',        // own formula, see CUSTOM_FORMULA
+  'toxic.t2.startTickCurveK': 'flat',       // own formula, see CUSTOM_FORMULA
 };
 
 // Read FLAT at their call sites — never multiplied by intensity. Listing them
 // stops the report implying a scaling that does not exist (joltDieMax is the
 // 1-4 die skills read directly; showing it climbing to 25 was misleading).
-const FLAT = new Set(['lightning.t1.joltDieMax']);
+const FLAT = new Set([
+  'lightning.t1.joltDieMax',
+  // Curve shape parameters, not damage. Multiplying an exponent by intensity
+  // would be meaningless; the tick they describe is reported by CUSTOM_FORMULA.
+  'fire.t2.startTickCurveExp', 'toxic.t2.startTickCurveExp',
+  // The DOT bases are read RAW by weaknessDotTick and never multiplied. Left
+  // on the family curve they reported a climb the engine stopped applying --
+  // which is precisely the drift this harness exists to catch, so it must not
+  // introduce it. EFFECT_CURVE only names WHICH curve; membership here is what
+  // decides that there is no curve at all.
+  'fire.t2.startTickBase', 'toxic.t2.startTickBase',
+]);
 
 // Effects whose engine formula is NOT `base * intensity`. Reporting them on
 // the default model is actively misleading — fire's perHundred term is
 // `base * (meter - 200) / 100`, added to the intensity-scaled part, and
 // treating it as scaled is what caused it to be mis-rebased once already.
 const CUSTOM_FORMULA = {
-  'fire.t2.startTickPerHundred': (base, m) => base * Math.max(0, m - 200) / 100,
+  // The whole tick, not just this term -- reported against the K entry so the
+  // snapshot records the number the fight actually deals at each meter. Both
+  // families share one shape; see weaknessDotTick, which is what the engine,
+  // both tooltips and Venom Bloom all call.
+  'fire.t2.startTickCurveK': (_K, m) => weaknessDotTick('fire', m),
+  'toxic.t2.startTickCurveK': (_K, m) => weaknessDotTick('toxic', m),
 };
 
 const I = (fam, key, m) =>
   (EFFECT_CURVE[key] === 'global' ? weaknessIntensityMult(m) : familyIntensityMult(fam, m));
+
+/**
+ * What an effect is actually worth at `meter`, capped.
+ *
+ * ONE definition, used by both the printed report and the JSON snapshot.
+ * They used to disagree: report() honoured CUSTOM_FORMULA and FLAT while
+ * collect() -- the half that writes the golden master and performs the diff --
+ * unconditionally computed `base * intensity`. So the printout was right and
+ * THE GUARD WAS WRONG, recording numbers the engine never computes for exactly
+ * the entries this file documents as special (joltDieMax, fire's add-on term).
+ * A drift-catching harness that quietly models the wrong formula is worse than
+ * none, because it reports IDENTICAL while the real value moves.
+ */
+function valueAt(fam, tier, key, base, cap, m) {
+  const raw = CUSTOM_FORMULA[key] ? CUSTOM_FORMULA[key](base, m)
+    : FLAT.has(key) ? base
+      : base * I(fam, key, m);
+  return cap == null ? raw : Math.min(cap, raw);
+}
 
 /** Pair a base key with its cap key, tolerating the three inconsistent names. */
 function capKeyFor(tierObj, baseKey) {
@@ -122,8 +161,7 @@ function collect() {
         const capKey = capKeyFor(t, k);
         const cap = capKey ? t[capKey] : null;
         for (const m of METERS) {
-          const raw = base * I(fam, key, m);
-          out.effects[`${key}@${m}`] = +(cap == null ? raw : Math.min(cap, raw)).toFixed(4);
+          out.effects[`${key}@${m}`] = +valueAt(fam, tier, key, base, cap, m).toFixed(4);
         }
       }
     }
@@ -160,10 +198,8 @@ function report() {
         const cap = capKey ? t[capKey] : null;
         const curve = EFFECT_CURVE[key] || '?';
         const cells = METERS.map(m => {
-          const raw = CUSTOM_FORMULA[key] ? CUSTOM_FORMULA[key](base, m)
-            : FLAT.has(key) ? base : base * I(fam, key, m);
-          const v = cap == null ? raw : Math.min(cap, raw);
-          const atCap = cap != null && raw >= cap;
+          const v = valueAt(fam, tier, key, base, cap, m);
+          const atCap = cap != null && valueAt(fam, tier, key, base, null, m) >= cap;
           return (v.toFixed(2) + (atCap ? '*' : ' ')).padStart(8);
         });
         const tag = CUSTOM_FORMULA[key] ? 'own-formula' : FLAT.has(key) ? 'FLAT' : (cap == null ? 'UNCAPPED' : `cap ${cap}`);
