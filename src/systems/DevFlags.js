@@ -20,6 +20,9 @@ const KEY_SUPER_SAIYAN  = 'dev_super_saiyan';
 const KEY_FREE_MANA     = 'dev_free_mana';
 const KEY_NO_COOLDOWN   = 'dev_no_cooldown';
 const KEY_NO_RANGE      = 'dev_no_range';
+// Opt IN, unlike every other flag here, which turn a restriction OFF.
+// Melee reach is a large enough balance change that it ships dormant.
+const KEY_MELEE_REACH   = 'dev_melee_reach';
 
 export const DevFlags = {
   isBreakthroughEnabled() {
@@ -78,6 +81,26 @@ export const DevFlags = {
 
   isNoRangeEnabled() {
     return localStorage.getItem(KEY_NO_RANGE) === 'true';
+  },
+
+  /**
+   * Melee attacks can only reach the enemy front line.
+   *
+   * OFF by default and deliberately so: it is the largest balance change the
+   * combat rules have ever taken, and every existing encounter was tuned with
+   * unlimited reach. Turning it on is how it gets play-tested one fight at a
+   * time rather than all at once.
+   *
+   * isNoRangeEnabled() still overrides it, so the existing range cheat keeps
+   * doing what it says.
+   */
+  isMeleeReachEnabled() {
+    return localStorage.getItem(KEY_MELEE_REACH) === 'true';
+  },
+  toggleMeleeReach() {
+    const next = !this.isMeleeReachEnabled();
+    localStorage.setItem(KEY_MELEE_REACH, String(next));
+    return next;
   },
   toggleNoRange() {
     const next = !this.isNoRangeEnabled();

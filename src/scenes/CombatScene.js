@@ -5789,8 +5789,58 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   /** Gates that depend on the TARGET. Returns a reason, or null if fine. */
+  /**
+   * Whether a melee attack can reach this target at all. Null means yes.
+   *
+   * ONE rule, applied to both sides. An asymmetric version -- enemies
+   * restricted while players are not -- does not read as a rule, it reads as a
+   * bug, and every report about it would be right.
+   *
+   * BROKEN RANKS: the restriction only holds while the defenders actually HOLD
+   * a front rank. With that column empty there is no line left to protect
+   * anything, so melee reaches whoever it likes. That is also why this can
+   * never soft-lock: there is always either a front rank to hit or no
+   * restriction at all, so a melee attacker always has somebody legal.
+   *
+   * AoE is untouched on purpose. Reach gates the PRIMARY target only; once a
+   * shape has somewhere legal to start, it spills wherever it spills. So a
+   * cleave landing on their front line can still catch the rank behind it, and
+   * a party-wide spell is not melee in the first place. That makes shapes more
+   * valuable under this rule rather than less, and keeps aoeResolver untouched.
+   *
+   * Opt in via DevFlags while it is being balanced; the existing no-range cheat
+   * overrides it either way.
+   */
+  _reachBlocked(user, target, ability) {
+    if (!DevFlags.isMeleeReachEnabled()) return null;
+    if (DevFlags.isNoRangeEnabled()) return null;
+    if (!ability || !target || !user) return null;
+    // Only across the field. Buffs and heals on your own side are not reaching
+    // past anything.
+    if (!!user.isEnemy === !!target.isEnemy) return null;
+
+    const tags = ability.tags || [];
+    // `reach: 'any'` is where nimble things earn their identity -- a diving owl,
+    // a lunge, a polearm. One field, checked before the rule.
+    if (ability.reach === 'any') return null;
+    if (tags.includes('ranged') || tags.includes('projectile') || tags.includes('spell')) return null;
+    if (!tags.includes('melee')) return null;
+
+    const side = target.isEnemy ? this.enemySlots : this.allySlots;
+    const frontHeld = (side || []).some(sl =>
+      sl.char && sl.char.status !== 'incapacitated'
+      && this._getColumnBySlotId(sl.slotId) === 'front');
+    if (!frontHeld) return null;
+
+    if (this._getColumnBySlotId(target._slot?.slotId) === 'front') return null;
+    return `${ability.name} cannot reach past the front line`;
+  }
+
   _abilityTargetGateReason(user, target, ability) {
     if (!ability || !target) return null;
+
+    const reach = this._reachBlocked(user, target, ability);
+    if (reach) return reach;
 
     const minCurse = Number(ability.minCurseTier) || 0;
     if (minCurse > 0 && ((target.weakness?.tiers?.curse | 0) < minCurse)) {
@@ -6339,6 +6389,17 @@ export default class CombatScene extends Phaser.Scene {
           return { ok: false };
         }
       }
+    }
+
+    // Reach, for the NPC execution path. Players are gated earlier, in
+    // _abilityTargetGateReason, which never runs here -- this method is the
+    // separate route AI actions take. Returning ok:false lets the AI's existing
+    // retry loop in _takeEnemyTurn_viaLogic pick something else, which is the
+    // same thing it already does for a skill on cooldown.
+    const _reach = this._reachBlocked(user, target, skill);
+    if (_reach) {
+      this._log(`${user.name} cannot reach ${target?.name ?? 'that target'} with ${skill.name}.`);
+      return { ok: false };
     }
 
     // Pre-checks only (let the pipeline handle actual payment/effects)
