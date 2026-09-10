@@ -1253,6 +1253,11 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.input.keyboard?.off('keydown', onKey);
       if (this._searchTimer) { this._searchTimer.remove(false); this._searchTimer = null; }
+      // Same reason as SkillsOverlay: this scene instance is reused on the next
+      // opening, but the scrollbars' Zones die with the display list. Holding
+      // on to them is how the Skills overlay crashed on its second opening.
+      this._invScrollbars?.forEach(b => b.destroy());
+      this._invScrollbars = [];
     });
   }
 

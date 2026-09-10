@@ -55,7 +55,19 @@ export function createScrollbar(scene, opts = {}) {
   let hovered = false;
   let thumbH = MIN_THUMB;
 
+  // Phaser clears a game object's `scene` when it is destroyed, and a scene's
+  // whole display list is destroyed when the scene shuts down. A caller that
+  // keeps this widget on `this` -- and Phaser REUSES scene instances, so every
+  // overlay does -- can therefore be holding a scrollbar whose parts are dead.
+  const alive = () => !!zone.scene;
+
   function refresh() {
+    // A dead scrollbar does nothing, rather than crash. Refreshing one used to
+    // reach setInteractive, which reads `this.scene.sys` and threw
+    // "Cannot read properties of undefined (reading 'sys')" -- the Skills
+    // overlay did exactly that on every second opening. Checked BEFORE the
+    // graphics are touched too, since they are destroyed along with the Zone.
+    if (!alive()) return;
     const max = Math.max(0, getMax() || 0);
     track.clear();
     thumb.clear();
@@ -99,6 +111,7 @@ export function createScrollbar(scene, opts = {}) {
   // An interrupted drag (mouse released off-canvas, or the list rebuilding
   // underneath) can otherwise leave the zone dead for the rest of the scene.
   zone.on('dragend', () => {
+    if (!alive()) return;
     if (!zone.input?.enabled) zone.setInteractive({ useHandCursor: true, draggable: true });
   });
 

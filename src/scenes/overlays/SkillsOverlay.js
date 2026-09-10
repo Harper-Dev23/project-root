@@ -300,6 +300,15 @@ export default class SkillsOverlay extends Phaser.Scene {
         clearTimeout(this._pendingCardRebuild);
         this._pendingCardRebuild = null;
       }
+      // Phaser REUSES this scene instance when the overlay is opened again, so
+      // anything stored on `this` survives a close -- but the display list is
+      // destroyed. A scrollbar left here points at a dead Zone, and the next
+      // opening refreshed it before rebuilding it (_buildCards calls _setScroll
+      // ahead of _buildScrollbar), which crashed in setInteractive reading
+      // `this.scene.sys` on a destroyed object. Reported from play as
+      // "Cannot read properties of undefined (reading 'sys')".
+      this._scrollbar?.destroy();
+      this._scrollbar = null;
     });
 
     this.header.add([this._searchBox, this._searchTxt, this._searchClear]);
