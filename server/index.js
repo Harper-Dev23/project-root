@@ -13,6 +13,7 @@
 // directory is its own npm project so that stays true.
 
 import http from 'node:http';
+import { execSync } from 'node:child_process';
 
 // MUST come before anything that imports CombatScene, which reaches for Phaser
 // at module scope. `deterministic: false` is the important part for a server -
@@ -44,12 +45,45 @@ try {
 const PORT = Number(process.env.PORT) || 8787;
 const hub = createHub({ CombatScene });
 
+// Which build is actually running.
+//
+// This exists because of a real evening lost to it: the site deployed, the
+// server did not, and a co-op victory paid nobody because the running
+// protocol.js predated rewards and simply left the field off the `over`
+// message. Everything looked healthy -- the game loaded, the fight worked, the
+// victory screen appeared -- and the only way to tell was to compare the
+// process uptime against the site's Last-Modified header and do the
+// subtraction. That is far too clever a thing to need.
+//
+// Railway sets these itself; locally they are absent and `git` answers.
+const BUILD = {
+  commit: (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_SHA || '').slice(0, 7)
+    || gitSha() || 'unknown',
+  branch: process.env.RAILWAY_GIT_BRANCH || '',
+  startedAt: new Date().toISOString(),
+};
+
+function gitSha() {
+  // `require` does not exist in an ES module, so this is a real import above.
+  // Getting that wrong fails into the catch and reports "unknown" forever --
+  // which is precisely the silent degradation this whole block exists to stop.
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+  } catch { return ''; }
+}
+
 const httpServer = http.createServer((req, res) => {
   // A health endpoint, because every host wants one and because it is the
   // quickest way to tell "the process is up" from "the socket is broken".
   if (req.url === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, lobbies: hub.lobbies.size, uptime: process.uptime() }));
+    res.end(JSON.stringify({
+      ok: true,
+      lobbies: hub.lobbies.size,
+      uptime: process.uptime(),
+      ...BUILD,
+    }));
     return;
   }
   res.writeHead(404).end('Behel\'ith co-op server');

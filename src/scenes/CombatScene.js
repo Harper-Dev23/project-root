@@ -10424,7 +10424,12 @@ export default class CombatScene extends Phaser.Scene {
     fx_hit_blunt: 'bumpHurt',
     fx_hit_blunt_alt: 'bumpHurt',
     fx_hit_explosion: 'explosion',
-    fx_hit_claw: 'screech',
+    // NOT 'screech'. The claw shape is the fallback for every beast skill
+    // whose name does not read as a bite (see the regex below), so putting the
+    // screech here gave it to every clawed creature in the game -- which is
+    // what made encounter 4 sound like an aviary. The screech is now named
+    // explicitly by the one beast that should own it, in BEAST_HIT_SOUNDS.
+    fx_hit_claw: 'bumpHurt',
     fx_hit_bite: 'snekHurt',
     fx_hit_cloud: 'hiss',
     fx_hit_engulf: 'burnHurt',
@@ -10867,7 +10872,13 @@ export default class CombatScene extends Phaser.Scene {
     // a screeching claw sat oddly against them. 'bumpHurt' reads as a heavy
     // physical swipe and keeps him distinct from Laki, who should own the
     // bird noises in this encounter.
+    // Now the same as the fx_hit_claw default, and kept anyway: it records
+    // that Oskar's claw is deliberately a heavy physical swipe, so changing
+    // the shared default later cannot silently change him with it.
     oskar_infectious_claw: 'bumpHurt',
+    // Kiro keeps the screech, alone. It is his signature and it reads as one
+    // creature rather than as the ambience of the whole encounter.
+    kiro_venomous_swipe: 'screech',
     // The owl's signature. Was falling through fx_hit_cloud to 'hiss', which
     // sounded like a gas cloud rather than a bird.
     laki_piercing_screech: 'creatureSound2',

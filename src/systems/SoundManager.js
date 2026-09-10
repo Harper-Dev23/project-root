@@ -17,7 +17,11 @@ export const AUDIO_MANIFEST = [
   { id: 'burnHurt',  file: 'burnHurt.wav',  volume: 0.5 },
   { id: 'snekHurt',  file: 'snekHurt.wav',  volume: 0.5 },
   { id: 'hiss',      file: 'hiss.wav',      volume: 0.45 },
-  { id: 'screech',   file: 'screech.wav',   volume: 0.5 },
+  // Was 0.5 and reported as too loud and too high-pitched in play. Now that
+  // only Kiro's swipe plays it, it is heard rarely enough to be a signature
+  // rather than a nuisance -- but it is a piercing sample, so it sits below
+  // the other creature sounds.
+  { id: 'screech',   file: 'screech.wav',   volume: 0.35 },
   // Present in assets/audio since before the manifest existed but never
   // registered, so nothing could play it. Laki's Piercing Screech uses it.
   { id: 'creatureSound2', file: 'creatureSound2.wav', volume: 0.5 },

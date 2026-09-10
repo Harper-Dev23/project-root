@@ -221,44 +221,70 @@ try {
   check('the fight finished', !!over, over?.outcome + ' after ' + turns + ' turns');
 
   // ---- rewards reach the LOCAL save, and only the local hunters ------------
+  //
+  // Run for BOTH players. The host and the joiner reach this code by different
+  // routes -- one created the lobby and one was handed a scenario it may never
+  // have unlocked -- and testing only the host is what let a joiner-side
+  // reward failure through to a real game.
   if (over?.outcome === 'victory') {
-    console.log('');
-    console.log('=== rewards ===');
-    check('the server reported what the fight was worth',
-      !!over.rewards && typeof over.rewards.xpReward === 'number',
-      'xp ' + over.rewards?.xpReward + ', loot ' + (over.rewards?.loot?.length ?? 0));
+    const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
 
-    // Put Alice's three hunters in the save, as a real client would have them,
-    // and leave Bob's out entirely.
-    const scene = scenes.p1;
-    const mineIds = scene.coopParty.filter(c => c.isLocal).map(c => c.instanceId || c.id);
-    GameState.party = scene.coopParty
-      .filter(c => c.isLocal)
-      .map(c => ({ ...c, currentHP: 1, status: 'active', experience: 0, level: 1 }));
-    const before = GameState.party.map(c => c.experience || 0);
+    for (const [who, scene] of [['HOST (Alice)', scenes.p1], ['JOINER (Bob)', scenes.p2]]) {
+      console.log('');
+      console.log('=== rewards -- ' + who + ' ===');
+      check('the server reported what the fight was worth',
+        !!over.rewards && typeof over.rewards.xpReward === 'number',
+        'xp ' + over.rewards?.xpReward + ', loot ' + (over.rewards?.loot?.length ?? 0));
 
-    const earned = scene._applyCoopRewards(over);
+      // A fresh save for this player: their own three hunters, nobody else's.
+      const mine = scene.coopParty.filter(c => c.isLocal);
+      check('this client knows which hunters are its own', mine.length === 3,
+        mine.length + ' local hunters');
 
-    check('only MY hunters were paid, never the other players',
-      GameState.party.every(c => mineIds.includes(c.instanceId || c.id))
-      && GameState.party.length === 3,
-      GameState.party.length + ' hunters in the save');
-    check('experience actually landed on the saved characters',
-      GameState.party.some((c, i) => (c.experience || 0) > before[i]),
-      GameState.party.map(c => c.experience || 0).join('/'));
-    check('the scenario was marked cleared for them',
-      GameState.party.every(c => GameState.hasCharacterCleared(c, over.rewards.scenarioId)));
-    check('the victory screen has something to show',
-      earned.xpSummary.length > 0, earned.xpSummary.slice(0, 2).join(' | '));
+      const mineIds = mine.map(c => c.instanceId || c.id);
+      GameState.party = mine.map(c => ({
+        ...c, currentHP: 1, status: 'active', experience: 0, level: 1,
+      }));
+      ProgressionManager.completedScenarios = [];
+      ProgressionManager.questFlags = [];
+      ProgressionManager.huntTickets = 0;
+      const before = GameState.party.map(c => c.experience || 0);
 
-    // A second clear must not pay again for a non-repeatable fight.
-    const after = GameState.party.map(c => c.experience || 0);
-    const second = scene._applyCoopRewards(over);
-    check('a repeat clear of a one-time fight pays nothing',
-      GameState.party.every((c, i) => (c.experience || 0) === after[i]),
-      second.xpSummary.slice(0, 1).join('') || 'no summary');
+      const earned = scene._applyCoopRewards(over);
 
-    GameState.party = [];
+      check('only MY hunters were paid, never the other players',
+        GameState.party.every(c => mineIds.includes(c.instanceId || c.id))
+        && GameState.party.length === 3,
+        GameState.party.length + ' hunters in the save');
+      check('experience actually landed on the saved characters',
+        GameState.party.every((c, i) => (c.experience || 0) > before[i]),
+        GameState.party.map(c => c.experience || 0).join('/'));
+      check('the scenario was marked cleared for them',
+        GameState.party.every(c => GameState.hasCharacterCleared(c, over.rewards.scenarioId)));
+      check('the victory screen has something to show',
+        earned.xpSummary.length > 0, earned.xpSummary.slice(0, 2).join(' | '));
+
+      // The things the player counts afterwards: tickets, the completion
+      // itself, and the quest flags that open the next conversation in town.
+      check('the scenario was recorded as completed',
+        ProgressionManager.completedScenarios.includes(over.rewards.scenarioId),
+        ProgressionManager.completedScenarios.join(', ') || 'nothing recorded');
+      check('hunt tickets were actually paid',
+        ProgressionManager.huntTickets > 0,
+        ProgressionManager.huntTickets + ' tickets');
+      check('the quest flags for this clear were set',
+        ProgressionManager.questFlags.length > 0,
+        ProgressionManager.questFlags.join(', ') || 'no flags set');
+
+      // A second clear must not pay again for a non-repeatable fight.
+      const after = GameState.party.map(c => c.experience || 0);
+      const second = scene._applyCoopRewards(over);
+      check('a repeat clear of a one-time fight pays nothing',
+        GameState.party.every((c, i) => (c.experience || 0) === after[i]),
+        second.xpSummary.slice(0, 1).join('') || 'no summary');
+
+      GameState.party = [];
+    }
   }
   check('no action was refused along the way', refusals.length === 0,
     refusals.slice(0, 3).join(' | '));
