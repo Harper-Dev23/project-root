@@ -77,6 +77,17 @@ const weightedPick = (list, weightFn) => {
  */
 const AIM_WEIGHT = 1.6;
 
+/**
+ * How hard enemies pile onto whoever is already hurt.
+ *
+ * Named and tunable because it is the single biggest lever on how punishing a
+ * fight feels: focus fire is what turns a bad round into a dead Hunter. Kept
+ * BELOW the positional lean on purpose, so where you stand matters more than
+ * how hurt you are -- position is a decision the player makes, low HP is
+ * mostly a consequence of one already made.
+ */
+const HP_BIAS_WEIGHT = 1.5;
+
 // Exported so the positional lean can be MEASURED rather than argued about.
 // It is a pure function of a target and some options; nothing depends on it
 // staying private, and "four fights in the snapshot differ" is not an answer
@@ -86,8 +97,9 @@ export const targetScore = (target, opts = {}) => {
   // preferHighHP is a genuine inversion (favors whoever's LEAST hurt) —
   // preferLowHP:false on its own still leans low-HP, just at half strength,
   // which isn't useful for "spread damage to whoever hasn't been hit" logic.
-  const hpBias = opts.preferHighHP ? hpRatio(target) * 2.4
-    : opts.preferLowHP ? (1 - hpRatio(target)) * 2.4
+  const w = opts.hpWeight ?? HP_BIAS_WEIGHT;
+  const hpBias = opts.preferHighHP ? hpRatio(target) * w
+    : opts.preferLowHP ? (1 - hpRatio(target)) * w
     : 0.5 * (1 - hpRatio(target));
   const families = Array.isArray(opts.preferWeakness) ? opts.preferWeakness : (opts.preferWeakness ? [opts.preferWeakness] : []);
   const weaknessBias = families.reduce((sum, fam) => {
