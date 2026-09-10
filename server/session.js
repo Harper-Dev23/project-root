@@ -210,6 +210,18 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
      * class of bug where the two sides disagree about what changed.
      */
     state() {
+      // Same idiom as toWireCharacter: keep everything JSON-safe, drop the
+      // rest, rather than naming fields and forgetting one.
+      const leanEffect = (e) => {
+        const out = {};
+        for (const [k, v] of Object.entries(e || {})) {
+          if (typeof v === 'function') continue;
+          try { JSON.stringify(v); } catch { continue; }
+          out[k] = v;
+        }
+        return out;
+      };
+
       const lean = (u) => ({
         ref: host._unitRef(u),
         owner: u.ownerId ?? null,
@@ -224,7 +236,17 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         actions: u.actionsLeft,
         meters: u.weakness?.meters,
         tiers: u.weakness?.tiers,
-        effects: (u.statusEffects || []).map(e => ({ id: e.id, turns: e.turns })),
+        // The WHOLE effect, minus anything that cannot cross a socket -- not
+        // {id, turns}, which is what this used to send and which threw away
+        // every field the client draws with. Three separate reports came from
+        // that one line: lodged arrows lost their `tint` and all rendered the
+        // same colour, a runic zone lost its `mods` and reported no active
+        // modifiers, and Rune Channel showed no sign of itself at all because
+        // the flag saying it was on never arrived.
+        //
+        // Rules run on the server, so the client needs these for DISPLAY only;
+        // functions are dropped the same way toWireCharacter drops them.
+        effects: (u.statusEffects || []).map(leanEffect),
         cooldowns: Object.fromEntries(
           Object.entries(u.cooldowns || {}).filter(([, v]) => v > 0)),
       });

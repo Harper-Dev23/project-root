@@ -79,6 +79,37 @@ const session = createSession({
   CombatScene, players: [alice, bob], scenarioId: 'training_encounter_1', seed: 2024,
 });
 
+// Status effects must cross the wire WHOLE. Sending only {id, turns} threw
+// away every field the client draws with, which surfaced as three separate
+// bug reports: lodged arrows all one colour, a runic zone reporting no active
+// modifiers, and Rune Channel showing no sign of being on.
+{
+  const board = session.state();
+  const victim = session.host.turnOrder.find(u => !u.isEnemy);
+  victim.statusEffects = victim.statusEffects || [];
+  victim.statusEffects.push({ id: 'lodged', turns: 3, tint: 0xffcc33 });
+  victim.statusEffects.push({
+    id: 'runic_zone', turns: 4, mpPerTurn: 2, ownerSlotId: 3,
+    mods: { kindlingRite: false, wardWeave: false, runeChannel: true },
+  });
+
+  const wired = session.state().units.find(u => u.ref === board.units.find(
+    x => x.name === victim.name).ref);
+  const lodged = (wired?.effects || []).find(e => e.id === 'lodged');
+  const zone = (wired?.effects || []).find(e => e.id === 'runic_zone');
+
+  check('a lodged arrow keeps its tint across the wire',
+    lodged?.tint === 0xffcc33, 'tint ' + lodged?.tint);
+  check('a runic zone keeps its modifiers across the wire',
+    zone?.mods?.runeChannel === true, JSON.stringify(zone?.mods));
+  check('and the rest of its fields, not just the ones someone remembered',
+    zone?.mpPerTurn === 2 && zone?.ownerSlotId === 3,
+    'mpPerTurn ' + zone?.mpPerTurn + ', ownerSlotId ' + zone?.ownerSlotId);
+
+  victim.statusEffects = victim.statusEffects.filter(
+    e => e.id !== 'lodged' && e.id !== 'runic_zone');
+}
+
 {
   const s = session.state();
   check('party is six, split across two owners',

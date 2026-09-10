@@ -5409,6 +5409,20 @@ export default class CombatScene extends Phaser.Scene {
           this.koArea.push(unit);
           this._placeInKOArea?.(unit);
         }
+
+        // The rest of the VISUAL half of _onUnitKnockedOut, which a co-op
+        // client cannot call. Without this the arrows lodged in a corpse stay
+        // pinned to the empty slot it left -- a porcupine standing on nothing
+        // -- and its runic ring keeps burning after the caster is down.
+        const lodgeKey = unit.name || unit.id || 'unknown';
+        (this.lodgeSprites?.[lodgeKey] || []).forEach(s => s?.destroy());
+        if (this.lodgeSprites) this.lodgeSprites[lodgeKey] = [];
+        const zoneIdx = (unit.statusEffects || []).findIndex(se => se?.id === 'runic_zone');
+        if (zoneIdx !== -1) unit.statusEffects.splice(zoneIdx, 1);
+        this._refreshRunicZoneSprite?.(unit);
+        // The signature must move too, or the redraw below sees no change and
+        // puts every arrow straight back.
+        unit.__netFxSig = 'ko';
       }
 
       unit.currentHP = u.hp;
@@ -5467,9 +5481,20 @@ export default class CombatScene extends Phaser.Scene {
     // deterministic would mean seeding it, and nothing about the fight depends
     // on where a decorative shaft happens to sit.)
     for (const unit of this._netUnits.values()) {
+      // The fallen are skipped, not redrawn. A corpse keeps its `lodged`
+      // effects, so redrawing it pins the arrows to the empty slot it left --
+      // and the KO branch above has already cleared them, so this loop would
+      // simply put them back.
+      if (unit.status === 'incapacitated') continue;
+
       const fx = unit.statusEffects || [];
-      const sig = fx.filter(e => e.id === 'lodged').length
-        + '|' + (fx.find(e => e.id === 'runic_zone')?.turns ?? 0);
+      // The runic ring is keyed on its MODS as well as its timer: turning Rune
+      // Channel on changes how the ring is drawn without changing how long it
+      // lasts, so a timer-only signature would never notice.
+      const zone = fx.find(e => e.id === 'runic_zone');
+      const sig = fx.filter(e => e.id === 'lodged').map(e => e.tint ?? '-').join(',')
+        + '|' + (zone?.turns ?? 0)
+        + '|' + JSON.stringify(zone?.mods ?? null);
       if (unit.__netFxSig === sig) continue;
       unit.__netFxSig = sig;
       this._refreshLodgeSprites?.(unit);
