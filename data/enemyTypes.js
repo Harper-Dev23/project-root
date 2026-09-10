@@ -468,7 +468,8 @@ export const ENEMY_TYPES = {
     // discount, without touching his base stats or Bloodthirster. Was -20%;
     // user playtested it and still got one-shot on a crit combo (Death
     // Spiral — see its own noCrit fix in CombatLogic.js), so trimmed further.
-    damageMultiplierPct: -40,
+    // -40 -> -46 (owner 2026-09-10): a 10% relative cut, 60% -> 54% damage.
+    damageMultiplierPct: -46,
     // Every other named/boss-tier enemy in encounters 3-5 has a derivedBonus
     // granting extra resists/Resilience on top of their base stats (see
     // huntsman_commander, beast_oskar, the duelists, etc.) — the berserker
@@ -525,7 +526,9 @@ export const ENEMY_TYPES = {
     maxHP: 1480,
     maxMP: 150,
     mpRegenPerTurn: 12,
-    damageMultiplierPct: -37.5,
+    // -37.5 -> -40.5 (owner 2026-09-10): half the base fight's trim, a 5%
+    // relative cut. Reckoning II-V are deliberately untouched.
+    damageMultiplierPct: -40.5,
     buildupMultiplierPct: 8,
     derivedBonus: { PhysicalResist: 30, Resilience: 42, ElementalResist: 8, NecroticResist: 8 },
     baseStats: { STR: 20, DEX: 10, CON: 16, INT: 8, WIS: 8, CHA: 12 },

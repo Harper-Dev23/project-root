@@ -94,12 +94,16 @@ export const COMBAT_SCENARIOS = {
     description: 'A huntsman commander leads two beasts.',
     longDescription: 'A ranged huntsman marks targets and directs two beasts—Oskar the ripper and Kiro the venom-spewer. Expect layered weaknesses, coordinated bursts and pack-wide buffs.',
     portraitKey: 'portrait_styx_commander',
+    // Per-fight damage trim (base fight, owner 2026-09-10): the base fights and
+    // Reckoning I hit too hard after the stat-gate and buildup changes.
+    // Set HERE rather than on the enemy type because the type is shared with
+    // every Reckoning tier, and the higher tiers deliberately keep their damage.
     enemies: [
       // Fixed/soulbound weapons (droppable: false, same convention as the
       // other training_encounter_N enemies) — give calculateDamage() real
       // weapon dice to roll now that these three are on the typed pipeline
       // instead of flat `amount` numbers.
-      { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: [
+      { damageMultiplierPct: -15, type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: [
         { equip: 'weaponMain', itemId: 'crude_bow', rarity: 'common', rollAffixes: false, droppable: false },
         // Fixed uncommon ("green") armor set, soulbound — same convention as
         // berserker_boss's gear (training_encounter_6): rarity fixed rather
@@ -114,8 +118,8 @@ export const COMBAT_SCENARIOS = {
       // displaying their raw type string ("beast_oskar"/"beast_kiro") in
       // combat despite the encounter's own longDescription already calling
       // them "Oskar the ripper"/"Kiro the venom-spewer".
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS }
+      { damageMultiplierPct: -15, type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { damageMultiplierPct: -15, type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS }
     ]
   },
 
@@ -126,13 +130,17 @@ export const COMBAT_SCENARIOS = {
     description: "Elite fire and ice duelists.",
     longDescription: 'Two elite duelists wield opposing elements. They coordinate Fire and Cold buildup to trigger Thermal Shock-style payoffs and field-wide bursts.',
     portraitKey: 'portrait_lesse_duelist_ice',
+    // Per-fight damage trim (base fight, owner 2026-09-10): the base fights and
+    // Reckoning I hit too hard after the stat-gate and buildup changes.
+    // Set HERE rather than on the enemy type because the type is shared with
+    // every Reckoning tier, and the higher tiers deliberately keep their damage.
     enemies: [
       // Fixed/soulbound weapon (common, real weapon dice for the typed
       // pipeline) plus a full soulbound RARE ("blue") armor set — same
       // convention as berserker_boss/Cade's gear, rarity fixed rather than
       // left to the normal random roll, none of it drops on defeat.
-      { type: 'fire_duelist', slotId: 2, name: 'Ember', drops: ENC5_DUELIST_DROPS },
-      { type: 'ice_duelist', slotId: 3, name: 'Rime', drops: ENC5_DUELIST_DROPS }
+      { damageMultiplierPct: -10, type: 'fire_duelist', slotId: 2, name: 'Ember', drops: ENC5_DUELIST_DROPS },
+      { damageMultiplierPct: -10, type: 'ice_duelist', slotId: 3, name: 'Rime', drops: ENC5_DUELIST_DROPS }
     ]
   },
 
@@ -331,9 +339,14 @@ export const COMBAT_SCENARIOS = {
       hpMult: 1.35,
       derivedBonus: { PhysicalResist: 8, ElementalResist: 8, NecroticResist: 8, Resilience: 20 },
     },
+    // Per-fight damage trim (Reckoning I, owner 2026-09-10): the base fights and
+    // Reckoning I hit too hard after the stat-gate and buildup changes.
+    // Set HERE rather than on the enemy type because the type is shared with
+    // every Reckoning tier, and the higher tiers deliberately keep their damage.
+    // The summoned adds are NOT trimmed -- they are a Reckoning mechanic.
     enemies: [
       {
-        type: 'fire_duelist', slotId: 2, name: 'Ember', drops: ENC5_DUELIST_DROPS,
+        damageMultiplierPct: -5, type: 'fire_duelist', slotId: 2, name: 'Ember', drops: ENC5_DUELIST_DROPS,
         // Fires ONCE per threshold (tracked on the enemy), so healing
         // back over the line cannot re-trigger it.
         summon: {
@@ -346,7 +359,7 @@ export const COMBAT_SCENARIOS = {
         },
       },
       {
-        type: 'ice_duelist', slotId: 3, name: 'Rime', drops: ENC5_DUELIST_DROPS,
+        damageMultiplierPct: -5, type: 'ice_duelist', slotId: 3, name: 'Rime', drops: ENC5_DUELIST_DROPS,
         summon: {
           type: 'ice_spawn', name: 'Ice Spawn', maxHP: 25,
           drops: [{ equip: 'weaponMain', itemId: 'crude_mace_2h', rarity: 'common', rollAffixes: false, droppable: false }],
@@ -452,15 +465,19 @@ export const COMBAT_SCENARIOS = {
       hpMult: 1.3,
       derivedBonus: { PhysicalResist: 8, ElementalResist: 8, NecroticResist: 8, Resilience: 20 },
     },
+    // Per-fight damage trim (Reckoning I, owner 2026-09-10): the base fights and
+    // Reckoning I hit too hard after the stat-gate and buildup changes.
+    // Set HERE rather than on the enemy type because the type is shared with
+    // every Reckoning tier, and the higher tiers deliberately keep their damage.
     enemies: [
-      { type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: ENC4_CADE_DROPS },
-      { type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
-      { type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS },
+      { damageMultiplierPct: -7.5, type: 'huntsman_commander', slotId: 8, name: 'Cade', drops: ENC4_CADE_DROPS },
+      { damageMultiplierPct: -7.5, type: 'beast_oskar', slotId: 2, name: 'Oskar', drops: OSKAR_DROPS },
+      { damageMultiplierPct: -7.5, type: 'beast_kiro', slotId: 3, name: 'Kiro', drops: KIRO_DROPS },
       // Laki, the third beast — present from Reckoning I, and NOT marked
       // isAdd, so she counts toward victory like Oskar and Kiro. Stat-equipped
       // with a weapon only (same as the other beasts) so calculateDamage has
       // real dice; enemyScale above applies to her too.
-      { type: 'beast_laki', slotId: 4, name: 'Laki', drops: LAKI_DROPS },
+      { damageMultiplierPct: -7.5, type: 'beast_laki', slotId: 4, name: 'Laki', drops: LAKI_DROPS },
     ]
   },
   training_encounter_4_reckoning_2: {

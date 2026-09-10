@@ -1834,8 +1834,16 @@ export default class CombatScene extends Phaser.Scene {
       gearEffects: {
         ...(Number.isFinite(template.mpRegenPerTurn) && template.mpRegenPerTurn > 0
           ? { mpPerTurn: template.mpRegenPerTurn } : {}),
-        ...(Number.isFinite(template.damageMultiplierPct) && template.damageMultiplierPct !== 0
-          ? { hiddenDamagePercent: template.damageMultiplierPct } : {}),
+        // The SCENARIO's entry for this enemy may override the type's dial.
+        // Needed because encounters 4 and 5 reuse one enemy type across the
+        // base fight AND every Reckoning tier -- a dial on the type trims them
+        // all together, and the owner wanted the base fights softened while
+        // the tiers keep their damage. `??` so a scenario can set 0 to clear
+        // the type's dial outright; only null/undefined fall through.
+        ...((() => {
+          const pct = config?.damageMultiplierPct ?? template.damageMultiplierPct;
+          return Number.isFinite(pct) && pct !== 0 ? { hiddenDamagePercent: pct } : {};
+        })()),
         ...(Number.isFinite(template.buildupMultiplierPct) && template.buildupMultiplierPct !== 0
           ? { physicalBuildupPercent: template.buildupMultiplierPct } : {}),
       },
