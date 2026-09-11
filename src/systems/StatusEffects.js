@@ -621,6 +621,43 @@ export function weaknessDotTick(family, meter, v3 = WeaknessV3) {
   return base + K * Math.pow(overflow, exp);
 }
 
+/**
+ * How a Shocked (Lightning T2) target's extra jolts are rolled at `meter`.
+ *
+ *   rolls  = floor(extraJoltsMax * I ** extraJoltsExp)   at least 1,
+ *            and at most extraJoltsCap if one is set
+ *   chance = min(multiJoltChanceCap, multiJoltChance * I ** multiJoltChanceExp)
+ *
+ * Two exponents, one per axis, so each can be tamed on its own. At I = 1
+ * (meter 200, the Shocked threshold) both reduce to their base values, so the
+ * exponents only shape how fast things GROW past T2, never the entry point.
+ *
+ * Each of `rolls` lands independently with `chance`; a hit deals 1 jolt plus
+ * however many land, so on average 1 + rolls * chance.
+ *
+ * ONE definition, for the jolt itself and anything that describes it. The
+ * count used to be `floor(extraJoltsMax * I)` inline in applyLightningJolt
+ * while the tooltip, the journal and three config comments all said "up to 4"
+ * -- the code had no ceiling at all, and at meter 2400 fired ~23 jolts a hit.
+ *
+ * extraJoltsExp is the dial for how steeply the count grows. 1 reproduces the
+ * old linear-in-intensity count exactly; below 1 still grows without bound,
+ * only more slowly, so the AVERAGE comes from the curve rather than from a cap.
+ * Both scale: the chance saturates at its cap first (~meter 760), after which
+ * the count alone decides how steep the top of the curve is.
+ */
+export function lightningJoltOdds(meter, v3 = WeaknessV3) {
+  const t2 = v3?.families?.lightning?.t2 || {};
+  const I = familyIntensityMult('lightning', meter);
+  const base = t2.extraJoltsMax ?? 4;
+  const exp = t2.extraJoltsExp ?? 1;
+  let rolls = Math.max(1, Math.floor(base * Math.pow(I, exp)));
+  if (Number.isFinite(t2.extraJoltsCap)) rolls = Math.min(rolls, t2.extraJoltsCap);
+  const cexp = t2.multiJoltChanceExp ?? 1;
+  const chance = Math.min(t2.multiJoltChanceCap ?? 0.9, (t2.multiJoltChance ?? 0) * Math.pow(I, cexp));
+  return { rolls, chance, I };
+}
+
 export function weaknessDecayAmount(baseDecay, m, curve = null) {
   const g = WeaknessV3.globals || {};
   const baseline = g.DECAY_BASELINE || 35;

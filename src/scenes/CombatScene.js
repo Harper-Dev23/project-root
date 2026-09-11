@@ -43,6 +43,7 @@ import {
   WeaknessAliases, familyIntensityMult,
   WeaknessBuildupCategory,
   weaknessDotTick,
+  lightningJoltOdds,
 } from '../systems/StatusEffects.js';
 
 // Combat logic
@@ -3045,13 +3046,13 @@ export default class CombatScene extends Phaser.Scene {
         const dieMax = cfg.t1?.joltDieMax ?? 0;
         add(1, 'Takes random jolts of shock damage on each hit taken.',
           `${dieMax ? `1–${dieMax}` : (cfg.t1?.joltFlat ?? 0)} shock damage per hit taken.`);
-        const I = familyIntensityMult('lightning', m);
-        const chanceBase = cfg.t2?.multiJoltChance ?? 0;
-        const chanceCap = cfg.t2?.multiJoltChanceCap ?? chanceBase;
-        const chancePct = Math.round(Math.min(chanceCap, chanceBase * I) * 100);
-        const extraMax = cfg.t2?.extraJoltsMax ?? 0;
+        // From lightningJoltOdds -- the same function the jolt itself calls --
+        // so the tooltip cannot drift from what a hit actually does. It used to
+        // restate the chance here and print the raw config "up to 4", while the
+        // real count grew with the meter and had no ceiling at all.
+        const odds = lightningJoltOdds(m);
         add(2, 'Chance for multiple extra jolts based on overflow.',
-          `${chancePct}% chance per extra jolt (up to ${extraMax}), each hit taken.`);
+          `${Math.round(odds.chance * 100)}% chance on each of ${odds.rolls} extra jolt rolls, every hit taken.`);
         break;
       }
       case 'disorient': {

@@ -1,4 +1,5 @@
 import { Items } from '../../data/items.js';
+import { lightningJoltOdds } from './StatusEffects.js';
 import { getItemComputedData, isItemInstance } from '../systems/ItemFactory.js';
 import { WeaknessV3, weaknessIntensityMult, WeaknessAliases, familyIntensityMult, } from '../systems/StatusEffects.js';
 
@@ -487,13 +488,13 @@ export function applyLightningJolt(target) {
   if (t < 1) return { joltTotal: 0 };
 
   const m = w.meters?.[key] | 0;
-  const I = familyIntensityMult('lightning', m);
   const dieMax = WeaknessV3.families.lightning.t1.joltDieMax ?? 0;
   const flat = WeaknessV3.families.lightning.t1.joltFlat ?? 0;
 
   // Curse of Static (axe) — a permanent rider adding a flat bonus to EACH
   // individual jolt roll below, not a one-time total add, so it compounds
-  // with T2's multi-jolt procs (up to 4 rolls/hit) by design.
+  // with T2's multi-jolt procs (however many lightningJoltOdds grants) by
+  // design -- which also means its value grows with the jolt count.
   const staticRider = Array.isArray(target?.statusEffects)
     ? target.statusEffects.find(se => se?.id === 'curse_static')
     : null;
@@ -503,15 +504,12 @@ export function applyLightningJolt(target) {
   let joltTotal = 0;
 
   if (t >= 2) {
-    const baseP = WeaknessV3.families.lightning.t2.multiJoltChance ?? 0;
-    const capP = WeaknessV3.families.lightning.t2.multiJoltChanceCap ?? 0.9;
     // Jolt COUNT scales with intensity; the jolt DIE stays a flat 1-4 because
     // skills read that die size directly. So deep Lightning buys more chances
     // at a jolt rather than bigger jolts — which keeps the die a stable number
-    // for those skills to build on.
-    const extraBase = WeaknessV3.families.lightning.t2.extraJoltsMax ?? 3;
-    const extraMax = Math.max(1, Math.floor(extraBase * I));
-    const p = Math.min(capP, baseP * I);
+    // for those skills to build on. The odds come from lightningJoltOdds, the
+    // one definition the tooltip and the journal are meant to describe.
+    const { rolls: extraMax, chance: p } = lightningJoltOdds(m);
     let extra = 0;
     for (let i = 0; i < extraMax; i++) {
       if (Math.random() < p) extra++;

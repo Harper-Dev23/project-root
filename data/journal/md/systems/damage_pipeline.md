@@ -69,7 +69,7 @@ Damage is floored here, once.
 
 ## Stage 3 — After the hit
 
-**1. Lightning Jolt.** Tier-3 lightning riders are added *after* crit, deliberately, so jolt damage can never be crit-amplified.
+**1. Lightning Jolt.** Lightning jolts are added *after* crit, deliberately, so jolt damage can never be crit-amplified.
 
 **2. Mitigation.** The target's resistance is applied per damage component: Physical Resist against physical, Elemental Resist against elemental, Necrotic Resist against necrotic. Each resist point is **1% reduction**, capped at 95% and floored at −95%.
 
