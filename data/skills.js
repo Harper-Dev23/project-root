@@ -13411,9 +13411,10 @@ Object.assign(RAW_SKILLS, {
       const roll = calculateDamage(attacker, target, ability);
 
       // Bonus damage if the target has ANY necrotic-family weakness active —
-      // a whole-hit "this skill hits harder" reward (Category A), combined
-      // additively with the 100% base into ONE skillPct rather than a second
-      // chained multiply.
+      // a whole-hit "this skill hits harder" reward (Category A), folded into
+      // ONE skillPct (60%, or 75% with a necrotic weakness) rather than a
+      // second chained multiply. 75 is 60 x 1.25 -- a RELATIVE +25%, which the
+      // description used to call "+25% damage" and read as 85% to players.
       const hasNecroticWeakness = (target?.weakness?.tiers?.toxic || 0) >= 1
         || (target?.weakness?.tiers?.disease || 0) >= 1
         || (target?.weakness?.tiers?.curse || 0) >= 1;
@@ -13438,7 +13439,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Deals 60% weapon damage. Applies Expose. +25% damage (75% total) if the target has any necrotic weakness (Toxic, Disease, or Curse). Grants Rhythm if the target is at least Flayed."
+    description: "Deals 60% weapon damage, or 75% if the target has any necrotic weakness (Toxic, Disease, or Curse). Applies Expose. Grants Rhythm if the target is at least Flayed."
   },
 
   'sword_flourish': {
@@ -15664,6 +15665,14 @@ Object.assign(RAW_SKILLS, {
       );
       const amount = Math.max(1, physical + elemental + necrotic);
 
+      // ONE Lightning buildup figure for the target AND every adjacent enemy:
+      // the base 60, plus a quarter of the Fire consumed (owner, 2026-09-10).
+      // The drained target used to get only the flat 60 while its neighbours
+      // got 60 + consumed/4 -- the one you emptied came away LESS shocked than
+      // the ones beside it, which was neither intended nor describable simply.
+      // Scorched is 200+ Fire, so this is always 110-160.
+      const lightningBuildup = (ability?.buildupHint?.lightning ?? 60) + Math.floor(consumed / 4);
+
       // The arc only jumps if there was real fuel — a T2 target with no whole
       // increment left still takes the hit, but nothing splashes.
       const splash = [];
@@ -15675,7 +15684,7 @@ Object.assign(RAW_SKILLS, {
           physical: 0, elemental: splashElemental, necrotic: 0,
           isMagic: true,
           element: "lightning",
-          buildup: { lightning: (ability?.buildupHint?.lightning ?? 60) + Math.floor(consumed / 4) },
+          buildup: { lightning: lightningBuildup },
           tags: ability?.tags,
         }));
       }
@@ -15684,14 +15693,14 @@ Object.assign(RAW_SKILLS, {
         ...roll, physical, elemental, necrotic, amount,
         isMagic: true,
         element: "lightning",
-        buildup: { lightning: ability?.buildupHint?.lightning ?? 60 },
+        buildup: { lightning: lightningBuildup },
         splash: splash.length ? splash : undefined,
         log: consumed > 0
           ? `${attacker?.name || "The axeman"} earths the blaze — ${consumed} Fire discharges as lightning.`
           : `${attacker?.name || "The axeman"} strikes, but the flames are too thin to arc.`,
       };
     },
-    description: "Requires the target to be Scorched (Fire T2+). Consumes up to 400 Fire and discharges it as Lightning: 100% weapon damage plus 15% per 100 consumed. The arc leaps to adjacent enemies for 60% of the elemental damage, shocking them with Lightning buildup."
+    description: "Requires the target to be Scorched (Fire T2+). Consumes up to 400 of its Fire, in whole hundreds, and discharges it as lightning: 100% weapon damage plus 15% per 100 Fire consumed, all dealt as Lightning. The arc also strikes each adjacent enemy for 60% of that damage. The target and every adjacent enemy gain 60 Lightning buildup, plus a quarter of the Fire consumed."
   },
 
   // Axe's second reaction, and deliberately NOT another Carrion Strike
@@ -18072,9 +18081,10 @@ Object.assign(RAW_SKILLS, {
       // sidesteps prediction entirely, same idea as the Thermal Shock check
       // on fire_burst/ice_freeze_point.
       const coldTier = target?.weakness?.tiers?.cold || 0;
-      let skillPct = 100;
-      if (coldTier >= 1) skillPct = 125;
-      if (coldTier >= 2) skillPct = 175; // T1 +25%, T2 an ADDITIONAL +50% on top
+      // 115% vs Chilled, 130% vs Frostbitten (owner, 2026-09-10). Was 125% /
+      // 175%, which made this one of the highest-percentage buildup skills in
+      // the game; the 100% base was fine and stays.
+      const skillPct = coldTier >= 2 ? 130 : coldTier >= 1 ? 115 : 100;
 
       const roll = calculateDamage(attacker, target, ability);
       const { physical, elemental, necrotic } = applyTypedDamageModifiers(
@@ -18100,7 +18110,7 @@ Object.assign(RAW_SKILLS, {
         repeatChance, repeatScale: 0.5,
       };
     },
-    description: "Deals 100% weapon damage (125% vs a Chilled target, 175% vs Frostbitten). Applies Cold. 50% chance to repeat at 50% damage if the target is Shocked (Lightning T2) — a 25% average damage increase while Shocked."
+    description: "Deals 100% weapon damage (115% vs a Chilled target, 130% vs Frostbitten). Applies Cold. 50% chance to repeat at 50% damage if the target is Shocked (Lightning T2)."
   },
 
   // Same underlying shape as sword_1h/dagger/staff/mace_2h's own pairs
@@ -18737,9 +18747,19 @@ Object.assign(RAW_SKILLS, {
     // pointed at the family this skill actually builds. Fires on EITHER tier
     // so a bow user gets something for the first crossing, not only the deep
     // one, which is what makes an 80-buildup bonus action worth a slot.
+    //
+    // damageDealtDownPct, NOT a raw `mods: { AttackPower }` object. The raw form
+    // never worked: _applyRewardDebuff builds its stat mods only from named
+    // fields and never reads `debuff.mods`, so the reward found nothing to
+    // apply and bailed out on "no mods" -- rattled_aim silently never landed,
+    // and the tooltip could only print the duration. damageDealtDownPct becomes
+    // AttackPower -X inside that same function -- the mod the damage pipeline
+    // actually reads -- and is the field the tooltip knows how to describe.
+    // Same statusId on both tiers so a T2 crossing replaces the T1 debuff
+    // rather than stacking beside it.
     rewardIfTierCross: [
-      { family: "disorient", tier: 1, debuff: { statusId: "rattled_aim", turns: 2, mods: { AttackPower: -10 }, vfx: { kind: 'debuff_decrease' } } },
-      { family: "disorient", tier: 2, debuff: { statusId: "rattled_aim", turns: 3, mods: { AttackPower: -18 }, vfx: { kind: 'debuff_decrease' } } },
+      { family: "disorient", tier: 1, debuff: { statusId: "rattled_aim", turns: 2, damageDealtDownPct: 10, vfx: { kind: 'debuff_decrease' } } },
+      { family: "disorient", tier: 2, debuff: { statusId: "rattled_aim", turns: 3, damageDealtDownPct: 18, vfx: { kind: 'debuff_decrease' } } },
     ],
     apply: (attacker, target) => {
       const ability = SKILLS?.whistling_shot;
