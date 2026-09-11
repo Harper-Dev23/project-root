@@ -228,8 +228,9 @@ export const WeaknessV3 = {
   families: {
     // === Elemental ============================================================
     lightning: {
-      // Explicit restatement of the GLOBAL curve (1 + (meter-200)/300, cap
-      // 2.5) rather than relying on familyIntensityMult's silent fallback.
+      // Explicit restatement of the GLOBAL curve (pow, S 250, exp 0.78) rather than relying on familyIntensityMult's silent fallback.
+      // (This once described a linear 1 + (meter-200)/300 curve capped at 2.5;
+      // the global curve was replaced since, and the values below match it.)
       // Behaviour-identical — verified by tools/weakness_snapshot.js — but it
       // means every family now declares its own shape, so "which curve does
       // this family use" is answerable by reading one block instead of
@@ -242,10 +243,24 @@ export const WeaknessV3 = {
         // joltFlat: 4,    // (optional) keep as fallback; unused if joltDieMax is present
       },
       t2: {
-        // Bump chance so you can actually see extra procs while testing
-        multiJoltChance: 0.3188,             // base chance per extra jolt; scales with intensity (min(base*I, cap))
-        multiJoltChanceCap: 0.90,          // never exceed 95% per extra roll
-        extraJoltsMax: 4,                  // up to 4 extra jolts (so total 1..5)
+        // How a Shocked target's extra jolts roll. See lightningJoltOdds -- the
+        // single definition applyLightningJolt, the tooltip and the journal all
+        // follow. Both axes scale with intensity I, each with its own exponent,
+        // and at I = 1 (the Shocked threshold) each is simply its base value:
+        //   rolls  = floor(extraJoltsMax * I ** extraJoltsExp)
+        //   chance = min(multiJoltChanceCap, multiJoltChance * I ** multiJoltChanceExp)
+        //
+        // Tuned with the owner 2026-09-10. Both exponents were effectively 1,
+        // which let the count run away to ~23 jolts a hit at meter 2400 with no
+        // ceiling, while every description said "up to 4". Now: 4 rolls at 32%
+        // on reaching Shocked; the chance climbs to its 90% cap at meter ~1200;
+        // the count keeps growing, slowly and with no cap. Measured averages:
+        // ~3.5 jolts a hit at meter 400, ~6 at 800, ~9 at 1200, ~12 at 2400.
+        multiJoltChance: 0.3188,
+        multiJoltChanceCap: 0.90,
+        multiJoltChanceExp: 0.756,   // solved so the 90% cap lands at meter ~1200
+        extraJoltsMax: 4,
+        extraJoltsExp: 0.6,          // count grows ~I^0.6: unbounded, but tame
       },
     },
 

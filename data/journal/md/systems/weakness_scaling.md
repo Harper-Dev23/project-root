@@ -83,7 +83,7 @@ Only **Fire** carries a heavier weight than baseline (40 against the standard 35
 
 ### Lightning — *Zapped / Shocked*
 - **T1:** each jolt rolls **1–4** damage.
-- **T2:** each extra jolt has a **40%** base chance (scaling with intensity, capped at **95%**), up to **4 extra jolts** — a maximum of 5 in one hit.
+- **T2:** each hit also rolls **extra jolts** — **4** rolls at Shocked, each landing **32%** of the time. Both grow as the meter climbs: the chance reaches its **90%** ceiling around meter **1200**, and the number of rolls keeps rising slowly after that, with no cap. On average that is about **3.5** jolts a hit at meter 400, **6** at 800, **9** at 1200 and **12** at 2400.
 - Jolt damage is applied after crit and is never crit-amplified.
 
 ### Cold — *Chilled / Frostbitten*

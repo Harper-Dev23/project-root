@@ -35,7 +35,7 @@ globalThis.localStorage = { getItem: () => null, setItem() {} };
 globalThis.Phaser = { Math: { Between: (a, b) => Math.round((a + b) / 2) } };
 
 const SE = await import('../src/systems/StatusEffects.js');
-const { WeaknessV3, WeaknessFamilies, weaknessIntensityMult, familyIntensityMult, weaknessDecayAmount, weaknessDotTick } = SE;
+const { WeaknessV3, WeaknessFamilies, weaknessIntensityMult, familyIntensityMult, weaknessDecayAmount, weaknessDotTick, lightningJoltOdds } = SE;
 
 // Read decay the way the ENGINE does — from the DERIVED WeaknessFamilies, not
 // from WeaknessV3.families directly. They disagree: curse has no `baseDecay`
@@ -74,7 +74,14 @@ const EFFECT_CURVE = {
   'disease.t1.healRecvPenalty': 'global',   // CombatLogic 344
   // Verified 2026-09-06 while checking the curse riders:
   'curse.t2.curseAmpMult': 'global',        // CombatLogic ~482, weaknessIntensityMult
-  'lightning.t2.extraJoltsMax': 'family',   // CombatLogic ~429, floor(base * I)
+  // Lightning's T2 odds are no longer `base * intensity`: each axis has its
+  // own exponent, so they are reported through lightningJoltOdds itself (see
+  // CUSTOM_FORMULA). Modelling them as 'family' here would record numbers the
+  // engine stopped computing -- the exact failure this harness exists to catch.
+  'lightning.t2.extraJoltsMax': 'own',
+  'lightning.t2.multiJoltChance': 'own',
+  'lightning.t2.extraJoltsExp': 'none',        // see FLAT
+  'lightning.t2.multiJoltChanceExp': 'none',   // see FLAT
   'lightning.t1.joltDieMax': 'flat',        // read raw, never multiplied
   'fire.t2.startTickCurveK': 'flat',        // own formula, see CUSTOM_FORMULA
   'toxic.t2.startTickCurveK': 'flat',       // own formula, see CUSTOM_FORMULA
@@ -94,6 +101,8 @@ const FLAT = new Set([
   // introduce it. EFFECT_CURVE only names WHICH curve; membership here is what
   // decides that there is no curve at all.
   'fire.t2.startTickBase', 'toxic.t2.startTickBase',
+  // Curve-shape exponents for Lightning's jolt odds -- parameters, not damage.
+  'lightning.t2.extraJoltsExp', 'lightning.t2.multiJoltChanceExp',
 ]);
 
 // Effects whose engine formula is NOT `base * intensity`. Reporting them on
@@ -101,6 +110,9 @@ const FLAT = new Set([
 // `base * (meter - 200) / 100`, added to the intensity-scaled part, and
 // treating it as scaled is what caused it to be mis-rebased once already.
 const CUSTOM_FORMULA = {
+  // The jolt's real odds, straight from the one function the engine calls.
+  'lightning.t2.extraJoltsMax': (_b, m) => lightningJoltOdds(m).rolls,
+  'lightning.t2.multiJoltChance': (_b, m) => lightningJoltOdds(m).chance,
   // The whole tick, not just this term -- reported against the K entry so the
   // snapshot records the number the fight actually deals at each meter. Both
   // families share one shape; see weaknessDotTick, which is what the engine,
