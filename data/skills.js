@@ -535,9 +535,10 @@ const RAW_SKILLS = {
     }
   },
 
-  // Usable only from the back row (requiresColumn — see the matching gate
-  // in CombatScene._applyAbilityToTarget). Ends immediately with NO reward
-  // if the Beggar takes any damage (breaksOnHitTaken, including AOE
+  // No row requirement (owner, 2026-09-10). It used to be back-row only via
+  // requiresColumn, which stopped making sense once melee reach began treating
+  // rank as something weapons and skills negotiate. Ends immediately with NO
+  // reward if the Beggar takes any damage (breaksOnHitTaken, including AOE
   // splash). If instead the Beggar ATTACKS while still hidden (never having
   // been hit), that very attack gets +15 Accuracy via sneakAttackBonus —
   // CombatScene._applyAbilityToTarget grants it just before the hit roll,
@@ -559,9 +560,8 @@ const RAW_SKILLS = {
     mpCost: 0,
     hpCost: 0,
     requiresTarget: false,
-    requiresColumn: 'back',
     cooldown: 3,
-    description: 'Beggar: vanish into the crowd (back row only) for heavy Evasion. Ends if you\'re hit; attack while still hidden for bonus Accuracy.',
+    description: 'Beggar: vanish into the crowd for heavy Evasion. Ends if you\'re hit; attack while still hidden for bonus Accuracy.',
     apply: (user, _target, scene) => {
       scene?._addStatusEffects?.(user, [{
         id: 'hide', turns: 2,
@@ -17435,7 +17435,11 @@ Object.assign(RAW_SKILLS, {
     requiresTarget: true,
     targetRequirement: "enemy",
     tags: ["melee", "attack", "lightning", "holy", "terrain"],
-    cooldown: 2,
+    // 2 -> 3 (owner, 2026-09-10): its 3-turn zone outlived a 2-turn cooldown,
+    // so it came back while its own zone was still down and could stack a
+    // second one. Measured on the real engine by tools/headless/zones.mjs:
+    // cooldown EQUAL to the zone's turns is already safe, shorter is not.
+    cooldown: 3,
     buildupHint: { lightning: 50 },
     // The zone is now spawned UNCONDITIONALLY — consecrating the ground is
     // what the slam does. What used to gate the zone's existence (target at

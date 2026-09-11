@@ -62,6 +62,24 @@ let _currentMusic = null;
 let _currentMusicVolume = 0;
 let _unsubscribeVolume = null;
 
+// The same sound requested again within this many milliseconds plays once.
+//
+// An AoE skill runs the whole ability once per target in the same frame, and
+// each run plays its own hit sound -- so an AoE across five Hunters summed five
+// copies of one sample, which is why AoE hits were far too loud. Different
+// sounds still layer (a crit among plain hits stays audible), and anything
+// spaced out on purpose -- a recast, a delayed follow-up strike -- is hundreds
+// of milliseconds apart and plays normally.
+const SAME_SOUND_WINDOW_MS = 60;
+const _lastPlayedAt = new Map();
+function _firstInWindow(id) {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  const last = _lastPlayedAt.get(id);
+  if (last !== undefined && now - last < SAME_SOUND_WINDOW_MS) return false;
+  _lastPlayedAt.set(id, now);
+  return true;
+}
+
 /**
  * Ramps a WebAudio sound's gain on the AudioContext's own clock, not Phaser's
  * render-loop tween clock. This matters because the browser keeps the
@@ -114,6 +132,9 @@ export const SoundManager = {
     const cfg = SOUNDS[id];
     if (!cfg || !_scene?.sound) return;
     if (!_scene.cache.audio.has(cfg.key)) return;
+    // Checked last, so a sound that could not play anyway never uses up the
+    // window and silences the next real one.
+    if (!_firstInWindow(id)) return;
     _scene.sound.play(cfg.key, { volume: AudioSettings.sfxVolume(cfg.volume) });
   },
 
