@@ -262,6 +262,19 @@ function normalizeAfterLoad(c) {
 
 
 // ---------------------------------------------------------------------------
+/**
+ * What to tell the player when a storage write throws.
+ *
+ * One definition for saving AND importing, which both write to localStorage and
+ * fail the same ways. localStorage.setItem throws when storage is full or the
+ * browser forbids it; a QuotaExceededError is by far the common case.
+ */
+function describeWriteError(e) {
+  return e && e.name === 'QuotaExceededError'
+    ? 'Browser storage is full or unavailable (private browsing blocks saving).'
+    : `Could not write the save: ${e && e.message ? e.message : e}`;
+}
+
 // Save schema version
 // ---------------------------------------------------------------------------
 // Saves have carried `version: 3` for a long time, but nothing ever READ it -
@@ -549,9 +562,7 @@ const GameState = {
       }
       localStorage.setItem(`bmSave_${slot}`, json);
     } catch (e) {
-      const why = e && e.name === 'QuotaExceededError'
-        ? 'Browser storage is full or unavailable (private browsing blocks saving).'
-        : `Could not write the save: ${e && e.message ? e.message : e}`;
+      const why = describeWriteError(e);
       console.error(`[GameState] Save to '${slot}' failed - ${why}`);
       this.lastSaveError = why;
       // `lastSaveError` was set here and read NOWHERE for as long as it existed,
@@ -640,6 +651,82 @@ const GameState = {
       }
     }
     return slots;
+  },
+
+  /** A slot's stored payload, parsed. Null if the slot is missing or unreadable. For export. */
+  readSlot(slot) {
+    try {
+      const raw = localStorage.getItem(`bmSave_${slot}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Would this payload load? Checked the way load() reads it, WITHOUT touching
+   * live state.
+   *
+   * Exists for imported saves, which can come from another computer, another
+   * version of the game, or someone else entirely. It runs the same version gate
+   * as load() and then the same per-character deserialize load() runs — on a
+   * COPY, since those transforms are pure but the payload must not be mutated.
+   * A file that would break the Load menu is refused here instead of being
+   * written into a slot the player then cannot open.
+   *
+   * Returns { ok: true, data } with the migrated payload, or { ok: false, reason }.
+   */
+  checkSave(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, reason: 'That file does not contain a save.' };
+    }
+    if (!Array.isArray(data.characters)) {
+      return { ok: false, reason: 'That save has no characters in it.' };
+    }
+    let copy;
+    try {
+      copy = JSON.parse(JSON.stringify(data));
+    } catch {
+      return { ok: false, reason: 'That save could not be read.' };
+    }
+    const migrated = migrateSave(copy);
+    if (!migrated.ok) return { ok: false, reason: migrated.reason };
+    try {
+      for (const c of migrated.data.characters) {
+        if (!c || typeof c !== 'object' || Array.isArray(c)) {
+          throw new Error('a character entry is not valid');
+        }
+        normalizeAfterLoad(deserializeCharacter(c));
+      }
+    } catch (e) {
+      return { ok: false, reason: `That save could not be loaded: ${e?.message || e}` };
+    }
+    return { ok: true, data: migrated.data };
+  },
+
+  /**
+   * Writes an imported save into `slot`, after checkSave passes.
+   *
+   * Never overwrites: callers pick a slot name that does not exist yet (see
+   * importSlotName in SaveTransfer.js), so importing a file can never replace a
+   * save the player already has. A storage failure is reported through the same
+   * channel as a failed save, so the player is told rather than left guessing.
+   */
+  importSave(slot, data) {
+    if (!slot) return { ok: false, reason: 'No slot name was given.' };
+    if (localStorage.getItem(`bmSave_${slot}`) != null) {
+      return { ok: false, reason: `A save named "${slot}" already exists.` };
+    }
+    const checked = this.checkSave(data);
+    if (!checked.ok) return checked;
+    try {
+      localStorage.setItem(`bmSave_${slot}`, JSON.stringify(checked.data));
+    } catch (e) {
+      const why = describeWriteError(e);
+      Diagnostics.noteSaveFailure(slot, why);
+      return { ok: false, reason: why };
+    }
+    return { ok: true, slot };
   },
 
   deleteSlot(slot) {
