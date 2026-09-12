@@ -89,7 +89,24 @@ const httpServer = http.createServer((req, res) => {
   res.writeHead(404).end('Behel\'ith co-op server');
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+// The largest message the server will accept.
+//
+// `ws` defaults to 100 MB, and this server never set its own limit — so anyone
+// who found the public URL could send messages thousands of times larger than
+// the game ever produces. Each one is held in memory and JSON-parsed, and this
+// is ONE process running ONE hunt: exhausting it ends the fight for everyone in it.
+//
+// Measured 2026-09-12: the largest legitimate message is a lobby `create` with a
+// full six-hunter party, about 40 KB. 1 MB leaves ample room for late-game
+// characters with far more gear and affixes than the test fixtures carry, while
+// sitting 100x under the old default.
+//
+// A message over the limit closes only the SENDER's connection (code 1009); the
+// socket 'error' handler below turns that into an ordinary disconnect, so it
+// cannot take the process down. server/limits_test.mjs proves both.
+const MAX_MESSAGE_BYTES = 1024 * 1024;
+
+const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_MESSAGE_BYTES });
 
 wss.on('connection', (socket, req) => {
   // The hub speaks in objects; the socket speaks in text. This adapter is the
