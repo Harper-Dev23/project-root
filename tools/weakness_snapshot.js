@@ -31,127 +31,18 @@
 //
 import fs from 'fs';
 
-globalThis.localStorage = { getItem: () => null, setItem() {} };
-globalThis.Phaser = { Math: { Between: (a, b) => Math.round((a + b) / 2) } };
+// The scaling model lives in tools/weaknessModel.js so the Journal generator
+// reads the same numbers this golden master guards. See that file's header for
+// why a copy here would be the wrong move.
+const {
+  WeaknessV3, weaknessIntensityMult, familyIntensityMult,
+  METERS, EFFECT_CURVE, FLAT, CUSTOM_FORMULA, valueAt: modelValueAt, capFor, decayOf,
+} = await import('./weaknessModel.js');
 
-const SE = await import('../src/systems/StatusEffects.js');
-const { WeaknessV3, WeaknessFamilies, weaknessIntensityMult, familyIntensityMult, weaknessDecayAmount, weaknessDotTick, lightningJoltOdds } = SE;
-
-// Read decay the way the ENGINE does — from the DERIVED WeaknessFamilies, not
-// from WeaknessV3.families directly. They disagree: curse has no `baseDecay`
-// at all (just a dead `decay: {base,overflow}` object the engine never reads),
-// so WeaknessV3 gives undefined while WeaknessFamilies correctly gives the
-// `?? 35` fallback. Reading the wrong one produced NaN on the first run of
-// this harness — exactly the class of drift it exists to catch.
-const decayOf = (fam, m) =>
-  weaknessDecayAmount(WeaknessFamilies[fam]?.decay, m, WeaknessFamilies[fam]?.decayCurve);
-
-const METERS = [200, 300, 400, 600, 800, 1000, 1200, 1600, 2400];
-
-// Which intensity curve each effect ACTUALLY uses at its call site.
-// 'family' = familyIntensityMult(fam, m)   'global' = weaknessIntensityMult(m)
-// Verified by reading the call sites in CombatScene.js / CombatLogic.js.
-// A '?' means the call site could not be determined and needs a human look.
-const EFFECT_CURVE = {
-  'toxic.t1.decayBypassChance': 'global',   // CombatScene ~8833 — NOT toxic's own curve
-  // Both DOT ticks are no longer intensity-scaled at all: they run the shaped
-  // curve in weaknessDotTick (base + K * (overflow/100)**exp). Reporting them
-  // as 'family' would show a multiplier the engine stopped applying.
-  'toxic.t2.startTickBase': 'none',         // see FLAT below
-  'fire.t2.startTickBase': 'none',          // see FLAT below
-  'lacerate.t2.startPctHP': 'family',       // CombatScene ~10218
-  'cold.t1.initiativePenalty': 'family',    // CombatLogic 151
-  'cold.t1.gaugeRegenPenalty': 'family',    // CombatScene ~10359
-  'cold.t2.dmgDealtPenalty': 'family',      // CombatLogic 383
-  'cold.t2.evasionPenalty': 'family',       // CombatLogic 181
-  'disorient.t1.costMultiplier': 'family',  // CombatScene ~10471
-  'expose.t1.physDRPen': 'family',          // CombatLogic 264/316
-  'expose.t2.critChanceBonus': 'global',    // CombatLogic 214
-  'expose.t2.critDamageBonus': 'global',    // CombatLogic 215
-  'lightning.t2.multiJoltChance': 'family', // CombatLogic 411/427
-  'curse.t1.decayReduction': 'global',      // CombatScene ~8831
-  'curse.t2.decayReduction': 'global',
-  'disease.t1.healRecvPenalty': 'global',   // CombatLogic 344
-  // Verified 2026-09-06 while checking the curse riders:
-  'curse.t2.curseAmpMult': 'global',        // CombatLogic ~482, weaknessIntensityMult
-  // Lightning's T2 odds are no longer `base * intensity`: each axis has its
-  // own exponent, so they are reported through lightningJoltOdds itself (see
-  // CUSTOM_FORMULA). Modelling them as 'family' here would record numbers the
-  // engine stopped computing -- the exact failure this harness exists to catch.
-  'lightning.t2.extraJoltsMax': 'own',
-  'lightning.t2.multiJoltChance': 'own',
-  'lightning.t2.extraJoltsExp': 'none',        // see FLAT
-  'lightning.t2.multiJoltChanceExp': 'none',   // see FLAT
-  'lightning.t1.joltDieMax': 'flat',        // read raw, never multiplied
-  'fire.t2.startTickCurveK': 'flat',        // own formula, see CUSTOM_FORMULA
-  'toxic.t2.startTickCurveK': 'flat',       // own formula, see CUSTOM_FORMULA
-};
-
-// Read FLAT at their call sites — never multiplied by intensity. Listing them
-// stops the report implying a scaling that does not exist (joltDieMax is the
-// 1-4 die skills read directly; showing it climbing to 25 was misleading).
-const FLAT = new Set([
-  'lightning.t1.joltDieMax',
-  // Curve shape parameters, not damage. Multiplying an exponent by intensity
-  // would be meaningless; the tick they describe is reported by CUSTOM_FORMULA.
-  'fire.t2.startTickCurveExp', 'toxic.t2.startTickCurveExp',
-  // The DOT bases are read RAW by weaknessDotTick and never multiplied. Left
-  // on the family curve they reported a climb the engine stopped applying --
-  // which is precisely the drift this harness exists to catch, so it must not
-  // introduce it. EFFECT_CURVE only names WHICH curve; membership here is what
-  // decides that there is no curve at all.
-  'fire.t2.startTickBase', 'toxic.t2.startTickBase',
-  // Curve-shape exponents for Lightning's jolt odds -- parameters, not damage.
-  'lightning.t2.extraJoltsExp', 'lightning.t2.multiJoltChanceExp',
-]);
-
-// Effects whose engine formula is NOT `base * intensity`. Reporting them on
-// the default model is actively misleading — fire's perHundred term is
-// `base * (meter - 200) / 100`, added to the intensity-scaled part, and
-// treating it as scaled is what caused it to be mis-rebased once already.
-const CUSTOM_FORMULA = {
-  // The jolt's real odds, straight from the one function the engine calls.
-  'lightning.t2.extraJoltsMax': (_b, m) => lightningJoltOdds(m).rolls,
-  'lightning.t2.multiJoltChance': (_b, m) => lightningJoltOdds(m).chance,
-  // The whole tick, not just this term -- reported against the K entry so the
-  // snapshot records the number the fight actually deals at each meter. Both
-  // families share one shape; see weaknessDotTick, which is what the engine,
-  // both tooltips and Venom Bloom all call.
-  'fire.t2.startTickCurveK': (_K, m) => weaknessDotTick('fire', m),
-  'toxic.t2.startTickCurveK': (_K, m) => weaknessDotTick('toxic', m),
-};
-
-const I = (fam, key, m) =>
-  (EFFECT_CURVE[key] === 'global' ? weaknessIntensityMult(m) : familyIntensityMult(fam, m));
-
-/**
- * What an effect is actually worth at `meter`, capped.
- *
- * ONE definition, used by both the printed report and the JSON snapshot.
- * They used to disagree: report() honoured CUSTOM_FORMULA and FLAT while
- * collect() -- the half that writes the golden master and performs the diff --
- * unconditionally computed `base * intensity`. So the printout was right and
- * THE GUARD WAS WRONG, recording numbers the engine never computes for exactly
- * the entries this file documents as special (joltDieMax, fire's add-on term).
- * A drift-catching harness that quietly models the wrong formula is worse than
- * none, because it reports IDENTICAL while the real value moves.
- */
-function valueAt(fam, tier, key, base, cap, m) {
-  const raw = CUSTOM_FORMULA[key] ? CUSTOM_FORMULA[key](base, m)
-    : FLAT.has(key) ? base
-      : base * I(fam, key, m);
-  return cap == null ? raw : Math.min(cap, raw);
-}
-
-/** Pair a base key with its cap key, tolerating the three inconsistent names. */
-function capKeyFor(tierObj, baseKey) {
-  const direct = baseKey + 'Cap';
-  if (direct in tierObj) return direct;
-  // startPctHP -> startPctCap, gaugeStartDrainBase -> gaugeStartDrainCap, ...
-  const stem = baseKey.replace(/(HP|Base|MP)$/, '');
-  if ((stem + 'Cap') in tierObj) return stem + 'Cap';
-  return null;
-}
+// Local adapter keeping this file's (fam, tier, fullKey, base, cap, m) call
+// shape, while the model itself takes the bare key.
+const valueAt = (fam, tier, key, base, cap, m) =>
+  modelValueAt(fam, tier, key.split('.').pop(), base, cap, m);
 
 function collect() {
   const out = { effects: {}, decay: {}, intensity: {} };
@@ -170,8 +61,7 @@ function collect() {
         if (typeof base !== 'number') continue;
         if (/Cap$/.test(k)) continue;
         const key = `${fam}.${tier}.${k}`;
-        const capKey = capKeyFor(t, k);
-        const cap = capKey ? t[capKey] : null;
+        const cap = capFor(fam, tier, k);
         for (const m of METERS) {
           out.effects[`${key}@${m}`] = +valueAt(fam, tier, key, base, cap, m).toFixed(4);
         }
@@ -206,8 +96,7 @@ function report() {
       for (const [k, base] of Object.entries(t)) {
         if (typeof base !== 'number' || /Cap$/.test(k)) continue;
         const key = `${fam}.${tier}.${k}`;
-        const capKey = capKeyFor(t, k);
-        const cap = capKey ? t[capKey] : null;
+        const cap = capFor(fam, tier, k);
         const curve = EFFECT_CURVE[key] || '?';
         const cells = METERS.map(m => {
           const v = valueAt(fam, tier, key, base, cap, m);
