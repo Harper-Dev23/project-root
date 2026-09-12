@@ -214,6 +214,7 @@ console.log('=== save slot shapes ===');
     bmSave_slot1: '{this is not json',
     dev_breakthrough: 'true',
     audioSettings: '{"master":0.5}',
+    coop_last_code: 'ZQ7K',
   }));
   const D = await freshModule();
   D.install();
@@ -227,6 +228,9 @@ console.log('=== save slot shapes ===');
     'dev flags change real behaviour, so they belong in the report');
   check('save slots are not repeated in the other-keys list',
     (text.match(/bmSave_autosave/g) || []).length === 1);
+  // Reports are pasted into chats; a live lobby code there lets a stranger join.
+  check('a stored lobby code is listed as present', /coop_last_code = \(hidden\)/.test(text));
+  check('...but the code itself appears nowhere in the report', !/ZQ7K/.test(text));
 }
 
 /* ---------------- 7. the persistence beacon ---------------- */

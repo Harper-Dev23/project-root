@@ -32,6 +32,9 @@ const MAX_SAVE_FAILURES = 25;
 const MAX_KEYS_LISTED   = 40;
 
 const BEACON_KEY = 'bm_diag_beacon';
+
+// Storage keys whose VALUES never appear in a report. See describeKeys.
+const REDACTED_KEYS = new Set(['coop_last_code']);
 const PROBE_KEY  = 'bm_diag_probe';
 
 let _installed    = false;
@@ -315,6 +318,13 @@ function describeKeys() {
       if (k.startsWith('bmSave_')) continue;   // already detailed above
       if (shown >= MAX_KEYS_LISTED) { rows.push('  ...more keys not listed'); break; }
       const v = localStorage.getItem(k) || '';
+      // Reports get pasted into chats. A lobby code there lets anyone who reads
+      // it join that lobby while it is still open, so it is shown as present but
+      // never printed. Its presence is the useful fact; the code itself is not.
+      if (REDACTED_KEYS.has(k)) {
+        rows.push(`  ${k} = (hidden)`);
+        continue;
+      }
       // Dev flags change real game behaviour, so show short values in full.
       rows.push(`  ${k} = ${v.length <= 32 ? v : `${bytes(v.length)} of data`}`);
       shown++;
