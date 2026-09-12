@@ -113,8 +113,23 @@ export default class UIScene extends Phaser.Scene {
     // separate bugs. Same unsubscribe discipline as the journal toast above:
     // scenes are REUSED here, so a leaked listener fires on a dead scene.
     this.saveErrorOff = Diagnostics.onSaveError(({ why } = {}) => {
-      this.showToast(`Save failed - ${why || 'browser storage is unavailable'}`);
+      const msg = `Save failed - ${why || 'browser storage is unavailable'}`;
+      // CombatScene SLEEPS this scene (CombatScene.js ~372), and a sleeping
+      // scene neither renders nor runs its timers -- so a toast raised during a
+      // fight would be lost. That is the worst case to lose, because combat is
+      // where post-combat rewards are saved. Hold it and show it on wake.
+      if (this.sys?.isSleeping?.()) { this._pendingSaveToast = msg; return; }
+      this.showToast(msg);
     });
+
+    this._flushPendingSaveToast = () => {
+      if (!this._pendingSaveToast) return;
+      const msg = this._pendingSaveToast;
+      this._pendingSaveToast = null;
+      // Slight delay so it does not collide with the scene redrawing on wake.
+      this.time.delayedCall(500, () => this.showToast(msg));
+    };
+    this.events.on('wake', this._flushPendingSaveToast, this);
 
     // Warned at most once per page load (the flag lives in Diagnostics, since
     // this scene is rebuilt on every scene change). Delayed because the toast
@@ -129,6 +144,9 @@ export default class UIScene extends Phaser.Scene {
       this.journalToastOff = null;
       this.saveErrorOff?.();
       this.saveErrorOff = null;
+      // Scenes are reused, so this must come off with the rest or a second
+      // start would stack another wake handler on the same scene.
+      this.events.off('wake', this._flushPendingSaveToast, this);
     }, this);
     this.events.once('destroy', () => {
       this._cleanupHotkeys?.();
@@ -136,6 +154,9 @@ export default class UIScene extends Phaser.Scene {
       this.journalToastOff = null;
       this.saveErrorOff?.();
       this.saveErrorOff = null;
+      // Scenes are reused, so this must come off with the rest or a second
+      // start would stack another wake handler on the same scene.
+      this.events.off('wake', this._flushPendingSaveToast, this);
     }, this);
 
 
