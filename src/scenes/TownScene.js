@@ -1721,15 +1721,19 @@ export default class TownScene extends Phaser.Scene {
               this.vendorInventoryText.setText(`You need at least ${cost} ${currencyWord} to gamble here.`);
               return;
             }
-            ProgressionManager[currency] -= cost;
-            GameState.save('autosave');
-            this._updateVendorCurrencyDisplay();
 
+            // Check the pool BEFORE charging. This used to charge first and
+            // check second, so an empty pool took the ticket and handed back
+            // nothing but a message — the player paid for the refusal.
             const pool = poolGetter();
             if (!pool.length) {
               this.vendorInventoryText.setText(emptyMessage);
               return;
             }
+
+            ProgressionManager[currency] -= cost;
+            GameState.save('autosave');
+            this._updateVendorCurrencyDisplay();
 
             // A renown origin is now an OVERLAY on the base that was going to
             // drop anyway, not a swap to a separate pool of 13 hand-written
