@@ -67,8 +67,18 @@ for (const [a, b, why] of [
   ['staggering_point', 'whistling_shot', 'bow Disorient: builder before the stronger debuff'],
   ['storm_splitter', 'thunderhead', 'axe Lightning: builder before the payoff that needs it'],
 ]) {
-  const ok = SKILLS[a]?.requiredStat === SKILLS[b]?.requiredStat ? gate(a) < gate(b) : true;
-  console.log('  ' + (ok ? 'PASS' : 'FAIL') + `  ${SKILLS[a].name} ${gate(a)} before ${SKILLS[b].name} ${gate(b)}   (${why})`);
+  // An order can only be enforced between gates on the SAME stat. Across stats
+  // the numbers are unrelated — "CHA 3 before STR 10" guarantees nothing, since a
+  // character can raise either stat without the other. That case used to print
+  // PASS, which read as a guarantee that no longer existed; it now says so.
+  const sa = SKILLS[a]?.requiredStat, sb = SKILLS[b]?.requiredStat;
+  if (sa !== sb) {
+    console.log(`  NOTE  ${SKILLS[a].name} (${sa} ${gate(a)}) and ${SKILLS[b].name} (${sb} ${gate(b)}) are on different stats, `
+      + `so this order is not enforced   (${why})`);
+    continue;
+  }
+  const ok = gate(a) < gate(b);
+  console.log('  ' + (ok ? 'PASS' : 'FAIL') + `  ${SKILLS[a].name} ${sa} ${gate(a)} before ${SKILLS[b].name} ${sb} ${gate(b)}   (${why})`);
   if (!ok) failures++;
 }
 for (const [id, s] of Object.entries(SKILLS)) {
