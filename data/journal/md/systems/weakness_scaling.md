@@ -10,44 +10,44 @@ status: "approved"
 teaser: false
 requires: []
 sort: 20
-version: 6
-updatedAt: 2026-08-23
+version: 7
+updatedAt: 2026-09-12
 ---
 # Weakness Scaling (In Depth)
 
-The exact numbers behind the nine families. For what each one broadly does, see [[Weakness System Overview]].
+How the nine families grow, decay and hurt, with the numbers behind each. For what each family broadly does, see [[Weakness System Overview]].
+
+Every table on this page is generated straight from the game's own combat rules, so the numbers always match what happens in a fight.
 
 ## Thresholds
 
 - **Tier 1** at **100** buildup
 - **Tier 2** at **200** buildup
 
-There is no Tier 3 threshold. Buildup beyond 200 is not wasted — it raises **intensity** instead.
+There is no Tier 3. Buildup beyond 200 is not wasted — it raises **intensity** instead.
 
 ## Intensity
 
-Every effect that scales does so off the same curve:
+Most effects grow with intensity, which is worked out from how far a meter has climbed past Tier 2:
 
 ```
-intensity = 1 + (buildup - 200) / 300     capped at 2.5
+intensity = 1 + (overflow / S) ^ exp          overflow = buildup - 200
 ```
 
-So 200 buildup is intensity 1.0, 350 is 1.5, 500 is 2.0, and 950 or more sits at the 2.5 cap.
+Intensity is exactly **1.0 at 200** in every family. That makes an effect's starting value simply what it does the moment a target reaches Tier 2.
 
-**Five families override that default with their own linear ramp.** The remaining four — Lightning, Expose, Disease and Curse — use the shared curve above.
+**Intensity has no ceiling.** Instead, each *effect* has its own cap. That split is deliberate: a chance should never reach certainty, but a damage tick can keep climbing for as long as you keep investing.
 
-| Family | Ramp per point | Cap | At 500 | At 1500 |
-|---|---|---|---|---|
-| **Fire** | +0.01 | 8.0 | 4.00 | 8.00 |
-| **Toxic** | +0.0075 | 8.0 | 3.25 | 8.00 |
-| **Cold** | +0.007 | 3.0 | 3.00 | 3.00 |
-| **Disorient** | +0.007 | 3.0 | 3.00 | 3.00 |
-| **Lacerate** | +0.0025 | 4.0 | 1.75 | 4.00 |
-| *(shared default)* | +0.00333 | 2.5 | 2.00 | 2.50 |
+The curve is **sublinear**, so doubling a meter never doubles its effect. For most families, going from 1200 to 2400 buildup raises intensity by only about 1.6×. That matters, because several hunters can stack the same family at once, and some abilities multiply buildup outright.
 
-Fire is the steepest in the game. Toxic follows the same shape at roughly half the strength, but shares Fire's ceiling — it simply takes far longer to get there. Cold and Disorient rise quickly and then stop early. Lacerate is the slowest ramp but keeps climbing well past where Cold and Disorient have flattened.
+Three families have their own shape:
 
-Nearly every effect below is written as `base x intensity, capped` — the cap matters, because most reach it well before intensity does.
+- **Fire** and **Toxic** climb faster than the rest.
+- **Lacerate** climbs a little faster than the default early on, then flattens out at high meters.
+
+The other six share the default curve.
+
+One subtlety: an effect doesn't always use its own family's curve. Toxic's chance to skip decay grows at the *default* rate, not Toxic's faster one. The same goes for Expose's critical bonuses and for Disease and Curse. The tables below already account for this.
 
 ## Resilience
 
@@ -57,101 +57,182 @@ Incoming buildup is reduced by a percentage curve, not a flat subtraction:
 reduction = Resilience / (Resilience + 100)
 ```
 
-So **100 Resilience is exactly 50% reduction**, 50 is 33%, 200 is 67%. It never reaches 100%. The percentage applies uniformly regardless of hit size — a small buildup hit is softened but never zeroed, and a large one takes the same proportional cut.
+So **100 Resilience is exactly a 50% reduction**, 50 gives 33%, and 200 gives 67%. It never reaches 100%. The same percentage applies to every hit, so a small hit is softened but never cancelled, and a large one takes the same proportional cut.
 
-Resilience comes from Wisdom (`WIS x 0.5`), from gear, and from temporary status effects, all summed before the curve.
+Resilience comes from Wisdom (`WIS × 0.5`), from gear, and from temporary effects, all added together before the curve.
 
-**Resilience is the only thing that reduces buildup.** Physical, Elemental and Necrotic Resist are damage stats and have no effect on a meter at all — verified directly: a target with 80 in all three resists takes exactly the same buildup as a target with none.
+**Resilience is the only thing that reduces buildup.** Physical, Elemental and Necrotic Resist reduce *damage*, and do nothing to a meter. A target in heavy armour fills its meters at full speed.
 
-Those resists do still apply to the *damage* a family's tier effects deal — a Toxic tick is necrotic, a Fire burn elemental, a Lacerate bleed physical — but they never slow the meter that triggers them. Everything else in the buildup pipeline points the other way: the attacker's gear buildup percentages, vulnerability riders and Expose's physical-family amplification are all multipliers that make buildup land harder.
+Those resists still apply to the damage a family deals once it is active: a Fire burn is elemental, a Toxic tick is necrotic, and a Lacerate bleed is physical.
 
 ## Decay
 
-Unrefreshed buildup decays each turn on a three-band curve, scaled by each family's own weight:
+Buildup that is not refreshed is lost at the end of each turn, in three bands:
 
-| Buildup | Decay per turn |
-|---|---|
-| Below 100 | 1–3 (light chip, so buildup can stick) |
-| 100–200 | ramps 8 → 12 |
-| 200+ | 28, plus 20 per 100 overflow, capped at 140 |
+- **Below 100:** only a light chip, so early buildup has time to stick.
+- **100 to 200:** the loss ramps up steadily.
+- **Past 200:** it climbs with every hundred points of overflow, up to a per-turn maximum.
 
-Only **Fire** carries a heavier weight than baseline (40 against the standard 35), so fire falls off faster than anything else.
+A few families break from that pattern:
 
----
-
-## Per-family numbers
-
-### Lightning — *Zapped / Shocked*
-- **T1:** each jolt rolls **1–4** damage.
-- **T2:** each hit also rolls **extra jolts** — **4** rolls at Shocked, each landing **32%** of the time. Both grow as the meter climbs: the chance reaches its **90%** ceiling around meter **1200**, and the number of rolls keeps rising slowly after that, with no cap. On average that is about **3.5** jolts a hit at meter 400, **6** at 800, **9** at 1200 and **12** at 2400.
-- Jolt damage is applied after crit and is never crit-amplified.
-
-### Cold — *Chilled / Frostbitten*
-- **T1:** Initiative penalty **15%**, capped at **50%**. Initiative Gauge regeneration reduced **35%**, capped at **75%**.
-- **T2:** outgoing damage **−10%**, capped at **−35%**. Evasion **−25%**, capped at **−60%**. Flat gauge drain of **4** at turn start, capped at **35**.
-
-### Fire — *Singed / Ablaze*
-- **T1:** **10** buildup lost on acting. Incoming fire damage **+25%**, capped at **+100%**.
-- **T2:** burn tick of **10**, plus **5 per 100** buildup, at end of turn. Fire does not consume its own meter — instead it uses a **steeper decay curve** than any other family (see below), so it still burns out fastest.
-
-### Disorient — *Dazed / Concussed*
-- **T1:** ability costs **+25%**, capped at **+75%**.
-- **T2:** **6** MP drained at turn start, capped at **40**.
-
-### Lacerate — *Bleeding / Hemorrhaging*
-- **T1:** acting adds **10** more Lacerate to yourself — the only family that feeds itself.
-- **T2:** an end-of-turn tick for **6% of the target's maximum HP x intensity**, reduced by Physical Resist. Its own ramp is `+0.0025 per point`, soft-capping at **22%** around meter 1270.
-
-Lacerate is the only damage family that scales off the *target* rather than off the meter alone, which makes it the one damage-over-time effect that does not fall behind against high-health enemies.
-
-### Expose — *Raw / Flayed*
-- **T1:** target's physical damage reduction cut by **10%**, capped at **20%**. Incoming physical-family buildup **+15%**.
-- **T2:** attacker crit chance **+15%**, capped at **+25%**. Crit damage **+25%**, capped at **+35%**.
-
-### Disease — *Sickened / Plagued*
-- **T1:** healing received **−25%**, capped at **−60%**.
-- **T2:** maximum HP reduced **10%** (scaling with intensity, hard-capped at 40%).
-
-### Toxic — *Poisoned / Envenomed*
-- **T1:** each turn there is a **30%** chance the meter skips its decay entirely, scaling with intensity to a **75%** cap. Toxic is the stickiest family in the game.
-- **T2:** an end-of-turn tick of **10 x intensity**, dealt as **necrotic** damage and reduced by the target's Necrotic Resist.
-- **Decay 30** — the lowest of any family, so what is applied stays applied.
-
-Toxic runs its own linear ramp (`+0.0075 per point`, capped at **8.0**) — the same shape as Fire at roughly half the strength.
-
-### Curse — *Hexed / Afflicted*
-- **T1:** the meter's own decay is reduced **25%**, capped at **60%**.
-- **T2:** decay reduced **50%**, capped at **85%**, and a **1.25x** curse amplification available to riders that read it.
-
-Curse deals no damage of its own. It is a persistence family — it makes itself and its riders hard to shake, and the payoff lives in the skills that consume it.
-
----
+- **Fire** sheds buildup far faster than anything else once it passes Tier 2, and also loses buildup each time a Singed target acts. It burns hot and burns out.
+- **Toxic** decays more slowly than the rest, and at Tier 1 has a chance to skip decay entirely.
+- **Curse** reduces its own decay, which makes it hard to shake once it takes hold.
 
 ## The three damage-over-time families
 
-Fire, Toxic and Lacerate all deal damage at end of turn, and all three are shaped to do it differently.
+Fire, Toxic and Lacerate all deal damage at the end of a turn, but each is built to do it differently.
 
-| Meter | Lacerate | Toxic | Fire |
-|---|---|---|---|
-| 200 | 6% max HP | 10 | 20 |
-| 300 | 7% max HP | 17 | 35 |
-| 500 | 10% max HP | 32 | 65 |
-| 800 | 15% max HP | 55 | 110 |
-| 1000 | 18% max HP | 70 | 130 |
-| 1270 | 22% *(soft cap)* | 80 *(capped)* | 143 |
-| 2000 | 22% max HP | 80 | 180 |
+**Fire — the spike.** Its tick starts gentle and accelerates hard, climbing faster than any other damage in the system. It pays for that with the steepest decay in the game. It rewards investment.
 
-**Fire — the spike.** Scales at `+0.01 per point` **and** adds a flat 5 per 100 meter, so it climbs faster than anything else. It pays for that with the steepest decay in the game: past 200 meter Fire sheds **60 plus 50 per additional 100**, up to 340 a turn — roughly **2.4x** what Lacerate loses at the same meter. Fire burns hot and burns out.
+**Toxic — the grind.** Its tick follows the same accelerating shape as Fire's, but weaker. In exchange it lasts: it decays slowest of the three, and it can skip decay outright. It rewards patience.
 
-**Toxic — the grind.** Scales at `+0.0075 per point` — deliberately half of Fire — with no second term. It consumes nothing, decays slowest at **30**, and at Tier 1 has up to a **75%** chance to skip decay entirely. Half the damage, indefinitely.
+**Lacerate — the equaliser.** It deals a share of the target's **maximum HP** rather than a fixed amount, so it is the only damage-over-time effect that grows with the size of the enemy. Against a high-health target it outpaces Fire at moderate meters, though Fire's accelerating tick overtakes it deep into the meter, where Lacerate has hit its cap. It also feeds itself: each time a Bleeding target acts, more Lacerate is added.
 
-**Lacerate — the equaliser.** The only one that scales off the *target's maximum HP* rather than off its own meter, so it is the only damage-over-time effect whose value does not shrink as enemies get bigger. Against a 100 HP target its 22% ceiling is worth 22 a turn, well under Toxic; against a 900 HP boss that same 22% is nearly 200 a turn, more than Fire at any meter. It also feeds itself — anything the target does adds another 10 to the stack.
-
-Put simply: **Fire scales with investment, Toxic scales with patience, and Lacerate scales with the enemy.**
+Put simply: **Fire scales with investment, Toxic with patience, and Lacerate with the enemy.**
 
 ## Consuming buildup
 
 Many strong abilities **consume** a meter rather than adding to it. Two conventions are worth knowing:
 
-- Most consumers spend in **whole 100-point increments** — a target sitting on 350 has 300 drained and keeps the leftover 50, rather than losing the lot.
+- Most consumers spend in **whole 100-point increments**. A target on 350 has 300 drained and keeps the leftover 50, rather than losing the lot.
 - Some abilities **require** a tier before they will fire at all, and fizzle for free (no cost, no cooldown) if the tier is not met.
+
+<!-- GEN:START - regenerated by tools/gen_weakness_journal.js, do not hand-edit below -->
+
+## Intensity by family
+
+Intensity is **1.0 at 200** buildup in every family, and grows from there with no ceiling. Each effect below carries its own cap instead.
+
+| Family | Curve | At 300 | At 400 | At 600 | At 800 | At 1200 | At 2400 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **Lightning** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+| **Cold** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+| **Fire** | S 149, exp 0.78 | 1.73 | 2.26 | 3.16 | 3.96 | 5.41 | 9.17 |
+| **Disorient** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+| **Lacerate** | S 250, exp 0.6 | 1.58 | 1.87 | 2.33 | 2.69 | 3.3 | 4.69 |
+| **Expose** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+| **Disease** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+| **Toxic** | S 151, exp 0.78 | 1.73 | 2.25 | 3.14 | 3.93 | 5.37 | 9.08 |
+| **Curse** | S 250, exp 0.78 | 1.49 | 1.84 | 2.44 | 2.98 | 3.95 | 6.45 |
+
+## Decay per turn
+
+Buildup that is not refreshed is lost at the end of each turn. These are the amounts lost at each meter.
+
+| Family | At 50 | At 150 | At 200 | At 300 | At 400 | At 600 | At 800 | Most per turn |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Lightning** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Cold** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Fire** | 2 | 18 | 60 | 110 | 160 | 260 | 340 | 340 |
+| **Disorient** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Lacerate** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Expose** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Disease** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+| **Toxic** | 2 | 13 | 24 | 58 | 93 | 161 | 180 | 180 |
+| **Curse** | 2 | 15 | 28 | 68 | 108 | 180 | 180 | 180 |
+
+## Damage over time
+
+Damage each family deals at the end of the target's turn, before resistances. Fire and Toxic deal a fixed amount set by the meter. Lacerate deals a share of the target's maximum HP.
+
+| Meter | Fire (elemental) | Toxic (necrotic) | Lacerate (physical) |
+| --- | --- | --- | --- |
+| 200 | 10 | 8 | 5% max HP |
+| 300 | 14 | 10 | 8% max HP |
+| 400 | 23 | 14 | 9% max HP |
+| 600 | 54 | 30 | 11% max HP |
+| 800 | 100 | 53 | 13% max HP |
+| 1000 | 159 | 82 | 15% max HP |
+| 1200 | 229 | 117 | 16% max HP |
+| 1600 | 404 | 205 | 19% max HP |
+| 2400 | 876 | 441 | 20% max HP *(cap)* |
+
+## Every effect, by family
+
+Values at four meters, the cap each effect stops at, and the meter where it first gets there.
+
+### Lightning — *Zapped / Shocked*
+
+**Zapped:** each jolt deals **1–4** damage. A jolt is added after every other part of the hit, so it is never scaled by skill bonuses, buffs or critical hits.
+
+**Shocked:** each hit rolls some number of extra jolts, each landing independently. A hit always deals its first jolt, plus however many of the extra rolls land.
+
+| Meter | Extra jolt rolls | Chance each lands | Average jolts per hit |
+| --- | --- | --- | --- |
+| 200 | 4 | 32% | 2.3 |
+| 300 | 5 | 43% | 3.2 |
+| 400 | 5 | 51% | 3.5 |
+| 600 | 6 | 63% | 4.8 |
+| 800 | 7 | 73% | 6.1 |
+| 1200 | 9 | 90% | 9.1 |
+| 1600 | 10 | 90% | 10.0 |
+| 2400 | 12 | 90% | 11.8 |
+
+### Cold — *Chilled / Frostbitten*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Chilled | Initiative reduced | 15% | 28% | 45% | 73% | 90% | meter 2150 |
+| Chilled | Initiative Gauge regeneration reduced | 25% | 46% | 75% | 90% | 90% | meter 1050 |
+| Frostbitten | Outgoing damage reduced | 10% | 19% | 30% | 49% | 90% | meter 3760 |
+| Frostbitten | Evasion reduced | 20% | 37% | 60% | 90% | 90% | meter 1440 |
+| Frostbitten | Initiative Gauge drained at turn start | 4 | 7 | 12 | 19 | 35 | meter 3620 |
+
+### Fire — *Singed / Ablaze*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Singed | Fire buildup lost each time the target acts | 23 | 53 | 93 | 158 | none | — |
+| Singed | Incoming Fire buildup increased | 34% | 76% | 133% | 200% | 200% | meter 1370 |
+
+Ablaze deals burn damage at the end of each turn; see **Damage over time** above.
+
+### Disorient — *Dazed / Concussed*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Dazed | Ability costs increased | 25% | 46% | 75% | 90% | 90% | meter 1050 |
+| Concussed | MP drained at turn start | 6 | 11 | 18 | 29 | 40 | meter 2490 |
+
+### Lacerate — *Bleeding / Hemorrhaging*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Bleeding | Lacerate added to itself each time the target acts | 8 | 15 | 22 | 31 | none | — |
+
+Hemorrhaging deals bleed damage at the end of each turn; see **Damage over time** above.
+
+### Expose — *Raw / Flayed*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Raw | Physical damage reduction lowered | 7 pts | 12 pts | 20 pts | 32 pts | 90 pts | beyond 5000 |
+| Raw | Incoming Disorient and Lacerate buildup increased | 13% | 23% | 38% | 61% | none | — |
+| Flayed | Attacker crit chance increased | 8% | 15% | 25% | 41% | 90% | meter 4820 |
+| Flayed | Attacker crit damage increased | 12% | 22% | 35% | 57% | 90% | meter 3050 |
+
+### Disease — *Sickened / Plagued*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Sickened | Healing received reduced | 20% | 37% | 60% | 90% | 90% | meter 1440 |
+| Plagued | Maximum HP reduced | 8% | 15% | 25% | 40% | 40% | meter 1570 |
+
+### Toxic — *Poisoned / Envenomed*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Poisoned | Chance each turn that Toxic does not decay | 20% | 37% | 60% | 60% | 60% | meter 810 |
+
+Envenomed deals poison damage at the end of each turn; see **Damage over time** above.
+
+### Curse — *Hexed / Afflicted*
+
+| Tier | Effect | At 200 | At 400 | At 800 | At 1600 | Cap | Cap reached |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Hexed | Curse's own decay reduced | 20% | 37% | 60% | 70% | 70% | meter 1010 |
+| Afflicted | Curse's own decay reduced | 20% | 37% | 60% | 70% | 70% | meter 1010 |
+| Afflicted | Amplification for curse-scaled on-hit effects | ×1.05 | ×1.93 | ×3.12 | ×5.07 | none | — |
+
+<!-- GEN:END -->

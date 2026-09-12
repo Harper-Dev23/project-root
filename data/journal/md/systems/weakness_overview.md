@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 10
-version: 4
-updatedAt: 2026-09-07
+version: 5
+updatedAt: 2026-09-12
 ---
 # Weakness System Overview
 
@@ -64,6 +64,6 @@ What a consumer spends is only ever the buildup itself. Whatever the meter was d
 
 **Only Resilience.** Physical, Elemental and Necrotic Resist reduce incoming *damage* — they do nothing whatsoever to incoming buildup. A target in heavy armour still fills its meters at full speed.
 
-That makes Resilience the single defensive stat against the whole weakness system, and it is why Wisdom carries more weight than its damage contribution suggests. Everything else in the buildup pipeline is a multiplier that makes buildup land *harder*: the attacker's gear buildup percentages, vulnerability riders, and Expose's amplification of physical-family buildup.
+That makes Resilience the single defensive stat against the whole weakness system, and it is why Wisdom carries more weight than its damage contribution suggests. Everything else in the buildup pipeline is a multiplier that makes buildup land *harder*: the attacker's gear buildup percentages, vulnerability riders, a Singed target taking extra Fire buildup, and Expose's amplification of Disorient and Lacerate buildup.
 
 Damage typing still matters once a family's effects start dealing damage — a Toxic tick is necrotic and *is* reduced by Necrotic Resist, a Fire burn is elemental, a Lacerate bleed is physical. The resist applies to the damage those ticks deal, never to the meter that produced them.
