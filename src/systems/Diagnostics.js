@@ -378,7 +378,14 @@ export function report() {
   return L.join('\n');
 }
 
+// Every consumer imports the DEFAULT (`import Diagnostics from ...`), so a
+// function missing from this object does not exist as far as the game is
+// concerned -- however correct its named export is. consumeStorageWarning was
+// left out of exactly this list and crashed UIScene.create on boot, while the
+// tests kept passing because they called it off the module namespace instead.
+// tools/headless/diagnostics.mjs now asserts this object matches the named
+// exports, so the next one cannot slip through the same gap.
 export default {
   install, report, noteError, noteSaveFailure, onSaveError,
-  setLiveStateProvider, storageStatus
+  setLiveStateProvider, storageStatus, consumeStorageWarning
 };

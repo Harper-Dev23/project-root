@@ -344,6 +344,45 @@ console.log('=== end to end through the real GameState.save() ===');
     (globalThis.localStorage.getItem('bmSave_autosave') || '').slice(0, 40) + '...');
 }
 
+/* ---------------- 11. the default export is the real surface ---------------- */
+//
+// Every consumer does `import Diagnostics from ...`, so a function that exists
+// as a named export but is missing from the default object does not exist to the
+// game. That is not hypothetical: consumeStorageWarning was left out of it and
+// crashed UIScene.create on boot, while every check above passed because they
+// used the module NAMESPACE, where the named export was present and fine.
+//
+// So this compares the two surfaces directly, and calls each function the way
+// the shipped code calls it.
+console.log('=== default export matches the named exports ===');
+{
+  const ns = await import('../../src/systems/Diagnostics.js');
+  const def = ns.default;
+
+  const named = Object.keys(ns).filter(k => k !== 'default' && typeof ns[k] === 'function');
+  const missing = named.filter(k => typeof def[k] !== 'function');
+  check('every named function is on the default export', missing.length === 0,
+    missing.length ? 'MISSING: ' + missing.join(', ') : named.length + ' functions');
+
+  // The exact call sites that ship, through the default export only.
+  const calls = {
+    'UIScene.create': () => def.consumeStorageWarning(),
+    'UIScene.create (onSaveError)': () => def.onSaveError(() => {})(),
+    'GameState.save': () => def.noteSaveFailure('slot1', 'why'),
+    'main.js boot': () => def.install(),
+    'main.js provider': () => def.setLiveStateProvider(() => ({})),
+    'bmDiag': () => def.report(),
+    'storageStatus': () => def.storageStatus(),
+    'noteError': () => def.noteError('error', 'x'),
+  };
+  for (const [where, fn] of Object.entries(calls)) {
+    let threw = null;
+    try { fn(); } catch (e) { threw = e; }
+    check(`${where} works through the default export`, threw === null,
+      threw ? String(threw.message) : 'ok');
+  }
+}
+
 console.log('\n' + (failures === 0
   ? 'ALL CHECKS PASSED'
   : failures + ' CHECK(S) FAILED'));
