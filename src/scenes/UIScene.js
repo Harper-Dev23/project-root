@@ -9,6 +9,7 @@ import { registerHotkeys } from '../systems/HotkeyManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { anyQuestTabHasNew } from './overlays/QuestOverlay.js';
 import { setupSceneCursor } from '../ui/cursor.js';
+import Diagnostics from '../systems/Diagnostics.js';
 
 // Every menu overlay scene key. Hoisted to module scope (was a local inside
 // create()) so other scenes can ask "is a menu already open?" before layering
@@ -107,15 +108,34 @@ export default class UIScene extends Phaser.Scene {
       this.showToast(message || 'New Journal entry');
     });
 
+    // A failed save was previously invisible outside the console, which is how
+    // one player ended up reporting purchases, gambles and quest progress as
+    // separate bugs. Same unsubscribe discipline as the journal toast above:
+    // scenes are REUSED here, so a leaked listener fires on a dead scene.
+    this.saveErrorOff = Diagnostics.onSaveError(({ why } = {}) => {
+      this.showToast(`Save failed - ${why || 'browser storage is unavailable'}`);
+    });
+
+    // Warned at most once per page load (the flag lives in Diagnostics, since
+    // this scene is rebuilt on every scene change). Delayed because the toast
+    // layer is built later, in buildUI(), and showToast() silently no-ops
+    // before it exists.
+    const storageWarning = Diagnostics.consumeStorageWarning();
+    if (storageWarning) this.time.delayedCall(1200, () => this.showToast(storageWarning));
+
     this.events.once('shutdown', () => {
       this._cleanupHotkeys?.();
       this.journalToastOff?.();
       this.journalToastOff = null;
+      this.saveErrorOff?.();
+      this.saveErrorOff = null;
     }, this);
     this.events.once('destroy', () => {
       this._cleanupHotkeys?.();
       this.journalToastOff?.();
       this.journalToastOff = null;
+      this.saveErrorOff?.();
+      this.saveErrorOff = null;
     }, this);
 
 

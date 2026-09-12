@@ -3,6 +3,9 @@ import { getXPNeededForLevel, LEVEL_CAP } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
+// Diagnostics imports nothing from the project, so this direction is safe and
+// can never become a cycle. See the header of that file.
+import Diagnostics from './Diagnostics.js';
 
 const defaultEquipment = {
   weaponMain: null,
@@ -551,6 +554,12 @@ const GameState = {
         : `Could not write the save: ${e && e.message ? e.message : e}`;
       console.error(`[GameState] Save to '${slot}' failed - ${why}`);
       this.lastSaveError = why;
+      // `lastSaveError` was set here and read NOWHERE for as long as it existed,
+      // so a player whose browser refuses to persist anything saw no sign of it:
+      // purchases, gambles and quest-flag transitions all appeared to work and
+      // then reverted on reload. This hands the failure to whoever is listening
+      // (UIScene raises a toast) and records it for bmDiag().
+      Diagnostics.noteSaveFailure(slot, why);
       return false;
     }
     this.lastSaveError = null;

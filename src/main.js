@@ -1,5 +1,7 @@
 import GameState from './systems/GameState.js';
 import SceneManager from './systems/SceneManager.js';
+import ProgressionManager from './systems/ProgressionManager.js';
+import Diagnostics from './systems/Diagnostics.js';
 import LoadingScene from './scenes/LoadingScene.js';
 import MainMenuScene from './scenes/MainMenuScene.js';
 import TownScene from './scenes/TownScene.js';
@@ -114,6 +116,27 @@ async function warmFonts() {
 }
 
 function boot() {
+  // BEFORE Phaser starts, so an error thrown while scenes are constructed is
+  // captured too. Installs the window.bmDiag() console report.
+  Diagnostics.install();
+
+  // Lets the report show in-memory quest state next to what is actually on
+  // disk. That GAP is the bug being hunted: when a save silently fails, the
+  // two disagree and quest markers appear to walk backwards after a reload.
+  Diagnostics.setLiveStateProvider(() => ({
+    scene:      GameState.currentScene || '(none)',
+    characters: (GameState.characters || []).length,
+    party:      (GameState.party || []).length,
+    questFlags: [...(ProgressionManager.questFlags || [])],
+    scenarios:  [...(ProgressionManager.completedScenarios || [])],
+    // The three currencies vendors and gambles charge, since "I could not buy
+    // it" and "the ticket vanished" are reported against these.
+    tickets:    `hunt=${ProgressionManager.huntTickets ?? '?'} `
+              + `reckoning=${ProgressionManager.reckoningMarks ?? '?'} `
+              + `tribe=${ProgressionManager.tribeTickets ?? '?'}`,
+    lastSaveError: GameState.lastSaveError || '(none)'
+  }));
+
   const game = new Phaser.Game(config);
 
   // Create and attach the SceneManager to GameState so it can be accessed globally
