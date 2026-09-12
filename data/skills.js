@@ -8610,7 +8610,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "STR",
-    requiredValue: 5,  // was INT 2 (owner pass, 2026-09-12)
+    requiredValue: 3,  // was STR 5 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 2,
     cooldown: 1,
@@ -8740,7 +8740,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
-    requiredValue: 5,  // was 4 (even spread, 2026-09-10)
+    requiredValue: 2,  // was WIS 5 (owner pass 2, 2026-09-12)
     // Moved Major → Bonus (cross-weapon balance audit, staff variety pass)
     // — damage nerfed 100%→65%; Disease buildup and the tier-cross Toxic
     // reward are untouched.
@@ -8984,7 +8984,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["staff"],
     requiredStat: "INT",
-    requiredValue: 7,  // was 5 (even spread, 2026-09-10)
+    requiredValue: 8,  // was INT 7 (owner pass 2, 2026-09-12)
     actionCost: "reaction",
     mpCost: 3,
     cooldown: 3,
@@ -9283,8 +9283,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 8,
+    requiredStat: "STR",
+    requiredValue: 7,  // was INT 8 (owner pass 2, 2026-09-12)
     // Moved Major → Bonus (cross-weapon balance audit, staff variety pass)
     // — an AoE hitting up to 4 targets deserves a bigger cut than a
     // single-target skill, so base nerfed 85%→55% (not the usual ~65%);
@@ -9425,8 +9425,8 @@ Object.assign(RAW_SKILLS, {
     mechanic: "active",
     versionTag: "v3.23",
     requiredWeapon: ["staff"],
-    requiredStat: "INT",
-    requiredValue: 3,  // was 2 (even spread, 2026-09-10)
+    requiredStat: "DEX",
+    requiredValue: 4,  // was INT 3 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 0,
     cooldown: 3,
@@ -9695,7 +9695,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["staff"],
     requiredStat: "STR",
-    requiredValue: 6,  // was INT 10 (owner pass, 2026-09-12)
+    requiredValue: 5,  // was STR 6 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     cooldown: 6,
@@ -9773,7 +9773,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["staff"],
     requiredStat: "WIS",
-    requiredValue: 2,
+    requiredValue: 5,  // was WIS 2 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 5,
     cooldown: 5,
@@ -11378,8 +11378,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 3,  // was DEX 2 (owner pass, 2026-09-12)
+    requiredStat: "STR",
+    requiredValue: 4,  // was DEX 3 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
@@ -11760,7 +11760,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
-    requiredValue: 8,  // was 5 (even spread, 2026-09-10)
+    requiredValue: 3,  // was DEX 8 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 0,
     requiresTarget: false,
@@ -11883,8 +11883,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["dagger"],
-    requiredStat: "DEX",
-    requiredValue: 10,  // was 7 (even spread, 2026-09-10)
+    requiredStat: "STR",
+    requiredValue: 6,  // was DEX 10 (owner pass 2, 2026-09-12)
     actionCost: ["major", "bonus"],
     mpCost: 4,
     requiresTarget: true,
@@ -11956,7 +11956,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["dagger"],
     requiredStat: "WIS",
-    requiredValue: 5,
+    requiredValue: 7,  // was WIS 5 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 4,
     requiresTarget: true,
@@ -12395,7 +12395,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["dagger"],
     requiredStat: "DEX",
-    requiredValue: 12,  // was DEX 13 (owner pass, 2026-09-12)
+    requiredValue: 11,  // was DEX 12 (owner pass 2, 2026-09-12)
     actionCost: "reaction",
     mpCost: 3,
     cooldown: 4,
@@ -12735,8 +12735,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["dagger"],
-    requiredStat: "WIS",
-    requiredValue: 7,
+    requiredStat: "STR",
+    requiredValue: 5,  // was WIS 7 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 4,
     requiresTarget: true,
@@ -13266,7 +13266,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
-    requiredValue: 5,  // was 3 (even spread, 2026-09-10)
+    requiredValue: 2,  // was DEX 5 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 3,
     requiresTarget: true,
@@ -13527,7 +13527,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["sword_1h"],
     requiredStat: "CHA",
-    requiredValue: 5,  // was 6: CHA gates above 4 cut 25% (owner, 2026-09-10)
+    requiredValue: 6,  // was CHA 5 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 3,
     requiresTarget: true,
@@ -13664,7 +13664,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
-    requiredValue: 12,  // was DEX 13 (owner pass, 2026-09-12)
+    requiredValue: 11,  // was DEX 12 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -13859,8 +13859,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["sword_1h"],
-    requiredStat: "DEX",
-    requiredValue: 7,  // was 5 (even spread, 2026-09-10)
+    requiredStat: "STR",
+    requiredValue: 6,  // was DEX 7 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -14411,7 +14411,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
-    requiredValue: 11,  // was DEX 12 (owner pass, 2026-09-12)
+    requiredValue: 10,  // was DEX 11 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -14511,7 +14511,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["sword_1h"],
     requiredStat: "DEX",
-    requiredValue: 10,  // was DEX 11 (owner pass, 2026-09-12)
+    requiredValue: 7,  // was DEX 10 (owner pass 2, 2026-09-12)
     actionCost: "reaction",
     mpCost: 3,
     cooldown: 4,
@@ -15069,7 +15069,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CHA",
-    requiredValue: 3,
+    requiredValue: 4,  // was CHA 3 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
@@ -15232,7 +15232,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["axe_2h"],
     requiredStat: "CHA",
-    requiredValue: 4,  // was 5: CHA gates above 4 cut 25% (owner, 2026-09-10)
+    requiredValue: 5,  // was CHA 4 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 4,
     requiresTarget: false,
@@ -15320,7 +15320,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 12,  // was 11 (even spread, 2026-09-10)
+    requiredValue: 11,  // was STR 12 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     requiresTarget: true,
@@ -15563,7 +15563,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "CHA",
-    requiredValue: 5,  // was 6: CHA gates above 4 cut 25% (owner, 2026-09-10)
+    requiredValue: 6,  // was CHA 5 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -15827,7 +15827,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 13,
+    requiredValue: 12,  // was STR 13 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -15886,8 +15886,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 11,  // was 8 (even spread, 2026-09-10)
+    requiredStat: "INT",
+    requiredValue: 6,  // was STR 11 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -16321,7 +16321,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
-    requiredValue: 7,  // was 4 (even spread, 2026-09-10)
+    requiredValue: 9,  // was STR 7 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 4,
     requiresTarget: true,
@@ -16645,7 +16645,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "WIS",
-    requiredValue: 4,
+    requiredValue: 5,  // was WIS 4 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -16738,7 +16738,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
-    requiredValue: 12,
+    requiredValue: 7,  // was STR 12 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     requiresTarget: true,
@@ -16812,7 +16812,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
-    requiredValue: 10,  // was 9 (even spread, 2026-09-10)
+    requiredValue: 12,  // was STR 10 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -16905,7 +16905,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
     requiredStat: "STR",
-    requiredValue: 7,  // was 4 (even spread, 2026-09-10)
+    requiredValue: 10,  // was STR 7 (owner pass 2, 2026-09-12)
     actionCost: ["major", "bonus"],
     mpCost: 6,
     requiresTarget: true,
@@ -17008,8 +17008,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["mace_2h"],
-    requiredStat: "STR",
-    requiredValue: 9,  // was 8 (even spread, 2026-09-10)
+    requiredStat: "INT",
+    requiredValue: 7,  // was STR 9 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     requiresTarget: true,
@@ -17586,7 +17586,7 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     requiredWeapon: ["mace_2h"],
     requiredStat: "WIS",
-    requiredValue: 2,
+    requiredValue: 4,  // was WIS 2 (owner pass 2, 2026-09-12)
     actionCost: "bonus",
     mpCost: 4,
     requiresTarget: true,
@@ -18335,8 +18335,8 @@ Object.assign(RAW_SKILLS, {
     mechanic: "active",
     versionTag: "v3.23",
     requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 5,  // was DEX 4 (owner pass, 2026-09-12)
+    requiredStat: "STR",
+    requiredValue: 4,  // was DEX 5 (owner pass 2, 2026-09-12)
     // Moved Major → Bonus (cross-weapon balance audit, bow variety pass) —
     // was already a lighter 75% base (a "quick tag" skill by design), nerfed
     // further to 50% to offset the action-economy gain; the lodge/dislodge
@@ -19188,8 +19188,8 @@ Object.assign(RAW_SKILLS, {
     mechanic: "active",
     versionTag: "v3.23",
     requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 7,  // was 3 (even spread, 2026-09-10)
+    requiredStat: "STR",
+    requiredValue: 5,  // was DEX 7 (owner pass 2, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     cooldown: 5,
@@ -19253,8 +19253,8 @@ Object.assign(RAW_SKILLS, {
     mechanic: "active",
     versionTag: "v3.23",
     requiredWeapon: ["bow"],
-    requiredStat: "DEX",
-    requiredValue: 12,  // was 11 (even spread, 2026-09-10)
+    requiredStat: "STR",
+    requiredValue: 7,  // was DEX 12 (owner pass 2, 2026-09-12)
     actionCost: ["major", "bonus"],
     // Cost/cooldown toned down along with dropping the old hard dual-
     // requirement gate (was 10/8) — this skill no longer requires anything
