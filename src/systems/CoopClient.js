@@ -206,8 +206,12 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
         // The full hunter data for EVERY player, sent once. The board cannot
         // be built from the lobby view alone, which carries only names.
         client.roster = msg.roster || [];
+        // Enemy gear is rolled locally by every client to draw the board, so
+        // the server sends one seed and everyone rolls the same equipment.
+        // Without it each player saw the same enemy wearing different gear.
+        client.gearSeed = Number.isFinite(msg.gearSeed) ? msg.gearSeed : null;
         client.status = CoopStatus.FIGHTING;
-        emit('started', { state: msg.state, roster: client.roster });
+        emit('started', { state: msg.state, roster: client.roster, gearSeed: client.gearSeed });
         emit('status', client.status);
         break;
 

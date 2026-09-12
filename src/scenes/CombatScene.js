@@ -24,6 +24,7 @@ import { HuntManager } from '../systems/HuntManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase } from '../systems/ItemFactory.js';
+import { makeRng, isSeed } from '../systems/seededRng.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
 // The board's own geometry, shared so the AI and the scene cannot disagree
@@ -258,8 +259,12 @@ function _formulaPartColor(kind, label) {
 // that file's comment). Don't redefine it here again.
 
 // Training encounters use this — caps at epic since legendary isn't implemented yet.
-function rollEnemyDropRarity() {
-  const r = Math.random();
+//
+// `rng` is optional and defaults to ambient randomness, so single player is
+// untouched. Co-op passes the fight's seeded stream so every client rolls the
+// same enemy gear — see seededRng.js and _placeEnemies.
+function rollEnemyDropRarity(rng = Math.random) {
+  const r = rng();
   if (r < 0.55) return 'uncommon';
   if (r < 0.88) return 'rare';
   return 'epic';
@@ -269,17 +274,46 @@ function rollEnemyDropRarity() {
 // rollEnemyDropRarity(), but lootQualityPercent (from the Hunt Plan/zone/
 // weather modifier pipeline — see HuntModifiers.js) shifts weight out of
 // uncommon and into rare/epic — never guaranteed, just biased.
-function rollHuntDropRarity(lootQualityPercent = 0) {
+function rollHuntDropRarity(lootQualityPercent = 0, rng = Math.random) {
   let uncommon = 55, rare = 33, epic = 12;
   const shift = Math.min(uncommon - 5, Math.max(0, lootQualityPercent) * 0.6);
   uncommon -= shift;
   rare += shift * 0.6;
   epic += shift * 0.4;
 
-  const r = Math.random() * 100;
+  const r = rng() * 100;
   if (r < uncommon) return 'uncommon';
   if (r < uncommon + rare) return 'rare';
   return 'epic';
+}
+
+/**
+ * The skill-shaped button an Identify tonic or Severing Chant is played as.
+ *
+ * ONE definition, because there are now two callers that must agree exactly:
+ * the action menu builds these for display, and _findSkillFor resolves them
+ * back from an id. Co-op is why the second caller exists — an action crosses
+ * the wire as `skill: '<id>'`, and for these the id is the ITEM id, which is
+ * not a key in SKILLS. Before this, the server looked one up, found nothing,
+ * and refused every chant in co-op with "no such skill".
+ *
+ * Returns null for an id with no `combatUse`, so a genuine unknown skill id is
+ * still refused rather than quietly becoming an item.
+ */
+function combatItemAbility(itemId, count = 1) {
+  const base = Items[itemId];
+  if (!base?.combatUse) return null;
+  return {
+    id: itemId,
+    name: count > 1 ? `${base.name} x${count}` : base.name,
+    description: base.description,
+    itemUse: base.combatUse,
+    actionCost: 'bonus',
+    mechanic: 'item',
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['item'],
+  };
 }
 
 // Returns all item IDs of a given type/slot from the Items catalogue.
@@ -334,6 +368,10 @@ export default class CombatScene extends Phaser.Scene {
     this.coopParty = [];        // every player's hunters, ours and theirs
     this._coopUnsubs = [];
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
+    // Set only in co-op, by the server. Makes every client roll the SAME random
+    // enemy gear as the authoritative board — see _placeEnemies. Absent in
+    // single player, which keeps rolling from ambient randomness.
+    this.gearSeed = Number.isFinite(data.gearSeed) ? data.gearSeed : null;
     this.scenarioId = data.scenarioId || 'training_encounter_1';
     this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
     this.localChatScript = getLocalChatScript(this.scenarioId);
@@ -1721,6 +1759,16 @@ export default class CombatScene extends Phaser.Scene {
     // same ids. Summons keep counting up from wherever placement finished.
     this._nextEnemyUid = 0;
 
+    // The fight's gear stream, when the fight has one.
+    //
+    // Built HERE rather than in create() because the server reaches placement
+    // through host.__begin(), which never runs create() -- putting it there
+    // would have left the authoritative board rolling ambient randomness while
+    // the clients rolled from the seed, which is the same mismatch in a new
+    // disguise. Null in single player, where everything falls back to
+    // Math.random exactly as before.
+    this._gearRng = isSeed(this.gearSeed) ? makeRng(this.gearSeed) : null;
+
     const scenario = COMBAT_SCENARIOS[scenarioId];
     if (!scenario) {
       console.error(`Scenario not found: ${scenarioId}`);
@@ -2001,17 +2049,22 @@ export default class CombatScene extends Phaser.Scene {
       if (isWeaponSlot) return;
       const pool = getItemIdsByTypeSlot('armor', equipSlot);
       if (!pool.length) return;
-      itemId = pickBaseId(pool, itemLevel, { maxBaseTier });
+      itemId = pickBaseId(pool, itemLevel, { maxBaseTier, rng: this._gearRng || undefined });
       if (!itemId) return;
     }
+
+    // Every roll below draws from the fight's gear stream when there is one, so
+    // a co-op client reproduces the server's enemy exactly. Undefined in single
+    // player, where each function falls back to Math.random as it always did.
+    const gearRng = this._gearRng || undefined;
 
     let rarity = dropCfg.rarity;
     if (!rarity) {
       if (this.isHunt) {
         const lootQualityPercent = HuntManager.getState()?.combinedModifiers?.lootQualityPercent || 0;
-        rarity = rollHuntDropRarity(lootQualityPercent);
+        rarity = rollHuntDropRarity(lootQualityPercent, gearRng || Math.random);
       } else {
-        rarity = rollEnemyDropRarity();
+        rarity = rollEnemyDropRarity(gearRng || Math.random);
       }
     }
     // historic-rarity gear (e.g. Bloodthirster) is fixed/scripted, not a
@@ -2019,7 +2072,7 @@ export default class CombatScene extends Phaser.Scene {
     // forgot to pass an explicit rarity, matching how the quest-reward copy
     // of this same item is created (rollAffixes: false) in TownScene.js.
     const rollAffixes = dropCfg.rollAffixes ?? (rarity !== 'common' && rarity !== 'historic');
-    const inst = createItemInstance(itemId, { rarity, rollAffixes, itemLevel });
+    const inst = createItemInstance(itemId, { rarity, rollAffixes, itemLevel, rng: gearRng });
     if (!inst) return;
 
     // Mark whether this instance should drop on victory
@@ -4751,20 +4804,9 @@ export default class CombatScene extends Phaser.Scene {
       // makes a pointless use a free no-op, so nothing is ever spent.
       counts.set(inst.id, (counts.get(inst.id) || 0) + 1);
     }
-    return Array.from(counts.entries()).map(([id, count]) => {
-      const base = Items[id];
-      return {
-        id,
-        name: count > 1 ? `${base.name} x${count}` : base.name,
-        description: base.description,
-        itemUse: base.combatUse,
-        actionCost: 'bonus',
-        mechanic: 'item',
-        requiresTarget: true,
-        targetRequirement: 'enemy',
-        tags: ['item'],
-      };
-    });
+    return Array.from(counts.entries())
+      .map(([id, count]) => combatItemAbility(id, count))
+      .filter(Boolean);
   }
 
   // Dispatch for a single Identify/Sever use — see the `ability.itemUse`
@@ -4778,8 +4820,14 @@ export default class CombatScene extends Phaser.Scene {
     const cfg = ability?.itemUse;
     if (!cfg || !user || !target) return;
 
+    // Whose bag is this? In single player and on a co-op CLIENT, the global
+    // inventory belongs to the player taking the action, so not holding the item
+    // is a refusal. A co-op SERVER holds nobody's inventory — it has its own
+    // empty module singleton — so requiring a copy there refused every chant in
+    // co-op with "doesn't have it anymore". The server rules on the board; the
+    // acting client is what spends the item.
     const inst = (GameState.inventory || []).find(it => isItemInstance(it) && it.id === ability.id);
-    if (!inst) {
+    if (!inst && !this.isAuthoritativeHost) {
       this._log(`${user.name} doesn't have ${ability.name} anymore.`);
       return;
     }
@@ -4834,7 +4882,9 @@ export default class CombatScene extends Phaser.Scene {
   _spendBonusActionAndItem(user, inst) {
     user.actionsLeft = user.actionsLeft || {};
     user.actionsLeft.bonus = Math.max(0, (user.actionsLeft.bonus || 0) - 1);
-    InventorySystem.removeGlobalItem(inst);
+    // No instance on a co-op server, which owns the action economy but nobody's
+    // bag. The action is still spent; the item is spent by the acting client.
+    if (inst) InventorySystem.removeGlobalItem(inst);
   }
 
 
@@ -5052,6 +5102,10 @@ export default class CombatScene extends Phaser.Scene {
 
     const off = [];
     off.push(client.on('state', (state) => {
+      // The server accepted something, so the optimistically-spent item is
+      // genuinely gone. Clearing it here stops a LATER unrelated refusal from
+      // handing back an item that was already used.
+      this._pendingItemUse = null;
       const report = this._applyNetState(state);
       if (!report.ok) {
         // Rather than draw a board we know is incomplete, ask for the whole
@@ -5088,7 +5142,18 @@ export default class CombatScene extends Phaser.Scene {
       this._scheduleLogRender?.();
     }));
 
-    off.push(client.on('error', (reason) => this._log(`⚠ ${reason}`)));
+    off.push(client.on('error', (reason) => {
+      this._log(`⚠ ${reason}`);
+      // An item was spent optimistically when the action was sent (see the
+      // co-op branch of _resolveAction). A refusal means it was never used, so
+      // it goes back in the bag rather than being lost to a mis-click.
+      const inst = this._pendingItemUse;
+      this._pendingItemUse = null;
+      if (inst && !(GameState.inventory || []).includes(inst)) {
+        (GameState.inventory = GameState.inventory || []).push(inst);
+        this._log(`${Items[inst.id]?.name || 'The item'} was not used and is still yours.`);
+      }
+    }));
 
     off.push(client.on('over', (msg) => {
       this.combatEnded = true;
@@ -5598,7 +5663,14 @@ export default class CombatScene extends Phaser.Scene {
   _findSkillFor(actor, skillRef) {
     if (!skillRef) return null;
     if (typeof skillRef === 'object') return skillRef;
-    return (actor?.skills || []).find(s => s?.id === skillRef) || SKILLS[skillRef] || null;
+    // Combat items are resolved LAST, so a real skill of the same id always
+    // wins. They have to be resolvable at all because a co-op action arrives as
+    // a bare id string, and for an Identify tonic or Severing Chant that id
+    // belongs to the item, not to SKILLS.
+    return (actor?.skills || []).find(s => s?.id === skillRef)
+      || SKILLS[skillRef]
+      || combatItemAbility(skillRef)
+      || null;
   }
 
   /**
@@ -5643,6 +5715,19 @@ export default class CombatScene extends Phaser.Scene {
         skill: ability.id,
         target: target ? this._unitRef(target) : null,
       });
+
+      // Combat items are the one action a client also applies locally, and the
+      // exception is principled rather than convenient: the item lives in THIS
+      // player's bag, which the server cannot see or spend, and the effect is a
+      // pure lookup against gear both sides now roll from one seed — no dice, so
+      // nothing can diverge. The server still rules on the board, which is what
+      // makes the loot authoritative.
+      if (ability.itemUse && target) {
+        this._pendingItemUse = (GameState.inventory || [])
+          .find(it => isItemInstance(it) && it.id === ability.id) || null;
+        this._useCombatItem(actor, target, ability);
+      }
+
       this._exitTargetingMode?.();
       return { ok: true, sent: true, actor, skill: ability, target };
     }

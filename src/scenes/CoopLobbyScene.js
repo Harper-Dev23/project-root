@@ -584,6 +584,9 @@ export default class CoopLobbyScene extends Phaser.Scene {
       mode: 'coop',
       coopClient: this.client,
       scenarioId: this.client.lobby?.scenarioId || this.scenarioId,
+      // The server's enemy-gear seed, so this board's enemies carry the same
+      // equipment — and therefore the same derived stats — as everyone else's.
+      gearSeed: this.client.gearSeed ?? null,
     });
   }
 

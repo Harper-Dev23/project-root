@@ -22,6 +22,7 @@ if (!globalThis.Phaser) {
 
 import { createCombatHost } from '../tools/headless/combatHost.js';
 import { seed as seedRng } from '../tools/headless/phaserStub.js';
+import { randomSeed } from '../src/systems/seededRng.js';
 import { startCombat, snapshotBoard } from '../tools/headless/fight.js';
 import { fromWireCharacter } from '../src/systems/CoopWire.js';
 import { GameplaySettings } from '../src/systems/GameplaySettings.js';
@@ -60,7 +61,7 @@ export { toWireCharacter, fromWireCharacter } from '../src/systems/CoopWire.js';
  * replaces the global Math.random, so a server that seeded every session would
  * have each new hunt reset the randomness of every hunt already in progress.
  */
-export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null, quickCombat = false }) {
+export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null, quickCombat = false, gearSeed = null }) {
   if (!CombatScene) throw new Error('createSession needs the CombatScene class');
   if (!players.length) throw new Error('a session needs at least one player');
 
@@ -170,6 +171,20 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     slotMap[slot] = char.instanceId || char.id;
   }
 
+  // Enemy gear is ROLLED, and every client runs placement locally to draw the
+  // board, so without a shared seed each player saw a different Gorrek with
+  // different derived stats. One seed decided here, sent to everyone, makes
+  // every board identical. Must be set BEFORE __begin, which is what places
+  // the enemies. Unlike `seed` above this touches nothing global, so
+  // concurrent hunts cannot disturb each other's randomness.
+  const fightGearSeed = Number.isFinite(gearSeed) ? gearSeed : randomSeed();
+  host.gearSeed = fightGearSeed;
+
+  // This host rules on the board but owns nobody's inventory, so a combat item
+  // (Identify tonic, Severing Chant) must be applied without demanding a copy
+  // from the server's own empty bag. The acting client spends the real item.
+  host.isAuthoritativeHost = true;
+
   host.__begin({ party, partySlots: slotMap, scenarioId });
   startCombat(host);
 
@@ -186,6 +201,8 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   const session = {
     scenarioId,
     seed,
+    // Sent to every client so they reproduce this board's enemy gear exactly.
+    gearSeed: fightGearSeed,
     players: players.map(p => ({ id: p.id, name: p.name })),
     host,
     party,

@@ -354,7 +354,10 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       const roster = lobby.players.flatMap(p =>
         (p.hunters || []).map(h => ({ ...h, ownerId: p.id })));
 
-      broadcast(lobby, { t: 'started', state: lobby.session.state(), roster });
+      broadcast(lobby, { t: 'started', state: lobby.session.state(), roster,
+        // The fight's enemy-gear seed. Clients roll their board from this so
+        // everyone's enemies carry identical equipment and derived stats.
+        gearSeed: lobby.session.gearSeed });
     },
 
     /** { t:'act', actor, skill, target } */
