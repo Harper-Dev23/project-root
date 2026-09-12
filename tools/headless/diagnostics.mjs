@@ -383,6 +383,121 @@ console.log('=== default export matches the named exports ===');
   }
 }
 
+/* ---------------- 12. browser checks ---------------- */
+//
+// From the first real report: a LibreWolf player whose saves vanished on closing
+// the browser. These checks describe the player's browser, so each must degrade
+// to "unavailable" rather than throw where the platform lacks a feature.
+console.log('=== browser checks ===');
+{
+  const fakeDocument = (measure) => ({
+    createElement: () => ({ getContext: () => ({ font: '', measureText: measure }) }),
+  });
+  const stableMetrics = () => ({ width: 120.5, actualBoundingBoxAscent: 15.2, actualBoundingBoxDescent: 4.1 });
+  let calls = 0;
+  const noisyMetrics = () => ({ width: 120.5 + (calls++ * 0.37), actualBoundingBoxAscent: 15.2, actualBoundingBoxDescent: 4.1 });
+
+  // No document at all (this is Node, and a stripped-down webview).
+  handlers = {};
+  installPlatform(makeStore());
+  delete globalThis.document;
+  {
+    const D = await freshModule();
+    D.install();
+    let threw = null, text = '';
+    try { text = D.report(); } catch (e) { threw = e; }
+    check('the browser section never throws without a document', threw === null,
+      threw ? String(threw.message) : '');
+    check('...and says text measurement is unavailable', /text measurement\s*:\s*unavailable/.test(text));
+    check('a real screen larger than the window is not flagged',
+      /fingerprint protection:\s*not detected/.test(text), 'screen 1920x1080 vs window 1280x720');
+  }
+
+  // Stable measurement: nothing is interfering.
+  Object.defineProperty(globalThis, 'document', { value: fakeDocument(stableMetrics), configurable: true, writable: true });
+  {
+    const D = await freshModule();
+    D.install();
+    const text = D.report();
+    check('identical measurements read as OK', /text measurement\s*:\s*OK/.test(text),
+      (text.match(/text measurement.*$/m) || [''])[0].trim());
+  }
+
+  // Noisy measurement: what a fingerprint-noise extension does to measureText.
+  calls = 0;
+  Object.defineProperty(globalThis, 'document', { value: fakeDocument(noisyMetrics), configurable: true, writable: true });
+  {
+    const D = await freshModule();
+    D.install();
+    const text = D.report();
+    check('measurements that differ each call read as UNSTABLE', /text measurement\s*:\s*UNSTABLE/.test(text),
+      (text.match(/text measurement.*$/m) || [''])[0].trim());
+    check('...and the report explains what that breaks', /mis-size tooltips/.test(text));
+  }
+
+  // resistFingerprinting reports the window as the screen.
+  Object.defineProperty(globalThis, 'document', { value: fakeDocument(stableMetrics), configurable: true, writable: true });
+  {
+    Object.defineProperty(globalThis, 'screen', { value: { width: 1920, height: 153 }, configurable: true, writable: true });
+    globalThis.window.innerWidth = 1920;
+    globalThis.window.innerHeight = 153;
+    const D = await freshModule();
+    D.install();
+    const text = D.report();
+    check('a screen exactly the size of the window is flagged',
+      /fingerprint protection:\s*LIKELY ON/.test(text), 'the real LibreWolf report had screen=1920x153, window=1920x153');
+  }
+
+  // Persistent storage state.
+  {
+    installPlatform(makeStore());
+    globalThis.navigator.storage.persisted = () => Promise.resolve(false);
+    const D = await freshModule();
+    D.install();
+    await new Promise(r => setTimeout(r, 5));   // persisted() resolves asynchronously
+    check('an unpersisted store is reported as clearable',
+      /persistent storage\s*:\s*not granted/.test(D.report()));
+  }
+  delete globalThis.document;
+}
+
+/* ---------------- 13. a refused clipboard write is not an error ---------------- */
+//
+// The real report arrived beside "Uncaught (in promise) DOMException: Clipboard
+// write was blocked due to lack of user activation." writeText returns a
+// promise, and try/catch does not catch a rejection. Firefox refuses clipboard
+// writes from the console, so this happened on every Firefox-based browser.
+console.log('=== refused clipboard write ===');
+{
+  handlers = {};
+  installPlatform(makeStore());
+  globalThis.navigator.clipboard = {
+    writeText: () => Promise.reject(Object.assign(new Error('Clipboard write was blocked'), { name: 'NotAllowedError' })),
+  };
+  const D = await freshModule();
+  D.install();
+
+  let unhandled = 0;
+  const onUnhandled = () => { unhandled++; };
+  process.on('unhandledRejection', onUnhandled);
+
+  let text = null, threw = null;
+  try { text = globalThis.window.bmDiag(); } catch (e) { threw = e; }
+  await new Promise(r => setTimeout(r, 20));   // let the rejection surface if it is going to
+  process.off('unhandledRejection', onUnhandled);
+
+  check('bmDiag() does not throw when the clipboard refuses', threw === null,
+    threw ? String(threw.message) : '');
+  check('...still returns the full report', typeof text === 'string' && /end of report/.test(text));
+  check('...and the refusal is NOT an unhandled rejection', unhandled === 0,
+    unhandled + ' unhandled rejection(s)');
+  // Verified by reintroducing the bug: this check fails with 1 unhandled
+  // rejection. A sibling check asserting the report showed zero errors was
+  // removed because it passed WITH the bug present -- Node never dispatches the
+  // fake window's unhandledrejection listener, so it could not fail.
+}
+
+
 console.log('\n' + (failures === 0
   ? 'ALL CHECKS PASSED'
   : failures + ' CHECK(S) FAILED'));

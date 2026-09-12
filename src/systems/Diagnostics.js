@@ -40,6 +40,7 @@ let _saveFailures = [];
 let _storage      = null;   // cached result of the boot-time probe
 let _beacon       = null;   // cached beacon state read at boot
 let _quota        = null;   // cached navigator.storage.estimate()
+let _persisted    = null;   // cached navigator.storage.persisted()
 let _liveState    = null;   // optional provider, registered by main.js
 
 const _saveErrorSubs = new Set();
@@ -223,6 +224,9 @@ export function install() {
     try {
       G().navigator?.storage?.estimate?.().then(est => { _quota = est; }).catch(() => {});
     } catch { /* not supported */ }
+    try {
+      G().navigator?.storage?.persisted?.().then(p => { _persisted = p; }).catch(() => {});
+    } catch { /* not supported */ }
 
     G().window?.addEventListener?.('error', (ev) => {
       noteError('error', ev?.message || ev?.error?.message || 'unknown', {
@@ -245,7 +249,16 @@ export function install() {
       G().window.bmDiag = () => {
         const text = report();
         console.log(text);
-        try { G().navigator?.clipboard?.writeText(text); } catch { /* console is enough */ }
+        // writeText returns a PROMISE, and a rejected promise is not caught by
+        // try/catch -- the first real report from a player arrived with an
+        // "Uncaught (in promise) DOMException" beside it. Firefox refuses a
+        // clipboard write from the console outright, since typing a command is
+        // not a user gesture, so this fails on every Firefox-based browser. It
+        // was also recorded by this module's own unhandledrejection listener,
+        // which would have listed the diagnostic's failure as the player's.
+        try {
+          G().navigator?.clipboard?.writeText?.(text)?.catch?.(() => {});
+        } catch { /* the printed report is enough */ }
         return text;
       };
     }
@@ -313,6 +326,82 @@ function describeKeys() {
 }
 
 /**
+ * Browser behaviour that changes what the game can do, and that a player
+ * cannot be expected to know about their own setup.
+ *
+ * Written after a LibreWolf report. LibreWolf clears site data when it closes,
+ * enables resistFingerprinting, and hosts extensions that intercept browser
+ * APIs -- that report's stack ran through injected functions named
+ * installTraps and reflect at lines of index.html that do not exist.
+ *
+ * TEXT MEASUREMENT is the check that matters for gameplay. Phaser sizes every
+ * Text object from measureText's bounding box; a tooltip's background is drawn
+ * to that size. An anti-fingerprinting extension that adds noise to
+ * measureText would make the same string measure differently each time, which
+ * is how a description box could come out mis-sized or invisible. So the same
+ * string is measured repeatedly: identical results mean nothing is interfering.
+ *
+ * Deliberately NO pixel readback (getImageData) here. In LibreWolf that raises
+ * the canvas permission prompt, and this game never reads pixels back --
+ * nothing here needs an answer to it. Asking a player to approve a prompt in
+ * order to diagnose them would change the very thing being diagnosed.
+ */
+function browserSection() {
+  const L = [];
+
+  // resistFingerprinting reports the WINDOW as the screen. A real display is
+  // essentially never exactly the size of the browser's content area.
+  try {
+    const w = G().window, s = G().screen;
+    if (w && s && Number.isFinite(s.width) && s.width > 0) {
+      const same = s.width === w.innerWidth && s.height === w.innerHeight;
+      L.push(`fingerprint protection: ${same
+        ? 'LIKELY ON (screen reports the window size)'
+        : 'not detected'}`);
+    } else {
+      L.push('fingerprint protection: unknown');
+    }
+  } catch { L.push('fingerprint protection: unknown'); }
+
+  L.push(`persistent storage     : ${_persisted === true ? 'granted'
+    : _persisted === false ? 'not granted (the browser may clear it)' : 'unknown'}`);
+
+  try {
+    const doc = G().document;
+    const canvas = doc?.createElement?.('canvas');
+    const ctx = canvas?.getContext?.('2d');
+    if (!ctx || typeof ctx.measureText !== 'function') {
+      L.push('text measurement       : unavailable');
+    } else {
+      ctx.font = '20px Georgia, serif';
+      const runs = [];
+      for (let i = 0; i < 4; i++) runs.push(ctx.measureText('Hg Description'));
+      const first = runs[0];
+      if (!('actualBoundingBoxAscent' in first)) {
+        L.push(`text measurement       : no bounding box (width ${first.width?.toFixed?.(2)})`);
+      } else {
+        const sig = (m) => [m.width, m.actualBoundingBoxAscent, m.actualBoundingBoxDescent]
+          .map(v => (+v).toFixed(3)).join('/');
+        const sigs = runs.map(sig);
+        const stable = sigs.every(x => x === sigs[0]);
+        const ascent = +first.actualBoundingBoxAscent;
+        const sane = ascent > 0 && ascent < 100;
+        L.push(`text measurement       : ${stable && sane ? 'OK' : stable ? 'IMPLAUSIBLE' : 'UNSTABLE'}`
+          + `  (w ${(+first.width).toFixed(2)}, ascent ${ascent.toFixed(2)})`);
+        if (!stable) {
+          L.push('    the same text measured differently each time -- something is altering');
+          L.push('    measureText, which would mis-size tooltips and description boxes');
+          L.push('    samples: ' + sigs.join('  '));
+        }
+      }
+    }
+  } catch (e) {
+    L.push(`text measurement       : error (${e?.message || e})`);
+  }
+  return L;
+}
+
+/**
  * One pasteable block of text. Synchronous and never throws, so it works from
  * a console one-liner even when the game itself is broken.
  */
@@ -344,6 +433,10 @@ export function report() {
     L.push(rows.length ? rows.join('\n') : '  (none - no saves on this machine)');
     L.push('other keys :');
     L.push(describeKeys().join('\n') || '  (none)');
+    L.push('');
+
+    L.push('--- browser ---');
+    L.push(browserSection().join('\n'));
     L.push('');
 
     if (_liveState) {
