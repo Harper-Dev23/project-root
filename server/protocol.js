@@ -365,6 +365,8 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       if (!lobby.session) return fail(conn, 'the hunt has not started');
       const result = lobby.session.act(player.id, {
         actor: msg.actor, skill: msg.skill, target: msg.target,
+        // A movement skill's destination. Only a finite slot id is passed on.
+        targetSlot: Number.isFinite(msg.targetSlot) ? msg.targetSlot : undefined,
       });
       // A refusal goes only to the player who tried it. The others do not need
       // to see someone else's mis-click, and it keeps the broadcast a pure

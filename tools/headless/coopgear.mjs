@@ -392,6 +392,161 @@ console.log('=== a tonic or chant used by one player shows for every player ==='
 }
 
 
+/* ---------------- 10. a move is seen by every player ---------------- */
+//
+// Moving used to call _executeSkill straight from the click, which moved the
+// hunter on the mover's screen only. The server never heard about it, so
+// teammates never saw it, and the next board from the server snapped the mover
+// back. Co-op boards also blinked units between slots instead of playing the
+// hop single player uses. This checks the whole chain: click -> send -> server
+// validates and moves -> the teammate's board shows the new slot with a hop.
+console.log('=== movement in co-op ===');
+{
+  const { createHub } = await import('../../server/protocol.js');
+  const { toWireCharacter } = await import('../../src/systems/CoopWire.js');
+  const { SKILLS } = await import('../../data/skills.js');
+  const DASH = SKILLS.move_dash;
+
+  const conn = (label) => ({
+    label, inbox: [],
+    send(msg) { this.inbox.push(msg); },
+    last(t) { return [...this.inbox].reverse().find(m => m.t === t) || null; },
+  });
+
+  const wire = makeParty().map(toWireCharacter);
+  const cut = (n, from) => JSON.parse(JSON.stringify(wire.slice(from, from + n)));
+  const hub = createHub({ CombatScene, codeFactory: () => 'MOVE' });
+  const a = conn('a'), b = conn('b');
+  hub.handle(a, { t: 'create', name: 'A', scenarioId: SCENARIO, hunters: cut(3, 0) });
+  hub.handle(b, { t: 'join', code: 'MOVE', name: 'B', hunters: cut(3, 3) });
+  hub.handle(a, { t: 'ready', ready: true });
+  hub.handle(b, { t: 'ready', ready: true });
+  hub.handle(a, { t: 'start' });
+  const started = a.last('started');
+  const ids = { a: a.last('joined')?.playerId, b: b.last('joined')?.playerId };
+  const current = started.state.current;
+  const ownerOfCurrent = started.roster.find(h => (h.instanceId || h.id) === current?.ref)?.ownerId;
+  const actor = ownerOfCurrent === ids.a ? a : b;
+  const watcher = actor === a ? b : a;
+  const watcherId = actor === a ? ids.b : ids.a;
+
+  // A board built the way a co-op client builds one, with a spy on the hop.
+  const buildBoard = (playerId) => {
+    const scene = createCombatHost(CombatScene);
+    scene.isCoop = true;
+    const sent = [];
+    scene.coopClient = { roster: started.roster, playerId, gearSeed: started.gearSeed, on: () => () => {}, act: (m) => { sent.push(m); } };
+    scene.coopParty = [];
+    scene._coopUnsubs = [];
+    scene.gearSeed = started.gearSeed;
+    scene.scenarioId = SCENARIO;
+    scene._placeCoopParty();
+    scene._placeEnemies(SCENARIO);
+    scene.turnOrder = [...scene.coopParty, ...scene.enemies];
+    scene.__hops = [];
+    scene._playMoveHopVFX = (slot, dx, dy) => { scene.__hops.push({ slotId: slot?.slotId, dx, dy }); };
+    // A real client applies the opening board as soon as the hunt starts, which
+    // is what puts every hunter where the SERVER placed them. Skipping it left
+    // this board with its own formation, so "reachable" was worked out from the
+    // wrong square.
+    scene._applyNetState(started.state);
+    scene.__hops = [];
+    return { scene, sent };
+  };
+  // The headless host replaces _enterPositionTargeting with a no-op (it is on
+  // its VISUAL_METHODS list), so the click-to-move flow is driven through the
+  // real prototype method.
+  const enterPositionTargeting = (scene, unit, ability) =>
+    CombatScene.prototype._enterPositionTargeting.call(scene, unit, ability);
+
+  const watch = buildBoard(watcherId);
+  const moverRef = current.ref;
+  const moverOnWatch = watch.scene.coopParty.find(c => (c.instanceId || c.id) === moverRef);
+  const fromSlot = moverOnWatch?._slot?.slotId;
+  const reachable = watch.scene._reachablePositions(moverOnWatch, DASH).map(s => s.slotId);
+  check('the mover has somewhere to Dash to', reachable.length > 0, `from ${fromSlot} to [${reachable.join(', ')}]`);
+  const dest = reachable[0];
+
+  // ---- the mover's own client sends, and does not move locally ----
+  {
+    const mine = buildBoard(ownerOfCurrent);
+    const me = mine.scene.coopParty.find(c => (c.instanceId || c.id) === moverRef);
+    mine.scene._currentChar = () => me;
+    enterPositionTargeting(mine.scene, me, DASH);
+    const slot = mine.scene.allySlots.find(s => s.slotId === dest);
+    if (typeof slot.__click === 'function') slot.__click(); else slot.emit('pointerdown');
+    check('clicking a destination in co-op SENDS the move', mine.sent.length === 1 && mine.sent[0].skill === 'move_dash',
+      JSON.stringify(mine.sent[0] || null));
+    check('...naming the destination slot', mine.sent[0]?.targetSlot === dest, `targetSlot ${mine.sent[0]?.targetSlot}`);
+    check('...and does NOT move the hunter locally', me._slot?.slotId === fromSlot,
+      `still at ${me._slot?.slotId}`);
+  }
+
+  // ---- an unreachable square is refused and moves nothing ----
+  {
+    const far = watch.scene.allySlots.map(s => s.slotId).find(id => id !== fromSlot && !reachable.includes(id));
+    const beforeState = actor.last('state') || started;
+    hub.handle(actor, { t: 'act', actor: moverRef, skill: 'move_dash', targetSlot: far });
+    const err = actor.last('error');
+    check('the server refuses an unreachable destination', /not reachable/.test(err?.reason || ''),
+      `slot ${far}: ${err?.reason}`);
+  }
+
+  // ---- another player cannot move this hunter ----
+  {
+    hub.handle(watcher, { t: 'act', actor: moverRef, skill: 'move_dash', targetSlot: dest });
+    const err = watcher.last('error');
+    check('a teammate cannot move a hunter that is not theirs', !!err && !/reachable/.test(err.reason || ''),
+      err?.reason || 'NOT refused');
+  }
+
+  // ---- the real move ----
+  {
+    const vBefore = watcher.last('state')?.state?.version ?? -1;
+    hub.handle(actor, { t: 'act', actor: moverRef, skill: 'move_dash', targetSlot: dest });
+    check('the server accepts a reachable move', !actor.inbox.slice(-1).some(m => m.t === 'error'),
+      actor.inbox.slice(-1)[0]?.reason || 'accepted');
+    const seen = watcher.last('state')?.state;
+    const unit = seen?.units?.find(u => u.ref === moverRef);
+    check('the TEAMMATE\'s broadcast has the hunter at the new slot', unit?.slot === dest,
+      `server says ${unit?.slot}, wanted ${dest}`);
+
+    watch.scene._applyNetState(seen);
+    check('the TEAMMATE\'s board moves the hunter there', moverOnWatch._slot?.slotId === dest,
+      `${fromSlot} -> ${moverOnWatch._slot?.slotId}`);
+    const hop = watch.scene.__hops.find(h => h.slotId === dest);
+    check('...with the same hop animation single player plays', !!hop && (hop.dx !== 0 || hop.dy !== 0),
+      JSON.stringify(hop || null));
+    const occupant = watch.scene.allySlots.find(s => s.slotId === fromSlot)?.char;
+    check('...and the slot it left is empty on that board', !occupant || (occupant.instanceId || occupant.id) !== moverRef);
+
+    // A board that changes nothing plays no hop.
+    const hopsNow = watch.scene.__hops.length;
+    watch.scene._applyNetState(seen);
+    check('re-applying the same board does not hop again', watch.scene.__hops.length === hopsNow);
+  }
+
+  // ---- single player is untouched: the click still moves directly ----
+  {
+    const sp = createCombatHost(CombatScene);
+    const party = makeParty();
+    sp.__begin({ party, partySlots: slotMapFor(party), scenarioId: SCENARIO });
+    startCombat(sp);
+    const hero = party[0];
+    setActor(sp, hero);
+    hero.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
+    const spFrom = hero._slot?.slotId;
+    const spDest = sp._reachablePositions(hero, DASH)[0]?.slotId;
+    enterPositionTargeting(sp, hero, DASH);
+    const slot = sp.allySlots.find(s => s.slotId === spDest);
+    if (typeof slot?.__click === 'function') slot.__click(); else slot?.emit?.('pointerdown');
+    sp.__drain?.();
+    check('single player: clicking a destination still moves the hunter', hero._slot?.slotId === spDest,
+      `${spFrom} -> ${hero._slot?.slotId} (wanted ${spDest})`);
+  }
+}
+
+
 console.log('\n' + (failures === 0
   ? 'ALL CHECKS PASSED'
   : failures + ' CHECK(S) FAILED'));

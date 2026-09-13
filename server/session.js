@@ -370,6 +370,8 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         u.weakness?.meters, u.weakness?.tiers,
         (u.statusEffects || []).map(e => e.id + ':' + e.turns),
         u.actionsLeft, u.cooldowns,
+        // Position, so a move counts as a change even if it cost nothing.
+        u._slot?.slotId ?? null,
       ]));
     },
 
@@ -385,7 +387,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       const before = session.fingerprint();
 
       const verdict = host._resolveAction(
-        { actor: intent.actor, skill: intent.skill, target: intent.target },
+        { actor: intent.actor, skill: intent.skill, target: intent.target, targetSlot: intent.targetSlot },
         { playerId }
       );
       host.__drain();

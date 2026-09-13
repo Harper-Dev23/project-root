@@ -172,8 +172,10 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
      * rejected promise: the server refusing is a normal outcome the UI shows,
      * not an exception.
      */
-    act({ actor, skill, target }) {
-      return client.send({ t: 'act', actor, skill, target });
+    act({ actor, skill, target, targetSlot }) {
+      // targetSlot: the destination of a movement skill, which targets a
+      // position rather than a unit. Omitted for every other action.
+      return client.send({ t: 'act', actor, skill, target, targetSlot });
     },
   };
 

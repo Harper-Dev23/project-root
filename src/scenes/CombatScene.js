@@ -5646,6 +5646,19 @@ export default class CombatScene extends Phaser.Scene {
     });
     if (!moved) return;
 
+    // Where each unit stood BEFORE this board, so a move can be animated. The
+    // rebuild below teleports every portrait; single player instead hops a
+    // moving unit from its old slot to its new one (_moveUnitToSlot). Without
+    // this, co-op enemies and teammates simply blinked between positions.
+    const before = new Map();
+    for (const u of standing) {
+      const unit = this._netUnits?.get(u.ref) || this._findUnitByRef(u.ref);
+      const s = unit?._slot;
+      if (unit && s && Number.isFinite(s.x) && Number.isFinite(s.y)) {
+        before.set(unit, { slotId: s.slotId, x: s.x, y: s.y });
+      }
+    }
+
     for (const slot of [...(this.allySlots || []), ...(this.enemySlots || [])]) {
       if (!slot.occupied) continue;
       this._clearPortrait?.(slot);
@@ -5658,7 +5671,15 @@ export default class CombatScene extends Phaser.Scene {
       if (!unit) continue;
       const side = unit.isEnemy ? this.enemySlots : this.allySlots;
       const slot = (side || []).find(x => x.slotId === u.slot);
-      if (slot) this._assignCharToSlot(unit, slot);
+      if (!slot) continue;
+      this._assignCharToSlot(unit, slot);
+
+      // The same hop single player plays, measured on THIS screen's slots —
+      // never replayed from the server, whose slot coordinates are not ours.
+      const was = before.get(unit);
+      if (was && was.slotId !== slot.slotId) {
+        this._playMoveHopVFX?.(slot, was.x - slot.x, was.y - slot.y);
+      }
     }
   }
 
@@ -5731,6 +5752,9 @@ export default class CombatScene extends Phaser.Scene {
         actor: this._unitRef(actor),
         skill: ability.id,
         target: target ? this._unitRef(target) : null,
+        // A movement skill targets an empty POSITION, which no unit ref can
+        // name. The slot id is stable and identical on every board.
+        targetSlot: Number.isFinite(intent.targetSlot) ? intent.targetSlot : undefined,
       });
 
       // Combat items are the one action a client also applies locally, and the
@@ -5796,6 +5820,20 @@ export default class CombatScene extends Phaser.Scene {
       if (!ability.positionRequirement.includes(col)) {
         return refuse(`${actor.name} cannot use ${ability.name} from ${col}`);
       }
+    }
+
+    // --- movement: the target is an empty POSITION, not a unit --------------
+    // What a co-op client sends when a hunter moves. Validated against the
+    // same reachable set the click-to-move highlight offers (_reachablePositions),
+    // then run through _executeSkill exactly as the single-player click does,
+    // so immobilize, costs and cooldowns are all enforced by the one path.
+    if (ability.targetRequirement === 'position') {
+      const slot = this._reachablePositions(actor, ability)
+        .find(s => s.slotId === intent.targetSlot);
+      if (!slot) return refuse(`${ability.name}: that position is not reachable`);
+      const res = this._executeSkill(actor, ability.id, slot);
+      if (res && res.ok === false) return refuse(`${ability.name} could not be used`);
+      return { ok: true, actor, skill: ability, target: null, targetSlot: slot.slotId };
     }
 
     // --- untargeted skills resolve on the caster ----------------------------
@@ -12181,6 +12219,28 @@ export default class CombatScene extends Phaser.Scene {
     return this._moveUnitToSlot(user, slotContainer);
   }
 
+  /**
+   * The open positions a movement skill can reach from where `user` stands.
+   *
+   * ONE definition for both callers: the click-to-move highlight in single
+   * player, and the co-op server validating a move a client sent. Two copies
+   * would let a client offer a square the server then refuses, or the reverse.
+   */
+  _reachablePositions(user, ability) {
+    // Movement budget: prefer ability.moveRange, else infer from id
+    const range = Number.isFinite(ability?.moveRange)
+      ? ability.moveRange
+      : (ability?.id === 'move_dash' ? 2 : 1);
+    const fromId = user?._slot?.slotId;
+    if (!fromId) return [];
+    // Only this side (allies for players, enemies for NPCs)
+    const open = this._getOpenSlotsForUnitSide(user) || [];
+    return open.filter(s => {
+      const cost = this._moveCost(fromId, s.slotId);
+      return Number.isFinite(cost) && cost > 0 && cost <= range;
+    });
+  }
+
   // Reset a slot's border back to your default
   _resetSlotStroke(slot) {
     const isEnemy = this.enemySlots.includes(slot);
@@ -12194,21 +12254,10 @@ export default class CombatScene extends Phaser.Scene {
     // Clear any previous targeting visuals/listeners
     this._exitTargetingMode?.();
 
-    // Movement budget: prefer ability.moveRange, else infer from id
-    const range = Number.isFinite(ability.moveRange)
-      ? ability.moveRange
-      : (ability.id === 'move_dash' ? 2 : 1);
-
     const fromId = user._slot?.slotId;
     if (!fromId) { this._log('No current position.'); return; }
 
-    // Only this side (allies for players, enemies for NPCs)
-    const open = this._getOpenSlotsForUnitSide(user);
-
-    const reachable = open.filter(s => {
-      const cost = this._moveCost(fromId, s.slotId);
-      return Number.isFinite(cost) && cost > 0 && cost <= range;
-    });
+    const reachable = this._reachablePositions(user, ability);
 
     if (!reachable.length) {
       this._log?.('No valid positions in range.');
@@ -12226,6 +12275,14 @@ export default class CombatScene extends Phaser.Scene {
 
       slot.once('pointerdown', () => {
         this._exitPositionTargeting();
+        // Co-op: a move is an action like any other and goes to the server.
+        // It used to run _executeSkill right here, which moved the hunter on
+        // this screen only — teammates never saw it, and the next board from
+        // the server snapped the mover back to where the server still had them.
+        if (this.isCoop) {
+          this._resolveAction({ actor: user, skill: ability.id, targetSlot: slot.slotId });
+          return;
+        }
         // Execute movement with the actual slot container as "target"
         this._executeSkill(user, ability.id, slot);
       });
