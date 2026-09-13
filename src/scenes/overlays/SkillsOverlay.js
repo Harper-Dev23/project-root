@@ -6,6 +6,7 @@ import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { buildSkillTooltipLines } from '../../ui/skillTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createScrollbar } from '../../ui/Scrollbar.js';
+import { createRectMask } from '../../ui/masks.js';
 import GameState from '../../systems/GameState.js';
 import { getProficiencyMap } from '../../systems/CombatLogic.js';
 
@@ -67,13 +68,11 @@ export default class SkillsOverlay extends Phaser.Scene {
     const viewport = new Phaser.Geom.Rectangle(panelX + 16, panelY + 110, panelW - 32, panelH - 146);
     this.graphViewport = viewport;
 
-    const maskShape = this.add.rectangle(
-      viewport.x + viewport.width / 2,
-      viewport.y + viewport.height / 2,
-      viewport.width, viewport.height,
-      0x000000, 0
-    );
-    const geomMask = maskShape.createGeometryMask();
+    // Graphics, not a Rectangle: a Rectangle mask draws nothing at all in the
+    // Canvas renderer, which blanked this whole list for a LibreWolf player.
+    // See src/ui/masks.js.
+    const { graphics: maskShape, mask: geomMask } =
+      createRectMask(this, viewport.x, viewport.y, viewport.width, viewport.height);
     this.root.add(maskShape);
 
     this.content = this.add.container(0, 0);

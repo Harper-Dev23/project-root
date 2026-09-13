@@ -14,6 +14,7 @@ import { describeModifiers } from '../systems/HuntModifiers.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
+import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
 
 // ---------------------------------------------------------------------------
@@ -1327,11 +1328,11 @@ export default class TownScene extends Phaser.Scene {
     const height = Math.max(0, bottomY - topY);
     const centerY = topY + height / 2;
 
-    this._inventoryMaskShape = this.add.rectangle(centerX, centerY, width, height, 0xffffff, 0)
-      .setOrigin(0.5)
-      .setVisible(false);
-
-    const mask = this._inventoryMaskShape.createGeometryMask();
+    // Graphics, not a Rectangle: a Rectangle mask draws nothing in the Canvas
+    // renderer, so a LibreWolf player saw an empty vendor list they could still
+    // hover and buy from. See src/ui/masks.js.
+    const { graphics, mask } = createRectMask(this, centerX - width / 2, topY, width, height);
+    this._inventoryMaskShape = graphics;
     this.vendorInventoryContainer.setMask(mask);
 
     // Remember bounds (used by auto-scroll math)

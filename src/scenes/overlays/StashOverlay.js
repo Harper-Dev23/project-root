@@ -5,6 +5,7 @@ import { Items } from '../../../data/items.js';
 import { isItemInstance, getItemComputedData } from '../../systems/ItemFactory.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
+import { createRectMask } from '../../ui/masks.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { DEPTH, RARITY_COLORS } from '../../ui/styles.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
@@ -90,9 +91,11 @@ export default class StashOverlay extends Phaser.Scene {
     this.root.add(divGfx);
 
     // ── Scrollable list containers ──
+    // Both masks are Graphics, not Rectangles: a Rectangle mask draws nothing in
+    // the Canvas renderer, which blanked both columns for a LibreWolf player.
+    // See src/ui/masks.js.
     // Left mask
-    const leftMaskShape = this.add.rectangle(lx + COL_W / 2, TOP_Y + PANEL_H / 2, COL_W, PANEL_H, 0x000000, 0);
-    const leftMask = leftMaskShape.createGeometryMask();
+    const { graphics: leftMaskShape, mask: leftMask } = createRectMask(this, lx, TOP_Y, COL_W, PANEL_H);
     this.root.add(leftMaskShape);
 
     this.leftList = this.add.container(0, 0);
@@ -100,8 +103,7 @@ export default class StashOverlay extends Phaser.Scene {
     this.root.add(this.leftList);
 
     // Right mask
-    const rightMaskShape = this.add.rectangle(rx + COL_W / 2, TOP_Y + PANEL_H / 2, COL_W, PANEL_H, 0x000000, 0);
-    const rightMask = rightMaskShape.createGeometryMask();
+    const { graphics: rightMaskShape, mask: rightMask } = createRectMask(this, rx, TOP_Y, COL_W, PANEL_H);
     this.root.add(rightMaskShape);
 
     this.rightList = this.add.container(0, 0);
