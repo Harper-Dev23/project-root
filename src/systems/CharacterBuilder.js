@@ -165,7 +165,11 @@ export function calculateDerivedStats(stats, { basePlayerHP = 0 } = {}) {
   // roll) — its job folded into Evasion, which now also partially reduces
   // attacker crit chance on a landed hit (see calculateDamage() in
   // CombatLogic.js). WIS's freed-up weight moved to Resilience instead.
-  const Resilience = Math.round((stats.WIS || 0) * 0.5);
+  // 1 per point of WIS (was 0.5, owner call 2026-09-13). Resilience feeds the
+  // R / (R + 100) buildup-mitigation curve, so this doubles what Wisdom buys
+  // against every weakness family. Shared by enemies: _spawnEnemy derives their
+  // stats through this same function.
+  const Resilience = Math.round((stats.WIS || 0) * 1);
   // +1 MP per turn per 5 INT — folded into gearEffects.mpPerTurn in
   // rebuildCharacterStats (same pattern as WIS->Resilience above), so it
   // stacks additively with gear-rolled mpPerTurn through the one existing

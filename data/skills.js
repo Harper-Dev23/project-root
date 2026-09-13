@@ -12548,7 +12548,7 @@ Object.assign(RAW_SKILLS, {
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
         attacker, target,
-        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 100, isCrit: roll.isCrit, critMult: roll.critMult }
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 140, isCrit: roll.isCrit, critMult: roll.critMult }  // was 100 (owner call 2026-09-13)
       );
 
       const lacMeter = target?.weakness?.meters?.lacerate || 0;
@@ -12588,7 +12588,7 @@ Object.assign(RAW_SKILLS, {
         rewardIfWeak: cloneRewardOrList(ability?.rewardIfWeak),
       };
     },
-    description: "Deals 100% weapon damage. Consumes all Lacerate, converting it to Toxic buildup (120% if target is at least Raw). Stronger if the target is Hemorrhaging."
+    description: "Deals 140% weapon damage. Consumes all Lacerate, converting it to Toxic buildup (120% if target is at least Raw). Stronger if the target is Hemorrhaging."
   },
 
   // --- Dagger Reaction ---

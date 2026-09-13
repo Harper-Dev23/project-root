@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 20
-version: 7
-updatedAt: 2026-09-12
+version: 8
+updatedAt: 2026-09-13
 ---
 # Weakness Scaling (In Depth)
 
@@ -59,7 +59,7 @@ reduction = Resilience / (Resilience + 100)
 
 So **100 Resilience is exactly a 50% reduction**, 50 gives 33%, and 200 gives 67%. It never reaches 100%. The same percentage applies to every hit, so a small hit is softened but never cancelled, and a large one takes the same proportional cut.
 
-Resilience comes from Wisdom (`WIS × 0.5`), from gear, and from temporary effects, all added together before the curve.
+Resilience comes from Wisdom (`WIS × 1`), from gear, and from temporary effects, all added together before the curve.
 
 **Resilience is the only thing that reduces buildup.** Physical, Elemental and Necrotic Resist reduce *damage*, and do nothing to a meter. A target in heavy armour fills its meters at full speed.
 

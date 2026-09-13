@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 10
-version: 3
-updatedAt: 2026-09-08
+version: 4
+updatedAt: 2026-09-13
 ---
 # Stat Calculations Overview
 
@@ -53,7 +53,7 @@ A Hunter with 20 permanent Dexterity has 10 Dexterity Proficiency, and so +10% M
 | Physical Resist | `CON x 0.5` | |
 | Elemental Resist | `WIS x 0.5 + CHA x 0.5` | The only resist drawing on two attributes. |
 | Necrotic Resist | `CHA x 0.5` | |
-| Resilience | `WIS x 0.5` | Reduces incoming weakness buildup. |
+| Resilience | `WIS x 1` | Reduces incoming weakness buildup. |
 | MP per turn | `floor(INT / 5)` | Stacks with MP regen from gear. |
 
 ## What each attribute actually does
