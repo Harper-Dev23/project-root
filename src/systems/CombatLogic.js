@@ -1413,6 +1413,16 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
       elemental += proc.fireDamage;
       try { _pushBreakdown({ label: se.name || 'Fire rider', flat: proc.fireDamage }); } catch { }
     }
+    // Withering Fervor's necrotic rider, at the SAME stage and in the same
+    // shape as the fire rider above. Only the fire half used to exist here, so
+    // on every typed skill Withering Fervor added no damage and no breakdown
+    // line at all — the necrotic handling lived solely in CombatScene's legacy
+    // fallback, which deliberately skips typed skills. Its disease buildup was
+    // unaffected, since buildup riders apply on both paths.
+    if (proc.necroticDamage > 0) {
+      necrotic += proc.necroticDamage;
+      try { _pushBreakdown({ label: se.name || 'Necrotic rider', flat: proc.necroticDamage }); } catch { }
+    }
   }
 
   // Elseth ring flat-damage procs (procPhysFlat/procElemFlat/procNecroFlat) —
