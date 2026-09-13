@@ -49,6 +49,20 @@ export { toWireCharacter, fromWireCharacter } from '../src/systems/CoopWire.js';
 // ---------------------------------------------------------------------------
 
 /**
+ * An enemy's equipment flags for the co-op broadcast: { slot: 'I' | 'D' | 'ID' }.
+ * I = revealed by an Identify tonic, D = droppable. See the `gear` field in state().
+ */
+function gearFlags(unit) {
+  const out = {};
+  for (const [slot, inst] of Object.entries(unit.equipment || {})) {
+    if (!isItemInstance(inst)) continue;   // rolled gear only; see _equipEnemyItem
+    const code = (inst._identified ? 'I' : '') + (inst._droppable ? 'D' : '');
+    if (code) out[slot] = code;
+  }
+  return out;
+}
+
+/**
  * players: [{ id, name, hunters: [wireCharacter, ...] }]
  *
  * The hunters of every player are merged into ONE party of at most six, which
@@ -266,6 +280,17 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         effects: (u.statusEffects || []).map(leanEffect),
         cooldowns: Object.fromEntries(
           Object.entries(u.cooldowns || {}).filter(([, v]) => v > 0)),
+        // Enemy equipment state, as { slot: 'I' | 'D' | 'ID' } -- I for revealed
+        // by an Identify tonic, D for droppable (a Severing Chant sets it). Only
+        // flagged slots are listed; an absent slot has neither.
+        //
+        // Without this a reveal happened on the server and on the screen of the
+        // player who drank the tonic, and nowhere else: every other player kept
+        // seeing [Uncommon] on armor their teammate had paid to read, and a lock
+        // on gear that had already been cut free. The item identities themselves
+        // never need to travel -- every client rolls the same gear from the
+        // fight's gearSeed -- so two letters per slot is the whole payload.
+        gear: u.isEnemy ? gearFlags(u) : undefined,
       });
 
       return {

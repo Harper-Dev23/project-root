@@ -274,6 +274,124 @@ console.log('=== the seed over the real protocol ===');
     (a && a.gearSeed) + ' vs ' + (second && second.gearSeed));
 }
 
+/* ---------------- 9. a reveal reaches EVERY player ---------------- */
+//
+// An Armor-Reading Tonic reveals an enemy's armor for the rest of the fight. In
+// single player the flag sits on the enemy's item, so the whole party sees it. In
+// co-op the flag lived only on the server and on the screen of the player who
+// drank the tonic: equipment state was never broadcast, so every teammate kept
+// seeing [Uncommon] on armor that had been read. Same for a Severing Chant's
+// lock. This drives the real hub, takes the broadcast the OTHER player receives,
+// and applies it to a board built the way that player's client builds it.
+console.log('=== a tonic or chant used by one player shows for every player ===');
+{
+  const { createHub } = await import('../../server/protocol.js');
+  const { toWireCharacter } = await import('../../src/systems/CoopWire.js');
+  const ARMOR = ['head', 'chest', 'legs', 'gloves', 'boots'];
+
+  const conn = (label) => ({
+    label, inbox: [],
+    send(msg) { this.inbox.push(msg); },
+    last(t) { return [...this.inbox].reverse().find(m => m.t === t) || null; },
+  });
+
+  /** A two-player hunt on Gorrek, started. Returns who acts first and who watches. */
+  const hunt = (code) => {
+    const wire = makeParty().map(toWireCharacter);
+    const cut = (n, from) => JSON.parse(JSON.stringify(wire.slice(from, from + n)));
+    const hub = createHub({ CombatScene, codeFactory: () => code });
+    const a = conn('a'), b = conn('b');
+    hub.handle(a, { t: 'create', name: 'A', scenarioId: SCENARIO, hunters: cut(3, 0) });
+    hub.handle(b, { t: 'join', code, name: 'B', hunters: cut(3, 3) });
+    hub.handle(a, { t: 'ready', ready: true });
+    hub.handle(b, { t: 'ready', ready: true });
+    hub.handle(a, { t: 'start' });
+    const started = a.last('started');
+    const ids = { a: a.last('joined')?.playerId, b: b.last('joined')?.playerId };
+    const current = started.state.current;
+    const ownerOfCurrent = started.roster.find(h => (h.instanceId || h.id) === current?.ref)?.ownerId;
+    const actor = ownerOfCurrent === ids.a ? a : b;
+    const watcher = actor === a ? b : a;
+    const watcherId = actor === a ? ids.b : ids.a;
+    const gorrek = started.state.units.find(u => u.side === 'enemy');
+    return { hub, started, current, actor, watcher, watcherId, gorrek };
+  };
+
+  /** The watcher's board, built the way CombatScene builds a co-op client board. */
+  const watcherBoard = (h) => {
+    const scene = createCombatHost(CombatScene);
+    scene.isCoop = true;
+    scene.coopClient = { roster: h.started.roster, playerId: h.watcherId, gearSeed: h.started.gearSeed, on: () => () => {} };
+    scene.coopParty = [];
+    scene._coopUnsubs = [];
+    scene.gearSeed = h.started.gearSeed;
+    scene.scenarioId = SCENARIO;
+    scene._placeCoopParty();
+    scene._placeEnemies(SCENARIO);
+    scene.turnOrder = [...scene.coopParty, ...scene.enemies];
+    return scene;
+  };
+
+  // ---- Identify ----
+  {
+    const h = hunt('RVL1');
+    check('the hunt started with a hunter to act and a teammate watching', !!h.current && !!h.gorrek && h.actor !== h.watcher);
+
+    const board = watcherBoard(h);
+    const enemy = board.enemies[0];
+    const armorSlots = ARMOR.filter(s => isItemInstance(enemy.equipment?.[s]));
+    check('Gorrek wears armor to reveal', armorSlots.length > 0, armorSlots.join(', '));
+    check('before the tonic, the teammate sees none of it revealed',
+      armorSlots.every(s => !enemy.equipment[s]._identified));
+
+    h.hub.handle(h.actor, { t: 'act', actor: h.current.ref, skill: 'identify_armor_tonic', target: h.gorrek.ref });
+    const refused = h.actor.last('error');
+    check('the server accepts the tonic', !refused, refused?.reason || 'accepted');
+
+    const seen = h.watcher.last('state')?.state;
+    const gUnit = seen?.units?.find(u => u.ref === h.gorrek.ref);
+    check('the TEAMMATE\'s broadcast carries the reveal for every armor slot',
+      armorSlots.every(s => (gUnit?.gear?.[s] || '').includes('I')), JSON.stringify(gUnit?.gear || null));
+
+    const report = board._applyNetState(seen);
+    check('the teammate\'s board applies that broadcast cleanly', report?.ok !== false,
+      report?.unknown?.length ? 'unknown: ' + report.unknown.join(',') : 'ok');
+    check('the TEAMMATE now sees every armor piece revealed',
+      armorSlots.every(s => enemy.equipment[s]._identified === true),
+      armorSlots.map(s => `${s}=${enemy.equipment[s]._identified}`).join(' '));
+    const weapon = enemy.equipment.weaponMain;
+    check('an Armor tonic leaves the weapon hidden', !weapon || weapon._identified !== true,
+      weapon ? `weaponMain=${weapon._identified}` : 'no weapon');
+
+    // The flags are set, not merged: an old board with no reveal must hide it again.
+    board._applyNetState(h.started.state);
+    check('flags follow the server exactly (an earlier board hides them again)',
+      armorSlots.every(s => enemy.equipment[s]._identified === false));
+  }
+
+  // ---- Sever ----
+  {
+    const h = hunt('RVL2');
+    const board = watcherBoard(h);
+    const enemy = board.enemies[0];
+    const slot = severableSlot(enemy);
+    check('Gorrek has a soul-bound item a chant can cut', !!slot && enemy.equipment[slot]._droppable === false, String(slot));
+
+    h.hub.handle(h.actor, { t: 'act', actor: h.current.ref, skill: `sever_${slot}`, target: h.gorrek.ref });
+    check('the server accepts the chant', !h.actor.last('error'), h.actor.last('error')?.reason || 'accepted');
+
+    const seen = h.watcher.last('state')?.state;
+    const gUnit = seen?.units?.find(u => u.ref === h.gorrek.ref);
+    check('the teammate\'s broadcast marks the slot droppable', (gUnit?.gear?.[slot] || '').includes('D'),
+      JSON.stringify(gUnit?.gear || null));
+    board._applyNetState(seen);
+    check('the TEAMMATE no longer sees a lock on the severed item', enemy.equipment[slot]._droppable === true);
+    const stillBound = Object.entries(enemy.equipment).filter(([s, i]) => s !== slot && isItemInstance(i) && i._droppable === false);
+    check('...while gear nobody severed stays locked', stillBound.length > 0, stillBound.map(([s]) => s).join(', '));
+  }
+}
+
+
 console.log('\n' + (failures === 0
   ? 'ALL CHECKS PASSED'
   : failures + ' CHECK(S) FAILED'));

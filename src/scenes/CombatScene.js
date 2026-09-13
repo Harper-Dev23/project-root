@@ -5505,6 +5505,23 @@ export default class CombatScene extends Phaser.Scene {
         if (u.tiers) unit.weakness.tiers = { ...u.tiers };
       }
 
+      // Enemy equipment: which slots a teammate has revealed or cut free.
+      //
+      // Set from the server's flags, not merged, so every player sees exactly
+      // what the authoritative board says — including a reveal this player
+      // applied optimistically and the server then refused. The items
+      // themselves are already identical on every client (the fight's gearSeed),
+      // so only the two flags travel. Absent on a server that predates them, in
+      // which case nothing here changes.
+      if (unit.isEnemy && u.gear && typeof u.gear === 'object') {
+        for (const [slot, inst] of Object.entries(unit.equipment || {})) {
+          if (!isItemInstance(inst)) continue;   // same rule as the server's gearFlags
+          const code = u.gear[slot] || '';
+          inst._identified = code.includes('I');
+          inst._droppable = code.includes('D');
+        }
+      }
+
       // Status effects are replaced wholesale rather than merged. A merge
       // would have to guess at identity for effects that carry no id of their
       // own, and the server's list is authoritative by definition.

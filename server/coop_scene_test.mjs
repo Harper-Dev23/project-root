@@ -64,6 +64,11 @@ function buildScene(client) {
   host.coopParty = [];
   host._coopUnsubs = [];
   host.scenarioId = SCENARIO;
+  // The real client passes the server's gearSeed into CombatScene (see
+  // CoopLobbyScene._enterFight). Without it this test's boards rolled their own
+  // enemy gear, so equipment flags from the server would land on different items
+  // than the ones the server flagged — a board no real player ever sees.
+  host.gearSeed = client.gearSeed ?? null;
 
   host._placeCoopParty();          // the real method
   host._placeEnemies(SCENARIO);    // the real method
