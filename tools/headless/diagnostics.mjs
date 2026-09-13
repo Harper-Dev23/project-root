@@ -452,6 +452,21 @@ console.log('=== browser checks ===');
       /fingerprint protection:\s*LIKELY ON/.test(text), 'the real LibreWolf report had screen=1920x153, window=1920x153');
   }
 
+  // Which renderer the game runs on. A LibreWolf player's blank lists came from
+  // the Canvas fallback, and nothing in the report said so.
+  {
+    const D = await freshModule();
+    D.install();
+    delete globalThis.sceneManager;
+    check('no running game reports the renderer as unknown', /renderer\s*:\s*unknown/.test(D.report()));
+    globalThis.sceneManager = { game: { renderer: { type: 1 } } };
+    check('a Canvas game is reported as CANVAS, with the reason',
+      /renderer\s*:\s*CANVAS \(the browser did not provide WebGL/.test(D.report()));
+    globalThis.sceneManager = { game: { renderer: { type: 2 } } };
+    check('a WebGL game is reported as WEBGL', /renderer\s*:\s*WEBGL/.test(D.report()));
+    delete globalThis.sceneManager;
+  }
+
   // Persistent storage state.
   {
     installPlatform(makeStore());

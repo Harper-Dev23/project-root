@@ -359,6 +359,24 @@ function describeKeys() {
 function browserSection() {
   const L = [];
 
+  // Which of Phaser's two renderers the game is running on. This was the missing
+  // fact behind a LibreWolf player's blank Skills, vendor and Stash lists: the
+  // browser withheld WebGL, Phaser fell back to Canvas, and Canvas draws nothing
+  // for a mask built from a Rectangle (see src/ui/masks.js). Every report from
+  // that player looked healthy, because nothing here said which renderer was in
+  // use. Read through the global sceneManager so this file still imports nothing.
+  try {
+    const type = G().sceneManager?.game?.renderer?.type;
+    const P = G().Phaser;
+    const name = type == null ? null
+      : type === (P?.CANVAS ?? 1) ? 'CANVAS'
+        : type === (P?.WEBGL ?? 2) ? 'WEBGL'
+          : `type ${type}`;
+    L.push(`renderer               : ${name === 'CANVAS'
+      ? 'CANVAS (the browser did not provide WebGL; some visuals differ)'
+      : name || 'unknown (the game has not started)'}`);
+  } catch { L.push('renderer               : unknown'); }
+
   // resistFingerprinting reports the WINDOW as the screen. A real display is
   // essentially never exactly the size of the browser's content area.
   try {
