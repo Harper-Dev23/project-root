@@ -15036,8 +15036,8 @@ Object.assign(RAW_SKILLS, {
     mechanic: "reaction",
     versionTag: "v3.23",
     requiredWeapon: ["axe_2h"],
-    requiredStat: "STR",
-    requiredValue: 9,  // was 7 (even spread, 2026-09-10)
+    requiredStat: "DEX",
+    requiredValue: 3,  // was STR 9 (owner pass 3, 2026-09-12)
     actionCost: "reaction",
     mpCost: 3,
     cooldown: 3,
@@ -15320,7 +15320,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 11,  // was STR 12 (owner pass 2, 2026-09-12)
+    requiredValue: 10,  // was STR 11 (owner pass 3, 2026-09-12)
     actionCost: "major",
     mpCost: 6,
     requiresTarget: true,
@@ -15562,8 +15562,8 @@ Object.assign(RAW_SKILLS, {
     versionTag: "v3.23",
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
-    requiredStat: "CHA",
-    requiredValue: 6,  // was CHA 5 (owner pass 2, 2026-09-12)
+    requiredStat: "STR",
+    requiredValue: 12,  // was CHA 6 (owner pass 3, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
@@ -15771,7 +15771,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 10,  // was STR 6 (owner pass, 2026-09-12)
+    requiredValue: 9,  // was STR 10 (owner pass 3, 2026-09-12)
     actionCost: "major",
     mpCost: 4,
     cooldown: 3,
@@ -15827,7 +15827,7 @@ Object.assign(RAW_SKILLS, {
     typedDamage: true,
     requiredWeapon: ["axe_2h"],
     requiredStat: "STR",
-    requiredValue: 12,  // was STR 13 (owner pass 2, 2026-09-12)
+    requiredValue: 11,  // was STR 12 (owner pass 3, 2026-09-12)
     actionCost: "major",
     mpCost: 5,
     requiresTarget: true,
