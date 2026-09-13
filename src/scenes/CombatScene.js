@@ -8,6 +8,7 @@ import StatusBar from '../ui/StatusBar.js';
 import UIButton, { createButton } from '../ui/Button.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { GameplaySettings } from '../systems/GameplaySettings.js';
+import { logKindOf, entryText, isEntryShown } from '../systems/logKinds.js';
 import { createStatusIcon, combineStatusEffects } from '../ui/statusEffectIcons.js';
 import { buildSkillTooltipLines } from '../ui/skillTooltip.js';
 import { setupSceneCursor, setCursor } from '../ui/cursor.js';
@@ -692,7 +693,64 @@ export default class CombatScene extends Phaser.Scene {
       combat: makeTab('Combat', 'combat', 0),
       local: makeTab('Local', 'local', 80),
     };
+    this._createCombatLogFilters(x, y, padding);
     this._updateCombatLogTabVisuals();
+  }
+
+  // Two quiet switches at the right of the tab strip that hide the noisiest
+  // kinds of combat line: weakness buildup, and initiative/MP bookkeeping.
+  // Damage, healing, misses, deaths and skill use always stay (logKinds.js).
+  // Filtering happens at render time, so switching one back on restores every
+  // line that was hidden, and co-op lines from the server filter the same way.
+  _createCombatLogFilters(x, y, padding) {
+    const right = x + (this.combatLogConfig?.width ?? 440) - padding;
+    const defs = [
+      { key: 'logHideResources', label: 'MP/Init', tip: 'initiative and MP lines' },
+      { key: 'logHideBuildup', label: 'Buildup', tip: 'weakness buildup lines' },
+    ];
+    let cursor = right;
+    this.combatLogFilterButtons = defs.map(def => {
+      const text = this.add.text(cursor, y + padding, '', {
+        fontSize: '12px', fontFamily: 'Georgia, Gelasio, serif', color: '#777777',
+      }).setOrigin(1, 0).setDepth(UI_DEPTH.overlay + 1);
+      text.setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+          GameplaySettings.set(def.key, !GameplaySettings[def.key]);
+          this._updateCombatLogFilterVisuals();
+          this._renderCombatLog();
+          this._scrollCombatLogToBottom?.();
+        })
+        .on('pointerover', () => text.setAlpha(1))
+        .on('pointerout', () => this._updateCombatLogFilterVisuals());
+      const button = { ...def, text };
+      this._updateCombatLogFilterButton(button);
+      cursor -= text.width + 12;
+      return button;
+    });
+    this._updateCombatLogFilterVisuals();
+  }
+
+  _updateCombatLogFilterButton(button) {
+    const hidden = !!GameplaySettings[button.key];
+    // A filled dot means the lines are shown; a hollow one means hidden.
+    button.text.setText(`${hidden ? '○' : '●'} ${button.label}`);
+    button.text.setColor(hidden ? '#5a5a5a' : '#8a8a8a');
+  }
+
+  _updateCombatLogFilterVisuals() {
+    const onCombat = this.activeCombatLogTab !== 'local';
+    for (const button of this.combatLogFilterButtons || []) {
+      this._updateCombatLogFilterButton(button);
+      button.text.setAlpha(0.85);
+      // The filters only apply to the Combat tab; chat is never filtered.
+      button.text.setVisible(onCombat);
+    }
+  }
+
+  _combatLogHide() {
+    if (this.activeCombatLogTab === 'local') return null;
+    const hide = { buildup: !!GameplaySettings.logHideBuildup, resource: !!GameplaySettings.logHideResources };
+    return (hide.buildup || hide.resource) ? hide : null;
   }
 
   _updateCombatLogTabVisuals() {
@@ -719,6 +777,7 @@ export default class CombatScene extends Phaser.Scene {
     this.logEntries = tab === 'local' ? this.localEntries : this.combatEntries;
     this.combatLogScroll = this._combatLogTabScroll[tab] || 0;
     this._updateCombatLogTabVisuals();
+    this._updateCombatLogFilterVisuals();
     this._renderCombatLog();
     this.localChatInputDom?.setVisible(tab === 'local');
   }
@@ -893,8 +952,23 @@ export default class CombatScene extends Phaser.Scene {
     const wrapWidth = this._getCombatLogWrapWidth();
     const spacing = 4;
     let y = 0;
+    const hide = this._combatLogHide();
+    // With a filter on, a turn can lose every line, which would stack its
+    // separators; only draw one after something visible.
+    let lastWasSeparator = true;
 
     for (const entry of this.logEntries) {
+      if (hide && !entry?.separator) {
+        // The kind is cached on the entry: a line's text never changes.
+        if (entry && !entry.kind) entry.kind = logKindOf(entryText(entry));
+        if (!isEntryShown(entry, hide)) continue;
+      }
+      if (hide && entry?.separator) {
+        if (lastWasSeparator) continue;
+        lastWasSeparator = true;
+      } else if (hide) {
+        lastWasSeparator = false;
+      }
       if (entry?.separator) {
         // Turn divider — thin horizontal line
         const g = this.add.graphics();

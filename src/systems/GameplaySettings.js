@@ -1,7 +1,7 @@
 // src/systems/GameplaySettings.js
 // Persisted gameplay toggles. Same convention as AudioSettings.js (flat
-// localStorage, live-reactive listeners) — currently just Quick Combat, the
-// on/off switch for how fast attack VFX/multi-hit pacing plays.
+// localStorage, live-reactive listeners) — Quick Combat (how fast attack
+// VFX/multi-hit pacing plays) and the combat log filters.
 
 const STORAGE_KEY = 'gameplaySettings';
 
@@ -11,6 +11,10 @@ const DEFAULTS = {
   // and testers actually see the animations land. Quick Combat opts back
   // into the snappier pace every VFX/pacing value was originally tuned at.
   quickCombat: false,
+  // Combat log filters. Both default OFF so the log shows everything, as it
+  // always has; a player opts into the quieter view from the log's own tab strip.
+  logHideBuildup: false,
+  logHideResources: false,
 };
 
 function load() {
@@ -18,9 +22,11 @@ function load() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };
     const parsed = JSON.parse(raw);
-    return {
-      quickCombat: typeof parsed.quickCombat === 'boolean' ? parsed.quickCombat : DEFAULTS.quickCombat,
-    };
+    const out = { ...DEFAULTS };
+    for (const key of Object.keys(DEFAULTS)) {
+      if (typeof parsed?.[key] === typeof DEFAULTS[key]) out[key] = parsed[key];
+    }
+    return out;
   } catch {
     return { ...DEFAULTS };
   }
@@ -31,11 +37,15 @@ const _listeners = new Set();
 
 export const GameplaySettings = {
   get quickCombat() { return _values.quickCombat; },
+  get logHideBuildup() { return _values.logHideBuildup; },
+  get logHideResources() { return _values.logHideResources; },
 
   set(key, value) {
     if (!(key in DEFAULTS)) return;
     _values[key] = value;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(_values));
+    // Storage can be full or blocked (private windows, some browsers). The
+    // setting still applies for this session; it just will not be remembered.
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(_values)); } catch { }
     _listeners.forEach(fn => fn(_values));
   },
 
