@@ -7,6 +7,7 @@ import { buildSkillTooltipLines } from '../../ui/skillTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createScrollbar } from '../../ui/Scrollbar.js';
 import { createRectMask } from '../../ui/masks.js';
+import { Items } from '../../../data/items.js';
 import GameState from '../../systems/GameState.js';
 import { getProficiencyMap } from '../../systems/CombatLogic.js';
 
@@ -626,10 +627,48 @@ export default class SkillsOverlay extends Phaser.Scene {
       this._charProf.setText('');
       return;
     }
-    this._charLabel.setText(`Hunter: ${char.name}`);
+    // What the Hunter is holding, beside their name — so which weapon's skills
+    // they can actually use is readable here, without a trip to the Inventory.
+    this._fitCharLabel(char.name, this._weaponSummary(char));
     const m = getProficiencyMap(char);
     this._charProf.setText(
       ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(k => `${k} ${m[k] ?? 0}`).join('   '));
+  }
+
+  /**
+   * The Hunter's equipped weapon types, in the same vocabulary as the Weapon
+   * filter and the skill cards ("sword_1h", "dagger"), so what is shown here is
+   * exactly what the filter can be set to. Dual wielding reads "dagger + dagger";
+   * nothing equipped reads "unarmed".
+   */
+  _weaponSummary(char) {
+    const typeOf = (entry) => {
+      if (!entry) return null;
+      const id = typeof entry === 'string' ? entry : entry.id;
+      return Items[id]?.weaponType || Items[id]?.subtype || null;
+    };
+    const types = [typeOf(char?.equipment?.weaponMain), typeOf(char?.equipment?.weaponOff)].filter(Boolean);
+    return types.length ? types.join(' + ') : 'unarmed';
+  }
+
+  /**
+   * Sets the Hunter label to "Hunter: Name · weapon", shortened to fit between
+   * the cycler arrows. It drops the "Hunter:" prefix first and then trims the
+   * name, never the weapon — the weapon is the part this label exists to show.
+   * Measured against the rendered text, so it holds for any name and font.
+   */
+  _fitCharLabel(name, weapon) {
+    const label = this._charLabel;
+    const room = Math.max(60, (this._charRight?.x ?? label.x + 220) - label.x - 6);
+    const tail = ` · ${weapon}`;
+    label.setText(`Hunter: ${name}${tail}`);
+    if (label.width <= room) return;
+    label.setText(`${name}${tail}`);
+    let n = String(name);
+    while (label.width > room && n.length > 1) {
+      n = n.slice(0, -1);
+      label.setText(`${n}…${tail}`);
+    }
   }
 
   // ---------- Tooltip helpers ----------
