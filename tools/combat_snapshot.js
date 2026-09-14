@@ -736,6 +736,10 @@ function measureEnemySkill(skillId, where, { loaded }) {
   if (!caster) return 'SKIPPED its owner is not on the board';
   caster.currentMP = caster.maxMP;
   caster.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
+  // A full gauge, as player skills get. Without it every enemy gauge spender
+  // (Coordinated Volley, Molt, Huntmaster's Mark) was recorded as a fizzle, so
+  // the snapshot could not see anything they do.
+  caster.initiativeGauge = GAUGE;
 
   for (const ally of party) {
     ally.maxHP = BAG_HP;
@@ -756,6 +760,7 @@ function measureEnemySkill(skillId, where, { loaded }) {
   const foeHpBefore = host.enemies.map(e => e.currentHP);
   const metersBefore = { ...(bag.weakness?.meters || {}) };
   const mpBefore = caster.currentMP;
+  const gaugeBefore = caster.initiativeGauge || 0;
   const logBefore = host.combatEntries.length;
 
   try {
@@ -777,6 +782,8 @@ function measureEnemySkill(skillId, where, { loaded }) {
     'cd=' + (caster.cooldowns?.[skillId] || 0),
   ];
   if (healed) parts.push('healedOwnSide=' + healed);
+  const gaugeSpent = (caster.initiativeGauge || 0) - gaugeBefore;
+  if (gaugeSpent) parts.push('gauge=' + gaugeSpent);
   const dm = meterDelta(metersBefore, { ...(bag.weakness?.meters || {}) });
   if (dm.length) parts.push('meters[' + dm.join(' ') + ']');
   const onBag = (bag.statusEffects || []).map(e => e.id).sort();

@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 40
-version: 1
-updatedAt: 2026-08-25
+version: 2
+updatedAt: 2026-09-14
 ---
 # Huntsman & Beasts
 
@@ -21,11 +21,12 @@ Three combatants, and the first encounter built around a **commander**. [[Cade]]
 
 ## How the fight works
 
-- **Cade marks and directs.** His mark applies Expose buildup and flags a target for focus, making his beasts far more likely to converge on whoever he has painted. He also hands out Initiative and Accuracy to the pack, and his stronger pack-wide buff only unlocks once a target is already carrying **two or more** active weaknesses — so the fight escalates as your meters fill.
+- **Cade marks and directs.** The mark costs Cade 30 Initiative, so it arrives a few turns in, and Cold or stolen Initiative pushes it back further. It applies Expose buildup, draws Cade's own shots, and any beast Cade whistles a command to goes straight for the marked target. Cade also hands out Initiative and Accuracy to the pack, and his stronger pack-wide buff only unlocks once a target is already carrying **two or more** active weaknesses — so the fight escalates as your meters fill.
 - **[[Oskar]]** is the ripper: the heaviest body on the field and largely physical, with rot and infection riders that carry necrotic.
+- **The beasts keep to lanes.** Oskar and Kiro press the front rank; Laki, from Reckoning I on, hunts the back.
 - **[[Kiro]]** is the venom-spewer, and the reason this encounter is the pit's real **Necrotic Resist** test. His venom kit deals its damage as necrotic rather than physical, so Physical Resist does nothing against him.
 
-The tension is that Cade is the least threatening thing on the field to look at and the most threatening thing to leave alive. Leave him up and the beasts hit marked targets with escalating buffs; go for him first and you spend the opening turns eating beast damage undefended.
+The tension is that Cade is the least threatening thing on the field to look at and the most threatening thing to leave alive. Leave him up and the beasts hit marked targets with escalating buffs; go for him first and you spend the opening turns eating beast damage undefended. The turns before the first mark are the window to take a beast down.
 
 ## What it teaches
 
@@ -52,8 +53,8 @@ Deliberately mixed: Oskar is mostly physical with necrotic riders, Kiro is heavi
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Huntmaster's Mark** | bonus | 4 MP | 1 | Deals 35% weapon damage and applies 150 Expose buildup. Marks the target for 3 turns, making allies more likely to focus their attacks on it. |
-| **Whistled Command** | class | 6 MP | 2 | Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn. |
+| **Huntmaster's Mark** | bonus | 4 MP | 1 | Spend 30 initiative: deals 35% weapon damage and applies 75 Expose buildup. Marks the target for 3 turns; Cade and any beast under Whistled Command focus it. |
+| **Whistled Command** | class | 6 MP | 2 | Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn. A commanded beast hunts the marked target. |
 | **Trap Shot** | major | 6 MP | 1 | Deals 80% weapon damage and applies 169 Lacerate buildup. Immobilizes the target for 2 turns. |
 | **Empower Pack** | bonus | 8 MP | 3 | Requires the target to have at least 2 active weaknesses (Expose/Lacerate/Disease/Toxic). Grants every beast ally +20 Initiative and +10 Accuracy for 2 turns. |
 | **Coordinated Volley** | class | 6 MP | 4 | Spend 30-60 initiative: deals 100-130% weapon damage (scaling with spend) and applies Expose buildup. |

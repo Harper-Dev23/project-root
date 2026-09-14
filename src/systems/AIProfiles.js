@@ -138,13 +138,17 @@ const pickTarget = (list, opts = {}) => {
 
 const firstAlive = list => pickTarget(list, { noise: 0.8, preferLowHP: false }) || null;
 const weakest = list => pickTarget(list, { preferLowHP: true, noise: 1.1 }) || null;
-const highestWeakness = (targets, family, minTier = 1) => {
+// `lane` ({ aim, aimWeight }) adds the same rank lean targetScore uses. Omitted,
+// the pick is exactly what it always was.
+const highestWeakness = (targets, family, minTier = 1, lane = null) => {
   const filtered = (targets || []).filter(t => isAlive(t) && ((t.weakness?.tiers?.[family] || 0) >= minTier));
   if (!filtered.length) return null;
   return weightedPick(filtered, t => {
     const tier = t?.weakness?.tiers?.[family] || 0;
     const meter = t?.weakness?.meters?.[family] || 0;
-    return Math.max(0.1, tier * 2 + meter / 60 + randomRange(0, 0.8));
+    const rank = lane ? frontness(t) : 0;
+    const laneBias = !lane ? 0 : lane.aim === 'front' ? rank * lane.aimWeight : lane.aim === 'back' ? (1 - rank) * lane.aimWeight : 0;
+    return Math.max(0.1, tier * 2 + meter / 60 + randomRange(0, 0.8) + laneBias);
   });
 };
 const alliesOf = (npc, scene) => (scene?.enemies || []).filter(unit => unit && unit.isEnemy === npc.isEnemy && isAlive(unit));
@@ -160,6 +164,43 @@ const buildTargetList = (npc, scene, enemies) => ({
   allies: alliesOf(npc, scene),
   foes: enemiesOf(enemies),
 });
+
+// Encounter 4's pack targeting (owner, 2026-09-14).
+//
+// Every beast and Cade's mark all used weakest(): the same mild front lean and
+// the same low-HP lean. So the mark landed on whoever the beasts already
+// favoured, and in Reckoning III 45% of all enemy damage hit the one marked
+// hunter even though no beast ever read the mark. The split below gives each
+// member its own lane: Oskar and Kiro press the front rank, Laki hunts the
+// back, Cade takes whatever is open, and only a beast Cade has just commanded
+// goes for the mark.
+// About four times the default AIM_WEIGHT. Measured at 3.2, 5 and 6 in Reckoning
+// III; the owner wanted a clear split, and at 6 each beast still reaches the
+// other rank 11-20% of the time, so no rank is ever safe.
+const PACK_AIM_WEIGHT = 6;
+
+// A beast Cade has commanded fights only the marked hunter while a mark is up.
+// A RULE rather than another weight: against a lean this strong a weight would
+// need to be ~37 to win clearly (measured: 5 left it at the even-spread 20%),
+// and a command should be a tell the player can read. Payoff skills still check
+// their own conditions, just on the marked hunter alone.
+const packFoes = (npc, foes) => {
+  if (!hasStatus(npc, 'commanded')) return foes;
+  const marked = foes.filter(f => hasStatus(f, 'huntsman_marked'));
+  return marked.length ? marked : foes;
+};
+
+// Payoff skills (Maw Rip, Corrosive Bite, Silent Dive...) pick by buildup; the
+// same lean keeps them in lane, or Cade's any-rank Trap Shot would pull Oskar's
+// Lacerate payoffs anywhere on the board.
+const FRONT_LANE = { aim: 'front', aimWeight: PACK_AIM_WEIGHT };
+const BACK_LANE = { aim: 'back', aimWeight: PACK_AIM_WEIGHT };
+
+/** A beast's everyday target, leaning toward its rank. */
+const packTarget = (foes, aim) => pickTarget(foes, { preferLowHP: true, noise: 1.1, aim, aimWeight: PACK_AIM_WEIGHT }) || null;
+
+/** Cade's target when no mark applies: no rank preference at all. */
+const cadeTarget = foes => pickTarget(foes, { preferLowHP: true, noise: 1.1, aim: null }) || null;
 
 function pickMarkedTarget(enemies) {
   const marked = (enemies || []).filter(e => Array.isArray(e?.statusEffects) && e.statusEffects.some(se => se?.id === 'huntsman_marked'));
@@ -494,8 +535,10 @@ export const AI_PROFILES = {
     decide(npc, scene, enemies) {
       const { allies, foes } = buildTargetList(npc, scene, enemies);
       const marked = pickMarkedTarget(foes);
-      if (canUseSkill(npc, 'huntsman_mark') && !marked) {
-        const target = weakest(foes);
+      // The mark costs 30 Initiative (see huntsman_mark); checked here so Cade
+      // does not pick it only to fizzle and lose the bonus action.
+      if (canUseSkill(npc, 'huntsman_mark') && !marked && (npc.initiativeGauge || 0) >= 30) {
+        const target = cadeTarget(foes);
         if (target) return buildAction('huntsman_mark', target);
       }
       // Coordinated Volley — the initiative-spend finisher. Held for a
@@ -513,13 +556,13 @@ export const AI_PROFILES = {
         return buildAction('huntsman_empower_pack', marked);
       }
       if (canUseSkill(npc, 'huntsman_trap_shot')) {
-        const target = marked || weakest(foes);
+        const target = marked || cadeTarget(foes);
         if (target) return buildAction('huntsman_trap_shot', target);
       }
       // Out of MP for everything above — a real (0-cost) weapon attack
       // instead of falling through to the generic fallback picker.
       if (canUseSkill(npc, 'basic_attack')) {
-        const target = marked || weakest(foes);
+        const target = marked || cadeTarget(foes);
         if (target) return buildAction('basic_attack', target);
       }
       return null;
@@ -535,27 +578,27 @@ export const AI_PROFILES = {
         scene.reactions.arm(npc, SKILLS.oskar_reflex_bite);
       }
 
-      const { foes } = buildTargetList(npc, scene, enemies);
-      const lacTarget = highestWeakness(foes, 'lacerate', 1);
+      const foes = packFoes(npc, buildTargetList(npc, scene, enemies).foes);
+      const lacTarget = highestWeakness(foes, 'lacerate', 1, FRONT_LANE);
       if (canUseSkill(npc, 'oskar_maw_rip') && lacTarget && hasAnyWeakness(lacTarget, ['lacerate'], 2)) {
         return buildAction('oskar_maw_rip', lacTarget);
       }
-      const diseaseTarget = highestWeakness(foes, 'disease', 2);
+      const diseaseTarget = highestWeakness(foes, 'disease', 2, FRONT_LANE);
       if (canUseSkill(npc, 'oskar_rotting_maw') && diseaseTarget) {
         return buildAction('oskar_rotting_maw', diseaseTarget);
       }
       if (canUseSkill(npc, 'oskar_rending_bite')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('oskar_rending_bite', target);
       }
       if (canUseSkill(npc, 'oskar_infectious_claw')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('oskar_infectious_claw', target);
       }
       // Out of MP for everything above — a real (0-cost) weapon attack
       // instead of falling through to the generic fallback picker.
       if (canUseSkill(npc, 'basic_attack')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('basic_attack', target);
       }
       return null;
@@ -576,27 +619,27 @@ export const AI_PROFILES = {
         return buildAction('kiro_molt', null);
       }
 
-      const { foes } = buildTargetList(npc, scene, enemies);
-      const toxicTarget = highestWeakness(foes, 'toxic', 2);
+      const foes = packFoes(npc, buildTargetList(npc, scene, enemies).foes);
+      const toxicTarget = highestWeakness(foes, 'toxic', 2, FRONT_LANE);
       if (canUseSkill(npc, 'kiro_corrosive_bite') && toxicTarget) {
         return buildAction('kiro_corrosive_bite', toxicTarget);
       }
-      const spreadTarget = highestWeakness(foes, 'toxic', 1);
+      const spreadTarget = highestWeakness(foes, 'toxic', 1, FRONT_LANE);
       if (canUseSkill(npc, 'kiro_poison_cloud') && spreadTarget) {
         return buildAction('kiro_poison_cloud', spreadTarget);
       }
       if (canUseSkill(npc, 'kiro_toxic_spit')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('kiro_toxic_spit', target);
       }
       if (canUseSkill(npc, 'kiro_venomous_swipe')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('kiro_venomous_swipe', target);
       }
       // Out of MP for everything above — a real (0-cost) weapon attack
       // instead of falling through to the generic fallback picker.
       if (canUseSkill(npc, 'basic_attack')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'front');
         if (target) return buildAction('basic_attack', target);
       }
       return null;
@@ -614,10 +657,10 @@ export const AI_PROFILES = {
         scene.reactions.arm(npc, SKILLS.laki_startle);
       }
 
-      const { foes } = buildTargetList(npc, scene, enemies);
+      const foes = packFoes(npc, buildTargetList(npc, scene, enemies).foes);
 
       // Cash in on a target she has already rattled.
-      const reeling = highestWeakness(foes, 'disorient', 2) || highestWeakness(foes, 'disorient', 1);
+      const reeling = highestWeakness(foes, 'disorient', 2, BACK_LANE) || highestWeakness(foes, 'disorient', 1, BACK_LANE);
       if (canUseSkill(npc, 'laki_silent_dive') && reeling) {
         return buildAction('laki_silent_dive', reeling);
       }
@@ -629,24 +672,24 @@ export const AI_PROFILES = {
 
       // Spread Disorient wide.
       if (canUseSkill(npc, 'laki_piercing_screech')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'back');
         if (target) return buildAction('laki_piercing_screech', target);
       }
 
       // Cheap bonus-action buildup — her bread and butter.
       if (canUseSkill(npc, 'laki_hooting_taunt')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'back');
         if (target) return buildAction('laki_hooting_taunt', target);
       }
 
       if (canUseSkill(npc, 'laki_silent_dive')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'back');
         if (target) return buildAction('laki_silent_dive', target);
       }
 
       // Same no-MP fallback every other beast profile ends on.
       if (canUseSkill(npc, 'basic_attack')) {
-        const target = weakest(foes);
+        const target = packTarget(foes, 'back');
         if (target) return buildAction('basic_attack', target);
       }
       return null;

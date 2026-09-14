@@ -33,8 +33,8 @@ Cade deals comparatively little damage himself. What he does is **make his beast
 
 | Ability | Action | Cost | CD | Effect |
 |---|---|---|---|---|
-| **Huntmaster's Mark** | bonus | 4 MP | 1 | Deals 35% weapon damage and applies 150 Expose buildup. Marks the target for 3 turns, making allies more likely to focus their attacks on it. |
-| **Whistled Command** | class | 6 MP | 2 | Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn. |
+| **Huntmaster's Mark** | bonus | 4 MP | 1 | Spend 30 initiative: deals 35% weapon damage and applies 75 Expose buildup. Marks the target for 3 turns; Cade and any beast under Whistled Command focus it. |
+| **Whistled Command** | class | 6 MP | 2 | Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn. A commanded beast hunts the marked target. |
 | **Trap Shot** | major | 6 MP | 1 | Deals 80% weapon damage and applies 169 Lacerate buildup. Immobilizes the target for 2 turns. |
 | **Empower Pack** | bonus | 8 MP | 3 | Requires the target to have at least 2 active weaknesses (Expose/Lacerate/Disease/Toxic). Grants every beast ally +20 Initiative and +10 Accuracy for 2 turns. |
 | **Coordinated Volley** | class | 6 MP | 4 | Spend 30-60 initiative: deals 100-130% weapon damage (scaling with spend) and applies Expose buildup. |

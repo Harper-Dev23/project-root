@@ -2191,9 +2191,16 @@ const NPC_ONLY_SKILLS = {
     enemyOnly: true,
     requiresTarget: true,
     targetRequirement: 'enemy',
+    // Gated on 30 Initiative, spent in full (owner, 2026-09-14). The mark used to
+    // land on round 1 of every fight and was reapplied the moment it expired.
+    // At Cade's ~13 regen it now arrives on Cade's third turn and returns roughly
+    // every five, which gives the party time to kill a beast first and makes
+    // Cold and initiative theft a real answer to it.
+    requiresInitiativeGauge: 30,
     tags: ['ranged', 'attack'],
     apply: (user, target) => {
       const ability = SKILLS?.huntsman_mark;
+      user.initiativeGauge = Math.max(0, (user.initiativeGauge || 0) - 30);
       const roll = calculateDamage(user, target, ability);
       let { physical, elemental, necrotic } = applyTypedDamageModifiers(
         { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
@@ -2203,12 +2210,13 @@ const NPC_ONLY_SKILLS = {
       const amount = Math.max(1, physical + elemental + necrotic);
       return {
         ...roll, physical, elemental, necrotic, amount,
-        // +50% then another +25% buildup across encounter 4 (was 80, then 120).
-        buildup: { expose: 150 },
+        // Was 80, 120, then 150. Halved to 75 (owner, 2026-09-14) so the mark
+        // alone no longer crosses Expose T1; Coordinated Volley's 150 is the payoff.
+        buildup: { expose: 75 },
         statusEffects: [{ id: 'huntsman_marked', turns: 3, data: { markedBy: user?.id || null }, vfx: { kind: 'debuff_leer' } }]
       };
     },
-    description: "Deals 35% weapon damage and applies 150 Expose buildup. Marks the target for 3 turns, making allies more likely to focus their attacks on it."
+    description: "Spend 30 initiative: deals 35% weapon damage and applies 75 Expose buildup. Marks the target for 3 turns; Cade and any beast under Whistled Command focus it."
   },
   'huntsman_command': {
     id: 'huntsman_command',
@@ -2224,7 +2232,7 @@ const NPC_ONLY_SKILLS = {
       amount: 0,
       statusEffects: [{ id: 'commanded', turns: 1, mods: { Initiative: 15, Accuracy: 10 }, vfx: { kind: 'buff_increase' } }]
     }),
-    description: "Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn."
+    description: "Grants an ally beast +15 Initiative and +10 Accuracy for 1 turn. A commanded beast hunts the marked target."
   },
   'huntsman_trap_shot': {
     id: 'huntsman_trap_shot',
