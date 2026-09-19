@@ -3,7 +3,7 @@
 // rolled weather — summed into one flat object the Hunt loop reads from.
 //
 // All six fields are live: lootQualityPercent shifts Cultist fight drops
-// toward rare (capped there for now — see CombatScene.js rollHuntDropRarity()),
+// toward rare and epic (a diminishing curve — see PartyStats.js rollHuntDropRarity()),
 // xpPercent scales the hunt-fight XP reward (_calculateXPReward()), and the
 // rest were already wired in earlier passes.
 //

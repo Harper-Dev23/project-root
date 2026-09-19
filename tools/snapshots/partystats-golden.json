@@ -1,0 +1,650 @@
+{
+ "pickLevels": [
+  2,
+  4,
+  6,
+  8,
+  10
+ ],
+ "ratingPick": 10,
+ "passives": {
+  "far_sight": {
+   "name": "Far Sight",
+   "minLevel": 6,
+   "effect": {
+    "sightRangeBonus": 1
+   },
+   "description": "+1 sight range for the party."
+  },
+  "pack_mule": {
+   "name": "Pack Mule",
+   "effect": {
+    "packRationsBonus": 20
+   },
+   "description": "The hunt pack takes 20 more Rations."
+  },
+  "low_profile": {
+   "name": "Low Profile",
+   "effect": {
+    "campConcealmentBonus": 20
+   },
+   "description": "+20 concealment while camped."
+  },
+  "field_rites": {
+   "name": "Field Rites",
+   "effect": {
+    "campRecoveryPercent": 25
+   },
+   "description": "Camping recovers 25% more HP and MP."
+  },
+  "naturalist": {
+   "name": "Naturalist",
+   "effect": {
+    "exactRoster": 1
+   },
+   "description": "Identified packs show their exact roster."
+  },
+  "rallying_song": {
+   "name": "Rallying Song",
+   "effect": {
+    "partyInitiativeBonus": 5
+   },
+   "description": "+5 party initiative, added after the average."
+  }
+ },
+ "startingProfiles": {
+  "Human Grunt": {
+   "perception": 10,
+   "endurance": 40,
+   "speed": 10,
+   "cooking": 25,
+   "fishing": 10,
+   "foraging": 25
+  },
+  "Human Shepherd": {
+   "perception": 35,
+   "endurance": 25,
+   "speed": 10,
+   "cooking": 10,
+   "fishing": 10,
+   "foraging": 30
+  },
+  "Human Beggar": {
+   "perception": 25,
+   "endurance": 10,
+   "speed": 25,
+   "cooking": 10,
+   "fishing": 20,
+   "foraging": 30
+  },
+  "Human Acolyte": {
+   "perception": 10,
+   "endurance": 25,
+   "speed": 10,
+   "cooking": 35,
+   "fishing": 10,
+   "foraging": 30
+  },
+  "Human Scholar": {
+   "perception": 30,
+   "endurance": 10,
+   "speed": 10,
+   "cooking": 25,
+   "fishing": 35,
+   "foraging": 10
+  },
+  "Human Performer": {
+   "perception": 10,
+   "endurance": 10,
+   "speed": 35,
+   "cooking": 30,
+   "fishing": 25,
+   "foraging": 10
+  },
+  "Dwarf Grunt": {
+   "perception": 10,
+   "endurance": 55,
+   "speed": 0,
+   "cooking": 35,
+   "fishing": 0,
+   "foraging": 20
+  },
+  "Dwarf Shepherd": {
+   "perception": 35,
+   "endurance": 40,
+   "speed": 0,
+   "cooking": 20,
+   "fishing": 0,
+   "foraging": 25
+  },
+  "Dwarf Beggar": {
+   "perception": 25,
+   "endurance": 25,
+   "speed": 15,
+   "cooking": 20,
+   "fishing": 10,
+   "foraging": 25
+  },
+  "Dwarf Acolyte": {
+   "perception": 10,
+   "endurance": 40,
+   "speed": 0,
+   "cooking": 45,
+   "fishing": 0,
+   "foraging": 25
+  },
+  "Dwarf Scholar": {
+   "perception": 30,
+   "endurance": 25,
+   "speed": 0,
+   "cooking": 35,
+   "fishing": 25,
+   "foraging": 5
+  },
+  "Dwarf Performer": {
+   "perception": 10,
+   "endurance": 25,
+   "speed": 25,
+   "cooking": 40,
+   "fishing": 15,
+   "foraging": 5
+  },
+  "Elf Grunt": {
+   "perception": 20,
+   "endurance": 30,
+   "speed": 15,
+   "cooking": 30,
+   "fishing": 0,
+   "foraging": 25
+  },
+  "Elf Shepherd": {
+   "perception": 45,
+   "endurance": 15,
+   "speed": 15,
+   "cooking": 15,
+   "fishing": 0,
+   "foraging": 30
+  },
+  "Elf Beggar": {
+   "perception": 35,
+   "endurance": 0,
+   "speed": 30,
+   "cooking": 15,
+   "fishing": 10,
+   "foraging": 30
+  },
+  "Elf Acolyte": {
+   "perception": 20,
+   "endurance": 15,
+   "speed": 15,
+   "cooking": 40,
+   "fishing": 0,
+   "foraging": 30
+  },
+  "Elf Scholar": {
+   "perception": 40,
+   "endurance": 0,
+   "speed": 15,
+   "cooking": 30,
+   "fishing": 25,
+   "foraging": 10
+  },
+  "Elf Performer": {
+   "perception": 20,
+   "endurance": 0,
+   "speed": 40,
+   "cooking": 35,
+   "fishing": 15,
+   "foraging": 10
+  },
+  "Ferrow Grunt": {
+   "perception": 25,
+   "endurance": 45,
+   "speed": 20,
+   "cooking": 15,
+   "fishing": 0,
+   "foraging": 15
+  },
+  "Ferrow Shepherd": {
+   "perception": 50,
+   "endurance": 30,
+   "speed": 20,
+   "cooking": 0,
+   "fishing": 0,
+   "foraging": 20
+  },
+  "Ferrow Beggar": {
+   "perception": 40,
+   "endurance": 15,
+   "speed": 35,
+   "cooking": 0,
+   "fishing": 10,
+   "foraging": 20
+  },
+  "Ferrow Acolyte": {
+   "perception": 25,
+   "endurance": 30,
+   "speed": 20,
+   "cooking": 25,
+   "fishing": 0,
+   "foraging": 20
+  },
+  "Ferrow Scholar": {
+   "perception": 45,
+   "endurance": 15,
+   "speed": 20,
+   "cooking": 15,
+   "fishing": 25,
+   "foraging": 0
+  },
+  "Ferrow Performer": {
+   "perception": 25,
+   "endurance": 15,
+   "speed": 45,
+   "cooking": 20,
+   "fishing": 15,
+   "foraging": 0
+  },
+  "Wylett Grunt": {
+   "perception": 5,
+   "endurance": 50,
+   "speed": 0,
+   "cooking": 15,
+   "fishing": 10,
+   "foraging": 40
+  },
+  "Wylett Shepherd": {
+   "perception": 30,
+   "endurance": 35,
+   "speed": 0,
+   "cooking": 0,
+   "fishing": 10,
+   "foraging": 45
+  },
+  "Wylett Beggar": {
+   "perception": 20,
+   "endurance": 20,
+   "speed": 15,
+   "cooking": 0,
+   "fishing": 20,
+   "foraging": 45
+  },
+  "Wylett Acolyte": {
+   "perception": 5,
+   "endurance": 35,
+   "speed": 0,
+   "cooking": 25,
+   "fishing": 10,
+   "foraging": 45
+  },
+  "Wylett Scholar": {
+   "perception": 25,
+   "endurance": 20,
+   "speed": 0,
+   "cooking": 15,
+   "fishing": 35,
+   "foraging": 25
+  },
+  "Wylett Performer": {
+   "perception": 5,
+   "endurance": 20,
+   "speed": 25,
+   "cooking": 20,
+   "fishing": 25,
+   "foraging": 25
+  },
+  "Skith Grunt": {
+   "perception": 10,
+   "endurance": 30,
+   "speed": 20,
+   "cooking": 15,
+   "fishing": 25,
+   "foraging": 20
+  },
+  "Skith Shepherd": {
+   "perception": 35,
+   "endurance": 15,
+   "speed": 20,
+   "cooking": 0,
+   "fishing": 25,
+   "foraging": 25
+  },
+  "Skith Beggar": {
+   "perception": 25,
+   "endurance": 0,
+   "speed": 35,
+   "cooking": 0,
+   "fishing": 35,
+   "foraging": 25
+  },
+  "Skith Acolyte": {
+   "perception": 10,
+   "endurance": 15,
+   "speed": 20,
+   "cooking": 25,
+   "fishing": 25,
+   "foraging": 25
+  },
+  "Skith Scholar": {
+   "perception": 30,
+   "endurance": 0,
+   "speed": 20,
+   "cooking": 15,
+   "fishing": 50,
+   "foraging": 5
+  },
+  "Skith Performer": {
+   "perception": 10,
+   "endurance": 0,
+   "speed": 45,
+   "cooking": 20,
+   "fishing": 40,
+   "foraging": 5
+  }
+ },
+ "bestStartingPerStat": {
+  "perception": "Ferrow Shepherd 50",
+  "endurance": "Dwarf Grunt 55",
+  "speed": "Ferrow Performer 45",
+  "cooking": "Dwarf Acolyte 45",
+  "fishing": "Skith Scholar 50",
+  "foraging": "Wylett Shepherd 45"
+ },
+ "curves": {
+  "supplyEfficiency": {
+   "stat": "endurance",
+   "ceiling": 40,
+   "k": 50,
+   "at": {
+    "0": 0,
+    "10": 6.6667,
+    "20": 11.4286,
+    "30": 15,
+    "40": 17.7778,
+    "50": 20,
+    "60": 21.8182,
+    "80": 24.6154,
+    "100": 26.6667,
+    "120": 28.2353,
+    "150": 30,
+    "200": 32,
+    "300": 34.2857
+   }
+  },
+  "travelTime": {
+   "stat": "speed",
+   "ceiling": 40,
+   "k": 50,
+   "at": {
+    "0": 0,
+    "10": 6.6667,
+    "20": 11.4286,
+    "30": 15,
+    "40": 17.7778,
+    "50": 20,
+    "60": 21.8182,
+    "80": 24.6154,
+    "100": 26.6667,
+    "120": 28.2353,
+    "150": 30,
+    "200": 32,
+    "300": 34.2857
+   }
+  },
+  "forageYield": {
+   "stat": "foraging",
+   "ceiling": 50,
+   "k": 50,
+   "at": {
+    "0": 0,
+    "10": 8.3333,
+    "20": 14.2857,
+    "30": 18.75,
+    "40": 22.2222,
+    "50": 25,
+    "60": 27.2727,
+    "80": 30.7692,
+    "100": 33.3333,
+    "120": 35.2941,
+    "150": 37.5,
+    "200": 40,
+    "300": 42.8571
+   }
+  },
+  "harvestTime": {
+   "stat": "foraging",
+   "ceiling": 40,
+   "k": 50,
+   "at": {
+    "0": 0,
+    "10": 6.6667,
+    "20": 11.4286,
+    "30": 15,
+    "40": 17.7778,
+    "50": 20,
+    "60": 21.8182,
+    "80": 24.6154,
+    "100": 26.6667,
+    "120": 28.2353,
+    "150": 30,
+    "200": 32,
+    "300": 34.2857
+   }
+  },
+  "fishYield": {
+   "stat": "fishing",
+   "ceiling": 50,
+   "k": 50,
+   "at": {
+    "0": 0,
+    "10": 8.3333,
+    "20": 14.2857,
+    "30": 18.75,
+    "40": 22.2222,
+    "50": 25,
+    "60": 27.2727,
+    "80": 30.7692,
+    "100": 33.3333,
+    "120": 35.2941,
+    "150": 37.5,
+    "200": 40,
+    "300": 42.8571
+   }
+  }
+ },
+ "gearRaritySoften": {
+  "0": 0,
+  "10": 9.0909,
+  "25": 20,
+  "50": 33.3333,
+  "100": 50,
+  "200": 66.6667,
+  "300": 75,
+  "600": 85.7143
+ },
+ "dropOdds": {
+  "0": {
+   "uncommon": 55,
+   "rare": 33,
+   "epic": 12
+  },
+  "5": {
+   "uncommon": 50.4545,
+   "rare": 35.7273,
+   "epic": 13.8182
+  },
+  "10": {
+   "uncommon": 46.6667,
+   "rare": 38,
+   "epic": 15.3333
+  },
+  "25": {
+   "uncommon": 38.3333,
+   "rare": 43,
+   "epic": 18.6667
+  },
+  "50": {
+   "uncommon": 30,
+   "rare": 48,
+   "epic": 22
+  },
+  "83": {
+   "uncommon": 23.797,
+   "rare": 51.7218,
+   "epic": 24.4812
+  },
+  "100": {
+   "uncommon": 21.6667,
+   "rare": 53,
+   "epic": 25.3333
+  },
+  "150": {
+   "uncommon": 17.5,
+   "rare": 55.5,
+   "epic": 27
+  },
+  "200": {
+   "uncommon": 15,
+   "rare": 57,
+   "epic": 28
+  },
+  "500": {
+   "uncommon": 9.5455,
+   "rare": 60.2727,
+   "epic": 30.1818
+  },
+  "5000": {
+   "uncommon": 5.495,
+   "rare": 62.703,
+   "epic": 31.802
+  }
+ },
+ "dropRollsSeeded": {
+  "0": {
+   "uncommon": 54.99,
+   "rare": 32.99,
+   "epic": 12.02
+  },
+  "25": {
+   "uncommon": 38.16,
+   "rare": 43.11,
+   "epic": 18.73
+  },
+  "100": {
+   "uncommon": 21.57,
+   "rare": 52.95,
+   "epic": 25.48
+  }
+ },
+ "fixtureParty": [
+  {
+   "name": "Bran",
+   "race": "Dwarf",
+   "cls": "Grunt",
+   "perception": 10,
+   "endurance": 55,
+   "speed": 0,
+   "cooking": 35,
+   "fishing": 0,
+   "foraging": 20
+  },
+  {
+   "name": "Sable",
+   "race": "Skith",
+   "cls": "Beggar",
+   "perception": 25,
+   "endurance": 0,
+   "speed": 35,
+   "cooking": 0,
+   "fishing": 35,
+   "foraging": 25
+  },
+  {
+   "name": "Wren",
+   "race": "Elf",
+   "cls": "Scholar",
+   "perception": 40,
+   "endurance": 0,
+   "speed": 15,
+   "cooking": 30,
+   "fishing": 25,
+   "foraging": 10
+  },
+  {
+   "name": "Halvard",
+   "race": "Dwarf",
+   "cls": "Acolyte",
+   "perception": 10,
+   "endurance": 40,
+   "speed": 0,
+   "cooking": 45,
+   "fishing": 0,
+   "foraging": 25
+  },
+  {
+   "name": "Ilse",
+   "race": "Ferrow",
+   "cls": "Shepherd",
+   "perception": 50,
+   "endurance": 30,
+   "speed": 20,
+   "cooking": 0,
+   "fishing": 0,
+   "foraging": 20
+  },
+  {
+   "name": "Torg",
+   "race": "Wylett",
+   "cls": "Grunt",
+   "perception": 5,
+   "endurance": 50,
+   "speed": 0,
+   "cooking": 15,
+   "fishing": 10,
+   "foraging": 40
+  }
+ ],
+ "fixturePartyStats": {
+  "size": 6,
+  "ratings": {
+   "perception": 50,
+   "cooking": 45,
+   "fishing": 35,
+   "foraging": 40,
+   "endurance": 29.166666666666668,
+   "speed": 11.666666666666666
+  },
+  "providers": {
+   "perception": "Ilse",
+   "cooking": "Halvard",
+   "fishing": "Sable",
+   "foraging": "Torg"
+  },
+  "perception": 50,
+  "cooking": 45,
+  "speed": 11.6667,
+  "partyInitiative": 7.1667,
+  "supplyEfficiencyPercent": 14.7368,
+  "travelTimePercent": 7.5676,
+  "forageYieldPercent": 22.2222,
+  "harvestTimePercent": 17.7778,
+  "fishYieldPercent": 20.5882,
+  "gearRarityPool": 0,
+  "itemRarity": 0,
+  "passiveIds": [],
+  "passives": {
+   "sightRangeBonus": 0,
+   "packRationsBonus": 0,
+   "campConcealmentBonus": 0,
+   "campRecoveryPercent": 0,
+   "exactRoster": 0,
+   "partyInitiativeBonus": 0
+  }
+ },
+ "itemRarityExample": {
+  "hunters": 6,
+  "gearEach": 20,
+  "partyPool": 15,
+  "itemRarity": 69.5455
+ }
+}

@@ -45,6 +45,71 @@ export const CLASS_BONUSES = {
   Shepherd: { WIS: 2, DEX: 1 }     // was +2; Watch Over leans on WIS
 };
 
+// --- Exploration ratings (Exploration System v2, chunk 6) -------------------
+// Design: the vault's PARTY_STATS.md. Owner signed these tables off 2026-09-19;
+// numbers are placeholders until chunk 13.
+//
+// Each hunter has a 0-100 RATING in six exploration stats. 100 is not a cap: it
+// means "a fully built specialist", the point the world's numbers are tuned
+// against. Starting rating = race + class, and the same discipline as the
+// combat tables above applies: EVERY race sums to 60 and EVERY class to 60, so
+// no pairing is secretly ahead. tools/headless/partystats.mjs fails if one
+// doesn't. No negatives: a race's combat penalty shows as a 0 instead.
+//
+// Reader of all four tables below: src/systems/PartyStats.js
+// (hunterExploration, partyStats). Races carry ratings only; passives are class
+// level-up picks.
+export const EXPLORATION_STATS = ['perception', 'endurance', 'speed', 'cooking', 'fishing', 'foraging'];
+export const EXPLORATION_RACE_BUDGET = 60;
+export const EXPLORATION_CLASS_BUDGET = 60;
+
+export const RACE_EXPLORATION = {
+  Human:  { perception: 10, endurance: 10, speed: 10, cooking: 10, fishing: 10, foraging: 10 }, // no spike, no gap
+  Dwarf:  { perception: 10, endurance: 25, cooking: 20, foraging: 5 },   // durable builders; -1 DEX -> no Speed
+  Elf:    { perception: 20, speed: 15, cooking: 15, foraging: 10 },      // sharp and refined; -1 CON -> no Endurance
+  Ferrow: { perception: 25, endurance: 15, speed: 20 },                  // explorers of high places
+  Wylett: { perception: 5, endurance: 20, fishing: 10, foraging: 25 },   // survivalists; slow to act
+  Skith:  { perception: 10, speed: 20, fishing: 25, foraging: 5 },       // desert, jungle and sea; quick
+};
+
+export const CLASS_EXPLORATION = {
+  Grunt:     { ratings: { endurance: 30, cooking: 15, foraging: 15 }, passives: ['pack_mule'] },
+  Shepherd:  { ratings: { perception: 25, endurance: 15, foraging: 20 }, passives: ['far_sight'] },
+  Beggar:    { ratings: { perception: 15, speed: 15, fishing: 10, foraging: 20 }, passives: ['low_profile'] },
+  Acolyte:   { ratings: { endurance: 15, cooking: 25, foraging: 20 }, passives: ['field_rites'] },
+  Scholar:   { ratings: { perception: 20, cooking: 15, fishing: 25 }, passives: ['naturalist'] },
+  Performer: { ratings: { speed: 25, cooking: 20, fishing: 15 }, passives: ['rallying_song'] },
+};
+
+// Exploration level-up picks: at each of these levels a hunter chooses +N to
+// one rating OR one passive from their class list (each passive once).
+// Owner 2026-09-19: 2/4/6/8/10 — so 4, 6 and 8 also offer a class skill.
+// Picks are saved as character.exploration.picks; what is OWED is worked out
+// from level, so old saves need no migration.
+export const EXPLORATION_PICK_LEVELS = [2, 4, 6, 8, 10];
+export const EXPLORATION_RATING_PICK = 10;
+
+// Passives write fields of the hunt modifier bundle. Only six, one per class,
+// each read by the NEXT chunk (7) — owner 2026-09-19: no passive may point at a
+// system whose design could still move. The rest are parked in PARTY_STATS.
+// `effect` values are summed across the party, but a passive counts ONCE per
+// party however many hunters took it. Field readers: PASSIVE_FIELDS in
+// PartyStats.js.
+export const EXPLORATION_PASSIVES = {
+  far_sight:     { name: 'Far Sight', minLevel: 6, effect: { sightRangeBonus: 1 },
+                   description: '+1 sight range for the party.' },
+  pack_mule:     { name: 'Pack Mule', effect: { packRationsBonus: 20 },
+                   description: 'The hunt pack takes 20 more Rations.' },
+  low_profile:   { name: 'Low Profile', effect: { campConcealmentBonus: 20 },
+                   description: '+20 concealment while camped.' },
+  field_rites:   { name: 'Field Rites', effect: { campRecoveryPercent: 25 },
+                   description: 'Camping recovers 25% more HP and MP.' },
+  naturalist:    { name: 'Naturalist', effect: { exactRoster: 1 },
+                   description: 'Identified packs show their exact roster.' },
+  rallying_song: { name: 'Rallying Song', effect: { partyInitiativeBonus: 5 },
+                   description: '+5 party initiative, added after the average.' },
+};
+
 // --- Helpers --------------------------------------------------
 function mergeStats(base, bonus) {
   const out = { ...base };

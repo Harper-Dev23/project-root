@@ -22,6 +22,7 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, ap
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
+import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase } from '../systems/ItemFactory.js';
@@ -271,22 +272,9 @@ function rollEnemyDropRarity(rng = Math.random) {
   return 'epic';
 }
 
-// Hunt-mode drops (Cultist fights) use the same uncommon/rare/epic spread as
-// rollEnemyDropRarity(), but lootQualityPercent (from the Hunt Plan/zone/
-// weather modifier pipeline — see HuntModifiers.js) shifts weight out of
-// uncommon and into rare/epic — never guaranteed, just biased.
-function rollHuntDropRarity(lootQualityPercent = 0, rng = Math.random) {
-  let uncommon = 55, rare = 33, epic = 12;
-  const shift = Math.min(uncommon - 5, Math.max(0, lootQualityPercent) * 0.6);
-  uncommon -= shift;
-  rare += shift * 0.6;
-  epic += shift * 0.4;
-
-  const r = rng() * 100;
-  if (r < uncommon) return 'uncommon';
-  if (r < uncommon + rare) return 'rare';
-  return 'epic';
-}
+// Hunt-mode drops: rollHuntDropRarity (Item Rarity -> uncommon/rare/epic) moved
+// to src/systems/PartyStats.js in chunk 6. It is party stats' Item Rarity
+// conversion, and the harness snapshots its curve there. Imported above.
 
 /**
  * The skill-shaped button an Identify tonic or Severing Chant is played as.
