@@ -102,7 +102,7 @@ export const COMPOSITIONS = {
 export const OCCUPANT_CONCEALMENT = {
   corrupted: 80,       // very high, but blight (20) hides nothing: 100, not above
   cultist: 30,         // a camp
-  cultAmbusher: 90,    // intended to exceed a reachable Perception
+  cultAmbusher: 90,    // hidden well past 100; Unmask keeps its band within UNMASK_MAX_CONCEALMENT
   event: 0,            // event sites are not hiding
 };
 

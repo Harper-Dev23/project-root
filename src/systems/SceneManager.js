@@ -42,7 +42,7 @@ export default class SceneManager {
       'CharacterCreationScene', 'PartyManagementScene',
       'CharacterListOverlay', 'InventoryOverlay', 'SkillsOverlay',
       'MapOverlay', 'OptionsOverlay', 'JournalOverlay', 'QuestOverlay',
-      'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay', 'HuntEventOverlay', 'TribeHQOverlay', 'HuntPlanPickerOverlay',
+      'HuntHubOverlay', 'HuntMapOverlay', 'HuntEncounterOverlay', 'HuntEventOverlay', 'TribeHQOverlay', 'HuntPlanPickerOverlay', 'HuntFieldOverlay',
     ];
     ALL_SCENES.forEach(key => {
       if (this.scene.isActive(key) || this.scene.isPaused(key)) {

@@ -29,6 +29,7 @@ import HuntEncounterOverlay from './scenes/overlays/HuntEncounterOverlay.js';
 import HuntEventOverlay from './scenes/overlays/HuntEventOverlay.js';
 import TribeHQOverlay from './scenes/overlays/TribeHQOverlay.js';
 import HuntPlanPickerOverlay from './scenes/overlays/HuntPlanPickerOverlay.js';
+import HuntFieldOverlay, { installDevHook as installHuntFieldDevHook } from './scenes/overlays/HuntFieldOverlay.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -63,6 +64,7 @@ const config = {
     HuntEventOverlay,
     TribeHQOverlay,
     HuntPlanPickerOverlay,
+    HuntFieldOverlay,
   ],
   physics: {
     default: 'arcade',
@@ -142,6 +144,9 @@ function boot() {
   // Create and attach the SceneManager to GameState so it can be accessed globally
   GameState.sceneManager = new SceneManager(game);
   window.sceneManager = GameState.sceneManager;
+  // Chunk 8b dev hook: window.bmDevMapHunt() opens the hex-map hunt scene on a
+  // sandboxed hunt in memory. 8c replaces it with the real departure.
+  installHuntFieldDevHook(game);
   // Optionally, launch the main menu using the manager
   GameState.sceneManager.startMainMenu();
 
