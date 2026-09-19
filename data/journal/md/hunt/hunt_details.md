@@ -11,15 +11,15 @@ teaser: false
 requires: []
 sort: 20
 version: 2
-updatedAt: 2026-08-23
+updatedAt: 2026-09-19
 ---
 # The Sacred Hunt
 
 ## Loadout
 
-A hunt begins with **60 supplies**. Hunt Tickets buy more at **10 supplies each**, up to **10 Tickets** spent at once -- a maximum of 160 supplies carried out of camp.
+The camp issues **60 supplies** free for every hunt. On top of that you can pack **Rations**, bought on the Hunt screen at **10 for one Hunt Ticket**, up to **100** packed -- a maximum of 160 supplies carried out of camp. The camp issue is eaten first, and packed Rations you don't eat come home when you leave.
 
-A **Hunt Plan**, if you have one, is consumed on departure and applies its rolled modifiers to the whole trip: supply efficiency, encounter odds, Hunt Point yield and the balance between beasts and cultists.
+Every hunt goes out on a **Hunt Plan** -- the free Basic Hunt Plan if you choose nothing else. A bought plan is used up on departure and applies its rolled modifiers to the whole trip; see [[Hunt Plans]].
 
 ## Travelling
 

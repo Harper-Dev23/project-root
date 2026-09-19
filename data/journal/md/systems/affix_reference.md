@@ -142,13 +142,54 @@ Every tier of a stat suffix shows the **same name** — "of the Bear" is always 
 
 ## Hunt plan modifiers
 
+Plans roll from their own pools. **Prefixes** are what the hunt demands, and every prefix also raises the completion reward by its tier: T1 +15%, T2 +12%, T3 +9%, T4 +6%, T5 +4% *(no effect yet)*. **Suffixes** are the party's edge. Rows marked *(no effect yet)* roll and show on the plan, but nothing reads them until a later update.
+
+### Prefixes
+
 | Modifier | T1 (best) | T2 | T3 | T4 | T5 |
 |---|---|---|---|---|---|
-| **Beast Encounter Weight** | — | Keen-Eyed<br>1–3 | — | — | — |
-| **Encounter Chance** | — | Bold<br>5–15 | — | — | — |
-| **Experience** | — | — | Studious<br>10–25 | — | — |
-| **Hunt Points** | of the Hunt<br>5–20 | — | — | — | — |
-| **Loot Quality** | — | — | of Plenty<br>10–25 | — | — |
-| **Supply Efficiency** | — | of Swift Travel<br>5–20 | — | — | — |
+| **Blight Patches *(no effect yet)*** | Blighted<br>4–5 | Blighted<br>3–4 | Blighted<br>2–3 | Blighted<br>1–2 | Blighted<br>1–1 |
+| **Elder Beasts *(no effect yet)*** | Elder Grounds<br>24–30 | Elder Grounds<br>18–23 | Elder Grounds<br>13–17 | Elder Grounds<br>9–12 | Elder Grounds<br>5–8 |
+| **Encounter Chance** | Teeming<br>17–20 | Teeming<br>13–16 | Teeming<br>9–12 | Teeming<br>6–8 | Teeming<br>3–5 |
+| **Fewer Forage Spots *(no effect yet)*** | Lean Country<br>41–50 | Lean Country<br>31–40 | Lean Country<br>23–30 | Lean Country<br>16–22 | Lean Country<br>10–15 |
+| **Harsher Weather** | Foul Weather<br>71–85 | Foul Weather<br>56–70 | Foul Weather<br>41–55 | Foul Weather<br>26–40 | Foul Weather<br>15–25 |
+| **Restless Packs *(no effect yet)*** | Restless<br>24–30 | Restless<br>18–23 | Restless<br>13–17 | Restless<br>9–12 | Restless<br>5–8 |
+
+### Suffixes
+
+| Modifier | T1 (best) | T2 | T3 | T4 | T5 |
+|---|---|---|---|---|---|
+| **Experience Gained** | of Learning<br>21–25 | of Learning<br>16–20 | of Learning<br>11–15 | of Learning<br>7–10 | of Learning<br>4–6 |
+| **Harvest & Forage Yield *(no effect yet)*** | of the Harvest<br>27–35 | of the Harvest<br>19–26 | of the Harvest<br>13–18 | of the Harvest<br>9–12 | of the Harvest<br>5–8 |
+| **Hunt Points** | of the Hunt<br>17–20 | of the Hunt<br>13–16 | of the Hunt<br>9–12 | of the Hunt<br>6–8 | of the Hunt<br>3–5 |
+| **Loot Quality** | of Plenty<br>21–25 | of Plenty<br>16–20 | of Plenty<br>11–15 | of Plenty<br>7–10 | of Plenty<br>4–6 |
+| **Perception *(no effect yet)*** | of Keen Eyes<br>16–20 | of Keen Eyes<br>11–15 | of Keen Eyes<br>7–10 | of Keen Eyes<br>4–6 | of Keen Eyes<br>2–3 |
+| **Rations in the Pack** | of Provision<br>41–50 | of Provision<br>31–40 | of Provision<br>21–30 | of Provision<br>11–20 | of Provision<br>5–10 |
+| **Travel Efficiency** | of Swift Travel<br>17–20 | of Swift Travel<br>13–16 | of Swift Travel<br>9–12 | of Swift Travel<br>6–8 | of Swift Travel<br>3–5 |
+| **Travel Time Saved *(no effect yet)*** | of the Trail<br>17–20 | of the Trail<br>13–16 | of the Trail<br>9–12 | of the Trail<br>6–8 | of the Trail<br>3–5 |
+
+### Plan tiers
+
+| Tier | Item levels | Always on the plan |
+|---|---|---|
+| **I** | 1–4 | nothing extra |
+| **II** | 5–7 | +10% completion reward *(no effect yet)* |
+| **III** | 8–10 | +20% completion reward *(no effect yet)*, one bonus objective |
+
+### Bonus objectives
+
+A bonus objective rolls as a prefix, at most one per plan; a Tier III plan adds a second, different one. They can only roll from their item level up. None of them pays out yet.
+
+| Objective | From item level | Done when |
+|---|---|---|
+| **Pathfinder** | 1 | Reveal 70% of the map. |
+| **Named Quarry** | 1 | Kill 5 beasts of a named native family. |
+| **Provisioner** | 1 | Carry home 6 foraged or fished foods. |
+| **Trophy** | 3 | Carry home a core part from a Prime-or-better beast. |
+| **Unbroken** | 3 | No hunter is knocked out in any fight this hunt. |
+| **Swift Return** | 5 | Leave the hunt before day 4. |
+| **Cleanse** | 5 | Cleanse a blight tile. |
+| **Great Quarry** | 8 | Kill a Great-grade beast. |
+| **Unmask** | 8 | Identify an occupant with concealment above 100. |
 
 <!-- GEN:END -->

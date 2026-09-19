@@ -27,7 +27,18 @@ const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP } = await import('../data/xpTable.js');
 const PM = (await import('../src/systems/ProgressionManager.js')).default;
 
-const { AFFIX_TIER_RULES, BASE_TIER_RULES, getAffixIndex } = IF;
+const { AFFIX_TIER_RULES, BASE_TIER_RULES, getAffixIndex, getHuntPlanPools } = IF;
+const {
+  PLAN_FIELDS, PLAN_PREFIX_FAMILIES, PLAN_SUFFIX_FAMILIES, BONUS_OBJECTIVES,
+  PLAN_TIER_BANDS, PLAN_TIER_IMPLICITS, PREFIX_COMPLETION_REWARD,
+} = await import('../data/planAffixes.js');
+
+// The armour index also carries every Hunt Plan affix -- the v2 pools (family
+// `plan_*`) and the six v1 ones kept so old plans still describe themselves.
+// None of them are armour; the plan section is built from the plan pools.
+const V1_PLAN_FAMILIES = ['huntPointsPercent', 'lootQualityPercent', 'xpPercent',
+  'supplyEfficiencyPercent', 'beastChanceWeight', 'encounterChancePercent'];
+const isPlanFamily = (fam) => String(fam).startsWith('plan_') || V1_PLAN_FAMILIES.includes(fam);
 
 // ---------------------------------------------------------------- labels
 // Player-facing names for the internal family keys. Anything unmapped falls
@@ -133,23 +144,64 @@ function affixBody() {
   out.push('---' + NL);
   out.push('## Armour modifiers' + NL);
   out.push('### Prefixes' + NL);
-  out.push(ladderTable(ladders(armour, (k, v) => !String(k).startsWith('of ') &&
-    !['huntPointsPercent', 'lootQualityPercent', 'xpPercent', 'supplyEfficiencyPercent',
-      'beastChanceWeight', 'encounterChancePercent'].includes(v.family))));
+  out.push(ladderTable(ladders(armour, (k, v) => !String(k).startsWith('of ') && !isPlanFamily(v.family))));
   out.push('### Suffixes' + NL);
   out.push('Every tier of a stat suffix shows the **same name** — "of the Bear" is always '
     + 'Strength. The number is what tells you the tier.' + NL);
   out.push(ladderTable(ladders(armour, (k, v) => String(v.family).startsWith('stat_'))));
 
-  const hunt = ladders(armour, (k, v) => ['huntPointsPercent', 'lootQualityPercent', 'xpPercent',
-    'supplyEfficiencyPercent', 'beastChanceWeight', 'encounterChancePercent'].includes(v.family));
-  if (Object.keys(hunt).length) {
-    out.push('---' + NL);
-    out.push('## Hunt plan modifiers' + NL);
-    out.push(ladderTable(hunt));
-  }
+  out.push('---' + NL);
+  out.push(huntPlanBody());
   return out.join(NL);
 }
+
+// ---------------------------------------------------------- hunt plans
+// Built from the real plan pools (ItemFactory.getHuntPlanPools) and
+// data/planAffixes.js, so a retune there shows up here on the next run.
+function huntPlanBody() {
+  const out = [];
+  const { prefixes, suffixes } = getHuntPlanPools();
+  const fieldOf = Object.fromEntries([...PLAN_PREFIX_FAMILIES, ...PLAN_SUFFIX_FAMILIES]
+    .map(f => [`plan_${f.id}`, f.field]));
+  // One row per family, named for what it does; a field whose reader is a later
+  // update is marked the same way the game marks it.
+  for (const [fam, field] of Object.entries(fieldOf)) {
+    const d = PLAN_FIELDS[field];
+    FAMILY_LABEL[fam] = d.label + (d.live ? '' : ' *(no effect yet)*');
+  }
+  const asIndex = (defs) => Object.fromEntries(defs.filter(d => !d.objective)
+    .map(d => [d.key, { tier: d.tier, family: d.family, range: d.range, label: d.label }]));
+
+  out.push('## Hunt plan modifiers' + NL);
+  out.push('Plans roll from their own pools. **Prefixes** are what the hunt demands, and '
+    + 'every prefix also raises the completion reward by its tier: '
+    + [1, 2, 3, 4, 5].map(t => `T${t} +${PREFIX_COMPLETION_REWARD[t]}%`).join(', ')
+    + ' *(no effect yet)*. **Suffixes** are the party\'s edge. Rows marked '
+    + '*(no effect yet)* roll and show on the plan, but nothing reads them until a later update.' + NL);
+  out.push('### Prefixes' + NL);
+  out.push(ladderTable(ladders(asIndex(prefixes))));
+  out.push('### Suffixes' + NL);
+  out.push(ladderTable(ladders(asIndex(suffixes))));
+
+  out.push('### Plan tiers' + NL);
+  out.push(['| Tier | Item levels | Always on the plan |', '|---|---|---|',
+    ...PLAN_TIER_BANDS.map(b => {
+      const imp = PLAN_TIER_IMPLICITS[b.tier];
+      const parts = [];
+      if (imp.completionRewardPercent) parts.push(`+${imp.completionRewardPercent}% completion reward *(no effect yet)*`);
+      if (imp.bonusObjective) parts.push('one bonus objective');
+      return `| **${['', 'I', 'II', 'III'][b.tier]}** | ${b.minItemLevel}–${b.maxItemLevel} | ${parts.join(', ') || 'nothing extra'} |`;
+    })].join(NL) + NL);
+
+  out.push('### Bonus objectives' + NL);
+  out.push('A bonus objective rolls as a prefix, at most one per plan; a Tier III plan '
+    + 'adds a second, different one. They can only roll from their item level up. '
+    + 'None of them pays out yet.' + NL);
+  out.push(['| Objective | From item level | Done when |', '|---|---|---|',
+    ...Object.values(BONUS_OBJECTIVES).map(o => `| **${o.name}** | ${o.unlockItemLevel} | ${o.doneWhen} |`)].join(NL) + NL);
+  return out.join(NL);
+}
+
 
 // ------------------------------------------------------------ item levels
 function itemLevelBody() {

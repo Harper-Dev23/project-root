@@ -11,13 +11,13 @@ teaser: false
 requires: []
 sort: 10
 version: 2
-updatedAt: 2026-08-23
+updatedAt: 2026-09-19
 ---
 # Hunt Synopsis
 
 Quick reference for a Hunt, start to finish:
 
-1. **Choose a location** on the island map, then set your loadout -- spend Hunt Tickets for extra supplies, and pick a Hunt Plan if one is available.
+1. **Choose a location** on the island map, then set your loadout -- pack Rations (bought with Hunt Tickets) for extra supplies, and pick a Hunt Plan, or go on the free Basic Hunt Plan.
 2. **Depart** through the [[The Hunt Gate]]. Supplies begin draining, and day, night and weather start shifting your odds.
 3. **Advance.** Most steps pass without incident. Sometimes something finds you -- a fight, or an Event (a choice, a stat check, or a riddle).
 4. **Investigate** anything that turns up. You cannot advance again while an encounter is pending, and once you engage there is no backing out.
