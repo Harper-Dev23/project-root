@@ -78,6 +78,22 @@
 //   retrieved   the Retrieve item has been taken (by standing on its site)
 //   communed    the shrine has been reached (Commune, until Events v2)
 //   unmasked    occupants identified while their concealment was above 100
+//
+// ── What the map scene reads (chunk 8a) ─────────────────────────────────────
+// The scene (chunk 8) reads view() and acts only through the methods here, so
+// view() carries everything it draws and nothing the party has not seen:
+//   layout          the current section's shape, known from the start (drawn
+//                   as fog hexes: owner decision 4, chunk 8)
+//   tiles           seen tiles only: ground as last seen, relief, ford, exit,
+//                   gathered
+//   passages,       only where their tile has been seen
+//   features
+//   objectiveSites  Scout / Retrieve / Commune sites, marked from departure
+//                   (decision 5); never Apex or Cull targets, never a bonus
+//                   objective's route (it can point at a hidden ambusher)
+//   moves           the enterable neighbours and what each costs now
+// The harness (huntrules.mjs, 8a) checks all of this at every step, including
+// that no undetected occupant's id ever appears in the view.
 
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
@@ -85,6 +101,7 @@ import { isPassable, GROUNDS } from '../../data/grounds.js';
 import { Items } from '../../data/items.js';
 import { addToList, makeStack, takeFromList, countInList } from './ItemStacks.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
+import { parseTileId } from './HexGrid.js';
 import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
 import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } from './HuntManager.js';
@@ -596,7 +613,39 @@ function makeMapHunt(s, rng, worldRng, world) {
       }
       const ground = {};
       for (const [id, f] of Object.entries(s.fog)) ground[id] = f === 'visible' ? s.map.tiles[id].ground : s.seenGround[id];
+      // Chunk 8a: what the map scene needs to draw, and only what the party
+      // has seen (owner decisions 4 and 5, 2026-09-19). The section's SHAPE is
+      // known from the start; ground, relief, fords, exits, passages and
+      // features only once seen. Nothing here reads an occupant.
+      const known = (id) => !!s.fog[id];
+      const section = parseTileId(s.pos).section;
+      const tiles = {};
+      for (const id of Object.keys(s.fog)) {
+        const t = s.map.tiles[id];
+        tiles[id] = { ground: ground[id], relief: t.relief || 'flat' };
+        if (t.ford) tiles[id].ford = true;
+        if (t.exit) tiles[id].exit = true;
+        if (s.gathered[id]) tiles[id].gathered = s.gathered[id];
+      }
+      const moves = [];
+      for (const to of mapNeighbors(s.map, s.pos)) {
+        const c = moveCost(s.map.tiles[to], st);
+        if (c) moves.push({ tile: to, supply: c.supply, time: c.time });
+      }
       return {
+        section,
+        layout: Object.keys(s.map.tiles).filter(id => parseTileId(id).section === section),
+        sections: s.map.sections.length,
+        tiles,
+        passages: s.map.passages.flatMap(({ a, b }) => [{ tile: a, to: b }, { tile: b, to: a }]).filter(p => known(p.tile)),
+        features: s.map.features.filter(f => known(f.tile))
+          .map(f => (f.destroyed ? { kind: f.kind, tile: f.tile, destroyed: true } : { kind: f.kind, tile: f.tile })),
+        objectiveSites: this._objectiveSites(),
+        moves,
+        zoneId: s.zoneId,
+        plan: { ...s.plan, bonusObjectives: [...s.plan.bonusObjectives] },
+        weather: { id: s.weather.id, name: s.weather.name },
+        log: clone(s.log),
         pos: s.pos,
         clock: this.clock(),
         supplies: s.supplies,
@@ -656,6 +705,21 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (out.home.brought.length) world.bankItems(out.home.brought, { found: false });
       if (out.home.found.length) world.bankItems(out.home.found, { found: true });
       return out;
+    },
+
+    /**
+     * The primary objective's sites, marked from departure: the plan is a
+     * chart (owner decision 5, chunk 8). Only Scout, Retrieve and Commune have
+     * sites; Apex and Cull targets are hunted and never marked. Bonus
+     * objectives are never marked (their generator `route` can point at a
+     * hidden ambusher).
+     */
+    _objectiveSites() {
+      const p = s.map.objectives.primary;
+      if (p.id === 'scout') return p.sites.map(tile => ({ objective: 'scout', tile, done: !!s.fog[tile] }));
+      if (p.id === 'retrieve') return [{ objective: 'retrieve', tile: p.site, done: !!s.retrieved }];
+      if (p.id === 'commune') return [{ objective: 'commune', tile: p.site, done: !!s.communed }];
+      return [];
     },
 
     /** Standing on the Retrieve site takes the item; on the shrine, communes. */

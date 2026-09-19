@@ -1501,6 +1501,98 @@ console.log('=== leaving early, the exit rules, the wipe ===');
 }
 
 // =============================================================================
+// 8a: the map scene's view. The scene reads view() and nothing else, so view()
+// must hold everything it draws and nothing the party has not seen. No golden
+// entries: these are checks only, so adding them moves nothing.
+// =============================================================================
+console.log('=== 8a: view() is all the scene needs, and never more ===');
+
+/** Problems with one view() against the hunt's own state. */
+function viewProblems(h) {
+  const out = [];
+  const s = h.getState(), v = h.view(), st = h.stats();
+  const fogged = (id) => !!s.fog[id];
+  // Tiles: exactly the seen ones, each as the map has it (ground as last seen).
+  const tileIds = Object.keys(v.tiles);
+  if (!same([...tileIds].sort(), Object.keys(s.fog).sort())) out.push('tiles are not exactly the seen tiles');
+  for (const id of tileIds) {
+    const t = s.map.tiles[id], vt = v.tiles[id];
+    if (vt.ground !== v.ground[id]) out.push(`${id}: tile ground ${vt.ground} vs ground ${v.ground[id]}`);
+    if (vt.relief !== (t.relief || 'flat') || !!vt.ford !== !!t.ford || !!vt.exit !== !!t.exit) out.push(`${id}: relief/ford/exit differ from the map`);
+    if ((vt.gathered || null) !== (s.gathered[id] || null)) out.push(`${id}: gathered differs`);
+  }
+  // Layout: the current section's shape, all of it, nothing from another section.
+  const sec = parseTileId(s.pos).section;
+  const want = Object.keys(s.map.tiles).filter(id => parseTileId(id).section === sec).sort();
+  if (v.section !== sec || !same([...v.layout].sort(), want)) out.push('layout is not the current section\'s shape');
+  // Passages and features: only on seen tiles, and all of those.
+  const wantPass = s.map.passages.flatMap(({ a, b }) => [`${a}>${b}`, `${b}>${a}`]).filter(p => fogged(p.split('>')[0])).sort();
+  if (!same(v.passages.map(p => `${p.tile}>${p.to}`).sort(), wantPass)) out.push('passages are not exactly the seen ones');
+  const wantFeat = s.map.features.filter(f => fogged(f.tile)).map(f => `${f.kind}@${f.tile}${f.destroyed ? '!' : ''}`).sort();
+  if (!same(v.features.map(f => `${f.kind}@${f.tile}${f.destroyed ? '!' : ''}`).sort(), wantFeat)) out.push('features are not exactly the seen ones');
+  // Objective sites: the primary's own, only for Scout / Retrieve / Commune.
+  const p = s.map.objectives.primary;
+  const sites = { scout: p.sites, retrieve: [p.site], commune: [p.site] }[p.id] || [];
+  if (!same(v.objectiveSites.map(o => o.tile), sites) || v.objectiveSites.some(o => o.objective !== p.id)) out.push(`objective sites wrong for ${p.id}`);
+  // Moves: every enterable neighbour at moveCost, nothing else.
+  const wantMoves = mapNeighbors(s.map, s.pos).filter(id => isPassable(s.map.tiles[id]))
+    .map(id => { const c = R.moveCost(s.map.tiles[id], st); return { tile: id, supply: c.supply, time: c.time }; });
+  if (!same(v.moves, wantMoves)) out.push('moves differ from moveCost over the enterable neighbours');
+  // Occupants: only detected ones, only on seen tiles.
+  for (const o of v.occupants) if (o.band === 'nothing' || !fogged(o.tile)) out.push('an undetected or unseen occupant is shown');
+  // No leak: an occupant the party never detected and never met is nowhere in
+  // the view, not even its id; nor are the generator's routes or concealments.
+  const text = JSON.stringify(v);
+  const met = new Set(s.log.filter(l => l.occId || l.occupant).map(l => l.occId || l.occupant));
+  for (const o of s.map.occupants) if (!s.sightings[o.id] && !met.has(o.id) && text.includes(`"${o.id}"`)) out.push(`${o.id} (undetected) leaks into the view`);
+  if (/"route"|"concealment"/.test(text)) out.push('a route or a concealment number is in the view');
+  return out;
+}
+
+{
+  const PRIMS = ['scout', 'apex', 'cull', 'retrieve', 'commune'];
+  const probs = [];
+  let steps = 0, sectionsCrossed = 0, sitesMarked = 0, featuresSeen = 0;
+  for (const zoneId of ZONES) for (const size of SIZES) for (const objective of PRIMS) for (let k = 0; k < 3; k++) {
+    const seed = 13000 + k;
+    const h = createMapHunt(zoneId, { plan: { objective, size, bonusObjectives: ['unmask'], mods: { blightPatches: 1 }, itemLevel: 8 }, supplies: 200, seed }, recordingWorld(makeParty()));
+    const pick = makeRng(seed ^ 0x8a);
+    const stood = new Set([h.getState().pos]);
+    let lastSec = parseTileId(h.getState().pos).section;
+    const first = h.view();
+    sitesMarked += first.objectiveSites.length;
+    for (const o of first.objectiveSites) if (o.objective === 'scout' ? false : o.done) probs.push(`${zoneId}/${size}/${objective}: a site starts done`);
+    for (let i = 0; i < 40; i++) {
+      if (h.encounter()) { (i % 3 ? h.winEncounter() : h.flee()); }
+      else if (i % 11 === 5) h.camp();
+      else if (i % 7 === 3) h.forage();
+      else { const to = chooseMove(h, pick, stood); stood.add(to); h.move(to); }
+      steps++;
+      const sec = parseTileId(h.getState().pos).section;
+      if (sec !== lastSec) { sectionsCrossed++; lastSec = sec; }
+      for (const pr of viewProblems(h)) probs.push(`${zoneId}/${size}/${objective} seed ${seed} step ${i}: ${pr}`);
+    }
+    featuresSeen += h.view().features.length;
+  }
+  check('view(): tiles, layout, passages, features, sites and moves are exactly what the party has seen, at every step',
+    probs.length === 0, probs.length ? probs.slice(0, 3).join(' | ') : `${steps} steps, ${sectionsCrossed} section crossings, ${sitesMarked} sites marked, ${featuresSeen} features seen at the end`);
+  check('view(): nothing undetected leaks (no id, route or concealment), including Unmask\'s hidden band', probs.every(p => !/leak|route|concealment/.test(p)));
+
+  // A fresh hunt: only the section shape is known beyond what is in sight.
+  const h = createMapHunt(ZONES[0], { plan: { objective: 'retrieve', size: 'large' }, supplies: 60, seed: 13100 }, recordingWorld(makeParty()));
+  const v = h.view();
+  check('at departure: the section shape is whole, only tiles in sight have ground, the Retrieve site is marked',
+    v.layout.length > Object.keys(v.tiles).length && v.objectiveSites.length === 1 && v.objectiveSites[0].objective === 'retrieve' && !v.objectiveSites[0].done,
+    `${v.layout.length} hexes in the shape, ${Object.keys(v.tiles).length} seen`);
+  const ap = createMapHunt(ZONES[1], { plan: { objective: 'apex', size: 'medium' }, supplies: 60, seed: 13101 }, recordingWorld(makeParty()));
+  const cu = createMapHunt(ZONES[1], { plan: { objective: 'cull', size: 'medium' }, supplies: 60, seed: 13101 }, recordingWorld(makeParty()));
+  check('Apex and Cull targets are never marked', ap.view().objectiveSites.length === 0 && cu.view().objectiveSites.length === 0);
+  const vv = h.view();
+  vv.tiles[vv.pos].ground = 'changed'; vv.layout.push('x'); vv.plan.bonusObjectives.push('x');
+  check('view() is a copy: changing it changes nothing in the hunt', h.view().tiles[vv.pos].ground !== 'changed' && !h.view().layout.includes('x') && !h.view().plan.bonusObjectives.includes('x'));
+}
+
+// =============================================================================
 const args = process.argv.slice(2);
 const jsonAt = args.indexOf('--json');
 const diffAt = args.indexOf('--diff');
