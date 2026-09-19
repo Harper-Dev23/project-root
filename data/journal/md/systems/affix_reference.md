@@ -187,7 +187,7 @@ A bonus objective rolls as a prefix, at most one per plan; a Tier III plan adds 
 | **Provisioner** | 1 | Carry home 6 foraged or fished foods. |
 | **Trophy** | 3 | Carry home a core part from a Prime-or-better beast. |
 | **Unbroken** | 3 | No hunter is knocked out in any fight this hunt. |
-| **Swift Return** | 5 | Leave the hunt before day 4. |
+| **Swift Return** | 5 | Leave the hunt before the deadline the map sets (day 4 at the earliest). |
 | **Cleanse** | 5 | Cleanse a blight tile. |
 | **Great Quarry** | 8 | Kill a Great-grade beast. |
 | **Unmask** | 8 | Identify an occupant with concealment above 100. |

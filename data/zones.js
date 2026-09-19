@@ -27,6 +27,23 @@ export const ZONES = {
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
     // Thick reeds and standing water make for slow, beast-rich going.
     modifiers: { encounterChancePercent: 6, supplyEfficiencyPercent: -5 },
+    // ── Hunt map generator data (chunk 5; reader: HuntMapGen.generateHuntMap) ──
+    // palette: weighted grounds (data/grounds.js); relief: flat/hills/highland
+    // odds. Blight is never in a palette: it is placed around a source.
+    palette: { marsh: 30, grass: 25, thicket: 15, water: 15, woodland: 15 },
+    relief: { flat: 80, hills: 20, highland: 0 },
+    // Native beast families. 'Kill the apex' and 'cull a native family' are
+    // filled from here (HUNT_PLANS, roles). Which grounds each favours is on
+    // the ground (GROUNDS[..].families). Names are placeholders until the
+    // beast families land (chunk 9).
+    natives: {
+      marsh_stalker: { name: 'Marsh Stalker' },
+      wading_heron:  { name: 'Wading Heron' },
+    },
+    apex: { family: 'marsh_stalker' },
+    cultistShare: 0.25,   // share of hostile occupants that are cultist bands
+    // The shrine a Commune plan sends you to: an event from this zone's table.
+    setPieces: { shrine: 'reeds_sunken_shrine' },
     encounterTable: {
       beasts: [
         { id: 'reeds_marsh_stalker',   label: 'A marsh stalker slips through the reeds.' },
@@ -90,10 +107,20 @@ export const ZONES = {
     danger: 1,          // 1-10; item level = danger (huntItemLevel, HuntScaling.js)
     deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'coastal',
-    divineAlignment: null,
+    divineAlignment: 'ezekiel', // STANDING (owner, 2026-09-18): Bay of Solace = Ezekiel
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',
     // Open, flat coastline — easy travel, but little cover means fewer encounters too.
     modifiers: { encounterChancePercent: -4, supplyEfficiencyPercent: 8 },
+    // Hunt map generator data: see the Reeds above.
+    palette: { shingle: 35, grass: 20, heath: 15, water: 15, dunes: 10, marsh: 5 },
+    relief: { flat: 90, hills: 10, highland: 0 },
+    natives: {
+      tide_crab:  { name: 'Tide Crab' },
+      shore_gull: { name: 'Shore Gull' },
+    },
+    apex: { family: 'tide_crab' },
+    cultistShare: 0.2,
+    setPieces: { shrine: 'bay_driftwood_idol' },
     encounterTable: {
       beasts: [
         { id: 'bay_tide_crab',       label: 'An oversized tide crab scuttles out of a rockpool.' },

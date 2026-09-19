@@ -53,7 +53,7 @@ export const PREFIX_COMPLETION_REWARD = { 5: 4, 4: 6, 3: 9, 2: 12, 1: 15 };
 export const PLAN_FIELDS = {
   // Live today
   encounterChancePercent:  { label: 'Encounter Chance', unit: '%', live: true,
-    reader: 'HuntManager.advance (encounter roll); the chunk 5 generator reads it as pack density' },
+    reader: 'HuntManager.advance (encounter roll); HuntMapGen reads it as pack density' },
   foulWeatherPercent:      { label: 'Harsher Weather', unit: '%', live: true,
     reader: 'rollWeather (data/weather.js): takes this share of Clear Skies\' weight' },
   lootQualityPercent:      { label: 'Loot Quality', unit: '%', live: true,
@@ -68,13 +68,13 @@ export const PLAN_FIELDS = {
     reader: 'CombatScene._calculateXPReward' },
   // Readers arrive in later chunks
   gradeShiftPercent:       { label: 'Elder Beasts', unit: '%', live: false,
-    reader: 'chunk 5 generator: grade weights toward Prime and Great' },
+    reader: 'HuntMapGen (built in chunk 5; live once hunts run on the map): grade weights toward Prime and Great' },
   restlessPercent:         { label: 'Restless Packs', unit: '%', live: false,
     reader: 'chunk 7 world sim: packs Roaming or Hunting instead of Rooted' },
   leanCountryPercent:      { label: 'Fewer Forage Spots', unit: '%', live: false,
-    reader: 'chunk 5 generator: forage and fishing spots' },
+    reader: 'HuntMapGen (built in chunk 5; live once hunts run on the map): forage and fishing spots' },
   blightPatches:           { label: 'Blight Patches', unit: '', live: false,
-    reader: 'chunk 5 generator: blight placement' },
+    reader: 'HuntMapGen (built in chunk 5; live once hunts run on the map): blight placement' },
   travelTimePercent:       { label: 'Travel Time Saved', unit: '%', live: false,
     reader: 'chunk 7 clock: time per move' },
   perceptionBonus:         { label: 'Perception', unit: '', live: false,
@@ -123,10 +123,13 @@ export const PLAN_SUFFIX_FAMILIES = [
 ];
 
 /**
- * What a bonus objective can ask the generator to place. Reader: the chunk 5
- * generator (required placements, then its reachability check). An objective
- * whose `needs` is empty must say `because`, so "needs nothing" is a stated
- * decision and never an omission.
+ * What an objective can ask the generator to place. Reader:
+ * HuntMapGen.generateHuntMap (required placements, then its reachability
+ * check); tools/headless/huntmap.mjs fails if any key here has no handler.
+ * Bonus objectives use the first eight. The primary objectives
+ * (PRIMARY_OBJECTIVES, data/huntMapGen.js) use native_family and exit too, plus
+ * the last four. An objective whose `needs` is empty must say `because`, so
+ * "needs nothing" is a stated decision and never an omission.
  */
 export const PLACEMENT_NEEDS = {
   reachable_tiles:    'enough reachable tiles to reveal the share asked for',
@@ -137,6 +140,11 @@ export const PLACEMENT_NEEDS = {
   great_beast:        'a Great-grade beast, reachable',
   concealed_occupant: 'an occupant with concealment above 100, reachable',
   exit:               'an exit reachable before the deadline day',
+  // Primary objectives (chunk 5)
+  scout_sites:        'the sites a Scout plan asks to reveal, reachable and spread out',
+  apex_beast:         "the region's apex beast, Great and Rooted, reachable",
+  retrieve_site:      'the site holding the item a Retrieve plan asks for, reachable',
+  shrine:             "the region's shrine set piece, reachable",
 };
 
 /**
@@ -162,8 +170,13 @@ export const BONUS_OBJECTIVES = {
   unbroken:      { name: 'Unbroken',      unlockItemLevel: 3, params: {},
     doneWhen: 'No hunter is knocked out in any fight this hunt.',
     placement: { needs: [], because: 'a rule on how fights go; nothing on the map' } },
-  swift_return:  { name: 'Swift Return',  unlockItemLevel: 5, params: { beforeDay: 4 },
-    doneWhen: 'Leave the hunt before day 4.',
+  // The deadline is set by the map (PLAN_AFFIXES: "exit before day N"): the
+  // generator measures the route through the objectives and out, allows
+  // routeSlack for fights and actions, and never sets it before beforeDay.
+  // A fixed day 4 was impossible on bigger maps (measured in chunk 5: the
+  // longest Small route takes 5.4 days, the longest Large one 10.8).
+  swift_return:  { name: 'Swift Return',  unlockItemLevel: 5, params: { beforeDay: 4, routeSlack: 1.5 },
+    doneWhen: 'Leave the hunt before the deadline the map sets (day 4 at the earliest).',
     placement: { needs: ['exit'] } },
   cleanse:       { name: 'Cleanse',       unlockItemLevel: 5, params: {},
     doneWhen: 'Cleanse a blight tile.',

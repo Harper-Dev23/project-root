@@ -44,6 +44,14 @@ pack. It proves a v4 save reaches v5 and its v1 hunt still resumes.
 `pack.mjs` covers item stacking, Rations and the hunt pack: merge and split,
 and what a clean exit or a wipe under each death rule does to the pack.
 
+`huntmap.mjs` covers the hunt-map generator (`src/systems/HuntMapGen.js`): hex
+math, the ground and region data, and 500 seeds per starter region and size,
+every map checked valid, reachable and completable. Its golden
+(`tools/snapshots/huntmap-golden.json`) is a hash over all 3,000 maps, six
+maps drawn out, and the measured statistics. A change to grounds, palettes, the
+generator or the objectives moves it on purpose; regenerate with `--json` in
+the same commit.
+
 ## How it works
 
 `CombatScene.prototype` carries every method. So:
