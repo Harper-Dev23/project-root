@@ -29,7 +29,8 @@ import { neighbors, distance, tileId, parseTileId, fromOffset, inSectionBounds,
          SECTION_COLS, SECTION_ROWS } from './HexGrid.js';
 import { GROUNDS, RELIEF, FORAGE_YIELDING, tileCosts, isPassable } from '../../data/grounds.js';
 import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_WEIGHTS_BY_DANGER,
-         COMPOSITIONS, OCCUPANT_CONCEALMENT, CULTIST_BAND, MARKED_SHARE, MAX_ATTEMPTS } from '../../data/huntMapGen.js';
+         COMPOSITIONS, OCCUPANT_CONCEALMENT, CULTIST_BAND, MARKED_SHARE, MAX_ATTEMPTS,
+         UNMASK_MAX_CONCEALMENT } from '../../data/huntMapGen.js';
 import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
 import { getZone } from '../../data/zones.js';
 import { makeRng } from './seededRng.js';
@@ -235,6 +236,13 @@ export function swiftDeadline(routeTime, { beforeDay, routeSlack }) {
 // re-derives from the finished map alone whether the need is met: it is the
 // validation step, and the harness runs it on every map it generates.
 
+/** An occupant Unmask can be done on: a cult band (it stays put), hidden past
+ *  100 but within UNMASK_MAX_CONCEALMENT. */
+export function unmaskable(map, occ) {
+  const c = occupantConcealment(map, occ);
+  return occ.kind === 'cultist' && c > 100 && c <= UNMASK_MAX_CONCEALMENT;
+}
+
 export const NEED_HANDLERS = {
   scout_sites: {
     place(ctx, obj) {
@@ -414,23 +422,28 @@ export const NEED_HANDLERS = {
   },
 
   concealed_occupant: {
-    // A cult ambush band on ground that hides it past 100. Nothing at danger 1
-    // is that well hidden otherwise, so Unmask places its own.
+    // A cult ambush band on ground that hides it past 100, but no further than
+    // UNMASK_MAX_CONCEALMENT, so a party can find it (owner, chunk 8). Only a
+    // cult band counts: it never moves, while a beast hidden in a thicket is
+    // hidden only until it walks out. Nothing at danger 1 is that well hidden
+    // otherwise, so Unmask places its own.
     late: true,
     place(ctx, obj) {
-      const hidden = o => occupantConcealment(ctx.map, o) > 100;
-      if (!ctx.map.occupants.some(o => ctx.reach.has(o.tile) && hidden(o))) {
+      if (!ctx.map.occupants.some(o => ctx.reach.has(o.tile) && unmaskable(ctx.map, o))) {
         const own = OCCUPANT_CONCEALMENT.cultAmbusher;
         const tile = ctx.pickTile({ hostile: true, weight: 'concealment',
-          filter: id => own + GROUNDS[ctx.map.tiles[id].ground].concealment > 100 });
+          filter: id => {
+            const c = own + GROUNDS[ctx.map.tiles[id].ground].concealment;
+            return c > 100 && c <= UNMASK_MAX_CONCEALMENT;
+          } });
         if (!tile) return ctx.fail('no ground to hide an ambush');
         ctx.addCultists(tile, { ambush: true });
       }
-      obj.route = [ctx.map.occupants.filter(o => ctx.reach.has(o.tile) && hidden(o))
+      obj.route = [ctx.map.occupants.filter(o => ctx.reach.has(o.tile) && unmaskable(ctx.map, o))
         .sort((a, b) => ctx.entryDist.get(a.tile) - ctx.entryDist.get(b.tile))[0].tile];
     },
     check(map, obj, reach) {
-      return map.occupants.some(o => reach.has(o.tile) && occupantConcealment(map, o) > 100);
+      return map.occupants.some(o => reach.has(o.tile) && unmaskable(map, o));
     },
   },
 

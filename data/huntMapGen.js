@@ -106,6 +106,16 @@ export const OCCUPANT_CONCEALMENT = {
   event: 0,            // event sites are not hiding
 };
 
+/**
+ * Unmask's hidden band is never concealed past this (owner, chunk 8,
+ * 2026-09-19). It is the best Perception the game can reach today (120: a
+ * level-10 Ferrow Shepherd with five Perception picks and a T1 of Keen Eyes)
+ * plus SENSED_MARGIN (15), the reach of the scout action. Without it 8 of 60
+ * maps had no band any party could find. The harness fails if the Perception
+ * ceiling moves away from it. Boons (chunk 10) may raise it.
+ */
+export const UNMASK_MAX_CONCEALMENT = 135;
+
 /** Cultist band size, members (grade does not apply to cultists). */
 export const CULTIST_BAND = { min: 2, max: 4 };
 

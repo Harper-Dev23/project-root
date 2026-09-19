@@ -56,7 +56,7 @@ installPhaserStub(17);
 
 const Hex = await import('../../src/systems/HexGrid.js');
 const { GROUNDS, RELIEF, FORD, isPassable, tileCosts } = await import('../../data/grounds.js');
-const { MAP_SIZES, PRIMARY_OBJECTIVES, GRADES, COMPOSITIONS } = await import('../../data/huntMapGen.js');
+const { MAP_SIZES, PRIMARY_OBJECTIVES, GRADES, COMPOSITIONS, UNMASK_MAX_CONCEALMENT } = await import('../../data/huntMapGen.js');
 const { PLACEMENT_NEEDS, BONUS_OBJECTIVES } = await import('../../data/planAffixes.js');
 const { ZONES } = await import('../../data/zones.js');
 const Gen = await import('../../src/systems/HuntMapGen.js');
@@ -224,7 +224,10 @@ function objectiveProblems(map) {
         if (!hasGrade(['great'])) bad('no Great');
         break;
       case 'unmask':
-        if (!map.occupants.some(x => reach.has(x.tile) && occupantConcealment(map, x) > 100)) bad('nothing hidden past 100');
+        // A cult band (it never moves) hidden past 100 but within the cap a
+        // party can reach (owner, chunk 8): UNMASK_MAX_CONCEALMENT.
+        if (!map.occupants.some(x => reach.has(x.tile) && x.kind === 'cultist'
+            && occupantConcealment(map, x) > 100 && occupantConcealment(map, x) <= UNMASK_MAX_CONCEALMENT)) bad('no cult band hidden in 101-' + UNMASK_MAX_CONCEALMENT);
         break;
       case 'cleanse':
         if (![...reach].some(id => map.tiles[id].ground === 'blight')) bad('no reachable blight');

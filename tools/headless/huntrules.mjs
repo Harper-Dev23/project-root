@@ -1420,10 +1420,14 @@ console.log('=== every objective is completable and pays at the exit ===');
     }
     check(`Unmask: completed on every map where an occupant that stays put is hidden within reach (Perception ${best} + ${R.SENSED_MARGIN} to scout it)`,
       reachableButFailed === 0);
-    const within = concs.filter(c => c <= best + R.SENSED_MARGIN).length;
-    console.log(`    FINDING: Unmask completed on ${done} of ${runs} maps at the best reachable Perception (${best}). `
-      + `Hidden bands' concealment: ${[...new Set(concs)].sort((a, b) => a - b).join(', ')}; ${concs.length - within} of ${concs.length} `
-      + `are beyond Perception + ${R.SENSED_MARGIN}, so no party can find them yet.`);
+    // Chunk 8 (owner): Unmask's band is capped at the best reachable
+    // Perception + SENSED_MARGIN, so it can be done on EVERY map. The cap is a
+    // data constant; if the Perception ceiling moves, this fails until someone
+    // decides what the cap should be.
+    check(`Unmask's cap (${HMG.UNMASK_MAX_CONCEALMENT}) is the best reachable Perception (${best}) + SENSED_MARGIN (${R.SENSED_MARGIN})`,
+      HMG.UNMASK_MAX_CONCEALMENT === best + R.SENSED_MARGIN);
+    check(`Unmask: completed on every map at the best reachable Perception (${best})`, done === runs,
+      `${done} of ${runs}; hidden concealments seen: ${[...new Set(concs)].sort((a, b) => a - b).join(', ')}`);
     golden.unmaskReach = { perception: best, runs, done, concealments: [...concs].sort((a, b) => a - b) };
     table['bonus unmask (best Perception)'] = { runs, done, perception: best };
   }
