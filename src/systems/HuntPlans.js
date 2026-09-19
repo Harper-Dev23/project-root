@@ -6,9 +6,20 @@
 
 import { createItemInstance, huntPlanView } from './ItemFactory.js';
 import { describeModifiers } from './HuntModifiers.js';
+import { Items } from '../../data/items.js';
+import { PENDING_UNTIL } from './HuntObjectives.js';
 
 const OBJECTIVE_NAMES = { scout: 'Scout', apex: 'Apex', cull: 'Cull', retrieve: 'Retrieve', commune: 'Commune' };
 const SIZE_NAMES = { small: 'Small map', medium: 'Medium map', large: 'Large map' };
+
+/**
+ * The plan base types the camp vendor sells (chunk 8c): every huntPlan base
+ * with an objective and a size, except the free basic plan and the legacy
+ * generic `hunt_plan` (still readable in saves as Scout / Small, not sold).
+ */
+export const PLAN_BASE_IDS = Object.values(Items)
+  .filter(b => b.type === 'huntPlan' && b.objective && b.size && !b.basic && !b.legacy)
+  .map(b => b.id);
 
 /** The free basic plan. Made on demand; it never sits in a bag. */
 export function makeBasicPlan() {
@@ -35,12 +46,14 @@ export function describePlanHeader(inst) {
   const v = huntPlanView(inst);
   const lines = [];
   let head = `Item Level ${v.itemLevel}, ${v.tierName}`;
-  if (v.implicitCompletionRewardPercent) head += `: +${v.implicitCompletionRewardPercent}% Completion Reward (no effect yet)`;
+  if (v.implicitCompletionRewardPercent) head += `: +${v.implicitCompletionRewardPercent}% Completion Reward`;
   lines.push(head);
-  if (v.objective) lines.push(`${OBJECTIVE_NAMES[v.objective] || v.objective}, ${SIZE_NAMES[v.size] || v.size} (no effect yet)`);
+  if (v.objective) lines.push(`${OBJECTIVE_NAMES[v.objective] || v.objective}, ${SIZE_NAMES[v.size] || v.size}`);
   for (const o of v.bonusObjectives) {
     const tag = o.from === 'implicit' ? 'Tier III bonus' : 'Bonus';
-    lines.push(`${tag}: ${o.def ? `${o.def.name}. ${o.def.doneWhen}` : o.id} (no effect yet)`);
+    // Trophy and Unbroken cannot be checked until combat is hooked up (chunk 9).
+    const wait = PENDING_UNTIL[o.id] ? ' (counts from a later update)' : '';
+    lines.push(`${tag}: ${o.def ? `${o.def.name}. ${o.def.doneWhen}` : o.id}${wait}`);
   }
   return lines;
 }
@@ -64,10 +77,12 @@ export function planPrice(itemLevel) {
 export function currentPlanStock(pm, { partyLevel, rollRarity, rng = Math.random }) {
   const day = pm.getDaysElapsed();
   const s = pm.planVendorStock;
-  if (s && s.day === day && Array.isArray(s.slots)) return s;
+  // A stock saved before chunk 8c has no base per slot: roll it again, once.
+  if (s && s.day === day && Array.isArray(s.slots) && s.slots.every(sl => PLAN_BASE_IDS.includes(sl.base))) return s;
   pm.planVendorStock = {
     day,
     slots: planStockLevels(partyLevel, 3, rng).map(itemLevel => ({
+      base: PLAN_BASE_IDS[Math.floor(rng() * PLAN_BASE_IDS.length)],
       rarity: rollRarity(), itemLevel, cost: planPrice(itemLevel), sold: false,
     })),
   };

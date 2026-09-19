@@ -1,3 +1,4 @@
+import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { QUEST_LINES, QUEST_CATEGORIES, getStepState, getQuestState } from '../../data/quests.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
@@ -381,7 +382,7 @@ export default class QuestOverlay extends Phaser.Scene {
 
   _close() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     // Refresh the UIScene panel so the alert dot state is recalculated.
     this.scene.get('UIScene')?.refreshUI?.();
     this.scene.resume('UIScene');

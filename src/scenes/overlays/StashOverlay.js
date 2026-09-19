@@ -1,4 +1,5 @@
 // src/scenes/overlays/StashOverlay.js
+import { wakeTown } from '../../ui/townInput.js';
 import GameState from '../../systems/GameState.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
 import { Items } from '../../../data/items.js';
@@ -267,7 +268,7 @@ export default class StashOverlay extends Phaser.Scene {
   _close() {
     this.tooltip?.hide();
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }

@@ -292,10 +292,9 @@ export function cookDish(main, addition, cooking) {
 
 // ── Packing ──────────────────────────────────────────────────────────────────
 
-/** Most Rations the Hunt screen packs (was 10 tickets x 10 supplies). Stays
- *  100 until the hub runs map hunts (chunk 8), then drops to 60 (TERRAIN_TYPES;
- *  decision 12). */
-export const RATIONS_PACK_CAP = 100;
+/** Most Rations the Hunt screen packs. 60 since the hub started map hunts
+ *  (chunk 8c; TERRAIN_TYPES, chunk 7 decision 12); it was 100 before. */
+export const RATIONS_PACK_CAP = 60;
 
 /** The packing cap for this party: the base plus Pack Mule's packRationsBonus. */
 export function rationPackCap(party) {

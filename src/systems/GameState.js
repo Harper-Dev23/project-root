@@ -291,7 +291,7 @@ function describeWriteError(e) {
 // Once a version has been pushed, players hold saves at that version, and a
 // migration that already ran will never run again for them. So a later change
 // to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
 const MIGRATIONS = {
@@ -329,6 +329,14 @@ const MIGRATIONS = {
     visit(data);
     return data;
   },
+  // v7: the saved hunt can be a hunt on the hex map (chunk 8c): `hunt` then
+  // carries `mode: 'map'` and HuntEngine's own shape (MAP_HUNT_STATE_VERSION).
+  // A hunt with no mode is the old Advance hunt, unchanged. Nothing to
+  // convert. The step exists for the version number: a build from before 8c
+  // would fail to restore a map hunt and drop it WITH ITS PACK, so it must
+  // refuse the save instead. Old saves' plan-vendor stock has no base per
+  // slot; HuntPlans.currentPlanStock rolls it again once, at runtime.
+  7: (data) => data,
 };
 
 /**

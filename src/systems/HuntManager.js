@@ -77,6 +77,7 @@ import { isItemInstance } from './ItemFactory.js';
 import { InventorySystem } from './InventorySystem.js';
 import ProgressionManager from './ProgressionManager.js';
 import GameState from './GameState.js';
+import { createMapHunt, restoreMapHunt } from './HuntEngine.js';
 
 // Tuned so a base-loadout hunt (no extra Hunt Tickets spent on supplies)
 // guarantees at least one full day+night cycle (12 advances) and typically
@@ -564,10 +565,22 @@ const IDLE_STATE = Object.freeze({
   pack: null,
 });
 
+// Which kind of hunt the holder has (chunk 8c, owner decision 1): 'map' for a
+// hunt on the hex map (HuntEngine.js), 'advance' for the old Advance hunt,
+// which only old saves can still hold (no new one is ever started from the
+// Hunt screen). Every Advance-only method below does nothing for a map hunt;
+// the map scene acts on current() directly.
+let _mode = null;
+
 export const HuntManager = {
   /** The live hunt instance, or null. */
   current() {
     return _current;
+  },
+
+  /** 'map', 'advance', or null with no hunt. */
+  mode() {
+    return _current ? _mode : null;
   },
 
   isActive() {
@@ -575,7 +588,28 @@ export const HuntManager = {
   },
 
   hasPendingEncounter() {
-    return !!_current?.hasPendingEncounter();
+    return _mode === 'advance' && !!_current?.hasPendingEncounter();
+  },
+
+  /**
+   * Start a hunt on the hex map (HuntEngine.createMapHunt), in the real game's
+   * world. `plan` is planMapInputs(huntPlanView(inst)) plus its itemLevel.
+   */
+  startMap(zoneId, { plan, supplies, bring = [], seed } = {}) {
+    const opts = { plan, supplies, bring };
+    if (seed !== undefined) opts.seed = seed;
+    _current = createMapHunt(zoneId, opts, GAME_WORLD);
+    _mode = 'map';
+    return _current;
+  },
+
+  /**
+   * A map hunt is over (it exited or wiped; the engine already banked the
+   * pack and paid the reward). Drop it, so the save no longer holds it.
+   */
+  clearFinished() {
+    if (_mode === 'map' && _current?.view().finished) { _current = null; _mode = null; return true; }
+    return false;
   },
 
   /**
@@ -584,30 +618,34 @@ export const HuntManager = {
    */
   start(zoneId, opts = {}) {
     _current = createHunt(zoneId, opts);
+    _mode = 'advance';
   },
 
   advance() {
-    return _current ? _current.advance() : null;
+    return _mode === 'advance' && _current ? _current.advance() : null;
   },
 
   resolveEncounter(outcome) {
-    return _current ? _current.resolveEncounter(outcome) : null;
+    return _mode === 'advance' && _current ? _current.resolveEncounter(outcome) : null;
   },
 
   engagePending() {
-    return _current ? _current.engagePending() : false;
+    return _mode === 'advance' && _current ? _current.engagePending() : false;
   },
 
   resolveCombatEncounter(result) {
-    return _current ? _current.resolveCombatEncounter(result) : null;
+    return _mode === 'advance' && _current ? _current.resolveCombatEncounter(result) : null;
   },
 
+  /** The Advance hunt's state. A map hunt reports idle here: its scene reads
+   *  view(), and nothing that reads this (CombatScene's hunt modifiers) can
+   *  run during a map hunt before chunk 9. */
   getState() {
-    return _current ? _current.getState() : { ...IDLE_STATE, log: [] };
+    return _mode === 'advance' && _current ? _current.getState() : { ...IDLE_STATE, log: [] };
   },
 
   addFound(inst) {
-    return _current ? _current.addFound(inst) : false;
+    return _mode === 'advance' && _current ? _current.addFound(inst) : false;
   },
 
   /**
@@ -615,15 +653,18 @@ export const HuntManager = {
    * pack outcome (see finish in makeHunt). Autosave straight after.
    */
   exit() {
+    if (_mode !== 'advance') return null;   // a map hunt exits through its own exit()
     const out = _current ? _current.finish('exit') : null;
     _current = null;
+    _mode = null;
     return out;
   },
 
   /** The party wiped. The pack comes home or is lost by the region's death rule. */
   wipe() {
-    const out = _current ? _current.finish('wipe') : null;
+    const out = !_current ? null : _mode === 'map' ? _current.wipe() : _current.finish('wipe');
     _current = null;
+    _mode = null;
     return out;
   },
 
@@ -634,6 +675,7 @@ export const HuntManager = {
    */
   end() {
     _current = null;
+    _mode = null;
   },
 };
 
@@ -642,12 +684,24 @@ export const HuntManager = {
 // A saved hunt that cannot be restored is dropped with an error rather than
 // failing the whole load: losing a hunt is recoverable, losing a save is not.
 GameState.attachHunt({
-  serialize: () => (_current ? _current.serialize() : null),
+  // A map hunt is saved with `mode: 'map'` beside HuntEngine's own shape; an
+  // Advance hunt is saved as it always was, with no mode (SAVE_VERSION 7).
+  serialize: () => (!_current ? null : _mode === 'map' ? { mode: 'map', ..._current.serialize() } : _current.serialize()),
   restore: (data) => {
     _current = null;
+    _mode = null;
     if (!data) return;
     try {
-      _current = restoreHunt(data);
+      if (data.mode === 'map') {
+        const { mode, ...rest } = data;
+        _current = restoreMapHunt(rest, GAME_WORLD);
+        _mode = 'map';
+      } else if (data.mode === undefined) {
+        _current = restoreHunt(data);
+        _mode = 'advance';
+      } else {
+        throw new Error(`unknown hunt mode '${data.mode}'`);
+      }
     } catch (e) {
       console.error(`[HuntManager] The saved hunt could not be restored and was dropped: ${e.message}`);
     }

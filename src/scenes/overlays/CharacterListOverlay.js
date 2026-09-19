@@ -1,3 +1,4 @@
+import { wakeTown } from '../../ui/townInput.js';
 import GameState from '../../systems/GameState.js';
 import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
@@ -516,7 +517,7 @@ export default class CharacterListOverlay extends Phaser.Scene {
 
   _close() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }

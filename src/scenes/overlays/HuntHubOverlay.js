@@ -10,8 +10,11 @@
 //
 // Phases (derived from state, not tracked separately, so they can't drift):
 //   'pick'    — no zone chosen yet
-//   'loadout' — zone chosen, supplies/Hunt Plan being configured, not departed
-//   'hunting' — HuntManager is active
+//   'loadout' — zone chosen, supplies/Hunt Plan being configured, not departed;
+//               shows all eight party stats and who provides each (chunk 8c)
+//   'hunting' — an OLD Advance hunt a save still holds (chunk 8c, owner
+//               decision 6). Depart now always starts a hunt on the hex map,
+//               which this screen hands straight to HuntFieldOverlay.
 //
 // A hunt is saved, so every action that changes it autosaves straight after:
 // departing, advancing, and resolving an event. A reload then lands the
@@ -22,6 +25,7 @@
 // packed ones are at risk in the hunt pack. What is left of them comes home on
 // a clean exit (HuntManager.js, the hunt pack).
 
+import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createButton } from '../../ui/Button.js';
@@ -33,17 +37,19 @@ import { countInList, takeFromList, makeStack } from '../../systems/ItemStacks.j
 import { Items } from '../../../data/items.js';
 import { describeModifiers, describeLoadout } from '../../systems/HuntModifiers.js';
 import { describePlanHeader, makeBasicPlan, isBasicPlan } from '../../systems/HuntPlans.js';
-import { getItemComputedData } from '../../systems/ItemFactory.js';
+import { getItemComputedData, huntPlanView } from '../../systems/ItemFactory.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
 import GameState from '../../systems/GameState.js';
 import { getZone } from '../../../data/zones.js';
-import { rationPackCap } from '../../systems/HuntRules.js';
+import { rationPackCap, huntMods } from '../../systems/HuntRules.js';
+import { partyStats } from '../../systems/PartyStats.js';
+import { planMapInputs } from '../../systems/HuntMapGen.js';
+import { launchMapHunt } from './HuntFieldOverlay.js';
 
-// The camp's free issue (CAMP_ISSUE, 60) is ~2.5 day/night cycles at the
-// default drain rate. Packing is capped where ticket spending used to be:
-// 10 tickets x 10 supplies then, 100 rations now. The cap is rationPackCap
-// (HuntRules.js), which adds Pack Mule's packRationsBonus for this party.
+// The camp's free issue (CAMP_ISSUE, 60) comes on top of what is packed. The
+// packing cap is rationPackCap (HuntRules.js): 60 since the hunt moved onto
+// the map (chunk 7 decision 12, applied in 8c), plus Pack Mule's 20.
 const RATIONS_PER_TICKET     = 10;
 const PACK_STEP              = 10;
 const LOG_LINES_SHOWN        = 10;
@@ -81,6 +87,13 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._depth = frame.depth;
     this._bounds = frame.bounds;
 
+    // Catch every click on the panel. Without it a click on empty parchment
+    // was "uncaught" and Phaser handed it to TownScene below, whose Bonfire
+    // opens character creation (found in chunk 8b, owner folded the fix into
+    // 8c). Buttons sit above this and take their own clicks first.
+    const b = frame.bounds;
+    this.add.zone(b.x, b.y, b.width, b.height).setOrigin(0).setDepth(frame.depth - 0.5).setInteractive();
+
     this.events.on('resume', () => this._render());
     this._render();
   }
@@ -107,6 +120,11 @@ export default class HuntHubOverlay extends Phaser.Scene {
     if (this._content) this._content.destroy(true);
     this._content = this.add.container(0, 0).setDepth(this._depth);
 
+    if (HuntManager.mode() === 'map') {
+      // A hunt on the hex map is played on its own scene (chunk 8c).
+      this._handOverToMap();
+      return;
+    }
     if (HuntManager.isActive()) {
       this._renderHunting();
     } else if (this.zoneId) {
@@ -210,7 +228,45 @@ export default class HuntHubOverlay extends Phaser.Scene {
       { fontSize: '13px', color: '#cccccc', wordWrap: { width: width - 112 } }
     );
 
+    this._renderPartyStats(left, modY + 102, width - 80, zone, plan);
+
     this._button(x + width / 2, bottom - 50, 'Depart', () => this._depart(), 'confirm');
+  }
+
+  /**
+   * All eight party stats at departure, and which hunter provides each
+   * best-of stat (PARTY_STATS: "where party stats are shown"). Built from the
+   * real partyStats with the zone and the plan; the weather is not known until
+   * the party leaves, so it is not in these numbers.
+   */
+  _renderPartyStats(left, top, w, zone, plan) {
+    const planMods = plan.instanceMods?.misc || {};
+    const st = partyStats(GameState.party, huntMods(zone.modifiers, {}, planMods));
+    const f = (n) => (Math.round(n * 10) / 10).toString();
+    const by = (k) => (st.providers[k] ? ` (${st.providers[k]})` : '');
+    const rows = [
+      [`Perception ${f(st.perception)}${by('perception')}`, 'what you can make out; ambushes'],
+      [`Endurance ${f(st.ratings.endurance)}`, `supplies per move ${st.supplyEfficiencyPercent >= 0 ? '-' : '+'}${f(Math.abs(st.supplyEfficiencyPercent))}%`],
+      [`Speed ${f(st.speed)}`, `time per move -${f(st.travelTimePercent)}%; outrunning packs`],
+      [`Cooking ${f(st.cooking)}${by('cooking')}`, 'meal quality at camp'],
+      [`Fishing ${f(st.ratings.fishing)}${by('fishing')}`, `catch +${f(st.fishYieldPercent)}%`],
+      [`Foraging ${f(st.ratings.foraging)}${by('foraging')}`, `forage +${f(st.forageYieldPercent)}%`],
+      [`Item Rarity ${f(st.itemRarity)}`, 'rarer finds, stronger beasts'],
+      [`Party Initiative ${f(st.partyInitiative)}`, 'which side acts first'],
+    ];
+    this._text(left, top, `Party stats (${st.size} hunters; weather not included)`, { fontSize: '14px', color: '#ffdd88', fontStyle: 'bold' });
+    const colW = w / 2;
+    rows.forEach(([head, note], i) => {
+      const cx = left + (i % 2) * colW, cy = top + 24 + Math.floor(i / 2) * 26;
+      this._text(cx, cy, head, { fontSize: '13px', color: '#e8e8e8' });
+      this._text(cx, cy + 13, note, { fontSize: '10px', color: '#9a9a9a' });
+    });
+  }
+
+  /** Close this screen and open the map scene on the hunt just started (or found). */
+  _handOverToMap() {
+    launchMapHunt(this);
+    this.scene.stop();
   }
 
   _rationsInBag() {
@@ -246,8 +302,14 @@ export default class HuntHubOverlay extends Phaser.Scene {
     // Out of the bag and into the pack: from here they are at risk.
     const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
     const plan = this._plan();
-    const huntPlanModifiers = plan.instanceMods?.misc || null;
-    HuntManager.start(this.zoneId, { supplies, huntPlanModifiers, bring: rations ? [rations] : [] });
+    // Every new hunt is a hunt on the hex map (chunk 8c): the plan's base type
+    // sets the objective and the map size, its item level the tier implicit
+    // and the bonus rewards. The Advance loop only lives on in old saves.
+    const view = huntPlanView(plan);
+    HuntManager.startMap(this.zoneId, {
+      plan: { ...planMapInputs(view), itemLevel: view.itemLevel },
+      supplies, bring: rations ? [rations] : [],
+    });
     this.rationsToPack = 0;
 
     // A general plan is used up on departure; the basic plan is free and
@@ -258,7 +320,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
     // One write for the rations, the plan and the new hunt, so a reload can
     // never refund either while keeping the hunt, or the other way round.
     GameState.save('autosave');
-    this._render();
+    this._handOverToMap();
   }
 
   // ── Phase: actively hunting ──────────────────────────────────────────────
@@ -393,7 +455,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
   _close() {
     if (HuntManager.isActive()) return;
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.stop();
   }
 }

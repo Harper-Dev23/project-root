@@ -18,6 +18,7 @@ import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
 import { HuntManager } from '../systems/HuntManager.js';
+import { launchMapHunt } from './overlays/HuntFieldOverlay.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -2106,7 +2107,7 @@ export default class TownScene extends Phaser.Scene {
   // 📦 Vendor Data
   // ===============================
   /** Today's Hunt Plan stock (HuntPlans.currentPlanStock): 3 slots, each with its own
-   *  rarity and item level, rolled once per in-game day and saved, so redrawing, leaving
+   *  base type (objective + map size, chunk 8c), rarity and item level, rolled once per in-game day and saved, so redrawing, leaving
    *  or reloading cannot re-roll it. Item levels go up to the party's highest level,
    *  priced in Hunt Tickets by level. Each slot sells once. The basic plan is free at
    *  the Hunt screen, so none is sold here. */
@@ -2116,8 +2117,8 @@ export default class TownScene extends Phaser.Scene {
     return stock.slots
       .map((s, planSlot) => ({ ...s, planSlot }))
       .filter(s => !s.sold)
-      .map(({ rarity, itemLevel, cost, planSlot }) => ({
-        id: 'hunt_plan', rarity, itemLevel, cost, planSlot,
+      .map(({ base, rarity, itemLevel, cost, planSlot }) => ({
+        id: base, rarity, itemLevel, cost, planSlot,
         currency: 'huntTickets', currencyLabel: 'Ticket',
       }));
   }
@@ -3386,6 +3387,10 @@ export default class TownScene extends Phaser.Scene {
   // 🚪 Hunt Gate (transition placeholder)
   // =====================================================
   _enterHuntGate() {
+    // A hunt on the hex map is played on its own scene (chunk 8c); the Hunt
+    // screen is for planning a departure, and for an old Advance hunt a save
+    // may still hold.
+    if (launchMapHunt(this)) return;
     // Launched WITHOUT bringing it above UIScene — the sidebar/right panel/
     // toggle button stay visible and clickable above the hunt screen so the
     // player can check inventory/HP mid-hunt.

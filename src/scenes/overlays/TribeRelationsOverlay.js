@@ -13,6 +13,7 @@
  * available. Content comes from data/tribeSystems.js.
  */
 
+import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import {
   TRIBE_IDS, TRIBE_DISPLAY,
@@ -616,7 +617,7 @@ export default class TribeRelationsOverlay extends Phaser.Scene {
 
   _close() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.get('UIScene')?.refreshUI?.();
     this.scene.stop();

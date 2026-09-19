@@ -394,16 +394,20 @@ console.log('=== real plans feed the generator ===');
     && Object.keys(m.tiles).length === 37 && m.features.filter(f => f.kind === 'scout_site').length === 2);
   let n = 0, bad = 0;
   const rng = makeRng(21);
+  // Chunk 8c: every sold plan is a base type carrying its objective and size,
+  // so the plan alone decides the map (no override).
+  const { PLAN_BASE_IDS } = await import('../../src/systems/HuntPlans.js');
+  let wrongShape = 0;
   for (let i = 0; i < 300; i++) {
-    const inst = createItemInstance('hunt_plan', { rarity: 'epic', itemLevel: 1 + (i % 10), rng });
+    const inst = createItemInstance(PLAN_BASE_IDS[i % PLAN_BASE_IDS.length], { rarity: 'epic', itemLevel: 1 + (i % 10), rng });
     const inp = planMapInputs(huntPlanView(inst));
-    // Generic plans carry no objective or size until the base-type catalogue is on the items.
-    const map = generateHuntMap({ zoneId: ZONE_IDS[i % 2], seed: i, ...inp,
-      objective: PRIMARIES[i % 5], size: SIZES[i % 3] });
+    const map = generateHuntMap({ zoneId: ZONE_IDS[i % 2], seed: i, ...inp });
     n++;
+    if (map.objective !== inp.objective || map.size !== inp.size || Object.keys(map.tiles).length !== MAP_SIZES[inp.size].tiles) wrongShape++;
     if (!validateHuntMap(map).ok || objectiveProblems(map).problems.length) bad++;
   }
-  check('300 rolled epic plans, item levels 1-10, their bonus objectives and modifiers: every map completable', bad === 0, `${n} maps`);
+  check('300 rolled epic plans of all 15 base types, item levels 1-10: each map has its base objective and size, and is completable',
+    bad === 0 && wrongShape === 0, `${n} maps, ${wrongShape} wrong shape`);
 }
 
 // =============================================================================

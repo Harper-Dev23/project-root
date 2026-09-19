@@ -28,6 +28,11 @@
 // The "Saved -> ..." lines are real GameState.save calls, into the throwaway
 // localStorage installed below.
 
+// Chunk 8c added: the real v6 fixture (an Advance hunt from the 8b build)
+// still loads and advances, and a hunt on the hex map goes into the save with
+// `mode: 'map'`, comes back identically, flees when reloaded mid-fight, and is
+// dropped once it is over.
+
 import fs from 'node:fs';
 
 let failures = 0;
@@ -309,7 +314,7 @@ console.log('=== the v3 fixture save ===');
 {
   const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v3-fixture.json', import.meta.url), 'utf8'));
   check('the fixture really is a v3 save with no hunt field', fixture.version === 3 && !('hunt' in fixture));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 6);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 7);
 
   const checked = GameState.checkSave(fixture);
   check('checkSave accepts it (the import path)', checked.ok, checked.reason || '');
@@ -329,7 +334,7 @@ console.log('=== the v3 fixture save ===');
 
   GameState.save('v3');
   const rewritten = JSON.parse(store.get('bmSave_v3'));
-  check('re-saved as v6 with hunt: null', rewritten.version === 6 && rewritten.hunt === null);
+  check('re-saved as v7 with hunt: null', rewritten.version === 7 && rewritten.hunt === null);
 }
 
 // =============================================================================
@@ -359,12 +364,134 @@ console.log('=== the v4 fixture save, mid-hunt ===');
 
   GameState.save('v4');
   const rewritten = JSON.parse(store.get('bmSave_v4'));
-  check('re-saved as v6, its hunt as v2', rewritten.version === 6 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
+  check('re-saved as v7, its hunt as v2', rewritten.version === 7 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
 
   // Exiting the old hunt returns no Rations: it packed none, it bought supplies.
   const out = HuntManager.exit();
   check('exiting it banks nothing (the old tickets bought supplies, not Rations)',
     out.rationsPacked === 0 && out.home.brought.length === 0 && GameState.inventory.length === fixture.inventory.length);
+}
+
+// =============================================================================
+console.log('=== the v6 fixture save, mid Advance hunt (chunk 8c) ===');
+{
+  // Written by the chunk-8b build (8fb5f6d) through the Hunt screen's own
+  // buttons, in headless Edge: a Reeds Advance hunt 3 advances in with Rations
+  // in the pack, a rolled generic hunt_plan left in the bag, a Perception
+  // pick on the first hunter, and a plan-vendor stock saved without bases.
+  const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v6-fixture.json', import.meta.url), 'utf8'));
+  check('the fixture really is a v6 save holding a v2 Advance hunt with no mode',
+    fixture.version === 6 && fixture.hunt?.v === 2 && !('mode' in fixture.hunt) && fixture.hunt.pack.brought.length === 1);
+  check('checkSave accepts it (the import path)', GameState.checkSave(fixture).ok);
+
+  freshGame();
+  store.set('bmSave_v6', JSON.stringify(fixture));
+  const loaded = GameState.load('v6');
+  check('load() accepts it', loaded === true, GameState.lastLoadError || '');
+  const st = HuntManager.getState();
+  check('its Advance hunt came back where it was, as an Advance hunt',
+    HuntManager.mode() === 'advance' && st.depth === fixture.hunt.depth && st.supplies === fixture.hunt.supplies
+    && HuntManager.current().serialize().rngState === fixture.hunt.rngState, `depth ${st.depth}, supplies ${st.supplies}`);
+  check('...its packed Rations still in the pack', same(st.pack.brought.map(i => [i.id, i.qty]), fixture.hunt.pack.brought.map(i => [i.id, i.qty])));
+  check('...and it still advances', HuntManager.advance() !== null);
+  const { huntPlanView } = await import('../../src/systems/ItemFactory.js');
+  const bagPlan = GameState.inventory.find(i => i.id === 'hunt_plan');
+  check('the generic plan in the bag now reads as Scout on a Small map (legacy base, not migrated)',
+    !!bagPlan && huntPlanView(bagPlan).objective === 'scout' && huntPlanView(bagPlan).size === 'small'
+    && same(bagPlan, fixture.inventory.find(i => i.id === 'hunt_plan')));
+  check('the exploration pick came through', GameState.characters[0].exploration?.picks?.[2]?.rating === 'perception');
+  const { currentPlanStock, PLAN_BASE_IDS } = await import('../../src/systems/HuntPlans.js');
+  const oldStock = JSON.stringify(ProgressionManager.planVendorStock);
+  const stock = currentPlanStock(ProgressionManager, { partyLevel: 5, rollRarity: () => 'rare', rng: makeRng(1) });
+  check('its vendor stock had no bases and is rolled again, every slot with a base',
+    !JSON.parse(oldStock).slots.some(s => s.base) && stock.slots.every(s => PLAN_BASE_IDS.includes(s.base)));
+
+  GameState.save('v6');
+  const rewritten = JSON.parse(store.get('bmSave_v6'));
+  check('re-saved as v7, its Advance hunt still with no mode', rewritten.version === 7 && rewritten.hunt?.v === 2 && !('mode' in rewritten.hunt));
+  HuntManager.end();
+}
+
+// =============================================================================
+console.log('=== a map hunt in the save (chunk 8c) ===');
+{
+  const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+  const strip = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'instanceId' ? undefined : x)));
+  freshGame();
+  const plan = { objective: 'retrieve', size: 'medium', bonusObjectives: ['swift_return'], mods: { perceptionBonus: 10 }, itemLevel: 5 };
+  HuntManager.startMap(ZONE_IDS[0], { plan, supplies: 80, seed: 77 });
+  check('startMap: the holder has a map hunt', HuntManager.mode() === 'map' && HuntManager.isActive());
+  check('...and the Advance-only calls do nothing to it',
+    HuntManager.advance() === null && HuntManager.resolveEncounter('x') === null && HuntManager.engagePending() === false
+    && HuntManager.addFound({ id: 'x' }) === false && HuntManager.exit() === null && HuntManager.hasPendingEncounter() === false);
+  check('...getState() reports idle (CombatScene cannot read a map hunt as an Advance hunt)',
+    HuntManager.getState().zoneId === null && HuntManager.getState().combinedModifiers === null);
+  const h = HuntManager.current();
+  for (let i = 0; i < 6; i++) { if (h.encounter()) h.flee(); const m = h.view().moves; h.move(m[i % m.length].tile); }
+  if (h.encounter()) h.flee();
+  const before = strip(h.serialize());
+  GameState.save('map1');
+  const raw = JSON.parse(store.get('bmSave_map1'));
+  check('saved as v7, the hunt with mode "map" beside HuntEngine\'s own shape', raw.version === 7 && raw.hunt?.mode === 'map' && raw.hunt.v === 1);
+  check('checkSave accepts it (the import path)', GameState.checkSave(raw).ok);
+  HuntManager.end();
+  GameState.load('map1');
+  check('a reload brings the map hunt back identically (both streams included)', HuntManager.mode() === 'map' && same(strip(HuntManager.current().serialize()), before));
+
+  // Reloading mid-fight is a flee (SAVE_COMPATIBILITY rec. 4).
+  const h2 = HuntManager.current();
+  let steps = 0;
+  const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+  const { isPassable } = await import('../../data/grounds.js');
+  while (!h2.encounter() && steps++ < 400) {
+    const s = h2.getState();
+    const targets = new Set(s.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile));
+    const prev = new Map([[s.pos, null]]); const q = [s.pos]; let goal = null;
+    for (let k = 0; k < q.length && !goal; k++) for (const n of mapNeighbors(s.map, q[k])) {
+      if (prev.has(n) || !isPassable(s.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (targets.has(n)) { goal = n; break; }
+    }
+    if (!goal) break;
+    let t = goal; while (prev.get(t) !== s.pos) t = prev.get(t);
+    h2.move(t);
+  }
+  check('found a fight to reload in', !!h2.encounter());
+  GameState.save('map_fight');
+  HuntManager.end();
+  GameState.load('map_fight');
+  const back = HuntManager.current();
+  check('a hunt saved mid-fight comes back fled: no fight pending, logged as a reload',
+    HuntManager.mode() === 'map' && !back.encounter() && back.view().log.some(l => l.kind === 'flee' && l.reason === 'reload'));
+
+  // Leaving: the holder drops the finished hunt, so the save no longer holds it.
+  const h3 = HuntManager.startMap(ZONE_IDS[1], { plan: { objective: 'scout', size: 'small', itemLevel: 1 }, supplies: 40, seed: 5 });
+  const left = h3.exit();
+  check('exit from the entry works on the holder\'s hunt', left.ok === true);
+  check('clearFinished drops a finished map hunt, and only a finished one',
+    HuntManager.clearFinished() === true && !HuntManager.isActive() && HuntManager.clearFinished() === false);
+  GameState.save('map_done');
+  check('...and the save then holds no hunt', JSON.parse(store.get('bmSave_map_done')).hunt === null);
+  const h4 = HuntManager.startMap(ZONE_IDS[1], { plan: { objective: 'scout', size: 'small', itemLevel: 1 }, supplies: 40, seed: 6 });
+  check('clearFinished leaves a hunt in progress alone', HuntManager.clearFinished() === false && HuntManager.current() === h4);
+
+  // A hunt with a mode this build does not know is dropped, not the save.
+  GameState.save('map_odd');
+  const odd = JSON.parse(store.get('bmSave_map_odd'));
+  odd.hunt.mode = 'teleport';
+  store.set('bmSave_map_odd', JSON.stringify(odd));
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a.join(' '));
+  const okOdd = GameState.load('map_odd');
+  console.error = orig;
+  check('an unknown hunt mode: the save loads, the hunt is dropped, and it says so',
+    okOdd === true && !HuntManager.isActive() && errors.some(e => /unknown hunt mode/.test(e)));
+
+  // What an older build does: a save newer than it is refused, not half-loaded.
+  const newer = { ...raw, version: SAVE_VERSION + 1 };
+  check('a save newer than this build is refused (why v7 exists: a pre-8c build must refuse a map hunt)',
+    GameState.checkSave(newer).ok === false);
+  void createMapHunt; void restoreMapHunt;
+  HuntManager.end();
 }
 
 // =============================================================================

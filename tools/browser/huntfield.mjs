@@ -22,119 +22,25 @@
 // still land on the map), no panel button under UIScene's dialogue bar, and no
 // uncaught errors.
 //
-// Lessons baked in (each cost a debugging round in chunk 8b):
-//   - Boot like a player: leave the main menu through ITS OWN SceneManager
-//     (it wraps the menu's ScenePlugin, so the menu stops). window.sceneManager
-//     leaves MainMenuScene running and clickable under the town, and a click
-//     that falls through reaches "Start New Game" (GameState.reset()).
-//   - Wait a frame before each click: Phaser drops destroyed hit zones on its
-//     next update, so a click in the same frame as a redraw can hit a ghost.
-import { spawn } from 'node:child_process';
+// Plumbing (Edge, DevTools, the static server, boot like a player): lib.mjs.
+
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import http from 'node:http';
-import { fileURLToPath } from 'node:url';
+import { startBrowser } from './lib.mjs';
 
 const mode = process.argv[2] || 'webgl';
 const out = path.resolve(process.argv[3] || path.join(os.tmpdir(), 'huntfield-shots'));
 const port = Number(process.argv[4] || 9333);
-fs.mkdirSync(out, { recursive: true });
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg',
-  '.wav': 'audio/wav', '.md': 'text/markdown', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const f = path.join(REPO, p);
-  if (!f.startsWith(REPO)) { res.writeHead(403); return res.end(); }
-  fs.readFile(f, (err, data) => {
-    if (err) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f).toLowerCase()] || 'application/octet-stream' });
-    res.end(data);
-  });
-});
-await new Promise(r => server.listen(0, '127.0.0.1', r));
-const gamePort = server.address().port;
+const B = await startBrowser({ mode, port, outDir: out });
+const { send, evaluate, shot, click, check, sleep } = B;
+const consoleErrors = B.errors;
+const results = { mode, checks: B.checks, errors: consoleErrors };
+const WHERE = { texts: 'HuntFieldOverlay', uiTexts: 'UIScene' };
+const findText = (re, where = 'texts') => B.findText(re, WHERE[where] || where);
+const clickText = (re, where = 'texts') => B.clickText(re, WHERE[where] || where);
+await B.loadGame();
 
-const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-'));
-const flags = mode === 'canvas'
-  ? ['--disable-gpu', '--disable-webgl', '--disable-webgl2', '--disable-3d-apis']
-  : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
-const edge = spawn(EDGE, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${prof}`,
-  '--window-size=1280,720', '--hide-scrollbars', '--mute-audio', '--autoplay-policy=no-user-gesture-required', ...flags, 'about:blank'],
-  { stdio: 'ignore' });
-
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-let targets;
-for (let i = 0; i < 50; i++) {
-  try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); if (targets.find(t => t.type === 'page')) break; } catch {}
-  await sleep(200);
-}
-const page = targets.find(t => t.type === 'page');
-const ws = new WebSocket(page.webSocketDebuggerUrl);
-await new Promise(r => ws.addEventListener('open', r, { once: true }));
-let nextId = 1;
-const pending = new Map();
-const consoleErrors = [];
-ws.addEventListener('message', (ev) => {
-  const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) { const { res, rej } = pending.get(m.id); pending.delete(m.id); m.error ? rej(new Error(m.error.message)) : res(m.result); }
-  if (m.method === 'Runtime.exceptionThrown') consoleErrors.push(m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text);
-  if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') consoleErrors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
-});
-const send = (method, params = {}) => new Promise((res, rej) => { const id = nextId++; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params })); });
-const evaluate = async (expr) => {
-  const r = await send('Runtime.evaluate', { expression: `(async () => { ${expr} })()`, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
-  return r.result.value;
-};
-const shot = async (name) => {
-  const r = await send('Page.captureScreenshot', { format: 'png' });
-  fs.writeFileSync(path.join(out, `${mode}-${name}.png`), Buffer.from(r.data, 'base64'));
-};
-/** A trusted click at GAME coordinates. */
-const click = async (gx, gy) => {
-  await sleep(80); // let a frame pass: Phaser drops destroyed hit zones on its next update
-  const { sx, sy, left, top } = await evaluate(`const c = document.querySelector('canvas').getBoundingClientRect(); return { sx: c.width / 1280, sy: c.height / 720, left: c.left, top: c.top };`);
-  const x = left + gx * sx, y = top + gy * sy;
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
-  await sleep(120);
-};
-
-await send('Runtime.enable');
-await send('Page.enable');
-await send('Page.navigate', { url: `http://127.0.0.1:${gamePort}/` });
-await sleep(3000);
-
-const results = { mode, checks: [], errors: consoleErrors };
-const check = (label, ok, detail = '') => { results.checks.push({ label, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '   ' + detail : ''}`); };
-
-// Helpers installed in the page.
-await evaluate(`
-  window.__T = {
-    g: () => window.sceneManager.game,
-    s: () => window.__T.g().scene.getScene('HuntFieldOverlay'),
-    // Every Text in the scene with its world bounds (buttons are containers).
-    texts() {
-      const out = [];
-      const walk = (o) => { if (!o) return; if (o.type === 'Text' && o.visible !== false) { const b = o.getBounds(); out.push({ text: o.text, x: b.centerX, y: b.centerY }); } if (o.list) o.list.forEach(walk); };
-      window.__T.s().children.list.forEach(walk);
-      return out;
-    },
-    uiTexts() {
-      const out = [];
-      const walk = (o) => { if (!o) return; if (o.type === 'Text' && o.visible !== false && o.alpha !== 0) { const b = o.getBounds(); out.push({ text: o.text, x: b.centerX, y: b.centerY }); } if (o.list) o.list.forEach(walk); };
-      window.__T.g().scene.getScene('UIScene').children.list.forEach(walk);
-      return out;
-    },
-  };
-  return true;
-`);
 const buttonsBelowBar = async () => evaluate(`
   const out = []; const walk = (o) => { if (!o) return; if (o.type === 'Text' && o.parentContainer?.input) { const b = o.getBounds(); if (b.bottom > 570) out.push(o.text + '@' + Math.round(b.bottom)); } if (o.list) o.list.forEach(walk); };
   window.__T.s().children.list.forEach(walk); return out;`);
@@ -150,36 +56,13 @@ const textOverlaps = async () => evaluate(`
     c.list.forEach(walk); };
   walk(layer); return bad;`);
 const shotP = async (name) => { await _shot(name); const bad = await buttonsBelowBar(); const overlaps = await textOverlaps(); panelShots.push({ name, bad, overlaps }); };
-const findText = async (re, where = 'texts') => {
-  const all = await evaluate(`return window.__T.${where}();`);
-  return all.find(t => new RegExp(re).test(t.text)) || null;
-};
-const clickText = async (re, where = 'texts') => {
-  const t = await findText(re, where);
-  if (!t) throw new Error(`no text matching ${re}`);
-  await click(t.x, t.y);
-  await sleep(150);
-  return t;
-};
 
-// Boot: a real party, into town, wait for TownScene to run (its hunt-screen
-// sync closes any hunt screen it finds on arrival).
-const renderer = await evaluate(`
+// Boot: a real party, into town, the way a player leaves the menu.
+await B.bootToTown(`
   const { makeParty } = await import('/tools/headless/fixtures.js');
   const GameState = (await import('/src/systems/GameState.js')).default;
-  const party = makeParty(); GameState.characters = party; GameState.party = party;
-  const G = window.__T.g();
-  const settled = () => !G.scene.isActive('LoadingScene') && G.scene.getScene('LoadingScene').sys.settings.status !== 5;
-  for (let i = 0; i < 150 && !(G.scene.isActive('MainMenuScene') && settled()); i++) await new Promise(r => setTimeout(r, 200));
-  // Leave the way a player does: the main menu's own SceneManager wraps its
-  // ScenePlugin, so its enterTown() stops the menu (window.sceneManager does not).
-  G.scene.getScene('MainMenuScene').sceneManager.enterTown();
-  for (let i = 0; i < 150; i++) { if (G.scene.isActive('TownScene') && G.scene.isActive('UIScene') && settled()) break; await new Promise(r => setTimeout(r, 200)); }
-  window.__bootScenes = G.scene.getScenes(true).map(x => x.sys.settings.key);
-  await new Promise(r => setTimeout(r, 1200));
-  return window.__T.g().renderer.type;
-`);
-console.log('scenes after boot:', await evaluate(`return window.__bootScenes.join(',');`));
+  const party = makeParty(); GameState.characters = party; GameState.party = party;`);
+const renderer = await evaluate('return window.__T.g().renderer.type;');
 check(`renderer is ${mode === 'canvas' ? 'CANVAS (1)' : 'WEBGL (2)'}`, renderer === (mode === 'canvas' ? 1 : 2), `type ${renderer}`);
 
 const open = async (opts) => {
@@ -441,9 +324,7 @@ check('no panel button sits under the dialogue bar (y 570+) in any panel screens
 check('no two lines of text overlap inside any panel, in any panel screenshot', panelShots.every(p => !p.overlaps.length), JSON.stringify(panelShots.filter(p => p.overlaps.length)).slice(0, 400));
 check('no uncaught errors in the page', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 fs.writeFileSync(path.join(out, `${mode}-results.json`), JSON.stringify(results, null, 1));
-await send('Browser.close').catch(() => {});
-edge.kill();
-server.close();
+await B.close();
 const fails = results.checks.filter(c => !c.ok).length;
 console.log(`\n${mode}: ${results.checks.length - fails} pass, ${fails} fail`);
 process.exit(fails ? 1 : 0);

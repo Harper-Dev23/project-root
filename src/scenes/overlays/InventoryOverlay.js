@@ -1,3 +1,4 @@
+import { wakeTown } from '../../ui/townInput.js';
 import GameState from '../../systems/GameState.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
 import { createScrollbar } from '../../ui/Scrollbar.js';
@@ -1175,7 +1176,7 @@ export default class InventoryOverlay extends Phaser.Scene {
   _handleClose() {
     this.tooltip?.hide();
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }

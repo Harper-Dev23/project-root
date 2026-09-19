@@ -1247,12 +1247,18 @@ export const Items = {
   // and the plan's base tier (I: 1-4, II: 5-7, III: 8-10) with its implicit.
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // LEGACY (chunk 8c): the one generic plan before the base types existed.
+  // No longer sold; plans already in saves keep working as a Scout plan on a
+  // Small map (owner decision 2, chunk 8), so no save needs migrating.
   hunt_plan: {
     id: 'hunt_plan',
     name: 'Hunt Plan',
     type: 'huntPlan',
     rarity: 'common',
-    description: 'A plan chosen before departing on a Hunt. Its prefixes are what the hunt demands, and each raises the completion reward; its suffixes are the party\'s edge. Item level sets how strong they roll and the plan\'s tier.',
+    legacy: true,
+    objective: 'scout',
+    size: 'small',
+    description: "An older, general Hunt Plan: a Small map to scout. Its prefixes are what the hunt demands, and each raises the completion reward; its suffixes are the party's edge.",
   },
 
   // Free and unlimited, replacing "go without a plan" (HUNT_PLANS). Never in a
@@ -1268,6 +1274,89 @@ export const Items = {
     objective: 'scout',
     size: 'small',
     description: 'Free, and always available. A small map to scout, with no modifiers.',
+  },
+
+  // ── The plan base types (chunk 8c; owner decision 2, chunk 8) ───────────
+  // Base type = primary objective + map size (HUNT_PLANS: "the base is fixed,
+  // the affixes vary, and no affix can change what the hunt is"). All 15 roll
+  // from the same plan pools (ItemFactory picks pools by type 'huntPlan').
+  // Readers: huntPlanView -> planMapInputs -> createMapHunt (the generator and
+  // the objectives); the camp plan vendor picks one per stock slot
+  // (HuntPlans.PLAN_BASE_IDS). Names are placeholders for the owner to rename.
+  plan_scout_small: {
+    id: 'plan_scout_small', name: "Small Scouting Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'scout', size: 'small',
+    description: "Scout: reveal every marked site. A small map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_scout_medium: {
+    id: 'plan_scout_medium', name: "Medium Scouting Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'scout', size: 'medium',
+    description: "Scout: reveal every marked site. A medium map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_scout_large: {
+    id: 'plan_scout_large', name: "Large Scouting Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'scout', size: 'large',
+    description: "Scout: reveal every marked site. A large map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_apex_small: {
+    id: 'plan_apex_small', name: "Small Apex Writ", type: 'huntPlan', rarity: 'common',
+    objective: 'apex', size: 'small',
+    description: "Apex: kill the region's apex beast. A small map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_apex_medium: {
+    id: 'plan_apex_medium', name: "Medium Apex Writ", type: 'huntPlan', rarity: 'common',
+    objective: 'apex', size: 'medium',
+    description: "Apex: kill the region's apex beast. A medium map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_apex_large: {
+    id: 'plan_apex_large', name: "Large Apex Writ", type: 'huntPlan', rarity: 'common',
+    objective: 'apex', size: 'large',
+    description: "Apex: kill the region's apex beast. A large map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_cull_small: {
+    id: 'plan_cull_small', name: "Small Cull Warrant", type: 'huntPlan', rarity: 'common',
+    objective: 'cull', size: 'small',
+    description: "Cull: kill a number of one native beast family. A small map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_cull_medium: {
+    id: 'plan_cull_medium', name: "Medium Cull Warrant", type: 'huntPlan', rarity: 'common',
+    objective: 'cull', size: 'medium',
+    description: "Cull: kill a number of one native beast family. A medium map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_cull_large: {
+    id: 'plan_cull_large', name: "Large Cull Warrant", type: 'huntPlan', rarity: 'common',
+    objective: 'cull', size: 'large',
+    description: "Cull: kill a number of one native beast family. A large map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_retrieve_small: {
+    id: 'plan_retrieve_small', name: "Small Recovery Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'retrieve', size: 'small',
+    description: "Retrieve: take the item from its marked site and carry it to an exit. A small map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_retrieve_medium: {
+    id: 'plan_retrieve_medium', name: "Medium Recovery Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'retrieve', size: 'medium',
+    description: "Retrieve: take the item from its marked site and carry it to an exit. A medium map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_retrieve_large: {
+    id: 'plan_retrieve_large', name: "Large Recovery Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'retrieve', size: 'large',
+    description: "Retrieve: take the item from its marked site and carry it to an exit. A large map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_commune_small: {
+    id: 'plan_commune_small', name: "Small Pilgrim's Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'commune', size: 'small',
+    description: "Commune: reach the region's shrine. A small map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_commune_medium: {
+    id: 'plan_commune_medium', name: "Medium Pilgrim's Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'commune', size: 'medium',
+    description: "Commune: reach the region's shrine. A medium map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
+  },
+  plan_commune_large: {
+    id: 'plan_commune_large', name: "Large Pilgrim's Chart", type: 'huntPlan', rarity: 'common',
+    objective: 'commune', size: 'large',
+    description: "Commune: reach the region's shrine. A large map. Prefixes are what the hunt demands and raise the completion reward; suffixes are the party's edge.",
   },
 
   // ═══════════════════════════════════════════════════════════════════════════

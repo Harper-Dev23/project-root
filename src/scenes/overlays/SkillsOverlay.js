@@ -1,4 +1,5 @@
 // src/scenes/overlays/SkillsOverlay.js
+import { wakeTown } from '../../ui/townInput.js';
 import Tooltip from '../../ui/Tooltip.js';
 import { DEPTH } from '../../ui/styles.js';
 import { SKILLS } from '../../../data/skills.js';
@@ -678,7 +679,7 @@ export default class SkillsOverlay extends Phaser.Scene {
   _close() {
     this._hideTooltip();
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }

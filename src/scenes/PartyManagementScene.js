@@ -1,5 +1,6 @@
 // PartyManagementScene.js — FULL REPLACEMENT
 
+import { wakeTown } from '../ui/townInput.js';
 import GameState from '../systems/GameState.js';
 import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
@@ -821,7 +822,7 @@ export default class PartyManagementScene extends Phaser.Scene {
 
   _closeAndReturn() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     // Refresh quest flags — TownScene stays running throughout (never sleeps),
     // so its 'wake' event never fires. We must call it explicitly here.
     town?._refreshQuestFlags?.();
@@ -833,7 +834,7 @@ export default class PartyManagementScene extends Phaser.Scene {
 
   shutdown() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     const ui = this.scene.get('UIScene');
     if (ui?.input) ui.input.enabled = true;
   }

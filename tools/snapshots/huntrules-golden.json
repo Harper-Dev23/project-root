@@ -1594,7 +1594,7 @@
    "night": 35
   },
   "FINE_MARGIN": 20,
-  "RATIONS_PACK_CAP": 100
+  "RATIONS_PACK_CAP": 60
  },
  "starvingRun": {
   "stagesSeen": [

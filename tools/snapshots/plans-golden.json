@@ -354,19 +354,19 @@
  "fields": {
   "encounterChancePercent": true,
   "foulWeatherPercent": true,
-  "lootQualityPercent": true,
   "supplyEfficiencyPercent": true,
   "provisionRations": true,
-  "huntPointsPercent": true,
-  "xpPercent": true,
-  "gradeShiftPercent": false,
-  "restlessPercent": false,
-  "leanCountryPercent": false,
-  "blightPatches": false,
-  "travelTimePercent": false,
-  "perceptionBonus": false,
-  "harvestYieldPercent": false,
-  "completionRewardPercent": false
+  "gradeShiftPercent": true,
+  "restlessPercent": true,
+  "leanCountryPercent": true,
+  "blightPatches": true,
+  "travelTimePercent": true,
+  "perceptionBonus": true,
+  "harvestYieldPercent": true,
+  "completionRewardPercent": true,
+  "lootQualityPercent": false,
+  "huntPointsPercent": false,
+  "xpPercent": false
  },
  "rollsByLevel": {
   "1": {
@@ -1081,6 +1081,23 @@
   "8": 8,
   "9": 9,
   "10": 10
+ },
+ "bases": {
+  "plan_scout_small": "scout/small: Small Scouting Chart",
+  "plan_scout_medium": "scout/medium: Medium Scouting Chart",
+  "plan_scout_large": "scout/large: Large Scouting Chart",
+  "plan_apex_small": "apex/small: Small Apex Writ",
+  "plan_apex_medium": "apex/medium: Medium Apex Writ",
+  "plan_apex_large": "apex/large: Large Apex Writ",
+  "plan_cull_small": "cull/small: Small Cull Warrant",
+  "plan_cull_medium": "cull/medium: Medium Cull Warrant",
+  "plan_cull_large": "cull/large: Large Cull Warrant",
+  "plan_retrieve_small": "retrieve/small: Small Recovery Chart",
+  "plan_retrieve_medium": "retrieve/medium: Medium Recovery Chart",
+  "plan_retrieve_large": "retrieve/large: Large Recovery Chart",
+  "plan_commune_small": "commune/small: Small Pilgrim's Chart",
+  "plan_commune_medium": "commune/medium: Medium Pilgrim's Chart",
+  "plan_commune_large": "commune/large: Large Pilgrim's Chart"
  },
  "weather": {
   "0": {

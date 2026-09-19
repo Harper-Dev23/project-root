@@ -486,8 +486,8 @@ console.log('=== Pack Mule and the packing cap ===');
   const one = rationPackCap(p);
   grunts[1].exploration = { picks: { 2: { passive: 'pack_mule' } } };
   const two = rationPackCap(p);
-  check('packing cap: 100 without Pack Mule, 120 with it, and it counts once per party',
-    plain === R.RATIONS_PACK_CAP && one === R.RATIONS_PACK_CAP + 20 && two === one, `${plain} / ${one} / ${two}`);
+  check('packing cap: 60 without Pack Mule (chunk 8c; was 100), 80 with it, and it counts once per party',
+    plain === 60 && plain === R.RATIONS_PACK_CAP && one === R.RATIONS_PACK_CAP + 20 && two === one, `${plain} / ${one} / ${two}`);
   check('the Hunt screen packs up to rationPackCap(GameState.party), not its own constant',
     /rationPackCap\(GameState\.party\)/.test(fs.readFileSync('src/scenes/overlays/HuntHubOverlay.js', 'utf8'))
     && !/MAX_RATIONS_PACKED/.test(fs.readFileSync('src/scenes/overlays/HuntHubOverlay.js', 'utf8')));

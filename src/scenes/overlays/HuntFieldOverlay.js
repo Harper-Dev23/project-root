@@ -28,13 +28,19 @@
 // each refresh, so nothing from a previous visit can survive. The map's hit
 // zone listeners and the dialogue timer are removed on shutdown.
 //
-// ── Chunk 8b scope ──────────────────────────────────────────────────────────
-// Not saved yet and not reachable from the Hunt screen: 8c wires departure and
-// the save. Until then, window.bmDevMapHunt() (installDevHook) opens it on a
-// hunt kept in memory, in a sandbox world that cannot touch the save.
+// ── How it is opened (chunk 8c) ─────────────────────────────────────────────
+// launchMapHunt() opens it on HuntManager's hunt: after Depart on the Hunt
+// screen, and whenever the town finds a map hunt in the save. It passes two
+// hooks, so this scene never touches the save itself:
+//   onAction    after every action the engine accepted: autosave
+//               (SAVE_COMPATIBILITY rec. 1, "autosave after every move")
+//   onFinished  after exit or wipe: HuntManager drops the hunt, then autosave
+// window.bmDevMapHunt() (installDevHook) still opens it on a hunt kept in
+// memory, in a sandbox world with no hooks: nothing it does is saved.
 // Fights cannot start until chunk 9, so an encounter offers a clearly labelled
 // TEST "Win" beside Flee (owner decision 7: removed in chunk 9).
 
+import { wakeTown } from '../../ui/townInput.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createButton } from '../../ui/Button.js';
 import { SoundManager } from '../../systems/SoundManager.js';
@@ -46,6 +52,8 @@ import { PRIMARY_OBJECTIVES, MAP_SIZES } from '../../../data/huntMapGen.js';
 import { BONUS_OBJECTIVES } from '../../../data/planAffixes.js';
 import { CAMP_TIME, CAMP_SUPPLY, FORAGE_TIME, FISH_TIME, SCOUT_TIME } from '../../systems/HuntRules.js';
 import { CLEANSE_TIME } from '../../systems/HuntWorld.js';
+import { HuntManager } from '../../systems/HuntManager.js';
+import GameState from '../../systems/GameState.js';
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 export const FIELD_WINDOW = { x: 179, y: 14, w: 922, h: 692 };
@@ -96,6 +104,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
   init(data) {
     this.hunt = data?.hunt || null;
     this.onDone = typeof data?.onDone === 'function' ? data.onDone : null;
+    this.onAction = typeof data?.onAction === 'function' ? data.onAction : null;
+    this.onFinished = typeof data?.onFinished === 'function' ? data.onFinished : null;
     this.v = null;              // the last view()
     this.selected = null;       // selected tile id
     this.panel = null;          // 'eat' | 'camp' | 'log' | null
@@ -138,7 +148,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this.mapZone?.off('pointerdown', this._onPointerDown);
       if (this._dialogueTimer) this._dialogueTimer.remove(false);
       this._uiScene()?.resetBottomBar?.();
-      if (town?.input) town.input.enabled = true;
+      wakeTown(this);
     });
 
     if (!this.hunt) {
@@ -754,6 +764,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       return res;
     }
     if (kind === 'move' || kind === 'flee') this.selected = this.hunt.view().pos;
+    // Save after every accepted action; a refusal changed nothing.
+    if (this.hunt.view().finished) this.onFinished?.(this.hunt);
+    else this.onAction?.(this.hunt);
     const news = this._news(kind, res);
     if (news) this._say(news);
     this._refresh();
@@ -824,7 +837,30 @@ export default class HuntFieldOverlay extends Phaser.Scene {
   }
 }
 
-// ── Dev hook (chunk 8b only; 8c replaces it with the real departure) ─────────
+// ── Opening it on the real hunt ─────────────────────────────────────────────
+
+/**
+ * Open the map scene on HuntManager's map hunt, from any scene (the Hunt
+ * screen after Depart, or the town finding a map hunt in a loaded save).
+ * Returns false, doing nothing, if the holder has no map hunt. If the scene
+ * is already up it is restarted on the current hunt: TownScene's
+ * _syncHuntScreen queues a stop of every hunt screen just before calling
+ * this, so "already open" cannot be trusted in the same frame.
+ */
+export function launchMapHunt(scene) {
+  if (HuntManager.mode() !== 'map') return false;
+  const sm = scene.scene;
+  if (sm.isActive('HuntFieldOverlay') || sm.isPaused('HuntFieldOverlay')) sm.stop('HuntFieldOverlay');
+  sm.launch('HuntFieldOverlay', {
+    hunt: HuntManager.current(),
+    onAction: () => GameState.save('autosave'),
+    onFinished: () => { HuntManager.clearFinished(); GameState.save('autosave'); },
+  });
+  sm.bringToTop('UIScene');
+  return true;
+}
+
+// ── Dev hook: a sandboxed hunt in memory (tools/browser/huntfield.mjs) ──────
 
 /**
  * window.bmDevMapHunt({ zoneId, objective, size, seed, supplies, bonusObjectives })

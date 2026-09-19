@@ -1,4 +1,5 @@
 
+import { wakeTown } from './townInput.js';
 import { DEPTH, MENU_THEME } from './styles.js';
 import { createPanel } from './GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
@@ -86,7 +87,7 @@ export function createOverlayFrame(scene, {
     scene.events.once('shutdown', () => {
         _openOverlayCount = Math.max(0, _openOverlayCount - 1);
         if (_openOverlayCount === 0) {
-            if (townScene?.input) townScene.input.enabled = true;
+            wakeTown(scene); // not under a hunt screen (src/ui/townInput.js)
             if (uiScene?.input) uiScene.input.enabled = true;
         }
     });

@@ -1,3 +1,4 @@
+import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import MapRegionLayer from '../../ui/MapRegionLayer.js';
@@ -492,7 +493,7 @@ export default class MapOverlay extends Phaser.Scene {
 
   _close() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }

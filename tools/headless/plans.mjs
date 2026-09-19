@@ -18,7 +18,10 @@
 //   - the basic plan: free, Small, Scout, no modifiers; "None" is gone
 //   - the vendor: stock up to party level, price rising with item level,
 //     rolled once per in-game day (saved), each slot sold once
-//   - a real v4 save holding a plan migrates to v6: item level 1, Tier I
+//   - a real v4 save holding a plan migrates to v7: item level 1, Tier I
+//   - chunk 8c: the 15 plan base types (objective + size), a base in every
+//     vendor slot, an old stock without bases rolled again once, and which
+//     fields are live now that every new hunt is a hunt on the map
 //
 // USAGE
 //   node tools/headless/plans.mjs                  run the checks
@@ -52,8 +55,9 @@ const GameState = (await import('../../src/systems/GameState.js')).default;
 const { SAVE_VERSION } = await import('../../src/systems/GameState.js');
 const { createItemInstance, getHuntPlanPools, huntPlanView, RARITY_RULES, getAffixIndex } =
   await import('../../src/systems/ItemFactory.js');
-const { makeBasicPlan, isBasicPlan, describePlan, planPrice, planStockLevels, currentPlanStock, markPlanSold } =
+const { makeBasicPlan, isBasicPlan, describePlan, describePlanHeader, planPrice, planStockLevels, currentPlanStock, markPlanSold, PLAN_BASE_IDS } =
   await import('../../src/systems/HuntPlans.js');
+const { planMapInputs } = await import('../../src/systems/HuntMapGen.js');
 const { combineModifiers } = await import('../../src/systems/HuntModifiers.js');
 const { createHunt } = await import('../../src/systems/HuntManager.js');
 const { rollWeather, WEATHER_TYPES } = await import('../../data/weather.js');
@@ -102,11 +106,22 @@ console.log('=== every plan field names its reader ===');
   for (const [f, d] of Object.entries(PLAN_FIELDS)) {
     check(`${f}: ${d.live ? 'live' : 'not yet'} -> ${d.reader}`, typeof d.reader === 'string' && d.reader.length > 10);
   }
-  // Live through the hunt's combined modifiers: the hunt loop reads these (HuntManager.advance etc.).
-  const combined = combineModifiers({ encounterChancePercent: 1, supplyEfficiencyPercent: 1, huntPointsPercent: 1, xpPercent: 1, lootQualityPercent: 1 });
-  check('the live percent fields reach the hunt\'s combined modifiers',
-    ['encounterChancePercent', 'supplyEfficiencyPercent', 'huntPointsPercent', 'xpPercent', 'lootQualityPercent']
-      .every(f => PLAN_FIELDS[f].live && combined[f] === 1));
+  // Chunk 8c: every new hunt is a map hunt. Summed fields reach its bundle
+  // through combineModifiers; plan-only fields through huntMods; the
+  // generator's fields through planMapInputs. The three fight rewards have no
+  // reader on the map until fights start there (chunk 9), so they are not live.
+  const { huntMods } = await import('../../src/systems/HuntRules.js');
+  const combined = combineModifiers({ encounterChancePercent: 1, supplyEfficiencyPercent: 1 });
+  check('live summed fields reach the hunt\'s combined modifiers',
+    ['encounterChancePercent', 'supplyEfficiencyPercent'].every(f => PLAN_FIELDS[f].live && combined[f] === 1));
+  const bundle = huntMods({}, {}, { travelTimePercent: 1, perceptionBonus: 1, harvestYieldPercent: 1 });
+  check('live plan-only fields reach the map hunt\'s bundle (huntMods)',
+    ['travelTimePercent', 'perceptionBonus', 'harvestYieldPercent'].every(f => PLAN_FIELDS[f].live && bundle[f] === 1));
+  const inputs = planMapInputs({ objective: 'scout', size: 'small', bonusObjectives: [], mods: { gradeShiftPercent: 1, leanCountryPercent: 1, blightPatches: 1, restlessPercent: 1 } });
+  check('live generator fields reach the generator (planMapInputs)',
+    ['gradeShiftPercent', 'leanCountryPercent', 'blightPatches', 'restlessPercent'].every(f => PLAN_FIELDS[f].live && inputs.mods[f] === 1));
+  check('fight rewards are not live until fights start on the map (chunk 9)',
+    ['lootQualityPercent', 'huntPointsPercent', 'xpPercent'].every(f => !PLAN_FIELDS[f].live && /chunk 9/.test(PLAN_FIELDS[f].reader)));
   golden.fields = Object.fromEntries(Object.entries(PLAN_FIELDS).map(([f, d]) => [f, d.live]));
 }
 
@@ -285,6 +300,35 @@ console.log('=== the vendor: up to party level, price rising with item level ===
   PM.deserialize(older);
   check('a save from before the stock existed loads with none, and rolls one', PM.planVendorStock === null
     && currentPlanStock(PM, { partyLevel: 2, rollRarity, rng: makeRng(5) }).slots.every(s => s.itemLevel <= 2));
+
+  // Chunk 8c: every slot sells a base type (objective + size).
+  const combos = new Set(PLAN_BASE_IDS.map(id => `${Items[id].objective}/${Items[id].size}`));
+  check('15 plan base types: every objective x every size, once each; the basic and legacy plans are not sold',
+    PLAN_BASE_IDS.length === 15 && combos.size === 15 && !PLAN_BASE_IDS.includes('hunt_plan') && !PLAN_BASE_IDS.includes('basic_hunt_plan'));
+  const baseTally = {};
+  for (let d = 0; d < 400; d++) {
+    PM.reset();
+    for (const sl of currentPlanStock(PM, { partyLevel: 5, rollRarity, rng: makeRng(7000 + d) }).slots) baseTally[sl.base] = (baseTally[sl.base] || 0) + 1;
+  }
+  check('over 400 days of stock, every slot has a base and all 15 are sold', Object.keys(baseTally).length === 15
+    && Object.keys(baseTally).every(b => PLAN_BASE_IDS.includes(b)), `min ${Math.min(...Object.values(baseTally))} / max ${Math.max(...Object.values(baseTally))} of 1200 slots`);
+  PM.reset();
+  const today = currentPlanStock(PM, { partyLevel: 4, rollRarity, rng: makeRng(11) });
+  PM.planVendorStock = { day: today.day, slots: today.slots.map(({ base, ...rest }) => ({ ...rest })) };
+  const rerolled = currentPlanStock(PM, { partyLevel: 4, rollRarity, rng: makeRng(12) });
+  const again = currentPlanStock(PM, { partyLevel: 4, rollRarity, rng: makeRng(13) });
+  check('a stock saved before 8c (no bases) is rolled again once, then kept',
+    rerolled.slots.every(sl => PLAN_BASE_IDS.includes(sl.base)) && JSON.stringify(again) === JSON.stringify(rerolled));
+  const bought = createItemInstance(rerolled.slots[0].base, { rarity: 'rare', itemLevel: 4, rng: makeRng(14) });
+  const bv = huntPlanView(bought);
+  check('a bought plan carries its base\'s objective and size into the map hunt\'s inputs',
+    bv.objective === Items[bought.id].objective && bv.size === Items[bought.id].size
+    && planMapInputs(bv).objective === bv.objective && planMapInputs(bv).size === bv.size);
+  const legacy = huntPlanView(createItemInstance('hunt_plan', { rarity: 'rare', itemLevel: 3, rng: makeRng(15) }));
+  check('the legacy hunt_plan reads as Scout on a Small map', legacy.objective === 'scout' && legacy.size === 'small');
+  check('no plan says "(no effect yet)" about its objective, size, bonus objectives or tier implicit',
+    PLAN_BASE_IDS.every(id => !describePlanHeader(createItemInstance(id, { rarity: 'epic', itemLevel: 9, rng: makeRng(16) })).some(l => /no effect yet/.test(l))));
+  golden.bases = Object.fromEntries(PLAN_BASE_IDS.map(id => [id, `${Items[id].objective}/${Items[id].size}: ${Items[id].name}`]));
   PM.reset();
 }
 
@@ -326,7 +370,7 @@ console.log('=== a real v4 save holding a plan migrates to v6 ===');
   const oldPlan = fixture.inventory.find(i => i.id === 'hunt_plan');
   check('the fixture is a v4 save holding a plan with no item level',
     fixture.version === 4 && oldPlan && oldPlan.itemLevel == null && !('bonusObjectives' in oldPlan));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 6);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 7);
 
   // Plans in a character's own bag and in a tribe stash must migrate too.
   const withMore = JSON.parse(JSON.stringify(fixture));
@@ -350,11 +394,11 @@ console.log('=== a real v4 save holding a plan migrates to v6 ===');
 
   GameState.save('v4plan');
   const rewritten = JSON.parse(store.get('bmSave_v4plan'));
-  check('re-saved as v6, the plan keeping its item level', rewritten.version === 6
+  check('re-saved as v7, the plan keeping its item level', rewritten.version === 7
     && rewritten.inventory.find(i => i.id === 'hunt_plan')?.itemLevel === 1);
 
   const reloaded = GameState.load('v4plan');
-  check('a v6 save loads again unchanged', reloaded === true
+  check('a v7 save loads again unchanged', reloaded === true
     && GameState.inventory.find(i => i.id === 'hunt_plan')?.itemLevel === 1);
 }
 

@@ -3,6 +3,7 @@
 // Non-player, non-leader parties can be equipped (from player inventory) and
 // accumulate stash items from their simulated hunts (transferable for 1 Tribe Ticket).
 
+import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createPanel } from '../../ui/GamePanel.js';
@@ -464,7 +465,7 @@ export default class TribeHQOverlay extends Phaser.Scene {
 
   _close() {
     const town = this.scene.get('TownScene');
-    if (town?.input) town.input.enabled = true;
+    wakeTown(this);
     this.scene.resume('UIScene');
     this.scene.stop();
   }
