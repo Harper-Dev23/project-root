@@ -115,6 +115,8 @@ export default class HuntEventOverlay extends Phaser.Scene {
 
     this._diceToken = new DiceToken(this, {
       x: centerX, y: y + 395, width: 760, height: 360, depth,
+      // Rolled by the hunt when the event was, so a reload shows the same die.
+      value: this.encounter?.dieRoll,
       onSettled: (value) => this._resolveCheck(eventDef, value),
     });
   }

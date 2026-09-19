@@ -1,0 +1,2941 @@
+{
+ "rngHead": [
+  0.9797282677609473,
+  0.3067522644996643,
+  0.484205421525985,
+  0.817934412509203,
+  0.5094283693470061
+ ],
+ "hunts": {
+  "reeds_of_gethsemane/s1": {
+   "weather": "storm",
+   "modifiers": {
+    "encounterChancePercent": 14,
+    "beastChanceWeight": 0,
+    "supplyEfficiencyPercent": -15,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 57.7,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 55.400000000000006,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 53.10000000000001,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 50.80000000000001,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.500000000000014,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.20000000000002,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 43.90000000000002,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 41.60000000000002,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 39.300000000000026,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 37.00000000000003,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 34.70000000000003,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 32.400000000000034,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 30.100000000000033,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sunken_shrine"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sunken_shrine",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 27.800000000000033,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 25.500000000000032,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 23.20000000000003,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 7,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 20.90000000000003,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 18.60000000000003,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 16.30000000000003,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 14.000000000000028,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 11.700000000000028,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_acolyte"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_acolyte",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 9.400000000000027,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 7.100000000000027,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 4.800000000000027,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.5000000000000275,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0.2000000000000277,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": "fight:hunt_cultist_acolyte"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_acolyte",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    }
+   ],
+   "world": [
+    "hp0",
+    "hp0",
+    "night",
+    "hp8",
+    "hp0",
+    "hp0",
+    "hp0",
+    "day",
+    "xp5",
+    "hp3",
+    "hp0",
+    "hp0",
+    "night",
+    "hp0",
+    "hp0",
+    "day",
+    "hp0",
+    "hp0"
+   ],
+   "partyHP": [
+    30,
+    26,
+    30
+   ],
+   "end": {
+    "day": 3,
+    "depth": 27,
+    "sessionHuntPoints": 11
+   }
+  },
+  "reeds_of_gethsemane/s2": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": 6,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": -10,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 57.8,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 55.599999999999994,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 53.39999999999999,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 51.19999999999999,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.999999999999986,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.79999999999998,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 44.59999999999998,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 42.39999999999998,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 40.199999999999974,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 9,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 37.99999999999997,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 35.79999999999997,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_sunken_shrine"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sunken_shrine",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 33.599999999999966,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 31.399999999999967,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 3,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 29.199999999999967,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sunken_shrine"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sunken_shrine",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 26.999999999999968,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 24.79999999999997,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 22.59999999999997,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 20.39999999999997,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 18.19999999999997,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 15.999999999999972,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 13.799999999999972,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 16,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 11.599999999999973,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.399999999999974,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 7.1999999999999735,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 15,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 4.999999999999973,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.799999999999973,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0.599999999999973,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    }
+   ],
+   "world": [
+    "night",
+    "hp0",
+    "xp5",
+    "hp3",
+    "day",
+    "hp0",
+    "xp5",
+    "hp3",
+    "hp8",
+    "night",
+    "hp0",
+    "hp0",
+    "hp2",
+    "day",
+    "hp2"
+   ],
+   "partyHP": [
+    26,
+    30,
+    26
+   ],
+   "end": {
+    "day": 3,
+    "depth": 28,
+    "sessionHuntPoints": 18
+   }
+  },
+  "reeds_of_gethsemane/s777": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": 6,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": -10,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 57.8,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 55.599999999999994,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 53.39999999999999,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 51.19999999999999,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.999999999999986,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.79999999999998,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 44.59999999999998,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 42.39999999999998,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 40.199999999999974,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 37.99999999999997,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 35.79999999999997,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 33.599999999999966,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 31.399999999999967,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 29.199999999999967,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 26.999999999999968,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 24.79999999999997,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 6,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 22.59999999999997,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 20.39999999999997,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 18.19999999999997,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 15.999999999999972,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 13.799999999999972,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 11.599999999999973,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.399999999999974,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": "event:reeds_stranger_at_camp"
+    },
+    {
+     "do": "event",
+     "id": "reeds_stranger_at_camp",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 7.1999999999999735,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 4.999999999999973,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.799999999999973,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_sunken_shrine"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sunken_shrine",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 0.599999999999973,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 14,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    }
+   ],
+   "world": [
+    "hp8",
+    "night",
+    "hp0",
+    "hp0",
+    "day",
+    "hp8",
+    "hp0",
+    "night",
+    "hp8",
+    "xp5",
+    "hp3",
+    "day",
+    "xp5",
+    "hp3",
+    "hp2"
+   ],
+   "partyHP": [
+    30,
+    30,
+    26
+   ],
+   "end": {
+    "day": 3,
+    "depth": 28,
+    "sessionHuntPoints": 32
+   }
+  },
+  "reeds_of_gethsemane/s3-plan": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": 26,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": 15,
+    "huntPointsPercent": 50,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 58.3,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 56.599999999999994,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 54.89999999999999,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 53.19999999999999,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 51.499999999999986,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 49.79999999999998,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.09999999999998,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.39999999999998,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": "event:reeds_sunken_shrine"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sunken_shrine",
+     "die": null,
+     "hp": 5
+    },
+    {
+     "do": "advance",
+     "supplies": 44.699999999999974,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 42.99999999999997,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 41.29999999999997,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 39.599999999999966,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 37.89999999999996,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 19,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 36.19999999999996,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 34.49999999999996,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 8,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 32.799999999999955,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 31.099999999999955,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 29.399999999999956,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 27.699999999999957,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 8,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 25.999999999999957,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 24.299999999999958,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 22.59999999999996,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 20.89999999999996,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 19.19999999999996,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 17.49999999999996,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": "event:reeds_distant_weeping"
+    },
+    {
+     "do": "event",
+     "id": "reeds_distant_weeping",
+     "die": null,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 15.799999999999962,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 14.099999999999962,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 12.399999999999963,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 10.699999999999964,
+     "depth": 29,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 8.999999999999964,
+     "depth": 30,
+     "day": 3,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 7.299999999999964,
+     "depth": 31,
+     "day": 3,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 5.599999999999964,
+     "depth": 32,
+     "day": 3,
+     "night": true,
+     "rolled": "event:reeds_sinking_mud"
+    },
+    {
+     "do": "event",
+     "id": "reeds_sinking_mud",
+     "die": 20,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 3.899999999999964,
+     "depth": 33,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.1999999999999638,
+     "depth": 34,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0.4999999999999638,
+     "depth": 35,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 36,
+     "day": 4,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    }
+   ],
+   "world": [
+    "hp12",
+    "hp12",
+    "night",
+    "xp5",
+    "hp5",
+    "day",
+    "hp3",
+    "hp0",
+    "hp12",
+    "night",
+    "hp0",
+    "hp12",
+    "day",
+    "hp0",
+    "hp0",
+    "night",
+    "hp12",
+    "hp12",
+    "hp3",
+    "day",
+    "hp12"
+   ],
+   "partyHP": [
+    30,
+    26,
+    26
+   ],
+   "end": {
+    "day": 4,
+    "depth": 36,
+    "sessionHuntPoints": 95
+   }
+  },
+  "bay_of_solace/s1": {
+   "weather": "storm",
+   "modifiers": {
+    "encounterChancePercent": 4,
+    "beastChanceWeight": 0,
+    "supplyEfficiencyPercent": -2,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 57.96,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 4
+    },
+    {
+     "do": "advance",
+     "supplies": 55.92,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 53.88,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 51.84,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 49.800000000000004,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 47.760000000000005,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 45.720000000000006,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 43.68000000000001,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 41.64000000000001,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 39.60000000000001,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 37.56000000000001,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 35.52000000000001,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 33.48000000000001,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 31.440000000000012,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 29.400000000000013,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 27.360000000000014,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 25.320000000000014,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 23.280000000000015,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 7,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 21.240000000000016,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 19.200000000000017,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 17.160000000000018,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 15.120000000000019,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 13.08000000000002,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_acolyte"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_acolyte",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 11.04000000000002,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.000000000000021,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 6.960000000000021,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 4.920000000000021,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.880000000000021,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": "fight:hunt_cultist_acolyte"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_acolyte",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 0.8400000000000212,
+     "depth": 29,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 30,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    }
+   ],
+   "world": [
+    "xp8",
+    "hp4",
+    "night",
+    "hp8",
+    "hp0",
+    "day",
+    "hp0",
+    "xp5",
+    "hp3",
+    "xp5",
+    "hp3",
+    "night",
+    "hp0",
+    "hp0",
+    "hp0",
+    "hp0",
+    "day",
+    "hp0",
+    "night"
+   ],
+   "partyHP": [
+    30,
+    27,
+    30
+   ],
+   "end": {
+    "day": 3,
+    "depth": 30,
+    "sessionHuntPoints": 18
+   }
+  },
+  "bay_of_solace/s2": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": -4,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": 3,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 58.06,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 56.120000000000005,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 54.18000000000001,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 52.24000000000001,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 50.30000000000001,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.360000000000014,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.420000000000016,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 44.48000000000002,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 42.54000000000002,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 9,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 40.60000000000002,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 38.660000000000025,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 36.72000000000003,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 34.78000000000003,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 3,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 32.84000000000003,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 30.90000000000003,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 28.96000000000003,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 27.020000000000028,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 25.080000000000027,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_cultist_solo"
+    },
+    {
+     "do": "fight",
+     "type": "cultist",
+     "scenario": "hunt_cultist_solo",
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 23.140000000000025,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 21.200000000000024,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 4
+    },
+    {
+     "do": "advance",
+     "supplies": 19.260000000000023,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 16,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 17.32000000000002,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 15.380000000000022,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 13.440000000000023,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 11.500000000000023,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.560000000000024,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 4
+    },
+    {
+     "do": "advance",
+     "supplies": 7.620000000000024,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 5.680000000000025,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 3.7400000000000246,
+     "depth": 29,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 1.8000000000000247,
+     "depth": 30,
+     "day": 3,
+     "night": true,
+     "rolled": "event:bay_lantern_glow"
+    },
+    {
+     "do": "event",
+     "id": "bay_lantern_glow",
+     "die": null,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 31,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    }
+   ],
+   "world": [
+    "night",
+    "hp0",
+    "xp5",
+    "hp3",
+    "day",
+    "hp0",
+    "xp5",
+    "hp3",
+    "hp8",
+    "night",
+    "hp0",
+    "xp8",
+    "hp4",
+    "hp2",
+    "day",
+    "xp8",
+    "hp4",
+    "night",
+    "xp4",
+    "hp2"
+   ],
+   "partyHP": [
+    27,
+    30,
+    27
+   ],
+   "end": {
+    "day": 3,
+    "depth": 31,
+    "sessionHuntPoints": 26
+   }
+  },
+  "bay_of_solace/s777": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": -4,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": 3,
+    "huntPointsPercent": 0,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 58.06,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 56.120000000000005,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 54.18000000000001,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 52.24000000000001,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 50.30000000000001,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.360000000000014,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 46.420000000000016,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 44.48000000000002,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 4
+    },
+    {
+     "do": "advance",
+     "supplies": 42.54000000000002,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 40.60000000000002,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 38.660000000000025,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 4
+    },
+    {
+     "do": "advance",
+     "supplies": 36.72000000000003,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 34.78000000000003,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 32.84000000000003,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 30.90000000000003,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 28.96000000000003,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 6,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 27.020000000000028,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 25.080000000000027,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 23.140000000000025,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 21.200000000000024,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 19.260000000000023,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 17.32000000000002,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 15.380000000000022,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": "event:bay_lantern_glow"
+    },
+    {
+     "do": "event",
+     "id": "bay_lantern_glow",
+     "die": null,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 13.440000000000023,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 11.500000000000023,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.560000000000024,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 7.620000000000024,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 14,
+     "hp": 2
+    },
+    {
+     "do": "advance",
+     "supplies": 5.680000000000025,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 3.7400000000000246,
+     "depth": 29,
+     "day": 3,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 8
+    },
+    {
+     "do": "advance",
+     "supplies": 1.8000000000000247,
+     "depth": 30,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 31,
+     "day": 3,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 8
+    }
+   ],
+   "world": [
+    "hp8",
+    "night",
+    "xp8",
+    "hp4",
+    "xp8",
+    "hp4",
+    "day",
+    "hp8",
+    "hp0",
+    "night",
+    "hp8",
+    "xp4",
+    "hp2",
+    "day",
+    "xp5",
+    "hp3",
+    "hp2",
+    "hp8",
+    "night",
+    "hp8"
+   ],
+   "partyHP": [
+    30,
+    30,
+    27
+   ],
+   "end": {
+    "day": 3,
+    "depth": 31,
+    "sessionHuntPoints": 55
+   }
+  },
+  "bay_of_solace/s3-plan": {
+   "weather": "fog",
+   "modifiers": {
+    "encounterChancePercent": 16,
+    "beastChanceWeight": 2,
+    "supplyEfficiencyPercent": 28,
+    "huntPointsPercent": 50,
+    "xpPercent": 0,
+    "lootQualityPercent": 0
+   },
+   "trace": [
+    {
+     "do": "advance",
+     "supplies": 58.56,
+     "depth": 1,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 57.120000000000005,
+     "depth": 2,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 55.68000000000001,
+     "depth": 3,
+     "day": 1,
+     "night": false,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 54.24000000000001,
+     "depth": 4,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 52.80000000000001,
+     "depth": 5,
+     "day": 1,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 51.360000000000014,
+     "depth": 6,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 49.920000000000016,
+     "depth": 7,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 48.48000000000002,
+     "depth": 8,
+     "day": 1,
+     "night": true,
+     "rolled": "event:bay_wrecked_hull"
+    },
+    {
+     "do": "event",
+     "id": "bay_wrecked_hull",
+     "die": null,
+     "hp": 5
+    },
+    {
+     "do": "advance",
+     "supplies": 47.04000000000002,
+     "depth": 9,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 45.60000000000002,
+     "depth": 10,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 44.160000000000025,
+     "depth": 11,
+     "day": 1,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 42.72000000000003,
+     "depth": 12,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 41.28000000000003,
+     "depth": 13,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 19,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 39.84000000000003,
+     "depth": 14,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 38.400000000000034,
+     "depth": 15,
+     "day": 2,
+     "night": false,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 8,
+     "hp": 0
+    },
+    {
+     "do": "advance",
+     "supplies": 36.960000000000036,
+     "depth": 16,
+     "day": 2,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 35.52000000000004,
+     "depth": 17,
+     "day": 2,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 34.08000000000004,
+     "depth": 18,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 32.64000000000004,
+     "depth": 19,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 31.200000000000042,
+     "depth": 20,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 29.76000000000004,
+     "depth": 21,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 28.32000000000004,
+     "depth": 22,
+     "day": 2,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 26.880000000000038,
+     "depth": 23,
+     "day": 2,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 25.440000000000037,
+     "depth": 24,
+     "day": 3,
+     "night": false,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 6
+    },
+    {
+     "do": "advance",
+     "supplies": 24.000000000000036,
+     "depth": 25,
+     "day": 3,
+     "night": false,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 6
+    },
+    {
+     "do": "advance",
+     "supplies": 22.560000000000034,
+     "depth": 26,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 21.120000000000033,
+     "depth": 27,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 19.68000000000003,
+     "depth": 28,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 18.24000000000003,
+     "depth": 29,
+     "day": 3,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 16.80000000000003,
+     "depth": 30,
+     "day": 3,
+     "night": true,
+     "rolled": "fight:hunt_beast_solo"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_solo",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 15.36000000000003,
+     "depth": 31,
+     "day": 3,
+     "night": true,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 13.92000000000003,
+     "depth": 32,
+     "day": 3,
+     "night": true,
+     "rolled": "event:bay_rising_tide"
+    },
+    {
+     "do": "event",
+     "id": "bay_rising_tide",
+     "die": 20,
+     "hp": 3
+    },
+    {
+     "do": "advance",
+     "supplies": 12.48000000000003,
+     "depth": 33,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 11.040000000000031,
+     "depth": 34,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 9.600000000000032,
+     "depth": 35,
+     "day": 3,
+     "night": true,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 8.160000000000032,
+     "depth": 36,
+     "day": 4,
+     "night": false,
+     "rolled": "fight:hunt_beast_marked"
+    },
+    {
+     "do": "fight",
+     "type": "beast",
+     "scenario": "hunt_beast_marked",
+     "hp": 12
+    },
+    {
+     "do": "advance",
+     "supplies": 6.720000000000033,
+     "depth": 37,
+     "day": 4,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 5.280000000000033,
+     "depth": 38,
+     "day": 4,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 3.840000000000033,
+     "depth": 39,
+     "day": 4,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 2.400000000000033,
+     "depth": 40,
+     "day": 4,
+     "night": false,
+     "rolled": null
+    },
+    {
+     "do": "advance",
+     "supplies": 0.9600000000000333,
+     "depth": 41,
+     "day": 4,
+     "night": false,
+     "rolled": "event:bay_driftwood_idol"
+    },
+    {
+     "do": "event",
+     "id": "bay_driftwood_idol",
+     "die": null,
+     "hp": 6
+    },
+    {
+     "do": "advance",
+     "supplies": 0,
+     "depth": 42,
+     "day": 4,
+     "night": true,
+     "rolled": null
+    }
+   ],
+   "world": [
+    "hp12",
+    "hp12",
+    "night",
+    "xp5",
+    "hp5",
+    "day",
+    "hp3",
+    "hp0",
+    "hp12",
+    "night",
+    "hp12",
+    "hp12",
+    "day",
+    "xp8",
+    "hp6",
+    "xp8",
+    "hp6",
+    "night",
+    "hp12",
+    "hp12",
+    "hp3",
+    "day",
+    "hp12",
+    "xp8",
+    "hp6",
+    "night"
+   ],
+   "partyHP": [
+    30,
+    30,
+    27
+   ],
+   "end": {
+    "day": 4,
+    "depth": 42,
+    "sessionHuntPoints": 125
+   }
+  }
+ }
+}

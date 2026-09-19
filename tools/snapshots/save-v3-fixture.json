@@ -1,0 +1,1412 @@
+{
+ "version": 3,
+ "characters": [
+  {
+   "id": "char_0f63hnws",
+   "instanceId": "char_0f63hnws",
+   "name": "Bran",
+   "race": "Dwarf",
+   "baseClass": "Grunt",
+   "specialization": null,
+   "level": 5,
+   "experience": 0,
+   "favor": 0,
+   "tribe": null,
+   "skin": "dwarf_portrait_1",
+   "skills": [
+    "move_step",
+    "basic_attack",
+    "basic_attack",
+    "widening_cut",
+    "marked_cut",
+    "guarded_slash",
+    "storm_cut",
+    "rally_blow",
+    "soft_spot_exposed",
+    "read_and_react",
+    "power_stab",
+    "taunting_cry",
+    "balancing_blow",
+    "harmonic_strike",
+    "cover_strike",
+    "blockade",
+    "read_and_react",
+    "cover_strike"
+   ],
+   "cooldowns": {},
+   "baseStats": {
+    "STR": 16,
+    "DEX": 10,
+    "CON": 14,
+    "INT": 5,
+    "WIS": 8,
+    "CHA": 7
+   },
+   "permanentStats": {
+    "STR": 20,
+    "DEX": 9,
+    "CON": 18,
+    "INT": 5,
+    "WIS": 10,
+    "CHA": 7
+   },
+   "creationStats": {
+    "STR": 16,
+    "DEX": 10,
+    "CON": 14,
+    "INT": 5,
+    "WIS": 8,
+    "CHA": 7
+   },
+   "totalStats": {
+    "STR": 23,
+    "DEX": 9,
+    "CON": 21,
+    "INT": 5,
+    "WIS": 10,
+    "CHA": 7
+   },
+   "derived": {
+    "maxHP": 58,
+    "maxMP": 27,
+    "Accuracy": 9,
+    "Evasion": 0,
+    "CritChance": 13,
+    "CritMult": 1.5,
+    "ElementalResist": 9,
+    "PhysicalResist": 11,
+    "NecroticResist": 4,
+    "Resilience": 10,
+    "MpRegenPerTurn": 1,
+    "Initiative": 7,
+    "ActionPoints": 1,
+    "BonusActions": 1,
+    "ReactionPoints": 1,
+    "ClassAction": 1
+   },
+   "maxHP": 58,
+   "maxMP": 27,
+   "currentHP": 58,
+   "currentMP": 27,
+   "initiative": 7,
+   "statusResist": {
+    "fear": 0,
+    "charm": 0,
+    "poison": 0,
+    "stun": 0
+   },
+   "healing": {
+    "received": 1,
+    "given": 1
+   },
+   "modifiers": {
+    "race": {
+     "STR": 2,
+     "CON": 3,
+     "WIS": 2,
+     "DEX": -1
+    },
+    "class": {
+     "STR": 2,
+     "CON": 1
+    },
+    "gear": {
+     "stats": {},
+     "derived": {},
+     "misc": {
+      "mpPerTurn": 1,
+      "skillCostReductionPct": 0,
+      "globalDamagePercent": 0,
+      "elementalDamagePercent": 0,
+      "necroticDamagePercent": 0,
+      "healingPercent": 0,
+      "resilience": 10,
+      "weaponBuildupPercent": {},
+      "physicalBuildupPercent": 0,
+      "elementalBuildupPercent": 0,
+      "necroticBuildupPercent": 0
+     }
+    }
+   },
+   "weaponSkills": [
+    "Bonecrusher"
+   ],
+   "racialTraits": [
+    "Stonebound Resolve",
+    "Stone Step"
+   ],
+   "classTalents": [],
+   "specializationTalents": [],
+   "weaponType": null,
+   "weapon": null,
+   "equipment": {
+    "weaponMain": {
+     "id": "hardened_sword_1h",
+     "instanceId": "itm_1ft8hfu0"
+    },
+    "weaponOff": null,
+    "head": {
+     "id": "simple_helm_str",
+     "instanceId": "itm_28aq2wno",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Simple Helm"
+    },
+    "chest": {
+     "id": "simple_chest_con_str",
+     "instanceId": "itm_z62louxr",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Tough Vest"
+    },
+    "legs": {
+     "id": "simple_legs_con",
+     "instanceId": "itm_p5xvsqy9",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Traveler's Pants"
+    },
+    "gloves": {
+     "id": "simple_gloves_str",
+     "instanceId": "itm_irsjtdqc",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Thick Gloves"
+    },
+    "boots": {
+     "id": "simple_boots_con",
+     "instanceId": "itm_elk0prey",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Sturdy Boots"
+    },
+    "ring": null,
+    "amulet": null
+   },
+   "inventory": [],
+   "location": {
+    "x": 0,
+    "y": 0
+   },
+   "status": "active",
+   "unspentStatPoints": 0,
+   "gearEffects": {
+    "mpPerTurn": 1,
+    "skillCostReductionPct": 0,
+    "globalDamagePercent": 0,
+    "elementalDamagePercent": 0,
+    "necroticDamagePercent": 0,
+    "healingPercent": 0,
+    "resilience": 10,
+    "weaponBuildupPercent": {},
+    "physicalBuildupPercent": 0,
+    "elementalBuildupPercent": 0,
+    "necroticBuildupPercent": 0,
+    "lifeStealPct": 0,
+    "physToElemPercent": 0,
+    "physToNecroPercent": 0,
+    "elemToNecroPercent": 0,
+    "initBonusOnBattleStart": 0,
+    "shieldPctOnBattleStart": 0,
+    "physBuildupOnPhysDmg": {},
+    "elemBuildupOnElemDmg": {},
+    "procDoubleDamage": 0,
+    "procHalfDamageTaken": 0,
+    "procHealOnHeal": 0,
+    "procElemFlat": 0,
+    "procNecroFlat": 0,
+    "procPhysFlat": 0
+   },
+   "resilience": 10,
+   "combatMods": {
+    "Accuracy": 0,
+    "Evasion": 0,
+    "Initiative": 0,
+    "CritChance": 0,
+    "CritMult": 0,
+    "ElementalResist": 0,
+    "PhysicalResist": 0,
+    "NecroticResist": 0
+   },
+   "classSkills": [],
+   "reactions": [],
+   "racialMovement": null
+  },
+  {
+   "id": "char_gs8jsexo",
+   "instanceId": "char_gs8jsexo",
+   "name": "Sable",
+   "race": "Skith",
+   "baseClass": "Beggar",
+   "specialization": null,
+   "level": 5,
+   "experience": 0,
+   "favor": 0,
+   "tribe": null,
+   "skin": "skith_portrait_1",
+   "skills": [
+    "move_dash",
+    "basic_attack",
+    "basic_attack",
+    "probing_cut",
+    "vital_mark",
+    "ember_strike",
+    "needle_venom",
+    "pressure_point",
+    "ghoststep",
+    "dagger_throw",
+    "hex_stitch",
+    "static_prick",
+    "street_panacea",
+    "poison_extraction",
+    "silent_order",
+    "curse_of_needles",
+    "flash_overload",
+    "curse_of_normality",
+    "sidestep",
+    "carrion_strike",
+    "twin_fang",
+    "hide",
+    "sidestep",
+    "carrion_strike"
+   ],
+   "cooldowns": {},
+   "baseStats": {
+    "STR": 8,
+    "DEX": 17,
+    "CON": 9,
+    "INT": 12,
+    "WIS": 7,
+    "CHA": 7
+   },
+   "permanentStats": {
+    "STR": 9,
+    "DEX": 22,
+    "CON": 10,
+    "INT": 15,
+    "WIS": 7,
+    "CHA": 6
+   },
+   "creationStats": {
+    "STR": 8,
+    "DEX": 17,
+    "CON": 9,
+    "INT": 12,
+    "WIS": 7,
+    "CHA": 7
+   },
+   "totalStats": {
+    "STR": 9,
+    "DEX": 26,
+    "CON": 11,
+    "INT": 16,
+    "WIS": 7,
+    "CHA": 6
+   },
+   "derived": {
+    "maxHP": 38,
+    "maxMP": 45,
+    "Accuracy": 26,
+    "Evasion": 0,
+    "CritChance": 17,
+    "CritMult": 1.5,
+    "ElementalResist": 7,
+    "PhysicalResist": 6,
+    "NecroticResist": 3,
+    "Resilience": 7,
+    "MpRegenPerTurn": 3,
+    "Initiative": 6,
+    "ActionPoints": 1,
+    "BonusActions": 1,
+    "ReactionPoints": 1,
+    "ClassAction": 1
+   },
+   "maxHP": 38,
+   "maxMP": 45,
+   "currentHP": 38,
+   "currentMP": 45,
+   "initiative": 6,
+   "statusResist": {
+    "fear": 0,
+    "charm": 0,
+    "poison": 0,
+    "stun": 0
+   },
+   "healing": {
+    "received": 1,
+    "given": 1
+   },
+   "modifiers": {
+    "race": {
+     "DEX": 3,
+     "INT": 3,
+     "STR": 1,
+     "CHA": -1
+    },
+    "class": {
+     "DEX": 2,
+     "CON": 1
+    },
+    "gear": {
+     "stats": {},
+     "derived": {},
+     "misc": {
+      "mpPerTurn": 3,
+      "skillCostReductionPct": 0,
+      "globalDamagePercent": 0,
+      "elementalDamagePercent": 0,
+      "necroticDamagePercent": 0,
+      "healingPercent": 0,
+      "resilience": 7,
+      "weaponBuildupPercent": {},
+      "physicalBuildupPercent": 0,
+      "elementalBuildupPercent": 0,
+      "necroticBuildupPercent": 0
+     }
+    }
+   },
+   "weaponSkills": [
+    "Feinting Jab",
+    "Barbed Arrow",
+    "Scorching Ray"
+   ],
+   "racialTraits": [
+    "Molten Reflex",
+    "Scale Slide"
+   ],
+   "classTalents": [],
+   "specializationTalents": [],
+   "weaponType": null,
+   "weapon": null,
+   "equipment": {
+    "weaponMain": {
+     "id": "hardened_dagger",
+     "instanceId": "itm_6aq2mdax"
+    },
+    "weaponOff": null,
+    "head": {
+     "id": "simple_helm_dex",
+     "instanceId": "itm_8mxy6iny",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Light Cap"
+    },
+    "chest": {
+     "id": "simple_chest_dex_int",
+     "instanceId": "itm_jx3yjcqd",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Balanced Robe"
+    },
+    "legs": {
+     "id": "simple_legs_dex",
+     "instanceId": "itm_q9ukuxpg",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Tight Slacks"
+    },
+    "gloves": {
+     "id": "simple_gloves_dex",
+     "instanceId": "itm_9a4n536m",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Leather Gloves"
+    },
+    "boots": {
+     "id": "simple_boots_con",
+     "instanceId": "itm_5m3xd7yj",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Sturdy Boots"
+    },
+    "ring": null,
+    "amulet": null
+   },
+   "inventory": [],
+   "location": {
+    "x": 0,
+    "y": 0
+   },
+   "status": "active",
+   "unspentStatPoints": 0,
+   "gearEffects": {
+    "mpPerTurn": 3,
+    "skillCostReductionPct": 0,
+    "globalDamagePercent": 0,
+    "elementalDamagePercent": 0,
+    "necroticDamagePercent": 0,
+    "healingPercent": 0,
+    "resilience": 7,
+    "weaponBuildupPercent": {},
+    "physicalBuildupPercent": 0,
+    "elementalBuildupPercent": 0,
+    "necroticBuildupPercent": 0,
+    "lifeStealPct": 0,
+    "physToElemPercent": 0,
+    "physToNecroPercent": 0,
+    "elemToNecroPercent": 0,
+    "initBonusOnBattleStart": 0,
+    "shieldPctOnBattleStart": 0,
+    "physBuildupOnPhysDmg": {},
+    "elemBuildupOnElemDmg": {},
+    "procDoubleDamage": 0,
+    "procHalfDamageTaken": 0,
+    "procHealOnHeal": 0,
+    "procElemFlat": 0,
+    "procNecroFlat": 0,
+    "procPhysFlat": 0
+   },
+   "resilience": 7,
+   "combatMods": {
+    "Accuracy": 0,
+    "Evasion": 0,
+    "Initiative": 0,
+    "CritChance": 0,
+    "CritMult": 0,
+    "ElementalResist": 0,
+    "PhysicalResist": 0,
+    "NecroticResist": 0
+   },
+   "classSkills": [],
+   "reactions": [],
+   "racialMovement": null
+  },
+  {
+   "id": "char_ri9dlk6u",
+   "instanceId": "char_ri9dlk6u",
+   "name": "Wren",
+   "race": "Elf",
+   "baseClass": "Scholar",
+   "specialization": null,
+   "level": 5,
+   "experience": 0,
+   "favor": 0,
+   "tribe": null,
+   "skin": "elf_portrait_1",
+   "skills": [
+    "move_step",
+    "basic_attack",
+    "basic_attack",
+    "conclave_circle",
+    "frost_swell",
+    "pestilent_word",
+    "arcane_needle",
+    "withering_rite",
+    "ignite",
+    "sigil_step",
+    "kindling_rite",
+    "cone_of_blight",
+    "ward_weave",
+    "rune_channel",
+    "ward_focus",
+    "flame_pillar",
+    "toxic_bloom",
+    "mana_fountain",
+    "curse_suppression",
+    "arcane_avalanche",
+    "restoration_light",
+    "curse_cinders",
+    "meditate",
+    "ignite"
+   ],
+   "cooldowns": {},
+   "baseStats": {
+    "STR": 5,
+    "DEX": 8,
+    "CON": 9,
+    "INT": 17,
+    "WIS": 14,
+    "CHA": 7
+   },
+   "permanentStats": {
+    "STR": 5,
+    "DEX": 10,
+    "CON": 8,
+    "INT": 22,
+    "WIS": 15,
+    "CHA": 9
+   },
+   "creationStats": {
+    "STR": 5,
+    "DEX": 8,
+    "CON": 9,
+    "INT": 17,
+    "WIS": 14,
+    "CHA": 7
+   },
+   "totalStats": {
+    "STR": 5,
+    "DEX": 11,
+    "CON": 8,
+    "INT": 25,
+    "WIS": 17,
+    "CHA": 9
+   },
+   "derived": {
+    "maxHP": 32,
+    "maxMP": 76,
+    "Accuracy": 11,
+    "Evasion": 0,
+    "CritChance": 14,
+    "CritMult": 1.5,
+    "ElementalResist": 13,
+    "PhysicalResist": 4,
+    "NecroticResist": 5,
+    "Resilience": 17,
+    "MpRegenPerTurn": 5,
+    "Initiative": 9,
+    "ActionPoints": 1,
+    "BonusActions": 1,
+    "ReactionPoints": 1,
+    "ClassAction": 1
+   },
+   "maxHP": 32,
+   "maxMP": 76,
+   "currentHP": 32,
+   "currentMP": 76,
+   "initiative": 9,
+   "statusResist": {
+    "fear": 0,
+    "charm": 0,
+    "poison": 0,
+    "stun": 0
+   },
+   "healing": {
+    "received": 1,
+    "given": 1
+   },
+   "modifiers": {
+    "race": {
+     "DEX": 2,
+     "INT": 3,
+     "CHA": 2,
+     "CON": -1
+    },
+    "class": {
+     "INT": 2,
+     "WIS": 1
+    },
+    "gear": {
+     "stats": {},
+     "derived": {},
+     "misc": {
+      "mpPerTurn": 5,
+      "skillCostReductionPct": 0,
+      "globalDamagePercent": 0,
+      "elementalDamagePercent": 0,
+      "necroticDamagePercent": 0,
+      "healingPercent": 0,
+      "resilience": 17,
+      "weaponBuildupPercent": {},
+      "physicalBuildupPercent": 0,
+      "elementalBuildupPercent": 0,
+      "necroticBuildupPercent": 0
+     }
+    }
+   },
+   "weaponSkills": [
+    "Feinting Jab",
+    "Scorching Ray"
+   ],
+   "racialTraits": [
+    "Graceful Deflection",
+    "Feystride"
+   ],
+   "classTalents": [],
+   "specializationTalents": [],
+   "weaponType": null,
+   "weapon": null,
+   "equipment": {
+    "weaponMain": {
+     "id": "hardened_staff",
+     "instanceId": "itm_cunb0tus"
+    },
+    "weaponOff": null,
+    "head": {
+     "id": "simple_helm_int",
+     "instanceId": "itm_inul7kg1",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Mystic Hood"
+    },
+    "chest": {
+     "id": "simple_chest_dex_int",
+     "instanceId": "itm_73hmw9ks",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Balanced Robe"
+    },
+    "legs": {
+     "id": "simple_legs_wis",
+     "instanceId": "itm_d8vh52iw",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Seer's Wraps"
+    },
+    "gloves": {
+     "id": "simple_gloves_int",
+     "instanceId": "itm_ak1qx59d",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Mage Mitts"
+    },
+    "boots": {
+     "id": "simple_boots_wis",
+     "instanceId": "itm_j90t29ip",
+     "rarity": "common",
+     "itemLevel": null,
+     "prefixes": [],
+     "suffixes": [],
+     "instanceMods": {
+      "stats": {},
+      "derived": {},
+      "damageFlat": {
+       "min": 0,
+       "max": 0
+      },
+      "damagePercent": {
+       "weapon": 0
+      },
+      "elementalFlat": {},
+      "misc": {
+       "mpPerTurn": 0,
+       "skillCostReductionPct": 0,
+       "globalDamagePercent": 0,
+       "elementalDamagePercent": 0,
+       "necroticDamagePercent": 0,
+       "healingPercent": 0,
+       "resilience": 0,
+       "buildupPercent": {},
+       "physicalBuildupPercent": 0,
+       "elementalBuildupPercent": 0,
+       "necroticBuildupPercent": 0,
+       "physToElemPercent": 0,
+       "physToNecroPercent": 0,
+       "elemToNecroPercent": 0,
+       "initBonusOnBattleStart": 0,
+       "shieldPctOnBattleStart": 0,
+       "physBuildupOnPhysDmg": {},
+       "elemBuildupOnElemDmg": {},
+       "procDoubleDamage": 0,
+       "procHalfDamageTaken": 0,
+       "procHealOnHeal": 0,
+       "procElemFlat": 0,
+       "procNecroFlat": 0,
+       "procPhysFlat": 0
+      }
+     },
+     "displayName": "Pilgrim Sandals"
+    },
+    "ring": null,
+    "amulet": null
+   },
+   "inventory": [],
+   "location": {
+    "x": 0,
+    "y": 0
+   },
+   "status": "active",
+   "unspentStatPoints": 0,
+   "gearEffects": {
+    "mpPerTurn": 5,
+    "skillCostReductionPct": 0,
+    "globalDamagePercent": 0,
+    "elementalDamagePercent": 0,
+    "necroticDamagePercent": 0,
+    "healingPercent": 0,
+    "resilience": 17,
+    "weaponBuildupPercent": {},
+    "physicalBuildupPercent": 0,
+    "elementalBuildupPercent": 0,
+    "necroticBuildupPercent": 0,
+    "lifeStealPct": 0,
+    "physToElemPercent": 0,
+    "physToNecroPercent": 0,
+    "elemToNecroPercent": 0,
+    "initBonusOnBattleStart": 0,
+    "shieldPctOnBattleStart": 0,
+    "physBuildupOnPhysDmg": {},
+    "elemBuildupOnElemDmg": {},
+    "procDoubleDamage": 0,
+    "procHalfDamageTaken": 0,
+    "procHealOnHeal": 0,
+    "procElemFlat": 0,
+    "procNecroFlat": 0,
+    "procPhysFlat": 0
+   },
+   "resilience": 17,
+   "combatMods": {
+    "Accuracy": 0,
+    "Evasion": 0,
+    "Initiative": 0,
+    "CritChance": 0,
+    "CritMult": 0,
+    "ElementalResist": 0,
+    "PhysicalResist": 0,
+    "NecroticResist": 0
+   },
+   "classSkills": [],
+   "reactions": [],
+   "racialMovement": null
+  }
+ ],
+ "slain": [],
+ "partyIds": [
+  "char_0f63hnws",
+  "char_gs8jsexo",
+  "char_ri9dlk6u"
+ ],
+ "inventory": [
+  {
+   "id": "hunt_plan",
+   "instanceId": "itm_tslu1l8m",
+   "rarity": "rare",
+   "itemLevel": 1,
+   "prefixes": [],
+   "suffixes": [],
+   "instanceMods": {
+    "stats": {},
+    "derived": {},
+    "damageFlat": {
+     "min": 0,
+     "max": 0
+    },
+    "damagePercent": {
+     "weapon": 0
+    },
+    "elementalFlat": {},
+    "misc": {
+     "mpPerTurn": 0,
+     "skillCostReductionPct": 0,
+     "globalDamagePercent": 0,
+     "elementalDamagePercent": 0,
+     "necroticDamagePercent": 0,
+     "healingPercent": 0,
+     "resilience": 0,
+     "buildupPercent": {},
+     "physicalBuildupPercent": 0,
+     "elementalBuildupPercent": 0,
+     "necroticBuildupPercent": 0,
+     "physToElemPercent": 0,
+     "physToNecroPercent": 0,
+     "elemToNecroPercent": 0,
+     "initBonusOnBattleStart": 0,
+     "shieldPctOnBattleStart": 0,
+     "physBuildupOnPhysDmg": {},
+     "elemBuildupOnElemDmg": {},
+     "procDoubleDamage": 0,
+     "procHalfDamageTaken": 0,
+     "procHealOnHeal": 0,
+     "procElemFlat": 0,
+     "procNecroFlat": 0,
+     "procPhysFlat": 0
+    }
+   },
+   "displayName": "Hunt Plan"
+  }
+ ],
+ "tribeStash": {},
+ "currentScene": "MainMenu",
+ "quests": [],
+ "flags": {},
+ "progression": {
+  "completedScenarios": [],
+  "huntTickets": 4,
+  "reckoningMarks": 0,
+  "tribeTickets": 0,
+  "huntPoints": 37,
+  "questFlags": [],
+  "tribe": null,
+  "tribeVendorStock": {},
+  "completedQuestSteps": [],
+  "tribeRep": {
+   "elseth": 0,
+   "styx": 5,
+   "lesse": 0,
+   "zafaar": -5
+  },
+  "tribeIntel": {
+   "elseth": 0,
+   "styx": 0,
+   "lesse": 0,
+   "zafaar": 0
+  },
+  "nightsElapsed": 0,
+  "daysElapsed": 0,
+  "tribeHuntPoints": {
+   "elseth": 0,
+   "styx": 0,
+   "lesse": 0,
+   "zafaar": 0
+  },
+  "tribeHuntingParties": {
+   "styx": {},
+   "zafaar": {},
+   "elseth": {},
+   "lesse": {}
+  },
+  "partyGear": {}
+ },
+ "partyOrder": [],
+ "partySlots": {}
+}

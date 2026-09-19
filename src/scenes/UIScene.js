@@ -1068,6 +1068,8 @@ Any unsaved progress will be lost.`,
                 GameState.load(sl);
                 this.cleanupPopup();
                 this.refreshUI?.();
+                // The loaded save carries its own hunt, or none.
+                if (this.scene.isActive('TownScene')) this.scene.get('TownScene')._syncHuntScreen?.();
               },
               { dimW: panelW + 40, dimH: panelH + 20 }
             );

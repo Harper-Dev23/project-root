@@ -286,11 +286,21 @@ function describeWriteError(e) {
 // Bump SAVE_VERSION whenever the shape of the payload changes, and add an entry
 // to MIGRATIONS that upgrades a save from (n-1) to n. Migrations run in order,
 // so a very old save walks forward one step at a time.
-export const SAVE_VERSION = 3;
+//
+// Once a version has been pushed, players hold saves at that version, and a
+// migration that already ran will never run again for them. So a later change
+// to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
+export const SAVE_VERSION = 4;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
-// e.g. 4: (data) => { data.newField = []; return data; }
-const MIGRATIONS = {};
+const MIGRATIONS = {
+  // v4: a hunt in progress is saved, as one `hunt` field (null when there is
+  // none). Before v4 hunts were never saved, so every v3 save has none.
+  4: (data) => {
+    if (!('hunt' in data)) data.hunt = null;
+    return data;
+  },
+};
 
 /**
  * Brings a parsed save payload up to SAVE_VERSION.
@@ -338,6 +348,14 @@ const GameState = {
   party: [],
   slain: [], // characters lost to a full party wipe — shown in CampRosterOverlay's Slain tab
   inventory: [], // GLOBAL inventory shared between characters
+
+  // The hunt in progress. GameState cannot import HuntManager (HuntManager
+  // imports GameState), so HuntManager attaches itself through attachHunt().
+  // `_rawHunt` is the hunt exactly as last loaded; it is written back unchanged
+  // when nothing is attached (a tool that never imports HuntManager), so a
+  // save/load round trip can never drop a hunt it did not understand.
+  _huntHooks: null,
+  _rawHunt: null,
   tribeStash: {}, // keyed by tribe id → ItemInstance[]
 
   currentScene: 'MainMenu',
@@ -522,6 +540,15 @@ const GameState = {
   },
 
 
+  /**
+   * Called once, by HuntManager, with { serialize(), restore(data) }. Restores
+   * whatever hunt is already loaded, so attach order never matters.
+   */
+  attachHunt(hooks) {
+    this._huntHooks = hooks;
+    hooks.restore(this._rawHunt);
+  },
+
   /* --------------------- Save / Load ---------------------- */
   save(slot) {
     if (!slot) return console.warn('Save slot required');
@@ -542,7 +569,9 @@ const GameState = {
       progression: ProgressionManager.serialize(),
 
       partyOrder: Array.isArray(this.partyOrder) ? this.partyOrder.slice() : [],
-      partySlots: this.partySlots ? { ...this.partySlots } : {}
+      partySlots: this.partySlots ? { ...this.partySlots } : {},
+
+      hunt: this._huntHooks ? this._huntHooks.serialize() : this._rawHunt,
     };
     // NOTE: no unguarded JSON.stringify above the try/catch below. A debug
     // snapshot line used to live here and was what actually took the game
@@ -635,6 +664,10 @@ const GameState = {
     // NEW: restore slot/order metadata (both optional)
     this.partyOrder = Array.isArray(data.partyOrder) ? data.partyOrder.slice() : [];
     this.partySlots = (data.partySlots && typeof data.partySlots === 'object') ? { ...data.partySlots } : {};
+
+    // Last, so the party a restored hunt reads is this save's party.
+    this._rawHunt = data.hunt ?? null;
+    this._huntHooks?.restore(this._rawHunt);
 
     console.log(`Loaded ← ${slot}`);
     return true;
@@ -749,6 +782,8 @@ const GameState = {
     this.quests = [];
     this.flags = {};
     this.currentScene = 'MainMenu';
+    this._rawHunt = null;
+    this._huntHooks?.restore(null);
   },
 
   /* -------------------- Scene Hooks ----------------------- */

@@ -28,11 +28,14 @@ const JUMP_PER_VALUE = 4; // pixels of extra jump height per point rolled
 const JUMP_DURATION_MS = 550;
 
 export default class DiceToken {
-  constructor(scene, { x, y, width, height, sides = 20, depth = 0, onSettled }) {
+  // `value` is the face to land on, when the caller has already rolled it (a
+  // hunt check's die is rolled with the hunt's saved stream). Without one the
+  // token picks its own, as it always has.
+  constructor(scene, { x, y, width, height, sides = 20, depth = 0, value = null, onSettled }) {
     this.scene = scene;
     this.onSettled = onSettled;
     this._rolling = false;
-    this.value = Phaser.Math.Between(1, sides);
+    this.value = Number.isInteger(value) && value >= 1 && value <= sides ? value : Phaser.Math.Between(1, sides);
 
     this.boxOutline = scene.add.rectangle(x, y, width, height)
       .setStrokeStyle(2, 0x6a5a3a, 0.8)

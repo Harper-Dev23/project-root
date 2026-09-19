@@ -33,9 +33,10 @@ export const WEATHER_TYPES = [
   },
 ];
 
-export function rollWeather() {
+// `rng` is the hunt's seeded stream; see EncounterRoller.roll for why.
+export function rollWeather(rng = Math.random) {
   const totalWeight = WEATHER_TYPES.reduce((sum, w) => sum + w.weight, 0);
-  let roll = Math.random() * totalWeight;
+  let roll = rng() * totalWeight;
   for (const weather of WEATHER_TYPES) {
     roll -= weather.weight;
     if (roll <= 0) return weather;

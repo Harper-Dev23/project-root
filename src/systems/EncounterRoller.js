@@ -32,8 +32,8 @@ const EVENT_CATEGORIES = ['environmental', 'microZone', 'flexible'];
 // (or delete this block) once you're done testing.
 const DEV_PRIORITIZE_CHECK_EVENTS = false;
 
-function pickEntry(entries) {
-  return entries[Math.floor(Math.random() * entries.length)];
+function pickEntry(entries, rng = Math.random) {
+  return entries[Math.floor(rng() * entries.length)];
 }
 
 function availableNow(entry, isNight) {
@@ -47,21 +47,25 @@ export const EncounterRoller = {
    * Rolls one Hunt turn result for the given zone. Depth is accepted for
    * future weighting (deeper = rarer categories more likely) but isn't used
    * yet. Returns null if the zone has nothing rollable right now.
+   *
+   * `rng` is the hunt's own seeded stream (see createHunt in HuntManager.js),
+   * so a saved hunt rolls the same thing after a reload. Defaults to
+   * Math.random for any caller without one.
    */
-  roll(zoneId, _depth = 0, beastChanceWeight = 0, isNight = false) {
+  roll(zoneId, _depth = 0, beastChanceWeight = 0, isNight = false, rng = Math.random) {
     const zone = getZone(zoneId);
     if (!zone) return null;
 
     const table = zone.encounterTable || {};
 
-    if (Math.random() < ENCOUNTER_CHANCE) {
+    if (rng() < ENCOUNTER_CHANCE) {
       // ── Encounter (fight): beast vs cultist ──────────────────────────────
       const beastWeight = 1 + Math.max(0, beastChanceWeight);
-      const isBeast = Math.random() * (beastWeight + 1) < beastWeight;
+      const isBeast = rng() * (beastWeight + 1) < beastWeight;
       const type = isBeast ? 'beast' : 'cultist';
 
       const flavorPool = table[type === 'beast' ? 'beasts' : 'cultists'] || [];
-      const entry = flavorPool.length > 0 ? pickEntry(flavorPool) : null;
+      const entry = flavorPool.length > 0 ? pickEntry(flavorPool, rng) : null;
       const scenarioPool = FIGHT_SCENARIOS[type];
 
       return {
@@ -69,7 +73,7 @@ export const EncounterRoller = {
         type,
         source: zoneId,
         label: entry?.label || 'Something stirs nearby.',
-        scenarioId: pickEntry(scenarioPool),
+        scenarioId: pickEntry(scenarioPool, rng),
       };
     }
 
@@ -88,7 +92,7 @@ export const EncounterRoller = {
       if (checksOnly.length > 0) pool = checksOnly;
     }
 
-    const { category, entry } = pickEntry(pool);
+    const { category, entry } = pickEntry(pool, rng);
 
     return {
       kind: 'event',

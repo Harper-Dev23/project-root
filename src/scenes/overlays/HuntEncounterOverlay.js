@@ -6,6 +6,8 @@
 //
 // Once you click Engage there's no backing out — it stops HuntHubOverlay and
 // launches CombatScene in 'hunt' mode, which can't be fled mid-fight.
+// Engaging is saved before the fight starts, so reloading mid-fight resolves
+// it as a flee rather than offering a second attempt (HuntManager.js).
 //
 // Pending EVENTS (non-fight) skip this screen entirely and go straight to
 // HuntEventOverlay — see HuntHubOverlay._investigate().
@@ -17,6 +19,7 @@ import { setupSceneCursor } from '../../ui/cursor.js';
 import { createButton } from '../../ui/Button.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import GameState from '../../systems/GameState.js';
+import { HuntManager } from '../../systems/HuntManager.js';
 
 export default class HuntEncounterOverlay extends Phaser.Scene {
   constructor() {
@@ -58,6 +61,8 @@ export default class HuntEncounterOverlay extends Phaser.Scene {
 
   _engage() {
     SoundManager.play('select');
+    HuntManager.engagePending();
+    GameState.save('autosave');
     // HuntHubOverlay is paused (not running) at this point — Phaser's sleep()
     // silently no-ops on a non-running scene, leaving it paused-but-visible
     // on top of combat. Stop it outright instead; CombatScene re-launches it

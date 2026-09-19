@@ -26,6 +26,18 @@ The snapshot records damage numbers, meters and refusals across every skill.
 none of which the snapshot can see, because it calls `_resolveAction` directly
 and records outcomes rather than permissions.
 
+## Hunts
+
+`hunt.mjs` is exploration's counterpart: a golden master of whole scripted
+hunts (`tools/snapshots/hunt-golden.json`) plus the save proofs, run through the
+real `createHunt`, `GameState.save` and `GameState.load`. It needs no
+`CombatScene`. A change to hunt rules, zone tables or weather moves its golden on
+purpose; regenerate with `--json` in the same commit. A combat change should
+never move it, and a hunt change should never move the combat golden.
+
+`tools/snapshots/save-v3-fixture.json` is a real save written by the v3 build,
+before hunts were saved. Keep it: it is what proves old saves still migrate.
+
 ## How it works
 
 `CombatScene.prototype` carries every method. So:

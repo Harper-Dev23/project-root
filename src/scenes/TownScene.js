@@ -16,6 +16,7 @@ import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
+import { HuntManager } from '../systems/HuntManager.js';
 
 // ---------------------------------------------------------------------------
 // Quest flag config — maps flag IDs to the world coordinates of the "!" marker
@@ -903,6 +904,32 @@ export default class TownScene extends Phaser.Scene {
 
     // Show quest flags that are already active on first load.
     this._buildQuestFlags();
+
+    // A loaded save can be mid-hunt. Deferred a tick so UIScene, launched
+    // right after this scene, exists for _enterHuntGate to layer against.
+    this.time.delayedCall(0, () => this._syncHuntScreen());
+  }
+
+  /**
+   * Puts the hunt screens in step with HuntManager after the hunt may have
+   * changed underneath them: a fresh Town after loading a save that is
+   * mid-hunt, or a save loaded from the in-town menu (a different hunt, or
+   * none). Hunts are saved (HuntManager.js), so Town must never sit open with
+   * a hunt live behind it, nor show a hunt the loaded save does not have.
+   */
+  _syncHuntScreen() {
+    const HUNT_SCREENS = ['HuntEncounterOverlay', 'HuntEventOverlay', 'HuntMapOverlay', 'HuntPlanPickerOverlay', 'HuntHubOverlay'];
+    const up = (key) => this.scene.isActive(key) || this.scene.isPaused(key);
+    const open = HUNT_SCREENS.filter(up);
+    // Stopped outright: they may be showing a hunt that is no longer loaded.
+    open.forEach(key => this.scene.stop(key));
+    if (HuntManager.isActive()) {
+      this._enterHuntGate();
+    } else if (open.length) {
+      // HuntHubOverlay disables Town input while open; stopping it bypasses
+      // its own _close(), which is what normally gives input back.
+      this.input.enabled = true;
+    }
   }
 
   // ===========================================================

@@ -12,6 +12,10 @@
 //   'pick'    — no zone chosen yet
 //   'loadout' — zone chosen, supplies/Hunt Plan being configured, not departed
 //   'hunting' — HuntManager is active
+//
+// A hunt is saved, so every action that changes it autosaves straight after:
+// departing, advancing, and resolving an event. A reload then lands the
+// player back in the hunt exactly where they were (see HuntManager.js).
 
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
@@ -193,6 +197,9 @@ export default class HuntHubOverlay extends Phaser.Scene {
       this.huntPlanInstance = null;
     }
 
+    // One write for the tickets, the plan and the new hunt, so a reload can
+    // never refund the plan while keeping the hunt, or the other way round.
+    GameState.save('autosave');
     this._render();
   }
 
@@ -259,6 +266,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
   _advance() {
     SoundManager.play('select');
     HuntManager.advance();
+    GameState.save('autosave');
     this._render();
   }
 
@@ -275,6 +283,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
   /** Called by HuntEncounterOverlay once it's worked out a choice/check/puzzle outcome. */
   onEncounterResolved(outcome) {
     HuntManager.resolveEncounter(outcome);
+    GameState.save('autosave');
     this._render();
   }
 
@@ -283,6 +292,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const summary = HuntManager.getState();
     HuntManager.end();
     GameState.restorePartyToFull();
+    GameState.save('autosave');
     this.zoneId = null;
     this.ticketsToSpend = 0;
     this.huntPlanInstance = null;

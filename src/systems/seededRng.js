@@ -31,14 +31,31 @@
  * means the same sequence everywhere in this project.
  */
 export function makeRng(seed = 1) {
-  let a = (seed >>> 0) || 1;   // a zero seed degenerates; 1 is as good as any
-  return function next() {
+  return rngFromState((seed >>> 0) || 1);   // a zero seed degenerates; 1 is as good as any
+}
+
+/**
+ * Rebuild a stream from a state read off another one with `getState()`. The
+ * rebuilt stream yields exactly what the original would have yielded next.
+ *
+ * This is what lets a saved hunt carry on where it stopped. Without it a
+ * reload is a free re-roll of whatever was coming next -- every event and every
+ * drop. The state is the whole generator: mulberry32 keeps one 32-bit integer.
+ *
+ * Deliberately separate from makeRng: a SEED goes through the zero guard, a
+ * STATE must not. State 0 is just a position in the sequence.
+ */
+export function rngFromState(state) {
+  let a = state >>> 0;
+  function next() {
     a = (a + 0x6D2B79F5) >>> 0;
     let t = a;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  }
+  next.getState = () => a;
+  return next;
 }
 
 /**
@@ -54,4 +71,4 @@ export function isSeed(v) {
   return Number.isFinite(v);
 }
 
-export default { makeRng, randomSeed, isSeed };
+export default { makeRng, rngFromState, randomSeed, isSeed };
