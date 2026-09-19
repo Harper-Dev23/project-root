@@ -24,7 +24,7 @@ const NL = '\n';
 const IF = await import('../src/systems/ItemFactory.js');
 const { Items: ITEMS } = await import('../data/items.js');
 const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
-const { getXPNeededForLevel, LEVEL_CAP } = await import('../data/xpTable.js');
+const { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP } = await import('../data/xpTable.js');
 const PM = (await import('../src/systems/ProgressionManager.js')).default;
 
 const { AFFIX_TIER_RULES, BASE_TIER_RULES, getAffixIndex } = IF;
@@ -219,8 +219,11 @@ function progressionBody() {
   out.push('## The level cap' + NL);
   out.push('A Hunter can reach **level ' + LEVEL_CAP + '**. Beyond that, experience stops '
     + 'accruing entirely — the bar sits full rather than filling a counter that can '
-    + 'never be spent. The cap exists because the Reckoning tiers pay out on **every** '
-    + 'clear, not just the first, so without one the ladder could be run indefinitely.' + NL);
+    + 'never be spent.' + NL);
+  out.push('Training takes a Hunter only as far as **level ' + TRAINING_LEVEL_CAP + '**. '
+    + 'The Reckoning tiers pay out on **every** clear, not just the first, so the pit '
+    + 'could otherwise be run all the way to the cap; past level ' + TRAINING_LEVEL_CAP
+    + ', experience comes from hunting.' + NL);
 
   const rows = ['| Level | XP to reach it | Cumulative |', '|---|---|---|'];
   let cum = 0;
@@ -255,7 +258,7 @@ function progressionBody() {
 
   // Which routes actually reach the cap — computed, not asserted.
   const total = ids => ids.reduce((t, id) => t + ((COMBAT_SCENARIOS[id] || {}).xpReward || 0), 0);
-  const levelFor = xp => { let l = 1, r = xp; while (l < LEVEL_CAP && r >= getXPNeededForLevel(l)) { r -= getXPNeededForLevel(l); l++; } return l; };
+  const levelFor = xp => { let l = 1, r = xp; while (l < TRAINING_LEVEL_CAP && r >= getXPNeededForLevel(l)) { r -= getXPNeededForLevel(l); l++; } return l; };
   const tiersOf = (enc, n) => Array.from({ length: n }, (_, i) => `training_encounter_${enc}_reckoning_${i + 1}`);
   const routes = [
     ['The base six alone', base],
@@ -263,7 +266,7 @@ function progressionBody() {
     ['Base six + all of IV and V’s Reckoning', [...base, ...tiersOf(4, 3), ...tiersOf(5, 3)]],
     ['Base six + only II and III’s Reckoning', [...base, ...tiersOf(2, 3), ...tiersOf(3, 3)]],
   ];
-  out.push('### Routes to the cap' + NL);
+  out.push('### Routes to level ' + TRAINING_LEVEL_CAP + NL);
   out.push('Clearing everything once is not the only way there. Each of these is a full '
     + 'first clear of the listed fights:' + NL);
   const rrows = ['| Route | XP | Reaches |', '|---|---|---|'];
@@ -272,7 +275,7 @@ function progressionBody() {
     rrows.push('| ' + lbl + ' | ' + t + ' | level ' + levelFor(t) + ' |');
   });
   out.push(rrows.join(NL) + NL);
-  out.push('Anything short of the cap can be closed by repeating a tier — they pay every time.' + NL);
+  out.push('Anything short of level ' + TRAINING_LEVEL_CAP + ' can be closed by repeating a tier — they pay every time.' + NL);
 
   out.push('## Currencies' + NL);
   out.push('**Hunt Tickets** are earned on the *first* clear of a fight and spent at the '

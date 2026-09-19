@@ -1,5 +1,5 @@
 import { SKILLS } from '../../data/skills.js'; // adjust path if needed
-import { getXPNeededForLevel, LEVEL_CAP } from '../../data/xpTable.js';
+import { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP, xpShare } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
@@ -472,6 +472,53 @@ const GameState = {
       summaries.push(summary);
     });
     return { leveledUpNames, summaries };
+  },
+
+  /**
+   * Training (pit) XP: awardXPTo, but it stops at TRAINING_LEVEL_CAP. Levels
+   * past it come from hunts (SCALING: levelling is counted in hunts), so the
+   * repeatable Reckoning tiers can no longer be ground to the real cap.
+   *
+   * Nothing past the training cap is kept: a hunter at or above it earns
+   * nothing here, and one who reaches it here keeps none of the overflow —
+   * otherwise pit XP would bank toward the next level and a hunt would cash
+   * it in. XP a hunter already has from hunts is left alone.
+   */
+  awardTrainingXPTo(chars, amount) {
+    const leveledUpNames = [];
+    const summaries = [];
+    if (amount <= 0 || !Array.isArray(chars)) return { leveledUpNames, summaries };
+
+    const below = [];
+    chars.forEach(char => {
+      if (!char || char.status === 'dead') return;
+      if (char.level >= TRAINING_LEVEL_CAP) {
+        summaries.push(`${char.name} has outgrown training (Lv ${TRAINING_LEVEL_CAP}+) - hunt to grow further.`);
+      } else {
+        below.push(char);
+      }
+    });
+    // Each hunter's award is clamped to exactly what reaches the training cap,
+    // so one who gets there lands on 0 XP into the next level.
+    below.forEach(char => {
+      let room = -(char.experience || 0);
+      for (let l = char.level; l < TRAINING_LEVEL_CAP; l++) room += getXPNeededForLevel(l);
+      const r = this.awardXPTo([char], Math.min(amount, room));
+      leveledUpNames.push(...r.leveledUpNames);
+      summaries.push(...r.summaries);
+    });
+    return { leveledUpNames, summaries };
+  },
+
+  /**
+   * Hunt XP: ONE pool, split between the hunters with a floor (xpShare,
+   * data/xpTable.js), so a small party levels faster than a full one. The
+   * split is over the whole party; the living members are paid, through
+   * awardXPTo so levelling still lives in one place.
+   */
+  awardXPPool(pool, party = this.party) {
+    const members = Array.isArray(party) ? party : [];
+    return this.awardXPTo(members, xpShare(pool, members.length));
   },
 
   /** Has THIS character personally cleared this scenario before? */

@@ -1,0 +1,142 @@
+{
+ "huntItemLevel": {
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+  "5": 5,
+  "6": 6,
+  "7": 7,
+  "8": 8,
+  "9": 9,
+  "10": 10
+ },
+ "huntItemLevelEdges": {
+  "0": 1,
+  "11": 10,
+  "2.4": 2,
+  "undefined": 1,
+  "NaN": 1
+ },
+ "zoneDanger": {
+  "reeds_of_gethsemane": 1,
+  "bay_of_solace": 1
+ },
+ "xpShareFloorPct": 25,
+ "xpShare": {
+  "20": {
+   "1": 20,
+   "2": 10,
+   "3": 7,
+   "4": 5,
+   "5": 5,
+   "6": 5
+  },
+  "100": {
+   "1": 100,
+   "2": 50,
+   "3": 33,
+   "4": 25,
+   "5": 25,
+   "6": 25
+  }
+ },
+ "xpLanded20": {
+  "1": [
+   20
+  ],
+  "2": [
+   10,
+   10
+  ],
+  "3": [
+   7,
+   7,
+   7
+  ],
+  "4": [
+   5,
+   5,
+   5,
+   5
+  ],
+  "5": [
+   5,
+   5,
+   5,
+   5,
+   5
+  ],
+  "6": [
+   5,
+   5,
+   5,
+   5,
+   5,
+   5
+  ]
+ },
+ "huntFight": {
+  "pool": 20,
+  "partySize": 4,
+  "each": [
+   5,
+   5,
+   5,
+   5
+  ]
+ },
+ "huntGearItemLevel": {
+  "1": 1,
+  "7": 7,
+  "10": 10,
+  "undefined": 1
+ },
+ "levelCap": 10,
+ "xpToNext": {
+  "1": 100,
+  "2": 150,
+  "3": 200,
+  "4": 250,
+  "5": 300,
+  "6": 350,
+  "7": 400,
+  "8": 450,
+  "9": 500,
+  "10": 550
+ },
+ "xpTotalTo10": 2700,
+ "trainingCap": {
+  "cap": 5,
+  "fromLevel1": {
+   "level": 5,
+   "experience": 0
+  },
+  "level4Plus100": {
+   "level": 5,
+   "experience": 0
+  },
+  "level5WithHuntXP": {
+   "level": 5,
+   "experience": 120
+  },
+  "thenHuntPool200": {
+   "level": 6,
+   "experience": 20
+  }
+ },
+ "trainingVictory": [
+  {
+   "level": 5,
+   "experience": 0
+  },
+  {
+   "level": 5,
+   "experience": 0
+  }
+ ],
+ "pinnedLevel5After5xp": {
+  "level": 6,
+  "experience": 5
+ }
+}

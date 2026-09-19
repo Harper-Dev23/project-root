@@ -773,9 +773,8 @@ export const BASE_TIER_RULES = {
 };
 
 export const AFFIX_TIER_RULES = {
-  // With the player cap at 5 (LEVEL_CAP, data/xpTable.js), T2 can roll from
-  // party-level sources such as the Bonepile; T1 stays out of reach until
-  // something rolls at item level 8.
+  // With the player cap at 10 (LEVEL_CAP, data/xpTable.js), party-level
+  // sources such as the Bonepile reach T2 at party level 5 and T1 at 8.
   1: { minItemLevel: 8, weight: 10,  perLevel: 9 },
   2: { minItemLevel: 5, weight: 18,  perLevel: 8 },
   // Pitched for a 1-10 player-level range, one unlock roughly every other

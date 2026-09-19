@@ -20,6 +20,8 @@ import { createButton } from '../../ui/Button.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import GameState from '../../systems/GameState.js';
 import { HuntManager } from '../../systems/HuntManager.js';
+import { huntItemLevel } from '../../systems/HuntScaling.js';
+import { getZone } from '../../../data/zones.js';
 
 export default class HuntEncounterOverlay extends Phaser.Scene {
   constructor() {
@@ -74,7 +76,12 @@ export default class HuntEncounterOverlay extends Phaser.Scene {
       mode: 'hunt',
       party: GameState.party,
       scenarioId: this.encounter.scenarioId,
-      huntContext: { type: this.encounter.type },
+      // The fight's gear rolls at the region's item level (danger = item
+      // level). CombatScene reads it in _equipEnemyItem.
+      huntContext: {
+        type: this.encounter.type,
+        itemLevel: huntItemLevel(getZone(HuntManager.getState()?.zoneId)?.danger),
+      },
     });
   }
 

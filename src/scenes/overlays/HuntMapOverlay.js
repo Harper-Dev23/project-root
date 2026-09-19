@@ -156,7 +156,7 @@ export default class HuntMapOverlay extends Phaser.Scene {
     const zone = region.huntZoneId ? getZone(region.huntZoneId) : null;
 
     add(this.add.text(this._detailX, y,
-      zone ? `Danger: ${'🟢'.repeat(zone.dangerTier)}  ·  ${zone.terrain}` : region.terrain, {
+      zone ? `Danger ${zone.danger}  ·  ${zone.terrain}` : region.terrain, {
         fontSize: '12px', color: '#8a8a96',
       }).setDepth(d + 2));
     y += 26;

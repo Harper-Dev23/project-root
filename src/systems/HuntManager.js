@@ -96,8 +96,9 @@ export const GAME_WORLD = {
       if (playerPartyId) ProgressionManager.addPartyPoints(ProgressionManager.tribe, playerPartyId, amount);
     }
   },
-  awardXP(amount) {
-    GameState.awardPartyXP(amount);
+  awardXP(pool) {
+    // A hunt's XP is a pool split across the party, not paid to each hunter.
+    GameState.awardXPPool(pool);
   },
   party() {
     return GameState.party || [];

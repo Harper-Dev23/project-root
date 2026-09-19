@@ -42,7 +42,9 @@ The Awakening is **not yet implemented**. The paths, their names and their shape
 
 ## The level cap
 
-A Hunter can reach **level 5**. Beyond that, experience stops accruing entirely — the bar sits full rather than filling a counter that can never be spent. The cap exists because the Reckoning tiers pay out on **every** clear, not just the first, so without one the ladder could be run indefinitely.
+A Hunter can reach **level 10**. Beyond that, experience stops accruing entirely — the bar sits full rather than filling a counter that can never be spent.
+
+Training takes a Hunter only as far as **level 5**. The Reckoning tiers pay out on **every** clear, not just the first, so the pit could otherwise be run all the way to the cap; past level 5, experience comes from hunting.
 
 | Level | XP to reach it | Cumulative |
 |---|---|---|
@@ -50,6 +52,11 @@ A Hunter can reach **level 5**. Beyond that, experience stops accruing entirely 
 | 3 | 150 | 250 |
 | 4 | 200 | 450 |
 | 5 | 250 | 700 |
+| 6 | 300 | 1000 |
+| 7 | 350 | 1350 |
+| 8 | 400 | 1750 |
+| 9 | 450 | 2200 |
+| 10 | 500 | 2700 |
 
 ## Where experience comes from
 
@@ -81,7 +88,7 @@ Every fight in the pit is worth a fixed amount, awarded each time it is cleared.
 | Gorrek — Reckoning IV | 105 | 14 |
 | Gorrek — Reckoning V | 120 | 18 |
 
-### Routes to the cap
+### Routes to level 5
 
 Clearing everything once is not the only way there. Each of these is a full first clear of the listed fights:
 
@@ -92,7 +99,7 @@ Clearing everything once is not the only way there. Each of these is a full firs
 | Base six + all of IV and V’s Reckoning | 730 | level 5 |
 | Base six + only II and III’s Reckoning | 490 | level 4 |
 
-Anything short of the cap can be closed by repeating a tier — they pay every time.
+Anything short of level 5 can be closed by repeating a tier — they pay every time.
 
 ## Currencies
 

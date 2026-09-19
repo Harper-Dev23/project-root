@@ -10,6 +10,9 @@ import ProgressionManager from '../systems/ProgressionManager.js';
 import { anyQuestTabHasNew } from './overlays/QuestOverlay.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 import Diagnostics from '../systems/Diagnostics.js';
+// The real curve. This scene used to keep its own copy (+150 a level against
+// the real +50), so the sidebar XP bar disagreed with actual levelling.
+import { getXPNeededForLevel } from '../../data/xpTable.js';
 
 // Every menu overlay scene key. Hoisted to module scope (was a local inside
 // create()) so other scenes can ask "is a menu already open?" before layering
@@ -20,10 +23,6 @@ export const MENU_OVERLAY_KEYS = [
   'TribeRelationsOverlay', 'PartyManagementScene', 'CampRosterOverlay',
 ];
 
-function getXPNeededForLevel(level) {
-  // Example XP curve; adjust as needed
-  return 100 + (level - 1) * 150;
-}
 
 export default class UIScene extends Phaser.Scene {
   constructor() {

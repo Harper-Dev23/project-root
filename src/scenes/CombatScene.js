@@ -2108,7 +2108,9 @@ export default class CombatScene extends Phaser.Scene {
     // all, which meant affix gating was skipped entirely and an encounter-3
     // head could roll a tier-1 affix.
     const loot = this.scenarioData?.loot || {};
-    const itemLevel = loot.itemLevel ?? 1;
+    // A hunt fight rolls at its region's item level (huntItemLevel, passed in
+    // by HuntEncounterOverlay); the scenario's own value is the fallback.
+    const itemLevel = this.huntContext?.itemLevel ?? loot.itemLevel ?? 1;
     const maxBaseTier = loot.maxBaseTier ?? 1;
 
     // Pick a specific item ID or choose randomly from the slot pool
@@ -5327,7 +5329,7 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     if (perClear > 0 && earners.length) {
-      const result = GameState.awardXPTo(earners, perClear);
+      const result = GameState.awardTrainingXPTo(earners, perClear);
       out.leveledUpNames = result.leveledUpNames || [];
       out.xpSummary.push(...(result.summaries || []));
     }
@@ -6417,7 +6419,7 @@ export default class CombatScene extends Phaser.Scene {
         : survivors.filter(c => GameState.hasCharacterCleared(c, this.scenarioId));
 
       if (perClear > 0 && earners.length) {
-        const result = GameState.awardXPTo(earners, perClear);
+        const result = GameState.awardTrainingXPTo(earners, perClear);
         leveledUpNames = result.leveledUpNames;
         xpSummary.push(...result.summaries);
       }
@@ -6428,7 +6430,10 @@ export default class CombatScene extends Phaser.Scene {
     } else {
       const xpReward = this._calculateXPReward();
       if (xpReward > 0) {
-        const result = GameState.awardPartyXP(xpReward);
+        // A hunt fight's XP is a pool split across the party (SCALING).
+        const result = this.isHunt
+          ? GameState.awardXPPool(xpReward)
+          : GameState.awardPartyXP(xpReward);
         leveledUpNames = result.leveledUpNames;
         xpSummary.push(...result.summaries);
       }

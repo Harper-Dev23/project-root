@@ -20,7 +20,7 @@ export const ZONES = {
   reeds_of_gethsemane: {
     id: 'reeds_of_gethsemane',
     name: 'The Reeds of Gethsemane',
-    dangerTier: 1,
+    danger: 1,          // 1-10; item level = danger (huntItemLevel, HuntScaling.js)
     terrain: 'wetland',
     divineAlignment: 'jeremiah',
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
@@ -86,7 +86,7 @@ export const ZONES = {
   bay_of_solace: {
     id: 'bay_of_solace',
     name: 'Bay of Solace',
-    dangerTier: 1,
+    danger: 1,          // 1-10; item level = danger (huntItemLevel, HuntScaling.js)
     terrain: 'coastal',
     divineAlignment: null,
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',
