@@ -1,10 +1,10 @@
 // src/systems/HuntEngine.js
 //
 // A hunt on the hex map (Exploration System v2, chunk 7). Chunk 7 builds it in
-// four steps; this file is currently step 7a:
+// four steps; 7a and 7b are built:
 //   7a  moving and seeing: moves (supplies + time), the clock and day/night,
 //       Sight, fog, Detection, the scout action            <- built
-//   7b  food: hunger, forage and fish, eating, camp and cooking
+//   7b  food: hunger, forage and fish, eating, camp and cooking  <- built
 //   7c  the world tick, the encounter trigger, flee
 //   7d  leaving: exit, objectives, the completion reward
 //
@@ -23,7 +23,20 @@
 // Party stats are NOT stored. partyStats(world.party(), mods) is called when a
 // rule needs it, so a hunter who dies stops counting at once (partyStats leaves
 // the dead out) and 7b's hunger can feed partyInitiativeBonus without a copy
-// going stale. It is pure and cheap.
+// going stale. It is pure and cheap. What it is handed is the departure
+// bundle plus this moment's hunger and food buff (HuntRules.momentMods).
+//
+// ── Food (7b) ───────────────────────────────────────────────────────────────
+// Food IS supplies (PARTY_STATS Part B): one pool, and hunger is read off it.
+//   zeroSince   when supplies last reached 0 (null above 0): Hungry, then
+//               Starving after STARVING_AFTER. A Starving move costs HP, never
+//               below 1 (HuntRules.starvedHP).
+//   satedUntil  a Hearty or Fine meal keeps the party Sated until then.
+//   foodBuff    one at a time: { field, amount, until, source }.
+//   gathered    tile id -> 'forage' | 'fish': each tile gives food once.
+// Gathered food goes into the pack's found list, so it is at risk like any
+// find and counts for Provisioner at the exit. Eating is an explicit action;
+// fish must be cooked, which only happens at camp.
 //
 // ── What the party knows ────────────────────────────────────────────────────
 //   fog        tile id -> 'visible' | 'remembered'; a tile missing is unseen.
@@ -36,7 +49,9 @@
 
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
-import { isPassable } from '../../data/grounds.js';
+import { isPassable, GROUNDS } from '../../data/grounds.js';
+import { Items } from '../../data/items.js';
+import { addToList, makeStack, takeFromList, countInList } from './ItemStacks.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { generateHuntMap, mapNeighbors, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
@@ -45,6 +60,9 @@ import { isItemInstance } from './ItemFactory.js';
 import {
   huntMods, moveCost, clockAt, sightRange, visibleTiles, occupantBand,
   occupantView, SCOUT_TIME, BANDS,
+  hungerStage, momentMods, starvedHP, forageCandidates, gatherQty, FORAGE_TIME, FISH_TIME,
+  FORAGE_YIELD, FISH_YIELD, FISH_ITEM, CAMP_TIME, CAMP_SUPPLY, SATED_TIME, campRecoveryPercent,
+  recovered, cookDish,
 } from './HuntRules.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
@@ -97,6 +115,10 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     fog: {},
     sightings: {},
     scouted: [],
+    zeroSince: start > 0 ? null : 0,
+    satedUntil: 0,
+    foodBuff: null,
+    gathered: {},
     pack,
     log: [],
   };
@@ -124,6 +146,11 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   }
   if (!data.sightings || Object.values(data.sightings).some(x => !BANDS.includes(x.band))) throw new Error('bad sightings');
   if (!Array.isArray(data.scouted) || !Array.isArray(data.log)) throw new Error('map hunt lists are missing');
+  if (!(data.zeroSince === null || Number.isFinite(data.zeroSince)) || !Number.isFinite(data.satedUntil)) throw new Error('map hunt hunger is not readable');
+  if (!data.gathered || typeof data.gathered !== 'object') throw new Error('map hunt has no gathered list');
+  if (data.foodBuff !== null && !(typeof data.foodBuff?.field === 'string' && Number.isFinite(data.foodBuff.amount) && Number.isFinite(data.foodBuff.until))) {
+    throw new Error('map hunt food buff is not readable');
+  }
   if (!Array.isArray(data.pack?.brought) || !Array.isArray(data.pack?.found)
       || ![...data.pack.brought, ...data.pack.found].every(isItemInstance)) {
     throw new Error('map hunt pack is not two lists of items');
@@ -142,9 +169,15 @@ function makeMapHunt(s, rng, world) {
   const occById = () => new Map(s.map.occupants.map(o => [o.id, o]));
 
   return {
-    /** The party's stats right now: live party, the hunt's bundle. */
+    /** The party's stats right now: live party, the hunt's bundle, this
+     *  moment's hunger and food buff. */
     stats() {
-      return partyStats(world.party(), s.mods);
+      return partyStats(world.party(), momentMods(s.mods, { stage: this.hunger(), foodBuff: s.foodBuff, time: s.time }));
+    },
+
+    /** Sated / fed / hungry / starving (HuntRules.hungerStage). */
+    hunger() {
+      return hungerStage({ supplies: s.supplies, zeroSince: s.zeroSince, satedUntil: s.satedUntil, time: s.time });
     },
 
     /** Day, night and the day number at the hunt's current time. */
@@ -170,11 +203,13 @@ function makeMapHunt(s, rng, world) {
       s.from = s.pos;
       s.pos = to;
       const flips = this._advanceTime(cost.time);
+      this._noteSupplies();
+      const starved = this.hunger() === 'starving' ? this._starve() : [];
       this._reveal(st);
       const occ = s.map.occupants.find(o => o.tile === to && HOSTILE.has(o.kind)) || null;
       const contact = occ ? { id: occ.id, kind: occ.kind, knew: knew?.band || 'nothing' } : null;
       if (contact) this._log({ kind: 'contact', tile: to, occupant: occ.id, knew: contact.knew, time: s.time });
-      return { ok: true, to, supply: cost.supply, time: cost.time, flips, contact };
+      return { ok: true, to, supply: cost.supply, time: cost.time, flips, contact, starved };
     },
 
     /**
@@ -198,6 +233,132 @@ function makeMapHunt(s, rng, world) {
       return { ok: true, time: SCOUT_TIME, flips, view: this.occupantViewOf(occId) };
     },
 
+    /**
+     * Forage the party's tile (PARTY_STATS Part B): FORAGE_TIME of in-game
+     * time, once per tile per hunt. What grows depends on the ground, how much
+     * on its forage band and the party's forageYieldPercent (Foraging's curve
+     * plus of the Harvest). Blight, barren tiles (Lean Country) and a tile
+     * already gathered give nothing, and are refused before any time is spent.
+     */
+    forage() {
+      const tile = s.map.tiles[s.pos];
+      if (s.gathered[s.pos]) return { ok: false, reason: 'this tile has already been gathered' };
+      if (tile.barren) return { ok: false, reason: 'nothing grows here' };
+      const band = GROUNDS[tile.ground]?.forage;
+      const worth = FORAGE_YIELD[band] || 0;
+      const kinds = forageCandidates(Items, tile.ground);
+      if (!worth || !kinds.length) return { ok: false, reason: 'nothing grows here' };
+      const st = this.stats();
+      const id = kinds[Math.floor(rng() * kinds.length)];
+      const qty = gatherQty(worth, st.forageYieldPercent, Items[id].supply);
+      addToList(s.pack.found, makeStack(id, qty));
+      s.gathered[s.pos] = 'forage';
+      const flips = this._advanceTime(FORAGE_TIME);
+      this._reveal();
+      this._log({ kind: 'forage', tile: s.pos, item: id, qty, time: s.time });
+      return { ok: true, item: id, qty, time: FORAGE_TIME, flips };
+    },
+
+    /** Fish from a tile beside water: FISH_TIME, once per tile (forage OR
+     *  fish), raw fish scaled by fishYieldPercent. Fish must be cooked. */
+    fish() {
+      const tile = s.map.tiles[s.pos];
+      if (s.gathered[s.pos]) return { ok: false, reason: 'this tile has already been gathered' };
+      if (!tile.fishing) return { ok: false, reason: 'there is no water to fish here' };
+      if (tile.barren) return { ok: false, reason: 'the water here is empty' };
+      const st = this.stats();
+      const qty = gatherQty(FISH_YIELD, st.fishYieldPercent, Items[FISH_ITEM].supply);
+      addToList(s.pack.found, makeStack(FISH_ITEM, qty));
+      s.gathered[s.pos] = 'fish';
+      const flips = this._advanceTime(FISH_TIME);
+      this._reveal();
+      this._log({ kind: 'fish', tile: s.pos, item: FISH_ITEM, qty, time: s.time });
+      return { ok: true, item: FISH_ITEM, qty, time: FISH_TIME, flips };
+    },
+
+    /** Food in the pack a party could eat or cook with, by id (Rations are
+     *  the supply pool already, not food to eat). */
+    foodInPack() {
+      const out = {};
+      for (const it of [...s.pack.found, ...s.pack.brought]) {
+        if (Items[it.id]?.type !== 'food') continue;
+        out[it.id] = (out[it.id] || 0) + (it.qty || 1);
+      }
+      return out;
+    },
+
+    /** Eat raw food from the pack: its supply value goes into the pool. No
+     *  time. Only rawEdible food; fish and meat must be cooked at camp. */
+    eat(itemId, qty = 1) {
+      const food = Items[itemId];
+      if (food?.type !== 'food') return { ok: false, reason: `'${itemId}' is not food` };
+      if (!food.food?.rawEdible) return { ok: false, reason: `${food.name} must be cooked first` };
+      if (!Number.isInteger(qty) || qty < 1) return { ok: false, reason: 'eat at least one' };
+      if (!this._takeFood(itemId, qty)) return { ok: false, reason: `not enough ${food.name} in the pack` };
+      const supply = qty * food.supply;
+      s.supplies += supply;
+      s.maxSupplies = Math.max(s.maxSupplies, s.supplies);
+      this._noteSupplies();
+      this._log({ kind: 'eat', item: itemId, qty, supply, time: s.time });
+      return { ok: true, supply };
+    },
+
+    /**
+     * Camp on the party's tile (PARTY_STATS Part B, decision 7). Takes
+     * CAMP_TIME and CAMP_SUPPLY (eaten after the meals are cooked, never below
+     * 0). Cooks each meal { main, addition? }: main is fish (or, from chunk 9,
+     * meat), the addition a forage food. Then every hunter who is not dead
+     * recovers a share of max HP and MP: more if the camp began at night,
+     * more again with Field Rites. A Hearty or Fine meal leaves the party
+     * Sated for SATED_TIME after the camp; the last Fine meal's buff replaces
+     * any other. The world tick and the found-in-camp check are 7c's.
+     * Refuses the whole camp, before anything happens, if a meal is not cookable.
+     */
+    camp({ meals = [] } = {}) {
+      const need = {};
+      for (const m of meals) {
+        const main = Items[m?.main], add = m?.addition ? Items[m.addition] : null;
+        if (!['fish', 'meat'].includes(main?.food?.kind)) return { ok: false, reason: `'${m?.main}' is not a main (fish or meat)` };
+        if (m.addition && add?.food?.kind !== 'forage') return { ok: false, reason: `'${m.addition}' is not a forage addition` };
+        need[m.main] = (need[m.main] || 0) + 1;
+        if (m.addition) need[m.addition] = (need[m.addition] || 0) + 1;
+      }
+      const have = this.foodInPack();
+      for (const [id, n] of Object.entries(need)) {
+        if ((have[id] || 0) < n) return { ok: false, reason: `not enough ${Items[id].name} in the pack` };
+      }
+      const st = this.stats();
+      const night = clockAt(s.time).isNight;
+      const dishes = [];
+      let gained = 0;
+      for (const m of meals) {
+        this._takeFood(m.main, 1);
+        if (m.addition) this._takeFood(m.addition, 1);
+        const dish = cookDish(Items[m.main], m.addition ? Items[m.addition] : null, st.cooking);
+        dishes.push({ main: m.main, addition: m.addition || null, ...dish });
+        gained += dish.supply;
+      }
+      s.supplies = Math.max(0, s.supplies + gained - CAMP_SUPPLY);
+      s.maxSupplies = Math.max(s.maxSupplies, s.supplies);
+      const flips = this._advanceTime(CAMP_TIME);
+      this._noteSupplies();
+      const pct = campRecoveryPercent(night, st.passives.campRecoveryPercent);
+      const healed = [];
+      for (const c of world.party()) {
+        if (!c || c.status === 'dead') continue;
+        const hp = c.currentHP, mp = c.currentMP;
+        c.currentHP = recovered(c.currentHP, c.maxHP, pct);
+        c.currentMP = recovered(c.currentMP, c.maxMP, pct);
+        healed.push({ name: c.name, hp: c.currentHP - hp, mp: c.currentMP - mp });
+      }
+      if (dishes.some(d => d.sated)) s.satedUntil = s.time + SATED_TIME;
+      const fine = [...dishes].reverse().find(d => d.buff);
+      if (fine) s.foodBuff = { ...fine.buff, until: s.time + fine.buff.duration, source: fine.addition };
+      this._reveal();
+      this._log({ kind: 'camp', tile: s.pos, night, pct, dishes: dishes.map(d => d.quality), time: s.time });
+      return { ok: true, night, recoveryPercent: pct, dishes, supplyGained: gained, healed, flips, time: CAMP_TIME };
+    },
+
     /** What the party knows of one occupant, or null (ENCOUNTERS). `stale` is
      *  set when its tile is not in sight now. */
     occupantViewOf(occId) {
@@ -218,6 +379,9 @@ function makeMapHunt(s, rng, world) {
         clock: this.clock(),
         supplies: s.supplies,
         maxSupplies: s.maxSupplies,
+        hunger: this.hunger(),
+        satedUntil: s.satedUntil,
+        foodBuff: s.foodBuff && s.time < s.foodBuff.until ? { ...s.foodBuff } : null,
         fog: { ...s.fog },
         occupants,
       };
@@ -230,6 +394,38 @@ function makeMapHunt(s, rng, world) {
     /** Plain JSON for the save. restoreMapHunt(serialize()) continues identically. */
     serialize() {
       return { ...clone(s), rngState: rng.getState() };
+    },
+
+    /** Keep zeroSince honest after any change to supplies. */
+    _noteSupplies() {
+      if (s.supplies <= 1e-9) {
+        s.supplies = 0;
+        if (s.zeroSince === null) s.zeroSince = s.time;
+      } else {
+        s.zeroSince = null;
+      }
+    },
+
+    /** A Starving move: every hunter not dead loses HP, never below 1. */
+    _starve() {
+      const out = [];
+      for (const c of world.party()) {
+        if (!c || c.status === 'dead') continue;
+        const before = c.currentHP;
+        c.currentHP = starvedHP(c);
+        if (c.currentHP !== before) out.push({ name: c.name, lost: before - c.currentHP });
+      }
+      return out;
+    },
+
+    /** Take n of a food out of the pack, found first, then brought. */
+    _takeFood(id, n) {
+      const inFound = countInList(s.pack.found, id);
+      if (inFound + countInList(s.pack.brought, id) < n) return false;
+      const a = Math.min(n, inFound);
+      if (a > 0) takeFromList(s.pack.found, id, a);
+      if (n - a > 0) takeFromList(s.pack.brought, id, n - a);
+      return true;
     },
 
     _knownAt(tile) {

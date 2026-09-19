@@ -38,12 +38,13 @@ import { RARITY_COLORS } from '../../ui/styles.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
 import GameState from '../../systems/GameState.js';
 import { getZone } from '../../../data/zones.js';
+import { rationPackCap } from '../../systems/HuntRules.js';
 
 // The camp's free issue (CAMP_ISSUE, 60) is ~2.5 day/night cycles at the
 // default drain rate. Packing is capped where ticket spending used to be:
-// 10 tickets x 10 supplies then, 100 rations now.
+// 10 tickets x 10 supplies then, 100 rations now. The cap is rationPackCap
+// (HuntRules.js), which adds Pack Mule's packRationsBonus for this party.
 const RATIONS_PER_TICKET     = 10;
-const MAX_RATIONS_PACKED     = 100;
 const PACK_STEP              = 10;
 const LOG_LINES_SHOWN        = 10;
 
@@ -161,7 +162,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._text(left, suppliesY, 'Supplies', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
     const inBag = this._rationsInBag();
-    this.rationsToPack = Math.min(this.rationsToPack, inBag, MAX_RATIONS_PACKED);
+    this.rationsToPack = Math.min(this.rationsToPack, inBag, rationPackCap(GameState.party));
     this._suppliesText = this._text(left, suppliesY + 30,
       `${this._departSupplies()} supplies (camp issue ${CAMP_ISSUE} + ${this.rationsToPack} Rations packed)`,
       { fontSize: '15px', color: '#d0d0d0' }
@@ -222,7 +223,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
   }
 
   _adjustPacked(delta) {
-    const most = Math.min(MAX_RATIONS_PACKED, this._rationsInBag());
+    const most = Math.min(rationPackCap(GameState.party), this._rationsInBag());
     this.rationsToPack = Phaser.Math.Clamp(this.rationsToPack + delta, 0, most);
     SoundManager.play('select');
     this._render();
@@ -240,7 +241,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
   _depart() {
     SoundManager.play('select');
-    const packed = Math.min(this.rationsToPack, this._rationsInBag(), MAX_RATIONS_PACKED);
+    const packed = Math.min(this.rationsToPack, this._rationsInBag(), rationPackCap(GameState.party));
     const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
     // Out of the bag and into the pack: from here they are at risk.
     const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;

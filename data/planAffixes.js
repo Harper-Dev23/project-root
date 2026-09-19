@@ -80,7 +80,7 @@ export const PLAN_FIELDS = {
   perceptionBonus:         { label: 'Perception', unit: '', live: false,
     reader: 'partyStats adds it after best-of; Detection reads it (HuntRules.occupantBand; live once chunk 8 runs hunts on the map)' },
   harvestYieldPercent:     { label: 'Harvest & Forage Yield', unit: '%', live: false,
-    reader: 'chunk 7 forage, chunk 9 harvest' },
+    reader: 'partyStats adds it to forageYieldPercent, read by HuntEngine.forage (live once chunk 8 runs hunts on the map); chunk 9 harvest' },
   completionRewardPercent: { label: 'Completion Reward', unit: '%', live: false,
     reader: 'chunk 7: the completion reward paid at a clean exit' },
 };

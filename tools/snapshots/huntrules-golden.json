@@ -1464,5 +1464,889 @@
    "at": 0,
    "stale": false
   }
+ },
+ "foods": {
+  "bitterroot": {
+   "supply": 2,
+   "kind": "forage",
+   "grounds": [
+    "marsh",
+    "bog",
+    "grass",
+    "heath"
+   ],
+   "rawEdible": true,
+   "difficulty": 10,
+   "buff": {
+    "field": "perceptionBonus",
+    "amount": 10,
+    "duration": 12
+   }
+  },
+  "marsh_cress": {
+   "supply": 1,
+   "kind": "forage",
+   "grounds": [
+    "marsh",
+    "thicket",
+    "bog"
+   ],
+   "rawEdible": true,
+   "difficulty": 5,
+   "buff": {
+    "field": "travelTimePercent",
+    "amount": 10,
+    "duration": 12
+   }
+  },
+  "reed_tuber": {
+   "supply": 3,
+   "kind": "forage",
+   "grounds": [
+    "marsh",
+    "bog",
+    "shingle"
+   ],
+   "rawEdible": false,
+   "difficulty": 10
+  },
+  "sweetberry": {
+   "supply": 2,
+   "kind": "forage",
+   "grounds": [
+    "woodland",
+    "thicket",
+    "heath",
+    "rainforest"
+   ],
+   "rawEdible": true,
+   "difficulty": 5,
+   "buff": {
+    "field": "supplyEfficiencyPercent",
+    "amount": 10,
+    "duration": 12
+   }
+  },
+  "wild_thyme": {
+   "supply": 1,
+   "kind": "forage",
+   "grounds": [
+    "grass",
+    "heath",
+    "scree",
+    "hardpan",
+    "snowfield",
+    "dunes"
+   ],
+   "rawEdible": true,
+   "difficulty": 15,
+   "buff": {
+    "field": "partyInitiativeBonus",
+    "amount": 1,
+    "duration": 12
+   }
+  },
+  "shore_kelp": {
+   "supply": 2,
+   "kind": "forage",
+   "grounds": [
+    "shingle",
+    "dunes",
+    "woodland",
+    "rainforest"
+   ],
+   "rawEdible": false,
+   "difficulty": 10,
+   "buff": {
+    "field": "perceptionBonus",
+    "amount": 5,
+    "duration": 12
+   }
+  },
+  "raw_fish": {
+   "supply": 4,
+   "kind": "fish",
+   "rawEdible": false,
+   "difficulty": 30
+  }
+ },
+ "food7b": {
+  "STARVING_AFTER": 6,
+  "SATED_TIME": 12,
+  "HUNGER_INITIATIVE": {
+   "sated": 2,
+   "fed": 0,
+   "hungry": -2,
+   "starving": -4
+  },
+  "FORAGE_YIELD": {
+   "good": 6,
+   "modest": 3,
+   "little": 1,
+   "none": 0,
+   "fishing": 0
+  },
+  "FISH_YIELD": 5,
+  "CAMP_TIME": 6,
+  "CAMP_SUPPLY": 3,
+  "CAMP_RECOVERY": {
+   "day": 20,
+   "night": 35
+  },
+  "FINE_MARGIN": 20,
+  "RATIONS_PACK_CAP": 100
+ },
+ "starvingRun": {
+  "stagesSeen": [
+   "fed",
+   "hungry",
+   "starving"
+  ],
+  "hpAtEnd": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "fedInit": 7.1667,
+  "starvInit": 3.1667
+ },
+ "mixed reeds small 8300": [
+  [
+   "move",
+   1,
+   27.2921,
+   3.6973,
+   "fed",
+   ""
+  ],
+  [
+   "move",
+   1,
+   25.4868,
+   6.4703,
+   "fed",
+   ""
+  ],
+  [
+   "forage",
+   1,
+   25.4868,
+   7.4703,
+   "fed",
+   "shore_kelpx4"
+  ],
+  [
+   "forage",
+   0,
+   25.4868,
+   7.4703,
+   "fed",
+   "shore_kelpx4"
+  ],
+  [
+   "forage",
+   0,
+   25.4868,
+   7.4703,
+   "fed",
+   "shore_kelpx4"
+  ],
+  [
+   "move",
+   1,
+   23.6816,
+   9.3189,
+   "fed",
+   "shore_kelpx4"
+  ],
+  [
+   "forage",
+   1,
+   23.6816,
+   10.3189,
+   "fed",
+   "shore_kelpx4,marsh_cressx7"
+  ],
+  [
+   "eat",
+   1,
+   24.6816,
+   10.3189,
+   "fed",
+   "shore_kelpx4,marsh_cressx6"
+  ],
+  [
+   "eat",
+   1,
+   25.6816,
+   10.3189,
+   "fed",
+   "shore_kelpx4,marsh_cressx5"
+  ],
+  [
+   "move",
+   1,
+   23.8763,
+   12.1676,
+   "fed",
+   "shore_kelpx4,marsh_cressx5"
+  ],
+  [
+   "forage",
+   1,
+   23.8763,
+   13.1676,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4"
+  ],
+  [
+   "move",
+   1,
+   21.1684,
+   15.9405,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4"
+  ],
+  [
+   "move",
+   1,
+   18.4605,
+   18.7135,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4"
+  ],
+  [
+   "camp",
+   1,
+   15.4605,
+   24.7135,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4"
+  ],
+  [
+   "forage",
+   1,
+   15.4605,
+   25.7135,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   12.7526,
+   28.4865,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   10.9474,
+   30.3351,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   9.1421,
+   32.1838,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx4,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   9.1421,
+   33.1838,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   0,
+   9.1421,
+   33.1838,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   7.3368,
+   35.0324,
+   "fed",
+   "shore_kelpx4,marsh_cressx5,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "eat",
+   1,
+   8.3368,
+   35.0324,
+   "fed",
+   "shore_kelpx4,marsh_cressx4,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   8.3368,
+   36.0324,
+   "fed",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   6.5316,
+   37.8811,
+   "fed",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   4.7263,
+   39.7297,
+   "fed",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   2.9211,
+   41.5784,
+   "fed",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   1.1158,
+   43.427,
+   "fed",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "camp",
+   1,
+   0,
+   49.427,
+   "hungry",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   51.2757,
+   "hungry",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   53.1243,
+   "hungry",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "camp",
+   1,
+   0,
+   59.1243,
+   "starving",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "fish",
+   0,
+   0,
+   59.1243,
+   "starving",
+   "shore_kelpx4,marsh_cressx11,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   60.1243,
+   "starving",
+   "shore_kelpx4,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   61.973,
+   "starving",
+   "shore_kelpx4,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   64.7459,
+   "starving",
+   "shore_kelpx4,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   68.4432,
+   "starving",
+   "shore_kelpx4,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   69.4432,
+   "starving",
+   "shore_kelpx8,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   72.2162,
+   "starving",
+   "shore_kelpx8,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   74.9892,
+   "starving",
+   "shore_kelpx8,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "fish",
+   0,
+   0,
+   74.9892,
+   "starving",
+   "shore_kelpx8,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   78.6865,
+   "starving",
+   "shore_kelpx8,marsh_cressx18,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "eat",
+   1,
+   1,
+   78.6865,
+   "fed",
+   "shore_kelpx8,marsh_cressx17,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   1,
+   79.6865,
+   "fed",
+   "shore_kelpx12,marsh_cressx17,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   83.3838,
+   "hungry",
+   "shore_kelpx12,marsh_cressx17,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "eat",
+   1,
+   1,
+   83.3838,
+   "fed",
+   "shore_kelpx12,marsh_cressx16,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   87.0811,
+   "hungry",
+   "shore_kelpx12,marsh_cressx16,sweetberryx8,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   88.0811,
+   "hungry",
+   "shore_kelpx12,marsh_cressx16,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   91.7784,
+   "hungry",
+   "shore_kelpx12,marsh_cressx16,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   92.7784,
+   "hungry",
+   "shore_kelpx16,marsh_cressx16,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "forage",
+   0,
+   0,
+   92.7784,
+   "hungry",
+   "shore_kelpx16,marsh_cressx16,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "eat",
+   1,
+   1,
+   92.7784,
+   "fed",
+   "shore_kelpx16,marsh_cressx15,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "fish",
+   0,
+   1,
+   92.7784,
+   "fed",
+   "shore_kelpx16,marsh_cressx15,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "forage",
+   0,
+   1,
+   92.7784,
+   "fed",
+   "shore_kelpx16,marsh_cressx15,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   96.4757,
+   "hungry",
+   "shore_kelpx16,marsh_cressx15,sweetberryx12,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   97.4757,
+   "hungry",
+   "shore_kelpx16,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   101.173,
+   "hungry",
+   "shore_kelpx16,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   102.173,
+   "hungry",
+   "shore_kelpx20,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   105.8703,
+   "starving",
+   "shore_kelpx20,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   109.5676,
+   "starving",
+   "shore_kelpx20,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   112.3405,
+   "starving",
+   "shore_kelpx20,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   116.0378,
+   "starving",
+   "shore_kelpx20,marsh_cressx15,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "eat",
+   1,
+   1,
+   116.0378,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2"
+  ],
+  [
+   "forage",
+   1,
+   1,
+   117.0378,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "fish",
+   0,
+   1,
+   117.0378,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "move",
+   1,
+   0,
+   119.8108,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "move",
+   1,
+   0,
+   123.5081,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "move",
+   1,
+   0,
+   125.3568,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "move",
+   1,
+   0,
+   127.2054,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "camp",
+   1,
+   0,
+   133.2054,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "move",
+   1,
+   0,
+   135.0541,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx4"
+  ],
+  [
+   "eat",
+   1,
+   2,
+   135.0541,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "move",
+   1,
+   0.1947,
+   136.9027,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "move",
+   1,
+   0,
+   138.7514,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "move",
+   1,
+   0,
+   142.4486,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "forage",
+   0,
+   0,
+   142.4486,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "forage",
+   0,
+   0,
+   142.4486,
+   "hungry",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "move",
+   1,
+   0,
+   145.2216,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "camp",
+   1,
+   0,
+   151.2216,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "move",
+   1,
+   0,
+   154.9189,
+   "starving",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx3"
+  ],
+  [
+   "eat",
+   1,
+   2,
+   154.9189,
+   "fed",
+   "shore_kelpx20,marsh_cressx14,sweetberryx16,reed_tuberx2,bitterrootx2"
+  ]
+ ],
+ "mixedHashes": {
+  "reeds_of_gethsemane/small": "0d646b080936cc41",
+  "reeds_of_gethsemane/medium": "d827467dfe16e60c",
+  "reeds_of_gethsemane/large": "0c0bccc03120a5b4",
+  "bay_of_solace/small": "632989aa820a36ae",
+  "bay_of_solace/medium": "0e031f068ce72ead",
+  "bay_of_solace/large": "f921691c5541a8d4"
+ },
+ "mixedTallies": {
+  "reeds_of_gethsemane/small": {
+   "move": 671,
+   "forage": 144,
+   "fish": 11,
+   "eat": 96,
+   "camp": 62,
+   "refused": 216,
+   "dishes": {
+    "plain": 0,
+    "hearty": 10,
+    "fine": 0
+   },
+   "gathered": 155
+  },
+  "reeds_of_gethsemane/medium": {
+   "move": 669,
+   "forage": 162,
+   "fish": 12,
+   "eat": 92,
+   "camp": 59,
+   "refused": 206,
+   "dishes": {
+    "plain": 0,
+    "hearty": 14,
+    "fine": 0
+   },
+   "gathered": 174
+  },
+  "reeds_of_gethsemane/large": {
+   "move": 655,
+   "forage": 173,
+   "fish": 7,
+   "eat": 91,
+   "camp": 64,
+   "refused": 210,
+   "dishes": {
+    "plain": 0,
+    "hearty": 6,
+    "fine": 0
+   },
+   "gathered": 180
+  },
+  "bay_of_solace/small": {
+   "move": 693,
+   "forage": 131,
+   "fish": 22,
+   "eat": 55,
+   "camp": 60,
+   "refused": 239,
+   "dishes": {
+    "plain": 0,
+    "hearty": 29,
+    "fine": 0
+   },
+   "gathered": 153
+  },
+  "bay_of_solace/medium": {
+   "move": 679,
+   "forage": 147,
+   "fish": 9,
+   "eat": 74,
+   "camp": 67,
+   "refused": 224,
+   "dishes": {
+    "plain": 0,
+    "hearty": 12,
+    "fine": 0
+   },
+   "gathered": 156
+  },
+  "bay_of_solace/large": {
+   "move": 648,
+   "forage": 171,
+   "fish": 14,
+   "eat": 75,
+   "camp": 66,
+   "refused": 226,
+   "dishes": {
+    "plain": 0,
+    "hearty": 19,
+    "fine": 0
+   },
+   "gathered": 185
+  }
  }
 }

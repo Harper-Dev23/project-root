@@ -176,23 +176,23 @@ export function applyExplorationPick(char, level, choice) {
  */
 export const PARTY_STAT_OUTPUTS = {
   perception:              'HuntRules.occupantBand (Detection, via HuntEngine): compared against occupantConcealment',
-  cooking:                 'chunk 7 camp cooking: compared against a dish difficulty',
+  cooking:                 'HuntRules.cookDish (camp, via HuntEngine.camp): compared against a dish difficulty',
   speed:                   'chunk 7 world sim: pursuit of a moving pack',
   partyInitiative:         'chunk 7 encounter trigger (ambush -> party initiative); chunk 9 turn order',
   supplyEfficiencyPercent: 'HuntRules.moveCost (via HuntEngine.move): supplies per move',
   travelTimePercent:       'HuntRules.moveCost (via HuntEngine.move): time per move',
-  forageYieldPercent:      'chunk 7 forage; chunk 9 harvest yield',
+  forageYieldPercent:      'HuntRules.gatherQty (HuntEngine.forage); chunk 9 harvest yield',
   harvestTimePercent:      'chunk 9 harvest step',
-  fishYieldPercent:        'chunk 7 fishing',
+  fishYieldPercent:        'HuntRules.gatherQty (HuntEngine.fish)',
   itemRarity:              'rollHuntDropRarity (chunk 9 swaps it in for the raw lootQualityPercent)',
 };
 
-/** The hunt-bundle fields a passive can write, and their readers — all chunk 7 (7a built: sight, exact roster). */
+/** The hunt-bundle fields a passive can write, and their readers — all chunk 7 (7a: sight, exact roster; 7b: rations cap, camp recovery). */
 export const PASSIVE_FIELDS = {
   sightRangeBonus:      'HuntRules.sightRange (Sight, via HuntEngine)',
-  packRationsBonus:     'chunk 7: the Rations packing cap at departure',
+  packRationsBonus:     'HuntRules.rationPackCap, read by the Hunt screen (HuntHubOverlay)',
   campConcealmentBonus: 'chunk 7 camp: found-in-camp check',
-  campRecoveryPercent:  'chunk 7 camp: HP and MP recovered',
+  campRecoveryPercent:  'HuntRules.campRecoveryPercent (HuntEngine.camp): HP and MP recovered',
   exactRoster:          'HuntEngine.occupantViewOf: what an identified pack shows',
   partyInitiativeBonus: 'partyStats itself: added after the initiative average',
 };

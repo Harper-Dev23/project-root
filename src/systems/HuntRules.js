@@ -23,6 +23,7 @@ import { GROUNDS, RELIEF, tileCosts } from '../../data/grounds.js';
 import { DAY_TIME_UNITS, GRADES, COMPOSITIONS } from '../../data/huntMapGen.js';
 import { combineModifiers } from './HuntModifiers.js';
 import { mapNeighbors, occupantConcealment } from './HuntMapGen.js';
+import { partyStats } from './PartyStats.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -168,6 +169,137 @@ export function betterBand(a, b) {
  *  the ground's, occupantConcealment). */
 export function occupantBand(map, occ, perception) {
   return detectionBand(perception, occupantConcealment(map, occ));
+}
+
+// ── Hunger (HUNT_STRUCTURE; numbers: decision 4) ─────────────────────────────
+
+/** In-game time at 0 supplies before Hungry becomes Starving. */
+export const STARVING_AFTER = 6;
+/** How long Sated lasts after a Hearty or Fine meal. */
+export const SATED_TIME = 12;
+/** Starving costs this share of max HP on every move, never below 1 HP. */
+export const STARVING_HP_SHARE = 0.05;
+/** What each stage adds to party initiative (the CHA-scale average, ~7). */
+export const HUNGER_INITIATIVE = { sated: 2, fed: 0, hungry: -2, starving: -4 };
+
+/**
+ * The party's hunger stage. Hunger is read off the one supply pool (PARTY_STATS
+ * Part B): above 0 the party is Fed, or Sated while a good meal lasts; at 0 it
+ * is Hungry, and Starving once it has been at 0 for STARVING_AFTER. Running
+ * out ends Sated: the pool is the truth.
+ */
+export function hungerStage({ supplies, zeroSince, satedUntil, time }) {
+  if (supplies <= 0) {
+    return zeroSince !== null && time - zeroSince >= STARVING_AFTER - 1e-9 ? 'starving' : 'hungry';
+  }
+  return time < (satedUntil || 0) ? 'sated' : 'fed';
+}
+
+/**
+ * The bundle partyStats reads at this moment: the departure bundle, plus the
+ * hunger stage's initiative and the food buff while it lasts. Both are
+ * hunt-bundle fields partyStats already reads (partyInitiativeBonus is added
+ * after the initiative average; a buff names its own field).
+ */
+export function momentMods(mods, { stage, foodBuff, time }) {
+  const m = { ...mods };
+  m.partyInitiativeBonus = (m.partyInitiativeBonus || 0) + (HUNGER_INITIATIVE[stage] || 0);
+  if (foodBuff && time < foodBuff.until) m[foodBuff.field] = (m[foodBuff.field] || 0) + foodBuff.amount;
+  return m;
+}
+
+/**
+ * One hunter's HP after a Starving move: loses STARVING_HP_SHARE of max HP
+ * (at least 1), and never goes below 1. A hunter already at 1 or below is
+ * left alone: Starving never kills and never knocks anyone out.
+ */
+export function starvedHP(char) {
+  const hp = char.currentHP;
+  if (!(hp > 1)) return hp;
+  const loss = Math.max(1, Math.ceil((char.maxHP || 0) * STARVING_HP_SHARE));
+  return Math.max(1, hp - loss);
+}
+
+// ── Forage and fish (PARTY_STATS Part B; numbers: decision 6) ────────────────
+
+/** Time one forage or fishing action takes. */
+export const FORAGE_TIME = 1;
+export const FISH_TIME = 1;
+/** Supplies' worth one forage yields by the ground's forage band, before the
+ *  Foraging curve (forageYieldPercent). */
+export const FORAGE_YIELD = { good: 6, modest: 3, little: 1, none: 0, fishing: 0 };
+/** Supplies' worth one fishing action yields, before fishYieldPercent. */
+export const FISH_YIELD = 5;
+export const FISH_ITEM = 'raw_fish';
+
+/** Forage ingredients that grow on `ground`, in a fixed order (id). */
+export function forageCandidates(items, ground) {
+  return Object.values(items)
+    .filter(it => it.type === 'food' && it.food?.kind === 'forage' && it.food.grounds?.includes(ground))
+    .map(it => it.id)
+    .sort();
+}
+
+/** How many of an item a gathering yields: its supplies' worth, scaled by the
+ *  yield percent, in whole items of `supplyEach`, at least 1. */
+export function gatherQty(baseWorth, yieldPercent, supplyEach) {
+  const worth = baseWorth * (1 + (yieldPercent || 0) / 100);
+  return Math.max(1, Math.round(worth / supplyEach));
+}
+
+// ── Camp and cooking (PARTY_STATS Part B; numbers: decision 7) ───────────────
+
+export const CAMP_TIME = 6;
+export const CAMP_SUPPLY = 3;
+/** HP and MP recovered by a camp, percent of max; a camp begun at night
+ *  sleeps through it and recovers more. Never a full restore. */
+export const CAMP_RECOVERY = { day: 20, night: 35 };
+/** Cooking must clear a dish's difficulty by this much for Fine. */
+export const FINE_MARGIN = 20;
+
+/** The camp's recovery percent: day or night, raised by Field Rites
+ *  (campRecoveryPercent) as a share of itself. */
+export function campRecoveryPercent(isNight, bonusPercent = 0) {
+  return (isNight ? CAMP_RECOVERY.night : CAMP_RECOVERY.day) * (1 + (bonusPercent || 0) / 100);
+}
+
+/** A resource after a camp: + pct of max, rounded, capped at max. */
+export function recovered(current, max, pct) {
+  if (!(max > 0)) return current;
+  return Math.min(max, current + Math.round(max * pct / 100));
+}
+
+/**
+ * A dish: one main (fish, later meat) plus an optional forage addition. The
+ * quality is deterministic, like Detection: the party's best Cooking against
+ * the dish's difficulty (main + addition).
+ *   plain   always: the supplies
+ *   hearty  Cooking meets the difficulty: + Sated
+ *   fine    Cooking clears it by FINE_MARGIN: + Sated + the addition's buff
+ * A weak cook never wastes food; they just don't get the extras.
+ */
+export function cookDish(main, addition, cooking) {
+  const difficulty = (main.food?.difficulty || 0) + (addition?.food?.difficulty || 0);
+  const quality = cooking >= difficulty + FINE_MARGIN ? 'fine' : cooking >= difficulty ? 'hearty' : 'plain';
+  return {
+    quality,
+    difficulty,
+    supply: (main.supply || 0) + (addition?.supply || 0),
+    sated: quality !== 'plain',
+    buff: quality === 'fine' && addition?.food?.buff ? { ...addition.food.buff } : null,
+  };
+}
+
+// ── Packing ──────────────────────────────────────────────────────────────────
+
+/** Most Rations the Hunt screen packs (was 10 tickets x 10 supplies). Stays
+ *  100 until the hub runs map hunts (chunk 8), then drops to 60 (TERRAIN_TYPES;
+ *  decision 12). */
+export const RATIONS_PACK_CAP = 100;
+
+/** The packing cap for this party: the base plus Pack Mule's packRationsBonus. */
+export function rationPackCap(party) {
+  return RATIONS_PACK_CAP + (partyStats(party).passives.packRationsBonus || 0);
 }
 
 /** "Roughly how many" for an identified roster (ENCOUNTERS). */

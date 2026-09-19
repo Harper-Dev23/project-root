@@ -40,6 +40,62 @@ export const Items = {
     description: 'Dried meat, hard bread and a skin of water. A hunt eats through them one step at a time; what you do not eat comes home with you, if you do.',
   },
 
+  // === Hunt food (Exploration System v2, chunk 7b; PARTY_STATS Part B) ===
+  // Food IS supplies: every food has a `supply` value it adds to the hunt's
+  // pool when eaten or cooked. `food` is read by the map hunt (HuntEngine.js,
+  // HuntRules.js):
+  //   kind        'forage' (gathered from land) or 'fish' (gathered beside
+  //               water). Meat arrives with harvesting (chunk 9).
+  //   grounds     forage only: the grounds it grows on (data/grounds.js);
+  //               HuntRules.forageCandidates picks among them.
+  //   rawEdible   may be eaten as it is. Fish (and meat) never: cook it first.
+  //   difficulty  added to a dish's difficulty; the party's best Cooking
+  //               against it sets the dish's quality (HuntRules.cookDish).
+  //   buff        what a FINE dish with this as its addition grants, for
+  //               `duration` in-game time units: a hunt-bundle field that
+  //               partyStats reads. One food buff at a time.
+  // All numbers are placeholders until chunk 13.
+  bitterroot: {
+    id: 'bitterroot', name: 'Bitterroot', type: 'food', rarity: 'common', stackable: true, supply: 2,
+    food: { kind: 'forage', grounds: ['marsh', 'bog', 'grass', 'heath'], rawEdible: true, difficulty: 10,
+            buff: { field: 'perceptionBonus', amount: 10, duration: 12 } },
+    description: 'A pale, knotted root. Chewed raw it is bitter; cooked into a stew it keeps the eyes sharp.',
+  },
+  marsh_cress: {
+    id: 'marsh_cress', name: 'Marsh Cress', type: 'food', rarity: 'common', stackable: true, supply: 1,
+    food: { kind: 'forage', grounds: ['marsh', 'thicket', 'bog'], rawEdible: true, difficulty: 5,
+            buff: { field: 'travelTimePercent', amount: 10, duration: 12 } },
+    description: 'Peppery leaves from the wet margins. Light in the stomach and quick on the feet.',
+  },
+  reed_tuber: {
+    id: 'reed_tuber', name: 'Reed Tuber', type: 'food', rarity: 'common', stackable: true, supply: 3,
+    food: { kind: 'forage', grounds: ['marsh', 'bog', 'shingle'], rawEdible: false, difficulty: 10 },
+    description: 'Starchy and filling, but it must be cooked; raw, it binds the gut.',
+  },
+  sweetberry: {
+    id: 'sweetberry', name: 'Sweetberry', type: 'food', rarity: 'common', stackable: true, supply: 2,
+    food: { kind: 'forage', grounds: ['woodland', 'thicket', 'heath', 'rainforest'], rawEdible: true, difficulty: 5,
+            buff: { field: 'supplyEfficiencyPercent', amount: 10, duration: 12 } },
+    description: 'Dark berries in low bushes. A handful goes a long way.',
+  },
+  wild_thyme: {
+    id: 'wild_thyme', name: 'Wild Thyme', type: 'food', rarity: 'common', stackable: true, supply: 1,
+    food: { kind: 'forage', grounds: ['grass', 'heath', 'scree', 'hardpan', 'snowfield', 'dunes'], rawEdible: true, difficulty: 15,
+            buff: { field: 'partyInitiativeBonus', amount: 1, duration: 12 } },
+    description: 'A hardy herb that grows where little else will. Its smoke wakes a tired camp.',
+  },
+  shore_kelp: {
+    id: 'shore_kelp', name: 'Shore Kelp', type: 'food', rarity: 'common', stackable: true, supply: 2,
+    food: { kind: 'forage', grounds: ['shingle', 'dunes', 'woodland', 'rainforest'], rawEdible: false, difficulty: 10,
+            buff: { field: 'perceptionBonus', amount: 5, duration: 12 } },
+    description: 'Salt-stiff ribbons thrown up by the tide. Boiled, it makes a broth that clears the head.',
+  },
+  raw_fish: {
+    id: 'raw_fish', name: 'Raw Fish', type: 'food', rarity: 'common', stackable: true, supply: 4,
+    food: { kind: 'fish', rawEdible: false, difficulty: 30 },
+    description: 'Still cold from the water. It has to be cooked before anyone eats it.',
+  },
+
   // === Sacred Relics ===
   waystone_shard: {
     id: 'waystone_shard',
