@@ -2997,5 +2997,317 @@
  "restless": {
   "rootedPlain": 100,
   "rootedRestless": 69
+ },
+ "leaving7d": {
+  "COMPLETION_HUNT_POINTS": {
+   "small": 20,
+   "medium": 35,
+   "large": 50
+  },
+  "BONUS_HUNT_POINTS_PER_ITEM_LEVEL": 5,
+  "PENDING_UNTIL": {
+   "trophy": "chunk 9: beast parts",
+   "unbroken": "chunk 9: knock-outs in fights"
+  }
+ },
+ "unmaskReach": {
+  "perception": 120,
+  "runs": 60,
+  "done": 52,
+  "concealments": [
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   110,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   130,
+   150,
+   150,
+   150,
+   150,
+   150,
+   150,
+   150,
+   150,
+   150,
+   170,
+   170,
+   170,
+   170,
+   170,
+   170
+  ]
+ },
+ "objectivesSolved": {
+  "scout reeds_of_gethsemane/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 3.1667
+  },
+  "apex reeds_of_gethsemane/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 2.8333
+  },
+  "cull reeds_of_gethsemane/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 2.5
+  },
+  "retrieve reeds_of_gethsemane/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 2.8333
+  },
+  "commune reeds_of_gethsemane/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 2.3333
+  },
+  "scout reeds_of_gethsemane/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 4
+  },
+  "apex reeds_of_gethsemane/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 3
+  },
+  "cull reeds_of_gethsemane/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 2.5
+  },
+  "retrieve reeds_of_gethsemane/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 3
+  },
+  "commune reeds_of_gethsemane/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 2.5
+  },
+  "scout reeds_of_gethsemane/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 7.5
+  },
+  "apex reeds_of_gethsemane/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 4.5
+  },
+  "cull reeds_of_gethsemane/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 4.5
+  },
+  "retrieve reeds_of_gethsemane/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 5.1667
+  },
+  "commune reeds_of_gethsemane/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 3.5
+  },
+  "scout bay_of_solace/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 1.8333
+  },
+  "apex bay_of_solace/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 1.6667
+  },
+  "cull bay_of_solace/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 1.6667
+  },
+  "retrieve bay_of_solace/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 1.6667
+  },
+  "commune bay_of_solace/small": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 130,
+   "avgDay": 1.5
+  },
+  "scout bay_of_solace/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 2.5
+  },
+  "apex bay_of_solace/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 1.8333
+  },
+  "cull bay_of_solace/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 1.5
+  },
+  "retrieve bay_of_solace/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 2.1667
+  },
+  "commune bay_of_solace/medium": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 227,
+   "avgDay": 1.5
+  },
+  "scout bay_of_solace/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 4.3333
+  },
+  "apex bay_of_solace/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 3.5
+  },
+  "cull bay_of_solace/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 2.5
+  },
+  "retrieve bay_of_solace/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 3.5
+  },
+  "commune bay_of_solace/large": {
+   "runs": 6,
+   "done": 6,
+   "huntPoints": 325,
+   "avgDay": 2.6667
+  },
+  "bonus pathfinder": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus named_quarry": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus provisioner": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus trophy": {
+   "runs": 18,
+   "done": 0
+  },
+  "bonus unbroken": {
+   "runs": 18,
+   "done": 0
+  },
+  "bonus swift_return": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus cleanse": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus great_quarry": {
+   "runs": 18,
+   "done": 18
+  },
+  "bonus unmask": {
+   "runs": 0,
+   "done": 0
+  },
+  "bonus unmask (best Perception)": {
+   "runs": 60,
+   "done": 52,
+   "perception": 120
+  }
  }
 }

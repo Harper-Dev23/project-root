@@ -275,6 +275,41 @@ export function packAtDeparture(bring = [], huntPlanModifiers = null) {
   return { pack, extraSupplies };
 }
 
+/**
+ * What the pack holds, and what an ending does with it (see the header). Rations
+ * left are the supplies still unspent (the camp issue eaten first), capped at
+ * what was packed. Every other brought item is still whole. Pure: changes
+ * nothing. Shared by createHunt's hunt and the map hunt (HuntEngine.js).
+ */
+export function settlePack({ pack, supplies, deathRule, ending }) {
+  if (ending !== 'exit' && ending !== 'wipe') throw new Error(`unknown hunt ending '${ending}'`);
+  const rationsPacked = pack.brought.reduce((n, it) => (it.id === 'rations' ? n + stackQty(it) : n), 0);
+  const rationsLeft = Math.min(rationsPacked, Math.floor(supplies / supplyPerRation() + 1e-9));
+
+  const brought = [];
+  let rationsPlaced = false;
+  for (const it of pack.brought) {
+    if (it.id !== 'rations') { brought.push(clone(it)); continue; }
+    // Every packed ration comes back as one stack of what is left.
+    if (rationsPlaced || rationsLeft <= 0) continue;
+    brought.push({ ...clone(it), qty: rationsLeft });
+    rationsPlaced = true;
+  }
+  const found = clone(pack.found);
+
+  const keeps = ending === 'exit' || deathRule === 'sheltered';
+  const none = { brought: [], found: [] };
+  return {
+    ending,
+    deathRule,
+    keeps,
+    rationsPacked,
+    rationsLeft,
+    home: keeps ? { brought, found } : none,
+    lost: keeps ? none : { brought, found },
+  };
+}
+
 /** Supplies one Rations unit is worth (data/items.js). */
 function supplyPerRation() {
   const k = Items.rations?.supply;
@@ -481,32 +516,7 @@ function makeHunt(s, rng, world) {
      * Pure: changes nothing.
      */
     packOutcome(ending) {
-      if (ending !== 'exit' && ending !== 'wipe') throw new Error(`unknown hunt ending '${ending}'`);
-      const rationsPacked = s.pack.brought.reduce((n, it) => (it.id === 'rations' ? n + stackQty(it) : n), 0);
-      const rationsLeft = Math.min(rationsPacked, Math.floor(s.supplies / supplyPerRation() + 1e-9));
-
-      const brought = [];
-      let rationsPlaced = false;
-      for (const it of s.pack.brought) {
-        if (it.id !== 'rations') { brought.push(clone(it)); continue; }
-        // Every packed ration comes back as one stack of what is left.
-        if (rationsPlaced || rationsLeft <= 0) continue;
-        brought.push({ ...clone(it), qty: rationsLeft });
-        rationsPlaced = true;
-      }
-      const found = clone(s.pack.found);
-
-      const keeps = ending === 'exit' || s.deathRule === 'sheltered';
-      const none = { brought: [], found: [] };
-      return {
-        ending,
-        deathRule: s.deathRule,
-        keeps,
-        rationsPacked,
-        rationsLeft,
-        home: keeps ? { brought, found } : none,
-        lost: keeps ? none : { brought, found },
-      };
+      return settlePack({ pack: s.pack, supplies: s.supplies, deathRule: s.deathRule, ending });
     },
 
     /**

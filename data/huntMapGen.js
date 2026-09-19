@@ -28,7 +28,7 @@ export const MAP_SIZES = {
  * says what that size asks for. `needs` are PLACEMENT_NEEDS keys
  * (data/planAffixes.js), the same vocabulary bonus objectives use, so one
  * generator handles both. Readers of `params` beyond placement: the completion
- * check (chunk 7).
+ * check (HuntObjectives.objectiveProgress).
  */
 export const PRIMARY_OBJECTIVES = {
   scout:    { name: 'Scout',    doneWhen: 'Reveal every marked site.',
@@ -63,7 +63,7 @@ export const DENSITY = {
 
 /** In-game time units in one day + night: 12 advances today (HuntManager's
  *  DAY_NIGHT_ADVANCES x 2). Read for Swift Return's route check; the clock
- *  itself is chunk 7. */
+ *  itself is HuntRules.clockAt (PHASE_UNITS is half of this). */
 export const DAY_TIME_UNITS = 12;
 
 /** Grades, weakest first (ENCOUNTERS, locked 2026-09-17). */
@@ -87,7 +87,7 @@ export const GRADE_WEIGHTS_BY_DANGER = [
  * with its own grade. `weight` is how often each is chosen for a filler pack;
  * Scourge only appears from `minDanger`. `concealment` is the occupant's own,
  * added to the ground's (ENCOUNTERS: "total = occupant + terrain"); `state` is
- * the pack's starting state, read by the world sim (chunk 7): Rooted stays put
+ * the pack's starting state, read by the world sim (HuntWorld.initWorld): Rooted stays put
  * (lairs, the apex, nesting mothers), Roaming wanders its section.
  */
 export const COMPOSITIONS = {

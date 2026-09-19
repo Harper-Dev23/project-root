@@ -34,7 +34,7 @@ export const PLAN_TIER_BANDS = [
  * Each tier's implicit: on every plan of that tier, whatever its affixes roll.
  * Reward-side only; a plan never makes a hunt harder through its tier.
  * Reader of completionRewardPercent: the completion reward at a clean exit
- * (chunk 7). Reader of bonusObjective: ItemFactory, which rolls it at creation.
+ * (HuntObjectives.exitReward). Reader of bonusObjective: ItemFactory, which rolls it at creation.
  */
 export const PLAN_TIER_IMPLICITS = {
   1: { completionRewardPercent: 0,  bonusObjective: false },
@@ -82,7 +82,7 @@ export const PLAN_FIELDS = {
   harvestYieldPercent:     { label: 'Harvest & Forage Yield', unit: '%', live: false,
     reader: 'partyStats adds it to forageYieldPercent, read by HuntEngine.forage (live once chunk 8 runs hunts on the map); chunk 9 harvest' },
   completionRewardPercent: { label: 'Completion Reward', unit: '%', live: false,
-    reader: 'chunk 7: the completion reward paid at a clean exit' },
+    reader: 'HuntObjectives.completionRewardPercent -> exitReward, paid at a clean exit (map hunts; live once chunk 8 runs hunts on the map)' },
 };
 
 // tiers: { tier: [min, max] }, T5 weakest.
@@ -152,7 +152,7 @@ export const PLACEMENT_NEEDS = {
  * tier. At most one rolls as a prefix (they share one family), plus the Tier
  * III implicit's guaranteed one, which is always a different objective.
  * "Carried home" objectives count at a clean exit, like the completion reward.
- * Readers of `params` and `doneWhen`: the chunk 7 completion check.
+ * Readers of `params`: HuntObjectives.objectiveProgress (the completion check).
  */
 export const BONUS_OBJECTIVES = {
   pathfinder:    { name: 'Pathfinder',    unlockItemLevel: 1, params: { revealPct: 70 },

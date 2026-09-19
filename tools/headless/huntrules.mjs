@@ -6,7 +6,7 @@
 // HuntRules.js. No rule or formula is re-derived here: where a number is
 // compared, both sides come from the game's own functions.
 //
-// Chunk 7 lands in four steps (7a-7d); this file grows with each. Now: 7a-7c.
+// Chunk 7 lands in four steps (7a-7d); this file covers all four.
 //
 // What it proves (7a):
 //   - rules on hand-built maps: Detection's three bands at their edges, the
@@ -1229,6 +1229,275 @@ console.log('=== trails and Restless ===');
   check('Restless 30 turns a share of Rooted packs Roaming; the plan\'s quarry never', rootedRestless < rootedPlain && quarryMoved === 0,
     `rooted packs over 60 maps: ${rootedPlain} -> ${rootedRestless}`);
   golden.restless = { rootedPlain, rootedRestless };
+}
+
+// =============================================================================
+// 7d: objectives, exit, wipe, the completion reward
+// =============================================================================
+const O = await import('../../src/systems/HuntObjectives.js');
+const { PRIMARY_OBJECTIVES } = HMG;
+const { BONUS_OBJECTIVES, PLAN_TIER_IMPLICITS, planTierFor } = await import('../../data/planAffixes.js');
+const { FORAGE_YIELDING } = await import('../../data/grounds.js');
+
+/** A world that also records Hunt Points paid and items banked. */
+function payingWorld(party) {
+  const w = recordingWorld(party);
+  w.paid = []; w.banked = [];
+  w.awardHuntPoints = (n) => { w.paid.push(n); };
+  w.bankItems = (items, { found }) => { w.banked.push({ found, items: items.map(i => `${i.id}x${i.qty || 1}`) }); };
+  return w;
+}
+
+console.log('=== 7d rules ===');
+{
+  check('every objective the plans can ask for has a completion check',
+    [...Object.keys(PRIMARY_OBJECTIVES), ...Object.keys(BONUS_OBJECTIVES)].every(id => O.CHECKED_OBJECTIVES.includes(id)));
+  check('completion percent = the plan\'s prefixes + its tier implicit',
+    O.completionRewardPercent({ completionRewardPercent: 15 }, 8) === 15 + PLAN_TIER_IMPLICITS[3].completionRewardPercent
+    && O.completionRewardPercent({}, 1) === 0 && O.completionRewardPercent({}, 5) === PLAN_TIER_IMPLICITS[2].completionRewardPercent);
+  check('completion reward: 20 / 35 / 50 by size, scaled by the percent, whole points',
+    O.completionReward('small', 0) === 20 && O.completionReward('medium', 0) === 35 && O.completionReward('large', 0) === 50
+    && O.completionReward('small', 35) === 27);
+  check(`bonus reward: ${O.BONUS_HUNT_POINTS_PER_ITEM_LEVEL} per plan item level`, O.bonusReward(1) === 5 && O.bonusReward(8) === 40);
+  golden.leaving7d = { COMPLETION_HUNT_POINTS: O.COMPLETION_HUNT_POINTS, BONUS_HUNT_POINTS_PER_ITEM_LEVEL: O.BONUS_HUNT_POINTS_PER_ITEM_LEVEL, PENDING_UNTIL: O.PENDING_UNTIL };
+}
+
+/**
+ * The harness's solver: a simple strategy that uses TRUE positions from the
+ * state (it is proving objectives completable, not playing fair). It walks the
+ * shortest path to what the next unfinished objective needs, wins every fight
+ * (combat is chunk 9), then walks to the nearest exit and leaves.
+ */
+function nextStep(h, isGoal, { avoid = true } = {}) {
+  const s = h.getState();
+  const hostileAt = new Set(s.map.occupants.filter(o => o.kind !== 'event').map(o => o.tile));
+  const prev = new Map([[s.pos, null]]);
+  const queue = [s.pos];
+  for (let i = 0; i < queue.length; i++) {
+    const id = queue[i];
+    if (id !== s.pos && isGoal(id)) {
+      let at = id;
+      while (prev.get(at) !== s.pos) at = prev.get(at);
+      return at;
+    }
+    for (const n of [...mapNeighbors(s.map, id)].sort()) {
+      if (prev.has(n) || !isPassable(s.map.tiles[n])) continue;
+      if (avoid && hostileAt.has(n) && !isGoal(n)) continue;
+      prev.set(n, id);
+      queue.push(n);
+    }
+  }
+  return avoid ? nextStep(h, isGoal, { avoid: false }) : null;
+}
+
+function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods = {}, itemLevel = 5, party = makeParty(), maxActions = 900 }) {
+  const world = payingWorld(party);
+  const h = createMapHunt(zoneId, { plan: { objective, size, bonusObjectives: bonus, mods: planMods, itemLevel }, supplies: 400, seed }, world);
+  const exitTiles = new Set(h.getState().map.exits);
+  let stuck = null;
+  for (let i = 0; i < maxActions; i++) {
+    if (h.encounter()) { h.winEncounter(); continue; }
+    const s = h.getState();
+    const prog = h.objectives();
+    const open = prog.find(p => !p.done && !p.pending && !(p.id === 'swift_return') && !(p.carriedHome && p.have >= p.need));
+    let step = null;
+    if (open) {
+      const o = open.kind === 'primary' ? s.map.objectives.primary : s.map.objectives.bonus.find(b => b.id === open.id);
+      const occs = s.map.occupants;
+      switch (open.id) {
+        case 'scout': step = nextStep(h, id => o.sites.includes(id) && !s.fog[id]); break;
+        case 'apex': step = nextStep(h, id => occs.some(x => x.id === o.occupant && x.tile === id)); break;
+        case 'cull': case 'named_quarry': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.family === o.family && x.tile === id)); break;
+        case 'retrieve': case 'commune': step = nextStep(h, id => id === o.site); break;
+        case 'pathfinder': step = nextStep(h, id => !s.fog[id]) || nextStep(h, id => mapNeighbors(s.map, id).some(n => !s.fog[n])); break;
+        case 'great_quarry': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.tile === id && x.roster.some(m => m.grade === 'great'))); break;
+        case 'provisioner': {
+          const t = s.map.tiles[s.pos];
+          const canForage = !s.gathered[s.pos] && !t.barren && (R.FORAGE_YIELD[GROUNDS[t.ground].forage] || 0) > 0 && R.forageCandidates(Items, t.ground).length > 0;
+          if (canForage) { h.forage(); continue; }
+          if (!s.gathered[s.pos] && t.fishing && !t.barren) { h.fish(); continue; }
+          step = nextStep(h, id => { const x = s.map.tiles[id]; return !s.gathered[id] && !x.barren && (x.fishing || FORAGE_YIELDING.includes(GROUNDS[x.ground].forage)); });
+          break;
+        }
+        case 'cleanse': {
+          if (s.map.tiles[s.pos].ground === 'blight') { h.cleanse(); continue; }
+          step = nextStep(h, id => s.map.tiles[id].ground === 'blight');
+          break;
+        }
+        case 'unmask': {
+          const hid = occs.filter(x => occupantConcealment(s.map, x) > 100 && !s.unmasked.includes(x.id));
+          const sensed = hid.find(x => s.sightings[x.id]?.band === 'sensed' && s.sightings[x.id].tile === x.tile && s.fog[x.tile] === 'visible');
+          if (sensed) { h.scout(sensed.id); continue; }
+          step = nextStep(h, id => hid.some(x => mapNeighbors(s.map, x.tile).includes(id)));
+          break;
+        }
+        default: stuck = `no strategy for ${open.id}`;
+      }
+      if (stuck) break;
+    } else {
+      if (exitTiles.has(s.pos)) {
+        const r = h.exit();
+        return { h, world, exited: r.ok, r, actions: i };
+      }
+      step = nextStep(h, id => exitTiles.has(id));
+    }
+    if (!step) { stuck = `no path (${open ? open.id : 'exit'})`; break; }
+    h.move(step);
+  }
+  return { h, world, exited: false, stuck: stuck || 'ran out of actions' };
+}
+const { occupantConcealment } = await import('../../src/systems/HuntMapGen.js');
+
+console.log('=== every objective is completable and pays at the exit ===');
+{
+  const table = {}, fails = [];
+  // Primaries: every zone, size, objective.
+  for (const zoneId of ZONES) {
+    for (const size of SIZES) {
+      for (const objective of Object.keys(PRIMARY_OBJECTIVES)) {
+        const row = { runs: 0, done: 0, days: 0, huntPoints: 0 };
+        for (let k = 0; k < 6; k++) {
+          const itemLevel = 1 + (k % 10);
+          const planMods = { completionRewardPercent: k % 2 ? 9 : 0 };
+          const r = solve({ zoneId, size, objective, seed: 10000 + k, itemLevel, planMods });
+          row.runs++;
+          const want = O.completionReward(size, O.completionRewardPercent(planMods, itemLevel));
+          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints) {
+            row.done++; row.days += R.clockAt(r.h.getState().time).day; row.huntPoints += r.r.reward.huntPoints;
+          } else fails.push(`${zoneId}/${size}/${objective} ${10000 + k}: ${r.stuck || JSON.stringify(r.r?.reward?.progress?.[0])}`);
+        }
+        row.avgDay = row.done ? r4(row.days / row.done) : null; delete row.days;
+        table[`${objective} ${zoneId}/${size}`] = row;
+      }
+    }
+  }
+  check('all 5 primaries x 2 regions x 3 sizes x 6 seeds: completed, left, and paid exactly completionReward', fails.length === 0, fails.slice(0, 3).join(' | '));
+  // Bonuses, on a Scout plan.
+  const bonusFails = [], pendingOk = [];
+  for (const id of Object.keys(BONUS_OBJECTIVES)) {
+    const row = { runs: 0, done: 0 };
+    for (const zoneId of ZONES) {
+      for (const size of SIZES) {
+        for (let k = 0; k < 3; k++) {
+          if (id === 'unmask') continue;   // measured on its own below: it depends on Perception
+          const r = solve({ zoneId, size, bonus: [id], seed: 11000 + k, itemLevel: 8 });
+          row.runs++;
+          const b = r.r?.reward?.progress?.find(p => p.id === id);
+          if (O.PENDING_UNTIL[id]) {
+            pendingOk.push(!!b?.pending && !b.done && !r.r.reward.bonuses.some(x => x.id === id));
+            continue;
+          }
+          if (r.exited && b?.done && r.r.reward.bonuses.some(x => x.id === id && x.huntPoints === O.bonusReward(8))) row.done++;
+          else bonusFails.push(`${id} ${zoneId}/${size} ${11000 + k}: ${r.stuck || JSON.stringify(b)}`);
+        }
+      }
+    }
+    table[`bonus ${id}`] = row;
+  }
+  check('every bonus objective the engine can check: completed on every map and paid its reward at the exit',
+    bonusFails.length === 0, bonusFails.slice(0, 3).join(' | '));
+  check('Trophy and Unbroken report pending (chunk 9) and are never done or paid', pendingOk.length > 0 && pendingOk.every(Boolean));
+  // Unmask, at the best Perception the game can reach today: a level-10
+  // Ferrow Shepherd with five Perception picks (100) and a T1 of Keen Eyes (+20).
+  {
+    const eyes = () => { const p = makeParty(); const s = p.find(c => c.baseClass === 'Shepherd');
+      s.level = 10; s.exploration = { picks: { 2: { rating: 'perception' }, 4: { rating: 'perception' }, 6: { rating: 'perception' }, 8: { rating: 'perception' }, 10: { rating: 'perception' } } }; return p; };
+    const best = partyStats(eyes(), { perceptionBonus: 20 }).perception;
+    let runs = 0, done = 0, reachableButFailed = 0;
+    const concs = [];
+    for (const zoneId of ZONES) for (const size of SIZES) for (let k = 0; k < 10; k++) {
+      const r = solve({ zoneId, size, bonus: ['unmask'], seed: 11000 + k, itemLevel: 8, planMods: { perceptionBonus: 20 }, party: eyes() });
+      runs++;
+      const s0 = createMapHunt(zoneId, { plan: { objective: 'scout', size, bonusObjectives: ['unmask'], itemLevel: 8 }, supplies: 1, seed: 11000 + k }, recordingWorld(makeParty())).getState();
+      // Only occupants that stay put can be counted on: a roaming beast in a
+      // thicket is hidden past 100 only until it walks out of it.
+      const hidden = s0.map.occupants.filter(o => (o.kind === 'cultist' || o.state === 'rooted') && occupantConcealment(s0.map, o) > 100).map(o => occupantConcealment(s0.map, o));
+      const reachable = hidden.some(c => c <= best + R.SENSED_MARGIN);
+      concs.push(...hidden);
+      const b = r.r?.reward?.progress?.find(p => p.id === 'unmask');
+      if (r.exited && b?.done) done++;
+      else if (reachable) reachableButFailed++;
+    }
+    check(`Unmask: completed on every map where an occupant that stays put is hidden within reach (Perception ${best} + ${R.SENSED_MARGIN} to scout it)`,
+      reachableButFailed === 0);
+    const within = concs.filter(c => c <= best + R.SENSED_MARGIN).length;
+    console.log(`    FINDING: Unmask completed on ${done} of ${runs} maps at the best reachable Perception (${best}). `
+      + `Hidden bands' concealment: ${[...new Set(concs)].sort((a, b) => a - b).join(', ')}; ${concs.length - within} of ${concs.length} `
+      + `are beyond Perception + ${R.SENSED_MARGIN}, so no party can find them yet.`);
+    golden.unmaskReach = { perception: best, runs, done, concealments: [...concs].sort((a, b) => a - b) };
+    table['bonus unmask (best Perception)'] = { runs, done, perception: best };
+  }
+  golden.objectivesSolved = table;
+  for (const [k, v] of Object.entries(table)) if (v.done !== v.runs && !k.includes('trophy') && !k.includes('unbroken')) console.log(`    ${k}: ${JSON.stringify(v)}`);
+  const days = Object.entries(table).filter(([k]) => !k.startsWith('bonus')).map(([k, v]) => `${k.split(' ')[0]} ${k.split('/')[1]}: day ${v.avgDay}`);
+  console.log(`    exit day by objective and size (solver, fights free): ${[...new Set(days)].slice(0, 15).join('; ')}`);
+}
+
+console.log('=== leaving early, the exit rules, the wipe ===');
+{
+  const party = makeParty();
+  const world = payingWorld(party);
+  const { makeStack } = await import('../../src/systems/ItemStacks.js');
+  const h = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'medium', itemLevel: 5 }, supplies: 100, seed: 12000, bring: [makeStack('rations', 40)] }, world);
+  // Walk one step off the entry: leaving is refused there.
+  const off = mapNeighbors(h.getState().map, h.getState().pos).find(n => isPassable(h.getState().map.tiles[n]) && !h.getState().map.tiles[n].exit);
+  h.move(off); settle(h);
+  check('exit is refused off an exit-capable tile', !h.exit().ok);
+  h.move(h.getState().from); settle(h);
+  const before = h.getState();
+  const r = h.exit();
+  check('leaving early from the entry: allowed; no completion reward, nothing paid', r.ok && !r.reward.primaryDone && r.reward.completion === 0 && world.paid.length === 0);
+  check('leaving early: the pack comes home through settlePack (unspent Rations banked)',
+    r.pack.keeps && r.pack.rationsPacked === 40 && world.banked.some(b => !b.found && b.items.some(x => x.startsWith('rations'))),
+    `${r.pack.rationsLeft} of 40 Rations home`);
+  const after = h.getState();
+  const tries = [h.move(off), h.camp(), h.forage(), h.exit(), h.wipe(), h.flee(), h.winEncounter()];
+  check('after the exit the hunt is over: every action refused', after.finished === 'exit' && tries.every(t => !t.ok));
+
+  // During a fight: exit refused. Find a fight on the entry's doorstep.
+  let refusedInFight = null;
+  for (let k = 0; k < 80 && refusedInFight === null; k++) {
+    const hh = createMapHunt(ZONES[k % 2], { plan: { objective: 'scout', size: 'medium' }, supplies: 100, seed: 12100 + k }, payingWorld(makeParty()));
+    const pick = makeRng(k), stood = new Set([hh.getState().pos]);
+    for (let i = 0; i < 40 && !hh.encounter(); i++) { const to = chooseMove(hh, pick, stood); stood.add(to); hh.move(to); }
+    if (!hh.encounter()) continue;
+    refusedInFight = !hh.exit().ok && hh.exit().reason.includes('fight');
+  }
+  check('exit is refused while a fight is pending', refusedInFight === true);
+
+  // The wipe, by death rule.
+  const wipeWith = (deathRule) => {
+    const w = payingWorld(makeParty());
+    const hh = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'small' }, supplies: 100, seed: 12200, bring: [makeStack('rations', 30)] }, w);
+    hh.forage();
+    const d = hh.serialize();
+    d.deathRule = deathRule;
+    const h2 = restoreMapHunt(d, w);
+    const out = h2.wipe();
+    return { out, w, h2 };
+  };
+  const sh = wipeWith('sheltered'), wa = wipeWith('watched');
+  check('wipe, Sheltered: the pack comes home; nothing is paid', sh.out.ok && sh.out.pack.keeps && sh.w.banked.length > 0 && sh.w.paid.length === 0);
+  check('wipe, Watched: the pack is lost; nothing banked, nothing paid', wa.out.ok && !wa.out.pack.keeps && wa.w.banked.length === 0 && wa.w.paid.length === 0);
+  check('after a wipe the hunt is over', sh.h2.getState().finished === 'wipe' && !sh.h2.move(mapNeighbors(sh.h2.getState().map, sh.h2.getState().pos)[0]).ok && !sh.h2.exit().ok);
+
+  // A Waystone is an exit: walk to one and leave from it.
+  let waystoneOk = null;
+  for (let k = 0; k < 300 && waystoneOk === null; k++) {
+    const w = payingWorld(makeParty());
+    const hh = createMapHunt(ZONES[k % 2], { plan: { objective: 'scout', size: 'large', bonusObjectives: ['swift_return'], itemLevel: 8 }, supplies: 400, seed: 12300 + k }, w);
+    const ways = hh.getState().map.features.filter(f => f.kind === 'waystone').map(f => f.tile);
+    if (!ways.length) continue;
+    for (let i = 0; i < 400 && !ways.includes(hh.getState().pos); i++) {
+      if (hh.encounter()) { hh.winEncounter(); continue; }
+      const step = nextStep(hh, id => ways.includes(id));
+      if (!step) break;
+      hh.move(step);
+    }
+    if (hh.encounter()) hh.winEncounter();
+    waystoneOk = ways.includes(hh.getState().pos) && hh.exit().ok;
+  }
+  check('a Waystone is an exit: the party walks to one and leaves from it', waystoneOk === true);
 }
 
 // =============================================================================

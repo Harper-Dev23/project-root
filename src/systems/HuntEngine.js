@@ -1,13 +1,14 @@
 // src/systems/HuntEngine.js
 //
 // A hunt on the hex map (Exploration System v2, chunk 7). Chunk 7 builds it in
-// four steps; 7a to 7c are built:
+// four steps, all built:
 //   7a  moving and seeing: moves (supplies + time), the clock and day/night,
 //       Sight, fog, Detection, the scout action
 //   7b  food: hunger, forage and fish, eating, camp and cooking
 //   7c  the world tick (HuntWorld.js), the encounter trigger with ambush and
 //       party initiative, flee, the found-in-camp check, cleansing blight
-//   7d  leaving: exit, objectives, the completion reward      <- next
+//   7d  leaving: objective progress (HuntObjectives.js), exit from an
+//       exit-capable tile with the completion reward, and the wipe
 //
 // It sits BESIDE the old Advance loop in HuntManager.js, which the game still
 // runs until chunk 8 draws the map. Nothing in the game creates a map hunt yet,
@@ -65,6 +66,18 @@
 //               in sight show what Detection reads NOW; a remembered tile keeps
 //               its last reading, stale once packs move.
 //   scouted     occupants the scout action has resolved: identified, exact.
+//
+// ── Leaving (7d) ────────────────────────────────────────────────────────────
+// A hunt ends two ways only (HUNT_STRUCTURE): exit() from an exit-capable tile
+// (the entry, a Waystone), or wipe() when the party falls (the combat hookup
+// calls it, chunk 9). The pack settles through the same settlePack the old
+// hunt uses. A clean exit pays the completion reward if the primary objective
+// is done, and each done bonus objective on top; leaving early keeps
+// everything earned and forfeits only the completion reward. A wipe pays none
+// of it. After either, every action is refused.
+//   retrieved   the Retrieve item has been taken (by standing on its site)
+//   communed    the shrine has been reached (Commune, until Events v2)
+//   unmasked    occupants identified while their concealment was above 100
 
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
@@ -72,9 +85,10 @@ import { isPassable, GROUNDS } from '../../data/grounds.js';
 import { Items } from '../../data/items.js';
 import { addToList, makeStack, takeFromList, countInList } from './ItemStacks.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
-import { generateHuntMap, mapNeighbors, HUNT_MAP_VERSION } from './HuntMapGen.js';
+import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
-import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES } from './HuntManager.js';
+import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } from './HuntManager.js';
+import { objectiveProgress, exitReward, completionRewardPercent } from './HuntObjectives.js';
 import { isItemInstance } from './ItemFactory.js';
 import {
   huntMods, moveCost, clockAt, sightRange, visibleTiles, occupantBand,
@@ -107,8 +121,9 @@ function mainLandGround(zone) {
  *
  * @param {string} zoneId
  * @param {object} opts
- * @param {{objective: string, size: string, bonusObjectives?: string[], mods?: object}} opts.plan
- *        planMapInputs(huntPlanView(inst)) gives exactly this (HuntMapGen.js)
+ * @param {{objective: string, size: string, bonusObjectives?: string[], mods?: object, itemLevel?: number}} opts.plan
+ *        planMapInputs(huntPlanView(inst)) gives all but itemLevel, which is
+ *        the view's own (it sets the tier implicit and the bonus rewards)
  * @param {number} opts.supplies  starting supplies, already including packed Rations
  * @param {object[]} [opts.bring] item instances packed at departure
  * @param {number} [opts.seed]
@@ -134,7 +149,11 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     v: MAP_HUNT_STATE_VERSION,
     seed,
     zoneId,
-    plan: { objective: plan.objective, size: plan.size, bonusObjectives: [...(plan.bonusObjectives || [])] },
+    plan: {
+      objective: plan.objective, size: plan.size, bonusObjectives: [...(plan.bonusObjectives || [])],
+      itemLevel: Number.isFinite(plan.itemLevel) ? plan.itemLevel : 1,
+      completionRewardPercent: completionRewardPercent(planMods, Number.isFinite(plan.itemLevel) ? plan.itemLevel : 1),
+    },
     weather,
     mods: huntMods(zone.modifiers, weather.modifiers, planMods),
     deathRule: zoneDeathRule(zone),
@@ -160,6 +179,11 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     kills: [],
     flees: 0,
     cleansed: [],
+    retrieved: false,
+    communed: false,
+    unmasked: [],
+    finished: null,
+    reward: null,
     pack,
     log: [],
   };
@@ -187,7 +211,7 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
     if (!data.map.tiles[id] || (f !== 'visible' && f !== 'remembered')) throw new Error(`bad fog entry '${id}'`);
   }
   if (!data.sightings || Object.values(data.sightings).some(x => !BANDS.includes(x.band))) throw new Error('bad sightings');
-  for (const k of ['scouted', 'log', 'kills', 'cleansed']) {
+  for (const k of ['scouted', 'log', 'kills', 'cleansed', 'unmasked']) {
     if (!Array.isArray(data[k])) throw new Error(`map hunt list '${k}' is missing`);
   }
   for (const k of ['gathered', 'trails', 'seenGround']) {
@@ -199,6 +223,8 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   }
   if (!Number.isFinite(data.world?.time) || !Number.isFinite(data.world?.day)) throw new Error('map hunt world clock is not readable');
   if (!GROUNDS[data.landGround]) throw new Error('map hunt has no land ground');
+  if (data.finished !== null && data.finished !== 'exit' && data.finished !== 'wipe') throw new Error(`map hunt ending '${data.finished}' is not one this build knows`);
+  if (!Number.isFinite(data.plan?.itemLevel) || !Number.isFinite(data.plan?.completionRewardPercent)) throw new Error('map hunt plan has no item level or reward');
   if (!Array.isArray(data.pack?.brought) || !Array.isArray(data.pack?.found)
       || ![...data.pack.brought, ...data.pack.found].every(isItemInstance)) {
     throw new Error('map hunt pack is not two lists of items');
@@ -207,7 +233,7 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   if (!isSeed(data.rngState) || !isSeed(data.worldRngState)) throw new Error('map hunt has no random-stream state');
   const { rngState, worldRngState, ...rest } = data;
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
-  if (rest.encounter) hunt.flee({ reason: 'reload' });
+  if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
   return hunt;
 }
 
@@ -217,7 +243,8 @@ function clone(v) {
 
 function makeMapHunt(s, rng, worldRng, world) {
   const occById = () => new Map(s.map.occupants.map(o => [o.id, o]));
-  const frozen = () => (s.encounter ? { ok: false, reason: 'a fight is under way: win it or flee' } : null);
+  const frozen = () => (s.finished ? { ok: false, reason: 'the hunt is over' }
+    : s.encounter ? { ok: false, reason: 'a fight is under way: win it or flee' } : null);
 
   return {
     /** The party's stats right now: live party, the hunt's bundle, this
@@ -265,6 +292,7 @@ function makeMapHunt(s, rng, worldRng, world) {
           cause: 'party', knew, ambush: knew === 'nothing', partyInitiative: st.partyInitiative, at: s.time, tile: to,
         });
       }
+      this._arrive();
       const spent = this._spendTime(cost.time);
       this._noteSupplies();
       const starved = this.hunger() === 'starving' ? this._starve() : [];
@@ -461,6 +489,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      * occupant ever replaces it (no mid-hunt spawns).
      */
     winEncounter() {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const e = s.encounter;
       if (!e) return { ok: false, reason: 'no fight to win' };
       const i = s.map.occupants.findIndex(o => o.id === e.occId);
@@ -488,6 +517,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      * No smoke charge yet: nothing could read one before chunk 9.
      */
     flee({ reason = 'fled' } = {}) {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const e = s.encounter;
       if (!e) return { ok: false, reason: 'nothing to flee from' };
       const occ = occById().get(e.occId);
@@ -505,6 +535,41 @@ function makeMapHunt(s, rng, worldRng, world) {
         ok: true, to: back, time, flips: spent.flips, enemyFreeRound: true,
         alerted: occ?.kind === 'beast' ? occ.id : null, starved, encounter: this.encounter(),
       };
+    },
+
+    /** Every objective with its progress now (HuntObjectives.objectiveProgress). */
+    objectives() {
+      return objectiveProgress(s);
+    },
+
+    /**
+     * Leave the map from an exit-capable tile (the entry or a Waystone). The
+     * clean exit: the pack comes home (settlePack), and the reward is paid
+     * through the world's awardHuntPoints (HuntObjectives.exitReward). Refused
+     * off an exit tile, during a fight, or once the hunt is over.
+     */
+    exit() {
+      const no = frozen(); if (no) return no;
+      if (!s.map.tiles[s.pos].exit) return { ok: false, reason: 'you can only leave from the entry or a Waystone' };
+      const reward = exitReward(s);
+      const pack = this._finish('exit');
+      if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
+      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone };
+      this._log({ kind: 'exit', tile: s.pos, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, time: s.time });
+      return { ok: true, reward, pack };
+    },
+
+    /**
+     * The party wiped (the combat hookup calls this, chunk 9). The hunt ends
+     * where it stands, a fight in progress included; the pack comes home or
+     * is lost by the region's death rule; nothing is paid.
+     */
+    wipe() {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      s.encounter = null;
+      const pack = this._finish('wipe');
+      this._log({ kind: 'wipe', tile: s.pos, deathRule: s.deathRule, time: s.time });
+      return { ok: true, pack };
     },
 
     /** What the party knows of one occupant, or null (ENCOUNTERS). `stale` is
@@ -544,6 +609,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         occupants,
         trails,
         encounter: this.encounter(),
+        objectives: objectiveProgress(s),
+        finished: s.finished,
       };
     },
 
@@ -580,6 +647,22 @@ function makeMapHunt(s, rng, worldRng, world) {
         this._log({ kind: 'encounter', ...tick.encounter, time: s.time });
       }
       return { spent, flips, encounter: tick.encounter };
+    },
+
+    /** Settle the pack for an ending, bank what comes home, mark the hunt over. */
+    _finish(ending) {
+      const out = settlePack({ pack: s.pack, supplies: s.supplies, deathRule: s.deathRule, ending });
+      s.finished = ending;
+      if (out.home.brought.length) world.bankItems(out.home.brought, { found: false });
+      if (out.home.found.length) world.bankItems(out.home.found, { found: true });
+      return out;
+    },
+
+    /** Standing on the Retrieve site takes the item; on the shrine, communes. */
+    _arrive() {
+      const p = s.map.objectives.primary;
+      if (p.id === 'retrieve' && s.pos === p.site && !s.retrieved) { s.retrieved = true; this._log({ kind: 'retrieved', tile: s.pos, time: s.time }); }
+      if (p.id === 'commune' && s.pos === p.site && !s.communed) { s.communed = true; this._log({ kind: 'communed', tile: s.pos, time: s.time }); }
     },
 
     /** Where a fleeing party goes: back where it came from if that is open,
@@ -670,6 +753,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         const band = s.scouted.includes(occ.id) ? 'identified' : occupantBand(s.map, occ, st.perception);
         if (band === 'nothing') delete s.sightings[occ.id];
         else s.sightings[occ.id] = { tile: occ.tile, band, at: now };
+        // Unmask: identified while hidden past 100 (occupant + ground).
+        if (band === 'identified' && !s.unmasked.includes(occ.id) && occupantConcealment(s.map, occ) > 100) s.unmasked.push(occ.id);
       }
       return range;
     },
