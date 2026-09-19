@@ -11,6 +11,7 @@ import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { describeModifiers } from '../systems/HuntModifiers.js';
+import { currentPlanStock, markPlanSold } from '../systems/HuntPlans.js';
 import { setupSceneCursor } from '../ui/cursor.js';
 import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
@@ -2011,12 +2012,13 @@ export default class TownScene extends Phaser.Scene {
       })
       .forEach(entry => {
         if (!entry.base) return;
-        // entry.rarity (set by stock generation, e.g. _rollHuntPlanStock) overrides the
+        // entry.rarity (set by stock generation, e.g. _huntPlanStock) overrides the
         // base item's static rarity — keeps the displayed color in sync with what you'll
         // actually receive, since that's the exact rarity passed to createItemInstance below.
         const rowRarity = entry.rarity || entry.base.rarity || entry.base.quality;
         const color = RARITY_COLORS[rowRarity] || '#cccccc';
-        const rarityTag = entry.rarity ? ` (${formatLabel(entry.rarity)})` : '';
+        const levelTag = Number.isFinite(entry.itemLevel) ? `, iLvl ${entry.itemLevel}` : '';
+        const rarityTag = entry.rarity ? ` (${formatLabel(entry.rarity)}${levelTag})` : '';
 
         // Vendor rows are priced in gold by default. An entry may name another
         // ProgressionManager counter via `currency` (e.g. reckoningMarks), in
@@ -2025,13 +2027,15 @@ export default class TownScene extends Phaser.Scene {
         // behaviour and deliberately left alone here.
         const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Mark', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket' };
         const cur = entry.currency;
-        const curName = cur ? CURRENCY_LABEL[cur] || cur : null;
+        // A row may shorten its currency name (plan rows carry rarity AND item
+        // level, and overflowed the panel with the full name).
+        const curName = cur ? entry.currencyLabel || CURRENCY_LABEL[cur] || cur : null;
         const priceText = cur
           ? `${entry.cost} ${curName}${entry.cost === 1 ? '' : 's'}`
           : `${entry.cost}g`;
 
         const text = this.add.text(620, 220 + yOffset, `• ${entry.base.name}${rarityTag} — ${priceText}`, {
-          fontSize: '18px',
+          fontSize: Number.isFinite(entry.itemLevel) ? '16px' : '18px',
           color
         })
           .setDepth(13)
@@ -2055,7 +2059,10 @@ export default class TownScene extends Phaser.Scene {
               ProgressionManager[cur] = held - entry.cost;
             }
 
-            const instance = createItemInstance(itemId, entry.rarity ? { rarity: entry.rarity } : undefined);
+            const instOpts = {};
+            if (entry.rarity) instOpts.rarity = entry.rarity;
+            if (Number.isFinite(entry.itemLevel)) instOpts.itemLevel = entry.itemLevel;
+            const instance = createItemInstance(itemId, instOpts);
             if (!instance) {
               console.warn(`Failed to create item instance for ID: ${itemId}`);
               return;
@@ -2063,6 +2070,11 @@ export default class TownScene extends Phaser.Scene {
 
             InventorySystem.addGlobalItem(instance);
             SoundManager.play('dullClick');
+            // A plan slot sells once: mark it and redraw, so the row goes away.
+            if (Number.isInteger(entry.planSlot)) {
+              markPlanSold(ProgressionManager, entry.planSlot);
+              this.openVendorInventory(vendorKey, filterType);
+            }
             this.vendorInventoryText.setText(`Purchased: ${instance.displayName || entry.base.name}`);
             console.log(`✅ Added to global inventory:`, instance);
 
@@ -2093,11 +2105,21 @@ export default class TownScene extends Phaser.Scene {
   // ===============================
   // 📦 Vendor Data
   // ===============================
-  /** Picks ~3 random Hunt Plan item ids, all free — re-rolled on every render (no stock tracking needed). */
-  /** 3 free Hunt Plan stock slots, each its own rolled rarity — locked in here so the
-   *  displayed color and the item actually received always match (re-rolled every visit). */
-  _rollHuntPlanStock() {
-    return Array.from({ length: 3 }, () => ({ id: 'hunt_plan', cost: 0, rarity: randomRarityForGamble() }));
+  /** Today's Hunt Plan stock (HuntPlans.currentPlanStock): 3 slots, each with its own
+   *  rarity and item level, rolled once per in-game day and saved, so redrawing, leaving
+   *  or reloading cannot re-roll it. Item levels go up to the party's highest level,
+   *  priced in Hunt Tickets by level. Each slot sells once. The basic plan is free at
+   *  the Hunt screen, so none is sold here. */
+  _huntPlanStock() {
+    const partyLevel = Math.max(1, ...(GameState.party || []).map(c => c?.level || 1));
+    const stock = currentPlanStock(ProgressionManager, { partyLevel, rollRarity: randomRarityForGamble });
+    return stock.slots
+      .map((s, planSlot) => ({ ...s, planSlot }))
+      .filter(s => !s.sold)
+      .map(({ rarity, itemLevel, cost, planSlot }) => ({
+        id: 'hunt_plan', rarity, itemLevel, cost, planSlot,
+        currency: 'huntTickets', currencyLabel: 'Ticket',
+      }));
   }
 
   getVendorDefinitions() {
@@ -2206,9 +2228,9 @@ export default class TownScene extends Phaser.Scene {
       wayfinder: {
         displayName: "Greenhollow Satchel",
         flavor: `"A weathered cartographer spreads a handful of dog-eared
-        plans across a crate. 'Take your pick — won't cost you a thing.
-        Just don't blame me for what you walk into.'"`,
-        inventory: this._rollHuntPlanStock()
+        plans across a crate. 'A ticket a level. The better the ground,
+        the dearer the map. Don't blame me for what you walk into.'"`,
+        inventory: this._huntPlanStock()
       }
     };
   }

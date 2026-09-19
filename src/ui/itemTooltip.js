@@ -13,6 +13,7 @@
 
 import { isItemInstance, getItemComputedData, getAffixIndex } from '../systems/ItemFactory.js';
 import { Items } from '../../data/items.js';
+import { describePlan } from '../systems/HuntPlans.js';
 import { SKILLS } from '../../data/skills.js';
 
 // Matches Tooltip.js's existing _pillColorFor palette where a family overlaps
@@ -211,6 +212,14 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
     if (misc.procPhysFlat) lines.push(`  • ${misc.procPhysFlat}% Chance: +10 Physical Damage`);
     if (misc.procElemFlat) lines.push(`  • ${misc.procElemFlat}% Chance: +10 Elemental Damage`);
     if (misc.procNecroFlat) lines.push(`  • ${misc.procNecroFlat}% Chance: +10 Necrotic Damage`);
+  }
+
+  // Hunt Plan: tier and implicit, objectives, and its modifiers, which the
+  // misc block above does not list.
+  if (base.type === 'huntPlan' && instance) {
+    lines.push('');
+    lines.push('Hunt Plan:');
+    describePlan(instance).forEach(l => lines.push(`  • ${l}`));
   }
 
   // Falls back to base.grantsSkills (view already spreads it in) for items

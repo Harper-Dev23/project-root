@@ -202,6 +202,10 @@ const ProgressionManager = {
   tribeTickets: 0,
   huntPoints:   0,          // player-wide score from the Hunt loop — tracked via the Waystone
   tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
+  // The camp plan vendor's stock: { day, slots: [{ rarity, itemLevel, cost, sold }] }.
+  // Rolled once per in-game day (HuntPlans.currentPlanStock), so re-opening the
+  // vendor or reloading cannot re-roll it. null = not rolled yet.
+  planVendorStock: null,
 
   // Quest flags: IDs of events that are currently "pending" (show a ! marker).
   // e.g. ['tribe_choice'] means the Elder's Tower has something for the player.
@@ -514,6 +518,7 @@ const ProgressionManager = {
       questFlags:          [...this.questFlags],
       tribe:               this.tribe,
       tribeVendorStock:    { ...this.tribeVendorStock },
+      planVendorStock:     this.planVendorStock ? JSON.parse(JSON.stringify(this.planVendorStock)) : null,
       completedQuestSteps: [...this.completedQuestSteps],
       tribeRep:            { ...this.tribeRep },
       tribeIntel:          { ...this.tribeIntel },
@@ -538,6 +543,9 @@ const ProgressionManager = {
     this.tribe               = data.tribe || null;
     this.tribeVendorStock    = (data.tribeVendorStock && typeof data.tribeVendorStock === 'object')
       ? { ...data.tribeVendorStock } : {};
+    // Optional: a save without it (every save before chunk 4) rolls a fresh stock.
+    this.planVendorStock     = (data.planVendorStock && Array.isArray(data.planVendorStock.slots))
+      ? JSON.parse(JSON.stringify(data.planVendorStock)) : null;
     this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
     this.tribeRep            = (data.tribeRep && typeof data.tribeRep === 'object')
       ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
@@ -565,6 +573,7 @@ const ProgressionManager = {
     this.questFlags          = [];
     this.tribe               = null;
     this.tribeVendorStock    = {};
+    this.planVendorStock     = null;
     this.completedQuestSteps = [];
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
     this.tribeIntel          = { ...DEFAULT_TRIBE_INTEL };

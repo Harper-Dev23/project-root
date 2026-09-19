@@ -34,11 +34,18 @@ export const WEATHER_TYPES = [
 ];
 
 // `rng` is the hunt's seeded stream; see EncounterRoller.roll for why.
-export function rollWeather(rng = Math.random) {
-  const totalWeight = WEATHER_TYPES.reduce((sum, w) => sum + w.weight, 0);
+// `foulWeatherPercent` is the Foul Weather plan prefix (data/planAffixes.js):
+// it takes that share of Clear Skies' weight, so the harsh kinds split what is
+// left in their usual proportions. Still one rng() call, so a plan with it does
+// not shift anything the hunt rolls afterwards.
+export function rollWeather(rng = Math.random, foulWeatherPercent = 0) {
+  const harsh = Math.max(0, Math.min(100, Number(foulWeatherPercent) || 0));
+  const weightOf = (w) => (w.id === 'clear' ? w.weight * (1 - harsh / 100) : w.weight);
+  const totalWeight = WEATHER_TYPES.reduce((sum, w) => sum + weightOf(w), 0);
   let roll = rng() * totalWeight;
   for (const weather of WEATHER_TYPES) {
-    roll -= weather.weight;
+    if (weightOf(weather) <= 0) continue;   // a roll of exactly 0 must not land on it
+    roll -= weightOf(weather);
     if (roll <= 0) return weather;
   }
   return WEATHER_TYPES[0];

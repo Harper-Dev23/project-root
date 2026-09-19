@@ -309,7 +309,7 @@ console.log('=== the v3 fixture save ===');
 {
   const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v3-fixture.json', import.meta.url), 'utf8'));
   check('the fixture really is a v3 save with no hunt field', fixture.version === 3 && !('hunt' in fixture));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 5);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 6);
 
   const checked = GameState.checkSave(fixture);
   check('checkSave accepts it (the import path)', checked.ok, checked.reason || '');
@@ -329,7 +329,7 @@ console.log('=== the v3 fixture save ===');
 
   GameState.save('v3');
   const rewritten = JSON.parse(store.get('bmSave_v3'));
-  check('re-saved as v5 with hunt: null', rewritten.version === 5 && rewritten.hunt === null);
+  check('re-saved as v6 with hunt: null', rewritten.version === 6 && rewritten.hunt === null);
 }
 
 // =============================================================================
@@ -359,7 +359,7 @@ console.log('=== the v4 fixture save, mid-hunt ===');
 
   GameState.save('v4');
   const rewritten = JSON.parse(store.get('bmSave_v4'));
-  check('re-saved as v5, its hunt as v2', rewritten.version === 5 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
+  check('re-saved as v6, its hunt as v2', rewritten.version === 6 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
 
   // Exiting the old hunt returns no Rations: it packed none, it bought supplies.
   const out = HuntManager.exit();

@@ -31,7 +31,8 @@ import { HuntManager, CAMP_ISSUE, zoneDeathRule } from '../../systems/HuntManage
 import { InventorySystem } from '../../systems/InventorySystem.js';
 import { countInList, takeFromList, makeStack } from '../../systems/ItemStacks.js';
 import { Items } from '../../../data/items.js';
-import { combineModifiers, describeModifiers } from '../../systems/HuntModifiers.js';
+import { describeModifiers, describeLoadout } from '../../systems/HuntModifiers.js';
+import { describePlanHeader, makeBasicPlan, isBasicPlan } from '../../systems/HuntPlans.js';
 import { getItemComputedData } from '../../systems/ItemFactory.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
@@ -88,9 +89,15 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._render();
   }
 
-  setHuntPlan(instanceOrNull) {
-    this.huntPlanInstance = instanceOrNull;
+  setHuntPlan(instance) {
+    this.huntPlanInstance = instance;
     this._render();
+  }
+
+  /** The chosen plan, or the basic plan when none is. */
+  _plan() {
+    if (!this.huntPlanInstance) this.huntPlanInstance = makeBasicPlan();
+    return this.huntPlanInstance;
   }
 
   // ── Render dispatch ──────────────────────────────────────────────────────
@@ -178,10 +185,13 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const planY = suppliesY + 124;
     this._text(left, planY, 'Hunt Plan', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
-    const planView = this.huntPlanInstance ? getItemComputedData(this.huntPlanInstance) : null;
-    const planColor = this.huntPlanInstance ? (RARITY_COLORS[this.huntPlanInstance.rarity] || RARITY_COLORS.common) : '#999999';
-    this._text(left, planY + 30, planView ? planView.name : 'None selected.', {
-      fontSize: '14px', color: planColor,
+    // Never empty: with nothing chosen, the hunt goes on the free basic plan.
+    const plan = this._plan();
+    this._text(left, planY + 30, getItemComputedData(plan).name, {
+      fontSize: '14px', color: RARITY_COLORS[plan.rarity] || RARITY_COLORS.common,
+    });
+    this._text(left + 420, planY + 4, describePlanHeader(plan).join('\n'), {
+      fontSize: '11px', color: '#aaaaaa', wordWrap: { width: width - 500 },
     });
     this._button(left + 280, planY + 18, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
 
@@ -193,8 +203,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
       fontSize: '13px', color: '#ffdd88', fontStyle: 'bold', wordWrap: { width: width - 112 },
     });
 
-    const previewMods = combineModifiers(zone.modifiers, this.huntPlanInstance?.instanceMods?.misc);
-    const previewLines = describeModifiers(previewMods);
+    const previewLines = describeLoadout(zone.modifiers, plan.instanceMods?.misc);
     this._text(left + 16, modY + 34,
       previewLines.length ? previewLines.join('   ·   ') : 'No active modifiers.',
       { fontSize: '13px', color: '#cccccc', wordWrap: { width: width - 112 } }
@@ -235,15 +244,15 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
     // Out of the bag and into the pack: from here they are at risk.
     const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
-    const huntPlanModifiers = this.huntPlanInstance?.instanceMods?.misc || null;
+    const plan = this._plan();
+    const huntPlanModifiers = plan.instanceMods?.misc || null;
     HuntManager.start(this.zoneId, { supplies, huntPlanModifiers, bring: rations ? [rations] : [] });
     this.rationsToPack = 0;
 
-    // The chosen Hunt Plan is consumed on departure, not just "equipped".
-    if (this.huntPlanInstance) {
-      GameState.removeFromInventory(this.huntPlanInstance.instanceId);
-      this.huntPlanInstance = null;
-    }
+    // A general plan is used up on departure; the basic plan is free and
+    // unlimited, and was never in the bag.
+    if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
+    this.huntPlanInstance = null;
 
     // One write for the rations, the plan and the new hunt, so a reload can
     // never refund either while keeping the hunt, or the other way round.

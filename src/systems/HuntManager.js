@@ -72,7 +72,7 @@ import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { Items } from '../../data/items.js';
-import { addToList, stackQty } from './ItemStacks.js';
+import { addToList, stackQty, makeStack } from './ItemStacks.js';
 import { isItemInstance } from './ItemFactory.js';
 import { InventorySystem } from './InventorySystem.js';
 import ProgressionManager from './ProgressionManager.js';
@@ -171,12 +171,21 @@ export const GAME_WORLD = {
  */
 export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, seed = randomSeed(), bring = [] } = {}, world = GAME_WORLD) {
   const rng = makeRng(seed);
-  const weather = rollWeather(rng);
+  // The plan's Foul Weather prefix leans the roll harsher (data/weather.js).
+  const weather = rollWeather(rng, huntPlanModifiers?.foulWeatherPercent || 0);
   const zone = getZone(zoneId);
   const pack = { brought: [], found: [] };
   for (const inst of bring) {
     if (!isItemInstance(inst)) throw new Error('only item instances can be packed');
     addToList(pack.brought, clone(inst));
+  }
+  // The plan's "of Provision" suffix: Rations put in the pack at departure, on
+  // top of what the caller packed. They are packed Rations like any other, so
+  // what is left of them comes home on a clean exit.
+  const provision = Math.max(0, Math.floor(huntPlanModifiers?.provisionRations || 0));
+  if (provision > 0) {
+    addToList(pack.brought, makeStack('rations', provision));
+    supplies += provision * supplyPerRation();
   }
   const state = {
     v: HUNT_STATE_VERSION,

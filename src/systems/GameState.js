@@ -291,7 +291,7 @@ function describeWriteError(e) {
 // Once a version has been pushed, players hold saves at that version, and a
 // migration that already ran will never run again for them. So a later change
 // to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
 const MIGRATIONS = {
@@ -309,6 +309,26 @@ const MIGRATIONS = {
   // A saved hunt's own shape is versioned separately (HUNT_STATE_VERSION);
   // restoreHunt upgrades a v1 hunt to carry a pack.
   5: (data) => data,
+  // v6: Hunt Plans have an item level (Hunt Plans v2). A plan saved before
+  // v6 has none, and becomes item level 1 -- base tier I, no implicit -- with
+  // no bonus objectives (SAVE_COMPATIBILITY). Its rolled affixes are kept as
+  // they are. Only one plan base existed before v6, `hunt_plan`, so matching
+  // that id is exact and stays true however the item data changes later.
+  // Walks the whole payload: plans can sit in the bag, a tribe stash, or a
+  // character's own inventory.
+  6: (data) => {
+    const visit = (v) => {
+      if (Array.isArray(v)) { v.forEach(visit); return; }
+      if (!v || typeof v !== 'object') return;
+      if (v.id === 'hunt_plan' && typeof v.instanceId === 'string') {
+        if (!Number.isFinite(v.itemLevel)) v.itemLevel = 1;
+        if (!Array.isArray(v.bonusObjectives)) v.bonusObjectives = [];
+      }
+      for (const k of Object.keys(v)) visit(v[k]);
+    };
+    visit(data);
+    return data;
+  },
 };
 
 /**

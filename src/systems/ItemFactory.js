@@ -1,5 +1,9 @@
 // src/systems/ItemFactory.js
 import { Items } from '../../data/items.js';
+import {
+  PLAN_PREFIX_FAMILIES, PLAN_SUFFIX_FAMILIES, PREFIX_COMPLETION_REWARD, BONUS_OBJECTIVES,
+  PLAN_FIELDS, PLAN_TIER_IMPLICITS, planTierFor,
+} from '../../data/planAffixes.js';
 
 /** ---------- Rarity Rules (affix counts) ----------
  * uncommon: 1–2 total affixes (prefix+suffix combined)
@@ -437,17 +441,82 @@ const ARMOR_SUFFIX_POOL = [
 ];
 
 // --- Hunt Plan pools ---------------------------------------------------------
-// makeMiscArmorPrefix is generic over any `misc` field name despite the name —
-// reused here rather than writing a near-duplicate factory. lootQualityPercent
-// shifts Cultist fight drop rarity toward rare — see CombatScene.js's
-// rollHuntDropRarity().
-const HUNTPLAN_PREFIX_POOL = [
+// Built from data/planAffixes.js (Exploration System v2, chunk 4): six prefix
+// families (the hunt's demands), eight suffix families (the party's edge), all
+// at tiers 5 -> 1, plus the nine bonus objectives as tierless prefixes. The
+// item-level gate, weights and one-per-family rule are the gear ones, unchanged.
+//
+// A plan prefix also writes completionRewardPercent for its tier. A bonus
+// objective is a prefix whose unlock level IS its tier: it maps onto the
+// AFFIX_TIER_RULES tier that unlocks at that level, and all nine share one
+// family, so pickUnique lets at most one roll.
+function makePlanAffix({ label, tier, field, range, rewardPct = 0, family }) {
+  const key = `${label} [T${tier}]`;
+  return {
+    key, label, tier, family, range,
+    roll(rng) {
+      const misc = { [field]: rollInt(range, rng) };
+      if (rewardPct) misc.completionRewardPercent = rewardPct;
+      return { key, label, tier, family, mods: { misc } };
+    }
+  };
+}
+
+function buildPlanFamilyPool(families, withReward) {
+  const out = [];
+  for (const fam of families) {
+    for (const [tier, range] of Object.entries(fam.tiers)) {
+      const t = Number(tier);
+      out.push(makePlanAffix({
+        label: fam.label, tier: t, field: fam.field, range, family: `plan_${fam.id}`,
+        rewardPct: withReward ? PREFIX_COMPLETION_REWARD[t] : 0,
+      }));
+    }
+  }
+  return out;
+}
+
+/** The AFFIX_TIER_RULES tier that unlocks exactly at `level` (the commonest if several do). */
+function tierUnlockingAt(level) {
+  const tiers = Object.entries(AFFIX_TIER_RULES)
+    .filter(([, r]) => r.minItemLevel === level)
+    .sort((a, b) => b[1].weight - a[1].weight);
+  if (!tiers.length) throw new Error(`no affix tier unlocks at item level ${level}`);
+  return Number(tiers[0][0]);
+}
+
+const BONUS_OBJECTIVE_FAMILY = 'plan_bonus_objective';
+function makeBonusObjectiveAffix(id, obj) {
+  const tier = tierUnlockingAt(obj.unlockItemLevel);
+  const affix = { key: obj.name, label: obj.name, tier, family: BONUS_OBJECTIVE_FAMILY, objective: id };
+  return { ...affix, roll: () => ({ ...affix, mods: { misc: {} } }) };
+}
+
+// Built lazily: AFFIX_TIER_RULES is declared further down this file.
+let _planPools = null;
+function planPools() {
+  if (_planPools) return _planPools;
+  const objectives = Object.entries(BONUS_OBJECTIVES).map(([id, o]) => makeBonusObjectiveAffix(id, o));
+  _planPools = {
+    prefixes: [...buildPlanFamilyPool(PLAN_PREFIX_FAMILIES, true), ...objectives],
+    suffixes: buildPlanFamilyPool(PLAN_SUFFIX_FAMILIES, false),
+    objectives,
+  };
+  return _planPools;
+}
+
+/** Copies of the plan affix pools, for the plans harness. */
+export function getHuntPlanPools() {
+  const { prefixes, suffixes, objectives } = planPools();
+  return { prefixes: [...prefixes], suffixes: [...suffixes], objectives: [...objectives] };
+}
+
+// The six v1 plan affixes (before chunk 4). Nothing rolls them any more; they
+// stay only so getAffixIndex can still describe plans saved with them.
+const HUNTPLAN_LEGACY_DEFS = [
   makeMiscArmorPrefix({ key: 'Keen-Eyed', tier: 2, prop: 'beastChanceWeight', range: [1, 3] }),
   makeMiscArmorPrefix({ key: 'Bold', tier: 2, prop: 'encounterChancePercent', range: [5, 15] }),
   makeMiscArmorPrefix({ key: 'Studious', tier: 3, prop: 'xpPercent', range: [10, 25] }),
-];
-
-const HUNTPLAN_SUFFIX_POOL = [
   makeMiscArmorPrefix({ key: 'of Swift Travel', tier: 2, prop: 'supplyEfficiencyPercent', range: [5, 20] }),
   makeMiscArmorPrefix({ key: 'of the Hunt', tier: 1, prop: 'huntPointsPercent', range: [5, 20] }),
   makeMiscArmorPrefix({ key: 'of Plenty', tier: 3, prop: 'lootQualityPercent', range: [10, 25] }),
@@ -702,7 +771,10 @@ function getAffixPoolsFor(base) {
       : { prefixes: WEAPON_PREFIX_POOL_2H, suffixes: WEAPON_SUFFIX_POOL_2H };
   }
   if (base.type === 'huntPlan') {
-    return { prefixes: HUNTPLAN_PREFIX_POOL, suffixes: HUNTPLAN_SUFFIX_POOL };
+    // The basic plan is common and would roll nothing anyway; say so outright.
+    if (base.basic) return null;
+    const { prefixes, suffixes } = planPools();
+    return { prefixes, suffixes };
   }
   return null;
 }
@@ -965,7 +1037,7 @@ export function getAffixIndex(hands) {
   if (variant === '1h') { add(WEAPON_PREFIX_POOL_1H); add(WEAPON_SUFFIX_POOL_1H); }
   else if (variant === '2h') { add(WEAPON_PREFIX_POOL_2H); add(WEAPON_SUFFIX_POOL_2H); }
   else { add(ARMOR_PREFIX_POOL); add(ARMOR_SUFFIX_POOL);
-         add(HUNTPLAN_PREFIX_POOL); add(HUNTPLAN_SUFFIX_POOL); }
+         const pp = planPools(); add(pp.prefixes); add(pp.suffixes); add(HUNTPLAN_LEGACY_DEFS); }
   _affixIndexCache[variant] = index;
   return index;
 }
@@ -1023,6 +1095,32 @@ function rollAffixCounts(rarity, rng) {
     if (prefixes <= suffixes) prefixes++; else suffixes++;
   }
   return { prefixes, suffixes };
+}
+
+const HUNT_PLAN_MISC_FIELDS = [...Object.keys(PLAN_FIELDS), 'beastChanceWeight'];
+const PLAN_TIER_NUMERALS = { 1: 'I', 2: 'II', 3: 'III' };
+
+/**
+ * Everything a screen needs to show a Hunt Plan, read off the instance. Plans
+ * saved before chunk 4 are migrated to item level 1 (GameState v6); a missing
+ * list of bonus objectives reads as none.
+ */
+export function huntPlanView(inst) {
+  const itemLevel = Number.isFinite(inst?.itemLevel) ? inst.itemLevel : 1;
+  const tier = planTierFor(itemLevel);
+  const base = Items[inst?.id] || {};
+  return {
+    itemLevel,
+    tier,
+    tierName: `Tier ${PLAN_TIER_NUMERALS[tier]}`,
+    basic: !!base.basic,
+    objective: base.objective || null,
+    size: base.size || null,
+    implicitCompletionRewardPercent: PLAN_TIER_IMPLICITS[tier]?.completionRewardPercent || 0,
+    bonusObjectives: (Array.isArray(inst?.bonusObjectives) ? inst.bonusObjectives : [])
+      .map(o => ({ ...o, def: BONUS_OBJECTIVES[o.id] || null })),
+    mods: inst?.instanceMods?.misc || {},
+  };
 }
 
 function ensureObj(obj) {
@@ -1144,13 +1242,11 @@ function buildInstanceModifiers(prefixes, suffixes) {
       if (misc.procElemFlat) mods.misc.procElemFlat += misc.procElemFlat;
       if (misc.procNecroFlat) mods.misc.procNecroFlat += misc.procNecroFlat;
       if (misc.procPhysFlat) mods.misc.procPhysFlat += misc.procPhysFlat;
-      // Hunt Plan mods (src/systems/HuntModifiers.js shared schema)
-      if (misc.encounterChancePercent) mods.misc.encounterChancePercent = (mods.misc.encounterChancePercent || 0) + misc.encounterChancePercent;
-      if (misc.beastChanceWeight) mods.misc.beastChanceWeight = (mods.misc.beastChanceWeight || 0) + misc.beastChanceWeight;
-      if (misc.supplyEfficiencyPercent) mods.misc.supplyEfficiencyPercent = (mods.misc.supplyEfficiencyPercent || 0) + misc.supplyEfficiencyPercent;
-      if (misc.huntPointsPercent) mods.misc.huntPointsPercent = (mods.misc.huntPointsPercent || 0) + misc.huntPointsPercent;
-      if (misc.xpPercent) mods.misc.xpPercent = (mods.misc.xpPercent || 0) + misc.xpPercent;
-      if (misc.lootQualityPercent) mods.misc.lootQualityPercent = (mods.misc.lootQualityPercent || 0) + misc.lootQualityPercent;
+      // Hunt Plan mods: every field in data/planAffixes.js PLAN_FIELDS, plus
+      // beastChanceWeight, which only v1 plans (and zones, weather) carry.
+      for (const f of HUNT_PLAN_MISC_FIELDS) {
+        if (misc[f]) mods.misc[f] = (mods.misc[f] || 0) + misc[f];
+      }
       // Jewelry misc mods — keyed-by-family objects
       if (misc.physBuildupOnPhysDmg) {
         for (const [fam, v] of Object.entries(misc.physBuildupOnPhysDmg)) {
@@ -1194,7 +1290,10 @@ export function createItemInstance(id, opts = {}) {
   // level, and a future zone passes its own, without this function ever knowing
   // which. `null` means "un-levelled" and skips gating entirely, which is what
   // every existing call site does until it is migrated.
-  const itemLevel = Number.isFinite(opts.itemLevel) ? opts.itemLevel : null;
+  // A Hunt Plan always has one (HUNT_PLANS): a caller that forgot gets the
+  // floor, level 1, never an ungated roll.
+  const isPlan = base.type === 'huntPlan';
+  const itemLevel = Number.isFinite(opts.itemLevel) ? opts.itemLevel : (isPlan ? 1 : null);
   // Accept legacy `quality` opt so old call sites don't silently break
   const rarity = opts.rarity || opts.quality || base.rarity || base.quality || 'common';
   const pools = getAffixPoolsFor(base);
@@ -1213,6 +1312,24 @@ export function createItemInstance(id, opts = {}) {
     suffixes = pickUnique(pools.suffixes, nSuf, rng, itemLevel);
   }
 
+  // Hunt Plan: base tier from item level (never rolled), and the bonus
+  // objectives -- the one a prefix rolled, plus Tier III's guaranteed one,
+  // always a different objective. The tier's completion-reward implicit is
+  // derived from the level when read (huntPlanView), so it is not stored.
+  let planTier = null;
+  let bonusObjectives = null;
+  if (isPlan) {
+    planTier = planTierFor(itemLevel);
+    bonusObjectives = prefixes.filter(a => a.objective).map(a => ({ id: a.objective, from: 'affix' }));
+    if (PLAN_TIER_IMPLICITS[planTier]?.bonusObjective) {
+      const taken = new Set(bonusObjectives.map(o => o.id));
+      const pool = planPools().objectives.filter(d => !taken.has(d.objective));
+      const [implicit] = pickUnique(pool, 1, rng, itemLevel);
+      if (implicit) bonusObjectives.push({ id: implicit.objective, from: 'implicit' });
+    }
+  }
+  const nameBase = (isPlan && !base.basic) ? `${base.name} ${PLAN_TIER_NUMERALS[planTier]}` : base.name;
+
   const instance = {
     id,
     instanceId: 'itm_' + Math.random().toString(36).slice(2, 10),
@@ -1223,8 +1340,9 @@ export function createItemInstance(id, opts = {}) {
 
     instanceMods: buildInstanceModifiers(prefixes, suffixes),
 
-    displayName: buildAffixedName(base.name, prefixes, suffixes, rng),
+    displayName: buildAffixedName(nameBase, prefixes, suffixes, rng),
   };
+  if (isPlan) instance.bonusObjectives = bonusObjectives;
 
   // Carry through unique-item metadata so equipped-item logic can read it
   if (base.unique) instance.unique = true;

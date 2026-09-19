@@ -1186,8 +1186,9 @@ export const Items = {
   // ═══════════════════════════════════════════════════════════════════════════
   // === Hunt Plans ===
   // Generic loadout items chosen before departing on a Hunt (see HuntHubOverlay).
-  // One base; its modifiers are rolled affixes (HUNTPLAN_PREFIX_POOL /
-  // HUNTPLAN_SUFFIX_POOL in ItemFactory), and rarity sets how many roll.
+  // Its modifiers are rolled affixes (data/planAffixes.js, built into pools in
+  // ItemFactory). Rarity sets how many roll; item level sets which tiers can,
+  // and the plan's base tier (I: 1-4, II: 5-7, III: 8-10) with its implicit.
   // ═══════════════════════════════════════════════════════════════════════════
 
   hunt_plan: {
@@ -1195,7 +1196,22 @@ export const Items = {
     name: 'Hunt Plan',
     type: 'huntPlan',
     rarity: 'common',
-    description: 'A loadout plan chosen before departing on a Hunt. Its modifiers come from rolled affixes — higher rarity means more of them.',
+    description: 'A plan chosen before departing on a Hunt. Its prefixes are what the hunt demands, and each raises the completion reward; its suffixes are the party\'s edge. Item level sets how strong they roll and the plan\'s tier.',
+  },
+
+  // Free and unlimited, replacing "go without a plan" (HUNT_PLANS). Never in a
+  // bag: the plan picker makes one when it is chosen, and departing does not
+  // use it up. `basic` keeps it off the affix pools. `objective` and `size` are
+  // read by the chunk 5 generator; until then they are shown, not played.
+  basic_hunt_plan: {
+    id: 'basic_hunt_plan',
+    name: 'Basic Hunt Plan',
+    type: 'huntPlan',
+    rarity: 'common',
+    basic: true,
+    objective: 'scout',
+    size: 'small',
+    description: 'Free, and always available. A small map to scout, with no modifiers.',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════

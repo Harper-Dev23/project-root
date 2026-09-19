@@ -1,20 +1,21 @@
 // src/scenes/overlays/HuntPlanPickerOverlay.js
 // "Choose Hunt Plan" sub-screen, opened from HuntHubOverlay's loadout phase.
-// Lists the player's owned huntPlan-type item instances plus a "None"
-// option. Each instance shows its rolled name in its rarity color and its
-// actual rolled modifiers (no two are alike — see ItemFactory.js's
-// HUNTPLAN_PREFIX_POOL/HUNTPLAN_SUFFIX_POOL). Picking writes the choice back
-// onto HuntHubOverlay and resumes it — same pattern as HuntMapOverlay.
+// The free Basic Hunt Plan is always the first row (it replaced "None" in
+// Hunt Plans v2); after it come the player's owned huntPlan instances. Each
+// row shows the plan's rolled name in its rarity colour, its item level, tier
+// and implicit, its bonus objectives and its rolled modifiers (describePlan).
+// Picking writes the choice back onto HuntHubOverlay and resumes it -- same
+// pattern as HuntMapOverlay.
 
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { getItemComputedData } from '../../systems/ItemFactory.js';
-import { describeModifiers } from '../../systems/HuntModifiers.js';
+import { describePlan, makeBasicPlan } from '../../systems/HuntPlans.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
 import GameState from '../../systems/GameState.js';
 
-const ROW_H = 78;
+const ROW_H = 92;
 
 export default class HuntPlanPickerOverlay extends Phaser.Scene {
   constructor() {
@@ -40,11 +41,13 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
 
     let rowY = y + 80;
 
-    this._row(left, rowY, width - 80, depth, 'None', '#ffdd88', 'Go without a Hunt Plan.', () => this._pick(null));
+    const basic = makeBasicPlan();
+    this._row(left, rowY, width - 80, depth, getItemComputedData(basic).name, '#ffdd88',
+      describePlan(basic).join('   ·   '), () => this._pick(basic));
     rowY += ROW_H;
 
     if (huntPlans.length === 0) {
-      this.add.text(left, rowY, "You don't own any Hunt Plans yet — check the Vendor Row.", {
+      this.add.text(left, rowY, 'Better plans are sold at the Greenhollow Satchel, for Hunt Tickets.', {
         fontSize: '14px', color: '#999999',
       }).setDepth(depth);
     }
@@ -52,9 +55,7 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     huntPlans.forEach(inst => {
       const view = getItemComputedData(inst);
       const color = RARITY_COLORS[inst.rarity] || RARITY_COLORS.common;
-      const modLines = describeModifiers(inst.instanceMods?.misc);
-      const desc = modLines.length ? modLines.join('   ·   ') : 'No modifiers rolled.';
-      this._row(left, rowY, width - 80, depth, view.name, color, desc, () => this._pick(inst));
+      this._row(left, rowY, width - 80, depth, view.name, color, describePlan(inst).join('   ·   '), () => this._pick(inst));
       rowY += ROW_H;
     });
   }
@@ -76,9 +77,9 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     });
   }
 
-  _pick(instanceOrNull) {
+  _pick(instance) {
     const hub = this.scene.get('HuntHubOverlay');
-    hub?.setHuntPlan(instanceOrNull);
+    hub?.setHuntPlan(instance);
     this.scene.stop();
     this.scene.resume('HuntHubOverlay');
   }
