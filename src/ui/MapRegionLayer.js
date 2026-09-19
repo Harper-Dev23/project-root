@@ -12,7 +12,7 @@
 //   • Labels are deliberately NOT in that container — they're screen-space
 //     so the font stays a constant readable size no matter the zoom.
 
-import { MAP_REGIONS, TERRAIN_TINT, pointInPoly, polyLabelPoint } from '../../data/mapRegions.js';
+import { MAP_REGIONS, BIOME_TINT, pointInPoly, polyLabelPoint } from '../../data/mapRegions.js';
 
 export default class MapRegionLayer {
   /**
@@ -223,7 +223,7 @@ export default class MapRegionLayer {
       const pts = r.poly.map(toLocal);
       const isHover = this.hovered === r;
       const selectable = this.isSelectable(r);
-      const tint = TERRAIN_TINT[r.terrain] ?? 0xffffff;
+      const tint = BIOME_TINT[r.terrain] ?? 0xffffff;
 
       let fillAlpha = 0;
       let lineAlpha = this.showIdleOutlines ? (selectable ? 0.30 : 0.12) : 0;

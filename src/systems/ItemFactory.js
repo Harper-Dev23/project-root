@@ -773,8 +773,9 @@ export const BASE_TIER_RULES = {
 };
 
 export const AFFIX_TIER_RULES = {
-  // T2/T1 stay deliberately out of reach: the level cap is 3, so nothing in
-  // the game can currently roll them. That is intended, not an oversight.
+  // With the player cap at 5 (LEVEL_CAP, data/xpTable.js), T2 can roll from
+  // party-level sources such as the Bonepile; T1 stays out of reach until
+  // something rolls at item level 8.
   1: { minItemLevel: 8, weight: 10,  perLevel: 9 },
   2: { minItemLevel: 5, weight: 18,  perLevel: 8 },
   // Pitched for a 1-10 player-level range, one unlock roughly every other
@@ -786,8 +787,9 @@ export const AFFIX_TIER_RULES = {
   //
   // T2 lands exactly on iLvl 5 so that raising the player cap to 5 opens the
   // second-highest tier as its reward. T1 stays at 8 — the top tier is meant
-  // to be rare (~7.6% at iLvl 10, nudged up from 5.6%) and chased through a
-  // crafting system later rather than handed out by levelling.
+  // to be rare (~7.6% at iLvl 10, nudged up from 5.6%). It drops in danger
+  // 8-10 regions, where item level = danger level; crafting is planned to add
+  // control over affixes, not tiers of its own.
   3: { minItemLevel: 3, weight: 28,  perLevel: 9 },
   4: { minItemLevel: 1, weight: 90,  perLevel: 0 },
   5: { minItemLevel: 1, weight: 100, perLevel: 0 },

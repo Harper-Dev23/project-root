@@ -19,10 +19,11 @@ Camp Nehemiah has two separate rows of trade, each with its own currency.
 
 **Vendor Row** — pays in coin, open to anyone:
 - Ironbinder's Stand — crude starting weapons
-- Watershade — simple armor
-- Greenhollow Satchel — potions
-- Ember Cart, Whispercloth Tent — fuel, repair, and utility goods
-- Wayfinder's Cache — free Hunt Plans
+- Watershade Armory — simple armor
+- Draughtwell — tonics
+- Ember Cart — fuel, and Proficiency tokens for Reckoning Marks
+- Whispering Cloth — Identify and Sever items for use in combat
+- Greenhollow Satchel — free Hunt Plans
 - Bonepile — a weapon gamble for Hunt Tickets, unlocked after the second training scenario
 
 **Tribe Vendor Row** — pays in Tribe Tickets, locked to whichever tribe a Hunter has pledged to:

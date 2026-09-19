@@ -109,7 +109,7 @@ export const RENOWN_TREE = {
     },
     {
       "id": "n9",
-      "label": "Soulb ound",
+      "label": "Soulbound",
       "x": 0.3456,
       "y": 0.3713,
       "arm": "shared",

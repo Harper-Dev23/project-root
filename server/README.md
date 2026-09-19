@@ -69,8 +69,15 @@ turn. Wait for a state whose `version` is greater than the one you acted on.
 A refusal (`error`) goes only to the player who caused it, so the broadcast
 stays a pure record of what actually happened.
 
-## Not done yet
+## Rewards
 
-Reward *distribution*. The `over` message reports the outcome, the survivors
-and who was present; each client is expected to apply its own rewards through
-the save system it already has. Nothing here writes to anyone's save.
+The server writes to nobody's save. On a win, the `over` message carries
+`rewards` (`session.rewards()`): the scenario id, its XP value, and every
+droppable item on the defeated enemies. Each client applies them to its own
+save in `CombatScene._applyCoopRewards`, using the same rules as single
+player:
+
+- **XP** goes only to that client's own hunters, matched back to the saved
+  characters by `instanceId`.
+- **Loot** is copied to every player, not split. Each client takes the whole
+  list.

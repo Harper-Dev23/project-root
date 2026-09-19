@@ -35,7 +35,7 @@ His wrath is flame and roar: pillars of fire erupt when oaths are broken, his ro
 
 ## Followers & Taboos
 
-His faithful, **The Flameward Host**, are composed of radiant beasts, phoenix-riders, and torchbearing seers who act as judges, protectors, and frontline defenders of divine law, often intervening in mortal conflict when justice falters. They are feared and honored, for their mercy is as absolute as their judgment.
+His faithful, **The Flameward Host**, are composed of radiant beasts, phoenix-riders, and torchbearing seers who act as judges, protectors, and frontline defenders of divine law, often intervening in mortal conflict when justice falters. They are feared and honored, for their mercy is as absolute as their judgment. His three minor prophets, Micah, Hosea, and Amos, are the shield, the mercy, and the wrath of his justice.
 
 Betraying oaths sworn in light, cowardice before known evil, or allowing injustice when action is possible are taboo. Offenders may feel Isaiah's presence in burning visions — or be hunted by radiant beasts.
 

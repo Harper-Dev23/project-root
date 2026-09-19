@@ -1170,7 +1170,8 @@ export const Items = {
   // ═══════════════════════════════════════════════════════════════════════════
   // === Hunt Plans ===
   // Generic loadout items chosen before departing on a Hunt (see HuntHubOverlay).
-  // Static modifiers, no affix rolling — same pattern as consumables/relics above.
+  // One base; its modifiers are rolled affixes (HUNTPLAN_PREFIX_POOL /
+  // HUNTPLAN_SUFFIX_POOL in ItemFactory), and rarity sets how many roll.
   // ═══════════════════════════════════════════════════════════════════════════
 
   hunt_plan: {

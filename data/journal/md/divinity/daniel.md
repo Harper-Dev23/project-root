@@ -35,7 +35,7 @@ His wrath is precision and entrapment: entire cities may wake surrounded by unbr
 
 ## Followers & Taboos
 
-His cult, **The Builders Beneath**, operates in silence, deep places, and under cities — tending vast networks of tunnels, dream-routes, and memory-threaded vaults, and keeping the sacred diagrams that map future forks. They are not loud, but everything they do matters later.
+His cult, **The Builders Beneath**, operates in silence, deep places, and under cities — tending vast networks of tunnels, dream-routes, and memory-threaded vaults, and keeping the sacred diagrams that map future forks. They are not loud, but everything they do matters later. His three minor prophets, Malachi, Zechariah, and Haggai, tend the hidden paths, the locked truths, and the sacred rebuilding of his web.
 
 Breaking a knot of fate, interrupting sacred diagrams, or exposing hidden truths without offering protection are grave offenses. Those who offend Daniel may find their names erased from cause — their actions forgotten, their effects nullified.
 

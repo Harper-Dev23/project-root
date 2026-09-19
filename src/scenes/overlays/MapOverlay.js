@@ -1,7 +1,7 @@
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import MapRegionLayer from '../../ui/MapRegionLayer.js';
-import { MAP_REGIONS, TERRAIN_TINT, polyLabelPoint } from '../../../data/mapRegions.js';
+import { MAP_REGIONS, BIOME_TINT, polyLabelPoint } from '../../../data/mapRegions.js';
 
 
 export default class MapOverlay extends Phaser.Scene {
@@ -339,7 +339,7 @@ export default class MapOverlay extends Phaser.Scene {
 
     MAP_REGIONS.forEach((region, i) => {
       const y = top + i * rowH;
-      const tint = TERRAIN_TINT[region.terrain] ?? 0xffffff;
+      const tint = BIOME_TINT[region.terrain] ?? 0xffffff;
       const isHunt = !!region.huntZoneId;
 
       // Full-width hit strip so the whole row is hoverable, not just glyphs.

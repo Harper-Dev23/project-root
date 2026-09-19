@@ -18,4 +18,4 @@ updatedAt: 2025-10-04
 
 **The Waystone Shard** is the one relic every Hunter carries: rare, soulbound (it cannot be sold, traded, or lost), and attuned to its owner. It tracks Hunt progress and prophet favor. See *The Waystone* under Buildings for the full mechanic.
 
-**Consumables** are the bread-and-butter of Hunt prep — Healing and Mana Potions, both common, sold for a modest price at Greenhollow Satchel. Future passes will expand this list as more effects (buffs, cures, utility) come online.
+**Consumables** are the bread-and-butter of Hunt prep — Healing and Mana Potions, both common. Future passes will expand this list as more effects (buffs, cures, utility) come online.

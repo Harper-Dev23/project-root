@@ -34,7 +34,7 @@ export const MAP_NATIVE_SIZE = { width: 922, height: 692 };
 
 // Terrain families → highlight tint. Kept coarse on purpose: the tint is a
 // readability aid, never the only signal (every region also has a label).
-export const TERRAIN_TINT = {
+export const BIOME_TINT = {
   tundra:     0xbfe6f2,
   coastal:    0x7fc8d8,
   mountain:   0xc9b79a,

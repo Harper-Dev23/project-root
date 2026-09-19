@@ -30,7 +30,7 @@ const EVENT_CATEGORIES = ['environmental', 'microZone', 'flexible'];
 // pick from those, skipping choice/puzzle entirely, so check events show up
 // far more often without grinding through many Advances. Set back to false
 // (or delete this block) once you're done testing.
-const DEV_PRIORITIZE_CHECK_EVENTS = true;
+const DEV_PRIORITIZE_CHECK_EVENTS = false;
 
 function pickEntry(entries) {
   return entries[Math.floor(Math.random() * entries.length)];
