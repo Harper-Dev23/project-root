@@ -24,6 +24,22 @@ export const Items = {
     description: 'Restores a small amount of mana.'
   },
 
+  // === Hunt supplies ===
+  // What a hunt runs on. Bought with Hunt Tickets on the Hunt screen, kept in
+  // the camp bag, packed at departure; whatever is left comes home on a clean
+  // exit (HuntManager, the hunt pack). `stackable` is read by ItemStacks.js;
+  // `supply` (supplies per ration) by the Hunt screen when it packs them and
+  // by HuntManager when it works out how many are left.
+  rations: {
+    id: 'rations',
+    name: 'Rations',
+    type: 'supply',
+    rarity: 'common',
+    stackable: true,
+    supply: 1,
+    description: 'Dried meat, hard bread and a skin of water. A hunt eats through them one step at a time; what you do not eat comes home with you, if you do.',
+  },
+
   // === Sacred Relics ===
   waystone_shard: {
     id: 'waystone_shard',

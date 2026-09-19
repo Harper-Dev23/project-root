@@ -42,6 +42,27 @@
 // with an engaged fight resolves it as a flee. For now a flee costs the
 // fight's reward and nothing else; its full cost arrives with the encounter
 // rules (IMPLEMENTATION_PLAN chunk 7).
+//
+// ── The hunt pack ───────────────────────────────────────────────────────────
+// Everything taken into a hunt and everything found on it travels in the pack
+// (HUNT_STRUCTURE, amendment of 2026-09-18), and the pack is what is at risk:
+//
+//                 clean exit        Sheltered wipe    Watched/Forsaken wipe
+//   brought       leftovers home    leftovers home    lost
+//   found         into the bag      into the bag      lost
+//
+// The camp bag (GameState.inventory) is never at risk. Equipped gear is not in
+// the pack; its loss waits for soulbound (DEATH_AND_REVIVAL).
+//
+// Supplies are Rations, a stackable item. The camp issues CAMP_ISSUE supplies
+// free on every departure, and the rations a player packs sit on top; the
+// issue is eaten first, so what comes home is min(rations packed, supplies
+// left). A free issue that came home would be free rations for walking out of
+// the gate, so it never does. `supplies` itself stays one number: it is the
+// fuel the hunt burns, and the golden records it.
+//
+// The death rule is read from the zone ONCE, at departure, and kept on the
+// hunt, like the modifiers: a deploy cannot change what a live hunt risks.
 
 import { EncounterRoller } from './EncounterRoller.js';
 import { TribeHuntSimulator } from './TribeHuntSimulator.js';
@@ -50,6 +71,10 @@ import { combineModifiers } from './HuntModifiers.js';
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
+import { Items } from '../../data/items.js';
+import { addToList, stackQty } from './ItemStacks.js';
+import { isItemInstance } from './ItemFactory.js';
+import { InventorySystem } from './InventorySystem.js';
 import ProgressionManager from './ProgressionManager.js';
 import GameState from './GameState.js';
 
@@ -72,7 +97,28 @@ const CHECK_DIE_SIDES           = 20;
  * what is inside this one. Bump it, and teach restoreHunt the old shape,
  * whenever serialize() changes.
  */
-export const HUNT_STATE_VERSION = 1;
+export const HUNT_STATE_VERSION = 2; // 2: the hunt pack and the death rule
+
+/**
+ * Supplies the camp gives every departure, free. Eaten first; never comes
+ * home. It was the Hunt screen's BASE_SUPPLIES, unchanged at 60.
+ */
+export const CAMP_ISSUE = 60;
+
+/**
+ * What a region does on a wipe (DEATH_AND_REVIVAL). Read here for the pack;
+ * who dies, and how they come back, is the combat hookup (chunk 9). A zone
+ * with no rule gets the design's default, Watched.
+ */
+export const DEATH_RULES = ['sheltered', 'watched', 'forsaken'];
+const DEFAULT_DEATH_RULE = 'watched';
+
+/** The zone's death rule, validated. */
+export function zoneDeathRule(zone) {
+  const r = zone?.deathRule ?? DEFAULT_DEATH_RULE;
+  if (!DEATH_RULES.includes(r)) throw new Error(`unknown death rule '${r}' on zone '${zone?.id}'`);
+  return r;
+}
 
 /** The real game's side of a hunt. See the header. */
 export const GAME_WORLD = {
@@ -100,6 +146,11 @@ export const GAME_WORLD = {
     // A hunt's XP is a pool split across the party, not paid to each hunter.
     GameState.awardXPPool(pool);
   },
+  bankItems(items, { found }) {
+    // Found items are new acquisitions and get the inventory's "new" dot;
+    // leftovers of what was brought are coming back, not arriving.
+    for (const inst of items) InventorySystem.addGlobalItem(inst, { isNew: !!found });
+  },
   party() {
     return GameState.party || [];
   },
@@ -109,16 +160,24 @@ export const GAME_WORLD = {
  * Start a new hunt.
  *
  * @param {string} zoneId
- * @param {{ supplies?: number, huntPlanModifiers?: object, seed?: number }} opts
+ * @param {{ supplies?: number, huntPlanModifiers?: object, seed?: number, bring?: object[] }} opts
  *   `seed` is for replays and the harness; the game leaves it out and gets a
  *   fresh one. It is kept on the hunt only as a label — the saved stream
  *   state, not the seed, is what a reload continues from.
+ *   `bring` is the item instances packed at departure, already taken out of
+ *   the bag by the caller (a Rations stack, today). `supplies` is the total
+ *   the hunt starts with, and must already include the rations in `bring`.
  * @param {object} world  see GAME_WORLD
  */
-export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, seed = randomSeed() } = {}, world = GAME_WORLD) {
+export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, seed = randomSeed(), bring = [] } = {}, world = GAME_WORLD) {
   const rng = makeRng(seed);
   const weather = rollWeather(rng);
   const zone = getZone(zoneId);
+  const pack = { brought: [], found: [] };
+  for (const inst of bring) {
+    if (!isItemInstance(inst)) throw new Error('only item instances can be packed');
+    addToList(pack.brought, clone(inst));
+  }
   const state = {
     v: HUNT_STATE_VERSION,
     seed,
@@ -134,6 +193,9 @@ export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, s
     pendingEncounter: null,
     weather,
     combinedModifiers: combineModifiers(zone?.modifiers, weather.modifiers, huntPlanModifiers),
+    deathRule: zoneDeathRule(zone),
+    pack,
+    finished: null,
   };
   return makeHunt(state, rng, world);
 }
@@ -145,10 +207,16 @@ export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, s
  */
 export function restoreHunt(data, world = GAME_WORLD) {
   if (!data || typeof data !== 'object') throw new Error('no hunt data');
+  if (!getZone(data.zoneId)) throw new Error(`unknown hunt zone '${data.zoneId}'`);
+  data = upgradeHuntState(data);
   if (data.v !== HUNT_STATE_VERSION) {
     throw new Error(`unknown hunt state version ${data.v} (this build reads ${HUNT_STATE_VERSION})`);
   }
-  if (!getZone(data.zoneId)) throw new Error(`unknown hunt zone '${data.zoneId}'`);
+  if (!DEATH_RULES.includes(data.deathRule)) throw new Error(`hunt has no valid death rule ('${data.deathRule}')`);
+  if (!Array.isArray(data.pack?.brought) || !Array.isArray(data.pack?.found)
+      || ![...data.pack.brought, ...data.pack.found].every(isItemInstance)) {
+    throw new Error('hunt pack is not two lists of items');
+  }
   if (!isSeed(data.rngState)) throw new Error('hunt has no random-stream state');
   for (const k of ['supplies', 'maxSupplies', 'day', 'depth', 'advancesSinceFlip', 'sessionHuntPoints']) {
     if (!Number.isFinite(data[k])) throw new Error(`hunt field '${k}' is not a number`);
@@ -167,8 +235,30 @@ export function restoreHunt(data, world = GAME_WORLD) {
   return hunt;
 }
 
+/**
+ * Older hunt shapes, brought forward one version at a time. Returns a copy and
+ * never edits what it was given. A version it does not know passes through
+ * untouched, for restoreHunt to refuse.
+ *   1 -> 2  the pack and the death rule. A v1 hunt's supplies were bought with
+ *           tickets under the old rule, where nothing came home, so its pack
+ *           starts empty: it brought nothing that could be returned.
+ */
+function upgradeHuntState(data) {
+  let d = data;
+  if (d.v === 1) {
+    d = { ...clone(d), v: 2, deathRule: zoneDeathRule(getZone(d.zoneId)), pack: { brought: [], found: [] }, finished: null };
+  }
+  return d;
+}
+
 function clone(v) {
   return JSON.parse(JSON.stringify(v));
+}
+
+/** Supplies one Rations unit is worth (data/items.js). */
+function supplyPerRation() {
+  const k = Items.rations?.supply;
+  return Number.isFinite(k) && k > 0 ? k : 1;
 }
 
 function makeHunt(s, rng, world) {
@@ -343,7 +433,75 @@ function makeHunt(s, rng, world) {
         pendingEncounter: s.pendingEncounter,
         weather: s.weather,
         combinedModifiers: s.combinedModifiers,
+        deathRule: s.deathRule,
+        pack: {
+          brought: clone(s.pack.brought),
+          found: clone(s.pack.found),
+          rationsLeft: this.packOutcome('exit').rationsLeft,
+        },
       };
+    },
+
+    /**
+     * Put an item found on the hunt into the pack, where it is at risk until
+     * the hunt ends (see the header). Stackables merge. This is the writer the
+     * combat hookup (chunk 9) calls for drops; until then drops still go
+     * straight to the bag.
+     */
+    addFound(inst) {
+      if (s.finished || !isItemInstance(inst)) return false;
+      addToList(s.pack.found, clone(inst));
+      return true;
+    },
+
+    /**
+     * What the pack holds now, and what an ending would do with it. Rations
+     * left are the supplies still unspent — the camp issue eaten first —
+     * capped at what was packed. Every other brought item is still whole.
+     * Pure: changes nothing.
+     */
+    packOutcome(ending) {
+      if (ending !== 'exit' && ending !== 'wipe') throw new Error(`unknown hunt ending '${ending}'`);
+      const rationsPacked = s.pack.brought.reduce((n, it) => (it.id === 'rations' ? n + stackQty(it) : n), 0);
+      const rationsLeft = Math.min(rationsPacked, Math.floor(s.supplies / supplyPerRation() + 1e-9));
+
+      const brought = [];
+      let rationsPlaced = false;
+      for (const it of s.pack.brought) {
+        if (it.id !== 'rations') { brought.push(clone(it)); continue; }
+        // Every packed ration comes back as one stack of what is left.
+        if (rationsPlaced || rationsLeft <= 0) continue;
+        brought.push({ ...clone(it), qty: rationsLeft });
+        rationsPlaced = true;
+      }
+      const found = clone(s.pack.found);
+
+      const keeps = ending === 'exit' || s.deathRule === 'sheltered';
+      const none = { brought: [], found: [] };
+      return {
+        ending,
+        deathRule: s.deathRule,
+        keeps,
+        rationsPacked,
+        rationsLeft,
+        home: keeps ? { brought, found } : none,
+        lost: keeps ? none : { brought, found },
+      };
+    },
+
+    /**
+     * End the hunt: 'exit' (the party walked out) or 'wipe'. Settles the pack
+     * through the world — what comes home is banked into the camp bag — and
+     * returns packOutcome(). Only the first call does anything; after that it
+     * returns null, so a pack can never be banked twice.
+     */
+    finish(ending) {
+      if (s.finished) return null;
+      const out = this.packOutcome(ending);
+      s.finished = ending;
+      if (out.home.brought.length) world.bankItems(out.home.brought, { found: false });
+      if (out.home.found.length) world.bankItems(out.home.found, { found: true });
+      return out;
     },
 
     /** Plain JSON for the save. restoreHunt(serialize()) continues identically. */
@@ -372,6 +530,8 @@ const IDLE_STATE = Object.freeze({
   pendingEncounter: null,
   weather: null,
   combinedModifiers: null,
+  deathRule: null,
+  pack: null,
 });
 
 export const HuntManager = {
@@ -416,7 +576,32 @@ export const HuntManager = {
     return _current ? _current.getState() : { ...IDLE_STATE, log: [] };
   },
 
-  /** Ends the hunt in memory. The next autosave records that there is none. */
+  addFound(inst) {
+    return _current ? _current.addFound(inst) : false;
+  },
+
+  /**
+   * The party left the map. Banks the pack and ends the hunt; returns the
+   * pack outcome (see finish in makeHunt). Autosave straight after.
+   */
+  exit() {
+    const out = _current ? _current.finish('exit') : null;
+    _current = null;
+    return out;
+  },
+
+  /** The party wiped. The pack comes home or is lost by the region's death rule. */
+  wipe() {
+    const out = _current ? _current.finish('wipe') : null;
+    _current = null;
+    return out;
+  },
+
+  /**
+   * Drops the hunt from memory WITHOUT settling the pack. For leaving to the
+   * main menu, where the save still holds the hunt and a reload resumes it.
+   * A hunt that is over ends through exit() or wipe(), never this.
+   */
   end() {
     _current = null;
   },

@@ -90,7 +90,10 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
   const base = computed || Items[itemRef?.id] || Items[itemRef] || {};
   const rarityColors = opts.rarityColors || {};
 
-  const name = instance?.displayName || computed?.name || base.name || instance?.id || itemRef?.id || 'Unknown';
+  const plainName = instance?.displayName || computed?.name || base.name || instance?.id || itemRef?.id || 'Unknown';
+  // A stack shows its count on its name, so every list that draws names
+  // (inventory, stash) shows it without knowing about stacks (ItemStacks.js).
+  const name = Number.isInteger(instance?.qty) && instance.qty > 1 ? `${plainName} ×${instance.qty}` : plainName;
   const rarity = instance?.rarity || instance?.quality || computed?.rarity || base.rarity || base.quality || 'common';
   const titleColor = rarityColors[rarity] || rarityColors.common || '#dddddd';
 

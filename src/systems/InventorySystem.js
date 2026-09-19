@@ -5,6 +5,7 @@ import { equipItem } from './CharacterBuilder.js';
 import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats } from './CharacterBuilder.js';
 import { getItemComputedData } from './ItemFactory.js';
+import { addToList } from './ItemStacks.js';
 
 /**
  * Flags an instance as not-yet-seen so the inventory can mark it.
@@ -35,9 +36,11 @@ export const InventorySystem = {
         console.warn(`Item '${item}' not found.`);
         return;
       }
-      GameState.inventory = [...(GameState.inventory || []), flagNew ? markNew(createItemInstance(item)) : createItemInstance(item)];
+      const inst = createItemInstance(item);
+      GameState.inventory = addToList([...(GameState.inventory || [])], flagNew ? markNew(inst) : inst);
     } else if (isItemInstance(item)) {
-      GameState.inventory = [...(GameState.inventory || []), (flagNew ? markNew(item) : item)];
+      // A stackable item merges into a matching stack (ItemStacks.js).
+      GameState.inventory = addToList([...(GameState.inventory || [])], flagNew ? markNew(item) : item);
     } else {
       console.warn('Invalid item passed to addGlobalItem:', item);
     }

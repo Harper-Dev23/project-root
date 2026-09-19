@@ -9,6 +9,9 @@
 //   - save -> reload mid-hunt gives an identical state AND identical next rolls
 //   - a real v3 save (tools/snapshots/save-v3-fixture.json, written by the v3
 //     build before the format changed) migrates cleanly
+//   - a real v4 save written MID-HUNT by the chunk-2 build
+//     (tools/snapshots/save-v4-fixture.json) migrates to v5, and its v1 hunt
+//     comes back as a v2 hunt with an empty pack
 //   - hunts are instances: two run interleaved behave exactly as run alone
 //   - reloading mid-fight is a flee, not a second attempt
 //
@@ -306,7 +309,7 @@ console.log('=== the v3 fixture save ===');
 {
   const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v3-fixture.json', import.meta.url), 'utf8'));
   check('the fixture really is a v3 save with no hunt field', fixture.version === 3 && !('hunt' in fixture));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 4);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 5);
 
   const checked = GameState.checkSave(fixture);
   check('checkSave accepts it (the import path)', checked.ok, checked.reason || '');
@@ -326,7 +329,42 @@ console.log('=== the v3 fixture save ===');
 
   GameState.save('v3');
   const rewritten = JSON.parse(store.get('bmSave_v3'));
-  check('re-saved as v4 with hunt: null', rewritten.version === 4 && rewritten.hunt === null);
+  check('re-saved as v5 with hunt: null', rewritten.version === 5 && rewritten.hunt === null);
+}
+
+// =============================================================================
+console.log('=== the v4 fixture save, mid-hunt ===');
+{
+  // Written by the chunk-2 build (25c26ac): a Reeds hunt one step in, with a
+  // pending event, supplies 87.7 bought under the old ticket rule.
+  const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v4-fixture.json', import.meta.url), 'utf8'));
+  check('the fixture really is a v4 save holding a v1 hunt', fixture.version === 4 && fixture.hunt?.v === 1 && !('pack' in fixture.hunt));
+  check('checkSave accepts it (the import path)', GameState.checkSave(fixture).ok);
+
+  freshGame();
+  store.set('bmSave_v4', JSON.stringify(fixture));
+  const loaded = GameState.load('v4');
+  check('load() accepts it', loaded === true, GameState.lastLoadError || '');
+  const st = HuntManager.getState();
+  check('its hunt came back, where it was', HuntManager.isActive() && st.zoneId === fixture.hunt.zoneId
+    && st.supplies === fixture.hunt.supplies && st.depth === fixture.hunt.depth && st.weather.id === fixture.hunt.weather.id,
+    `${st.zoneId}, supplies ${st.supplies}, depth ${st.depth}`);
+  check('...with its pending event and its stream intact',
+    same(st.pendingEncounter, fixture.hunt.pendingEncounter) && HuntManager.current().serialize().rngState === fixture.hunt.rngState);
+  check('...upgraded to a v2 hunt: an empty pack and its zone death rule',
+    same(st.pack.brought, []) && same(st.pack.found, []) && st.pack.rationsLeft === 0 && st.deathRule === 'sheltered');
+  check('its bag came through unstacked, as it was',
+    same(GameState.inventory.map(i => [i.id, i.qty ?? null]), fixture.inventory.map(i => [i.id, i.qty ?? null])),
+    GameState.inventory.map(i => i.id).join(', '));
+
+  GameState.save('v4');
+  const rewritten = JSON.parse(store.get('bmSave_v4'));
+  check('re-saved as v5, its hunt as v2', rewritten.version === 5 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
+
+  // Exiting the old hunt returns no Rations: it packed none, it bought supplies.
+  const out = HuntManager.exit();
+  check('exiting it banks nothing (the old tickets bought supplies, not Rations)',
+    out.rationsPacked === 0 && out.home.brought.length === 0 && GameState.inventory.length === fixture.inventory.length);
 }
 
 // =============================================================================

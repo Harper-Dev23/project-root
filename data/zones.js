@@ -21,6 +21,7 @@ export const ZONES = {
     id: 'reeds_of_gethsemane',
     name: 'The Reeds of Gethsemane',
     danger: 1,          // 1-10; item level = danger (huntItemLevel, HuntScaling.js)
+    deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'wetland',
     divineAlignment: 'jeremiah',
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
@@ -87,6 +88,7 @@ export const ZONES = {
     id: 'bay_of_solace',
     name: 'Bay of Solace',
     danger: 1,          // 1-10; item level = danger (huntItemLevel, HuntScaling.js)
+    deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'coastal',
     divineAlignment: null,
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',

@@ -864,7 +864,9 @@ export default class InventoryOverlay extends Phaser.Scene {
         } else {
           listContainer.add(lockLabel);
         }
-      } else if (char) {
+      } else if (char && !baseItem.stackable) {
+        // Stackables (Rations) stay in the camp bag: that is where the Hunt
+        // screen packs them from, and a hunter's own pack does not stack.
         const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {

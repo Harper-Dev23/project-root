@@ -6539,7 +6539,10 @@ export default class CombatScene extends Phaser.Scene {
         // A wipe ends the hunt itself — the dead go to the Slain roster,
         // there's no continuing back to the Hunt Hub with a dead party.
         GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c));
-        HuntManager.end();
+        // Settles the hunt pack by the region's death rule (HuntManager.js):
+        // Sheltered brings it home, Watched/Forsaken lose it. end() would drop
+        // it on the floor, packed Rations included.
+        HuntManager.wipe();
         this._showDefeatScreen('Defeat', 'Your party has fallen. The hunt is over.');
       } else {
         this._showDefeatScreen('Defeat', 'Return to town.');

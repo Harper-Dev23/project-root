@@ -1,6 +1,7 @@
 import { SKILLS } from '../../data/skills.js'; // adjust path if needed
 import { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP, xpShare } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
+import { addToList } from './ItemStacks.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
 // Diagnostics imports nothing from the project, so this direction is safe and
@@ -290,7 +291,7 @@ function describeWriteError(e) {
 // Once a version has been pushed, players hold saves at that version, and a
 // migration that already ran will never run again for them. So a later change
 // to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
 const MIGRATIONS = {
@@ -300,6 +301,14 @@ const MIGRATIONS = {
     if (!('hunt' in data)) data.hunt = null;
     return data;
   },
+  // v5: items can stack (ItemStacks.js) — an entry may carry `qty`, and the
+  // bag can hold Rations. Nothing to convert: no save before v5 holds a stack,
+  // and a missing qty reads as 1. The step exists for the version number,
+  // which is what makes a build from before stacking REFUSE a v5 save instead
+  // of loading "Rations x40" as one ration and autosaving the other 39 away.
+  // A saved hunt's own shape is versioned separately (HUNT_STATE_VERSION);
+  // restoreHunt upgrades a v1 hunt to carry a pack.
+  5: (data) => data,
 };
 
 /**
@@ -372,9 +381,9 @@ const GameState = {
     if (!this.tribeStash[tribeId]) this.tribeStash[tribeId] = [];
     if (typeof item === 'string') {
       const instance = createItemInstance(item);
-      if (instance) this.tribeStash[tribeId].push(instance);
+      if (instance) addToList(this.tribeStash[tribeId], instance);
     } else if (isItemInstance(item)) {
-      this.tribeStash[tribeId].push(item);
+      addToList(this.tribeStash[tribeId], item);
     }
   },
 
@@ -388,11 +397,12 @@ const GameState = {
   // inventory management------////
   addToInventory(item) {
     // Allow either a string ID or an instance object
+    // A stackable item merges into a matching stack (ItemStacks.js).
     if (typeof item === 'string') {
       const instance = createItemInstance(item);
-      if (instance) this.inventory.push(instance);
+      if (instance) addToList(this.inventory, instance);
     } else if (isItemInstance(item)) {
-      this.inventory.push(item);
+      addToList(this.inventory, item);
     } else {
       console.warn('Invalid item type passed to addToInventory:', item);
     }

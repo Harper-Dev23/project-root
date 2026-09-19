@@ -16,13 +16,21 @@
 // A hunt is saved, so every action that changes it autosaves straight after:
 // departing, advancing, and resolving an event. A reload then lands the
 // player back in the hunt exactly where they were (see HuntManager.js).
+//
+// Supplies are Rations, a stackable item in the camp bag. Hunt Tickets buy
+// them here; the loadout packs some on top of the camp's free issue, and the
+// packed ones are at risk in the hunt pack. What is left of them comes home on
+// a clean exit (HuntManager.js, the hunt pack).
 
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createButton } from '../../ui/Button.js';
 import { createPanel } from '../../ui/GamePanel.js';
 import { SoundManager } from '../../systems/SoundManager.js';
-import { HuntManager } from '../../systems/HuntManager.js';
+import { HuntManager, CAMP_ISSUE, zoneDeathRule } from '../../systems/HuntManager.js';
+import { InventorySystem } from '../../systems/InventorySystem.js';
+import { countInList, takeFromList, makeStack } from '../../systems/ItemStacks.js';
+import { Items } from '../../../data/items.js';
 import { combineModifiers, describeModifiers } from '../../systems/HuntModifiers.js';
 import { getItemComputedData } from '../../systems/ItemFactory.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
@@ -30,10 +38,20 @@ import ProgressionManager from '../../systems/ProgressionManager.js';
 import GameState from '../../systems/GameState.js';
 import { getZone } from '../../../data/zones.js';
 
-const BASE_SUPPLIES          = 60; // ~2.5 day/night cycles at the default drain rate (see HuntManager.js)
-const SUPPLIES_PER_TICKET    = 10;
-const MAX_TICKETS_SPENDABLE  = 10;
+// The camp's free issue (CAMP_ISSUE, 60) is ~2.5 day/night cycles at the
+// default drain rate. Packing is capped where ticket spending used to be:
+// 10 tickets x 10 supplies then, 100 rations now.
+const RATIONS_PER_TICKET     = 10;
+const MAX_RATIONS_PACKED     = 100;
+const PACK_STEP              = 10;
 const LOG_LINES_SHOWN        = 10;
+
+// Shown before departure, never a surprise (DEATH_AND_REVIVAL).
+const DEATH_RULE_TEXT = {
+  sheltered: 'Sheltered: a wipe loses nothing in your pack.',
+  watched:   'Watched: a wipe loses everything in your pack.',
+  forsaken:  'Forsaken: a wipe loses everything in your pack.',
+};
 
 export default class HuntHubOverlay extends Phaser.Scene {
   constructor() {
@@ -42,7 +60,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
   init() {
     this.zoneId = null;
-    this.ticketsToSpend = 0;
+    this.rationsToPack = 0;
     this.huntPlanInstance = null;
   }
 
@@ -131,25 +149,33 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._text(left, y + 92, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
     this._button(x + width - 140, y + 64, 'Change Location', () => this._openMap(), 'danger');
 
-    // ── Supplies ───────────────────────────────────────────────────────
+    // ── Supplies: the camp's issue plus packed Rations ──────────────────
     const suppliesY = y + 150;
     this._text(left, suppliesY, 'Supplies', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
-    const supplies = BASE_SUPPLIES + this.ticketsToSpend * SUPPLIES_PER_TICKET;
+    const inBag = this._rationsInBag();
+    this.rationsToPack = Math.min(this.rationsToPack, inBag, MAX_RATIONS_PACKED);
     this._suppliesText = this._text(left, suppliesY + 30,
-      `${supplies} supplies (Base ${BASE_SUPPLIES} + ${this.ticketsToSpend} Hunt Ticket${this.ticketsToSpend === 1 ? '' : 's'} × ${SUPPLIES_PER_TICKET})`,
+      `${this._departSupplies()} supplies (camp issue ${CAMP_ISSUE} + ${this.rationsToPack} Rations packed)`,
       { fontSize: '15px', color: '#d0d0d0' }
     );
     this._ticketsText = this._text(left, suppliesY + 56,
-      `Hunt Tickets available: ${ProgressionManager.huntTickets - this.ticketsToSpend} / ${ProgressionManager.huntTickets}`,
+      `Rations in camp bag: ${inBag}   ·   Hunt Tickets: ${ProgressionManager.huntTickets}`,
       { fontSize: '13px', color: '#999999' }
     );
+    this._text(left, suppliesY + 78,
+      `Packed Rations are at risk. What you don't eat comes home when you leave. ${DEATH_RULE_TEXT[zoneDeathRule(zone)]}`,
+      { fontSize: '12px', color: '#c9a36a', wordWrap: { width: width - 80 } }
+    );
 
-    this._button(left + 280, suppliesY + 32, '−', () => this._adjustTickets(-1));
-    this._button(left + 330, suppliesY + 32, '+', () => this._adjustTickets(1));
+    // Right-aligned: the supplies line is longer than it was under tickets.
+    this._button(x + width - 350, suppliesY + 32, '−', () => this._adjustPacked(-PACK_STEP));
+    this._button(x + width - 280, suppliesY + 32, '+', () => this._adjustPacked(PACK_STEP));
+    const buy = this._button(x + width - 130, suppliesY + 32, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
+    if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
 
     // ── Hunt Plan ────────────────────────────────────────────────────────
-    const planY = suppliesY + 110;
+    const planY = suppliesY + 124;
     this._text(left, planY, 'Hunt Plan', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
     const planView = this.huntPlanInstance ? getItemComputedData(this.huntPlanInstance) : null;
@@ -177,19 +203,41 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._button(x + width / 2, bottom - 50, 'Depart', () => this._depart(), 'confirm');
   }
 
-  _adjustTickets(delta) {
-    const maxAffordable = Math.min(MAX_TICKETS_SPENDABLE, ProgressionManager.huntTickets);
-    this.ticketsToSpend = Phaser.Math.Clamp(this.ticketsToSpend + delta, 0, maxAffordable);
+  _rationsInBag() {
+    return countInList(GameState.inventory, 'rations');
+  }
+
+  /** Supplies the hunt would start with: the free issue plus what is packed. */
+  _departSupplies() {
+    return CAMP_ISSUE + this.rationsToPack * (Items.rations?.supply ?? 1);
+  }
+
+  _adjustPacked(delta) {
+    const most = Math.min(MAX_RATIONS_PACKED, this._rationsInBag());
+    this.rationsToPack = Phaser.Math.Clamp(this.rationsToPack + delta, 0, most);
+    SoundManager.play('select');
+    this._render();
+  }
+
+  /** Hunt Tickets -> Rations, straight into the camp bag. Spent now, not at departure. */
+  _buyRations() {
+    if (ProgressionManager.huntTickets < 1) return;
+    ProgressionManager.huntTickets -= 1;
+    InventorySystem.addGlobalItem(makeStack('rations', RATIONS_PER_TICKET));
+    GameState.save('autosave');
     SoundManager.play('select');
     this._render();
   }
 
   _depart() {
     SoundManager.play('select');
-    const supplies = BASE_SUPPLIES + this.ticketsToSpend * SUPPLIES_PER_TICKET;
-    ProgressionManager.huntTickets -= this.ticketsToSpend;
+    const packed = Math.min(this.rationsToPack, this._rationsInBag(), MAX_RATIONS_PACKED);
+    const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
+    // Out of the bag and into the pack: from here they are at risk.
+    const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
     const huntPlanModifiers = this.huntPlanInstance?.instanceMods?.misc || null;
-    HuntManager.start(this.zoneId, { supplies, huntPlanModifiers });
+    HuntManager.start(this.zoneId, { supplies, huntPlanModifiers, bring: rations ? [rations] : [] });
+    this.rationsToPack = 0;
 
     // The chosen Hunt Plan is consumed on departure, not just "equipped".
     if (this.huntPlanInstance) {
@@ -197,8 +245,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
       this.huntPlanInstance = null;
     }
 
-    // One write for the tickets, the plan and the new hunt, so a reload can
-    // never refund the plan while keeping the hunt, or the other way round.
+    // One write for the rations, the plan and the new hunt, so a reload can
+    // never refund either while keeping the hunt, or the other way round.
     GameState.save('autosave');
     this._render();
   }
@@ -222,6 +270,10 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._content.add(barBg);
     this._content.add(barFill);
     this._text(left, barY - 22, `Supplies: ${state.supplies} / ${state.maxSupplies}`, { fontSize: '13px', color: '#cccccc' });
+    const packed = state.pack.brought.filter(i => i.id === 'rations').reduce((n, i) => n + (i.qty || 1), 0);
+    this._text(left + barW, barY - 22,
+      `Pack: ${state.pack.rationsLeft} of ${packed} Rations left  ·  ${state.pack.found.length} found`,
+      { fontSize: '13px', color: '#c9a36a' }).setOrigin(1, 0);
 
     this._text(left, barY + 18, `Day ${state.day} — ${state.isNight ? 'Night' : 'Day'}  ·  Depth ${state.depth}`, { fontSize: '15px', color: '#ffffaa' });
     this._text(left, barY + 42, `Hunt Points this trip: ${state.sessionHuntPoints}  ·  Total: ${ProgressionManager.huntPoints}`, { fontSize: '13px', color: '#88ddff' });
@@ -290,16 +342,20 @@ export default class HuntHubOverlay extends Phaser.Scene {
   _returnToCamp() {
     SoundManager.play('select');
     const summary = HuntManager.getState();
-    HuntManager.end();
+    // A clean exit: the pack is banked into the camp bag.
+    const pack = HuntManager.exit();
     GameState.restorePartyToFull();
     GameState.save('autosave');
     this.zoneId = null;
-    this.ticketsToSpend = 0;
+    this.rationsToPack = 0;
     this.huntPlanInstance = null;
     const uiScene = this.scene.get('UIScene');
     uiScene?.refreshUI();
+    const found = pack?.home.found.length || 0;
     uiScene?.showDialogue(
-      `You return to Camp Nehemiah.\nHunt Points earned this trip: ${summary.sessionHuntPoints}`
+      `You return to Camp Nehemiah.\nHunt Points earned this trip: ${summary.sessionHuntPoints}` +
+      (pack?.rationsPacked ? `\nRations brought home: ${pack.rationsLeft} of ${pack.rationsPacked}` : '') +
+      (found ? `\nItems from your pack: ${found}` : '')
     );
     this._close();
   }

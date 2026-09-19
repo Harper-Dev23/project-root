@@ -37,6 +37,12 @@ never move it, and a hunt change should never move the combat golden.
 
 `tools/snapshots/save-v3-fixture.json` is a real save written by the v3 build,
 before hunts were saved. Keep it: it is what proves old saves still migrate.
+`tools/snapshots/save-v4-fixture.json` is its successor: a real save written
+mid-hunt by the v4 build (chunk 2, `25c26ac`), before stacking and the hunt
+pack. It proves a v4 save reaches v5 and its v1 hunt still resumes.
+
+`pack.mjs` covers item stacking, Rations and the hunt pack: merge and split,
+and what a clean exit or a wipe under each death rule does to the pack.
 
 ## How it works
 
