@@ -6,7 +6,7 @@
 // HuntRules.js. No rule or formula is re-derived here: where a number is
 // compared, both sides come from the game's own functions.
 //
-// Chunk 7 lands in four steps (7a-7d); this file grows with each. Now: 7a + 7b.
+// Chunk 7 lands in four steps (7a-7d); this file grows with each. Now: 7a-7c.
 //
 // What it proves (7a):
 //   - rules on hand-built maps: Detection's three bands at their edges, the
@@ -73,6 +73,12 @@ const ZONES = ['reeds_of_gethsemane', 'bay_of_solace'];
 const SIZES = ['small', 'medium', 'large'];
 const SEEDS = 25;
 const STEPS = 60;
+
+/** A pending encounter is won (the combat hookup's seam), so a scripted walk
+ *  can carry on. Walks that test fleeing do it themselves. */
+function settle(h) {
+  if (h.encounter()) h.winEncounter();
+}
 
 function recordingWorld(party) {
   const calls = [];
@@ -172,6 +178,7 @@ function walk({ zoneId, size, seed, supplies = 60, steps = STEPS, planMods = {},
     const to = chooseMove(hunt, pick, stood);
     const before = hunt.getState();
     const res = hunt.move(to);
+    if (res.ok) settle(hunt);
     if (!res.ok) { problems.push(`step ${i}: move refused: ${res.reason}`); break; }
     stood.add(to);
     charged += res.supply;
@@ -307,8 +314,8 @@ console.log('=== hunts are instances ===');
   const pickA = makeRng(7200 ^ 0x5eed), pickB = makeRng(7201 ^ 0x5eed);
   const sa = new Set([a.getState().pos]), sb = new Set([b.getState().pos]);
   for (let i = 0; i < 25; i++) {
-    const ta = chooseMove(a, pickA, sa); a.move(ta); sa.add(ta);
-    const tb = chooseMove(b, pickB, sb); b.move(tb); sb.add(tb);
+    const ta = chooseMove(a, pickA, sa); a.move(ta); settle(a); sa.add(ta);
+    const tb = chooseMove(b, pickB, sb); b.move(tb); settle(b); sb.add(tb);
   }
   check('two hunts interleaved = each run alone', same(a.serialize(), alone[0].hunt.serialize()) && same(b.serialize(), alone[1].hunt.serialize()));
 }
@@ -505,6 +512,7 @@ console.log('=== hunger in a hunt: initiative, and Starving never kills ===');
     const stageBefore = h.hunger();
     const to = chooseMove(h, pick, stood); stood.add(to);
     const res = h.move(to);
+    settle(h);
     const stage = h.hunger();
     stages.push(stage);
     if (stage === 'starving' && firstStarveAt === null) firstStarveAt = h.getState().time - h.getState().zeroSince;
@@ -545,7 +553,10 @@ function findHunt(test, { zones = ZONES, size = 'medium', party = () => makePart
 function stepTo(h, pred) {
   const s = h.getState();
   const n = mapNeighbors(s.map, s.pos).find(id => isPassable(s.map.tiles[id]) && pred(s.map.tiles[id], id));
-  return n ? h.move(n) : null;
+  if (!n) return null;
+  const r = h.move(n);
+  settle(h);
+  return r;
 }
 
 console.log('=== forage and fish ===');
@@ -735,6 +746,12 @@ console.log('=== mixed actions: invariants, reload, golden ===');
         const to = chooseMove(h, pick, stood); stood.add(to);
         res = h.move(to);
       }
+      // Encounters from any action are settled in the same step (win or flee,
+      // by the harness's stream), so no step starts with a fight pending.
+      for (let k = 0; k < 5 && h.encounter(); k++) {
+        if (pick() < 0.5) h.flee(); else h.winEncounter();
+      }
+      settle(h);
       if (res.ok) tally[kind]++; else tally.refused++;
       const s = h.getState();
       if (s.supplies < 0) problems.push(`step ${i}: supplies negative`);
@@ -786,6 +803,432 @@ console.log('=== mixed actions: invariants, reload, golden ===');
     }
   }
   check('reload in the middle of mixed actions continues identically (instance ids aside)', bad === 0, `${runs} runs, ${bad} differ`);
+}
+
+// =============================================================================
+// 7c: the world tick, encounters, flee, camp found, blight, corruption
+// =============================================================================
+const W = await import('../../src/systems/HuntWorld.js');
+const HMG = await import('../../data/huntMapGen.js');
+
+console.log('=== 7c rules on hand-built inputs ===');
+{
+  check('occupant initiative: the average of its members by grade; cultists 7',
+    W.occupantInitiative({ roster: [{ grade: 'great' }, { grade: 'yearling' }] }) === (HMG.OCCUPANT_INITIATIVE.great + HMG.OCCUPANT_INITIATIVE.yearling) / 2
+    && W.occupantInitiative({ kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }] }) === HMG.OCCUPANT_INITIATIVE.cultist);
+  check('who acts first: ambush is decisive; otherwise higher initiative, ties to the party',
+    W.whoActsFirst({ ambush: true, partyInitiative: 99, enemyInitiative: 1 }) === 'enemy'
+    && W.whoActsFirst({ ambush: false, partyInitiative: 7, enemyInitiative: 7 }) === 'party'
+    && W.whoActsFirst({ ambush: false, partyInitiative: 7, enemyInitiative: 7.5 }) === 'enemy');
+  check(`trail lost: a day, half a day when the party's Speed beats ${HMG.PACK_SPEED}`,
+    W.trailLostTime(HMG.PACK_SPEED) === W.TRAIL_LOST_TIME && W.trailLostTime(HMG.PACK_SPEED + 1) === W.TRAIL_LOST_TIME_FAST);
+  check(`camp found: pack perception ${HMG.PACK_PERCEPTION} at or above the camp's concealment`,
+    W.packFindsCamp(HMG.PACK_PERCEPTION) && !W.packFindsCamp(HMG.PACK_PERCEPTION + 1));
+  const tr = { family: 'marsh_stalker', to: '0:1,1', at: 0 };
+  const conc = GROUNDS.grass.concealment + W.TRAIL_CONCEALMENT;
+  check('trails read through the Detection bands; age only with Perception well above',
+    W.trailView(tr, 'grass', conc - R.SENSED_MARGIN - 1, 5) === null
+    && W.trailView(tr, 'grass', conc - 1, 5)?.band === 'sensed' && W.trailView(tr, 'grass', conc - 1, 5).family === undefined
+    && W.trailView(tr, 'grass', conc, 5)?.family === 'marsh_stalker' && W.trailView(tr, 'grass', conc, 5).age === undefined
+    && W.trailView(tr, 'grass', conc + W.TRAIL_AGE_MARGIN, 5)?.age === 5);
+  golden.world7c = {
+    ROAM_STEP: W.ROAM_STEP, HUNT_STEP: W.HUNT_STEP, TRAIL_LOST_TIME: W.TRAIL_LOST_TIME, TRAIL_LOST_TIME_FAST: W.TRAIL_LOST_TIME_FAST,
+    TRAIL_TIME: W.TRAIL_TIME, TRAIL_CONCEALMENT: W.TRAIL_CONCEALMENT, TRAIL_AGE_MARGIN: W.TRAIL_AGE_MARGIN,
+    BLIGHT_START_RADIUS: W.BLIGHT_START_RADIUS, CORRUPT_TIME: W.CORRUPT_TIME, CLEANSE_TIME: W.CLEANSE_TIME,
+    OCCUPANT_INITIATIVE: HMG.OCCUPANT_INITIATIVE, PACK_PERCEPTION: HMG.PACK_PERCEPTION, PACK_SPEED: HMG.PACK_SPEED,
+  };
+}
+
+console.log('=== a hundred in-game days: the world keeps its rules ===');
+const secOf = (id) => Number(String(id).split(':')[0]);
+function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null, party = makeParty() }) {
+  const world = recordingWorld(party);
+  let h = createMapHunt(zoneId, { plan: { objective: 'scout', size, mods: planMods }, supplies: 200, seed }, world);
+  const pick = makeRng(seed ^ 0xbeef);
+  const stood = new Set([h.getState().pos]);
+  const s0 = h.getState();
+  const home = Object.fromEntries(s0.map.occupants.map(o => [o.id, { tile: o.tile, sec: secOf(o.tile), state: o.state }]));
+  const startCount = s0.map.occupants.length;
+  const problems = [], trace = [], encounters = [];
+  let lastWorld = 0, seen = new Set(Object.keys(s0.fog));
+  const tally = { steps: 0, encounters: 0, ambush: 0, byCause: { party: 0, pack: 0, camp: 0 }, flees: 0, wins: 0, caughtAgain: 0, cleansed: 0, trailsSeen: 0 };
+  let fledFrom = null;
+  for (let i = 0; i < 20000 && h.getState().time < days * 12; i++) {
+    if (onStep) h = onStep(h, i, world) || h;
+    const before = h.getState();
+    const r = pick();
+    let res, kind;
+    const onBlight = before.map.tiles[before.pos].ground === 'blight';
+    if (onBlight && r < 0.3) { kind = 'cleanse'; res = h.cleanse(); if (res.ok) tally.cleansed++; }
+    else if (r < 0.4) { kind = 'camp'; res = h.camp(); }
+    else if (r < 0.45) { kind = 'forage'; res = h.forage(); }
+    else {
+      kind = 'move';
+      const to = chooseMove(h, pick, stood); stood.add(to);
+      res = h.move(to);
+    }
+    const s = h.getState();
+    tally.steps++;
+    // --- the encounter, if one started ---
+    const e = h.encounter();
+    if (e) {
+      tally.encounters++; tally.byCause[e.cause]++; if (e.ambush) tally.ambush++;
+      if (fledFrom && e.occId === fledFrom && e.cause === 'pack') tally.caughtAgain++;
+      encounters.push(e);
+      if (e.ambush !== (e.cause === 'camp' || e.knew === 'nothing')) problems.push(`step ${i}: ambush ${e.ambush} but cause ${e.cause}, knew ${e.knew}`);
+      if (e.first !== W.whoActsFirst(e)) problems.push(`step ${i}: first ${e.first} disagrees with whoActsFirst`);
+      const occ = s.map.occupants.find(o => o.id === e.occId);
+      if (!occ || occ.tile !== s.pos) problems.push(`step ${i}: the encounter's occupant is not on the party's tile`);
+      if (Math.abs(e.enemyInitiative - W.occupantInitiative(occ)) > EPS) problems.push(`step ${i}: enemy initiative is not occupantInitiative`);
+      // Frozen: every action is refused and changes nothing.
+      const frozenBefore = JSON.stringify(noIds(h.serialize()));
+      const tries = [h.move(mapNeighbors(s.map, s.pos)[0]), h.camp(), h.forage(), h.fish(), h.scout(e.occId), h.cleanse(), h.eat('bitterroot')];
+      if (tries.some(t => t.ok) || JSON.stringify(noIds(h.serialize())) !== frozenBefore) problems.push(`step ${i}: the hunt was not frozen during a fight`);
+      if (pick() < 0.5) {
+        const fromTile = s.from;
+        const f = h.flee();
+        tally.flees++; fledFrom = e.occId;
+        const sf = h.getState();
+        const pack = sf.map.occupants.find(o => o.id === e.occId);
+        if (!f.ok || !f.enemyFreeRound) problems.push(`step ${i}: flee refused or no free round`);
+        if (pack?.kind === 'beast' && !(pack.alerted)) problems.push(`step ${i}: the pack fled from was not alerted`);
+        if (sf.supplies !== s.supplies) problems.push(`step ${i}: fleeing cost supplies`);
+        if (e.cause === 'party' && f.to && f.to !== fromTile) problems.push(`step ${i}: fled to ${f.to}, came from ${fromTile}`);
+        for (let k = 0; k < 5 && h.encounter(); k++) h.winEncounter();
+      } else {
+        const n = h.getState().map.occupants.length;
+        const wr = h.winEncounter();
+        tally.wins++;
+        if (!wr.ok || h.getState().map.occupants.length !== n - 1) problems.push(`step ${i}: a win did not remove exactly one occupant`);
+      }
+    }
+    const s2 = h.getState();
+    // --- the world's invariants ---
+    if (s2.map.occupants.length + s2.kills.length !== startCount) problems.push(`step ${i}: occupants + kills ${s2.map.occupants.length + s2.kills.length} != ${startCount} (a spawn, or a loss)`);
+    // One HOSTILE occupant per tile. A Hunting pack that catches the party on an
+    // event site fights it there, so a pack and an event may share a tile.
+    const tiles = s2.map.occupants.filter(o => o.kind !== 'event').map(o => o.tile);
+    if (new Set(tiles).size !== tiles.length) problems.push(`step ${i}: two hostile occupants on one tile`);
+    for (const o of s2.map.occupants) {
+      const hm = home[o.id];
+      if (o.kind !== 'beast' && o.tile !== hm.tile) problems.push(`step ${i}: ${o.kind} ${o.id} moved`);
+      if (o.kind === 'beast' && !o.alerted && hm.state === 'rooted' && o.tile !== hm.tile) problems.push(`step ${i}: rooted ${o.id} moved`);
+      if (o.kind === 'beast' && !o.alerted && secOf(o.tile) !== hm.sec) problems.push(`step ${i}: roaming ${o.id} left its section`);
+      if (!isPassable(s2.map.tiles[o.tile])) problems.push(`step ${i}: ${o.id} on impassable ground`);
+      if (o.mark === 'corrupted' && o.concealment !== HMG.OCCUPANT_CONCEALMENT.corrupted) problems.push(`step ${i}: corrupted ${o.id} kept its old concealment`);
+    }
+    for (const o of s0.map.occupants) {
+      const now = s2.map.occupants.find(x => x.id === o.id);
+      if (now && o.mark && now.mark !== o.mark && !(o.mark === 'unmarked' && now.mark === 'corrupted')) problems.push(`step ${i}: ${o.id} went ${o.mark} -> ${now.mark}`);
+    }
+    if (s2.world.time < lastWorld - EPS) problems.push(`step ${i}: the world clock went back`);
+    if (s2.world.time > s2.time + EPS) problems.push(`step ${i}: the world ran ahead of the hunt`);
+    if (res?.ok && !h.encounter() && kind !== 'eat' && Math.abs(s2.world.time - s2.time) > EPS && !e) problems.push(`step ${i}: the world did not catch up (${s2.world.time} vs ${s2.time})`);
+    lastWorld = s2.world.time;
+    const living = s2.map.features.filter(f => f.kind === 'blight_source' && !f.destroyed).map(f => f.tile);
+    for (const [id, t] of Object.entries(s2.map.tiles)) {
+      if (t.ground !== 'blight' || !t.blightedFrom) continue;   // spread-made blight
+      const p = parseTileId(id);
+      if (!s2.map.features.some(f => f.kind === 'blight_source' && secOf(f.tile) === p.section
+        && distance(parseTileId(f.tile), p) <= W.BLIGHT_START_RADIUS + s2.world.day)) problems.push(`step ${i}: blight at ${id} out of any source's reach`);
+    }
+    if (!living.length) {
+      const nowBlight = Object.values(s2.map.tiles).filter(t => t.ground === 'blight').length;
+      const was = Object.values(before.map.tiles).filter(t => t.ground === 'blight').length;
+      if (nowBlight > was) problems.push(`step ${i}: blight spread with no living source`);
+    }
+    for (const id of seen) if (!s2.fog[id]) problems.push(`step ${i}: fog un-revealed ${id}`);
+    seen = new Set(Object.keys(s2.fog));
+    if (s2.supplies < 0) problems.push(`step ${i}: supplies negative`);
+    if (party.some(c => c.currentHP < 1)) problems.push(`step ${i}: a hunter below 1 HP`);
+    tally.trailsSeen += h.view().trails.length;
+    trace.push([kind, res?.ok ? 1 : 0, s2.pos, r4(s2.time), e ? `${e.occId}:${e.cause}:${e.first}` : 0,
+      s2.map.occupants.filter(o => o.kind === 'beast').map(o => `${o.id}@${o.tile}:${o.state[0]}${o.mark === 'corrupted' ? '*' : ''}`).join(' ')]);
+  }
+  const s = h.getState();
+  tally.days = R.clockAt(s.time).day;
+  tally.blightTiles = Object.values(s.map.tiles).filter(t => t.ground === 'blight').length;
+  tally.corrupted = s.map.occupants.filter(o => o.mark === 'corrupted').length;
+  tally.stillHunting = s.map.occupants.filter(o => o.state === 'hunting').length;
+  return { h, trace, problems, tally, encounters };
+}
+
+const { parseTileId, distance } = await import('../../src/systems/HexGrid.js');
+{
+  const probs = [], hashes = {}, tallies = {};
+  let allEnc = [];
+  for (const zoneId of ZONES) {
+    for (const size of SIZES) {
+      const hsh = crypto.createHash('sha256');
+      const agg = {};
+      for (let k = 0; k < 6; k++) {
+        const planMods = k % 2 ? { blightPatches: 2, restlessPercent: 25 } : {};
+        const L = longHunt({ zoneId, size, seed: 9000 + k, planMods });
+        probs.push(...L.problems.map(p => `${zoneId}/${size} ${9000 + k}: ${p}`));
+        hsh.update(JSON.stringify(L.trace));
+        allEnc = allEnc.concat(L.encounters);
+        for (const [key, v] of Object.entries(L.tally)) {
+          if (typeof v === 'object') { agg[key] = agg[key] || {}; for (const [a, b] of Object.entries(v)) agg[key][a] = (agg[key][a] || 0) + b; }
+          else agg[key] = (agg[key] || 0) + v;
+        }
+        if (zoneId === ZONES[0] && size === 'medium' && k === 1) golden['world reeds medium 9001 (first 60 steps)'] = L.trace.slice(0, 60);
+      }
+      hashes[`${zoneId}/${size}`] = hsh.digest('hex').slice(0, 16);
+      tallies[`${zoneId}/${size}`] = agg;
+    }
+  }
+  check('36 hunts x 100 in-game days: no spawns, one hostile occupant per tile, rooted stay, roamers keep their section, the world never runs ahead or falls behind, blight only within a living source\'s reach, marks only turn corrupted',
+    probs.length === 0, probs.slice(0, 3).join(' | '));
+  check('every encounter: ambush exactly when the party knew nothing or a camp was found; who goes first is whoActsFirst; the hunt is frozen until it is won or fled',
+    probs.length === 0 && allEnc.length > 0, `${allEnc.length} encounters`);
+  const kinds = { identifiedNotAmbush: allEnc.some(e => e.knew === 'identified' && !e.ambush), ambushEnemyFirst: allEnc.some(e => e.ambush && e.first === 'enemy'),
+    packCame: allEnc.some(e => e.cause === 'pack'), campFound: allEnc.some(e => e.cause === 'camp'), partyFirst: allEnc.some(e => e.first === 'party') };
+  check('seen in play: identified contacts, ambushes, packs that came, camps found, parties acting first', Object.values(kinds).every(Boolean), JSON.stringify(kinds));
+  golden.worldHashes = hashes;
+  golden.worldTallies = tallies;
+  for (const [k, v] of Object.entries(tallies)) console.log(`    ${k}: ${JSON.stringify(v)}`);
+
+  // Determinism and reload over a long world run.
+  const a = longHunt({ zoneId: ZONES[0], size: 'large', seed: 9100, days: 30, planMods: { blightPatches: 2, restlessPercent: 25 } });
+  const b = longHunt({ zoneId: ZONES[0], size: 'large', seed: 9100, days: 30, planMods: { blightPatches: 2, restlessPercent: 25 } });
+  check('the same seed and script give the same world, twice', same(a.trace, b.trace) && same(noIds(a.h.serialize()), noIds(b.h.serialize())));
+  let bad = 0;
+  for (const at of [3, 40, 111, 200]) {
+    const c = longHunt({ zoneId: ZONES[0], size: 'large', seed: 9100, days: 30, planMods: { blightPatches: 2, restlessPercent: 25 },
+      onStep: (hunt, i, world) => (i === at ? restoreMapHunt(JSON.parse(JSON.stringify(hunt.serialize())), world) : null) });
+    if (!same(c.trace, a.trace) || !same(noIds(c.h.serialize()), noIds(a.h.serialize()))) bad++;
+  }
+  check('reload anywhere in 30 days of world continues identically (both streams saved)', bad === 0, `${bad} of 4 differ`);
+}
+
+/** Build a scene through the save: edit serialized state, restore it. The
+ *  rules then run on it as they would on any hunt. Test setup only. */
+function scene(zoneId, seed, edit, { party = makeParty(), size = 'medium', planMods = {} } = {}) {
+  const h0 = createMapHunt(zoneId, { plan: { objective: 'scout', size, mods: planMods }, supplies: 100, seed }, recordingWorld(party));
+  const d = h0.serialize();
+  edit(d);
+  const world = recordingWorld(party);
+  return { h: restoreMapHunt(d, world), party, world };
+}
+
+/** An open land tile and a neighbour of it, same section, both passable, not the entry, nothing on them. */
+function openPair(d, ground) {
+  const taken = new Set(d.map.occupants.map(o => o.tile));
+  for (const id of Object.keys(d.map.tiles).sort()) {
+    const t = d.map.tiles[id];
+    if (!isPassable(t) || t.ford || taken.has(id) || id === d.pos) continue;
+    const n = mapNeighbors(d.map, id).find(x => isPassable(d.map.tiles[x]) && !d.map.tiles[x].ford && !taken.has(x) && x !== d.pos && secOf(x) === secOf(id));
+    if (!n) continue;
+    if (ground) { t.ground = ground; t.relief = 'flat'; delete t.blightedFrom; }
+    return [id, n];
+  }
+  return null;
+}
+
+console.log('=== found in camp ===');
+{
+  const campWith = (ground, { lowProfile = false } = {}) => {
+    const party = makeParty();
+    if (lowProfile) party.find(c => c.baseClass === 'Beggar').exploration = { picks: { 2: { passive: 'low_profile' } } };
+    let packId = null;
+    const { h } = scene(ZONES[0], 9200, (d) => {
+      const [camp, next] = openPair(d, ground);
+      d.pos = camp; d.from = null;
+      const beast = d.map.occupants.find(o => o.kind === 'beast');
+      packId = beast.id;
+      beast.tile = next;
+      W.alert(beast, d.time);
+      d.world.time = d.time;
+      for (const o of d.map.occupants) if (o !== beast && o.kind === 'beast') { o.state = 'rooted'; o.home = 'rooted'; o.nextStepAt = null; }
+    }, { party });
+    party.forEach(c => { c.currentHP = 1; });
+    const r = h.camp();
+    return { r, h, packId, party };
+  };
+  const open = campWith('grass');
+  check(`camping on grass (${GROUNDS.grass.concealment}): a hunting pack finds it; ambush, enemy first, the camp broken off`,
+    open.r.ok && open.r.found && open.r.encounter?.cause === 'camp' && open.r.encounter.ambush && open.r.encounter.first === 'enemy'
+    && open.r.time < R.CAMP_TIME, `slept ${r4(open.r.time)} of ${R.CAMP_TIME}`);
+  check('a broken-off camp recovers only the share slept',
+    Math.abs(open.r.recoveryPercent - R.campRecoveryPercent(open.r.night) * open.r.time / R.CAMP_TIME) < EPS);
+  const hidden = campWith('thicket');
+  check(`camping in a thicket (${GROUNDS.thicket.concealment}): not found, the full camp, no fight`,
+    hidden.r.ok && !hidden.r.found && hidden.r.time === R.CAMP_TIME && !hidden.h.encounter());
+  const heath = campWith('heath');
+  const heathLP = campWith('heath', { lowProfile: true });
+  check(`heath (${GROUNDS.heath.concealment}) is found; Low Profile (+20) hides the same camp`,
+    heath.r.found && !heathLP.r.found && heathLP.r.time === R.CAMP_TIME);
+}
+
+console.log('=== flee, pursuit and losing the trail ===');
+{
+  const runAway = (h, packId) => {
+    // Each move: the open neighbour furthest from the pack (the harness's own choice).
+    for (let k = 0; k < 40; k++) {
+      const s = h.getState();
+      const pack = s.map.occupants.find(o => o.id === packId);
+      if (!pack) return 'gone';
+      if (pack.state !== 'hunting') return 'lost';
+      const opts = mapNeighbors(s.map, s.pos).filter(n => isPassable(s.map.tiles[n]) && !s.map.occupants.some(o => o.tile === n)).sort();
+      if (!opts.length) return 'cornered';
+      const far = (id) => (secOf(id) === secOf(pack.tile) ? distance(parseTileId(id), parseTileId(pack.tile)) : 99);
+      const to = opts.reduce((best, n) => (far(n) > far(best) ? n : best), opts[0]);
+      h.move(to);
+      const e = h.encounter();
+      if (e) { const again = e.occId === packId && e.cause === 'pack'; h.winEncounter(); if (again) return 'caught'; }
+    }
+    return 'still hunting';
+  };
+  const fast = () => {
+    const p = makeParty();
+    p.forEach(c => { c.level = 10; c.exploration = { picks: { 2: { rating: 'speed' }, 4: { rating: 'speed' }, 6: { rating: 'speed' }, 8: { rating: 'speed' }, 10: { rating: 'speed' } } }; });
+    return p;
+  };
+  const outcomes = { normal: {}, fast: {} };
+  let checkedFlee = false;
+  for (const [label, mkParty] of [['normal', makeParty], ['fast', fast]]) {
+    for (let k = 0; k < 120; k++) {
+      const zoneId = ZONES[k % 2];
+      const party = mkParty();
+      const h = createMapHunt(zoneId, { plan: { objective: 'scout', size: 'large' }, supplies: 200, seed: 9300 + k }, recordingWorld(party));
+      const pick = makeRng(9300 + k);
+      const stood = new Set([h.getState().pos]);
+      let e = null;
+      for (let i = 0; i < 80 && !e; i++) {
+        const to = chooseMove(h, pick, stood); stood.add(to);
+        h.move(to);
+        e = h.encounter();
+        if (e && (e.kind !== 'beast' || e.cause !== 'party')) { h.winEncounter(); e = null; }
+      }
+      if (!e) continue;
+      const before = h.getState();
+      const f = h.flee();
+      const after = h.getState();
+      if (!checkedFlee) {
+        checkedFlee = true;
+        const pack = after.map.occupants.find(o => o.id === e.occId);
+        const cost = R.moveCost(after.map.tiles[before.from], h.stats()).time;
+        check('flee: back to the tile it came from, one move of time, no supplies, the pack stays and hunts',
+          f.ok && after.pos === before.from && Math.abs(f.time - cost) < EPS && after.supplies === before.supplies
+          && pack && pack.tile === before.pos && pack.alerted && after.flees === 1);
+        check(`flee: the hunting pack's first step waits for the end of the retreat + ${W.HUNT_STEP}`,
+          !pack || pack.state !== 'hunting' || pack.nextStepAt >= before.time + f.time + W.HUNT_STEP - EPS || h.encounter());
+      }
+      if (h.encounter()) { h.winEncounter(); outcomes[label].caughtAtOnce = (outcomes[label].caughtAtOnce || 0) + 1; continue; }
+      const o = runAway(h, e.occId);
+      outcomes[label][o] = (outcomes[label][o] || 0) + 1;
+    }
+  }
+  const fastSpeed = partyStats(fast(), {}).speed;
+  console.log(`    pursuit after a flee, running away (party Speed ${r4(partyStats(makeParty(), {}).speed)} vs fast ${r4(fastSpeed)}; pack ${HMG.PACK_SPEED}):`);
+  console.log(`      normal: ${JSON.stringify(outcomes.normal)}`);
+  console.log(`      fast:   ${JSON.stringify(outcomes.fast)}`);
+  check('some fled packs lose the trail, some catch up: pursuit is a race, not a certainty',
+    (outcomes.normal.lost || 0) + (outcomes.fast.lost || 0) > 0 && (outcomes.normal.caught || 0) + (outcomes.fast.caught || 0) > 0);
+  check('a party faster than the pack shakes it off more often', (outcomes.fast.lost || 0) / Object.values(outcomes.fast).reduce((a, b) => a + b, 0)
+    > (outcomes.normal.lost || 0) / Object.values(outcomes.normal).reduce((a, b) => a + b, 0));
+  golden.pursuit = outcomes;
+
+  // A reload with a fight pending is a flee.
+  let reloadOk = false;
+  for (let k = 0; k < 60 && !reloadOk; k++) {
+    const party = makeParty();
+    const world = recordingWorld(party);
+    const h = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'medium' }, supplies: 100, seed: 9500 + k }, world);
+    const pick = makeRng(9500 + k), stood = new Set([h.getState().pos]);
+    for (let i = 0; i < 60 && !h.encounter(); i++) { const to = chooseMove(h, pick, stood); stood.add(to); h.move(to); }
+    const e = h.encounter();
+    if (!e || e.cause !== 'party' || e.kind !== 'beast') continue;
+    const d = h.serialize();
+    const r = restoreMapHunt(JSON.parse(JSON.stringify(d)), world);
+    const s = r.getState();
+    reloadOk = s.flees === 1 && s.pos === d.from && s.map.occupants.find(o => o.id === e.occId)?.alerted && s.log.some(l => l.kind === 'flee' && l.reason === 'reload');
+  }
+  check('a hunt reloaded mid-fight comes back fled: retreated, the pack alerted, logged as a reload', reloadOk);
+}
+
+console.log('=== blight, cleansing and corruption ===');
+{
+  // A Blighted map, the party put on a spread-made blight tile inside a living source's reach.
+  const bh = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'medium', mods: { blightPatches: 1 } }, supplies: 200, seed: 9600 }, recordingWorld(makeParty()));
+  const d = bh.serialize();
+  const src = d.map.features.find(f => f.kind === 'blight_source');
+  check('a Blighted plan places a source', !!src);
+  if (src) {
+    const ring1 = mapNeighbors(d.map, src.tile).find(id => d.map.tiles[id].ground === 'blight' && !d.map.occupants.some(o => o.tile === id));
+    const world = recordingWorld(makeParty());
+    const h = restoreMapHunt({ ...d, pos: ring1, from: null }, world);
+    const before = h.getState();
+    const c = h.cleanse();
+    const after = h.getState();
+    check('cleanse: the tile goes back to land (the region\'s main ground when the generator painted it), CLEANSE_TIME passes',
+      c.ok && after.map.tiles[ring1].ground === after.landGround && Math.abs(after.time - before.time - W.CLEANSE_TIME) < EPS
+      && after.cleansed.includes(ring1) && !c.sourceDestroyed);
+    check('cleanse: refused where there is no blight', !h.cleanse().ok);
+    const countBlight = (x) => Object.values(x.map.tiles).filter(t => t.ground === 'blight').length;
+    const n0 = countBlight(after);
+    while (h.getState().world.day < after.world.day + 1) h.camp();
+    const a1 = h.getState();
+    check('the next day, blight spreads a ring and takes the cleansed tile back while its source lives',
+      a1.map.tiles[ring1].ground === 'blight' && countBlight(a1) > n0, `${n0} -> ${countBlight(a1)} tiles`);
+    // Now kill the source.
+    const h2 = restoreMapHunt({ ...h.serialize(), pos: src.tile, from: null, encounter: null }, recordingWorld(makeParty()));
+    const k = h2.cleanse();
+    const n1 = countBlight(h2.getState());
+    for (let day = h2.getState().world.day, i = 0; h2.getState().world.day < day + 3 && i < 50; i++) h2.camp();
+    check('cleansing the source\'s tile destroys it; after three more days the blight has not grown',
+      k.ok && k.sourceDestroyed && countBlight(h2.getState()) <= n1, `${n1} -> ${countBlight(h2.getState())}`);
+    golden.blightExample = { ring1, before: n0, nextDay: countBlight(a1), afterSourceKilled: countBlight(h2.getState()) };
+  }
+
+  // Corruption: an unmarked beast standing in blight turns; a marked one never.
+  const turn = (mark) => {
+    let id = null;
+    const { h } = scene(ZONES[0], 9700, (dd) => {
+      const [tile] = openPair(dd, 'blight');
+      const beast = dd.map.occupants.find(o => o.kind === 'beast');
+      id = beast.id;
+      beast.tile = tile; beast.mark = mark; beast.state = 'rooted'; beast.home = 'rooted'; beast.nextStepAt = null; beast.blightSince = null;
+      dd.world.time = dd.time;
+    });
+    for (let i = 0; i < 5; i++) h.camp();
+    return h.getState().map.occupants.find(o => o.id === id);
+  };
+  const u = turn('unmarked'), m = turn('marked');
+  check(`corruption: an unmarked beast in blight for ${W.CORRUPT_TIME} turns corrupted, concealment ${HMG.OCCUPANT_CONCEALMENT.corrupted}`,
+    u.mark === 'corrupted' && u.concealment === HMG.OCCUPANT_CONCEALMENT.corrupted && Number.isFinite(u.corruptedAt));
+  check('corruption: a marked beast in blight never turns', m.mark === 'marked');
+}
+
+console.log('=== trails and Restless ===');
+{
+  let seenTrails = 0, fadedOk = true, bandOk = true;
+  for (let k = 0; k < 10; k++) {
+    const h = createMapHunt(ZONES[k % 2], { plan: { objective: 'scout', size: 'medium', mods: { restlessPercent: 50 } }, supplies: 200, seed: 9800 + k }, recordingWorld(makeParty()));
+    for (let i = 0; i < 8; i++) h.camp();
+    const s = h.getState(), st = h.stats(), v = h.view();
+    for (const t of Object.values(s.trails)) if (s.world.time - t.at > W.TRAIL_TIME + EPS) fadedOk = false;
+    for (const tv of v.trails) {
+      seenTrails++;
+      const real = W.trailView(s.trails[tv.tile], s.map.tiles[tv.tile].ground, st.perception, s.time);
+      if (!same({ tile: tv.tile, ...real }, tv)) bandOk = false;
+    }
+  }
+  check('packs that move leave trails; none older than TRAIL_TIME is kept', fadedOk && seenTrails > 0, `${seenTrails} trails in sight`);
+  check('the trails in view are exactly what trailView reads for this party', bandOk);
+
+  let rootedPlain = 0, rootedRestless = 0, quarryMoved = 0;
+  for (let k = 0; k < 60; k++) {
+    for (const [pct, add] of [[0, (n) => { rootedPlain += n; }], [30, (n) => { rootedRestless += n; }]]) {
+      const h = createMapHunt(ZONES[k % 2], { plan: { objective: 'apex', size: 'medium', mods: { restlessPercent: pct } }, supplies: 60, seed: 9900 + k }, recordingWorld(makeParty()));
+      const occ = h.getState().map.occupants.filter(o => o.kind === 'beast');
+      add(occ.filter(o => o.state === 'rooted').length);
+      if (occ.some(o => o.quarry && o.state !== 'rooted')) quarryMoved++;
+    }
+  }
+  check('Restless 30 turns a share of Rooted packs Roaming; the plan\'s quarry never', rootedRestless < rootedPlain && quarryMoved === 0,
+    `rooted packs over 60 maps: ${rootedPlain} -> ${rootedRestless}`);
+  golden.restless = { rootedPlain, rootedRestless };
 }
 
 // =============================================================================

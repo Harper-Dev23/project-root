@@ -1,12 +1,13 @@
 // src/systems/HuntEngine.js
 //
 // A hunt on the hex map (Exploration System v2, chunk 7). Chunk 7 builds it in
-// four steps; 7a and 7b are built:
+// four steps; 7a to 7c are built:
 //   7a  moving and seeing: moves (supplies + time), the clock and day/night,
-//       Sight, fog, Detection, the scout action            <- built
-//   7b  food: hunger, forage and fish, eating, camp and cooking  <- built
-//   7c  the world tick, the encounter trigger, flee
-//   7d  leaving: exit, objectives, the completion reward
+//       Sight, fog, Detection, the scout action
+//   7b  food: hunger, forage and fish, eating, camp and cooking
+//   7c  the world tick (HuntWorld.js), the encounter trigger with ambush and
+//       party initiative, flee, the found-in-camp check, cleansing blight
+//   7d  leaving: exit, objectives, the completion reward      <- next
 //
 // It sits BESIDE the old Advance loop in HuntManager.js, which the game still
 // runs until chunk 8 draws the map. Nothing in the game creates a map hunt yet,
@@ -14,17 +15,34 @@
 // serialize/restore now so that wiring is only plumbing.
 //
 // Same seams as createHunt (HuntManager.js):
-//   - an instance per hunt, with its own seeded stream, saved as its state so a
-//     reload does not re-roll anything;
+//   - an instance per hunt, with its own seeded streams, saved as their state
+//     so a reload does not re-roll anything. Two streams: the hunt's (weather,
+//     the map seed, what a forage finds) and the world's (pack movement,
+//     Restless), so a pack wandering never shifts what a forage finds;
 //   - side effects go through the injected `world` (GAME_WORLD in the game):
-//     nightFalls / dayBreaks for the save-wide clock, party() for the hunters.
+//     nightFalls / dayBreaks for the save-wide clock (dayBreaks also advances
+//     the rival tribes), party() for the hunters;
 //   - the modifier bundle is built ONCE at departure and kept on the hunt.
 //
 // Party stats are NOT stored. partyStats(world.party(), mods) is called when a
 // rule needs it, so a hunter who dies stops counting at once (partyStats leaves
-// the dead out) and 7b's hunger can feed partyInitiativeBonus without a copy
-// going stale. It is pure and cheap. What it is handed is the departure
-// bundle plus this moment's hunger and food buff (HuntRules.momentMods).
+// the dead out). What it is handed is the departure bundle plus this moment's
+// hunger and food buff (HuntRules.momentMods).
+//
+// ── Time ────────────────────────────────────────────────────────────────────
+// Everything that spends time (move, scout, forage, fish, camp, cleanse, flee)
+// goes through _spendTime: the world catches up first (HuntWorld.worldTick),
+// then the clock advances. The party stands on its destination while a move's
+// time passes, so a Hunting pack can catch it there.
+//
+// ── Encounters (ENCOUNTERS) ─────────────────────────────────────────────────
+// An encounter starts when the party walks onto a hostile occupant, or a
+// Hunting pack reaches the party. It records what the party knew (the
+// Detection band), whether it is an ambush (knew nothing, or a camp was
+// found), both initiatives, and who acts first. While one is pending the hunt
+// is frozen: every action is refused until it is won (winEncounter, the seam
+// the combat hookup calls in chunk 9) or fled. A reload with one pending
+// resolves it as a flee (SAVE_COMPATIBILITY rec. 4).
 //
 // ── Food (7b) ───────────────────────────────────────────────────────────────
 // Food IS supplies (PARTY_STATS Part B): one pool, and hunger is read off it.
@@ -39,13 +57,14 @@
 // fish must be cooked, which only happens at camp.
 //
 // ── What the party knows ────────────────────────────────────────────────────
-//   fog        tile id -> 'visible' | 'remembered'; a tile missing is unseen.
-//              A tile never goes back to unseen (harness invariant).
-//   sightings  occupant id -> what was last detected there, and when. Tiles in
-//              sight show what Detection reads NOW (it is a continuous state,
-//              TERRAIN_TYPES); a remembered tile keeps its last reading, which
-//              goes stale once packs move (7c).
-//   scouted    occupants the scout action has resolved: identified, exact.
+//   fog         tile id -> 'visible' | 'remembered'; a tile missing is unseen.
+//               A tile never goes back to unseen (harness invariant).
+//   seenGround  the ground a tile had when last seen: a remembered tile shows
+//               it as it was, even if blight has taken it since.
+//   sightings   occupant id -> what was last detected, where, and when. Tiles
+//               in sight show what Detection reads NOW; a remembered tile keeps
+//               its last reading, stale once packs move.
+//   scouted     occupants the scout action has resolved: identified, exact.
 
 import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
@@ -64,12 +83,24 @@ import {
   FORAGE_YIELD, FISH_YIELD, FISH_ITEM, CAMP_TIME, CAMP_SUPPLY, SATED_TIME, campRecoveryPercent,
   recovered, cookDish,
 } from './HuntRules.js';
+import { initWorld, worldTick, alert, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
 
 const LOG_LIMIT = 50;
 const HOSTILE = new Set(['beast', 'cultist']);
+/** Mixed into the hunt seed for the world's own stream. */
+const WORLD_STREAM_SALT = 0x9E3779B9;
+
+/** The ground a cleansed tile returns to when the generator painted it as
+ *  blight: the region's main land ground, the same rule the generator uses to
+ *  make land (HuntMapGen, `landGround`). */
+function mainLandGround(zone) {
+  return Object.entries(zone.palette || {})
+    .filter(([g]) => g !== 'blight' && GROUNDS[g]?.passable)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'grass';
+}
 
 /**
  * Start a hunt on a freshly generated map.
@@ -89,6 +120,7 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
   if (!plan?.objective || !plan?.size) throw new Error('a map hunt needs a plan with an objective and a size');
   const planMods = plan.mods || {};
   const rng = makeRng(seed);
+  const worldRng = makeRng((seed ^ WORLD_STREAM_SALT) >>> 0);
   // First draw: the weather, as createHunt rolls it. Second: the map's seed.
   const weather = rollWeather(rng, planMods.foulWeatherPercent || 0);
   const mapSeed = Math.floor(rng() * 0x100000000) >>> 0;
@@ -106,6 +138,7 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     weather,
     mods: huntMods(zone.modifiers, weather.modifiers, planMods),
     deathRule: zoneDeathRule(zone),
+    landGround: mainLandGround(zone),
     map,
     pos: map.entry,
     from: null,
@@ -113,23 +146,32 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     supplies: start,
     maxSupplies: start,
     fog: {},
+    seenGround: {},
     sightings: {},
     scouted: [],
     zeroSince: start > 0 ? null : 0,
     satedUntil: 0,
     foodBuff: null,
     gathered: {},
+    // Restless (a plan prefix) is read here, once: WORLD_SIM's pack states.
+    world: initWorld(map, { restlessPercent: planMods.restlessPercent || 0, rng: worldRng }),
+    trails: {},
+    encounter: null,
+    kills: [],
+    flees: 0,
+    cleansed: [],
     pack,
     log: [],
   };
-  const hunt = makeMapHunt(s, rng, world);
+  const hunt = makeMapHunt(s, rng, worldRng, world);
   hunt._reveal();
   return hunt;
 }
 
 /**
  * Rebuild a map hunt from serialize() output. Throws on anything it does not
- * recognise rather than half-restoring it.
+ * recognise rather than half-restoring it. A fight in progress is not saved,
+ * so a restored hunt with an encounter pending resolves it as a flee.
  */
 export function restoreMapHunt(data, world = GAME_WORLD) {
   if (!data || typeof data !== 'object') throw new Error('no map hunt data');
@@ -138,35 +180,44 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   if (data.map?.v !== HUNT_MAP_VERSION || !data.map.tiles) throw new Error('map hunt has no map it can read');
   if (!data.map.tiles[data.pos]) throw new Error(`map hunt position '${data.pos}' is not on its map`);
   if (!DEATH_RULES.includes(data.deathRule)) throw new Error(`map hunt has no valid death rule ('${data.deathRule}')`);
-  for (const k of ['time', 'supplies', 'maxSupplies']) {
+  for (const k of ['time', 'supplies', 'maxSupplies', 'flees']) {
     if (!Number.isFinite(data[k])) throw new Error(`map hunt field '${k}' is not a number`);
   }
   for (const [id, f] of Object.entries(data.fog || {})) {
     if (!data.map.tiles[id] || (f !== 'visible' && f !== 'remembered')) throw new Error(`bad fog entry '${id}'`);
   }
   if (!data.sightings || Object.values(data.sightings).some(x => !BANDS.includes(x.band))) throw new Error('bad sightings');
-  if (!Array.isArray(data.scouted) || !Array.isArray(data.log)) throw new Error('map hunt lists are missing');
+  for (const k of ['scouted', 'log', 'kills', 'cleansed']) {
+    if (!Array.isArray(data[k])) throw new Error(`map hunt list '${k}' is missing`);
+  }
+  for (const k of ['gathered', 'trails', 'seenGround']) {
+    if (!data[k] || typeof data[k] !== 'object') throw new Error(`map hunt has no '${k}'`);
+  }
   if (!(data.zeroSince === null || Number.isFinite(data.zeroSince)) || !Number.isFinite(data.satedUntil)) throw new Error('map hunt hunger is not readable');
-  if (!data.gathered || typeof data.gathered !== 'object') throw new Error('map hunt has no gathered list');
   if (data.foodBuff !== null && !(typeof data.foodBuff?.field === 'string' && Number.isFinite(data.foodBuff.amount) && Number.isFinite(data.foodBuff.until))) {
     throw new Error('map hunt food buff is not readable');
   }
+  if (!Number.isFinite(data.world?.time) || !Number.isFinite(data.world?.day)) throw new Error('map hunt world clock is not readable');
+  if (!GROUNDS[data.landGround]) throw new Error('map hunt has no land ground');
   if (!Array.isArray(data.pack?.brought) || !Array.isArray(data.pack?.found)
       || ![...data.pack.brought, ...data.pack.found].every(isItemInstance)) {
     throw new Error('map hunt pack is not two lists of items');
   }
   if (!data.mods || !data.weather) throw new Error('map hunt is missing its weather or modifiers');
-  if (!isSeed(data.rngState)) throw new Error('map hunt has no random-stream state');
-  const { rngState, ...rest } = data;
-  return makeMapHunt(clone(rest), rngFromState(rngState), world);
+  if (!isSeed(data.rngState) || !isSeed(data.worldRngState)) throw new Error('map hunt has no random-stream state');
+  const { rngState, worldRngState, ...rest } = data;
+  const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
+  if (rest.encounter) hunt.flee({ reason: 'reload' });
+  return hunt;
 }
 
 function clone(v) {
   return JSON.parse(JSON.stringify(v));
 }
 
-function makeMapHunt(s, rng, world) {
+function makeMapHunt(s, rng, worldRng, world) {
   const occById = () => new Map(s.map.occupants.map(o => [o.id, o]));
+  const frozen = () => (s.encounter ? { ok: false, reason: 'a fight is under way: win it or flee' } : null);
 
   return {
     /** The party's stats right now: live party, the hunt's bundle, this
@@ -185,31 +236,41 @@ function makeMapHunt(s, rng, world) {
       return { time: s.time, ...clockAt(s.time) };
     },
 
+    /** The pending encounter, or null. */
+    encounter() {
+      return s.encounter ? { ...s.encounter } : null;
+    },
+
     /**
      * Move to a neighbouring tile. Spends supplies (never below 0: running
      * out never ejects the party, HUNT_STRUCTURE) and time, then looks around.
      * Refuses a tile that is not next to the party or cannot be entered.
-     * `contact` names a hostile occupant on the tile entered, with what the
-     * party knew of it BEFORE stepping in; the encounter it starts is 7c.
+     * Walking onto a hostile occupant starts an encounter at once; `knew` is
+     * what the party had detected of it before stepping in.
      */
     move(to) {
+      const no = frozen(); if (no) return no;
       if (!mapNeighbors(s.map, s.pos).includes(to)) return { ok: false, reason: `'${to}' is not next to the party` };
       const tile = s.map.tiles[to];
       if (!isPassable(tile)) return { ok: false, reason: `'${to}' cannot be entered` };
       const st = this.stats();
       const cost = moveCost(tile, st);
-      const knew = this._knownAt(to);
+      const occ = s.map.occupants.find(o => o.tile === to && HOSTILE.has(o.kind)) || null;
+      const knew = occ ? this._bandOf(occ) : null;
       s.supplies = Math.max(0, s.supplies - cost.supply);
       s.from = s.pos;
       s.pos = to;
-      const flips = this._advanceTime(cost.time);
+      if (occ) {
+        s.encounter = makeEncounter(occ, {
+          cause: 'party', knew, ambush: knew === 'nothing', partyInitiative: st.partyInitiative, at: s.time, tile: to,
+        });
+      }
+      const spent = this._spendTime(cost.time);
       this._noteSupplies();
       const starved = this.hunger() === 'starving' ? this._starve() : [];
-      this._reveal(st);
-      const occ = s.map.occupants.find(o => o.tile === to && HOSTILE.has(o.kind)) || null;
-      const contact = occ ? { id: occ.id, kind: occ.kind, knew: knew?.band || 'nothing' } : null;
-      if (contact) this._log({ kind: 'contact', tile: to, occupant: occ.id, knew: contact.knew, time: s.time });
-      return { ok: true, to, supply: cost.supply, time: cost.time, flips, contact, starved };
+      this._reveal();
+      const contact = occ ? { id: occ.id, kind: occ.kind, knew } : null;
+      return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved };
     },
 
     /**
@@ -220,17 +281,18 @@ function makeMapHunt(s, rng, world) {
      * the combat hookup's (chunk 9); `scouted` is what it will read.
      */
     scout(occId) {
+      const no = frozen(); if (no) return no;
       const occ = occById().get(occId);
       if (!occ) return { ok: false, reason: `no occupant '${occId}'` };
       if (s.scouted.includes(occId)) return { ok: false, reason: 'already scouted' };
       if (s.fog[occ.tile] !== 'visible') return { ok: false, reason: 'not in sight' };
       const seen = s.sightings[occId];
-      if (!seen || seen.band === 'nothing') return { ok: false, reason: 'nothing detected there' };
-      const flips = this._advanceTime(SCOUT_TIME);
+      if (!seen || seen.band === 'nothing' || seen.tile !== occ.tile) return { ok: false, reason: 'nothing detected there' };
       s.scouted.push(occId);
+      const spent = this._spendTime(SCOUT_TIME);
       this._reveal();
       this._log({ kind: 'scout', occupant: occId, time: s.time });
-      return { ok: true, time: SCOUT_TIME, flips, view: this.occupantViewOf(occId) };
+      return { ok: true, time: SCOUT_TIME, flips: spent.flips, view: this.occupantViewOf(occId), encounter: this.encounter() };
     },
 
     /**
@@ -241,6 +303,7 @@ function makeMapHunt(s, rng, world) {
      * already gathered give nothing, and are refused before any time is spent.
      */
     forage() {
+      const no = frozen(); if (no) return no;
       const tile = s.map.tiles[s.pos];
       if (s.gathered[s.pos]) return { ok: false, reason: 'this tile has already been gathered' };
       if (tile.barren) return { ok: false, reason: 'nothing grows here' };
@@ -253,15 +316,16 @@ function makeMapHunt(s, rng, world) {
       const qty = gatherQty(worth, st.forageYieldPercent, Items[id].supply);
       addToList(s.pack.found, makeStack(id, qty));
       s.gathered[s.pos] = 'forage';
-      const flips = this._advanceTime(FORAGE_TIME);
+      const spent = this._spendTime(FORAGE_TIME);
       this._reveal();
       this._log({ kind: 'forage', tile: s.pos, item: id, qty, time: s.time });
-      return { ok: true, item: id, qty, time: FORAGE_TIME, flips };
+      return { ok: true, item: id, qty, time: FORAGE_TIME, flips: spent.flips, encounter: this.encounter() };
     },
 
     /** Fish from a tile beside water: FISH_TIME, once per tile (forage OR
      *  fish), raw fish scaled by fishYieldPercent. Fish must be cooked. */
     fish() {
+      const no = frozen(); if (no) return no;
       const tile = s.map.tiles[s.pos];
       if (s.gathered[s.pos]) return { ok: false, reason: 'this tile has already been gathered' };
       if (!tile.fishing) return { ok: false, reason: 'there is no water to fish here' };
@@ -270,10 +334,10 @@ function makeMapHunt(s, rng, world) {
       const qty = gatherQty(FISH_YIELD, st.fishYieldPercent, Items[FISH_ITEM].supply);
       addToList(s.pack.found, makeStack(FISH_ITEM, qty));
       s.gathered[s.pos] = 'fish';
-      const flips = this._advanceTime(FISH_TIME);
+      const spent = this._spendTime(FISH_TIME);
       this._reveal();
       this._log({ kind: 'fish', tile: s.pos, item: FISH_ITEM, qty, time: s.time });
-      return { ok: true, item: FISH_ITEM, qty, time: FISH_TIME, flips };
+      return { ok: true, item: FISH_ITEM, qty, time: FISH_TIME, flips: spent.flips, encounter: this.encounter() };
     },
 
     /** Food in the pack a party could eat or cook with, by id (Rations are
@@ -290,6 +354,7 @@ function makeMapHunt(s, rng, world) {
     /** Eat raw food from the pack: its supply value goes into the pool. No
      *  time. Only rawEdible food; fish and meat must be cooked at camp. */
     eat(itemId, qty = 1) {
+      const no = frozen(); if (no) return no;
       const food = Items[itemId];
       if (food?.type !== 'food') return { ok: false, reason: `'${itemId}' is not food` };
       if (!food.food?.rawEdible) return { ok: false, reason: `${food.name} must be cooked first` };
@@ -304,17 +369,21 @@ function makeMapHunt(s, rng, world) {
     },
 
     /**
-     * Camp on the party's tile (PARTY_STATS Part B, decision 7). Takes
-     * CAMP_TIME and CAMP_SUPPLY (eaten after the meals are cooked, never below
-     * 0). Cooks each meal { main, addition? }: main is fish (or, from chunk 9,
-     * meat), the addition a forage food. Then every hunter who is not dead
-     * recovers a share of max HP and MP: more if the camp began at night,
-     * more again with Field Rites. A Hearty or Fine meal leaves the party
-     * Sated for SATED_TIME after the camp; the last Fine meal's buff replaces
-     * any other. The world tick and the found-in-camp check are 7c's.
+     * Camp on the party's tile (PARTY_STATS Part B, decision 7). Cooks each
+     * meal { main, addition? } first: main is fish (or, from chunk 9, meat),
+     * the addition a forage food. CAMP_SUPPLY is eaten after the meals (never
+     * below 0). Then CAMP_TIME passes while the world ticks: a Hunting pack
+     * that reaches the camp must find it first (Detection reversed: its
+     * perception against the tile's concealment plus Low Profile). A camp
+     * that is found is broken off at that moment as an ambush, and recovers
+     * only the share of the camp that was slept. Recovery: a share of max HP
+     * and MP for every hunter not dead, more if the camp began at night, more
+     * again with Field Rites. A Hearty or Fine meal leaves the party Sated for
+     * SATED_TIME after the camp; the last Fine meal's buff replaces any other.
      * Refuses the whole camp, before anything happens, if a meal is not cookable.
      */
     camp({ meals = [] } = {}) {
+      const no = frozen(); if (no) return no;
       const need = {};
       for (const m of meals) {
         const main = Items[m?.main], add = m?.addition ? Items[m.addition] : null;
@@ -340,9 +409,10 @@ function makeMapHunt(s, rng, world) {
       }
       s.supplies = Math.max(0, s.supplies + gained - CAMP_SUPPLY);
       s.maxSupplies = Math.max(s.maxSupplies, s.supplies);
-      const flips = this._advanceTime(CAMP_TIME);
       this._noteSupplies();
-      const pct = campRecoveryPercent(night, st.passives.campRecoveryPercent);
+      const spent = this._spendTime(CAMP_TIME, { camping: true });
+      this._noteSupplies();
+      const pct = campRecoveryPercent(night, st.passives.campRecoveryPercent) * spent.spent / CAMP_TIME;
       const healed = [];
       for (const c of world.party()) {
         if (!c || c.status === 'dead') continue;
@@ -355,8 +425,86 @@ function makeMapHunt(s, rng, world) {
       const fine = [...dishes].reverse().find(d => d.buff);
       if (fine) s.foodBuff = { ...fine.buff, until: s.time + fine.buff.duration, source: fine.addition };
       this._reveal();
-      this._log({ kind: 'camp', tile: s.pos, night, pct, dishes: dishes.map(d => d.quality), time: s.time });
-      return { ok: true, night, recoveryPercent: pct, dishes, supplyGained: gained, healed, flips, time: CAMP_TIME };
+      this._log({ kind: 'camp', tile: s.pos, night, pct, dishes: dishes.map(d => d.quality), found: !!spent.encounter, time: s.time });
+      return {
+        ok: true, night, recoveryPercent: pct, dishes, supplyGained: gained, healed, flips: spent.flips,
+        time: spent.spent, found: !!spent.encounter, encounter: this.encounter(),
+      };
+    },
+
+    /**
+     * Cleanse the blight under the party (WORLD_SIM; decision 9): an action on
+     * the tile, CLEANSE_TIME of time. The tile goes back to the ground it was.
+     * Cleansing a blight source's own tile destroys the source, and its spread
+     * stops. A cleansed tile within reach of a living source re-blights at the
+     * next day boundary: tile by tile against a living source is a losing game.
+     */
+    cleanse() {
+      const no = frozen(); if (no) return no;
+      const tile = s.map.tiles[s.pos];
+      if (tile.ground !== 'blight') return { ok: false, reason: 'there is no blight here' };
+      tile.ground = tile.blightedFrom || s.landGround;
+      delete tile.blightedFrom;
+      s.cleansed.push(s.pos);
+      const src = s.map.features.find(f => f.kind === 'blight_source' && f.tile === s.pos && !f.destroyed) || null;
+      if (src) src.destroyed = true;
+      const spent = this._spendTime(CLEANSE_TIME);
+      this._reveal();
+      this._log({ kind: 'cleanse', tile: s.pos, source: !!src, time: s.time });
+      return { ok: true, ground: tile.ground, sourceDestroyed: !!src, time: CLEANSE_TIME, flips: spent.flips, encounter: this.encounter() };
+    },
+
+    /**
+     * The fight was won. This is the seam the combat hookup calls (chunk 9),
+     * which is also where loot, parts, Hunt Points and XP will be paid: here
+     * the occupant leaves the map and the kill is recorded, nothing more. No
+     * occupant ever replaces it (no mid-hunt spawns).
+     */
+    winEncounter() {
+      const e = s.encounter;
+      if (!e) return { ok: false, reason: 'no fight to win' };
+      const i = s.map.occupants.findIndex(o => o.id === e.occId);
+      const [occ] = s.map.occupants.splice(i, 1);
+      const kill = {
+        occId: occ.id, kind: occ.kind, family: occ.family || null, mark: occ.mark || null,
+        roster: occ.roster.map(m => ({ ...m })), tile: occ.tile, at: s.time,
+      };
+      s.kills.push(kill);
+      delete s.sightings[occ.id];
+      s.encounter = null;
+      this._reveal();
+      this._log({ kind: 'win', occupant: occ.id, time: s.time });
+      return { ok: true, kill };
+    },
+
+    /**
+     * Flee (ENCOUNTERS, decision 10): always possible, never free, no roll.
+     *   - the enemy gets a full round as you disengage: `enemyFreeRound`, which
+     *     the combat hookup applies before calling this (chunk 9);
+     *   - the party retreats to the tile it came from (or, if the pack came to
+     *     it, to the first open neighbour), paying that move's time;
+     *   - nothing from the fight is kept: the occupant stays on the map;
+     *   - the pack is alerted: it hunts the party, from the end of the retreat.
+     * No smoke charge yet: nothing could read one before chunk 9.
+     */
+    flee({ reason = 'fled' } = {}) {
+      const e = s.encounter;
+      if (!e) return { ok: false, reason: 'nothing to flee from' };
+      const occ = occById().get(e.occId);
+      const back = this._retreatTile(e);
+      s.encounter = null;
+      s.flees += 1;
+      const time = back ? moveCost(s.map.tiles[back], this.stats()).time : SCOUT_TIME;
+      if (back) { s.from = s.pos; s.pos = back; }
+      if (occ && occ.kind === 'beast') alert(occ, s.time + time);
+      const spent = this._spendTime(time);
+      const starved = this.hunger() === 'starving' ? this._starve() : [];
+      this._reveal();
+      this._log({ kind: 'flee', occupant: e.occId, reason, to: back, time: s.time });
+      return {
+        ok: true, to: back, time, flips: spent.flips, enemyFreeRound: true,
+        alerted: occ?.kind === 'beast' ? occ.id : null, starved, encounter: this.encounter(),
+      };
     },
 
     /** What the party knows of one occupant, or null (ENCOUNTERS). `stale` is
@@ -373,7 +521,16 @@ function makeMapHunt(s, rng, world) {
 
     /** Everything the party knows about the map. Plain data for the map scene. */
     view() {
+      const st = this.stats();
       const occupants = Object.keys(s.sightings).map(id => this.occupantViewOf(id)).filter(Boolean);
+      const trails = [];
+      for (const [id, t] of Object.entries(s.trails)) {
+        if (s.fog[id] !== 'visible') continue;
+        const v = trailView(t, s.map.tiles[id].ground, st.perception, s.time);
+        if (v) trails.push({ tile: id, ...v });
+      }
+      const ground = {};
+      for (const [id, f] of Object.entries(s.fog)) ground[id] = f === 'visible' ? s.map.tiles[id].ground : s.seenGround[id];
       return {
         pos: s.pos,
         clock: this.clock(),
@@ -383,7 +540,10 @@ function makeMapHunt(s, rng, world) {
         satedUntil: s.satedUntil,
         foodBuff: s.foodBuff && s.time < s.foodBuff.until ? { ...s.foodBuff } : null,
         fog: { ...s.fog },
+        ground,
         occupants,
+        trails,
+        encounter: this.encounter(),
       };
     },
 
@@ -393,7 +553,50 @@ function makeMapHunt(s, rng, world) {
 
     /** Plain JSON for the save. restoreMapHunt(serialize()) continues identically. */
     serialize() {
-      return { ...clone(s), rngState: rng.getState() };
+      return { ...clone(s), rngState: rng.getState(), worldRngState: worldRng.getState() };
+    },
+
+    /**
+     * Spend in-game time: the world catches up first, then the clock. When
+     * camping, a found camp ends the time early (the rest is not slept).
+     * Returns { spent, flips, encounter }.
+     */
+    _spendTime(units, { camping = false } = {}) {
+      const start = s.time;
+      const campConcealment = camping
+        ? (GROUNDS[s.map.tiles[s.pos].ground]?.concealment || 0) + (this.stats().passives.campConcealmentBonus || 0)
+        : 0;
+      const tick = worldTick(s, start + units, {
+        rng: worldRng,
+        stats: () => this.stats(),
+        campFrom: camping ? start : null,
+        campConcealment,
+        bandOf: (occ) => this._bandOf(occ),
+        onEvent: () => this._reveal(),
+      });
+      const spent = camping && tick.encounter ? Math.max(0, Math.min(units, tick.stoppedAt - start)) : units;
+      const flips = this._advanceTime(spent);
+      if (tick.encounter && !s.log.some(l => l.kind === 'encounter' && l.at === tick.encounter.at && l.occId === tick.encounter.occId)) {
+        this._log({ kind: 'encounter', ...tick.encounter, time: s.time });
+      }
+      return { spent, flips, encounter: tick.encounter };
+    },
+
+    /** Where a fleeing party goes: back where it came from if that is open,
+     *  otherwise the first open neighbour in tile order. Only a hostile
+     *  occupant closes a tile; the party can stand on an event site. */
+    _retreatTile(e) {
+      const open = (id) => id && id !== s.pos && isPassable(s.map.tiles[id])
+        && !s.map.occupants.some(o => o.tile === id && o.id !== e.occId && HOSTILE.has(o.kind))
+        && mapNeighbors(s.map, s.pos).includes(id);
+      if (open(s.from)) return s.from;
+      return [...mapNeighbors(s.map, s.pos)].sort().find(open) || null;
+    },
+
+    /** What the party has detected of an occupant where it stands now. */
+    _bandOf(occ) {
+      const sg = s.sightings[occ.id];
+      return sg && sg.tile === occ.tile && s.fog[occ.tile] === 'visible' ? sg.band : 'nothing';
     },
 
     /** Keep zeroSince honest after any change to supplies. */
@@ -428,13 +631,9 @@ function makeMapHunt(s, rng, world) {
       return true;
     },
 
-    _knownAt(tile) {
-      return Object.values(s.sightings).find(x => x.tile === tile) || null;
-    },
-
     /**
-     * Spend in-game time. Each phase boundary crossed is one flip, in order:
-     * night falls, then the next day breaks. Returns the flips.
+     * Advance the hunt's clock. Each phase boundary crossed is one flip, in
+     * order: night falls, then the next day breaks. Returns the flips.
      */
     _advanceTime(units) {
       const before = clockAt(s.time);
@@ -452,18 +651,25 @@ function makeMapHunt(s, rng, world) {
     /**
      * Look around from the party's tile: Sight decides which tiles are
      * visible (the rest seen before become remembered), then Detection reads
-     * every occupant on a visible tile.
+     * every occupant on a visible tile. A sighting whose tile is in sight but
+     * whose occupant has left (or died) is dropped: you can see it is gone.
      */
     _reveal(st = this.stats()) {
+      const now = Math.max(s.time, s.world?.time || 0);
       const range = sightRange(s.map, s.pos, st.passives.sightRangeBonus);
       const vis = new Set(visibleTiles(s.map, s.pos, { range }));
       for (const id of Object.keys(s.fog)) if (!vis.has(id)) s.fog[id] = 'remembered';
-      for (const id of vis) s.fog[id] = 'visible';
+      for (const id of vis) { s.fog[id] = 'visible'; s.seenGround[id] = s.map.tiles[id].ground; }
+      const byId = occById();
+      for (const [id, sg] of Object.entries(s.sightings)) {
+        const occ = byId.get(id);
+        if (!occ || (vis.has(sg.tile) && occ.tile !== sg.tile)) delete s.sightings[id];
+      }
       for (const occ of s.map.occupants) {
         if (!vis.has(occ.tile)) continue;
         const band = s.scouted.includes(occ.id) ? 'identified' : occupantBand(s.map, occ, st.perception);
         if (band === 'nothing') delete s.sightings[occ.id];
-        else s.sightings[occ.id] = { tile: occ.tile, band, at: s.time };
+        else s.sightings[occ.id] = { tile: occ.tile, band, at: now };
       }
       return range;
     },

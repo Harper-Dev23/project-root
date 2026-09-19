@@ -70,7 +70,7 @@ export const PLAN_FIELDS = {
   gradeShiftPercent:       { label: 'Elder Beasts', unit: '%', live: false,
     reader: 'HuntMapGen (built in chunk 5; live once hunts run on the map): grade weights toward Prime and Great' },
   restlessPercent:         { label: 'Restless Packs', unit: '%', live: false,
-    reader: 'chunk 7 world sim: packs Roaming or Hunting instead of Rooted' },
+    reader: 'HuntWorld.initWorld at departure: that share of Rooted packs Roaming (map hunts; live once chunk 8 runs hunts on the map)' },
   leanCountryPercent:      { label: 'Fewer Forage Spots', unit: '%', live: false,
     reader: 'HuntMapGen (built in chunk 5; live once hunts run on the map): forage and fishing spots' },
   blightPatches:           { label: 'Blight Patches', unit: '', live: false,
