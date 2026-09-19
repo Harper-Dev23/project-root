@@ -52,6 +52,14 @@ maps drawn out, and the measured statistics. A change to grounds, palettes, the
 generator or the objectives moves it on purpose; regenerate with `--json` in
 the same commit.
 
+`huntrules.mjs` covers the hunt rules engine (`src/systems/HuntRules.js`,
+`src/systems/HuntEngine.js`, chunk 7). It walks the real fixture party across
+real generated maps and checks every step: supplies never negative, fog never
+un-reveals, every sighting matches Detection, the clock and the world agree.
+It also proves a reload at any step continues identically. Its golden
+(`tools/snapshots/huntrules-golden.json`) hashes every walk and keeps three in
+full, with the measured statistics. It grows with each step of chunk 7.
+
 ## How it works
 
 `CombatScene.prototype` carries every method. So:

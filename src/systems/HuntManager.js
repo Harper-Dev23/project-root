@@ -41,7 +41,7 @@
 // A fight is marked `engaged` when the player commits to it; a restored hunt
 // with an engaged fight resolves it as a flee. For now a flee costs the
 // fight's reward and nothing else; its full cost arrives with the encounter
-// rules (IMPLEMENTATION_PLAN chunk 7).
+// rules (map hunts, HuntEngine.js: 7c's flee).
 //
 // ── The hunt pack ───────────────────────────────────────────────────────────
 // Everything taken into a hunt and everything found on it travels in the pack
@@ -174,19 +174,8 @@ export function createHunt(zoneId, { supplies = 100, huntPlanModifiers = null, s
   // The plan's Foul Weather prefix leans the roll harsher (data/weather.js).
   const weather = rollWeather(rng, huntPlanModifiers?.foulWeatherPercent || 0);
   const zone = getZone(zoneId);
-  const pack = { brought: [], found: [] };
-  for (const inst of bring) {
-    if (!isItemInstance(inst)) throw new Error('only item instances can be packed');
-    addToList(pack.brought, clone(inst));
-  }
-  // The plan's "of Provision" suffix: Rations put in the pack at departure, on
-  // top of what the caller packed. They are packed Rations like any other, so
-  // what is left of them comes home on a clean exit.
-  const provision = Math.max(0, Math.floor(huntPlanModifiers?.provisionRations || 0));
-  if (provision > 0) {
-    addToList(pack.brought, makeStack('rations', provision));
-    supplies += provision * supplyPerRation();
-  }
+  const { pack, extraSupplies } = packAtDeparture(bring, huntPlanModifiers);
+  supplies += extraSupplies;
   const state = {
     v: HUNT_STATE_VERSION,
     seed,
@@ -262,6 +251,28 @@ function upgradeHuntState(data) {
 
 function clone(v) {
   return JSON.parse(JSON.stringify(v));
+}
+
+/**
+ * The hunt pack at departure: the instances the caller packed, plus the plan's
+ * "of Provision" Rations on top. Those are packed Rations like any other, so
+ * what is left of them comes home on a clean exit. `extraSupplies` is what the
+ * Provision Rations add to the starting supplies. Shared by createHunt and the
+ * map hunt (HuntEngine.js), so both pack the same way.
+ */
+export function packAtDeparture(bring = [], huntPlanModifiers = null) {
+  const pack = { brought: [], found: [] };
+  for (const inst of bring) {
+    if (!isItemInstance(inst)) throw new Error('only item instances can be packed');
+    addToList(pack.brought, clone(inst));
+  }
+  const provision = Math.max(0, Math.floor(huntPlanModifiers?.provisionRations || 0));
+  let extraSupplies = 0;
+  if (provision > 0) {
+    addToList(pack.brought, makeStack('rations', provision));
+    extraSupplies = provision * supplyPerRation();
+  }
+  return { pack, extraSupplies };
 }
 
 /** Supplies one Rations unit is worth (data/items.js). */
