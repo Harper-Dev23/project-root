@@ -6,6 +6,26 @@ import { createPanel } from '../ui/GamePanel.js';
 import { SoundManager } from '../systems/SoundManager.js';
 import { MENU_THEME } from '../ui/styles.js';
 import { setupSceneCursor } from '../ui/cursor.js';
+import { createButton } from '../ui/Button.js';
+import {
+  partyStats, hunterExploration, owedExplorationPicks, explorationPickOptions, applyExplorationPick,
+} from '../systems/PartyStats.js';
+import { EXPLORATION_STATS, EXPLORATION_PASSIVES, EXPLORATION_RATING_PICK } from '../systems/CharacterBuilder.js';
+
+// ── The party sheet (Exploration System v2, chunk 8d) ───────────────────────
+// PARTY_STATS, Part A: this screen is the party sheet, and the hunt's "one
+// click away" sheet opens the same view (the map's HUD has a Party button).
+// It fills the empty band this screen always had, to the right of the two
+// lists and above the formation slots:
+//   SHEET  x 690-1245, y 88-338      the eight party stats, then the hunter
+//                                    selected in the list: their six ratings
+//                                    and their exploration picks
+// The formation quadrant starts at y 344, so nothing here may reach past 338.
+const SHEET = { x: 690, y: 74, w: 555, bottom: 338 };
+const STAT_LABEL = {
+  perception: 'Perception', endurance: 'Endurance', speed: 'Speed',
+  cooking: 'Cooking', fishing: 'Fishing', foraging: 'Foraging',
+};
 
 // ===== Central UI frame geometry =====
 // Screen is 1280x720. Used to be inset 180px/14px to sit between the (dimmed,
@@ -20,9 +40,6 @@ const CENTER_W = 1280 - LEFT_MARGIN - RIGHT_MARGIN; // 1280
 const CENTER_H = 720 - TOP_MARGIN - BOTTOM_MARGIN;  // 720
 
 
-// Top-right info label inside inner UI frame
-const INFO_LABEL_X = 870; // you asked for ~870x, 180y
-const INFO_LABEL_Y = 180;
 // We’ll use the *bottom-right quarter* of this central area.
 const QUAD_X = LEFT_MARGIN + Math.floor(CENTER_W / 2);
 const QUAD_Y = TOP_MARGIN + Math.floor(CENTER_H / 2);
@@ -117,6 +134,14 @@ export default class PartyManagementScene extends Phaser.Scene {
     this.slotAssignments = []; // index → instanceId (or null)
   }
 
+  /** Scenes are reused: every field this screen keeps is set here, not left
+   *  from the last visit (ENGINE_HAZARDS #1). */
+  init() {
+    this._selected = null;   // the hunter the sheet is showing
+    this._sheet = null;
+    this._pickModal = null;
+  }
+
   create() {
     const { width, height } = this.scale;
     setupSceneCursor(this);
@@ -168,10 +193,9 @@ export default class PartyManagementScene extends Phaser.Scene {
       .setOrigin(1, 0).setDepth(1002).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => { SoundManager.play('handsClick'); this._closeAndReturn(); });
 
-    this.infoLabel = this.add.text(INFO_LABEL_X, INFO_LABEL_Y, '—', {
-      fontSize: '22px',
-      color: '#ffffff'
-    }).setDepth(1500).setOrigin(0, 0);
+    // A floating "name — class" label used to sit at (870, 180). That is
+    // inside the party sheet's band (chunk 8d) and printed over its stat
+    // rows, so it is gone: the sheet names the selected hunter itself.
     // Drag quality of life
     this.input.dragDistanceThreshold = 2; // tiny movement starts drag
     this.input.topOnly = true;
@@ -190,6 +214,7 @@ export default class PartyManagementScene extends Phaser.Scene {
     this.refreshListsAndPortraits();
 
     this._syncPortraitPositionsToSlots();
+    this._renderSheet();
   }
 
   /* ---------- UI Builders ---------- */
@@ -294,6 +319,8 @@ export default class PartyManagementScene extends Phaser.Scene {
 
 
   refreshListsAndPortraits() {
+    // The sheet reads the party, so it follows every change to these lists.
+    if (this._sheet) this.time.delayedCall(0, () => this._renderSheet());
     // Clear old texts
     this.memberTexts.forEach(t => t.destroy());
     this.memberTexts = [];
@@ -808,14 +835,137 @@ export default class PartyManagementScene extends Phaser.Scene {
     });
   }
 
+  /** Show this hunter on the sheet (clicking a name or a portrait). */
   _showCharInfo(char) {
-    if (!char) {
-      this.infoLabel?.setText('—');
-      return;
+    this._selected = char ? (char.instanceId || char.id || null) : null;
+    this._renderSheet();
+  }
+
+  /* ---------- The party sheet (chunk 8d) ---------- */
+
+  /** The hunter whose ratings the sheet shows: the one last clicked, else the
+   *  first in the party. */
+  _sheetChar() {
+    const party = GameState.party || [];
+    return party.find(c => (c.instanceId || c.id) === this._selected) || party[0] || null;
+  }
+
+  /**
+   * The eight party stats (PARTY_STATS, Part A) with the hunter providing each
+   * best-of one, then the selected hunter's six ratings and their exploration
+   * picks. Rebuilt whole on every change, so nothing can go stale.
+   */
+  _renderSheet() {
+    this._sheet?.destroy(true);
+    this._sheet = this.add.container(0, 0).setDepth(1002);
+    const party = GameState.party || [];
+    const add = (x, y, s, style) => {
+      const t = this.add.text(x, y, s, { fontSize: '13px', color: '#d8d8d8', ...style });
+      this._sheet.add(t);
+      return t;
+    };
+    // No modifiers here: this is the party as it stands in camp, not on a
+    // hunt. The Hunt screen shows the same stats with the zone and the plan.
+    const st = partyStats(party, {});
+    const f = (n) => (Math.round(n * 10) / 10).toString();
+    const by = (k) => (st.providers[k] ? ` (${st.providers[k]})` : '');
+    // Every line here is kept to one line at its width, and the rows are
+    // spaced by more than a line: a wrapped line printed over the next one
+    // (caught by the browser check's overlap test, as on the map's panels).
+    const COL = SHEET.w / 2;
+    add(SHEET.x, SHEET.y, 'Party Stats', { fontSize: '20px', color: '#fff' });
+    add(SHEET.x, SHEET.y + 25, 'Best-of for Perception, Cooking, Fishing and Foraging; average for the rest.',
+      { fontSize: '11px', color: '#9a9a9a', fontStyle: 'italic' });
+    const rows = [
+      `Perception ${f(st.perception)}${by('perception')}`,
+      `Endurance ${f(st.ratings.endurance)} · supplies -${f(st.supplyEfficiencyPercent)}%`,
+      `Speed ${f(st.speed)} · time -${f(st.travelTimePercent)}%`,
+      `Cooking ${f(st.cooking)}${by('cooking')}`,
+      `Fishing ${f(st.ratings.fishing)}${by('fishing')} +${f(st.fishYieldPercent)}%`,
+      `Foraging ${f(st.ratings.foraging)}${by('foraging')} +${f(st.forageYieldPercent)}%`,
+      `Item Rarity ${f(st.itemRarity)}`,
+      `Party Initiative ${f(st.partyInitiative)}`,
+    ];
+    const rowsTop = SHEET.y + 42;
+    rows.forEach((r, i) => add(SHEET.x + (i % 2) * COL, rowsTop + Math.floor(i / 2) * 22, r, { fontSize: '13px' }));
+    const passives = st.passiveIds.map(id => EXPLORATION_PASSIVES[id]?.name || id);
+    add(SHEET.x, rowsTop + 4 * 22, passives.length ? `Party passives: ${passives.join(', ')}` : 'Party passives: none yet',
+      { fontSize: '12px', color: '#c9a36a' });
+
+    // ── The selected hunter ──────────────────────────────────────────────
+    const char = this._sheetChar();
+    const top = rowsTop + 4 * 22 + 26;
+    if (!char) { add(SHEET.x, top, 'No one in the party.', { color: '#9a9a9a' }); return; }
+    const ex = hunterExploration(char);
+    add(SHEET.x, top, `${char.name} — ${char.baseClass || '—'} (Lv ${char.level || 1})`, { fontSize: '16px', color: '#ffdd88' });
+    const ratings = EXPLORATION_STATS.map(s => `${STAT_LABEL[s]} ${ex.ratings[s]}`);
+    add(SHEET.x, top + 24, ratings.slice(0, 3).join('  ·  '), { fontSize: '13px' });
+    add(SHEET.x, top + 42, ratings.slice(3).join('  ·  '), { fontSize: '13px' });
+    const own = ex.passives.map(id => EXPLORATION_PASSIVES[id]?.name || id);
+    add(SHEET.x, top + 60, own.length ? `Passives: ${own.join(', ')}` : 'Passives: none', { fontSize: '12px', color: '#c9a36a' });
+
+    // Exploration picks: one at each of levels 2, 4, 6, 8 and 10. Owed picks
+    // are derived from the level, so an old save's hunters are owed theirs.
+    const owed = owedExplorationPicks(char);
+    if (owed.length) {
+      // Beside the passives line, not under it: the button's own background
+      // covered that line when it sat below (the browser check now measures
+      // button bodies, not just text).
+      const b = createButton(this, SHEET.x + 420, top + 62, `Exploration pick (${owed.length} owed)`,
+        () => this._openPickModal(char, owed[0]), 'confirm', { fontSize: '13px' });
+      b.setDepth(1002);
+      this._sheet.add(b);
+    } else {
+      add(SHEET.x + 320, top + 55, 'No exploration pick owed.', { fontSize: '12px', color: '#9a9a9a' });
     }
-    const name = char.name || 'Unknown';
-    const base = char.baseClass || char.class || '—';
-    this.infoLabel?.setText(`${name} — ${base}`);
+  }
+
+  /** Choose this hunter's pick at `level`: +10 to a rating, or a class passive. */
+  _openPickModal(char, level) {
+    this._pickModal?.destroy(true);
+    const W = 560, H = 430, X = (this.scale.width - W) / 2, Y = (this.scale.height - H) / 2;
+    const c = this.add.container(0, 0).setDepth(2000);
+    this._pickModal = c;
+    c.add(this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 0x000000, 0.7)
+      .setInteractive());
+    c.add(createPanel(this, X, Y, W, H, 'silverMenu'));
+    const add = (x, y, s, style) => { const t = this.add.text(x, y, s, { fontSize: '13px', color: '#d8d8d8', ...style }); c.add(t); return t; };
+    add(X + 20, Y + 16, `${char.name}: exploration pick at level ${level}`, { fontSize: '18px', color: MENU_THEME.titleColor });
+    add(X + 20, Y + 44, `+${EXPLORATION_RATING_PICK} to one rating, or one of this class's passives. Each passive can be taken once.`,
+      { fontSize: '12px', color: '#9a9a9a', wordWrap: { width: W - 40 } });
+    const ex = hunterExploration(char);
+    const opts = explorationPickOptions(char, level);
+    const choose = (choice) => {
+      const r = applyExplorationPick(char, level, choice);
+      if (!r.ok) { SoundManager.play('dullClick'); add(X + 20, Y + H - 30, r.reason, { color: '#ff8888' }); return; }
+      SoundManager.play('select');
+      GameState.save('autosave');            // a pick is progress: keep it
+      this._pickModal.destroy(true); this._pickModal = null;
+      this._renderSheet();
+    };
+    let y = Y + 84;
+    for (const s of opts.ratings) {
+      const btn = createButton(this, X + 130, y + 12, `${STAT_LABEL[s]}  ${ex.ratings[s]} → ${ex.ratings[s] + EXPLORATION_RATING_PICK}`,
+        () => choose({ rating: s }), 'primary', { fontSize: '13px' });
+      c.add(btn);
+      y += 34;
+    }
+    y += 6;
+    if (opts.passives.length) {
+      add(X + 20, y, 'Or a passive:', { fontSize: '14px', color: '#ffdd88' });
+      y += 22;
+      for (const id of opts.passives) {
+        const def = EXPLORATION_PASSIVES[id] || {};
+        const btn = createButton(this, X + 130, y + 12, def.name || id, () => choose({ passive: id }), 'confirm', { fontSize: '13px' });
+        c.add(btn);
+        add(X + 250, y + 5, def.description || '', { fontSize: '12px', color: '#c9a36a', wordWrap: { width: W - 270 } });
+        y += 34;
+      }
+    } else {
+      add(X + 20, y, 'No class passive is available at this level.', { fontSize: '12px', color: '#9a9a9a' });
+    }
+    const cancel = createButton(this, X + W - 80, Y + H - 28, 'Cancel', () => { this._pickModal.destroy(true); this._pickModal = null; }, 'danger', { fontSize: '13px' });
+    c.add(cancel);
   }
 
   /* ---------- Scene lifecycle ---------- */

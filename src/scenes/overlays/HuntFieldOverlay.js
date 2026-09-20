@@ -439,12 +439,20 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       t.on('pointerout', () => { tip?.destroy(true); tip = null; });
     }
 
-    // Log toggle.
+    // Log toggle, and the party sheet one click away (PARTY_STATS, Part A:
+    // the HUD carries only what changes route decisions; the full sheet is
+    // PartyManagementScene, chunk 8d).
     const logBtn = createButton(this, x + w - 48, y + HUD_HEIGHT / 2, 'Log', () => {
       this.panel = this.panel === 'log' ? null : 'log';
       this._refresh();
     }, 'primary', { fontSize: '14px' });
     this.layer.add(logBtn);
+    const partyBtn = createButton(this, x + w - 132, y + HUD_HEIGHT / 2, 'Party', () => {
+      SoundManager.play('select');
+      this.scene.launch('PartyManagementScene');
+      this.scene.bringToTop('PartyManagementScene');
+    }, 'primary', { fontSize: '14px' });
+    this.layer.add(partyBtn);
   }
 
   /** A small text panel; returns its container. */

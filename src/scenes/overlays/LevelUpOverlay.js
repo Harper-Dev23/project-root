@@ -16,6 +16,7 @@ import { rebuildCharacterStats, calculateDerivedStats } from '../../systems/Char
 import { SoundManager } from '../../systems/SoundManager.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { getAwakeningsFor, TIER_STYLE } from '../../../data/awakenings.js';
+import { owedExplorationPicks } from '../../systems/PartyStats.js';
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
@@ -138,6 +139,16 @@ export default class LevelUpOverlay extends Phaser.Scene {
       `${c.race}  ·  ${c.baseClass}  ·  Level ${c.level}`,
       { fontSize: '13px', color: '#888888' }
     ).setDepth(d);
+
+    // Exploration picks are chosen on the party sheet, not here (owner
+    // decision 8, chunk 8): this line only says one is waiting.
+    const owed = owedExplorationPicks(c).length;
+    if (owed) {
+      this.add.text(b.x + 24, y + 44,
+        `${owed} exploration pick${owed === 1 ? '' : 's'} waiting on the Party screen.`,
+        { fontSize: '12px', color: '#9fe09f' }
+      ).setDepth(d);
+    }
 
     // Points-remaining badge — right-aligned, level with the tab row so it
     // reads as part of the same band (clear of the frame's close button,
