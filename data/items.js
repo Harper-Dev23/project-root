@@ -56,6 +56,10 @@ export const Items = {
   //   buff        what a FINE dish with this as its addition grants, for
   //               `duration` in-game time units: a hunt-bundle field that
   //               partyStats reads. One food buff at a time.
+  //               Or `duration: 'fight'` (chunk 9c): "the next fight". Its
+  //               field is then a combat STATUS-mod key (_sumStatusEffectMods):
+  //               HuntEngine.beginFight uses the buff up and CombatScene puts
+  //               it on every standing hunter for that fight.
   // All numbers are placeholders until chunk 13.
   bitterroot: {
     id: 'bitterroot', name: 'Bitterroot', type: 'food', rarity: 'common', stackable: true, supply: 2,
@@ -91,6 +95,14 @@ export const Items = {
     food: { kind: 'forage', grounds: ['shingle', 'dunes', 'woodland', 'rainforest'], rawEdible: false, difficulty: 10,
             buff: { field: 'perceptionBonus', amount: 5, duration: 12 } },
     description: 'Salt-stiff ribbons thrown up by the tide. Boiled, it makes a broth that clears the head.',
+  },
+  // The first "next fight" food (chunk 9 decision 11): AttackPower is the
+  // outgoing-damage % a status carries (War Cry uses the same key).
+  ember_pepper: {
+    id: 'ember_pepper', name: 'Ember Pepper', type: 'food', rarity: 'common', stackable: true, supply: 1,
+    food: { kind: 'forage', grounds: ['grass', 'heath', 'woodland'], rawEdible: true, difficulty: 15,
+            buff: { field: 'AttackPower', amount: 10, duration: 'fight' } },
+    description: 'A small red pod that burns going down. Cooked into a meal, it puts fire in the arm for the next fight.',
   },
   raw_fish: {
     id: 'raw_fish', name: 'Raw Fish', type: 'food', rarity: 'common', stackable: true, supply: 4,

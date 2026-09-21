@@ -26,6 +26,16 @@
 //     is back on its feet at 1 HP+, the hunt is over and the pack came home;
 //     Watched sends the fallen to the Slain and loses the pack; an old save's
 //     Advance hunt follows its own death rule the same way
+//   - chunk 9c, flee inside the fight: on a hunter's turn, every living enemy
+//     takes exactly one turn and no hunter does, then the hunt takes the flee
+//     (retreat, the pack hunting, nothing kept); knock-outs in that round are
+//     counted and stand up at 1 HP; the last hunter falling in it is a wipe
+//   - Unbroken: not done before a fight is won, done after a clean win,
+//     broken by a win with a knock-out
+//   - food for the fight: a Fine camp meal with Ember Pepper leaves a clockless
+//     fight buff that survives a reload; beginFight hands it over and uses it
+//     up; every standing hunter starts the fight with it; and the same seeded
+//     Basic Attack hits harder with it (the consumer, measured)
 //
 // USAGE
 //   node tools/headless/huntfight.mjs        run the checks (no golden: the
@@ -84,12 +94,12 @@ function recordingWorld(party) {
 }
 
 /** Walk a hunt until it meets an encounter of the wanted kind, or give up. */
-function meet({ kind, zones = ZONES, from = 100, tries = 120, planMods = {}, party = () => makeParty(), size = 'medium' }) {
+function meet({ kind, zones = ZONES, from = 100, tries = 120, planMods = {}, party = () => makeParty(), size = 'medium', bonus = [] }) {
   for (let seedN = from; seedN < from + tries; seedN++) {
     for (const zoneId of zones) {
       const p = party();
       const world = recordingWorld(p);
-      const h = createMapHunt(zoneId, { plan: { objective: 'cull', size, mods: planMods }, supplies: 300, seed: seedN }, world);
+      const h = createMapHunt(zoneId, { plan: { objective: 'cull', size, mods: planMods, bonusObjectives: bonus }, supplies: 300, seed: seedN }, world);
       const pick = makeRng(seedN);
       for (let i = 0; i < 120; i++) {
         const e = h.encounter();
@@ -319,6 +329,216 @@ function pendingFight(rule, from) {
     check(`Advance hunt, ${rule}: a wipe kills nobody (it used to send the party to the Slain)`,
       rule === 'sheltered' && host.combatEnded && died === 0 && p.every(c => c.status === 'alive'), `${died} slain`);
     check('Advance hunt: the wipe ends it', HuntManager.mode() === null);
+  }
+}
+
+// =============================================================================
+// Chunk 9c: flee inside the fight, knock-outs for Unbroken, food for the fight
+// =============================================================================
+const { startCombat, setActor, cast } = await import('./fight.js');
+const { hunterExploration, partyStats } = await import('../../src/systems/PartyStats.js');
+const { cookDish } = await import('../../src/systems/HuntRules.js');
+const { SKILLS } = await import('../../data/skills.js');
+
+const alive = (u) => u && u.status !== 'incapacitated' && (u.currentHP ?? 1) > 0;
+
+/** Drive enemy turns until a hunter's turn comes up (or the fight ends). */
+function toPartyTurn(host) {
+  for (let i = 0; i < 60 && !host.combatEnded; i++) {
+    const c = host._currentChar();
+    if (c && !c.isEnemy) return c;
+    const before = host.currentTurnIndex;
+    host.__drain();
+    if (host.currentTurnIndex === before && !host.combatEnded && host._currentChar()?.isEnemy) {
+      host._takeEnemyTurn_viaLogic(host._currentChar());
+      host.__drain();
+    }
+  }
+  return host.combatEnded ? null : host._currentChar();
+}
+
+/** After _startFlee: let the free round play out, the way runFight drives enemies. */
+function playFreeRound(host) {
+  for (let i = 0; i < 60 && !host.combatEnded; i++) {
+    const before = host.currentTurnIndex;
+    host.__drain();
+    const c = host._currentChar();
+    if (!host.combatEnded && host.currentTurnIndex === before && c?.isEnemy) {
+      host._takeEnemyTurn_viaLogic(c);
+      host.__drain();
+    }
+  }
+}
+
+/** A fresh host on the hunt's pending fight, started the way the map scene now
+ *  starts one (beginFight: the spec plus the "next fight" food buff). */
+function hostBegun(m) {
+  const spec = m.h.beginFight();
+  const host = createCombatHost(CombatScene);
+  host.__begin({ party: m.party, partySlots: slotMapFor(m.party), huntFight: { ...spec, hunt: m.h } });
+  return { host, spec };
+}
+
+console.log('=== flee inside the fight: the free round ===');
+{
+  const m = meet({ kind: 'beast', from: 1500 });
+  check('found a beast fight to flee from', !!m);
+  const { host } = hostBegun(m);
+  for (const u of m.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  seed(41);
+  startCombat(host);
+  const actor = toPartyTurn(host);
+  const living = host.enemies.filter(alive).map(e => e.uid).sort();
+  const s0 = m.h.getState();
+  const started = [];
+  const origStart = host._startTurnStatusEffects;
+  host._startTurnStatusEffects = function (c) { started.push(c); return origStart.call(this, c); };
+  host._startFlee();
+  playFreeRound(host);
+  const s1 = m.h.getState();
+  const occ = s1.map.occupants.find(o => o.id === s0.encounter.occId);
+  check('on a hunter\'s turn, Flee starts the free round', !!actor && !actor.isEnemy);
+  check('every living enemy takes exactly one turn, and no hunter does',
+    same(started.filter(c => c.isEnemy).map(c => c.uid).sort(), living) && !started.some(c => !c.isEnemy),
+    `${started.length} turns for ${living.length} enemies`);
+  check('then the fight ends as a flee: the hunt retreats, the pack stays and hunts the party',
+    host.combatEnded && !s1.encounter && s1.flees === s0.flees + 1 && !!occ && occ.state === 'hunting'
+    && s1.log.some(l => l.kind === 'flee' && l.reason === 'fled') && s1.pos !== s0.pos,
+    `flees ${s0.flees} -> ${s1.flees}, pack ${occ?.state}`);
+  check('nothing from a fled fight is kept: no kill, no Hunt Points', s1.kills.length === s0.kills.length && m.world.paid.length === 0);
+}
+{
+  // Knock-outs during the free round stand back up at 1 HP, and are counted.
+  const m = meet({ kind: 'beast', from: 1600 });
+  const { host } = hostBegun(m);
+  seed(43);
+  startCombat(host);
+  const actor = toPartyTurn(host);
+  for (const u of m.party) { if (u !== actor) { u.currentHP = 1; } else { u.maxHP = 9999; u.currentHP = 9999; } }
+  let koAtEnd = -1;
+  const origFled = host._onCombatFled;
+  host._onCombatFled = function () { koAtEnd = GameState.party.filter(c => c.status === 'incapacitated').length; return origFled.call(this); };
+  host._startFlee();
+  playFreeRound(host);
+  const s1 = m.h.getState();
+  check('hunters knocked out in the free round are counted for Unbroken, then stand at 1 HP',
+    koAtEnd > 0 && s1.knockouts === koAtEnd && m.party.every(c => c.status !== 'incapacitated' && c.status !== 'dead' && c.currentHP >= 1),
+    `${koAtEnd} knocked out, hunt counts ${s1.knockouts}; party ${m.party.map(c => c.status + "/" + c.currentHP).join(" ")}`);
+}
+{
+  // A wipe during the free round is a wipe, not a flee.
+  const m = meet({ kind: 'beast', from: 1700 });
+  const { host } = hostBegun(m);
+  seed(47);
+  startCombat(host);
+  const actor = toPartyTurn(host);
+  for (const u of m.party) if (u !== actor) host._onUnitKnockedOut(u);
+  actor.currentHP = 1;
+  for (const e of host.enemies) { e.derived.Accuracy = 500; }
+  host._startFlee();
+  playFreeRound(host);
+  const s1 = m.h.getState();
+  check('if the last hunter falls in the free round, it is a wipe (Sheltered), not a flee',
+    s1.finished === 'wipe' && !s1.log.some(l => l.kind === 'flee' && l.reason === 'fled'), `finished ${s1.finished}`);
+}
+
+console.log('=== Unbroken: knock-outs in won fights ===');
+{
+  const m = meet({ kind: 'beast', from: 1800, bonus: ['unbroken'] });
+  check('found a hunt with Unbroken and a fight', !!m && m.h.objectives().some(o => o.id === 'unbroken'));
+  const ub = () => m.h.objectives().find(o => o.id === 'unbroken');
+  check('before any fight is won, Unbroken is not done (a hunt that fought nothing is untested)', ub().done === false && !ub().pending);
+  const { host } = hostBegun(m);
+  for (const u of m.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  seed(53);
+  runFight(host, basicAttack, { maxTurns: 800 });
+  check('a clean win: Unbroken is done', m.h.getState().knockouts === 0 && ub().done === true);
+  // A second fight, won with one hunter knocked out, breaks it for the hunt.
+  let e = m.h.encounter();
+  for (let i = 0; i < 120 && !e; i++) {
+    const v = m.h.view();
+    const target = m.h.getState().map.occupants.find(o => (o.kind === 'beast' || o.kind === 'cultist') && v.moves.some(mv => mv.tile === o.tile));
+    if (!v.moves.length) break;
+    m.h.move(target ? target.tile : v.moves[i % v.moves.length].tile);
+    e = m.h.encounter();
+  }
+  if (e) {
+    const { host: h2 } = hostBegun(m);
+    startCombat(h2);
+    h2._onUnitKnockedOut(m.party[0]);
+    seed(59);
+    runFight(h2, basicAttack, { maxTurns: 800 });
+    check('a win with a hunter knocked out: counted, and Unbroken is broken for the hunt', m.h.getState().knockouts >= 1 && ub().done === false,
+      `knockouts ${m.h.getState().knockouts}`);
+  } else {
+    check('found a second fight for Unbroken', false);
+  }
+}
+
+console.log('=== food for the fight: from a camp meal to the damage ===');
+{
+  // The best cook takes two Cooking picks (levels 2 and 4): 45 + 20 = 65, what
+  // a Fine fish-and-pepper dish needs (30 + 15 + FINE_MARGIN 20).
+  const cookParty = () => {
+    const p = makeParty();
+    const best = [...p].sort((a, b) => hunterExploration(b).ratings.cooking - hunterExploration(a).ratings.cooking)[0];
+    best.exploration = { picks: { 2: { rating: 'cooking' }, 4: { rating: 'cooking' } } };
+    return p;
+  };
+  const m = meet({ kind: 'beast', from: 1900, party: cookParty });
+  const data = m.h.serialize();
+  data.pack.found.push(makeStack('raw_fish', 1), makeStack('ember_pepper', 1));
+  const world = recordingWorld(m.party);
+  const h = restoreMapHunt(data, world);   // the pending fight resolves as a flee
+  const cooking = partyStats(m.party, {}).cooking;
+  const dish = cookDish(Items.raw_fish, Items.ember_pepper, cooking);
+  check('the party can cook it Fine, and the dish carries a "next fight" buff', dish.quality === 'fine' && dish.buff?.duration === 'fight', `Cooking ${cooking}, ${dish.quality}`);
+  const c = h.camp({ meals: [{ main: 'raw_fish', addition: 'ember_pepper' }] });
+  const fb = h.view().foodBuff;
+  check('camp: the Fine meal leaves the fight buff on the hunt, with no clock', c.ok && fb?.fight === true && fb.field === 'AttackPower' && fb.until === undefined && fb.source === 'ember_pepper', JSON.stringify(fb));
+  // Survives a reload.
+  const back = restoreMapHunt(JSON.parse(JSON.stringify(h.serialize())), world);
+  check('the fight buff survives a save and reload', back.view().foodBuff?.fight === true);
+  // Walk into a fight and begin it.
+  let e = h.encounter();
+  for (let i = 0; i < 150 && !e; i++) {
+    const v = h.view();
+    const target = h.getState().map.occupants.find(o => (o.kind === 'beast' || o.kind === 'cultist') && v.moves.some(mv => mv.tile === o.tile));
+    if (!v.moves.length) break;
+    h.move(target ? target.tile : v.moves[i % v.moves.length].tile);
+    e = h.encounter();
+  }
+  check('walked into a fight with the buff held', !!e && h.view().foodBuff?.fight === true);
+  if (e) {
+    const spec = h.beginFight();
+    check('beginFight hands the buff to the fight and uses it up (logged)', spec.ok && spec.foodBuff?.field === 'AttackPower' && spec.foodBuff.amount === 10
+      && h.view().foodBuff === null && h.getState().log.some(l => l.kind === 'fight' && l.food === 'ember_pepper'));
+    const host = createCombatHost(CombatScene);
+    host.__begin({ party: m.party, partySlots: slotMapFor(m.party), huntFight: { ...spec, hunt: h } });
+    const standing = m.party.filter(alive);
+    check('every standing hunter starts the fight with the food status', standing.length > 0
+      && standing.every(u => u.statusEffects.some(se => se.id === 'hunt_food_buff' && se.mods?.AttackPower === 10)));
+    // The consumer: the same Basic Attack, same seed, with and without the
+    // status, lands harder with it.
+    let measured = null;
+    for (let k = 0; k < 20 && !measured; k++) {
+      const hit = (withBuff) => {
+        const p = makeParty();
+        const hh = createCombatHost(CombatScene);
+        hh.__begin({ party: p, partySlots: slotMapFor(p), huntFight: { ...spec, foodBuff: withBuff ? spec.foodBuff : null, hunt: { winEncounter: () => ({}), wipe: () => ({}), flee: () => ({}) } } });
+        const me = p[0], foe = hh.enemies[0];
+        foe.maxHP = 99999; foe.currentHP = 99999;
+        me.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
+        setActor(hh, me);
+        seed(700 + k);
+        cast(hh, me, me.skills.find(s => s.id === 'basic_attack'), foe);
+        return 99999 - foe.currentHP;
+      };
+      const a = hit(true), b = hit(false);
+      if (b > 0) measured = { a, b };
+    }
+    check('the consumer: the same seeded Basic Attack hits harder with the buff', !!measured && measured.a > measured.b,
+      measured ? `${measured.b} -> ${measured.a} damage` : 'no hit landed');
   }
 }
 

@@ -27,6 +27,9 @@
 //     a won fight's "Back to the Hunt" (clicked) returns to the map with the
 //     occupant gone and the win saved; a wipe in a Sheltered region kills
 //     nobody, ends the hunt, and Exit (clicked) goes back to town
+//   - chunk 9c: Flee is offered inside the fight on a hunter's turn (not on the
+//     map panel); clicking it plays the enemy's free round and ends the fight
+//     as fled, and Back to the Hunt returns to a map where the pack hunts you
 // Test setup may drive the engine directly (walking to a fight or an exit),
 // but through the scene's own _act, so autosave runs as it does for a click.
 // A fight's OUTCOME is forced from the page (every enemy, or every hunter,
@@ -198,6 +201,33 @@ check('...the occupant is gone, the kill recorded, and the win saved', won.gone 
   && svWon?.hunt?.mode === 'map' && svWon.hunt.kills.length === pre.kills + 1, JSON.stringify(won));
 await shot('05d-back-on-map');
 
+// ---- 5c. Flee from inside a fight (chunk 9c) ---------------------------------------------
+const fight4 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+check('walked into a fight to flee from', fight4 === 'fight', fight4);
+check('the encounter panel has no Flee button (it lives in the fight now)', !(await findText('^Flee$', 'HuntFieldOverlay')));
+const pre4 = await evaluate(`const h = window.__T.s().hunt; const st = h.getState(); return { occId: h.encounter().occId, kind: h.encounter().kind, flees: st.flees, pos: st.pos };`);
+await clickText('^Fight$', 'HuntFieldOverlay');
+check('...Fight starts CombatScene', await waitFor(combatReady));
+// Wait for a hunter's turn: the Flee button shows with End Turn.
+const partyTurn = await waitFor("(() => { const c = window.__T.g().scene.getScene('CombatScene'); const a = c._currentChar?.(); return a && !a.isEnemy && c.fleeButton?.visible; })()", 30000);
+check('on a hunter\'s turn the fight offers Flee', partyTurn);
+await shot('05e-flee-button');
+await clickText('^Flee$', 'CombatScene');
+check('Flee (clicked): the enemy gets its free round, then the fight ends as fled', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Fled')", 30000));
+await shot('05f-fled');
+await clickText('^Back to the Hunt$', 'CombatScene');
+check('Back to the Hunt (clicked) returns to the map', await waitFor("window.__T.g().scene.isActive('HuntFieldOverlay') && !window.__T.g().scene.isActive('CombatScene')"));
+await sleep(600);
+const after4 = await evaluate(`const h = window.__T.s().hunt; const st = h.getState(); const occ = st.map.occupants.find(o => o.id === ${JSON.stringify(pre4.occId)});
+  return { enc: !!h.encounter(), flees: st.flees, hunting: occ?.state, fled: st.log.some(l => l.kind === 'flee' && l.reason === 'fled') };`);
+const sv4 = await saved();
+// A beast pack fled from hunts the party (7c: only beasts are alerted; a
+// cultist camp stays where it is).
+check('...the party fell back, a fled beast pack hunts it, and the flee is saved',
+  !after4.enc && after4.flees === pre4.flees + 1 && (pre4.kind === 'beast' ? after4.hunting === 'hunting' : true) && after4.fled && sv4?.hunt?.flees === pre4.flees + 1,
+  JSON.stringify({ kind: pre4.kind, ...after4 }));
+await shot('05g-after-flee');
+
 // ---- 6. Leave through an exit -------------------------------------------------------
 const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t]) => t.exit).map(([id]) => id))");
 check('walked to an exit', walked === 'there', walked);
@@ -210,11 +240,19 @@ if (enter) await click(enter.x, enter.y);
 await sleep(400);
 await shot('06-left');
 const after = await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.js'); const PM = (await import('/src/systems/ProgressionManager.js')).default;
-  return { active: HuntManager.isActive(), finished: window.__T.s().v.finished, pts: PM.huntPoints };`);
+  const rw = window.__T.s().hunt.getState().reward;
+  return { active: HuntManager.isActive(), finished: window.__T.s().v.finished, pts: PM.huntPoints,
+    completion: rw?.completion, primaryDone: rw?.primaryDone, bonusPts: (rw?.bonuses || []).reduce((t, b) => t + (b.huntPoints || 0), 0), bonuses: (rw?.bonuses || []).map(b => b.id) };`);
 const sv = await saved();
 check('leaving ends the hunt: the holder drops it and the save holds no hunt', after.finished === 'exit' && !after.active && sv?.hunt === null);
 check('...unspent Rations come home to the bag', (await bagRations()) >= home0, `${home0} -> ${await bagRations()}`);
-check('...Hunt Points paid only if the objective was done (it was not: 0 more)', after.pts === pts0, `${pts0} -> ${after.pts}`);
+// The primary was not done, so no completion reward. A bonus objective pays on
+// top whatever the primary (7d); since 9c Unbroken can be done by the fights
+// this run wins, and the plan's bonus is rolled unseeded, so it may or may not
+// be one. What is paid must be exactly the bonuses the engine reports done.
+check('...no completion reward (the objective was not done); only done bonus objectives pay',
+  !after.primaryDone && after.completion === 0 && after.pts - pts0 === after.bonusPts,
+  `${pts0} -> ${after.pts}, bonuses ${JSON.stringify(after.bonuses)} = ${after.bonusPts}`);
 await clickText('^Return to camp$');
 await sleep(500);
 await evaluate(`window.__T.g().scene.getScene('TownScene')._enterHuntGate(); await new Promise(r => setTimeout(r, 900)); return 1;`);

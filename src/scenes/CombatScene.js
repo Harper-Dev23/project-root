@@ -363,6 +363,10 @@ export default class CombatScene extends Phaser.Scene {
     // gated on it, so every other fight (training, co-op, an old save's
     // Advance hunt) runs exactly as before. Reset here: the scene is reused.
     this.huntFight = data.huntFight || null;
+    // Flee (chunk 9c): set once the party breaks away, for the enemy's free
+    // round; the button exists only in a map-hunt fight.
+    this._fleeing = false;
+    this.fleeButton = null;
     // Set only in co-op, by the server. Makes every client roll the SAME random
     // enemy gear as the authoritative board — see _placeEnemies. Absent in
     // single player, which keeps rolling from ambient randomness.
@@ -466,6 +470,9 @@ export default class CombatScene extends Phaser.Scene {
         u.statusEffects.push({ id: 'ward_shield_timer', turns: 2 });
       }
     }
+    // A map-hunt fight's food buff goes on AFTER that reset, or it would be
+    // wiped before the first turn (chunk 9c).
+    this._applyHuntFightStart();
 
     // Bars were constructed before this reset ran (see
     // _updateInitiativeBars) — repaint them now that the gauge is
@@ -497,6 +504,7 @@ export default class CombatScene extends Phaser.Scene {
     this._createActionMenu(layout.actionMenu.x, layout.actionMenu.y);
     this._createActionLights(layout.actionLights.x, layout.actionLights.y);
     this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
+    if (this.huntFight) this._createFleeButton(layout.endTurn.x, layout.endTurn.y - 60);
     this._highlightCurrentTurn();
     this._createCombatLog();
     this._postLocalChatLines(this.localChatScript?.onCombatStart?.(this._buildLocalChatCtx()));
@@ -3483,6 +3491,82 @@ export default class CombatScene extends Phaser.Scene {
     this.add.existing(this.endTurnButton);
   }
 
+  // === Map-hunt fights: flee and food (Exploration v2, chunk 9c) ============
+  // All of it exists only when huntFight is set; no other fight has a Flee
+  // button, a free round or a food buff.
+
+  /** The Flee button, above End Turn; shown and hidden with it. */
+  _createFleeButton(x, y) {
+    this.fleeButton = new UIButton(this, x, y, 'Flee', () => this._startFlee());
+    this.fleeButton.setDepth(UI_DEPTH.overlay + 1);
+    this.add.existing(this.fleeButton);
+  }
+
+  /**
+   * The party breaks away (ENCOUNTERS: "fleeing always works, never free";
+   * chunk 9 decision 8). Called on a hunter's turn. That hunter's turn ends
+   * normally, then EVERY living enemy takes one turn through the ordinary
+   * turn pipeline (start-of-turn effects, the AI, reactions: all of it) before
+   * the fight ends as a flee (_onCombatFled). The turn order becomes [this
+   * hunter, the living enemies by initiative, the rest of the party]: the
+   * party stays in it because the AI picks its targets from the turn order,
+   * and _advanceTurn ends the free round the moment the turn comes back to
+   * the party's side. A wipe during the free round is an ordinary wipe.
+   */
+  _startFlee() {
+    if (!this.huntFight || this.combatEnded || this._fleeing) return;
+    const actor = this._currentChar?.();
+    if (!actor || actor.isEnemy) return;
+    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
+    const living = (this.enemies || []).filter(e => e && e.status !== 'incapacitated').sort(byInitiativeDesc);
+    const rest = this.turnOrder.filter(u => u !== actor && !u.isEnemy);
+    this._fleeing = true;
+    this.fleeButton?.setVisible(false);
+    this.turnOrder = [actor, ...living, ...rest];
+    this.currentTurnIndex = 0;
+    this._refreshTurnOrderUI?.();
+    this._log(`🏃 ${actor.name} calls the retreat. The enemy gets a free round!`);
+    this._advanceTurn({ playerEndedTurn: true });
+  }
+
+  /**
+   * The free round is over: the party is away. The knocked-out stand up at
+   * 1 HP (decision 8), and the hunt takes the flee: back to the tile it came
+   * from, the time that costs, the pack alerted, nothing from the fight kept
+   * (HuntEngine.flee), with how many were knocked out, for Unbroken.
+   */
+  _onCombatFled() {
+    this.combatEnded = true;
+    this._resetAllCooldowns();
+    const knockedOut = GameState.party.filter(c => c.status === 'incapacitated').length;
+    this._reviveKnockedOutParty();
+    this.huntFight.hunt.flee({ knockedOut });
+    this._log('🏃 The party broke away.');
+    GameState.save('autosave');
+    this._showDefeatScreen('Fled', 'You broke away. They will be hunting you.', {
+      showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight.reopen?.(this),
+    });
+  }
+
+  /**
+   * At the start of a map-hunt fight: a food buff whose duration is "the next
+   * fight" (PARTY_STATS Part B; chunk 9 decision 11), handed over by
+   * hunt.beginFight() and already used up there, goes on every standing
+   * hunter as a status for the whole fight. Its field is a status-mod key
+   * _sumStatusEffectMods reads (the food data names one). Called after the
+   * per-combat reset, which would otherwise wipe it.
+   */
+  _applyHuntFightStart() {
+    const buff = this.huntFight?.foodBuff;
+    if (!buff?.field || !Number.isFinite(buff.amount)) return;
+    for (const c of GameState.party || []) {
+      if (!c || c.status === 'incapacitated' || (c.currentHP ?? 1) <= 0) continue;
+      c.statusEffects = c.statusEffects || [];
+      c.statusEffects.push({ id: 'hunt_food_buff', name: buff.name || 'Well fed', turns: 99, mods: { [buff.field]: buff.amount } });
+    }
+    this._log(`🍲 Well fed: ${buff.name || 'a meal'} (+${buff.amount} ${buff.field}) for this fight.`);
+  }
+
 
   _createActionMenu(x, y) {
     const { width, height } = this.sys.game.canvas;
@@ -4013,14 +4097,14 @@ export default class CombatScene extends Phaser.Scene {
     if (!isPlayerTurn) {
       // Hide the player action UI entirely on enemy turn OR before first _advanceTurn()
       this.actionMenu.setVisible(false);
-      this.endTurnButton?.setVisible(false);
+      this.endTurnButton?.setVisible(false); this.fleeButton?.setVisible(false);
       this._setActionMenuInteractive(false);
       return;
     }
 
     // Player turn: ensure UI is visible and interactive
     this.actionMenu.setVisible(true);
-    this.endTurnButton?.setVisible(true);
+    this.endTurnButton?.setVisible(true); this.fleeButton?.setVisible(!this._fleeing);
     this._setActionMenuInteractive(true);
     this.menuLevel = 'root';
 
@@ -6407,6 +6491,10 @@ export default class CombatScene extends Phaser.Scene {
     this.combatEnded = true;
     this._resetAllCooldowns();
     const xpSummary = [];
+    // Who is down at the end, BEFORE they are stood back up below: the hunt
+    // counts knock-outs for the Unbroken bonus objective (chunk 9c). Nobody is
+    // revived mid-fight, so the fight's end sees every one of them.
+    const huntKnockedOut = this.huntFight ? GameState.party.filter(c => c?.status === 'incapacitated').length : 0;
 
     if (this.isTraining) {
       this._log('🏆 Training complete — all party members are fully restored.');
@@ -6507,7 +6595,7 @@ export default class CombatScene extends Phaser.Scene {
       // A map-hunt fight: the hunt removes the occupant, records the kill,
       // takes the loot into the pack and pays the fight's Hunt Points
       // (HuntEngine.winEncounter). The autosave below saves it.
-      const won = this.huntFight.hunt.winEncounter({ loot });
+      const won = this.huntFight.hunt.winEncounter({ loot, knockedOut: huntKnockedOut });
       if (won?.huntPoints > 0) this._log(`+${won.huntPoints} Hunt Points.`);
     } else if (this.isHunt) {
       // Hunt fights aren't training-progression scenarios — award Hunt Points
@@ -12936,6 +13024,15 @@ export default class CombatScene extends Phaser.Scene {
       char.isEnemy = !!this.enemies?.includes(char);
     }
 
+    // The party is fleeing (chunk 9c, _startFlee): the order is [the hunter
+    // who called it, every living enemy, the rest of the party]. The enemy's
+    // free round is over the moment the turn comes back to anyone on the
+    // party's side, before that hunter's turn starts.
+    if (this._fleeing && !char.isEnemy) {
+      this._onCombatFled();
+      return;
+    }
+
     // Clear per-turn kill flags at the start of each new actor's turn
     this.enemyDiedThisTurn = false;
     this.currentActorMovedThisTurn = false;
@@ -13037,7 +13134,7 @@ export default class CombatScene extends Phaser.Scene {
     // 7) Branch by actor type
     if (char.isEnemy) {
       this.actionMenu?.setVisible(false);
-      this.endTurnButton?.setVisible(false);
+      this.endTurnButton?.setVisible(false); this.fleeButton?.setVisible(false);
       this.actionMenu?.iterate?.(child => child.disableInteractive?.());
 
       // Let AI act after a brief delay
@@ -13628,7 +13725,7 @@ export default class CombatScene extends Phaser.Scene {
       // Restart same scenario. Party already restored to full in _onCombatDefeat.
       this.scene.restart({ party: this.partyData, mode: 'pit', scenarioId: this.scenarioId });
     }));
-    if (showExit) buttons.push(makeBtn('[ Exit ]', width / 2 + (showRetry ? spacing / 2 : 0), () => {
+    if (showExit) buttons.push(makeBtn(opts.exitLabel || '[ Exit ]', width / 2 + (showRetry ? spacing / 2 : 0), () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       if (this.isHunt && !this.huntFight) {
@@ -13640,11 +13737,13 @@ export default class CombatScene extends Phaser.Scene {
       this.scene.wake('TownScene');
       this.scene.wake('UIScene');
       this.scene.get('UIScene')?.refreshUI(); // drop the now-Slain party members from the panel immediately
+      // A fled map-hunt fight goes back to the map (chunk 9c).
+      opts.onExit?.();
     }));
 
     // If something else tries to rebuild UI, hide it now
     this.actionMenu?.setVisible(false);
-    this.endTurnButton?.setVisible(false);
+    this.endTurnButton?.setVisible(false); this.fleeButton?.setVisible(false);
   }
 
 

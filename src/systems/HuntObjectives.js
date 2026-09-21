@@ -11,10 +11,10 @@
 // obj.occupant, obj.family, obj.site, obj.beforeDay) are on the map, so a
 // deploy cannot change what a live hunt is asking for.
 //
-// Two objectives cannot be checked until combat is hooked up (chunk 9):
-// Trophy needs beast parts, Unbroken needs to know who was knocked out. They
-// report `pending` and are never done or paid until then, rather than being
-// quietly granted.
+// Trophy cannot be checked until beast parts can be carried home (chunk 9d):
+// it reports `pending` and is never done or paid until then, rather than
+// being quietly granted. Unbroken is checked since chunk 9c, off the hunt's
+// knock-out count.
 //
 // All numbers are placeholders until chunk 13.
 
@@ -35,8 +35,7 @@ export const BONUS_HUNT_POINTS_PER_ITEM_LEVEL = 5;
 
 /** Objectives that wait for the combat hookup, and what they wait for. */
 export const PENDING_UNTIL = {
-  trophy: 'chunk 9: beast parts',
-  unbroken: 'chunk 9: knock-outs in fights',
+  trophy: 'chunk 9d: beast parts',
 };
 
 /** The plan's completion-reward percent: its prefixes' share plus its tier's implicit. */
@@ -129,8 +128,16 @@ function judge(s, obj, { atExit }) {
       return { have, need: 1, done: have >= 1 };
     }
     case 'trophy':
-    case 'unbroken':
       return { have: 0, need: 1, done: false, pending: PENDING_UNTIL[obj.id] };
+    // No hunter knocked out in any fight this hunt, fled fights included
+    // (chunk 9 decision 15). A hunt with no fight won has not earned it: a
+    // hunt that avoided every fight is not "unbroken", it is untested (a
+    // Claude call in 9c, flagged to the owner).
+    case 'unbroken': {
+      const ko = s.knockouts || 0;
+      const done = ko === 0 && (s.kills || []).length > 0;
+      return { have: done ? 1 : 0, need: 1, done, knockouts: ko };
+    }
     default:
       throw new Error(`no completion check for objective '${obj.id}'`);
   }

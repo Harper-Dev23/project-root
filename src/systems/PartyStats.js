@@ -207,10 +207,9 @@ export function applyExplorationPick(char, level, choice) {
 // ── The party ───────────────────────────────────────────────────────────────
 
 /**
- * Every field partyStats hands on, and what reads it. Only the Item Rarity
- * conversion has a reader today, and the hunt still passes it the raw
- * lootQualityPercent (the gear pool is always 0 until a gear affix writes it);
- * chunk 9 passes partyStats().itemRarity instead.
+ * Every field partyStats hands on, and what reads it. Item Rarity reaches the
+ * hunt's loot through HuntBeasts.rollLoadout since chunk 9a (the gear pool
+ * is always 0 until a gear affix writes it).
  */
 export const PARTY_STAT_OUTPUTS = {
   perception:              'HuntRules.occupantBand (Detection, via HuntEngine): compared against occupantConcealment',

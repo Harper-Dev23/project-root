@@ -15,7 +15,7 @@
 //
 // What it proves: a click sweep over every hex of a section (and points near
 // every hex corner), moving by clicks, every own-tile action, the eat and camp
-// panels, the log, an encounter and Flee, crossing a passage into section 2,
+// panels, the log, an encounter (its panel offers Fight, and since 9c no Flee), crossing a passage into section 2,
 // leaving through an exit with the dialogue-bar confirm, other regions and
 // sizes, the bonus-objective hover, three visits in a row (nothing piles up),
 // an Inventory opened and closed over the map (town input stays off and clicks
@@ -210,9 +210,12 @@ if (gotEnc) {
   await shotP('11b-encounter-with-log');
   check('the log opens clear of the encounter panel', overlap === 'clear', overlap);
   await clickText('^Log$');
-  await clickText('^Flee$');
-  const fled = await evaluate(`return !window.__T.s().v.encounter;`);
-  check('Flee (clicked) ends the encounter through the engine', fled);
+  // Chunk 9c: fleeing happens inside the fight now (huntflow.mjs clicks it
+  // there); the panel only starts the fight. Clear the encounter through the
+  // engine so the walk can go on.
+  check('the encounter panel has no Flee button any more (it lives in combat)', !(await findText('^Flee$')));
+  const fled = await evaluate(`const s = window.__T.s(); s._act('flee', () => s.hunt.flee()); return !s.v.encounter;`);
+  check('an encounter cleared through the engine leaves the map scene working', fled);
   await shot('12-after-flee');
 }
 

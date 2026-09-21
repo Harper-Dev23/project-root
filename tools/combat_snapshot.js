@@ -882,7 +882,24 @@ const HUNT_FIGHTS = {
   'stalker pack, ambushed':    { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'enemy' },
   'great-led pack with parts': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party' },
   'cultist band':              { occ: { id: 'o3', kind: 'cultist', grades: [null, null, null] }, first: 'party' },
+  // Chunk 9c: a fight fed by a "next fight" meal, and a fight fled at once.
+  'stalker pack, fed for the fight': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+    foodBuff: { field: 'AttackPower', amount: 10, source: 'ember_pepper', name: 'Ember Pepper' } },
+  'stalker pack, fled on the first turn': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party', flee: true },
 };
+
+/** Play a flee's free round out, the way runFight drives enemy turns. */
+function playFreeRound(host) {
+  for (let i = 0; i < 60 && !host.combatEnded; i++) {
+    const before = host.currentTurnIndex;
+    host.__drain();
+    const c = host._currentChar();
+    if (!host.combatEnded && host.currentTurnIndex === before && c?.isEnemy) {
+      host._takeEnemyTurn_viaLogic(c);
+      host.__drain();
+    }
+  }
+}
 
 function collectHuntFights() {
   const out = {};
@@ -900,15 +917,21 @@ function collectHuntFights() {
     const hunt = {
       winEncounter: ({ loot = [] } = {}) => { calls.push('win:' + loot.map(i => i.id + '/' + i.rarity).join(',')); return { ok: true, huntPoints: 0 }; },
       wipe: () => { calls.push('wipe'); return { ok: true }; },
+      flee: ({ knockedOut = 0 } = {}) => { calls.push('flee:ko=' + knockedOut); return { ok: true }; },
     };
     const huntFight = {
       hunt, kind: o.kind, first: def.first, itemLevel: 1, xpPool: 20, deathRule: 'sheltered',
       scenario: fightScenario(occ, { itemLevel: 1 }),
+      ...(def.foodBuff ? { foodBuff: def.foodBuff } : {}),
     };
+    let fled = false;
     try {
       host.__begin({ party, partySlots: slotMapFor(party), huntFight });
       const firstSide = host.turnOrder[0]?.isEnemy ? 'enemy' : 'party';
       const r = runFight(host, (h, actor) => {
+        // The flee entry breaks away on the party's first turn and plays the
+        // free round out here, so runFight's own endTurn never cuts into it.
+        if (def.flee && !fled) { fled = true; h._startFlee(); playFreeRound(h); return []; }
         const atk = (actor.skills || []).find(s => s.id === 'basic_attack');
         const foe = h.enemies.find(e => e.status !== 'incapacitated' && e.currentHP > 0);
         return (atk && foe) ? [{ ability: atk, target: foe }] : [];
@@ -917,7 +940,7 @@ function collectHuntFights() {
       const alliesUp = snap.allies.filter(a => a.hp > 0).length;
       const foesUp = snap.enemies.filter(e => e.hp > 0).length;
       out[label] = [
-        (foesUp === 0 ? 'WIN' : alliesUp === 0 ? 'LOSS' : 'UNRESOLVED'),
+        (foesUp === 0 ? 'WIN' : alliesUp === 0 ? 'LOSS' : calls.some(c => c.startsWith('flee')) ? 'FLED' : 'UNRESOLVED'),
         'first=' + firstSide,
         'turns=' + r.turns,
         'round=' + r.round,

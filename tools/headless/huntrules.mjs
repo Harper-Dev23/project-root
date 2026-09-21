@@ -468,11 +468,18 @@ console.log('=== 7b rules on hand-built inputs ===');
   // Declared-but-unenforced guard: each buff field must actually move partyStats.
   const party = makeParty();
   const base = partyStats(party, {});
+  // A "next fight" buff (chunk 9c) is a combat status instead: its field must
+  // move what _sumStatusEffectMods reports. huntfight.mjs measures the damage.
+  const { _sumStatusEffectMods } = await import('../../src/systems/CombatLogic.js');
   const dead = foods.filter(f => f.food.buff).filter(f => {
+    if (f.food.buff.duration === 'fight') {
+      const mods = _sumStatusEffectMods({ statusEffects: [{ id: 'x', turns: 9, mods: { [f.food.buff.field]: f.food.buff.amount } }] });
+      return !(mods[f.food.buff.field] > 0);
+    }
     const withBuff = partyStats(party, { [f.food.buff.field]: f.food.buff.amount });
     return same(withBuff, base);
   }).map(f => f.id);
-  check('every food buff writes a field partyStats reads (no dead buff)', dead.length === 0, dead.join(', '));
+  check('every food buff writes a field partyStats or a combat status reads (no dead buff)', dead.length === 0, dead.join(', '));
   golden.foods = Object.fromEntries(foods.map(f => [f.id, { supply: f.supply, ...f.food }]));
   golden.food7b = { STARVING_AFTER: R.STARVING_AFTER, SATED_TIME: R.SATED_TIME, HUNGER_INITIATIVE: R.HUNGER_INITIATIVE,
     FORAGE_YIELD: R.FORAGE_YIELD, FISH_YIELD: R.FISH_YIELD, CAMP_TIME: R.CAMP_TIME, CAMP_SUPPLY: R.CAMP_SUPPLY,
@@ -1321,6 +1328,9 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
         case 'retrieve': case 'commune': step = nextStep(h, id => id === o.site); break;
         case 'pathfinder': step = nextStep(h, id => !s.fog[id]) || nextStep(h, id => mapNeighbors(s.map, id).some(n => !s.fog[n])); break;
         case 'great_quarry': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.tile === id && x.roster.some(m => m.grade === 'great'))); break;
+        // Unbroken (checkable since 9c): win one fight with nobody knocked out.
+        // The solver's fights are free wins, so reaching any hostile will do.
+        case 'unbroken': step = nextStep(h, id => occs.some(x => (x.kind === 'beast' || x.kind === 'cultist') && x.tile === id)); break;
         case 'provisioner': {
           const t = s.map.tiles[s.pos];
           const canForage = !s.gathered[s.pos] && !t.barren && (R.FORAGE_YIELD[GROUNDS[t.ground].forage] || 0) > 0 && R.forageCandidates(Items, t.ground).length > 0;
@@ -1406,7 +1416,7 @@ console.log('=== every objective is completable and pays at the exit ===');
   }
   check('every bonus objective the engine can check: completed on every map and paid its reward at the exit',
     bonusFails.length === 0, bonusFails.slice(0, 3).join(' | '));
-  check('Trophy and Unbroken report pending (chunk 9) and are never done or paid', pendingOk.length > 0 && pendingOk.every(Boolean));
+  check('Trophy reports pending (chunk 9d) and is never done or paid', pendingOk.length > 0 && pendingOk.every(Boolean));
   // Unmask, at the best Perception the game can reach today: a level-10
   // Ferrow Shepherd with five Perception picks (100) and a T1 of Keen Eyes (+20).
   {

@@ -427,6 +427,8 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
       u.shieldHP = shieldPct > 0 ? Math.floor((u.maxHP || 0) * shieldPct / 100) : 0;
       if (u.shieldHP > 0) u.statusEffects.push({ id: 'ward_shield_timer', turns: 2 });
     }
+    // A map-hunt fight's food buff, after the reset (CombatScene.create does the same).
+    this._applyHuntFightStart();
 
     this.__drain();
     return this;

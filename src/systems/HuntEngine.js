@@ -209,6 +209,9 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     encounter: null,
     kills: [],
     flees: 0,
+    // Hunters knocked out in fights this hunt (won or fled), for the Unbroken
+    // bonus objective (chunk 9c). Optional in a save: missing reads as 0.
+    knockouts: 0,
     cleansed: [],
     retrieved: false,
     communed: false,
@@ -249,10 +252,12 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
     if (!data[k] || typeof data[k] !== 'object') throw new Error(`map hunt has no '${k}'`);
   }
   if (!(data.zeroSince === null || Number.isFinite(data.zeroSince)) || !Number.isFinite(data.satedUntil)) throw new Error('map hunt hunger is not readable');
-  if (data.foodBuff !== null && !(typeof data.foodBuff?.field === 'string' && Number.isFinite(data.foodBuff.amount) && Number.isFinite(data.foodBuff.until))) {
+  if (data.foodBuff !== null && !(typeof data.foodBuff?.field === 'string' && Number.isFinite(data.foodBuff.amount)
+      && (Number.isFinite(data.foodBuff.until) || data.foodBuff.fight === true))) {
     throw new Error('map hunt food buff is not readable');
   }
   if (!Number.isFinite(data.world?.time) || !Number.isFinite(data.world?.day)) throw new Error('map hunt world clock is not readable');
+  if (data.knockouts !== undefined && !Number.isFinite(data.knockouts)) throw new Error('map hunt knock-outs are not readable');
   if (!GROUNDS[data.landGround]) throw new Error('map hunt has no land ground');
   if (data.finished !== null && data.finished !== 'exit' && data.finished !== 'wipe') throw new Error(`map hunt ending '${data.finished}' is not one this build knows`);
   if (!Number.isFinite(data.plan?.itemLevel) || !Number.isFinite(data.plan?.completionRewardPercent)) throw new Error('map hunt plan has no item level or reward');
@@ -484,7 +489,13 @@ function makeMapHunt(s, rng, worldRng, world) {
       }
       if (dishes.some(d => d.sated)) s.satedUntil = s.time + SATED_TIME;
       const fine = [...dishes].reverse().find(d => d.buff);
-      if (fine) s.foodBuff = { ...fine.buff, until: s.time + fine.buff.duration, source: fine.addition };
+      // A buff lasts in-game time, or "the next fight" (PARTY_STATS Part B):
+      // a fight buff has no clock; beginFight() hands it to combat and uses it.
+      if (fine) {
+        s.foodBuff = fine.buff.duration === 'fight'
+          ? { field: fine.buff.field, amount: fine.buff.amount, fight: true, source: fine.addition }
+          : { ...fine.buff, until: s.time + fine.buff.duration, source: fine.addition };
+      }
       this._reveal();
       this._log({ kind: 'camp', tile: s.pos, night, pct, dishes: dishes.map(d => d.quality), found: !!spent.encounter, time: s.time });
       return {
@@ -540,6 +551,26 @@ function makeMapHunt(s, rng, worldRng, world) {
     },
 
     /**
+     * Start the pending encounter's fight (the map scene's Fight button, chunk
+     * 9c): fightSpec() plus the party's "next fight" food buff, which is USED
+     * UP here (PARTY_STATS: "the next fight"). CombatScene puts it on every
+     * standing hunter as a status. A reload mid-fight is still a flee, and the
+     * buff stays spent: it was eaten.
+     */
+    beginFight() {
+      const spec = this.fightSpec();
+      if (!spec.ok) return spec;
+      let foodBuff = null;
+      if (s.foodBuff?.fight) {
+        foodBuff = { field: s.foodBuff.field, amount: s.foodBuff.amount, source: s.foodBuff.source,
+          name: Items[s.foodBuff.source]?.name || 'a meal' };
+        s.foodBuff = null;
+      }
+      this._log({ kind: 'fight', occupant: spec.occId, food: foodBuff?.source || null, time: s.time });
+      return { ...spec, foodBuff };
+    },
+
+    /**
      * The fight was won (CombatScene calls this, chunk 9b). The occupant leaves
      * the map and the kill is recorded; no occupant ever replaces it (no
      * mid-hunt spawns). What the fight pays, as the Advance loop paid it
@@ -551,7 +582,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      *   - XP is the fight's pool (fightSpec().xpPool), paid by CombatScene,
      *     which shows who levelled.
      */
-    winEncounter({ loot = [] } = {}) {
+    winEncounter({ loot = [], knockedOut = 0 } = {}) {
       if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const e = s.encounter;
       if (!e) return { ok: false, reason: 'no fight to win' };
@@ -564,6 +595,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       s.kills.push(kill);
       delete s.sightings[occ.id];
       s.encounter = null;
+      s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
       const found = loot.filter(isItemInstance);
       for (const inst of found) addToList(s.pack.found, inst);
       const huntPoints = occ.kind === 'beast'
@@ -576,15 +608,17 @@ function makeMapHunt(s, rng, worldRng, world) {
 
     /**
      * Flee (ENCOUNTERS, decision 10): always possible, never free, no roll.
-     *   - the enemy gets a full round as you disengage: `enemyFreeRound`, which
-     *     the combat hookup applies before calling this (chunk 9);
+     *   - the enemy gets a full round as you disengage: CombatScene plays it
+     *     (_startFlee, chunk 9c) and then calls this, with how many hunters it
+     *     knocked out (for Unbroken). A reload mid-fight also calls it
+     *     (reason 'reload'), with no free round;
      *   - the party retreats to the tile it came from (or, if the pack came to
      *     it, to the first open neighbour), paying that move's time;
      *   - nothing from the fight is kept: the occupant stays on the map;
      *   - the pack is alerted: it hunts the party, from the end of the retreat.
      * No smoke charge yet: nothing could read one before chunk 9.
      */
-    flee({ reason = 'fled' } = {}) {
+    flee({ reason = 'fled', knockedOut = 0 } = {}) {
       if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const e = s.encounter;
       if (!e) return { ok: false, reason: 'nothing to flee from' };
@@ -592,6 +626,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const back = this._retreatTile(e);
       s.encounter = null;
       s.flees += 1;
+      s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
       const time = back ? moveCost(s.map.tiles[back], this.stats()).time : SCOUT_TIME;
       if (back) { s.from = s.pos; s.pos = back; }
       if (occ && occ.kind === 'beast') alert(occ, s.time + time);
@@ -600,7 +635,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       this._reveal();
       this._log({ kind: 'flee', occupant: e.occId, reason, to: back, time: s.time });
       return {
-        ok: true, to: back, time, flips: spent.flips, enemyFreeRound: true,
+        ok: true, to: back, time, flips: spent.flips, enemyFreeRound: reason !== 'reload',
         alerted: occ?.kind === 'beast' ? occ.id : null, starved, encounter: this.encounter(),
       };
     },
@@ -706,7 +741,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         maxSupplies: s.maxSupplies,
         hunger: this.hunger(),
         satedUntil: s.satedUntil,
-        foodBuff: s.foodBuff && s.time < s.foodBuff.until ? { ...s.foodBuff } : null,
+        foodBuff: s.foodBuff && (s.foodBuff.fight || s.time < s.foodBuff.until) ? { ...s.foodBuff } : null,
         fog: { ...s.fog },
         ground,
         occupants,

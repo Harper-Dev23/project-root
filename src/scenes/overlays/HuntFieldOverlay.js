@@ -707,6 +707,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : ''}.`;
       case 'win': return `${day(e.time)} Won the fight${e.huntPoints ? `: +${e.huntPoints} Hunt Points` : ''}${e.loot ? `, ${e.loot} item${e.loot > 1 ? 's' : ''} to the pack` : ''}.`;
       case 'flee': return `${day(e.time)} Fled${e.reason === 'reload' ? ' (reloaded mid-fight)' : ''}.`;
+      case 'fight': return `${day(e.time)} The fight began${e.food ? `, well fed on ${item(e.food)}` : ''}.`;
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
       case 'exit': return `${day(e.time)} Left the hunt: ${e.huntPoints} Hunt Points.`;
@@ -732,10 +733,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     let ty = p.py + 36;
     ty = this._panelLines(p, ty, lines);
     ty += 10;
-    this._panelButton(p, p.px + 95, ty + 12, 'Fight', () => this._fight(), 'danger');
-    // Flee moves into combat in chunk 9c (decision 8: the enemy's free round
-    // is paid there); until then it stays here, before the fight starts.
-    this._panelButton(p, p.px + 265, ty + 12, 'Flee', () => this._act('flee', () => this.hunt.flee()));
+    // Fleeing is done from inside the fight (chunk 9c, decision 8), where the
+    // enemy's free round is played: the panel only starts it.
+    this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
   }
 
   /**
@@ -748,8 +748,11 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * saved with the encounter pending, so a reload mid-fight is a flee.
    */
   _fight() {
-    const spec = this.hunt.fightSpec();
+    // beginFight (chunk 9c) is fightSpec plus the party's "next fight" food
+    // buff, which it uses up: so the hunt is saved before the fight starts.
+    const spec = this.hunt.beginFight();
     if (!spec?.ok) { this._say(spec?.reason ? `Cannot: ${spec.reason}.` : 'Cannot fight.'); return; }
+    this.onAction?.(this.hunt);
     SoundManager.play('select');
     const reopenData = { hunt: this.hunt, onDone: this.onDone, onAction: this.onAction, onFinished: this.onFinished };
     const huntFight = {
