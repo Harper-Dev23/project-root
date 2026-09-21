@@ -2227,6 +2227,22 @@ export default class CombatScene extends Phaser.Scene {
     if (view?._derivedMods) {
       for (const [k, v] of Object.entries(view._derivedMods)) {
         if (!v) continue;
+        // Max HP / Max MP affixes (armour's Sanctified, Anointed, ...) belong on
+        // the pools themselves, as rebuildCharacterStats folds them for
+        // players. They used to land in enemy.derived.maxHP / maxMP, which
+        // nothing reads, so on an enemy they did nothing (found in chunk 9a,
+        // fixed after chunk 9). Any grade or tier scaling in _spawnEnemy is
+        // applied after this, to the whole pool, the same as CON's HP.
+        if (k === 'maxHP') {
+          enemy.maxHP += v;
+          enemy.currentHP = Math.min(enemy.maxHP, enemy.currentHP + v);
+          continue;
+        }
+        if (k === 'maxMP') {
+          enemy.maxMP += v;
+          enemy.currentMP = Math.min(enemy.maxMP, enemy.currentMP + v);
+          continue;
+        }
         enemy.derived[k] = (enemy.derived[k] || 0) + v;
       }
     }

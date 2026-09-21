@@ -374,7 +374,8 @@
    ]
   }
  },
- "enemyMaxHpAffixDead": true,
+ "enemyMaxHpAffixApplied": true,
+ "enemyMaxMpAffixApplied": true,
  "partRarityOdds": {
   "yearling": {
    "0": {

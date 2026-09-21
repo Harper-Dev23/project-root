@@ -15,6 +15,7 @@
 //     pools, none is Max HP / Max MP (dead on enemies, see below), peripheral
 //     ranges are PERIPHERAL_SCALE of the core ones, and each family's
 //     signature buildup rolls where it should
+//   - enemy armour's Max HP affix reaches the enemy's HP (the bug 9a found, fixed)
 //   - NO DEAD AFFIX: parts rolled at every rarity are spawned onto a real enemy
 //     by CombatScene._spawnEnemy, and every affix they carry must move the
 //     field its consumer reads (derived stat, HP, gearEffects, weapon damage,
@@ -239,24 +240,43 @@ function spawn(type, drops = [], seed = 1) {
   check('every affix on an epic part moves the field its combat consumer reads', bad.length === 0,
     bad.slice(0, 4).join('; ') || `${affixes} affixes on ${FAMILIES.length} families`);
 
-  // The finding that shaped the pools: an armour Max HP affix on an enemy lands
-  // in enemy.derived.maxHP, and nothing reads it. Recorded so a fix shows up.
+  // The bug 9a found, FIXED after chunk 9: an armour Max HP affix on an enemy
+  // used to land in enemy.derived.maxHP, which nothing reads. It must now raise
+  // the enemy's maxHP by exactly its value, on top of what the chest's CON adds.
   let armorId = Object.keys(Items).find(id => Items[id].type === 'armor' && Items[id].slot === 'chest');
-  let hpDead = null;
-  for (let k = 0; k < 400 && hpDead === null; k++) {
+  let hp = null;
+  for (let k = 0; k < 400 && hp === null; k++) {
     const e = spawn('hunt_cult_zealot', [{ equip: 'chest', itemId: armorId, rarity: 'epic' }], 5000 + k);
-    const hp = e.equipment.chest?.instanceMods?.derived?.maxHP;
-    if (hp) {
-      // Whatever else the chest carries (CON is +2 HP a point, and that IS
-      // read) is taken out by comparing with what its CON alone adds.
+    const affix = e.equipment.chest?.instanceMods?.derived?.maxHP;
+    if (affix) {
+      // Whatever else the chest carries (CON is +2 HP a point) is taken out by
+      // comparing with what its CON alone adds.
       const con = IF.getItemComputedData(e.equipment.chest).bonuses?.CON || 0;
-      hpDead = { affix: hp, rise: e.maxHP - spawn('hunt_cult_zealot').maxHP, conOnly: calcConHP(con, ENEMY_TYPES.hunt_cult_zealot.baseStats.CON), derivedMaxHP: e.derived.maxHP };
+      hp = { affix, rise: e.maxHP - spawn('hunt_cult_zealot').maxHP, conOnly: calcConHP(con, ENEMY_TYPES.hunt_cult_zealot.baseStats.CON), stranded: e.derived.maxHP || 0, full: e.currentHP === e.maxHP };
     }
   }
-  const dead = !!hpDead && hpDead.rise === hpDead.conOnly && hpDead.derivedMaxHP === hpDead.affix;
-  check('FINDING recorded: an armour Max HP affix does not raise an enemy\'s maxHP', dead,
-    hpDead ? `+${hpDead.affix} Max HP rolled; maxHP rose ${hpDead.rise}, exactly its CON's ${hpDead.conOnly}; the +${hpDead.affix} sits unread in derived.maxHP` : 'no roll found');
-  golden.enemyMaxHpAffixDead = dead;
+  const applied = !!hp && hp.rise === hp.conOnly + hp.affix && hp.stranded === 0 && hp.full;
+  check('an armour Max HP affix raises an enemy\'s maxHP by exactly its value (fixed after chunk 9)', applied,
+    hp ? `+${hp.affix} Max HP rolled; maxHP rose ${hp.rise} = CON's ${hp.conOnly} + ${hp.affix}; nothing left in derived.maxHP` : 'no roll found');
+  golden.enemyMaxHpAffixApplied = applied;
+  // The same for Max MP: its rise is what the chest's stats add to MP (through
+  // the game's own calculateDerivedStats) plus the affix.
+  let mp = null;
+  const Z = ENEMY_TYPES.hunt_cult_zealot.baseStats;
+  for (let k = 0; k < 600 && mp === null; k++) {
+    const e = spawn('hunt_cult_zealot', [{ equip: 'chest', itemId: armorId, rarity: 'epic' }], 9000 + k);
+    const affix = e.equipment.chest?.instanceMods?.derived?.maxMP;
+    if (affix) {
+      const bonus = IF.getItemComputedData(e.equipment.chest).bonuses || {};
+      const withStats = { ...Z }; for (const [s2, v] of Object.entries(bonus)) withStats[s2] = (withStats[s2] || 0) + v;
+      const fromStats = calculateDerivedStats(withStats).maxMP - calculateDerivedStats(Z).maxMP;
+      mp = { affix, rise: e.maxMP - spawn('hunt_cult_zealot').maxMP, fromStats, stranded: e.derived.maxMP || 0 };
+    }
+  }
+  const mpApplied = !!mp && mp.rise === mp.fromStats + mp.affix && mp.stranded === 0;
+  check('an armour Max MP affix raises an enemy\'s maxMP by exactly its value', mpApplied,
+    mp ? `+${mp.affix} Max MP rolled; maxMP rose ${mp.rise} = stats' ${mp.fromStats} + ${mp.affix}` : 'no roll found');
+  golden.enemyMaxMpAffixApplied = mpApplied;
 }
 
 // =============================================================================
