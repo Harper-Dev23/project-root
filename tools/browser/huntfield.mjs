@@ -198,7 +198,7 @@ const gotEnc = await evaluate(`
 check('found an encounter to show', gotEnc);
 if (gotEnc) {
   await shotP('11-encounter');
-  check('the encounter panel shows who acts first and the TEST win button', !!(await findText('acts first')) && !!(await findText('^TEST: win$')));
+  check('the encounter panel shows who acts first and the Fight button (chunk 9b; no TEST button)', !!(await findText('acts first')) && !!(await findText('^Fight$')) && !(await findText('TEST')));
   await clickText('^Log$');
   const overlap = await evaluate(`
     const s = window.__T.s(); const pr = s._panelRect; let log = null;

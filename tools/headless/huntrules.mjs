@@ -82,7 +82,9 @@ function settle(h) {
 
 function recordingWorld(party) {
   const calls = [];
-  return { calls, party: () => party, nightFalls: () => calls.push('night'), dayBreaks: () => calls.push('day') };
+  // awardHuntPoints: a won beast fight pays Hunt Points (chunk 9b). Not
+  // recorded here; payingWorld below records them.
+  return { calls, party: () => party, nightFalls: () => calls.push('night'), dayBreaks: () => calls.push('day'), awardHuntPoints() {} };
 }
 
 // =============================================================================
@@ -1302,7 +1304,9 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
   const exitTiles = new Set(h.getState().map.exits);
   let stuck = null;
   for (let i = 0; i < maxActions; i++) {
-    if (h.encounter()) { h.winEncounter(); continue; }
+    // A won beast fight pays its own Hunt Points (chunk 9b); tallied apart so
+    // the exit's payment can still be checked exactly.
+    if (h.encounter()) { world.fightPaid = (world.fightPaid || 0) + (h.winEncounter().huntPoints || 0); continue; }
     const s = h.getState();
     const prog = h.objectives();
     const open = prog.find(p => !p.done && !p.pending && !(p.id === 'swift_return') && !(p.carriedHome && p.have >= p.need));
@@ -1368,7 +1372,7 @@ console.log('=== every objective is completable and pays at the exit ===');
           const r = solve({ zoneId, size, objective, seed: 10000 + k, itemLevel, planMods });
           row.runs++;
           const want = O.completionReward(size, O.completionRewardPercent(planMods, itemLevel));
-          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints) {
+          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints + (r.world.fightPaid || 0)) {
             row.done++; row.days += R.clockAt(r.h.getState().time).day; row.huntPoints += r.r.reward.huntPoints;
           } else fails.push(`${zoneId}/${size}/${objective} ${10000 + k}: ${r.stuck || JSON.stringify(r.r?.reward?.progress?.[0])}`);
         }

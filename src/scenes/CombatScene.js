@@ -357,12 +357,19 @@ export default class CombatScene extends Phaser.Scene {
     this.coopParty = [];        // every player's hunters, ours and theirs
     this._coopUnsubs = [];
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
+    // A fight on the hunt MAP (Exploration v2, chunk 9b), or null. Set by
+    // HuntFieldOverlay from hunt.fightSpec(): { hunt, scenario, first, xpPool,
+    // deathRule, reopen, onAction, onFinished, ... }. Everything it changes is
+    // gated on it, so every other fight (training, co-op, an old save's
+    // Advance hunt) runs exactly as before. Reset here: the scene is reused.
+    this.huntFight = data.huntFight || null;
     // Set only in co-op, by the server. Makes every client roll the SAME random
     // enemy gear as the authoritative board — see _placeEnemies. Absent in
     // single player, which keeps rolling from ambient randomness.
     this.gearSeed = Number.isFinite(data.gearSeed) ? data.gearSeed : null;
     this.scenarioId = data.scenarioId || 'training_encounter_1';
-    this.scenarioData = COMBAT_SCENARIOS[this.scenarioId] || null;
+    // A map-hunt fight brings its own scenario, built from the occupant.
+    this.scenarioData = this.huntFight?.scenario || COMBAT_SCENARIOS[this.scenarioId] || null;
     this.localChatScript = getLocalChatScript(this.scenarioId);
     this.enemiesDefeatedCount = 0;
     this._postCombatDimmed = false;
@@ -409,19 +416,15 @@ export default class CombatScene extends Phaser.Scene {
     // Build fixed turn order (decided at combat start) — grouped by TEAM
     // first (no interleaving/"stragglers" between sides), Initiative only
     // decides order WITHIN each team's own block. Which team's block goes
-    // first is currently hardcoded to the player party for the combat pit;
-    // a real circumstance-based rule (ambush, enemy initiative, etc.) is a
-    // separate, later decision — this is a deliberate placeholder for that.
+    // first: the party's, except in a map-hunt fight, where the hunt already
+    // decided it (party initiative, ambush decisive: _blockOrder).
     if (this.isCoop) {
       // A placeholder only. The server decides the real order and sends it
       // with the opening board; this just gives _findUnitByRef something to
       // resolve against until that arrives a moment later.
       this.turnOrder = [...this.coopParty, ...(this.enemies || [])];
     } else {
-      const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
-      const partyOrder = [...GameState.party].sort(byInitiativeDesc);
-      const enemyOrder = [...(this.enemies || [])].sort(byInitiativeDesc);
-      this.turnOrder = [...partyOrder, ...enemyOrder];
+      this.turnOrder = this._blockOrder(GameState.party, this.enemies || []);
 
       // Skipped in co-op: this reads GameState.party, which holds the LOCAL
       // player's real characters rather than the fight's roster, so running it
@@ -1831,13 +1834,29 @@ export default class CombatScene extends Phaser.Scene {
     // Math.random exactly as before.
     this._gearRng = isSeed(this.gearSeed) ? makeRng(this.gearSeed) : null;
 
-    const scenario = COMBAT_SCENARIOS[scenarioId];
+    // A map-hunt fight's scenario is built from its occupant, not looked up.
+    const scenario = this.huntFight?.scenario || COMBAT_SCENARIOS[scenarioId];
     if (!scenario) {
       console.error(`Scenario not found: ${scenarioId}`);
       return;
     }
 
     scenario.enemies.forEach(config => this._spawnEnemy(config));
+  }
+
+  /**
+   * The fight's turn order: two team blocks, each sorted by Initiative
+   * inside itself. The party's block goes first, except in a map-hunt fight,
+   * where the hunt decided it at contact (ENCOUNTERS: party initiative against
+   * the occupant's, ambush decisive; HuntWorld.whoActsFirst) and hands it over
+   * as huntFight.first. Shared with the headless host, so both build the same
+   * order.
+   */
+  _blockOrder(party, enemies) {
+    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
+    const partyOrder = [...party].sort(byInitiativeDesc);
+    const enemyOrder = [...enemies].sort(byInitiativeDesc);
+    return this.huntFight?.first === 'enemy' ? [...enemyOrder, ...partyOrder] : [...partyOrder, ...enemyOrder];
   }
 
   /**
@@ -1966,6 +1985,15 @@ export default class CombatScene extends Phaser.Scene {
         this._equipEnemyItem(enemy, dropCfg);
       });
     }
+    // A map-hunt member wears the loadout the hunt already rolled and kept
+    // (HuntBeasts.fightScenario): its parts or armour, as item instances, so
+    // the fight meets exactly what the party scouted. Through the same
+    // _equipEnemyItem, so every bonus lands where random gear's does.
+    if (config.gear && typeof config.gear === 'object') {
+      for (const [slot, inst] of Object.entries(config.gear)) {
+        this._equipEnemyItem(enemy, { equip: slot, instance: inst, droppable: !!config.gearDroppable?.[slot] });
+      }
+    }
 
     // Resolve base + gear core stats (enemy.totalStats, now fully
     // accumulated) through the SAME calculateDerivedStats() players use —
@@ -2055,6 +2083,13 @@ export default class CombatScene extends Phaser.Scene {
       enemy.currentHP = enemy.maxHP;
     }
 
+    // A map-hunt beast's grade scales its HP (GRADE_HP_SCALE, chunk 9
+    // decision 2), after its parts' CON has landed. Only fightScenario sets it.
+    if (Number.isFinite(config.hpMult) && config.hpMult > 0 && config.hpMult !== 1) {
+      enemy.maxHP = Math.max(1, Math.round(enemy.maxHP * config.hpMult));
+      enemy.currentHP = enemy.maxHP;
+    }
+
     // Find target slot
     const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
     if (!slot) {
@@ -2084,11 +2119,12 @@ export default class CombatScene extends Phaser.Scene {
    *
    * dropCfg: { equip: 'chest'|'head'|..., itemId?: string, droppable?: bool }
    */
-  _equipEnemyItem(enemy, dropCfg) {
-    const equipSlot = dropCfg.equip || 'chest';
-    const droppable = dropCfg.droppable ?? false;
-    const isWeaponSlot = equipSlot === 'weaponMain' || equipSlot === 'weaponOff';
-
+  /**
+   * Pick and roll one random enemy item for a drop config (split out of
+   * _equipEnemyItem in chunk 9b so a prebuilt instance can skip it). Returns
+   * the instance, or undefined when the slot has nothing to give.
+   */
+  _rollEnemyItem(dropCfg, equipSlot, isWeaponSlot) {
     // How good this fight's loot is allowed to be. Declared per scenario so a
     // Reckoning tier and its base fight can differ without either one's enemy
     // list changing. Falls back to the weakest setting rather than to
@@ -2136,7 +2172,17 @@ export default class CombatScene extends Phaser.Scene {
     // forgot to pass an explicit rarity, matching how the quest-reward copy
     // of this same item is created (rollAffixes: false) in TownScene.js.
     const rollAffixes = dropCfg.rollAffixes ?? (rarity !== 'common' && rarity !== 'historic');
-    const inst = createItemInstance(itemId, { rarity, rollAffixes, itemLevel, rng: gearRng });
+    return createItemInstance(itemId, { rarity, rollAffixes, itemLevel, rng: gearRng });
+  }
+
+  _equipEnemyItem(enemy, dropCfg) {
+    const equipSlot = dropCfg.equip || 'chest';
+    const droppable = dropCfg.droppable ?? false;
+    const isWeaponSlot = equipSlot === 'weaponMain' || equipSlot === 'weaponOff';
+
+    // A prebuilt instance (a map-hunt loadout, chunk 9b) is equipped as given:
+    // nothing is picked or rolled for it. Everything else rolls as it always has.
+    const inst = isItemInstance(dropCfg.instance) ? dropCfg.instance : this._rollEnemyItem(dropCfg, equipSlot, isWeaponSlot);
     if (!inst) return;
 
     // Mark whether this instance should drop on victory
@@ -6442,18 +6488,28 @@ export default class CombatScene extends Phaser.Scene {
           // which reaches this same loop via _droppable) was the ONLY
           // acquisition path that skipped that flag; bone-pile rolls, vendor
           // purchases and quest rewards all already went through here.
-          InventorySystem.addGlobalItem(inst);
+          // A map-hunt fight's drops go into the hunt PACK instead, at risk
+          // until the exit (HUNT_STRUCTURE): hunt.winEncounter takes them below.
+          if (!this.huntFight) InventorySystem.addGlobalItem(inst);
           loot.push(inst);
         }
       }
     });
 
     if (loot.length > 0) {
-      this._log(`Collected ${loot.length} item${loot.length > 1 ? 's' : ''} from defeated enemies.`);
+      this._log(this.huntFight
+        ? `${loot.length} item${loot.length > 1 ? 's go' : ' goes'} into the hunt pack.`
+        : `Collected ${loot.length} item${loot.length > 1 ? 's' : ''} from defeated enemies.`);
     }
 
     let progressReward = null;
-    if (this.isHunt) {
+    if (this.huntFight) {
+      // A map-hunt fight: the hunt removes the occupant, records the kill,
+      // takes the loot into the pack and pays the fight's Hunt Points
+      // (HuntEngine.winEncounter). The autosave below saves it.
+      const won = this.huntFight.hunt.winEncounter({ loot });
+      if (won?.huntPoints > 0) this._log(`+${won.huntPoints} Hunt Points.`);
+    } else if (this.isHunt) {
       // Hunt fights aren't training-progression scenarios — award Hunt Points
       // (Beast only; Cultist's reward is the loot just collected above) and
       // let the Hunt Hub pick the resolved encounter back up on return.
@@ -6474,6 +6530,9 @@ export default class CombatScene extends Phaser.Scene {
 
   _calculateXPReward() {
     // Temporary — can be scenario-based later
+    // A map-hunt fight's pool comes from the hunt (HuntEngine.fightSpec:
+    // FIGHT_XP_POOL scaled by the plan's xpPercent).
+    if (this.huntFight) return this.huntFight.xpPool || 0;
     if (this.isHunt) {
       const xpPercent = HuntManager.getState()?.combinedModifiers?.xpPercent || 0;
       return Math.round(20 * (1 + xpPercent / 100));
@@ -6519,20 +6578,42 @@ export default class CombatScene extends Phaser.Scene {
     }
     else {
       this._log('💀 All allies knocked out. You were defeated.');
-      GameState.party.forEach(char => {
-        if (char.status === 'incapacitated') char.status = 'dead';
-      });
 
       if (this.isHunt) {
-        // A wipe ends the hunt itself — the dead go to the Slain roster,
-        // there's no continuing back to the Hunt Hub with a dead party.
+        // A wipe ends the hunt, and what happens to the fallen is the
+        // region's death rule (DEATH_AND_REVIVAL; chunk 9 decision 10), read
+        // at departure and kept on the hunt. A wipe never kills by itself:
+        //   sheltered  nobody dies: the party is carried back to camp, the
+        //              knocked-out standing at 1 HP
+        //   watched,   the fallen go to the Slain roster (no way back until
+        //   forsaken   chunk 10's intercession and lesser rite)
+        // This applies to an old save's Advance hunt too: before chunk 9 every
+        // hunt wipe sent the party to the Slain, whatever the region.
+        const rule = this.huntFight ? this.huntFight.deathRule : (HuntManager.getState()?.deathRule || 'watched');
+        const sheltered = rule === 'sheltered';
+        GameState.party.forEach(char => {
+          if (char.status !== 'incapacitated') return;
+          if (sheltered) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
+          else char.status = 'dead';
+        });
         GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c));
-        // Settles the hunt pack by the region's death rule (HuntManager.js):
-        // Sheltered brings it home, Watched/Forsaken lose it. end() would drop
-        // it on the floor, packed Rations included.
-        HuntManager.wipe();
-        this._showDefeatScreen('Defeat', 'Your party has fallen. The hunt is over.');
+        // Settles the hunt pack by the same death rule: Sheltered brings it
+        // home, Watched/Forsaken lose it. end() would drop it on the floor,
+        // packed Rations included.
+        if (this.huntFight) {
+          this.huntFight.hunt.wipe();
+          this.huntFight.onFinished?.(this.huntFight.hunt);
+        } else {
+          HuntManager.wipe();
+        }
+        GameState.save('autosave');
+        this._showDefeatScreen('Defeat', sheltered
+          ? 'Your party is carried back to camp. The hunt is over; the pack comes home.'
+          : 'Your fallen join the Slain. The hunt is over; the pack is lost.');
       } else {
+        GameState.party.forEach(char => {
+          if (char.status === 'incapacitated') char.status = 'dead';
+        });
         this._showDefeatScreen('Defeat', 'Return to town.');
       }
     }
@@ -13480,7 +13561,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // Return button — anchored below all content with some breathing room
     const btnY = Math.max(cursorY + 30, height / 2 + 120);
-    createButton(this, width / 2, btnY, 'Return to Camp', () => {
+    createButton(this, width / 2, btnY, this.huntFight ? 'Back to the Hunt' : 'Return to Camp', () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
@@ -13493,7 +13574,12 @@ export default class CombatScene extends Phaser.Scene {
       // HuntEncounterOverlay._engage() — so it's relaunched fresh here
       // rather than woken. Its render reads live state from HuntManager,
       // so a fresh launch picks the hunt back up correctly.
-      if (this.isHunt) {
+      // A map-hunt fight goes back to the map: HuntFieldOverlay stopped itself
+      // to start the fight and handed over how to reopen it (its own hooks, so
+      // a sandboxed dev hunt reopens sandboxed).
+      if (this.huntFight) {
+        this.huntFight.reopen?.(this);
+      } else if (this.isHunt) {
         this.scene.launch('HuntHubOverlay');
         this.scene.bringToTop('UIScene'); // keep the persistent banners/panel above the Hub
       }
@@ -13545,9 +13631,10 @@ export default class CombatScene extends Phaser.Scene {
     if (showExit) buttons.push(makeBtn('[ Exit ]', width / 2 + (showRetry ? spacing / 2 : 0), () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
-      if (this.isHunt) {
+      if (this.isHunt && !this.huntFight) {
         // The hunt already ended in _onCombatDefeat() — close the Hub
-        // properly (re-enables Town input) instead of waking it.
+        // properly (re-enables Town input) instead of waking it. A map-hunt
+        // fight has no Hub open: its map scene stopped itself to fight.
         this.scene.get('HuntHubOverlay')?._close();
       }
       this.scene.wake('TownScene');

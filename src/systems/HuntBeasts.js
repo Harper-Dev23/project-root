@@ -33,7 +33,7 @@
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items } from '../../data/items.js';
 import {
-  HUNT_BEASTS, HUNT_CULTIST_TYPES, CULTIST_GEAR_SLOT, partBaseId,
+  HUNT_BEASTS, HUNT_CULTIST_TYPES, CULTIST_GEAR_SLOT, GRADE_HP_SCALE, partBaseId,
 } from '../../data/beastParts.js';
 import { calculateDerivedStats } from './CharacterBuilder.js';
 import { createItemInstance, getItemComputedData, pickBaseId } from './ItemFactory.js';
@@ -120,3 +120,61 @@ export function loadoutView(occ) {
   return occ.loadout.map(gear => Object.fromEntries(Object.entries(gear).map(([slot, inst]) => [slot, inst.rarity])));
 }
 
+
+// ── The fight (chunk 9b) ────────────────────────────────────────────────────
+// A tile's occupant IS the enemy side of the board (ENCOUNTERS: "that roster is
+// the enemy side of the board"), so an encounter turns into a combat scenario
+// with nothing translated: one enemy per member, in its real type, scaled by
+// its grade, wearing its kept loadout. CombatScene reads this through
+// data.huntFight (its _placeEnemies / _spawnEnemy take the scenario as given).
+
+/** Board slots filled in order: the front rank's centre first (slot 2), then
+ *  the rest of the front, the middle, the back (boardGeometry: column 2 is
+ *  the front, the middle row is the centre). */
+export const FIGHT_SLOT_ORDER = [2, 1, 3, 5, 4, 7, 6, 8];
+
+const GRADE_RANK = { great: 3, prime: 2, grown: 1, yearling: 0 };
+
+/** A member's base-HP scale (decision 2); cultists have no grade. */
+export function gradeHpScale(grade) {
+  return grade ? (GRADE_HP_SCALE[grade] ?? 1) : 1;
+}
+
+/**
+ * The combat scenario for an occupant whose loadout has been rolled.
+ * Members stand by grade, the strongest at the front centre (the leader of an
+ * Alpha and pack, the mother of a Matriarch and young); ties keep roster order.
+ * Each gets a COPY of its loadout, so what combat does to an item never
+ * reaches the hunt's saved occupant. A cultist's armour drops if it falls (the
+ * Advance loop's cultist drop); a beast's parts never drop, they are
+ * harvested (9d).
+ */
+export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
+  if (!occ?.loadout) throw new Error(`occupant ${occ?.id} has no loadout yet`);
+  const order = occ.roster.map((m, i) => i)
+    .sort((a, b) => (GRADE_RANK[occ.roster[b].grade] ?? -1) - (GRADE_RANK[occ.roster[a].grade] ?? -1) || a - b);
+  const enemies = order.map((i, k) => {
+    const m = occ.roster[i];
+    const type = memberType(occ, i);
+    const gear = JSON.parse(JSON.stringify(occ.loadout[i] || {}));
+    const base = ENEMY_TYPES[type]?.name || type;
+    return {
+      type,
+      slotId: FIGHT_SLOT_ORDER[k],
+      name: m.grade ? `${m.grade[0].toUpperCase()}${m.grade.slice(1)} ${base}` : base,
+      grade: m.grade || null,
+      hpMult: gradeHpScale(m.grade),
+      gear,
+      gearDroppable: occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, true])) : {},
+    };
+  });
+  const lead = occ.kind === 'cultist' ? 'Cultists' : (HUNT_BEASTS[occ.family]?.name || 'Beasts');
+  return {
+    id: `hunt_map_${occ.id}`,
+    name: occ.kind === 'cultist' ? 'Cultist band' : `${lead}${occ.roster.length > 1 ? ' pack' : ''}`,
+    description: zoneName ? `A fight in the ${zoneName}.` : 'A fight on the hunt.',
+    portraitKey: occ.kind === 'cultist' ? 'soldier_portrait' : 'beast_portrait',
+    loot: { itemLevel, maxBaseTier: 1 },
+    enemies,
+  };
+}

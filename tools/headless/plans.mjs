@@ -108,8 +108,8 @@ console.log('=== every plan field names its reader ===');
   }
   // Chunk 8c: every new hunt is a map hunt. Summed fields reach its bundle
   // through combineModifiers; plan-only fields through huntMods; the
-  // generator's fields through planMapInputs. The three fight rewards have no
-  // reader on the map until fights start there (chunk 9), so they are not live.
+  // generator's fields through planMapInputs. The three fight rewards went
+  // live again in chunk 9b, when fights started on the map (checked below).
   const { huntMods } = await import('../../src/systems/HuntRules.js');
   const combined = combineModifiers({ encounterChancePercent: 1, supplyEfficiencyPercent: 1 });
   check('live summed fields reach the hunt\'s combined modifiers',
@@ -120,8 +120,12 @@ console.log('=== every plan field names its reader ===');
   const inputs = planMapInputs({ objective: 'scout', size: 'small', bonusObjectives: [], mods: { gradeShiftPercent: 1, leanCountryPercent: 1, blightPatches: 1, restlessPercent: 1 } });
   check('live generator fields reach the generator (planMapInputs)',
     ['gradeShiftPercent', 'leanCountryPercent', 'blightPatches', 'restlessPercent'].every(f => PLAN_FIELDS[f].live && inputs.mods[f] === 1));
-  check('fight rewards are not live until fights start on the map (chunk 9)',
-    ['lootQualityPercent', 'huntPointsPercent', 'xpPercent'].every(f => !PLAN_FIELDS[f].live && /chunk 9/.test(PLAN_FIELDS[f].reader)));
+  // Live again since fights run on the map (chunk 9b; 8c had set them not-live).
+  // huntfight.mjs proves their consumers: the loadout roll, winEncounter's
+  // Hunt Points, the fight's XP pool.
+  const fightBundle = huntMods({}, {}, { lootQualityPercent: 1, huntPointsPercent: 1, xpPercent: 1 });
+  check('fight rewards are live and reach the map hunt\'s bundle (chunk 9b)',
+    ['lootQualityPercent', 'huntPointsPercent', 'xpPercent'].every(f => PLAN_FIELDS[f].live && fightBundle[f] === 1 && !/once fights start/.test(PLAN_FIELDS[f].reader)));
   golden.fields = Object.fromEntries(Object.entries(PLAN_FIELDS).map(([f, d]) => [f, d.live]));
 }
 

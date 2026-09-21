@@ -76,14 +76,14 @@ export const PLAN_FIELDS = {
     reader: "partyStats adds it to forageYieldPercent, read by HuntEngine.forage; chunk 9 harvest" },
   completionRewardPercent: { label: "Completion Reward", unit: "%", live: true,
     reader: "HuntObjectives.completionRewardPercent -> exitReward, paid at a clean exit" },
-  // Fight rewards: nothing reads them on the map until fights start there (chunk 9).
-  // They were live on the old Advance hunt, which no new hunt uses (chunk 8c).
-  lootQualityPercent: { label: "Loot Quality", unit: "%", live: false,
-    reader: "rollHuntDropRarity via partyStats().itemRarity, once fights start on the map (chunk 9); the old Advance hunt still reads it" },
-  huntPointsPercent: { label: "Hunt Points", unit: "%", live: false,
-    reader: "fight Hunt Points on the map (chunk 9); the old Advance hunt still reads it. Does not scale the completion reward (chunk 7d)" },
-  xpPercent: { label: "Experience Gained", unit: "%", live: false,
-    reader: "CombatScene._calculateXPReward, once fights start on the map (chunk 9); the old Advance hunt still reads it" },
+  // Fight rewards: live again since fights run on the map (chunk 9b). They were
+  // set not-live in 8c, when the map had no fights to read them.
+  lootQualityPercent: { label: "Loot Quality", unit: "%", live: true,
+    reader: "partyStats().itemRarity -> HuntBeasts.rollLoadout (a map occupant's part and gear rarity, rolled on scout or contact); the old Advance hunt still reads it" },
+  huntPointsPercent: { label: "Hunt Points", unit: "%", live: true,
+    reader: "HuntEngine.winEncounter: a won beast fight's Hunt Points; the old Advance hunt still reads it. Does not scale the completion reward (chunk 7d)" },
+  xpPercent: { label: "Experience Gained", unit: "%", live: true,
+    reader: "HuntEngine.fightSpec -> the fight's xpPool, paid by CombatScene._calculateXPReward; the old Advance hunt still reads it" },
 };
 
 // tiers: { tier: [min, max] }, T5 weakest.

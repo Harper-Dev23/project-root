@@ -8,7 +8,7 @@
 //
 // ── The one rule ────────────────────────────────────────────────────────────
 // This scene READS hunt.view() and ACTS only through the engine's methods
-// (move, scout, forage, fish, eat, camp, cleanse, flee, exit, winEncounter).
+// (move, scout, forage, fish, eat, camp, cleanse, flee, exit, fightSpec).
 // It never reads getState() and never decides a rule: every cost, refusal and
 // outcome comes back from the engine, and a refusal's `reason` is shown as is.
 // view() holds nothing the party has not seen (the harness checks it), so the
@@ -37,8 +37,10 @@
 //   onFinished  after exit or wipe: HuntManager drops the hunt, then autosave
 // window.bmDevMapHunt() (installDevHook) still opens it on a hunt kept in
 // memory, in a sandbox world with no hooks: nothing it does is saved.
-// Fights cannot start until chunk 9, so an encounter offers a clearly labelled
-// TEST "Win" beside Flee (owner decision 7: removed in chunk 9).
+// An encounter's Fight button starts a real fight (chunk 9b, _fight): the
+// TEST "Win" button of chunk 8 is gone (owner decision 7). A fight in a
+// sandboxed dev hunt still uses the REAL party (CombatScene fights
+// GameState.party), so its XP and HP are real; only the hunt is sandboxed.
 
 import { wakeTown } from '../../ui/townInput.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
@@ -703,7 +705,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'camp': return `${day(e.time)} Camped${e.night ? ' at night' : ''}${e.dishes?.length ? `, cooked ${e.dishes.join(', ')}` : ''}${e.found ? '; a pack found the camp' : ''}.`;
       case 'cleanse': return `${day(e.time)} Cleansed the blight${e.source ? ' and destroyed its source' : ''}.`;
       case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : ''}.`;
-      case 'win': return `${day(e.time)} Won the fight.`;
+      case 'win': return `${day(e.time)} Won the fight${e.huntPoints ? `: +${e.huntPoints} Hunt Points` : ''}${e.loot ? `, ${e.loot} item${e.loot > 1 ? 's' : ''} to the pack` : ''}.`;
       case 'flee': return `${day(e.time)} Fled${e.reason === 'reload' ? ' (reloaded mid-fight)' : ''}.`;
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
@@ -724,15 +726,49 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     else lines.push(e.kind === 'cultist' ? 'Cultists.' : 'Beasts.');
     lines.push(`Initiative: party ${fmt(e.partyInitiative)}, them ${fmt(e.enemyInitiative)}.`);
     lines.push(e.first === 'party' ? 'Your side acts first.' : 'Their side acts first.');
-    lines.push('Fights start in a later update (chunk 9).');
     const width = 360, height = 50 + this._linesHeight(lines, 360) + 60;
     const p = this._sidePanel(e.tile && v.layout.includes(e.tile) ? e.tile : v.pos, width, height);
     this._panelText(p, p.px + 10, p.py + 8, e.ambush ? 'Ambush' : 'Encounter', 17, '#ff9a8a');
     let ty = p.py + 36;
     ty = this._panelLines(p, ty, lines);
     ty += 10;
-    this._panelButton(p, p.px + 95, ty + 12, 'TEST: win', () => this._act('win', () => this.hunt.winEncounter()), 'danger');
+    this._panelButton(p, p.px + 95, ty + 12, 'Fight', () => this._fight(), 'danger');
+    // Flee moves into combat in chunk 9c (decision 8: the enemy's free round
+    // is paid there); until then it stays here, before the fight starts.
     this._panelButton(p, p.px + 265, ty + 12, 'Flee', () => this._act('flee', () => this.hunt.flee()));
+  }
+
+  /**
+   * Start the pending encounter as a real fight (chunk 9b). The engine's
+   * fightSpec() is the whole hand-over: the occupant as a scenario, who acts
+   * first, the XP pool, the death rule. This scene stops (as the old Hunt
+   * screen did before combat) and hands CombatScene a way back: `reopen`
+   * relaunches it with the same hunt and hooks, so a sandboxed dev hunt comes
+   * back sandboxed and the real one keeps autosaving. The hunt was already
+   * saved with the encounter pending, so a reload mid-fight is a flee.
+   */
+  _fight() {
+    const spec = this.hunt.fightSpec();
+    if (!spec?.ok) { this._say(spec?.reason ? `Cannot: ${spec.reason}.` : 'Cannot fight.'); return; }
+    SoundManager.play('select');
+    const reopenData = { hunt: this.hunt, onDone: this.onDone, onAction: this.onAction, onFinished: this.onFinished };
+    const huntFight = {
+      ...spec,
+      hunt: this.hunt,
+      onFinished: this.onFinished,
+      reopen: (scene) => {
+        scene.scene.launch('HuntFieldOverlay', reopenData);
+        scene.scene.bringToTop('UIScene');
+      },
+    };
+    this.scene.stop();
+    window.sceneManager.loadScene('CombatScene', spec.ambush ? 'Ambush!' : 'The hunt turns to a fight!', {
+      mode: 'hunt',
+      party: GameState.party,
+      scenarioId: spec.scenario.id,
+      huntContext: { type: spec.kind, itemLevel: spec.itemLevel },
+      huntFight,
+    });
   }
 
   _confirmExit() {

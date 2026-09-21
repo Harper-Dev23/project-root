@@ -71,6 +71,7 @@ const { cast, runFight, snapshotBoard, setActor } = await import('./headless/fig
 const { SKILLS } = await import('../data/skills.js');
 const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { ENEMY_TYPES } = await import('../data/enemyTypes.js');
+const { rollLoadout, fightScenario } = await import('../src/systems/HuntBeasts.js');
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
 const CombatScene = CombatSceneMod.default
   || Object.values(CombatSceneMod).find(v => typeof v === 'function');
@@ -863,7 +864,76 @@ function collect() {
     reactions: collectReactions(),
     enemySkills: collectEnemySkills(),
     fights: collectFights(),
+    huntFights: collectHuntFights(),
   };
+}
+
+/**
+ * Map-hunt fights (Exploration v2, chunk 9b): occupants built by hand, their
+ * loadouts rolled from a fixed seed (HuntBeasts.rollLoadout), turned into
+ * fights by the same HuntBeasts.fightScenario the hunt uses, and run start to
+ * finish by the engine's own turn loop with the same Basic Attack control
+ * policy as the scripted fights. The hunt is a recorder: what the fight hands
+ * back to it (winEncounter's loot, a wipe) is part of the entry. Everything
+ * it exercises is gated on huntFight, so no entry above can move with it.
+ */
+const HUNT_FIGHTS = {
+  'stalker pack, party first': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party' },
+  'stalker pack, ambushed':    { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'enemy' },
+  'great-led pack with parts': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party' },
+  'cultist band':              { occ: { id: 'o3', kind: 'cultist', grades: [null, null, null] }, first: 'party' },
+};
+
+function collectHuntFights() {
+  const out = {};
+  for (const [label, def] of Object.entries(HUNT_FIGHTS)) {
+    seed(SEED);
+    const host = createCombatHost(CombatScene);
+    const party = makeParty();
+    const o = def.occ;
+    const occ = {
+      id: o.id, kind: o.kind, family: o.family || null,
+      roster: o.grades.map(g => ({ type: o.kind === 'cultist' ? 'cultist' : o.family, grade: g })),
+    };
+    occ.loadout = rollLoadout(occ, { itemLevel: 1, itemRarity: 0, seed: 4242 });
+    const calls = [];
+    const hunt = {
+      winEncounter: ({ loot = [] } = {}) => { calls.push('win:' + loot.map(i => i.id + '/' + i.rarity).join(',')); return { ok: true, huntPoints: 0 }; },
+      wipe: () => { calls.push('wipe'); return { ok: true }; },
+    };
+    const huntFight = {
+      hunt, kind: o.kind, first: def.first, itemLevel: 1, xpPool: 20, deathRule: 'sheltered',
+      scenario: fightScenario(occ, { itemLevel: 1 }),
+    };
+    try {
+      host.__begin({ party, partySlots: slotMapFor(party), huntFight });
+      const firstSide = host.turnOrder[0]?.isEnemy ? 'enemy' : 'party';
+      const r = runFight(host, (h, actor) => {
+        const atk = (actor.skills || []).find(s => s.id === 'basic_attack');
+        const foe = h.enemies.find(e => e.status !== 'incapacitated' && e.currentHP > 0);
+        return (atk && foe) ? [{ ability: atk, target: foe }] : [];
+      }, { maxTurns: 600 });
+      const snap = snapshotBoard(host);
+      const alliesUp = snap.allies.filter(a => a.hp > 0).length;
+      const foesUp = snap.enemies.filter(e => e.hp > 0).length;
+      out[label] = [
+        (foesUp === 0 ? 'WIN' : alliesUp === 0 ? 'LOSS' : 'UNRESOLVED'),
+        'first=' + firstSide,
+        'turns=' + r.turns,
+        'round=' + r.round,
+        'allies=' + alliesUp + '/' + snap.allies.length,
+        'foes=' + foesUp + '/' + snap.enemies.length,
+        'foeMaxHP=' + host.enemies.map(e => e.maxHP).join('/'),
+        'allyHP=' + snap.allies.map(a => a.hp).join('/'),
+        'foeHP=' + snap.enemies.map(e => e.hp).join('/'),
+        'hunt=' + (calls.join(';') || 'none'),
+        'log=' + host.combatEntries.length,
+      ].join(' ');
+    } catch (e) {
+      out[label] = 'THREW ' + String(e.message).split('\n')[0].slice(0, 120);
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -901,7 +971,7 @@ if (skillIdx !== -1) {
   const before = JSON.parse(fs.readFileSync(args[diffIdx + 1], 'utf8'));
   const after = collect();
   let n = 0;
-  for (const section of ['skills', 'reactions', 'enemySkills', 'fights']) {
+  for (const section of ['skills', 'reactions', 'enemySkills', 'fights', 'huntFights']) {
     const keys = new Set([...Object.keys(before[section] || {}), ...Object.keys(after[section] || {})]);
     for (const k of [...keys].sort()) {
       const a = before[section]?.[k], b = after[section]?.[k];
@@ -922,6 +992,10 @@ if (skillIdx !== -1) {
   }
   console.log(n ? '\n' + n + ' entr(ies) changed. Every one must be intentional.'
     : '\nIDENTICAL - behaviour-neutral.');
+  // A change FAILS the run, so npm run verify (which chains on this) stops.
+  // Before chunk 9b it only printed: a moved golden passed verify unless
+  // someone read this line.
+  if (n) process.exit(1);
 } else if (jsonIdx !== -1) {
   const out = args[jsonIdx + 1] || path.join(HERE, 'snapshots', 'combat-golden.json');
   fs.mkdirSync(path.dirname(out), { recursive: true });

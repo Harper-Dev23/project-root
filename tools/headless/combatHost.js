@@ -38,7 +38,6 @@ import GameState from '../../src/systems/GameState.js';
 import EventBus from '../../src/systems/EventBus.js';
 import ReactionSystem from '../../src/systems/ReactionSystem.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
-import { computeEffectiveInitiative } from '../../src/systems/CombatLogic.js';
 
 // Mirrored from _createBattleSlots (CombatScene.js:1271-1297). The authored
 // order of the position arrays is meaningful - it is what pairs a screen
@@ -384,24 +383,29 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
    * driver's job (see fight.js), so a caller can also just poke at a
    * fully-built board without a turn loop running.
    */
-  host.__begin = function ({ party, partySlots = {}, scenarioId = 'training_encounter_1' }) {
-    const scenario = COMBAT_SCENARIOS[scenarioId];
+  host.__begin = function ({ party, partySlots = {}, scenarioId = 'training_encounter_1', huntFight = null }) {
+    // A map-hunt fight (chunk 9b) brings its own scenario and decides which
+    // block acts first, exactly as CombatScene.init reads data.huntFight.
+    const scenario = huntFight?.scenario || COMBAT_SCENARIOS[scenarioId];
     if (!scenario) throw new Error('unknown scenario: ' + scenarioId);
 
     GameState.party = party;
     GameState.partySlots = partySlots;
-    this.scenarioId = scenarioId;
+    this.huntFight = huntFight;
+    if (huntFight) {
+      this.combatType = 'hunt';
+      this.isHunt = true;
+      this.huntContext = { type: huntFight.kind, itemLevel: huntFight.itemLevel };
+    }
+    this.scenarioId = huntFight ? scenario.id : scenarioId;
     this.scenarioData = scenario;
     this.enemies = [];
 
     this._placePartyMembers();
-    this._placeEnemies(scenarioId);
+    this._placeEnemies(this.scenarioId);
 
-    const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
-    this.turnOrder = [
-      ...[...GameState.party].sort(byInitiativeDesc),
-      ...[...(this.enemies || [])].sort(byInitiativeDesc),
-    ];
+    // The scene's own block order, so the host can never build a different one.
+    this.turnOrder = this._blockOrder(GameState.party, this.enemies || []);
 
     this._resetAllCooldowns();
 

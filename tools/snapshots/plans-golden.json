@@ -364,9 +364,9 @@
   "perceptionBonus": true,
   "harvestYieldPercent": true,
   "completionRewardPercent": true,
-  "lootQualityPercent": false,
-  "huntPointsPercent": false,
-  "xpPercent": false
+  "lootQualityPercent": true,
+  "huntPointsPercent": true,
+  "xpPercent": true
  },
  "rollsByLevel": {
   "1": {

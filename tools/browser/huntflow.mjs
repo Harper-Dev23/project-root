@@ -22,8 +22,17 @@
 //     mid-hunt, then a click on the Hunt screen over the town's Bonfire does
 //     nothing (it opened character creation before)
 //   - no uncaught errors
+//   - chunk 9b: a fight on the map is REAL: clicking Fight starts CombatScene
+//     with the occupant's roster (the side the hunt said acts first opens it),
+//     a won fight's "Back to the Hunt" (clicked) returns to the map with the
+//     occupant gone and the win saved; a wipe in a Sheltered region kills
+//     nobody, ends the hunt, and Exit (clicked) goes back to town
 // Test setup may drive the engine directly (walking to a fight or an exit),
 // but through the scene's own _act, so autosave runs as it does for a click.
+// A fight's OUTCOME is forced from the page (every enemy, or every hunter,
+// knocked out, then the scene's own _checkVictoryCondition): the check is the
+// hand-over and the screens, not the battle, which the headless combat golden
+// runs in full.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -61,6 +70,9 @@ const walkTo = (goal) => evaluate(`
   }
   return 'gave up';
 `);
+
+const waitFor = (expr, ms = 15000) => evaluate(`for (let i = 0; i < ${Math.ceil(ms / 200)}; i++) { if (${expr}) return true; await new Promise(r => setTimeout(r, 200)); } return false;`);
+const combatReady = "window.__T.g().scene.isActive('CombatScene') && (window.__T.g().scene.getScene('CombatScene').enemies || []).length > 0 && (window.__T.g().scene.getScene('CombatScene').turnOrder || []).length > 0";
 
 await B.loadGame();
 await B.bootToTown(`
@@ -158,6 +170,34 @@ const fled = await evaluate(`const { HuntManager } = await import('/src/systems/
 check('a reload with a fight pending comes back fled (logged as a reload), on the map', !fled.enc && fled.reload && fled.field, JSON.stringify(fled));
 await shot('05-reloaded-fled');
 
+// ---- 5b. A real fight from the map (chunk 9b) ----------------------------------------
+const fight2 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+check('walked into another fight', fight2 === 'fight', fight2);
+const pre = await evaluate(`const h = window.__T.s().hunt; const e = h.encounter(); const occ = h.getState().map.occupants.find(o => o.id === e.occId);
+  return { occId: e.occId, first: e.first, n: occ.roster.length, kills: h.getState().kills.length };`);
+check('the encounter panel offers Fight, and no TEST button any more', !!(await findText('^Fight$', 'HuntFieldOverlay')) && !(await findText('TEST', 'HuntFieldOverlay')));
+await clickText('^Fight$', 'HuntFieldOverlay');
+check('clicking Fight starts CombatScene', await waitFor(combatReady));
+await sleep(800);
+const board = await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
+  return { n: c.enemies.length, firstEnemy: !!c.turnOrder[0].isEnemy, map: !!c.huntFight, field: window.__T.g().scene.isActive('HuntFieldOverlay') };`);
+check('...with one enemy per roster member, the map scene closed', board.map && board.n === pre.n && !board.field, JSON.stringify(board));
+check(`...and the side the hunt said acts first (${pre.first}) opens the fight`, board.firstEnemy === (pre.first === 'enemy'));
+await shot('05b-fight');
+await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
+  for (const e of c.enemies) { e.currentHP = 0; e.status = 'incapacitated'; } c._checkVictoryCondition(); return 1;`);
+check('the fight is won: the victory screen offers Back to the Hunt', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Back to the Hunt')"));
+await shot('05c-victory');
+await clickText('^Back to the Hunt$', 'CombatScene');
+check('Back to the Hunt (clicked) returns to the map', await waitFor("window.__T.g().scene.isActive('HuntFieldOverlay') && !window.__T.g().scene.isActive('CombatScene')"));
+await sleep(600);
+const won = await evaluate(`const h = window.__T.s().hunt; const st = h.getState();
+  return { gone: !st.map.occupants.some(o => o.id === ${JSON.stringify(pre.occId)}), kills: st.kills.length, enc: !!h.encounter() };`);
+const svWon = await saved();
+check('...the occupant is gone, the kill recorded, and the win saved', won.gone && won.kills === pre.kills + 1 && !won.enc
+  && svWon?.hunt?.mode === 'map' && svWon.hunt.kills.length === pre.kills + 1, JSON.stringify(won));
+await shot('05d-back-on-map');
+
 // ---- 6. Leave through an exit -------------------------------------------------------
 const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t]) => t.exit).map(([id]) => id))");
 check('walked to an exit', walked === 'there', walked);
@@ -208,6 +248,34 @@ await sleep(2000);
 const scenes = await evaluate('return window.__T.active().join(",");');
 check('...and a click over the Bonfire does nothing (no character creation, no load)', !/CharacterCreation|Loading/.test(scenes) && /HuntHubOverlay/.test(scenes), scenes);
 await shot('09-bonfire-click-after-inventory');
+
+// ---- 9. A wipe in a Sheltered region (chunk 9b) ------------------------------------------
+await B.loadGame();
+await B.bootToTown(`
+  const { makeParty } = await import('/tools/headless/fixtures.js');
+  const GS = (await import('/src/systems/GameState.js')).default;
+  const party = makeParty(); GS.characters = party; GS.party = party; GS.slain = [];
+`);
+await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.js');
+  const { launchMapHunt } = await import('/src/scenes/overlays/HuntFieldOverlay.js');
+  HuntManager.startMap('reeds_of_gethsemane', { plan: { objective: 'cull', size: 'small', bonusObjectives: [], mods: {}, itemLevel: 1 }, supplies: 60, seed: 4040 });
+  launchMapHunt(window.__T.g().scene.getScene('TownScene')); await new Promise(r => setTimeout(r, 900)); return 1;`);
+const fight3 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+check('a new hunt (Sheltered) walked into a fight', fight3 === 'fight', fight3);
+await clickText('^Fight$', 'HuntFieldOverlay');
+check('...Fight starts CombatScene', await waitFor(combatReady));
+await sleep(800);
+await evaluate(`const c = window.__T.g().scene.getScene('CombatScene'); const GS = (await import('/src/systems/GameState.js')).default;
+  for (const p of GS.party) { p.currentHP = 0; p.status = 'incapacitated'; } c._checkVictoryCondition(); return 1;`);
+check('the party wipes: the defeat screen says it is carried back to camp', await waitFor("window.__T.textsOf('CombatScene').some(t => /carried back to camp/.test(t.text))"));
+await shot('10-sheltered-wipe');
+const wiped = await evaluate(`const GS = (await import('/src/systems/GameState.js')).default; const { HuntManager } = await import('/src/systems/HuntManager.js');
+  return { slain: GS.slain.length, alive: GS.party.length === 6 && GS.party.every(c => c.status === 'alive' && c.currentHP >= 1), mode: HuntManager.mode() };`);
+const svWipe = await saved();
+check('...nobody is Slain, all six stand at 1 HP+, and the hunt is gone from the holder and the save', wiped.slain === 0 && wiped.alive && wiped.mode === null && svWipe?.hunt === null, JSON.stringify(wiped));
+await clickText('Exit', 'CombatScene');
+check('Exit (clicked) goes back to town, with no map scene reopening', await waitFor("!window.__T.g().scene.isActive('CombatScene') && window.__T.g().scene.isActive('TownScene') && !window.__T.g().scene.isActive('HuntFieldOverlay')"));
+await shot('11-back-in-town');
 
 check('no uncaught errors in the page', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 fs.writeFileSync(path.join(out, `${mode}-results.json`), JSON.stringify({ mode, checks: B.checks, errors: B.errors }, null, 1));

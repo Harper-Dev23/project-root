@@ -487,5 +487,11 @@
   "training_encounter_4": "LOSS turns=45 round=11 allies=0/6 foes=2/3 allyHP=0/0/0/0/0/0 foeHP=0/236/354 log=580",
   "training_encounter_5": "LOSS turns=29 round=8 allies=0/6 foes=2/2 allyHP=0/0/0/0/0/0 foeHP=166/526 log=420",
   "training_encounter_6": "LOSS turns=22 round=6 allies=0/6 foes=1/1 allyHP=0/0/0/0/0/0 foeHP=830 log=232"
+ },
+ "huntFights": {
+  "stalker pack, party first": "WIN first=party turns=19 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=58/14/32/1/40/55 foeHP=0/0/0/0 hunt=win: log=165",
+  "stalker pack, ambushed": "WIN first=enemy turns=19 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=50/1/32/27/40/3 foeHP=0/0/0/0 hunt=win: log=200",
+  "great-led pack with parts": "WIN first=party turns=35 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=3/1/22/1/27/47 foeHP=0/0/0/0/0 hunt=win: log=321",
+  "cultist band": "WIN first=party turns=15 round=4 allies=6/6 foes=0/3 foeMaxHP=70/58/72 allyHP=56/38/32/48/40/57 foeHP=0/0/0 hunt=win:simple_chest_dex_int/uncommon,simple_chest_con_str/uncommon,simple_chest_wis_con/rare log=96"
  }
 }

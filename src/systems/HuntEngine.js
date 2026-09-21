@@ -119,11 +119,19 @@ import {
   recovered, cookDish,
 } from './HuntRules.js';
 import { initWorld, worldTick, alert, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
-import { rollLoadout, loadoutSeed, loadoutView } from './HuntBeasts.js';
+import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
+
+/** A won fight's XP pool, split over the party (GameState.awardXPPool), before
+ *  the plan's xpPercent. The Advance loop's number (chunk 9 decision 9);
+ *  tuning is chunk 13. */
+export const FIGHT_XP_POOL = 20;
+/** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
+ *  The Advance loop's number; cultists pay none (their reward is gear). */
+export const BEAST_FIGHT_HUNT_POINTS = 8;
 
 const LOG_LIMIT = 50;
 const HOSTILE = new Set(['beast', 'cultist']);
@@ -508,12 +516,42 @@ function makeMapHunt(s, rng, worldRng, world) {
     },
 
     /**
-     * The fight was won. This is the seam the combat hookup calls (chunk 9),
-     * which is also where loot, parts, Hunt Points and XP will be paid: here
-     * the occupant leaves the map and the kill is recorded, nothing more. No
-     * occupant ever replaces it (no mid-hunt spawns).
+     * What CombatScene needs to fight the pending encounter (chunk 9b): the
+     * occupant as a combat scenario (HuntBeasts.fightScenario: its roster, grades
+     * and kept loadout), which side acts first, the region's item level, the
+     * death rule a wipe follows, and the fight's XP pool (FIGHT_XP_POOL scaled
+     * by the plan's xpPercent). Reading it changes nothing.
      */
-    winEncounter() {
+    fightSpec() {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      const e = s.encounter;
+      if (!e) return { ok: false, reason: 'no fight to start' };
+      const occ = occById().get(e.occId);
+      this._ensureLoadout(occ);
+      const zone = getZone(s.zoneId);
+      const itemLevel = huntItemLevel(zone?.danger);
+      return {
+        ok: true, occId: e.occId, kind: e.kind, first: e.first, ambush: e.ambush, knew: e.knew,
+        partyInitiative: e.partyInitiative, enemyInitiative: e.enemyInitiative,
+        itemLevel, deathRule: s.deathRule,
+        xpPool: Math.round(FIGHT_XP_POOL * (1 + (s.mods.xpPercent || 0) / 100)),
+        scenario: fightScenario(occ, { itemLevel, zoneName: zone?.name }),
+      };
+    },
+
+    /**
+     * The fight was won (CombatScene calls this, chunk 9b). The occupant leaves
+     * the map and the kill is recorded; no occupant ever replaces it (no
+     * mid-hunt spawns). What the fight pays, as the Advance loop paid it
+     * (chunk 9 decision 9):
+     *   - `loot`: the item instances that dropped go into the pack's found
+     *     list, at risk until the exit (HUNT_STRUCTURE's pack);
+     *   - Hunt Points: BEAST_FIGHT_HUNT_POINTS for a beast fight, scaled by the
+     *     plan's huntPointsPercent, none for cultists (their reward is gear);
+     *   - XP is the fight's pool (fightSpec().xpPool), paid by CombatScene,
+     *     which shows who levelled.
+     */
+    winEncounter({ loot = [] } = {}) {
       if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const e = s.encounter;
       if (!e) return { ok: false, reason: 'no fight to win' };
@@ -526,9 +564,14 @@ function makeMapHunt(s, rng, worldRng, world) {
       s.kills.push(kill);
       delete s.sightings[occ.id];
       s.encounter = null;
+      const found = loot.filter(isItemInstance);
+      for (const inst of found) addToList(s.pack.found, inst);
+      const huntPoints = occ.kind === 'beast'
+        ? Math.round(BEAST_FIGHT_HUNT_POINTS * (1 + (s.mods.huntPointsPercent || 0) / 100)) : 0;
+      if (huntPoints > 0) world.awardHuntPoints(huntPoints);
       this._reveal();
-      this._log({ kind: 'win', occupant: occ.id, time: s.time });
-      return { ok: true, kill };
+      this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
+      return { ok: true, kill, huntPoints, loot: found.length };
     },
 
     /**
