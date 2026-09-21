@@ -810,12 +810,17 @@ console.log('=== mixed actions: invariants, reload, golden ===');
 // =============================================================================
 const W = await import('../../src/systems/HuntWorld.js');
 const HMG = await import('../../data/huntMapGen.js');
+const B = await import('../../src/systems/HuntBeasts.js');
 
 console.log('=== 7c rules on hand-built inputs ===');
 {
-  check('occupant initiative: the average of its members by grade; cultists 7',
-    W.occupantInitiative({ roster: [{ grade: 'great' }, { grade: 'yearling' }] }) === (HMG.OCCUPANT_INITIATIVE.great + HMG.OCCUPANT_INITIATIVE.yearling) / 2
-    && W.occupantInitiative({ kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }] }) === HMG.OCCUPANT_INITIATIVE.cultist);
+  // Chunk 9a: an occupant's initiative is its members' average, each from its
+  // real enemy type (HuntBeasts; beastparts.mjs checks it in depth).
+  check('occupant initiative: the average of its members real types (chunk 9a)',
+    B.occupantInitiative({ kind: 'beast', family: 'marsh_stalker', roster: [{ type: 'marsh_stalker', grade: 'great' }, { type: 'marsh_stalker', grade: 'yearling' }] })
+      === B.memberInitiative('hunt_marsh_stalker')
+    && B.occupantInitiative({ id: 'o1', kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }] })
+      === (B.memberInitiative('hunt_cult_zealot') + B.memberInitiative('hunt_cult_adept')) / 2);
   check('who acts first: ambush is decisive; otherwise higher initiative, ties to the party',
     W.whoActsFirst({ ambush: true, partyInitiative: 99, enemyInitiative: 1 }) === 'enemy'
     && W.whoActsFirst({ ambush: false, partyInitiative: 7, enemyInitiative: 7 }) === 'party'
@@ -835,7 +840,7 @@ console.log('=== 7c rules on hand-built inputs ===');
     ROAM_STEP: W.ROAM_STEP, HUNT_STEP: W.HUNT_STEP, TRAIL_LOST_TIME: W.TRAIL_LOST_TIME, TRAIL_LOST_TIME_FAST: W.TRAIL_LOST_TIME_FAST,
     TRAIL_TIME: W.TRAIL_TIME, TRAIL_CONCEALMENT: W.TRAIL_CONCEALMENT, TRAIL_AGE_MARGIN: W.TRAIL_AGE_MARGIN,
     BLIGHT_START_RADIUS: W.BLIGHT_START_RADIUS, CORRUPT_TIME: W.CORRUPT_TIME, CLEANSE_TIME: W.CLEANSE_TIME,
-    OCCUPANT_INITIATIVE: HMG.OCCUPANT_INITIATIVE, PACK_PERCEPTION: HMG.PACK_PERCEPTION, PACK_SPEED: HMG.PACK_SPEED,
+    PACK_PERCEPTION: HMG.PACK_PERCEPTION, PACK_SPEED: HMG.PACK_SPEED,
   };
 }
 
@@ -879,7 +884,8 @@ function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null
       if (e.first !== W.whoActsFirst(e)) problems.push(`step ${i}: first ${e.first} disagrees with whoActsFirst`);
       const occ = s.map.occupants.find(o => o.id === e.occId);
       if (!occ || occ.tile !== s.pos) problems.push(`step ${i}: the encounter's occupant is not on the party's tile`);
-      if (Math.abs(e.enemyInitiative - W.occupantInitiative(occ)) > EPS) problems.push(`step ${i}: enemy initiative is not occupantInitiative`);
+      if (!occ?.loadout || occ.loadout.length !== occ.roster.length) problems.push(`step ${i}: the encounter's occupant has no loadout (chunk 9a)`);
+      if (Math.abs(e.enemyInitiative - B.occupantInitiative(occ)) > EPS) problems.push(`step ${i}: enemy initiative is not occupantInitiative`);
       // Frozen: every action is refused and changes nothing.
       const frozenBefore = JSON.stringify(noIds(h.serialize()));
       const tries = [h.move(mapNeighbors(s.map, s.pos)[0]), h.camp(), h.forage(), h.fish(), h.scout(e.occId), h.cleanse(), h.eat('bitterroot')];

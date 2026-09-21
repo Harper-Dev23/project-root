@@ -65,7 +65,11 @@
 //   sightings   occupant id -> what was last detected, where, and when. Tiles
 //               in sight show what Detection reads NOW; a remembered tile keeps
 //               its last reading, stale once packs move.
-//   scouted     occupants the scout action has resolved: identified, exact.
+//   scouted     occupants the scout action has resolved: identified, exact,
+//               and their loadout's rarities shown (chunk 9a).
+//   occ.loadout on a hostile occupant (chunk 9a, HuntBeasts.js): its parts or
+//               gear, rolled once on the first scout or contact from its own
+//               stream, kept in the save, and what sets its initiative.
 //
 // ── Leaving (7d) ────────────────────────────────────────────────────────────
 // A hunt ends two ways only (HUNT_STRUCTURE): exit() from an exit-capable tile
@@ -115,6 +119,8 @@ import {
   recovered, cookDish,
 } from './HuntRules.js';
 import { initWorld, worldTick, alert, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
+import { rollLoadout, loadoutSeed, loadoutView } from './HuntBeasts.js';
+import { huntItemLevel } from './HuntScaling.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
@@ -305,6 +311,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       s.from = s.pos;
       s.pos = to;
       if (occ) {
+        this._ensureLoadout(occ);
         s.encounter = makeEncounter(occ, {
           cause: 'party', knew, ambush: knew === 'nothing', partyInitiative: st.partyInitiative, at: s.time, tile: to,
         });
@@ -321,9 +328,9 @@ function makeMapHunt(s, rng, worldRng, world) {
     /**
      * The scout action (ENCOUNTERS): costs SCOUT_TIME of in-game time and no
      * supplies, the party stays put, and it targets one occupant in sight that
-     * is at least sensed. It resolves it: identified, with the exact roster.
-     * Its gear and part rarity are rolled with the fight, so showing them is
-     * the combat hookup's (chunk 9); `scouted` is what it will read.
+     * is at least sensed. It resolves it: identified, with the exact roster,
+     * and its loadout's rarities (chunk 9a): the loadout is rolled here if it
+     * has not been yet, and kept, so the fight meets what was scouted.
      */
     scout(occId) {
       const no = frozen(); if (no) return no;
@@ -334,6 +341,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const seen = s.sightings[occId];
       if (!seen || seen.band === 'nothing' || seen.tile !== occ.tile) return { ok: false, reason: 'nothing detected there' };
       s.scouted.push(occId);
+      this._ensureLoadout(occ);
       const spent = this._spendTime(SCOUT_TIME);
       this._reveal();
       this._log({ kind: 'scout', occupant: occId, time: s.time });
@@ -598,6 +606,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       const exact = s.scouted.includes(occId) || this.stats().passives.exactRoster > 0;
       const v = occupantView(occ, seen.band, { exact: seen.band === 'identified' && exact });
       if (!v) return null;
+      // Only a scout shows the loadout (ENCOUNTERS: "a scout action shows actual
+      // gear"); Keen Tracker's exact roster does not.
+      if (v.exact && s.scouted.includes(occId) && occ.loadout) v.loadout = loadoutView(occ);
       return { ...v, tile: seen.tile, at: seen.at, stale: s.fog[seen.tile] !== 'visible' };
     },
 
@@ -688,6 +699,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         campFrom: camping ? start : null,
         campConcealment,
         bandOf: (occ) => this._bandOf(occ),
+        ensureLoadout: (occ) => this._ensureLoadout(occ),
         onEvent: () => this._reveal(),
       });
       const spent = camping && tick.encounter ? Math.max(0, Math.min(units, tick.stoppedAt - start)) : units;
@@ -696,6 +708,21 @@ function makeMapHunt(s, rng, worldRng, world) {
         this._log({ kind: 'encounter', ...tick.encounter, time: s.time });
       }
       return { spent, flips, encounter: tick.encounter };
+    },
+
+    /**
+     * Roll a hostile occupant's loadout the first time it is needed, and keep
+     * it on the occupant (HuntBeasts.js): parts for a beast, armour for a
+     * cultist. From its own stream, at the region's item level and the party's
+     * Item Rarity now. Never re-rolled.
+     */
+    _ensureLoadout(occ) {
+      if (!occ || occ.loadout || !HOSTILE.has(occ.kind)) return;
+      occ.loadout = rollLoadout(occ, {
+        itemLevel: huntItemLevel(getZone(s.zoneId)?.danger),
+        itemRarity: this.stats().itemRarity,
+        seed: loadoutSeed(s.seed, occ),
+      });
     },
 
     /** Settle the pack for an ending, bank what comes home, mark the hunt over. */

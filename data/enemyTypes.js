@@ -326,6 +326,98 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
 
+  // === Map-hunt enemies (Exploration System v2, chunk 9a) =====================
+  // One type per family the hunt map places (data/beastParts.js, HUNT_BEASTS,
+  // names which), plus the two a cultist band alternates between. Placeholders
+  // the owner accepted 2026-09-21 (chunk 9 decision 1): each borrows skills and
+  // an AI profile from the encounter-4 beasts or the training dummies, and
+  // every AI profile used checks `npc.skills` before reaching for a skill, so
+  // a subset of Oskar's or Laki's kit is safe. Numbers are chunk 13's.
+  //
+  // `maxHP` is a GROWN beast's; grade scales it (GRADE_HP_SCALE, 9b). The rest
+  // of a beast's strength is its parts, rolled from its grade and worn in
+  // the ordinary slots. CHA sets Initiative, which is what decides who acts
+  // first against the party's (HuntBeasts.occupantInitiative).
+  //
+  // The Advance loop's hunt_* types above are untouched: old saves' Advance
+  // hunts still fight them.
+  hunt_marsh_stalker: {
+    name: 'Marsh Stalker',
+    skin: 'portrait_oskar',
+    maxHP: 50,
+    maxMP: 10,
+    baseStats: { STR: 8, DEX: 7, CON: 5, INT: 2, WIS: 3, CHA: 7 },
+    derivedBonus: { Resilience: 10 },
+    skills: ['oskar_rending_bite', 'oskar_maw_rip', 'basic_attack'],
+    aiProfile: 'oskar_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_wading_heron: {
+    name: 'Wading Heron',
+    skin: 'portrait_laki',
+    maxHP: 36,
+    maxMP: 12,
+    baseStats: { STR: 5, DEX: 9, CON: 4, INT: 3, WIS: 5, CHA: 6 },
+    derivedBonus: { Evasion: 10 },
+    skills: ['laki_hooting_taunt', 'laki_silent_dive', 'basic_attack'],
+    aiProfile: 'laki_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_tide_crab: {
+    name: 'Tide Crab',
+    skin: 'beast_portrait',
+    maxHP: 56,
+    maxMP: 8,
+    baseStats: { STR: 7, DEX: 4, CON: 7, INT: 1, WIS: 3, CHA: 4 },
+    derivedBonus: { PhysicalResist: 15 },
+    skills: ['oskar_rending_bite', 'basic_attack'],
+    aiProfile: 'oskar_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_shore_gull: {
+    name: 'Shore Gull',
+    skin: 'portrait_laki',
+    maxHP: 28,
+    maxMP: 10,
+    baseStats: { STR: 4, DEX: 8, CON: 3, INT: 2, WIS: 3, CHA: 9 },
+    derivedBonus: { Evasion: 15 },
+    skills: ['kiro_toxic_spit', 'basic_attack'],
+    aiProfile: 'kiro_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_cult_zealot: {
+    name: 'Cult Zealot',
+    skin: 'soldier_portrait',
+    maxHP: 60,
+    maxMP: 20,
+    baseStats: { STR: 7, DEX: 5, CON: 5, INT: 3, WIS: 4, CHA: 6 },
+    skills: ['fighter_heavy_slash', 'basic_attack'],
+    aiProfile: 'fighter_dummy',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_cult_adept: {
+    name: 'Cult Adept',
+    skin: 'rogue_portrait',
+    maxHP: 48,
+    maxMP: 24,
+    baseStats: { STR: 4, DEX: 8, CON: 4, INT: 5, WIS: 4, CHA: 8 },
+    skills: ['rogue_poisoned_knife', 'basic_attack'],
+    aiProfile: 'rogue_dummy',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
   beast_kiro: {
     skin: 'portrait_kiro',
     // +50% HP, same as the other two encounter-4 enemies.

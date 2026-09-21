@@ -34,10 +34,11 @@
 import { parseTileId, distance } from './HexGrid.js';
 import { GROUNDS, isPassable } from '../../data/grounds.js';
 import {
-  DAY_TIME_UNITS, OCCUPANT_INITIATIVE, PACK_PERCEPTION, PACK_SPEED, OCCUPANT_CONCEALMENT,
+  DAY_TIME_UNITS, PACK_PERCEPTION, PACK_SPEED, OCCUPANT_CONCEALMENT,
 } from '../../data/huntMapGen.js';
 import { mapNeighbors } from './HuntMapGen.js';
 import { detectionBand } from './HuntRules.js';
+import { occupantInitiative } from './HuntBeasts.js';
 
 /** A Roaming pack steps every ROAM_STEP units; a Hunting one every HUNT_STEP. */
 export const ROAM_STEP = 4;
@@ -64,16 +65,10 @@ export const CLEANSE_TIME = 2;
 const EPS = 1e-9;
 const occNum = (o) => Number(String(o.id).replace(/\D/g, '')) || 0;
 
-// ── Initiative (ENCOUNTERS; decision 5) ──────────────────────────────────────
-
-/** An occupant's initiative: the average of its members' by grade. Cultists
- *  have no grade. */
-export function occupantInitiative(occ) {
-  const roster = occ?.roster || [];
-  if (!roster.length) return 0;
-  const each = roster.map(m => (m.grade ? OCCUPANT_INITIATIVE[m.grade] : OCCUPANT_INITIATIVE.cultist) || 0);
-  return each.reduce((a, b) => a + b, 0) / each.length;
-}
+// ── Initiative (ENCOUNTERS) ──────────────────────────────────────────────────
+// An occupant's own initiative comes from its real enemy types and loadout
+// (HuntBeasts.occupantInitiative, chunk 9a), which replaced chunk 7's
+// placeholder table by grade.
 
 /**
  * Which block acts first. Ambush is decisive: the enemy goes first whatever
@@ -253,6 +248,8 @@ function stepPack(s, occ, now, ctx) {
     // can't, the pack does not come in (and is not getting any closer).
     if (camping && !packFindsCamp(ctx.campConcealment)) return;
     const knew = ctx.bandOf(occ);
+    // Its loadout sets its initiative, so it is rolled before the encounter.
+    ctx.ensureLoadout?.(occ);
     leaveTrail(s, occ, from, s.pos, now);
     occ.tile = s.pos;
     s.encounter = makeEncounter(occ, {

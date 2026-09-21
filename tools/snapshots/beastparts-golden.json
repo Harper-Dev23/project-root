@@ -1,0 +1,749 @@
+{
+ "types": {
+  "hunt_marsh_stalker": {
+   "maxHP": 50,
+   "maxMP": 10,
+   "baseStats": {
+    "STR": 8,
+    "DEX": 7,
+    "CON": 5,
+    "INT": 2,
+    "WIS": 3,
+    "CHA": 7
+   },
+   "derivedBonus": {
+    "Resilience": 10
+   },
+   "skills": [
+    "oskar_rending_bite",
+    "oskar_maw_rip",
+    "basic_attack"
+   ],
+   "aiProfile": "oskar_beast",
+   "initiative": 7
+  },
+  "hunt_wading_heron": {
+   "maxHP": 36,
+   "maxMP": 12,
+   "baseStats": {
+    "STR": 5,
+    "DEX": 9,
+    "CON": 4,
+    "INT": 3,
+    "WIS": 5,
+    "CHA": 6
+   },
+   "derivedBonus": {
+    "Evasion": 10
+   },
+   "skills": [
+    "laki_hooting_taunt",
+    "laki_silent_dive",
+    "basic_attack"
+   ],
+   "aiProfile": "laki_beast",
+   "initiative": 6
+  },
+  "hunt_tide_crab": {
+   "maxHP": 56,
+   "maxMP": 8,
+   "baseStats": {
+    "STR": 7,
+    "DEX": 4,
+    "CON": 7,
+    "INT": 1,
+    "WIS": 3,
+    "CHA": 4
+   },
+   "derivedBonus": {
+    "PhysicalResist": 15
+   },
+   "skills": [
+    "oskar_rending_bite",
+    "basic_attack"
+   ],
+   "aiProfile": "oskar_beast",
+   "initiative": 4
+  },
+  "hunt_shore_gull": {
+   "maxHP": 28,
+   "maxMP": 10,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 8,
+    "CON": 3,
+    "INT": 2,
+    "WIS": 3,
+    "CHA": 9
+   },
+   "derivedBonus": {
+    "Evasion": 15
+   },
+   "skills": [
+    "kiro_toxic_spit",
+    "basic_attack"
+   ],
+   "aiProfile": "kiro_beast",
+   "initiative": 9
+  },
+  "hunt_cult_zealot": {
+   "maxHP": 60,
+   "maxMP": 20,
+   "baseStats": {
+    "STR": 7,
+    "DEX": 5,
+    "CON": 5,
+    "INT": 3,
+    "WIS": 4,
+    "CHA": 6
+   },
+   "derivedBonus": null,
+   "skills": [
+    "fighter_heavy_slash",
+    "basic_attack"
+   ],
+   "aiProfile": "fighter_dummy",
+   "initiative": 6
+  },
+  "hunt_cult_adept": {
+   "maxHP": 48,
+   "maxMP": 24,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 8,
+    "CON": 4,
+    "INT": 5,
+    "WIS": 4,
+    "CHA": 8
+   },
+   "derivedBonus": null,
+   "skills": [
+    "rogue_poisoned_knife",
+    "basic_attack"
+   ],
+   "aiProfile": "rogue_dummy",
+   "initiative": 8
+  }
+ },
+ "GRADE_HP_SCALE": {
+  "yearling": 0.75,
+  "grown": 1,
+  "prime": 1.3,
+  "great": 1.7
+ },
+ "partBases": {
+  "marsh_stalker": [
+   "weaponMain:Fangs",
+   "weaponOff:Claws",
+   "head:Skull",
+   "chest:Hide",
+   "legs:Haunches",
+   "gloves:Forepaws",
+   "boots:Hind Paws",
+   "ring:Eyes",
+   "amulet:Heart"
+  ],
+  "wading_heron": [
+   "weaponMain:Beak",
+   "head:Crest",
+   "chest:Plumage",
+   "legs:Shanks",
+   "gloves:Wings",
+   "boots:Feet",
+   "ring:Eyes",
+   "amulet:Heart"
+  ],
+  "tide_crab": [
+   "weaponMain:Great Pincer",
+   "weaponOff:Lesser Pincer",
+   "head:Eyestalk Crest",
+   "chest:Carapace",
+   "legs:Walking Legs",
+   "ring:Eyes",
+   "amulet:Gland"
+  ],
+  "shore_gull": [
+   "weaponMain:Beak",
+   "head:Skull",
+   "chest:Plumage",
+   "gloves:Wings",
+   "boots:Feet",
+   "ring:Eyes",
+   "amulet:Craw"
+  ]
+ },
+ "stalkerRanges": {
+  "chest": {
+   "Blessed": [
+    6,
+    9
+   ],
+   "Braced": [
+    3,
+    5
+   ],
+   "Layered": [
+    1,
+    2
+   ],
+   "Exalted": [
+    10,
+    14
+   ],
+   "David’s": [
+    15,
+    20
+   ],
+   "Hallowed": [
+    6,
+    9
+   ],
+   "Insulated": [
+    3,
+    5
+   ],
+   "Lined": [
+    1,
+    2
+   ],
+   "Redeemed": [
+    10,
+    14
+   ],
+   "Samuel’s": [
+    15,
+    20
+   ],
+   "Warded": [
+    6,
+    9
+   ],
+   "Salted": [
+    3,
+    5
+   ],
+   "Bound": [
+    1,
+    2
+   ],
+   "Sealed": [
+    10,
+    14
+   ],
+   "Ezekiel’s": [
+    15,
+    20
+   ],
+   "Stalwart": [
+    18,
+    25
+   ],
+   "Rooted": [
+    8,
+    14
+   ],
+   "Settled": [
+    3,
+    6
+   ],
+   "Unyielding": [
+    33,
+    40
+   ],
+   "Job’s": [
+    53,
+    60
+   ]
+  },
+  "legs": {
+   "Blessed": [
+    3,
+    5
+   ],
+   "Braced": [
+    2,
+    3
+   ],
+   "Layered": [
+    1,
+    1
+   ],
+   "Exalted": [
+    5,
+    7
+   ],
+   "David’s": [
+    8,
+    10
+   ]
+  }
+ },
+ "stalkerPools": {
+  "weaponMain": {
+   "prefixes": [
+    "min",
+    "max",
+    "weaponPercent"
+   ],
+   "suffixes": [
+    "stat_STR",
+    "lacerate"
+   ]
+  },
+  "weaponOff": {
+   "prefixes": [
+    "CritChance",
+    "Accuracy"
+   ],
+   "suffixes": [
+    "stat_STR",
+    "stat_DEX"
+   ]
+  },
+  "head": {
+   "prefixes": [
+    "Accuracy",
+    "CritChance"
+   ],
+   "suffixes": [
+    "stat_CHA",
+    "stat_STR"
+   ]
+  },
+  "chest": {
+   "prefixes": [
+    "PhysicalResist",
+    "ElementalResist",
+    "NecroticResist",
+    "resilience"
+   ],
+   "suffixes": [
+    "stat_CON",
+    "stat_WIS"
+   ]
+  },
+  "legs": {
+   "prefixes": [
+    "Evasion",
+    "PhysicalResist"
+   ],
+   "suffixes": [
+    "stat_CON",
+    "stat_CHA"
+   ]
+  },
+  "gloves": {
+   "prefixes": [
+    "Evasion",
+    "Accuracy"
+   ],
+   "suffixes": [
+    "stat_DEX",
+    "stat_STR"
+   ]
+  },
+  "boots": {
+   "prefixes": [
+    "Evasion",
+    "PhysicalResist"
+   ],
+   "suffixes": [
+    "stat_CHA",
+    "stat_DEX"
+   ]
+  },
+  "ring": {
+   "prefixes": [
+    "Accuracy",
+    "Evasion"
+   ],
+   "suffixes": [
+    "stat_DEX",
+    "stat_CHA"
+   ]
+  },
+  "amulet": {
+   "prefixes": [
+    "resilience",
+    "NecroticResist"
+   ],
+   "suffixes": [
+    "stat_CON",
+    "stat_WIS",
+    "lacerate"
+   ]
+  }
+ },
+ "enemyMaxHpAffixDead": true,
+ "partRarityOdds": {
+  "yearling": {
+   "0": {
+    "common": 55,
+    "uncommon": 33,
+    "rare": 10,
+    "epic": 2
+   },
+   "10": {
+    "common": 46.67,
+    "uncommon": 33,
+    "rare": 15,
+    "epic": 5.33
+   },
+   "25": {
+    "common": 38.33,
+    "uncommon": 33,
+    "rare": 20,
+    "epic": 8.67
+   },
+   "50": {
+    "common": 30,
+    "uncommon": 33,
+    "rare": 25,
+    "epic": 12
+   },
+   "100": {
+    "common": 21.67,
+    "uncommon": 33,
+    "rare": 30,
+    "epic": 15.33
+   },
+   "200": {
+    "common": 15,
+    "uncommon": 33,
+    "rare": 34,
+    "epic": 18
+   }
+  },
+  "grown": {
+   "0": {
+    "common": 30,
+    "uncommon": 45,
+    "rare": 20,
+    "epic": 5
+   },
+   "10": {
+    "common": 21.67,
+    "uncommon": 45,
+    "rare": 25,
+    "epic": 8.33
+   },
+   "25": {
+    "common": 13.33,
+    "uncommon": 45,
+    "rare": 30,
+    "epic": 11.67
+   },
+   "50": {
+    "common": 5,
+    "uncommon": 45,
+    "rare": 35,
+    "epic": 15
+   },
+   "100": {
+    "common": 0,
+    "uncommon": 41.67,
+    "rare": 40,
+    "epic": 18.33
+   },
+   "200": {
+    "common": 0,
+    "uncommon": 35,
+    "rare": 44,
+    "epic": 21
+   }
+  },
+  "prime": {
+   "0": {
+    "common": 10,
+    "uncommon": 40,
+    "rare": 38,
+    "epic": 12
+   },
+   "10": {
+    "common": 1.67,
+    "uncommon": 40,
+    "rare": 43,
+    "epic": 15.33
+   },
+   "25": {
+    "common": 0,
+    "uncommon": 33.33,
+    "rare": 48,
+    "epic": 18.67
+   },
+   "50": {
+    "common": 0,
+    "uncommon": 25,
+    "rare": 53,
+    "epic": 22
+   },
+   "100": {
+    "common": 0,
+    "uncommon": 16.67,
+    "rare": 58,
+    "epic": 25.33
+   },
+   "200": {
+    "common": 0,
+    "uncommon": 10,
+    "rare": 62,
+    "epic": 28
+   }
+  },
+  "great": {
+   "0": {
+    "common": 0,
+    "uncommon": 25,
+    "rare": 50,
+    "epic": 25
+   },
+   "10": {
+    "common": 0,
+    "uncommon": 16.67,
+    "rare": 55,
+    "epic": 28.33
+   },
+   "25": {
+    "common": 0,
+    "uncommon": 8.33,
+    "rare": 60,
+    "epic": 31.67
+   },
+   "50": {
+    "common": 0,
+    "uncommon": 0,
+    "rare": 65,
+    "epic": 35
+   },
+   "100": {
+    "common": 0,
+    "uncommon": 0,
+    "rare": 65,
+    "epic": 35
+   },
+   "200": {
+    "common": 0,
+    "uncommon": 0,
+    "rare": 65,
+    "epic": 35
+   }
+  }
+ },
+ "stalkerLoadouts": {
+  "yearling@0": {
+   "common": 54.75,
+   "uncommon": 33.01,
+   "rare": 10.36,
+   "epic": 1.88,
+   "affixesPerBeast": 7.96
+  },
+  "yearling@50": {
+   "common": 30.19,
+   "uncommon": 32.79,
+   "rare": 24.68,
+   "epic": 12.34,
+   "affixesPerBeast": 15.52
+  },
+  "grown@0": {
+   "common": 29.83,
+   "uncommon": 45.14,
+   "rare": 19.72,
+   "epic": 5.31,
+   "affixesPerBeast": 13.34
+  },
+  "grown@50": {
+   "common": 4.99,
+   "uncommon": 45.05,
+   "rare": 34.79,
+   "epic": 15.17,
+   "affixesPerBeast": 20.95
+  },
+  "prime@0": {
+   "common": 9.69,
+   "uncommon": 40.26,
+   "rare": 37.74,
+   "epic": 12.32,
+   "affixesPerBeast": 20.08
+  },
+  "prime@50": {
+   "common": 0,
+   "uncommon": 24.64,
+   "rare": 53.82,
+   "epic": 21.54,
+   "affixesPerBeast": 25.65
+  },
+  "great@0": {
+   "common": 0,
+   "uncommon": 24.53,
+   "rare": 50.86,
+   "epic": 24.62,
+   "affixesPerBeast": 25.93
+  },
+  "great@50": {
+   "common": 0,
+   "uncommon": 0,
+   "rare": 65.47,
+   "epic": 34.53,
+   "affixesPerBeast": 30.11
+  }
+ },
+ "powerAtItemLevel1": {
+  "marsh_stalker": {
+   "yearling": {
+    "maxHP": 46.08,
+    "PDR": 4.45,
+    "Evasion": 2.75,
+    "Accuracy": 10.32,
+    "Initiative": 7.73,
+    "dice": 7.51,
+    "buildupPct": 8.1
+   },
+   "grown": {
+    "maxHP": 61.53,
+    "PDR": 5.58,
+    "Evasion": 3.97,
+    "Accuracy": 12.78,
+    "Initiative": 8.18,
+    "dice": 7.93,
+    "buildupPct": 11.95
+   },
+   "prime": {
+    "maxHP": 81.85,
+    "PDR": 6.97,
+    "Evasion": 5.65,
+    "Accuracy": 15.6,
+    "Initiative": 9.05,
+    "dice": 8.27,
+    "buildupPct": 15.23
+   },
+   "great": {
+    "maxHP": 108.83,
+    "PDR": 7.92,
+    "Evasion": 7.17,
+    "Accuracy": 17.48,
+    "Initiative": 9.75,
+    "dice": 8.63,
+    "buildupPct": 21.25
+   }
+  },
+  "wading_heron": {
+   "yearling": {
+    "maxHP": 33.92,
+    "PDR": 3.7,
+    "Evasion": 12.3,
+    "Accuracy": 11.75,
+    "Initiative": 6.57,
+    "dice": 6.44,
+    "buildupPct": 7.05
+   },
+   "grown": {
+    "maxHP": 45.77,
+    "PDR": 4.9,
+    "Evasion": 13.93,
+    "Accuracy": 13.57,
+    "Initiative": 7.12,
+    "dice": 6.84,
+    "buildupPct": 10.18
+   },
+   "prime": {
+    "maxHP": 60.78,
+    "PDR": 6.2,
+    "Evasion": 15.48,
+    "Accuracy": 15.48,
+    "Initiative": 7.72,
+    "dice": 7.14,
+    "buildupPct": 17.05
+   },
+   "great": {
+    "maxHP": 81.55,
+    "PDR": 7.47,
+    "Evasion": 16.43,
+    "Accuracy": 17.83,
+    "Initiative": 8.55,
+    "dice": 7.47,
+    "buildupPct": 21.28
+   }
+  },
+  "tide_crab": {
+   "yearling": {
+    "maxHP": 53.73,
+    "PDR": 20.05,
+    "Evasion": 1.27,
+    "Accuracy": 6.58,
+    "Initiative": 4.65,
+    "dice": 6.97,
+    "buildupPct": 6.05
+   },
+   "grown": {
+    "maxHP": 71.7,
+    "PDR": 20.65,
+    "Evasion": 2.2,
+    "Accuracy": 8.65,
+    "Initiative": 4.95,
+    "dice": 7.38,
+    "buildupPct": 11.63
+   },
+   "prime": {
+    "maxHP": 94.98,
+    "PDR": 21.72,
+    "Evasion": 2.9,
+    "Accuracy": 10.23,
+    "Initiative": 5.6,
+    "dice": 7.67,
+    "buildupPct": 16.27
+   },
+   "great": {
+    "maxHP": 125.88,
+    "PDR": 22.52,
+    "Evasion": 3.92,
+    "Accuracy": 11.48,
+    "Initiative": 6.18,
+    "dice": 8.03,
+    "buildupPct": 22.68
+   }
+  },
+  "shore_gull": {
+   "yearling": {
+    "maxHP": 26.43,
+    "PDR": 3.02,
+    "Evasion": 16.78,
+    "Accuracy": 10.62,
+    "Initiative": 9.53,
+    "dice": 5.43,
+    "buildupPct": 6.58
+   },
+   "grown": {
+    "maxHP": 35.4,
+    "PDR": 3.82,
+    "Evasion": 18.17,
+    "Accuracy": 11.62,
+    "Initiative": 10.13,
+    "dice": 5.83,
+    "buildupPct": 10.22
+   },
+   "prime": {
+    "maxHP": 46.83,
+    "PDR": 4.2,
+    "Evasion": 19.28,
+    "Accuracy": 14.45,
+    "Initiative": 10.42,
+    "dice": 6.09,
+    "buildupPct": 17.48
+   },
+   "great": {
+    "maxHP": 63.15,
+    "PDR": 5.22,
+    "Evasion": 20.07,
+    "Accuracy": 16.13,
+    "Initiative": 11.17,
+    "dice": 6.42,
+    "buildupPct": 22.63
+   }
+  }
+ },
+ "contactFirsts": {
+  "party": 31,
+  "enemy": 44,
+  "ambush": 40
+ }
+}

@@ -27,6 +27,7 @@ import {
   EXPLORATION_PICK_LEVELS, EXPLORATION_RATING_PICK, EXPLORATION_PASSIVES,
 } from './CharacterBuilder.js';
 import { computeEffectiveInitiative } from './CombatLogic.js';
+import { PART_RARITY_BY_GRADE } from '../../data/beastParts.js';
 
 // ── Curves ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,43 @@ export function rollHuntDropRarity(itemRarity = 0, rng = Math.random) {
   const r = rng() * 100;
   if (r < odds.uncommon) return 'uncommon';
   if (r < odds.uncommon + odds.rare) return 'rare';
+  return 'epic';
+}
+
+// ── Beast part rarity (chunk 9a) ────────────────────────────────────────────
+// A part's rarity starts from its beast's GRADE (PART_RARITY_BY_GRADE,
+// data/beastParts.js), common included, and Item Rarity shifts it upward on the
+// drop curve's shape (ENCOUNTERS: "grade sets the base weights, Item Rarity
+// shifts them upward, one roll"). The shift is the same diminishing
+// DROP_MAX_SHIFT / DROP_SHIFT_K amount the drop odds use; it is taken from the
+// bottom (common first, then uncommon) and given 60% to rare and 40% to epic,
+// the drop curve's split. At Item Rarity 0 the grade's odds are unchanged.
+
+/** The odds table for a grade and Item Rarity value, in percent. */
+export function partRarityOdds(grade, itemRarity = 0) {
+  const base = PART_RARITY_BY_GRADE[grade];
+  if (!base) throw new Error(`no part rarity weights for grade '${grade}'`);
+  const odds = { ...base };
+  let shift = diminishing(itemRarity, DROP_MAX_SHIFT, DROP_SHIFT_K);
+  let moved = 0;
+  for (const r of ['common', 'uncommon']) {
+    const take = Math.min(odds[r], shift);
+    odds[r] -= take; shift -= take; moved += take;
+  }
+  odds.rare += moved * 0.6;
+  odds.epic += moved * 0.4;
+  return odds;
+}
+
+/** One draw from `rng`. */
+export function rollPartRarity(grade, itemRarity = 0, rng = Math.random) {
+  const odds = partRarityOdds(grade, itemRarity);
+  const r = rng() * 100;
+  let acc = 0;
+  for (const rarity of ['common', 'uncommon', 'rare']) {
+    acc += odds[rarity];
+    if (r < acc) return rarity;
+  }
   return 'epic';
 }
 
@@ -184,7 +222,7 @@ export const PARTY_STAT_OUTPUTS = {
   forageYieldPercent:      'HuntRules.gatherQty (HuntEngine.forage); chunk 9 harvest yield',
   harvestTimePercent:      'chunk 9 harvest step',
   fishYieldPercent:        'HuntRules.gatherQty (HuntEngine.fish)',
-  itemRarity:              'rollHuntDropRarity (chunk 9 swaps it in for the raw lootQualityPercent)',
+  itemRarity:              'rollPartRarity / rollHuntDropRarity via HuntBeasts.rollLoadout (a map occupant\'s parts and gear, 9a); the fight\'s drops (9b)',
 };
 
 /** The hunt-bundle fields a passive can write, and their readers — all read in chunk 7. */

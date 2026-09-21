@@ -130,13 +130,10 @@ export const MAX_ATTEMPTS = 40;
 
 // ── What occupants bring to the world sim (chunk 7c) ────────────────────────
 // Reader: src/systems/HuntWorld.js (the world tick and the encounter trigger).
-// Placeholders the owner signed off 2026-09-19 (chunk 7 decisions 5, 7, 8);
-// chunk 9 replaces OCCUPANT_INITIATIVE with the real enemy types' Initiative
-// once a family maps to a combat type. Tuning is chunk 13.
-
-/** An occupant's initiative is the average of its members' (decision 5), on the
- *  same CHA-based scale as the party's (the test party averages ~7). */
-export const OCCUPANT_INITIATIVE = { yearling: 5, grown: 7, prime: 9, great: 11, cultist: 7 };
+// Placeholders the owner signed off 2026-09-19 (chunk 7 decisions 7, 8).
+// Tuning is chunk 13. An occupant's initiative used to live here as a table by
+// grade (decision 5); since chunk 9a it comes from the real enemy types and
+// what they wear (HuntBeasts.occupantInitiative).
 
 /** A searching pack's "perception", against a camp's concealment (decision 7). */
 export const PACK_PERCEPTION = 40;

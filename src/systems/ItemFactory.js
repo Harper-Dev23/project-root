@@ -4,6 +4,9 @@ import {
   PLAN_PREFIX_FAMILIES, PLAN_SUFFIX_FAMILIES, PREFIX_COMPLETION_REWARD, BONUS_OBJECTIVES,
   PLAN_FIELDS, PLAN_TIER_IMPLICITS, planTierFor,
 } from '../../data/planAffixes.js';
+import {
+  PART_SLOT_THEMES, SIGNATURE_SLOTS, CORE_SLOTS, PERIPHERAL_SCALE, HUNT_BEASTS,
+} from '../../data/beastParts.js';
 
 /** ---------- Rarity Rules (affix counts) ----------
  * uncommon: 1–2 total affixes (prefix+suffix combined)
@@ -758,10 +761,77 @@ const WEAPON_PREFIX_POOL_1H = buildWeaponPrefixPool(1);
 const WEAPON_SUFFIX_POOL_2H = buildWeaponSuffixPool(2);
 const WEAPON_SUFFIX_POOL_1H = buildWeaponSuffixPool(1);
 
+// --- Beast part pools (Exploration System v2, chunk 9a) ---------------------
+// One pool per family x slot, themed by anatomy (data/beastParts.js,
+// PART_SLOT_THEMES), ASSEMBLED FROM THE AFFIXES ABOVE rather than restating a
+// single number: a hide rolls the armour resist prefixes, a fang the weapon
+// damage prefixes. Core slots keep the canonical ranges (the 2H weapon ones:
+// a beast never dual-wields); peripheral slots get PERIPHERAL_SCALE of them
+// through scaleRange, the owner's 1H-weapon analogy (BEAST_PARTS). The
+// family's signature is its single-family buildup suffix, on SIGNATURE_SLOTS.
+// Same keys, tiers and families as the originals, so the item-level gate, the
+// weights and one-affix-per-family all behave exactly as on gear.
+
+/** A copy of an affix def with its range scaled. Its roll keeps the original's
+ *  shape and writes the scaled amount into every numeric leaf (a hybrid's two
+ *  leaves share one roll, as they do unscaled). */
+function rescaleAffix(def, scale) {
+  if (scale === 1 || !Array.isArray(def.range)) return def;
+  const range = scaleRange(def.range, scale);
+  const setLeaves = (v, n) => (typeof v === 'number' ? n
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, setLeaves(x, n)])) : v);
+  return {
+    ...def,
+    range,
+    roll(rng) {
+      const shape = def.roll(() => 0);
+      return { ...shape, mods: setLeaves(shape.mods, rollInt(range, rng)) };
+    },
+  };
+}
+
+function themeAffixes(token) {
+  const [kind, name] = token.split(':');
+  switch (kind) {
+    case 'derived':
+    case 'misc':   return ARMOR_PREFIX_POOL.filter(d => d.family === name);
+    case 'stat':   return ARMOR_SUFFIX_POOL.filter(d => d.family === `stat_${name}`);
+    case 'weapon': return WEAPON_PREFIX_POOL_2H.filter(d => d.family === name);
+    default: throw new Error(`unknown part theme '${token}'`);
+  }
+}
+
+const _partPools = new Map();
+function partPools(family, slot) {
+  const id = `${family}:${slot}`;
+  if (_partPools.has(id)) return _partPools.get(id);
+  const theme = PART_SLOT_THEMES[slot];
+  const fam = HUNT_BEASTS[family];
+  if (!theme || !fam) throw new Error(`no part pool for '${id}'`);
+  const scale = CORE_SLOTS.includes(slot) ? 1 : PERIPHERAL_SCALE;
+  const build = (tokens) => tokens.flatMap(themeAffixes).map(d => rescaleAffix(d, scale));
+  const suffixes = build(theme.suffixes);
+  if (SIGNATURE_SLOTS.includes(slot)) {
+    suffixes.push(...WEAPON_SUFFIX_POOL_2H.filter(d => d.family === fam.signature).map(d => rescaleAffix(d, scale)));
+  }
+  const pools = { prefixes: build(theme.prefixes), suffixes };
+  _partPools.set(id, pools);
+  return pools;
+}
+
+/** Copies of one part pool, for the beast-parts harness. */
+export function getPartPools(family, slot) {
+  const { prefixes, suffixes } = partPools(family, slot);
+  return { prefixes: [...prefixes], suffixes: [...suffixes] };
+}
+
 function getAffixPoolsFor(base) {
   if (!base) return null;
   // Unique items with a fixedAffix skip the random pool entirely
   if (base.unique && base.fixedAffix) return null;
+  // Beast parts (chunk 9a) roll from their slot's own pool, checked before the
+  // type: a weaponMain part is a natural weapon, but not a forged one.
+  if (base.part) return partPools(base.part.family, base.part.slot);
   if (base.type === 'armor') {
     return { prefixes: ARMOR_PREFIX_POOL, suffixes: ARMOR_SUFFIX_POOL };
   }

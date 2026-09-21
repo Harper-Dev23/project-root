@@ -2360,13 +2360,6 @@
   "BLIGHT_START_RADIUS": 1,
   "CORRUPT_TIME": 12,
   "CLEANSE_TIME": 2,
-  "OCCUPANT_INITIATIVE": {
-   "yearling": 5,
-   "grown": 7,
-   "prime": 9,
-   "great": 11,
-   "cultist": 7
-  },
   "PACK_PERCEPTION": 40,
   "PACK_SPEED": 30
  },
@@ -2853,12 +2846,12 @@
   ]
  ],
  "worldHashes": {
-  "reeds_of_gethsemane/small": "9465d8c3475ea546",
-  "reeds_of_gethsemane/medium": "12e4cddc6d31c52f",
-  "reeds_of_gethsemane/large": "415cbfc9b86f4ad6",
-  "bay_of_solace/small": "31e9e42669b76f7c",
-  "bay_of_solace/medium": "9754852ff8b4d157",
-  "bay_of_solace/large": "72a36770d9b46ebe"
+  "reeds_of_gethsemane/small": "65c7466d5835c9a1",
+  "reeds_of_gethsemane/medium": "3e5a772c2e823ee5",
+  "reeds_of_gethsemane/large": "385f9e623d071ec1",
+  "bay_of_solace/small": "ecb74b05cb81b37b",
+  "bay_of_solace/medium": "98f53d3871bcbc1b",
+  "bay_of_solace/large": "c3e2b037f4bab909"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {

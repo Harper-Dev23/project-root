@@ -3,6 +3,8 @@
 // both in sync if a tier is ever added/renamed).
 export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'historic'];
 
+import { buildPartBases } from './beastParts.js';
+
 export const Items = {
 
   healing_potion: {
@@ -1572,5 +1574,10 @@ export const Items = {
     notImplemented: true,
     description: 'A blank slate, bound in unmarked vellum. Strips an item of all renown it has gathered — every kill, every battle carried, every story told about it — and returns it to an ordinary thing. [Not yet functional: the Renown system is unimplemented.]',
   },
+
+  // === Beast parts (Exploration System v2, chunk 9a) ==========================
+  // One base per family x slot, generated from data/beastParts.js, which says
+  // what reads each field. `natural: true`, like the natural weapons above.
+  ...buildPartBases(),
 
 };
