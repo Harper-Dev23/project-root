@@ -227,7 +227,7 @@ const crossed = await evaluate(`
   const st0 = h.getState(); if (!st0.map.passages.length) return 'no passage';
   const goal = st0.map.passages[0].a;
   for (let i = 0; i < 200 && h.getState().pos !== goal; i++) {
-    if (h.encounter()) { h.winEncounter(); continue; }
+    if (h.encounter()) { h.winEncounter(); if (h.view().spoils) h.harvest({ take: [], meat: false }); continue; }
     const st = h.getState();
     const prev = new Map([[st.pos, null]]); const q = [st.pos];
     for (let k = 0; k < q.length; k++) for (const n of mapNeighbors(st.map, q[k])) { if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); }
@@ -235,7 +235,7 @@ const crossed = await evaluate(`
     while (prev.get(t) !== st.pos) t = prev.get(t);
     h.move(t);
   }
-  if (h.encounter()) h.winEncounter();
+  if (h.encounter()) { h.winEncounter(); if (h.view().spoils) h.harvest({ take: [], meat: false }); }
   s.panel = null; s.selected = h.view().pos; s._refresh();
   return h.getState().pos === goal ? 'at passage' : 'not there';
 `);
@@ -255,7 +255,7 @@ const atExit = await evaluate(`
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   for (let i = 0; i < 300 && !h.getState().map.tiles[h.getState().pos].exit; i++) {
-    if (h.encounter()) { h.winEncounter(); continue; }
+    if (h.encounter()) { h.winEncounter(); if (h.view().spoils) h.harvest({ take: [], meat: false }); continue; }
     const st = h.getState();
     const prev = new Map([[st.pos, null]]); const q = [st.pos]; let goal = null;
     for (let k = 0; k < q.length && !goal; k++) for (const n of mapNeighbors(st.map, q[k])) { if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (st.map.tiles[n].exit) { goal = n; break; } }
@@ -263,7 +263,7 @@ const atExit = await evaluate(`
     let t = goal; while (prev.get(t) !== st.pos) t = prev.get(t);
     h.move(t);
   }
-  if (h.encounter()) h.winEncounter();
+  if (h.encounter()) { h.winEncounter(); if (h.view().spoils) h.harvest({ take: [], meat: false }); }
   s.panel = null; s.selected = h.view().pos; s._refresh();
   return !!h.getState().map.tiles[h.getState().pos].exit;
 `);

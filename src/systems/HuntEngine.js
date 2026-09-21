@@ -103,7 +103,8 @@ import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
 import { isPassable, GROUNDS } from '../../data/grounds.js';
 import { Items } from '../../data/items.js';
-import { addToList, makeStack, takeFromList, countInList } from './ItemStacks.js';
+import { addToList, makeStack, takeFromList, countInList, partMaterial } from './ItemStacks.js';
+import { HARVEST_TIME, MEAT_TIME_PER_BODY, MEAT_BY_GRADE, SPECIMEN_RARITIES } from '../../data/beastParts.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { parseTileId } from './HexGrid.js';
 import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
@@ -212,6 +213,10 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     // Hunters knocked out in fights this hunt (won or fled), for the Unbroken
     // bonus objective (chunk 9c). Optional in a save: missing reads as 0.
     knockouts: 0,
+    // What a won beast fight left on the ground (chunk 9d): its parts and its
+    // bodies' meat, until the party harvests or walks away. Saved, so a
+    // reload keeps it. Null otherwise.
+    spoils: null,
     cleansed: [],
     retrieved: false,
     communed: false,
@@ -258,6 +263,9 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   }
   if (!Number.isFinite(data.world?.time) || !Number.isFinite(data.world?.day)) throw new Error('map hunt world clock is not readable');
   if (data.knockouts !== undefined && !Number.isFinite(data.knockouts)) throw new Error('map hunt knock-outs are not readable');
+  if (data.spoils != null && !(Array.isArray(data.spoils.parts) && data.spoils.parts.every(isItemInstance) && Array.isArray(data.spoils.bodies))) {
+    throw new Error('map hunt spoils are not readable');
+  }
   if (!GROUNDS[data.landGround]) throw new Error('map hunt has no land ground');
   if (data.finished !== null && data.finished !== 'exit' && data.finished !== 'wipe') throw new Error(`map hunt ending '${data.finished}' is not one this build knows`);
   if (!Number.isFinite(data.plan?.itemLevel) || !Number.isFinite(data.plan?.completionRewardPercent)) throw new Error('map hunt plan has no item level or reward');
@@ -279,8 +287,20 @@ function clone(v) {
 
 function makeMapHunt(s, rng, worldRng, world) {
   const occById = () => new Map(s.map.occupants.map(o => [o.id, o]));
-  const frozen = () => (s.finished ? { ok: false, reason: 'the hunt is over' }
-    : s.encounter ? { ok: false, reason: 'a fight is under way: win it or flee' } : null);
+  // Doing anything else walks away from a won fight's spoils (decision 13:
+  // "spoils left behind are gone"); they are never a lock on the hunt.
+  const leaveSpoils = () => {
+    if (!s.spoils) return;
+    s.log.push({ kind: 'spoils_left', parts: s.spoils.parts.length, time: s.time });
+    if (s.log.length > LOG_LIMIT) s.log.shift();
+    s.spoils = null;
+  };
+  const frozen = () => {
+    if (s.finished) return { ok: false, reason: 'the hunt is over' };
+    if (s.encounter) return { ok: false, reason: 'a fight is under way: win it or flee' };
+    leaveSpoils();
+    return null;
+  };
 
   return {
     /** The party's stats right now: live party, the hunt's bundle, this
@@ -571,6 +591,56 @@ function makeMapHunt(s, rng, worldRng, world) {
     },
 
     /**
+     * Harvest a won beast fight (BEAST_PARTS; chunk 9 decisions 12-14). `take`
+     * lists the spoils' part ids (view().spoils.parts[].id) to carry; `meat`
+     * butchers every body. It costs in-game time, HARVEST_TIME per part (core
+     * or peripheral) and MEAT_TIME_PER_BODY, cut by Foraging's harvest-time
+     * curve; the world ticks for it, so a Hunting pack can arrive. It never
+     * fails and never lowers a rarity:
+     *   - common and uncommon parts go in the pack as plain material
+     *     (partMaterial: no affixes, stacked by family + slot + rarity + grade);
+     *   - rare and epic parts keep their affixes, each its own specimen;
+     *   - meat per body by grade (MEAT_BY_GRADE), scaled by Foraging's yield
+     *     curve and of the Harvest (forageYieldPercent).
+     * What is not taken is gone. harvest({ take: [], meat: false }) just walks
+     * away, costing nothing.
+     */
+    harvest({ take = [], meat = true } = {}) {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      if (s.encounter) return { ok: false, reason: 'a fight is under way: win it or flee' };
+      const sp = s.spoils;
+      if (!sp) return { ok: false, reason: 'nothing to harvest' };
+      const byId = new Map(sp.parts.map(p => [p.instanceId, p]));
+      const want = [...new Set(take)];
+      const bad = want.find(id => !byId.has(id));
+      if (bad) return { ok: false, reason: `'${bad}' is not among the spoils` };
+      const st = this.stats();
+      const parts = want.map(id => byId.get(id));
+      const baseTime = parts.reduce((t, p) => t + (Items[p.id]?.part?.core ? HARVEST_TIME.core : HARVEST_TIME.peripheral), 0)
+        + (meat ? sp.bodies.length * MEAT_TIME_PER_BODY : 0);
+      const time = baseTime * (1 - (st.harvestTimePercent || 0) / 100);
+      let specimens = 0, materials = 0;
+      for (const p of parts) {
+        if (SPECIMEN_RARITIES.includes(p.rarity)) { addToList(s.pack.found, clone(p)); specimens++; }
+        else { const m = partMaterial(p, 1); if (m) { addToList(s.pack.found, m); materials++; } }
+      }
+      const meatGot = {};
+      if (meat) {
+        for (const g of sp.bodies) {
+          const m = MEAT_BY_GRADE[g];
+          if (!m) continue;
+          meatGot[m.id] = (meatGot[m.id] || 0) + Math.round(m.qty * (1 + (st.forageYieldPercent || 0) / 100));
+        }
+        for (const [id, qty] of Object.entries(meatGot)) if (qty > 0) addToList(s.pack.found, makeStack(id, qty));
+      }
+      s.spoils = null;
+      const spent = time > 0 ? this._spendTime(time) : { flips: [], encounter: null };
+      this._reveal();
+      this._log({ kind: 'harvest', specimens, materials, meat: meatGot, time: s.time });
+      return { ok: true, specimens, materials, meat: meatGot, time, flips: spent.flips, encounter: this.encounter() };
+    },
+
+    /**
      * The fight was won (CombatScene calls this, chunk 9b). The occupant leaves
      * the map and the kill is recorded; no occupant ever replaces it (no
      * mid-hunt spawns). What the fight pays, as the Advance loop paid it
@@ -600,10 +670,19 @@ function makeMapHunt(s, rng, worldRng, world) {
       for (const inst of found) addToList(s.pack.found, inst);
       const huntPoints = occ.kind === 'beast'
         ? Math.round(BEAST_FIGHT_HUNT_POINTS * (1 + (s.mods.huntPointsPercent || 0) / 100)) : 0;
+      // A beast fight leaves its bodies (chunk 9d): every part it wore, as
+      // rolled and kept since the scout or contact, and the meat, for harvest().
+      // Cultists leave only the armour that already dropped.
+      s.spoils = occ.kind === 'beast' ? {
+        family: occ.family || null,
+        parts: (occ.loadout || []).flatMap(g => Object.values(g)).map(p => clone(p)),
+        bodies: occ.roster.map(m => m.grade),
+        at: s.time,
+      } : null;
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils };
     },
 
     /**
@@ -748,6 +827,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         trails,
         encounter: this.encounter(),
         objectives: objectiveProgress(s),
+        spoils: this._spoilsView(),
         finished: s.finished,
       };
     },
@@ -801,6 +881,40 @@ function makeMapHunt(s, rng, worldRng, world) {
         itemRarity: this.stats().itemRarity,
         seed: loadoutSeed(s.seed, occ),
       });
+    },
+
+    /**
+     * What the harvest panel shows of a won fight's spoils (chunk 9d), or null.
+     * The fight is over, so a part's full identity is shown (BEAST_PARTS: parts
+     * are revealed at harvest): each part's name, slot, rarity, grade and the
+     * time it takes, and the meat the bodies would give. The factor is
+     * Foraging's harvest-time cut, already applied to every time here.
+     */
+    _spoilsView() {
+      const sp = s.spoils;
+      if (!sp) return null;
+      const st = this.stats();
+      const factor = 1 - (st.harvestTimePercent || 0) / 100;
+      const meat = {};
+      for (const g of sp.bodies) {
+        const m = MEAT_BY_GRADE[g];
+        if (m) meat[m.id] = (meat[m.id] || 0) + Math.round(m.qty * (1 + (st.forageYieldPercent || 0) / 100));
+      }
+      return {
+        family: sp.family,
+        parts: sp.parts.map(p => {
+          const part = Items[p.id]?.part || {};
+          return {
+            id: p.instanceId, base: p.id, name: p.displayName || Items[p.id]?.name || p.id,
+            slot: part.slot || null, core: !!part.core, rarity: p.rarity, grade: p.grade || null,
+            specimen: SPECIMEN_RARITIES.includes(p.rarity),
+            time: (part.core ? HARVEST_TIME.core : HARVEST_TIME.peripheral) * factor,
+          };
+        }),
+        bodies: sp.bodies.length,
+        meat,
+        meatTime: sp.bodies.length * MEAT_TIME_PER_BODY * factor,
+      };
     },
 
     /** Settle the pack for an ending, bank what comes home, mark the hunt over. */

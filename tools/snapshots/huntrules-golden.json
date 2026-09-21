@@ -1584,6 +1584,24 @@
    "kind": "fish",
    "rawEdible": false,
    "difficulty": 30
+  },
+  "lean_game": {
+   "supply": 4,
+   "kind": "meat",
+   "rawEdible": false,
+   "difficulty": 20
+  },
+  "prime_game": {
+   "supply": 6,
+   "kind": "meat",
+   "rawEdible": false,
+   "difficulty": 35
+  },
+  "great_game": {
+   "supply": 8,
+   "kind": "meat",
+   "rawEdible": false,
+   "difficulty": 50
   }
  },
  "food7b": {
@@ -3014,9 +3032,7 @@
    "large": 50
   },
   "BONUS_HUNT_POINTS_PER_ITEM_LEVEL": 5,
-  "PENDING_UNTIL": {
-   "trophy": "chunk 9d: beast parts"
-  }
+  "PENDING_UNTIL": {}
  },
  "unmaskReach": {
   "perception": 120,
@@ -3291,7 +3307,7 @@
   },
   "bonus trophy": {
    "runs": 18,
-   "done": 0
+   "done": 18
   },
   "bonus unbroken": {
    "runs": 18,

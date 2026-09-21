@@ -11,15 +11,15 @@
 // obj.occupant, obj.family, obj.site, obj.beforeDay) are on the map, so a
 // deploy cannot change what a live hunt is asking for.
 //
-// Trophy cannot be checked until beast parts can be carried home (chunk 9d):
-// it reports `pending` and is never done or paid until then, rather than
-// being quietly granted. Unbroken is checked since chunk 9c, off the hunt's
-// knock-out count.
+// Every objective is checkable since chunk 9d: Unbroken off the hunt's
+// knock-out count (9c), Trophy off the core parts of Prime-or-better beasts in
+// the pack (9d). PENDING_UNTIL stays, empty, for objectives yet to come.
 //
 // All numbers are placeholders until chunk 13.
 
 import { PLAN_TIER_IMPLICITS, planTierFor } from '../../data/planAffixes.js';
 import { Items } from '../../data/items.js';
+import { TROPHY_GRADES } from '../../data/beastParts.js';
 import { clockAt } from './HuntRules.js';
 
 /** The completion reward, in Hunt Points, by map size (chunk 7 decision 11),
@@ -34,9 +34,7 @@ export const COMPLETION_HUNT_POINTS = { small: 20, medium: 35, large: 50 };
 export const BONUS_HUNT_POINTS_PER_ITEM_LEVEL = 5;
 
 /** Objectives that wait for the combat hookup, and what they wait for. */
-export const PENDING_UNTIL = {
-  trophy: 'chunk 9d: beast parts',
-};
+export const PENDING_UNTIL = {};
 
 /** The plan's completion-reward percent: its prefixes' share plus its tier's implicit. */
 export function completionRewardPercent(planMods = {}, itemLevel = 1) {
@@ -127,8 +125,13 @@ function judge(s, obj, { atExit }) {
       const have = s.unmasked.length;
       return { have, need: 1, done: have >= 1 };
     }
-    case 'trophy':
-      return { have: 0, need: 1, done: false, pending: PENDING_UNTIL[obj.id] };
+    // Carry home a core part from a Prime-or-better beast (PLAN_AFFIXES):
+    // harvested parts record their beast's grade, stacks included.
+    case 'trophy': {
+      const have = s.pack.found.filter(it => Items[it.id]?.part?.core && TROPHY_GRADES.includes(it.grade))
+        .reduce((t, it) => t + (it.qty || 1), 0);
+      return { have, need: 1, done: atExit && have >= 1, carriedHome: true };
+    }
     // No hunter knocked out in any fight this hunt, fled fights included
     // (chunk 9 decision 15). A hunt with no fight won has not earned it: a
     // hunt that avoided every fight is not "unbroken", it is untested (a

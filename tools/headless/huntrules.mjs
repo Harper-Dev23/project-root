@@ -1313,7 +1313,14 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
   for (let i = 0; i < maxActions; i++) {
     // A won beast fight pays its own Hunt Points (chunk 9b); tallied apart so
     // the exit's payment can still be checked exactly.
-    if (h.encounter()) { world.fightPaid = (world.fightPaid || 0) + (h.winEncounter().huntPoints || 0); continue; }
+    if (h.encounter()) {
+      world.fightPaid = (world.fightPaid || 0) + (h.winEncounter().huntPoints || 0);
+      // Trophy (checkable since 9d): carry home a core part of a Prime-or-better
+      // beast, so the solver harvests exactly those when the plan asks for it.
+      const sp = h.view().spoils;
+      if (sp && bonus.includes('trophy')) h.harvest({ take: sp.parts.filter(p => p.core && ['prime', 'great'].includes(p.grade)).map(p => p.id), meat: false });
+      continue;
+    }
     const s = h.getState();
     const prog = h.objectives();
     const open = prog.find(p => !p.done && !p.pending && !(p.id === 'swift_return') && !(p.carriedHome && p.have >= p.need));
@@ -1331,6 +1338,7 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
         // Unbroken (checkable since 9c): win one fight with nobody knocked out.
         // The solver's fights are free wins, so reaching any hostile will do.
         case 'unbroken': step = nextStep(h, id => occs.some(x => (x.kind === 'beast' || x.kind === 'cultist') && x.tile === id)); break;
+        case 'trophy': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.tile === id && x.roster.some(m => m.grade === 'prime' || m.grade === 'great'))); break;
         case 'provisioner': {
           const t = s.map.tiles[s.pos];
           const canForage = !s.gathered[s.pos] && !t.barren && (R.FORAGE_YIELD[GROUNDS[t.ground].forage] || 0) > 0 && R.forageCandidates(Items, t.ground).length > 0;
@@ -1416,7 +1424,8 @@ console.log('=== every objective is completable and pays at the exit ===');
   }
   check('every bonus objective the engine can check: completed on every map and paid its reward at the exit',
     bonusFails.length === 0, bonusFails.slice(0, 3).join(' | '));
-  check('Trophy reports pending (chunk 9d) and is never done or paid', pendingOk.length > 0 && pendingOk.every(Boolean));
+  // Since 9d nothing is pending: every bonus objective is checked above.
+  check('no bonus objective is pending any more (9d)', Object.keys(O.PENDING_UNTIL).length === 0 && pendingOk.length === 0);
   // Unmask, at the best Perception the game can reach today: a level-10
   // Ferrow Shepherd with five Perception picks (100) and a T1 of Keen Eyes (+20).
   {

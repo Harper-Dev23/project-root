@@ -109,6 +109,26 @@ export const Items = {
     food: { kind: 'fish', rawEdible: false, difficulty: 30 },
     description: 'Still cold from the water. It has to be cooked before anyone eats it.',
   },
+  // Meat (chunk 9d, decision 12): harvested from a won beast fight
+  // (HuntEngine.harvest; MEAT_BY_GRADE in data/beastParts.js says which and how
+  // much), never foraged. Raw meat is never eaten raw (BEAST_PARTS: "meat must
+  // be cooked"); camp cooks it as a dish's main. The better the beast, the
+  // harder it is to cook and the more it is worth.
+  lean_game: {
+    id: 'lean_game', name: 'Lean Game', type: 'food', rarity: 'common', stackable: true, supply: 4,
+    food: { kind: 'meat', rawEdible: false, difficulty: 20 },
+    description: 'Stringy meat off a young or ordinary beast. Cook it; it is filling enough.',
+  },
+  prime_game: {
+    id: 'prime_game', name: 'Prime Game', type: 'food', rarity: 'common', stackable: true, supply: 6,
+    food: { kind: 'meat', rawEdible: false, difficulty: 35 },
+    description: 'Dark, rich meat from a beast in its prime. It rewards a careful cook.',
+  },
+  great_game: {
+    id: 'great_game', name: 'Great Game', type: 'food', rarity: 'common', stackable: true, supply: 8,
+    food: { kind: 'meat', rawEdible: false, difficulty: 50 },
+    description: 'Meat from a great beast, tough and heavy with fat. Only a real cook gets the best of it.',
+  },
 
   // === Sacred Relics ===
   waystone_shard: {

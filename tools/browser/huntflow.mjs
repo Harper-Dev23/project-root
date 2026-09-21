@@ -201,6 +201,25 @@ check('...the occupant is gone, the kill recorded, and the win saved', won.gone 
   && svWon?.hunt?.mode === 'map' && svWon.hunt.kills.length === pre.kills + 1, JSON.stringify(won));
 await shot('05d-back-on-map');
 
+// ---- 5b'. Harvest (chunk 9d): a beast fight leaves spoils on the map ---------------------
+const kind5 = await evaluate(`const h = window.__T.s().hunt; const k = h.getState().kills.slice(-1)[0]; return k?.kind;`);
+if (kind5 === 'beast') {
+  check('after a won beast fight, the map shows the spoils to harvest', !!(await findText('^Spoils: ', 'HuntFieldOverlay')) && !!(await findText('^Harvest$', 'HuntFieldOverlay')));
+  await shot('05d2-spoils');
+  const before5 = await evaluate(`const st = window.__T.s().hunt.getState(); return { found: st.pack.found.reduce((t, i) => t + (i.qty || 1), 0), time: st.time, shown: window.__T.s().v.spoils.parts.filter(p => p.rarity !== 'common').length };`);
+  await clickText('^Harvest$', 'HuntFieldOverlay');
+  await sleep(500);
+  const after5 = await evaluate(`const s = window.__T.s(); const st = s.hunt.getState();
+    return { spoils: !!s.v.spoils, found: st.pack.found.reduce((t, i) => t + (i.qty || 1), 0), parts: st.pack.found.filter(i => i.id.startsWith('part_')).reduce((t, i) => t + (i.qty || 1), 0), time: st.time, log: st.log.some(l => l.kind === 'harvest') };`);
+  const sv5 = await saved();
+  check('Harvest (clicked) takes the shown parts and the meat into the pack, spends time, and is saved',
+    !after5.spoils && after5.parts === before5.shown && after5.found > before5.found && after5.time > before5.time && after5.log
+    && sv5?.hunt?.spoils === null && sv5.hunt.pack.found.some(i => i.id.startsWith('part_')), JSON.stringify({ ...before5, ...after5 }));
+  await shot('05d3-harvested');
+} else {
+  check('after a won cultist fight there are no spoils to harvest', !(await findText('^Spoils: ', 'HuntFieldOverlay')));
+}
+
 // ---- 5c. Flee from inside a fight (chunk 9c) ---------------------------------------------
 const fight4 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
 check('walked into a fight to flee from', fight4 === 'fight', fight4);

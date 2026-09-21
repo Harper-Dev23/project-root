@@ -414,6 +414,15 @@ export function equipItem(character, item, slot) {
     return character;
   }
 
+  // Beast parts (natural, chunk 9) are materials, never hunter gear (BEAST_PARTS:
+  // 'parts are materials, not hunter gear'). A weaponMain part is a natural
+  // weapon with dice, and every other part names a body slot, so without this
+  // both would pass the checks below once harvested into the bag.
+  if (baseItem.natural) {
+    console.warn(`${inst.id} is a beast part: parts are not worn`);
+    return character;
+  }
+
   const isWeapon = baseItem.type === 'weapon';
   const isArmor = ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot);
   if (!isWeapon && !isArmor) {

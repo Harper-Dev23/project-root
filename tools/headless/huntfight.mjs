@@ -542,5 +542,204 @@ console.log('=== food for the fight: from a camp meal to the damage ===');
   }
 }
 
+// =============================================================================
+// Chunk 9d: harvest, meat, stacking, Trophy, and a whole small hunt
+// =============================================================================
+let golden9d = null;
+const O = await import('../../src/systems/HuntObjectives.js');
+const { equipItem } = await import('../../src/systems/CharacterBuilder.js');
+const { canStack, partMaterial } = await import('../../src/systems/ItemStacks.js');
+
+/** Win the pending fight for real (a strong party), through the host. */
+function winPending(m, s = 61) {
+  const { host } = hostBegun(m);
+  for (const u of m.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  seed(s);
+  runFight(host, basicAttack, { maxTurns: 800 });
+  return host;
+}
+/** Walk (by true positions: test code) to the next hostile and into it. */
+function walkToFight(h, pred = (o) => o.kind === 'beast' || o.kind === 'cultist') {
+  for (let i = 0; i < 400 && !h.encounter(); i++) {
+    const st = h.getState();
+    if (st.finished) return false;
+    const targets = new Set(st.map.occupants.filter(pred).map(o => o.tile));
+    if (!targets.size) return false;
+    const prev = new Map([[st.pos, null]]); const q = [st.pos]; let goal = null;
+    for (let k = 0; k < q.length && !goal; k++) for (const n of mapNeighbors(st.map, q[k])) {
+      if (prev.has(n) || !isPassable(st.map.tiles[n])) continue;
+      prev.set(n, q[k]); q.push(n); if (targets.has(n)) { goal = n; break; }
+    }
+    if (!goal) return false;
+    let t = goal; while (prev.get(t) !== st.pos) t = prev.get(t);
+    h.move(t);
+  }
+  return !!h.encounter();
+}
+const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+const { isPassable } = await import('../../data/grounds.js');
+
+console.log('=== harvest: the spoils of a won beast fight ===');
+{
+  const m = meet({ kind: 'beast', from: 2100 });
+  const occId = m.h.encounter().occId;
+  const occ0 = m.h.getState().map.occupants.find(o => o.id === occId);
+  winPending(m);
+  const v = m.h.view();
+  const sp = v.spoils;
+  const partsWorn = occ0.loadout.flatMap(g => Object.values(g));
+  check('a won beast fight leaves spoils: every part its members wore, one body each', !!sp && sp.parts.length === partsWorn.length && sp.bodies === occ0.roster.length,
+    sp ? `${sp.parts.length} parts, ${sp.bodies} bodies` : 'none');
+  check('...showing each part\'s name, rarity and grade, but no occupant id', sp.parts.every(p => p.name && p.rarity && p.grade) && !JSON.stringify(sp).includes(`"${occId}"`));
+  const st = m.h.stats();
+  const meatIds = new Set(occ0.roster.map(r => BP.MEAT_BY_GRADE[r.grade].id));
+  check('...and the meat its bodies give, the kinds their grades name', same([...new Set(Object.keys(sp.meat))].sort(), [...meatIds].sort()) && Object.values(sp.meat).every(q => q > 0), JSON.stringify(sp.meat));
+  // The yield, through the engine only: the same saved spoils, harvested with
+  // and without "of the Harvest" in the hunt's bundle.
+  const meatWith = (pct) => {
+    const d = JSON.parse(JSON.stringify(m.h.serialize()));
+    d.mods.harvestYieldPercent = pct;
+    const hh = restoreMapHunt(d, m.world);
+    const r0 = hh.harvest({ take: [], meat: true });
+    return Object.values(r0.meat || {}).reduce((a, b) => a + b, 0);
+  };
+  const plain = meatWith(0), rich = meatWith(100);
+  check('Foraging\'s yield and of the Harvest raise the meat taken', rich > plain && plain > 0, `${plain} -> ${rich} with harvestYieldPercent 100`);
+  // A reload keeps the spoils.
+  const back = restoreMapHunt(JSON.parse(JSON.stringify(m.h.serialize())), m.world);
+  check('the spoils survive a save and reload', same(back.view().spoils, sp));
+  // Harvest: two specimens (if any), every material, and the meat.
+  const specimenIds = sp.parts.filter(p => p.specimen).map(p => p.id);
+  const materialIds = sp.parts.filter(p => !p.specimen).map(p => p.id);
+  const take = [...specimenIds, ...materialIds];
+  const t0 = m.h.getState().time;
+  const found0 = m.h.getState().pack.found.length;
+  const r = m.h.harvest({ take, meat: true });
+  const s1 = m.h.getState();
+  const factor = 1 - st.harvestTimePercent / 100;
+  const want = (sp.parts.reduce((a, p) => a + (p.core ? BP.HARVEST_TIME.core : BP.HARVEST_TIME.peripheral), 0) + sp.bodies * BP.MEAT_TIME_PER_BODY) * factor;
+  check('harvest never fails, and costs HARVEST_TIME per part plus the meat, cut by Foraging', r.ok && Math.abs((s1.time - t0) - want) < 1e-9 && Math.abs(r.time - want) < 1e-9,
+    `${r.time?.toFixed?.(3)} units (factor ${factor.toFixed(3)})`);
+  const specimens = s1.pack.found.filter(it => Items[it.id]?.part && ['rare', 'epic'].includes(it.rarity));
+  const byId = new Map(occ0.loadout.flatMap(g => Object.values(g)).map(p => [p.instanceId, p]));
+  check('rare and epic parts keep their affixes, each its own specimen (never a lower rarity)',
+    specimens.length === specimenIds.length && specimenIds.every(id => { const o = byId.get(id); return specimens.some(sx => sx.instanceId === id && same(sx.instanceMods, o.instanceMods) && sx.rarity === o.rarity); }));
+  const mats = s1.pack.found.filter(it => Items[it.id]?.part && !['rare', 'epic'].includes(it.rarity));
+  check('common and uncommon parts become plain material: no affixes, grade kept, stacked',
+    mats.every(x => !x.prefixes.length && !x.suffixes.length && x.grade) && mats.reduce((a, x) => a + (x.qty || 1), 0) === materialIds.length);
+  check('the harvest delivers exactly the meat the spoils showed', same(r.meat, sp.meat)
+    && Object.entries(sp.meat).every(([id, q]) => s1.pack.found.filter(it => it.id === id).reduce((a, it) => a + (it.qty || 1), 0) >= q));
+  check('the spoils are gone once harvested', m.h.view().spoils === null && s1.pack.found.length > found0);
+  check('the log records the harvest', s1.log.some(l => l.kind === 'harvest'));
+}
+{
+  // Walking away leaves them.
+  const m = meet({ kind: 'beast', from: 2200 });
+  winPending(m);
+  const had = !!m.h.view().spoils;
+  const mv = m.h.view().moves[0];
+  m.h.move(mv.tile);
+  check('walking away leaves the spoils: gone, logged, nothing taken', had && m.h.view().spoils === null
+    && m.h.getState().log.some(l => l.kind === 'spoils_left') && !m.h.getState().pack.found.some(it => Items[it.id]?.part));
+  // A cultist fight leaves no spoils (its armour already dropped into the pack).
+  const c = meet({ kind: 'cultist', from: 2300 });
+  winPending(c);
+  check('a cultist fight leaves no spoils', c.h.view().spoils === null);
+}
+{
+  // Stacking keeps grades apart; a part is never worn.
+  const mk = (grade, rarity = 'uncommon') => partMaterial({ id: 'part_marsh_stalker_chest', rarity, grade, itemLevel: 1 }, 1);
+  check('material of the same grade and rarity stacks; another grade or rarity does not',
+    canStack(mk('grown'), mk('grown')) && !canStack(mk('grown'), mk('prime')) && !canStack(mk('grown'), mk('grown', 'common')));
+  check('an item with no grade stacks exactly as before', canStack(makeStack('rations', 1), makeStack('rations', 2)));
+  const hunter = makeParty()[0];
+  const fang = partMaterial({ id: 'part_marsh_stalker_weaponMain', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
+  const hide = partMaterial({ id: 'part_marsh_stalker_chest', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
+  const before = JSON.stringify(hunter.equipment);
+  check('a hunter cannot wear a part (not the natural-weapon fangs, not a hide)',
+    JSON.stringify(equipItem(hunter, fang, 'weaponMain').equipment) === before && JSON.stringify(equipItem(hunter, hide, 'chest').equipment) === before);
+}
+
+console.log('=== Trophy ===');
+{
+  const m = meet({ kind: 'beast', from: 2400, bonus: ['trophy'] });
+  const tr = () => m.h.objectives().find(o => o.id === 'trophy');
+  check('a hunt with Trophy: not pending any more, not done at the start', !!tr() && !tr().pending && tr().have === 0);
+  // Fight until a Prime-or-better beast has fallen, and take its core parts.
+  let got = false;
+  for (let k = 0; k < 12 && !got; k++) {
+    if (!m.h.encounter() && !walkToFight(m.h, o => o.kind === 'beast' && o.roster.some(x => x.grade === 'prime' || x.grade === 'great'))) break;
+    winPending(m, 70 + k);
+    const sp = m.h.view().spoils;
+    if (!sp) continue;
+    const core = sp.parts.filter(p => p.core && (p.grade === 'prime' || p.grade === 'great'));
+    m.h.harvest({ take: core.map(p => p.id), meat: false });
+    got = core.length > 0;
+  }
+  check('carrying a core part of a Prime-or-better beast counts for Trophy', got && tr().have >= 1, `have ${tr()?.have}`);
+  check('Trophy is only done when carried home (at the exit)', tr().done === false && O.objectiveProgress(m.h.getState(), { atExit: true }).find(o => o.id === 'trophy')?.done === true);
+}
+
+console.log('=== a whole small hunt: move, fight, harvest, cook, exit ===');
+{
+  // The best cook takes two Cooking picks so lean game cooks Fine (20 + 20 margin).
+  const party = makeParty();
+  const world = recordingWorld(party);
+  let h = null, zoneId = null;
+  for (let seedN = 3000; seedN < 3060 && !h; seedN++) {
+    const cand = createMapHunt('reeds_of_gethsemane', { plan: { objective: 'cull', size: 'small', itemLevel: 1 }, supplies: 120, seed: seedN }, world);
+    if (cand.getState().map.objectives.primary.id === 'cull') { h = cand; zoneId = 'reeds_of_gethsemane'; }
+  }
+  const tally = { fights: 0, harvested: 0, meals: 0, flees: 0 };
+  for (let step = 0; step < 40; step++) {
+    const prog = h.objectives().find(o => o.kind === 'primary');
+    if (prog.done) break;
+    const fam = h.getState().map.objectives.primary.family;
+    if (!walkToFight(h, o => o.kind === 'beast' && o.family === fam) && !h.encounter()) break;
+    const e = h.encounter();
+    if (!e) break;
+    if (e.kind !== 'beast') { h.flee(); tally.flees++; continue; }
+    winPending({ h, party, world }, 90 + step);
+    tally.fights++;
+    const sp = h.view().spoils;
+    if (sp) {
+      const r = h.harvest({ take: sp.parts.filter(p => p.rarity !== 'common').map(p => p.id), meat: true });
+      if (r.ok) tally.harvested += r.specimens + r.materials;
+    }
+    // Cook what was butchered.
+    const food = h.foodInPack();
+    const meatId = Object.keys(food).find(id => Items[id]?.food?.kind === 'meat');
+    if (meatId && !h.encounter()) { const c = h.camp({ meals: [{ main: meatId }] }); if (c.ok) tally.meals += c.dishes.length; }
+    if (h.encounter()) { const x = h.encounter(); if (x.kind === 'beast' || x.kind === 'cultist') { winPending({ h, party, world }, 150 + step); tally.fights++; h.view().spoils && h.harvest({ take: [], meat: false }); } }
+  }
+  const primary = h.objectives().find(o => o.kind === 'primary');
+  check('the cull is completed by real fights', primary.done, `${primary.have}/${primary.need} after ${tally.fights} fights`);
+  check('parts were harvested and meat was cooked on the way', tally.harvested > 0 && tally.meals > 0, JSON.stringify(tally));
+  // Walk out.
+  const exits = new Set(Object.entries(h.getState().map.tiles).filter(([, t]) => t.exit).map(([id]) => id));
+  for (let i = 0; i < 300 && !exits.has(h.getState().pos); i++) {
+    const st = h.getState();
+    if (h.encounter()) { winPending({ h, party, world }, 200 + i); h.view().spoils && h.harvest({ take: [], meat: false }); continue; }
+    const prev = new Map([[st.pos, null]]); const q = [st.pos]; let goal = null;
+    for (let k = 0; k < q.length && !goal; k++) for (const n of mapNeighbors(st.map, q[k])) {
+      if (prev.has(n) || !isPassable(st.map.tiles[n])) continue;
+      prev.set(n, q[k]); q.push(n); if (exits.has(n)) { goal = n; break; }
+    }
+    if (!goal) break;
+    let t = goal; while (prev.get(t) !== st.pos) t = prev.get(t);
+    h.move(t);
+  }
+  const foundBefore = h.getState().pack.found.length;
+  const paidBefore = world.paid.reduce((a, b) => a + b, 0);
+  const x = h.exit();
+  const paidAtExit = world.paid.reduce((a, b) => a + b, 0) - paidBefore;
+  check('the party leaves through an exit and the completion reward is paid', x.ok && x.reward.primaryDone && x.reward.completion > 0 && paidAtExit === x.reward.huntPoints,
+    x.ok ? `${x.reward.huntPoints} Hunt Points at the exit; ${world.paid.length - 1} fights paid before` : x.reason);
+  check('the pack comes home: the harvested parts and what is left of the food are banked',
+    world.banked.some(b => b.found && b.n === foundBefore) && foundBefore > 0, `${foundBefore} found entries banked`);
+  golden9d = { tally, days: Math.ceil(h.clock().time / 12), exitPoints: x.reward?.huntPoints };
+}
+console.log(`  (the small hunt: ${JSON.stringify(golden9d)})`);
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

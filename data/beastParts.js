@@ -23,12 +23,18 @@
 //   HUNT_BEASTS[f].signature     ItemFactory part pools: the family's buildup affix
 //   HUNT_BEASTS[f].weaponDamage  the weaponMain part's dice (calculateDamage)
 //   HUNT_CULTIST_TYPES           HuntBeasts.memberType for cultist bands
-//   GRADE_HP_SCALE               HuntBeasts.memberSpec -> the fight (9b)
+//   GRADE_HP_SCALE               HuntBeasts.gradeHpScale -> fightScenario hpMult ->
+//                                CombatScene._spawnEnemy (9b)
 //   PART_RARITY_BY_GRADE         PartyStats.partRarityOdds / rollPartRarity
 //   CORE_SLOTS, PERIPHERAL_SCALE ItemFactory part pools (full vs reduced ranges);
 //                                Trophy (9d) reads CORE_SLOTS
 //   PART_SLOT_THEMES             ItemFactory part pools: which affix families
 //                                each slot can roll
+//   HARVEST_TIME,                HuntEngine.harvest and its spoils view (9d):
+//   MEAT_TIME_PER_BODY,          what taking parts and meat costs and gives,
+//   MEAT_BY_GRADE,               which parts stay specimens, and what counts
+//   SPECIMEN_RARITIES,           for Trophy (HuntObjectives)
+//   TROPHY_GRADES
 
 /** The nine character slots, in the order a harvest screen lists them. */
 export const PART_SLOTS = ['weaponMain', 'weaponOff', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
@@ -122,6 +128,33 @@ export const PART_RARITY_BY_GRADE = {
   prime:    { common: 10, uncommon: 40, rare: 38, epic: 12 },
   great:    { common: 0,  uncommon: 25, rare: 50, epic: 25 },
 };
+
+// ── Harvest (chunk 9d; decisions 12-14) ─────────────────────────────────────
+// Reader: HuntEngine.harvest. Placeholders until chunk 13.
+
+/** In-game time units to take one part: core parts are the careful work,
+ *  peripheral ones quicker. Foraging's harvest-time curve cuts it
+ *  (partyStats().harvestTimePercent). */
+export const HARVEST_TIME = { core: 1, peripheral: 0.5 };
+
+/** Butchering for meat: time per body, before the same curve. */
+export const MEAT_TIME_PER_BODY = 0.25;
+
+/** Meat per body by grade, before Foraging's yield curve and "of the Harvest"
+ *  (partyStats().forageYieldPercent). Cultists give none. */
+export const MEAT_BY_GRADE = {
+  yearling: { id: 'lean_game',  qty: 1 },
+  grown:    { id: 'lean_game',  qty: 2 },
+  prime:    { id: 'prime_game', qty: 2 },
+  great:    { id: 'great_game', qty: 3 },
+};
+
+/** Common and uncommon parts lose their affixes when harvested and stack as
+ *  plain material; rare and better keep them as specimens (decision 14). */
+export const SPECIMEN_RARITIES = ['rare', 'epic'];
+
+/** Grades whose core parts make a Trophy (the Trophy bonus objective). */
+export const TROPHY_GRADES = ['prime', 'great'];
 
 /** The part base id for a family and slot: family + slot in the id, so stacks
  *  never merge two families' hides (ItemStacks keys by id + rarity). */

@@ -36,9 +36,13 @@ export function isStackable(inst) {
   return true;
 }
 
-/** Two entries that may be merged into one. */
+/** Two entries that may be merged into one. A beast part also keeps its
+ *  beast's grade apart (chunk 9d): a Prime hide never merges into a Yearling
+ *  stack, so what the Trophy objective reads survives stacking. Nothing else
+ *  carries a grade, so every other stack behaves exactly as before. */
 export function canStack(a, b) {
-  return isStackable(a) && isStackable(b) && a.id === b.id && a.rarity === b.rarity;
+  return isStackable(a) && isStackable(b) && a.id === b.id && a.rarity === b.rarity
+    && (a.grade ?? null) === (b.grade ?? null);
 }
 
 /**
@@ -109,6 +113,20 @@ export function takeFromList(list, id, n) {
 }
 
 /** A fresh stack of `n` units of a stackable base. */
+/**
+ * A harvested part as plain material (decision 14): the same base, rarity and
+ * grade, no affixes, so it stacks by family + slot + rarity + grade.
+ */
+export function partMaterial(part, n = 1) {
+  const base = Items[part?.id];
+  if (!base?.part || !Number.isInteger(n) || n <= 0) return null;
+  const inst = createItemInstance(part.id, { rarity: part.rarity, rollAffixes: false, itemLevel: part.itemLevel ?? null });
+  if (!inst) return null;
+  inst.qty = n;
+  if (part.grade) inst.grade = part.grade;
+  return inst;
+}
+
 export function makeStack(id, n) {
   if (!Items[id]?.stackable || !Number.isInteger(n) || n <= 0) return null;
   const inst = createItemInstance(id);

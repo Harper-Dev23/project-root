@@ -495,7 +495,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           this.scene.restart();
         });
 
-      if (baseItem.type === 'weapon') {
+      if (baseItem.type === 'weapon' && !baseItem.natural) {
         const mBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[M]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
@@ -519,7 +519,7 @@ export default class InventoryOverlay extends Phaser.Scene {
             });
         }
         pList.add([tBtn, mBtn, oBtn]);
-      } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
+      } else if (!baseItem.natural && ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
         const eqBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[Eq]', { fontSize: '12px', color: '#88ff88' })
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', (p) => {
@@ -879,7 +879,7 @@ export default class InventoryOverlay extends Phaser.Scene {
             this.scene.restart();
           });
 
-        if (baseItem.type === 'weapon') {
+        if (baseItem.type === 'weapon' && !baseItem.natural) {
           const mBtn = this.add.text(420, y, '[Main]', { fontSize: '14px', color: '#88ff88' })
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
@@ -907,7 +907,7 @@ export default class InventoryOverlay extends Phaser.Scene {
               });
           }
           listContainer.add([transferBtn, mBtn, oBtn]);
-        } else if (['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
+        } else if (!baseItem.natural && ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
           const eqBtn = this.add.text(420, y, '[Eq]', { fontSize: '14px', color: '#88ff88' })
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {

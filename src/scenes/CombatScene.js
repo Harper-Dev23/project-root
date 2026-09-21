@@ -6597,6 +6597,7 @@ export default class CombatScene extends Phaser.Scene {
       // (HuntEngine.winEncounter). The autosave below saves it.
       const won = this.huntFight.hunt.winEncounter({ loot, knockedOut: huntKnockedOut });
       if (won?.huntPoints > 0) this._log(`+${won.huntPoints} Hunt Points.`);
+      if (won?.spoils) this._log('The bodies are yours: harvest what you want on the map.');
     } else if (this.isHunt) {
       // Hunt fights aren't training-progression scenarios — award Hunt Points
       // (Beast only; Cultist's reward is the loot just collected above) and

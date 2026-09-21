@@ -48,6 +48,7 @@ import { createButton } from '../../ui/Button.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { parseTileId, toOffset } from '../../systems/HexGrid.js';
 import { GROUNDS } from '../../../data/grounds.js';
+import { HUNT_BEASTS, PART_SLOTS } from '../../../data/beastParts.js';
 import { Items } from '../../../data/items.js';
 import { getZone } from '../../../data/zones.js';
 import { PRIMARY_OBJECTIVES, MAP_SIZES } from '../../../data/huntMapGen.js';
@@ -112,6 +113,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this.selected = null;       // selected tile id
     this.panel = null;          // 'eat' | 'camp' | 'log' | null
     this.meals = [];            // camp meal queue: [{ main, addition }]
+    // The harvest panel (chunk 9d): which part groups (by slot) the player has
+    // turned OFF, whether meat is off, whether commons are shown. Reset with
+    // every launch; a fight relaunches the scene, so each spoils starts fresh.
+    this.harvestSkip = new Set();
+    this.harvestNoMeat = false;
+    this.harvestCommons = false;
     this.origin = { x: 0, y: 0 };
     this.layer = null;          // everything drawn from view(), rebuilt per refresh
     this.hoverGfx = null;
@@ -185,6 +192,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._drawHUD();
     if (v.finished) this._drawFinished();
     else if (v.encounter) this._drawEncounter();
+    else if (v.spoils) this._drawHarvest();
     else if (this.panel === 'eat') this._drawEat();
     else if (this.panel === 'camp') this._drawCamp();
     else if (this.selected) this._drawInspect(this.selected);
@@ -707,6 +715,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : ''}.`;
       case 'win': return `${day(e.time)} Won the fight${e.huntPoints ? `: +${e.huntPoints} Hunt Points` : ''}${e.loot ? `, ${e.loot} item${e.loot > 1 ? 's' : ''} to the pack` : ''}.`;
       case 'flee': return `${day(e.time)} Fled${e.reason === 'reload' ? ' (reloaded mid-fight)' : ''}.`;
+      case 'harvest': return `${day(e.time)} Harvested ${e.specimens + e.materials} part${e.specimens + e.materials === 1 ? '' : 's'}${Object.keys(e.meat || {}).length ? ' and meat' : ''}.`;
+      case 'spoils_left': return `${day(e.time)} Left the spoils behind.`;
       case 'fight': return `${day(e.time)} The fight began${e.food ? `, well fed on ${item(e.food)}` : ''}.`;
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
@@ -774,6 +784,52 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     });
   }
 
+  /**
+   * The spoils of a won beast fight (chunk 9d; BEAST_PARTS: "harvest on the
+   * victory screen", grouped by part type, commons hidden by default). Every
+   * group is taken unless turned off; commons only when shown. The time is
+   * the engine's (view().spoils, Foraging's cut applied). Walking away leaves
+   * the spoils, as does "Leave it".
+   */
+  _drawHarvest() {
+    const sp = this.v.spoils;
+    const fam = HUNT_BEASTS[sp.family];
+    const shown = (p) => this.harvestCommons || p.rarity !== 'common';
+    const commons = sp.parts.filter(p => p.rarity === 'common').length;
+    const groups = PART_SLOTS.map(slot => ({ slot, word: fam?.parts?.[slot] || slot, parts: sp.parts.filter(p => p.slot === slot && shown(p)) }))
+      .filter(g => g.parts.length);
+    const order = ['epic', 'rare', 'uncommon', 'common'];
+    const take = groups.filter(g => !this.harvestSkip.has(g.slot)).flatMap(g => g.parts);
+    const meatOn = !this.harvestNoMeat && Object.keys(sp.meat).length > 0;
+    const time = take.reduce((a, p) => a + p.time, 0) + (meatOn ? sp.meatTime : 0);
+    const width = 420;
+    const height = 70 + groups.length * 30 + 30 + 30 + 46 + (groups.length ? 0 : 20);
+    const p = this._sidePanel(null, width, Math.min(height, PANEL_BOTTOM - MAP.y - 12));
+    this._panelText(p, p.px + 10, p.py + 8, `Spoils: ${sp.bodies} ${fam?.name || 'beast'}${sp.bodies > 1 ? 's' : ''}`, 16, '#f2e6c8');
+    this._panelText(p, p.px + 10, p.py + 30, 'Take what you want. It costs time; what you leave is gone.', 12, '#a8b0bc');
+    let ty = p.py + 58;
+    if (!groups.length) { this._panelText(p, p.px + 10, ty, 'No parts worth taking.', 13, '#a8b0bc'); ty += 20; }
+    for (const g of groups) {
+      const counts = order.map(r => [r, g.parts.filter(x => x.rarity === r).length]).filter(([, n]) => n).map(([r, n]) => `${n} ${r}`).join(', ');
+      const on = !this.harvestSkip.has(g.slot);
+      this._panelButton(p, p.px + width / 2, ty + 12, `[${on ? 'x' : ' '}] ${g.word} x${g.parts.length}: ${counts}`, () => {
+        if (on) this.harvestSkip.add(g.slot); else this.harvestSkip.delete(g.slot);
+        this._refresh();
+      });
+      ty += 30;
+    }
+    const meatWords = Object.entries(sp.meat).map(([id, q]) => `${q} ${Items[id]?.name || id}`).join(', ');
+    if (meatWords) {
+      this._panelButton(p, p.px + width / 2, ty + 12, `[${meatOn ? 'x' : ' '}] Meat: ${meatWords}`, () => { this.harvestNoMeat = !this.harvestNoMeat; this._refresh(); });
+      ty += 30;
+    }
+    this._panelText(p, p.px + 10, ty + 4, `Time: ${fmt(time)}. ${take.length} part${take.length === 1 ? '' : 's'}${meatOn ? ' and the meat' : ''}.`, 13, '#d8d8d8');
+    ty += 30;
+    this._panelButton(p, p.px + 80, ty + 12, this.harvestCommons ? 'Hide commons' : `Show commons (${commons})`, () => { this.harvestCommons = !this.harvestCommons; this._refresh(); });
+    this._panelButton(p, p.px + 230, ty + 12, 'Harvest', () => this._act('harvest', () => this.hunt.harvest({ take: take.map(x => x.id), meat: meatOn })), 'confirm');
+    this._panelButton(p, p.px + 345, ty + 12, 'Leave it', () => this._act('leave', () => this.hunt.harvest({ take: [], meat: false })));
+  }
+
   _confirmExit() {
     const prim = this.v.objectives.find(o => o.kind === 'primary');
     const msg = prim?.done || (prim?.id === 'retrieve' && prim.have)
@@ -830,6 +886,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (kind === 'camp') out.push(`Camped: recovered ${Math.round(res.recoveryPercent)}% HP and MP${res.found ? ', then a pack found the camp' : ''}.`);
     if (kind === 'cleanse') out.push(res.sourceDestroyed ? 'The blight source is destroyed.' : 'The blight here is cleansed.');
     if (kind === 'flee') out.push('You fell back. They will be hunting you.');
+    if (kind === 'harvest') out.push(`Harvested ${res.specimens + res.materials} part${res.specimens + res.materials === 1 ? '' : 's'}${Object.keys(res.meat || {}).length ? ' and meat' : ''} into the pack.`);
     if (res.starved?.length) out.push(`Starving: ${res.starved.map(s => s.name).join(', ')} lost HP.`);
     if (kind === 'scout' && res.view?.exact) out.push('Scouted: you know exactly what is there.');
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points.`);
