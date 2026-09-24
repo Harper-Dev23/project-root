@@ -1,0 +1,82 @@
+{
+ "costs": [
+  {
+   "level": 1,
+   "intercession": 10,
+   "rite": {
+    "days": 3,
+    "tickets": 5
+   }
+  },
+  {
+   "level": 2,
+   "intercession": 20,
+   "rite": {
+    "days": 4,
+    "tickets": 10
+   }
+  },
+  {
+   "level": 3,
+   "intercession": 30,
+   "rite": {
+    "days": 5,
+    "tickets": 15
+   }
+  },
+  {
+   "level": 5,
+   "intercession": 50,
+   "rite": {
+    "days": 7,
+    "tickets": 25
+   }
+  },
+  {
+   "level": 10,
+   "intercession": 100,
+   "rite": {
+    "days": 12,
+    "tickets": 50
+   }
+  }
+ ],
+ "open": {
+  "home": [
+   true,
+   true
+  ],
+  "abroad": [
+   false,
+   true
+  ],
+  "forsaken": [
+   false,
+   false
+  ],
+  "legacy": [
+   false,
+   true
+  ]
+ },
+ "riteTrace": [
+  {
+   "day": 1,
+   "revived": []
+  },
+  {
+   "day": 2,
+   "revived": []
+  },
+  {
+   "day": 3,
+   "revived": []
+  },
+  {
+   "day": 4,
+   "revived": [
+    "Torg"
+   ]
+  }
+ ]
+}

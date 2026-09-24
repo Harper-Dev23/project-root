@@ -9,6 +9,7 @@
 
 import { wakeTown } from '../../ui/townInput.js';
 import GameState from '../../systems/GameState.js';
+import ProgressionManager from '../../systems/ProgressionManager.js';
 import { getXPNeededForLevel } from '../../../data/xpTable.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { Items } from '../../../data/items.js';
@@ -163,9 +164,13 @@ export default class CampRosterOverlay extends Phaser.Scene {
         fontSize: '15px', color: isSelected ? MENU_THEME.accentHover : '#eeeeee',
       }).setDepth(this.contentDepth);
 
-      // Party status badge
-      const badgeColor = inParty ? '#88ffaa' : '#aaaaaa';
-      const badgeLabel = inParty ? '⚔ In Party' : '🏕 Rested';
+      // Party status badge; a Slain hunter shows their way back (chunk 10c).
+      const rite = this.activeTab === 'slain' ? char.rite : null;
+      const days = rite ? Math.max(0, rite.untilDay - ProgressionManager.getDaysElapsed()) : 0;
+      const badgeColor = this.activeTab === 'slain' ? (rite ? '#e8c66a' : '#c09090') : inParty ? '#88ffaa' : '#aaaaaa';
+      const badgeLabel = this.activeTab === 'slain'
+        ? (rite ? `✦ The rite: ${days} day${days === 1 ? '' : 's'} left` : char.fell?.rule === 'forsaken' ? '✝ Fell in Forsaken lands' : '✝ Awaits the lodge shrine')
+        : inParty ? '⚔ In Party' : '🏕 Rested';
       const badge = this.add.text(listLeft + 10, y + 22, badgeLabel, {
         fontSize: '12px', color: badgeColor,
       }).setDepth(this.contentDepth);

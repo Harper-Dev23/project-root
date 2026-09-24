@@ -19,6 +19,8 @@
 //   LEGACY_HEAD_START,       Standing.endSeason / newSeason: next season's
 //   HEAD_START_CAP           devotion head start from legacy
 //   HUNT_POINTS_PER_REP      Standing.repFromHuntPoints <- GAME_WORLD.awardHuntPoints
+//   INTERCESSION_COST_PER_LEVEL, RITE_DAYS_BASE, RITE_DAYS_PER_LEVEL,
+//   RITE_TICKETS_PER_LEVEL   Revival.js: what each way back costs (10c)
 
 /** The four major prophets' houses. Only these can be followed (STANDING). */
 export const HOUSES = ['jeremiah', 'ezekiel', 'isaiah', 'daniel'];
@@ -56,3 +58,12 @@ export const HEAD_START_CAP = 75;
 
 /** Your own tribe gains 1 reputation per this many Hunt Points you earn. */
 export const HUNT_POINTS_PER_REP = 5;
+
+// ── The ways back (DEATH_AND_REVIVAL; chunk 10c). Readers: Revival.js ────────
+/** Intercession costs this much Bond standing per level of the fallen hunter. */
+export const INTERCESSION_COST_PER_LEVEL = 10;
+/** The lesser rite takes RITE_DAYS_BASE + RITE_DAYS_PER_LEVEL x level days. */
+export const RITE_DAYS_BASE = 2;
+export const RITE_DAYS_PER_LEVEL = 1;
+/** ...and an offering of this many Hunt Tickets per level. */
+export const RITE_TICKETS_PER_LEVEL = 5;

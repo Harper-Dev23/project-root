@@ -67,6 +67,7 @@
 import { EncounterRoller } from './EncounterRoller.js';
 import { TribeHuntSimulator } from './TribeHuntSimulator.js';
 import * as Standing from './Standing.js';
+import { completeRites } from './Revival.js';
 import { getPlayerPartyId } from '../../data/tribeHuntingParties.js';
 import { combineModifiers } from './HuntModifiers.js';
 import { rollWeather } from '../../data/weather.js';
@@ -144,6 +145,8 @@ export const GAME_WORLD = {
     // Math.random: it is save-wide world state, written by the same autosave
     // as the move that caused it, so a reload cannot re-roll it separately.
     TribeHuntSimulator.tick();
+    // The lesser rite (chunk 10c): a hunter whose days have passed comes back.
+    r.revived = completeRites(pm.getDaysElapsed()).map(c => c.name);
     return r;
   },
   awardHuntPoints(amount) {

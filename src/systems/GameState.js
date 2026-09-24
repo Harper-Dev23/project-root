@@ -661,6 +661,23 @@ const GameState = {
 
 
   /**
+   * A Slain hunter comes back (Revival.js: intercession or the lesser rite,
+   * chunk 10c): off the Slain roster, alive at full HP and MP, into camp (not
+   * the party). The record of where they fell goes with them.
+   */
+  reviveFromSlain(charObj) {
+    if (!this.slain.includes(charObj)) return false;
+    this.slain = this.slain.filter(c => c !== charObj);
+    delete charObj.fell;
+    delete charObj.rite;
+    charObj.status = 'alive';
+    charObj.currentHP = charObj.maxHP;
+    charObj.currentMP = charObj.maxMP ?? charObj.currentMP;
+    if (!this.characters.includes(charObj)) this.characters.push(charObj);
+    return true;
+  },
+
+  /**
    * Called once, by HuntManager, with { serialize(), restore(data) }. Restores
    * whatever hunt is already loaded, so attach order never matters.
    */

@@ -57,6 +57,12 @@ Its golden is `tools/snapshots/boons-golden.json`. The host's
 `_updateHealthBars` stub runs Final Mercy's check (the summon check it also
 hosts still does not run headless, a pre-existing gap).
 
+`revival.mjs` covers the ways back for the Slain (`src/systems/Revival.js`,
+chunk 10c): what each way costs, which is open, intercession and the lesser
+rite on the real GameState, the rite ending through `GAME_WORLD.dayBreaks`,
+and a real save and load. Its golden is `tools/snapshots/revival-golden.json`.
+The shrine screen itself is proved in the browser (`tools/browser/shrine.mjs`).
+
 `pack.mjs` covers item stacking, Rations and the hunt pack: merge and split,
 and what a clean exit or a wipe under each death rule does to the pack.
 

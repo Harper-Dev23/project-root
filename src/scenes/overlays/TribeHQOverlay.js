@@ -7,6 +7,7 @@ import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createPanel } from '../../ui/GamePanel.js';
+import { createButton } from '../../ui/Button.js';
 import { TRIBE_IDS, TRIBE_DISPLAY } from '../../systems/TribeRelations.js';
 import { getPartiesForTribe } from '../../../data/tribeHuntingParties.js';
 import ProgressionManager from '../../systems/ProgressionManager.js';
@@ -104,6 +105,14 @@ export default class TribeHQOverlay extends Phaser.Scene {
       this.add.text(l, b.y + 118, 'Hunting Parties', {
         fontSize: '15px', color: MENU_THEME.accentHover, fontStyle: 'bold',
       }).setDepth(d),
+
+      // The lodge shrine (chunk 10c): the houses, and the ways back for the
+      // Slain. It takes this screen's place while open and brings it back.
+      createButton(this, b.right - 110, b.y + 104, 'Shrine', () => {
+        this.scene.stop();
+        this.scene.launch('LodgeShrineOverlay');
+        this.scene.bringToTop('LodgeShrineOverlay');
+      }, 'primary', { fontSize: '16px' }).setDepth(d),
     );
   }
 
