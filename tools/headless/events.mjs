@@ -382,7 +382,9 @@ console.log('=== every branch of every real template resolves ===');
       : [{ accept: true }, { accept: false }];
     for (const pick of picks) {
       try {
-        const { h, tile } = withSite(id, { zoneId, night: t.appears?.night ?? false });
+        // A template for inside a pact (11c) is met with one already begun.
+        const inPact = t.appears?.pact === true ? (d) => { d.boon.pact = { god: ZONES[zoneId].falseGod, level: 3 }; } : null;
+        const { h, tile } = withSite(id, { zoneId, night: t.appears?.night ?? false, extra: inPact });
         const opened = h.move(tile);
         if (!opened.event) { problems.push(`${id}: did not open (${opened.quiet || opened.reason})`); continue; }
         const r = h.resolveEvent(pick);

@@ -117,6 +117,7 @@ import { objectiveProgress, exitReward, completionRewardPercent } from './HuntOb
 import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { houseOf } from './Standing.js';
 import * as Boons from './Boons.js';
+import { FALSE_GODS, PACT_START, PACT_MAX, PACT_PRICE } from '../../data/falseGods.js';
 import {
   huntMods, moveCost, clockAt, sightRange, visibleTiles, occupantBand,
   occupantView, SCOUT_TIME, BANDS,
@@ -305,6 +306,7 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   const { rngState, worldRngState, ...rest } = data;
   if (rest.event === undefined) rest.event = null;
   if (rest.boon === undefined) rest.boon = { house: houseOf(getZone(rest.zoneId)?.divineAlignment), followed: false, favor: 0, level: 0 };
+  if (rest.boon.pact != null && !(FALSE_GODS[rest.boon.pact.god] && Number.isInteger(rest.boon.pact.level))) throw new Error('map hunt pact is not readable');
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
   if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
   return hunt;
@@ -344,7 +346,7 @@ function makeMapHunt(s, rng, worldRng, world) {
     stats() {
       return partyStats(world.party(), momentMods(s.mods, {
         stage: this.hunger(), foodBuff: s.foodBuff, time: s.time,
-        boon: Boons.boonEffects(s.boon?.house, s.boon?.level || 0).explore,
+        boon: this._boonNow().explore,
       }));
     },
 
@@ -1172,8 +1174,9 @@ function makeMapHunt(s, rng, worldRng, world) {
           ground: GROUNDS[s.map.tiles[tile]?.ground]?.name || s.map.tiles[tile]?.ground || null,
           rival: rivalId ? (world.tribeName?.(rivalId) || cap(rivalId)) : null,
           beast,
+          falsegod: FALSE_GODS[zone?.falseGod]?.name || null,
         },
-        houseId, rivalId,
+        houseId, rivalId, godId: FALSE_GODS[zone?.falseGod] ? zone.falseGod : null,
       };
     },
 
@@ -1187,16 +1190,16 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (!site) return null;
       const tpl = EVENT_TEMPLATES[site.templateId];
       if (!tpl) return null;
-      const { roles, houseId, rivalId } = this._eventRoles(tile);
+      const { roles, houseId, rivalId, godId } = this._eventRoles(tile);
       const quiet = dynamicBlock(tpl, {
-        isNight: this.clock().isNight, hunger: this.hunger(), roles,
+        isNight: this.clock().isNight, hunger: this.hunger(), roles, pact: !!s.boon?.pact,
         hasQuestFlag: (f) => !!world.hasQuestFlag?.(f),
       });
       if (quiet) {
         this._log({ kind: 'event_quiet', event: site.templateId, tile, time: s.time });
         return { quiet };
       }
-      s.event = { templateId: site.templateId, site: { occId: site.occId || null, tile, feature: site.feature || null }, roles, houseId, rivalId };
+      s.event = { templateId: site.templateId, site: { occId: site.occId || null, tile, feature: site.feature || null }, roles, houseId, rivalId, godId };
       this._log({ kind: 'event_open', event: site.templateId, tile, time: s.time });
       return this.event();
     },
@@ -1235,6 +1238,12 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (tpl.shape === 'offer') {
         const need = this._supplyCost(tpl.price, r);
         out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need };
+        if ((tpl.reward || []).some(e => e.falseGod?.pact)) {
+          const god = FALSE_GODS[getZone(s.zoneId)?.falseGod];
+          const next = s.boon?.pact ? Math.min(PACT_MAX, s.boon.pact.level + 1) : PACT_START;
+          out.offer.pact = { god: god?.name, level: next, bondCost: PACT_PRICE.bondPerLevel * next, house: r.house,
+            gift: god?.levels[next]?.text || null, curse: god?.curse.text, endsProphet: !s.boon?.pact };
+        }
       }
       if (tpl.shape === 'trade') {
         const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
@@ -1247,7 +1256,8 @@ function makeMapHunt(s, rng, worldRng, world) {
     _eventApi(ev) {
       const hunt = this;
       return {
-        s, world, rng, roles: ev.roles, houseId: ev.houseId, rivalId: ev.rivalId, SATED_TIME,
+        s, world, rng, roles: ev.roles, houseId: ev.houseId, rivalId: ev.rivalId, godId: ev.godId || null, SATED_TIME,
+        pactStep: () => hunt._pactStep(),
         party: () => world.party(),
         noteSupplies: () => hunt._noteSupplies(),
         earnFavor: (n, src) => hunt._earnFavor(n, src),
@@ -1408,6 +1418,7 @@ function makeMapHunt(s, rng, worldRng, world) {
     _earnFavor(raw, source) {
       const b = s.boon;
       if (!b?.house || !(raw > 0)) return 0;
+      if (b.pact) return 0;   // a pact ends the prophet's track for this hunt (11c)
       const booked = Boons.gain(raw, b.followed);
       b.favor += booked;
       world.favor?.(b.house, booked);
@@ -1422,17 +1433,58 @@ function makeMapHunt(s, rng, worldRng, world) {
     /** The boon as the HUD shows it. */
     boon() {
       const b = s.boon || { house: null, followed: false, favor: 0, level: 0 };
+      const pact = b.pact ? {
+        god: b.pact.god, name: FALSE_GODS[b.pact.god].name, title: FALSE_GODS[b.pact.god].title, level: b.pact.level,
+        names: Boons.pactEffects(b.pact.god, b.pact.level).names, curse: FALSE_GODS[b.pact.god].curse,
+      } : null;
       return {
         house: b.house, followed: b.followed, favor: b.favor, level: b.level,
         written: Boons.hasBoons(b.house), title: Boons.houseTitle(b.house),
         toNext: Boons.toNext(b.favor, b.followed),
         names: Boons.boonEffects(b.house, b.level).names,
+        pact,
       };
+    },
+
+    /** The boon in force now: a false god's pact if one is on (11c), otherwise the prophet's. */
+    _boonNow() {
+      const b = s.boon;
+      if (b?.pact) return Boons.pactEffects(b.pact.god, b.pact.level);
+      return Boons.boonEffects(b?.house, b?.level || 0);
+    },
+
+    /**
+     * A false god's pact takes a step (chunk 11c; the `falseGod` verb with
+     * { pact: true }): the first starts it at PACT_START and ends the prophet's
+     * track; each later one raises it by one, to PACT_MAX. Each step pays its
+     * price through the world: hidden standing with the god, and Bond standing
+     * with the region's house, both scaled by the level reached. The curse is
+     * part of pactEffects. Returns the line for the player.
+     */
+    _pactStep() {
+      const god = getZone(s.zoneId)?.falseGod;
+      const def = FALSE_GODS[god];
+      if (!def) return null;
+      const b = s.boon;
+      if (b.pact && b.pact.god !== god) return null;
+      if (b.pact && b.pact.level >= PACT_MAX) return `${def.name} has nothing more to give.`;
+      b.pact = b.pact ? { god, level: b.pact.level + 1 } : { god, level: PACT_START };
+      const level = b.pact.level;
+      world.falseGod?.(god, PACT_PRICE.hiddenPerLevel * level);
+      if (b.house) world.bond?.(b.house, -PACT_PRICE.bondPerLevel * level);
+      this._log({ kind: 'pact', god, level, time: s.time });
+      const L = def.levels[level];
+      return `A pact with ${def.name}, level ${level}: ${L?.name || ''}. ${def.curse.name} grows.`;
     },
 
     /** What CombatScene applies for the boon (fightSpec.boon), or null at level 0. */
     _boonForFight() {
       const b = s.boon;
+      if (b?.pact) {
+        const fx = Boons.pactEffects(b.pact.god, b.pact.level);
+        return { house: null, god: b.pact.god, name: FALSE_GODS[b.pact.god].name, level: b.pact.level,
+          party: fx.party, enemies: fx.enemies, capstone: fx.capstone };
+      }
       if (!b?.house || !(b.level > 0) || !Boons.hasBoons(b.house)) return null;
       const fx = Boons.boonEffects(b.house, b.level);
       return { house: b.house, level: b.level, party: fx.party, enemies: fx.enemies, capstone: fx.capstone };

@@ -161,6 +161,24 @@ export function addRivalDevotion(st, tribe, house, amount) {
   return true;
 }
 
+/**
+ * Hidden false-god standing (chunk 11c): kept on the Bond, never shown
+ * (canon: false gods "persist, hidden"). Optional in a save: missing is none.
+ */
+export function addFalseGod(st, god, amount) {
+  if (!god || !Number.isFinite(amount)) return false;
+  st.falseGods = st.falseGods || {};
+  st.falseGods[god] = (st.falseGods[god] || 0) + amount;
+  return true;
+}
+
+/** Bond standing alone moves (a pact's price, chunk 11c); devotion is not touched. May go below 0. */
+export function adjustBond(st, house, amount) {
+  if (!HOUSES.includes(house) || !Number.isFinite(amount)) return false;
+  st.bond[house] = (st.bond[house] || 0) + amount;
+  return true;
+}
+
 /** Spend Bond standing (intercession, 10c). Refused, and nothing spent, if the Bond cannot pay. */
 export function spendBond(st, house, cost) {
   if (!HOUSES.includes(house) || !(cost >= 0)) return { ok: false, reason: 'bad spend' };

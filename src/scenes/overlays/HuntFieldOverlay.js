@@ -432,7 +432,18 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
     // The prophet boon (chunk 10b): level and favor; hover for what it gives.
     const b = v.boon;
-    if (b?.house && b.written) {
+    if (b?.pact) {
+      // A false god's pact replaces the prophet's boon for this hunt (11c).
+      const pt = txt(x + 12, y + 41, `✦ ${b.pact.name}'s pact ${b.pact.level} · ${b.pact.curse.name}`, 11, '#c89ae8');
+      pt.setInteractive({ useHandCursor: true });
+      let tip = null;
+      pt.on('pointerover', () => {
+        const lines = [`${b.pact.name}, ${b.pact.title}: a pact, level ${b.pact.level}`,
+          ...b.pact.names.map(n => `· ${n}`), `Curse: ${b.pact.curse.text}`, 'The prophet has turned away for this hunt.'];
+        tip = this._box(x + 2, y + HUD_HEIGHT + 4, 420, lines, 20);
+      });
+      pt.on('pointerout', () => { tip?.destroy(true); tip = null; });
+    } else if (b?.house && b.written) {
       const next = b.toNext === null ? (b.level >= 5 ? 'max' : 'max here') : `${fmt(b.favor)} favor, ${fmt(b.toNext)} to next`;
       const bt = txt(x + 12, y + 41, `✦ ${houseName(b.house)} ${b.level ? `boon ${b.level}` : 'watches'} · ${next}`, 11, '#e8c66a');
       bt.setInteractive({ useHandCursor: true });
@@ -827,6 +838,11 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
     if (ev.shape === 'offer') {
       if (ev.offer.supplyCost > 0) lines.push(`It costs ${fmt(ev.offer.supplyCost)} supplies${ev.offer.canAccept ? '' : ' (you have too few)'}.`);
+      const pc = ev.offer.pact;
+      if (pc) {
+        lines.push(`A pact with ${pc.god}, level ${pc.level}: ${pc.gift || ''}`);
+        lines.push(`The price: ${pc.bondCost} standing with ${pc.house || 'the house'}, and a curse for the rest of the hunt (${pc.curse})${pc.endsProphet ? ' The prophet will turn away.' : ''}`);
+      }
       buttons = [[ev.offer.label, ev.offer.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), ev.offer.canAccept ? 'primary' : 'danger'],
         ['Refuse', act({ accept: false }), 'primary']];
     }

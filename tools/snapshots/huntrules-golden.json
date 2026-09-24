@@ -181,7 +181,7 @@
    "0:0,8",
    12.8337,
    49.9135,
-   0,
+   "o1:sensed",
    28
   ],
   [
@@ -272,7 +272,7 @@
    "0:3,5",
    0,
    85.9622,
-   "o1:nothing",
+   0,
    28
   ],
   [
@@ -1144,7 +1144,7 @@
    "1:2,3",
    0,
    78.5676,
-   0,
+   "o7:nothing",
    54
   ],
   [
@@ -1158,7 +1158,7 @@
    "1:3,3",
    0,
    84.1135,
-   "o3:nothing",
+   0,
    56
   ],
   [
@@ -1186,7 +1186,7 @@
    "1:3,6",
    0,
    89.6595,
-   "o7:identified",
+   "o2:sensed",
    68
   ],
   [
@@ -1249,7 +1249,7 @@
    "1:5,8",
    0,
    101.6757,
-   0,
+   "o3:nothing",
    77
   ],
   [
@@ -1284,7 +1284,7 @@
    "1:7,4",
    0,
    108.1459,
-   0,
+   "o8:sensed",
    85
   ],
   [
@@ -1298,7 +1298,7 @@
    "1:9,4",
    0,
    113.6919,
-   "o8:sensed",
+   0,
    85
   ],
   [
@@ -1317,12 +1317,12 @@
   ]
  ],
  "walkHashes": {
-  "reeds_of_gethsemane/small": "95200cd5a9e6cfcd",
-  "reeds_of_gethsemane/medium": "d84d768e34f727bb",
-  "reeds_of_gethsemane/large": "3e425768dbd26bd9",
-  "bay_of_solace/small": "f5c4fc9a5d5c0f0c",
-  "bay_of_solace/medium": "dd68c3ef05c2d4d9",
-  "bay_of_solace/large": "59d5586c13f58182"
+  "reeds_of_gethsemane/small": "36c9c154ce88a6f3",
+  "reeds_of_gethsemane/medium": "63cbb8d69fbef0fe",
+  "reeds_of_gethsemane/large": "65261dbb71160b43",
+  "bay_of_solace/small": "dd85292be2a7f954",
+  "bay_of_solace/medium": "27db4802f03ed6c7",
+  "bay_of_solace/large": "5eef356478d926a7"
  },
  "walkStats": {
   "reeds_of_gethsemane/small": {
@@ -1331,11 +1331,11 @@
    "daysAtEnd": 12.24,
    "mapRevealed": 0.9859,
    "timePerMove": 2.3398,
-   "supplyPerMove": 2.1234,
+   "supplyPerMove": 2.1141,
    "contactsBy": {
-    "identified": 7,
-    "sensed": 25,
-    "nothing": 32
+    "identified": 8,
+    "sensed": 24,
+    "nothing": 31
    }
   },
   "reeds_of_gethsemane/medium": {
@@ -1344,35 +1344,35 @@
    "daysAtEnd": 11.52,
    "mapRevealed": 0.9082,
    "timePerMove": 2.2017,
-   "supplyPerMove": 1.9887,
+   "supplyPerMove": 2.008,
    "contactsBy": {
-    "identified": 15,
-    "sensed": 18,
-    "nothing": 49
+    "identified": 11,
+    "sensed": 16,
+    "nothing": 47
    }
   },
   "reeds_of_gethsemane/large": {
    "hunts": 25,
    "movesEach": 60,
    "daysAtEnd": 11.84,
-   "mapRevealed": 0.7978,
+   "mapRevealed": 0.7991,
    "timePerMove": 2.2769,
-   "supplyPerMove": 2.0374,
+   "supplyPerMove": 2.0471,
    "contactsBy": {
-    "identified": 18,
-    "sensed": 33,
+    "identified": 17,
+    "sensed": 34,
     "nothing": 51
    }
   },
   "bay_of_solace/small": {
    "hunts": 25,
    "movesEach": 60,
-   "daysAtEnd": 6.84,
+   "daysAtEnd": 6.8,
    "mapRevealed": 0.9881,
-   "timePerMove": 1.2861,
+   "timePerMove": 1.2791,
    "supplyPerMove": 1.3123,
    "contactsBy": {
-    "identified": 40,
+    "identified": 43,
     "sensed": 18,
     "nothing": 6
    }
@@ -1380,14 +1380,14 @@
   "bay_of_solace/medium": {
    "hunts": 25,
    "movesEach": 60,
-   "daysAtEnd": 7,
+   "daysAtEnd": 7.08,
    "mapRevealed": 0.922,
-   "timePerMove": 1.2953,
+   "timePerMove": 1.3076,
    "supplyPerMove": 1.3086,
    "contactsBy": {
-    "identified": 48,
+    "identified": 49,
     "sensed": 31,
-    "nothing": 10
+    "nothing": 11
    }
   },
   "bay_of_solace/large": {
@@ -1395,19 +1395,19 @@
    "movesEach": 60,
    "daysAtEnd": 6.76,
    "mapRevealed": 0.7055,
-   "timePerMove": 1.2641,
+   "timePerMove": 1.2629,
    "supplyPerMove": 1.2455,
    "contactsBy": {
-    "identified": 41,
-    "sensed": 31,
+    "identified": 48,
+    "sensed": 27,
     "nothing": 14
    }
   }
  },
  "firstSightBands": {
-  "identified": 566,
-  "sensed": 243,
-  "nothing": 268
+  "identified": 858,
+  "sensed": 275,
+  "nothing": 298
  },
  "testPartyStats": {
   "perception": 60,
@@ -2290,76 +2290,34 @@
   ]
  ],
  "mixedHashes": {
-  "reeds_of_gethsemane/small": "69a9bb2b480e8084",
-  "reeds_of_gethsemane/medium": "c3b91dabd17b3897",
-  "reeds_of_gethsemane/large": "ce6d5f028a019641",
-  "bay_of_solace/small": "4b50e072d99905ee",
-  "bay_of_solace/medium": "1b7b5292b71e2dd7",
-  "bay_of_solace/large": "5579ecabf537d496"
+  "reeds_of_gethsemane/small": "04b86b0443b15055",
+  "reeds_of_gethsemane/medium": "9f7cc5df80812839",
+  "reeds_of_gethsemane/large": "4b678c2426ebebe6",
+  "bay_of_solace/small": "62509a4afd2c83d4",
+  "bay_of_solace/medium": "5e083a1104bf43ca",
+  "bay_of_solace/large": "7ee1d5f2267beb86"
  },
  "mixedTallies": {
   "reeds_of_gethsemane/small": {
-   "move": 648,
-   "forage": 166,
-   "fish": 9,
-   "eat": 98,
-   "camp": 67,
-   "refused": 212,
+   "move": 669,
+   "forage": 162,
+   "fish": 10,
+   "eat": 85,
+   "camp": 58,
+   "refused": 216,
    "dishes": {
     "plain": 0,
     "hearty": 9,
     "fine": 0
    },
-   "gathered": 175
+   "gathered": 172
   },
   "reeds_of_gethsemane/medium": {
-   "move": 684,
-   "forage": 158,
-   "fish": 8,
-   "eat": 84,
-   "camp": 58,
-   "refused": 208,
-   "dishes": {
-    "plain": 0,
-    "hearty": 11,
-    "fine": 0
-   },
-   "gathered": 166
-  },
-  "reeds_of_gethsemane/large": {
-   "move": 665,
-   "forage": 162,
-   "fish": 9,
-   "eat": 81,
-   "camp": 50,
-   "refused": 233,
-   "dishes": {
-    "plain": 0,
-    "hearty": 6,
-    "fine": 0
-   },
-   "gathered": 171
-  },
-  "bay_of_solace/small": {
-   "move": 674,
-   "forage": 139,
-   "fish": 25,
-   "eat": 63,
-   "camp": 61,
-   "refused": 238,
-   "dishes": {
-    "plain": 0,
-    "hearty": 28,
-    "fine": 0
-   },
-   "gathered": 164
-  },
-  "bay_of_solace/medium": {
-   "move": 666,
-   "forage": 163,
-   "fish": 9,
-   "eat": 79,
-   "camp": 63,
+   "move": 668,
+   "forage": 165,
+   "fish": 7,
+   "eat": 87,
+   "camp": 53,
    "refused": 220,
    "dishes": {
     "plain": 0,
@@ -2368,19 +2326,61 @@
    },
    "gathered": 172
   },
-  "bay_of_solace/large": {
-   "move": 662,
-   "forage": 160,
-   "fish": 14,
-   "eat": 78,
-   "camp": 67,
-   "refused": 219,
+  "reeds_of_gethsemane/large": {
+   "move": 677,
+   "forage": 163,
+   "fish": 7,
+   "eat": 83,
+   "camp": 53,
+   "refused": 217,
    "dishes": {
     "plain": 0,
-    "hearty": 12,
+    "hearty": 6,
     "fine": 0
    },
-   "gathered": 174
+   "gathered": 170
+  },
+  "bay_of_solace/small": {
+   "move": 678,
+   "forage": 131,
+   "fish": 23,
+   "eat": 68,
+   "camp": 58,
+   "refused": 242,
+   "dishes": {
+    "plain": 0,
+    "hearty": 33,
+    "fine": 0
+   },
+   "gathered": 154
+  },
+  "bay_of_solace/medium": {
+   "move": 660,
+   "forage": 168,
+   "fish": 9,
+   "eat": 82,
+   "camp": 61,
+   "refused": 220,
+   "dishes": {
+    "plain": 0,
+    "hearty": 8,
+    "fine": 0
+   },
+   "gathered": 177
+  },
+  "bay_of_solace/large": {
+   "move": 652,
+   "forage": 177,
+   "fish": 13,
+   "eat": 74,
+   "camp": 70,
+   "refused": 214,
+   "dishes": {
+    "plain": 0,
+    "hearty": 13,
+    "fine": 0
+   },
+   "gathered": 190
   }
  },
  "world7c": {
@@ -2404,7 +2404,7 @@
    "0:2,9",
    6,
    0,
-   "o1@0:1,8:r o2@0:4,3:r o4@0:2,7:r o5@0:2,4:r*"
+   "o1@0:1,8:r o2@0:4,4:r o4@0:2,7:r o5@0:2,4:r*"
   ],
   [
    "move",
@@ -2412,7 +2412,7 @@
    "0:3,9",
    8.773,
    0,
-   "o1@0:1,7:r o2@0:3,3:r o4@0:2,6:r o5@0:2,4:r*"
+   "o1@0:1,7:r o2@0:3,4:r o4@0:2,6:r o5@0:2,4:r*"
   ],
   [
    "forage",
@@ -2420,7 +2420,7 @@
    "0:3,9",
    9.773,
    0,
-   "o1@0:1,7:r o2@0:3,3:r o4@0:2,6:r o5@0:2,4:r*"
+   "o1@0:1,7:r o2@0:3,4:r o4@0:2,6:r o5@0:2,4:r*"
   ],
   [
    "camp",
@@ -2428,7 +2428,7 @@
    "0:3,9",
    15.773,
    0,
-   "o1@0:0,7:r o2@0:3,4:r o4@0:3,5:r o5@0:2,4:r*"
+   "o1@0:0,7:r o2@0:3,3:r o4@0:3,5:r o5@0:2,4:r*"
   ],
   [
    "move",
@@ -2436,7 +2436,7 @@
    "0:3,8",
    18.5459,
    0,
-   "o1@0:1,7:r o2@0:3,3:r o4@0:4,5:r o5@0:2,4:r*"
+   "o1@0:1,7:r o2@0:3,4:r o4@0:4,5:r o5@0:2,4:r*"
   ],
   [
    "forage",
@@ -2444,7 +2444,7 @@
    "0:3,8",
    19.5459,
    0,
-   "o1@0:1,7:r o2@0:3,3:r o4@0:4,5:r o5@0:2,4:r*"
+   "o1@0:1,7:r o2@0:3,4:r o4@0:4,5:r o5@0:2,4:r*"
   ],
   [
    "move",
@@ -2452,7 +2452,7 @@
    "0:4,7",
    22.3189,
    0,
-   "o1@0:2,7:r o2@0:3,4:r o4@0:4,4:r o5@0:2,4:r*"
+   "o1@0:2,7:r o2@0:3,3:r o4@0:3,6:r o5@0:2,4:r*"
   ],
   [
    "move",
@@ -2460,7 +2460,7 @@
    "0:5,6",
    24.1676,
    0,
-   "o1@0:3,7:r o2@0:3,5:r o4@0:3,4:r o5@0:2,4:r*"
+   "o1@0:3,7:r o2@0:4,2:r o4@0:2,6:r o5@0:2,4:r*"
   ],
   [
    "camp",
@@ -2468,7 +2468,7 @@
    "0:5,6",
    30.1676,
    0,
-   "o1@0:4,6:r o2@0:2,6:r o4@0:4,4:r o5@0:2,4:r*"
+   "o1@0:3,8:r o2@0:3,3:r o4@0:3,6:r o5@0:2,4:r*"
   ],
   [
    "camp",
@@ -2476,458 +2476,458 @@
    "0:5,6",
    36.1676,
    0,
-   "o1@0:6,5:r o2@0:2,6:r o4@0:5,3:r o5@0:2,4:r*"
+   "o1@0:4,9:r o2@0:2,5:r o4@0:4,5:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:5,6",
-   40.7892,
-   "o1:party:party",
-   "o1@0:6,5:h o2@0:2,7:r o4@0:4,3:r o5@0:2,4:r*"
-  ],
-  [
-   "camp",
-   1,
-   "0:5,6",
-   42.7892,
-   "o1:camp:enemy",
-   "o2@0:2,7:r o4@0:4,3:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:5,5",
-   44.6378,
+   "0:6,5",
+   38.0162,
    0,
-   "o2@0:3,6:r o4@0:3,4:r o5@0:2,4:r*"
+   "o1@0:4,9:r o2@0:2,5:r o4@0:4,5:r o5@0:2,4:r*"
   ],
   [
    "cleanse",
    1,
-   "0:5,5",
-   46.6378,
+   "0:6,5",
+   40.0162,
    0,
-   "o2@0:3,6:r o4@0:3,4:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:6,4",
-   48.4865,
-   0,
-   "o2@0:3,7:r o4@0:4,4:r o5@0:2,4:r*"
+   "o1@0:4,10:r o2@0:2,6:r o4@0:5,4:r o5@0:2,4:r*"
   ],
   [
    "camp",
    1,
-   "0:6,4",
-   54.4865,
+   "0:6,5",
+   46.0162,
    0,
-   "o2@0:3,6:r o4@0:3,4:r o5@0:2,4:r*"
+   "o1@0:4,9:r o2@0:3,5:r o4@0:6,4:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:5,4",
-   56.3351,
+   "0:6,5",
+   48.7892,
+   "o4:party:enemy",
+   "o1@0:3,9:r o2@0:2,5:r o4@0:6,4:h o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:7,4",
+   50.6378,
    0,
-   "o2@0:4,6:r o4@0:3,3:r o5@0:2,4:r*"
+   "o1@0:3,9:r o2@0:2,5:r o4@0:6,4:h o5@0:2,4:r*"
+  ],
+  [
+   "camp",
+   1,
+   "0:7,4",
+   50.7892,
+   "o4:camp:enemy",
+   "o1@0:3,9:r o2@0:2,5:r o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:7,3",
+   52.6378,
+   0,
+   "o1@0:4,9:r o2@0:3,4:r o5@0:2,4:r*"
   ],
   [
    "cleanse",
    1,
-   "0:5,4",
-   58.3351,
+   "0:7,3",
+   54.6378,
    0,
-   "o2@0:4,6:r o4@0:3,3:r o5@0:2,4:r*"
-  ],
-  [
-   "camp",
-   1,
-   "0:5,4",
-   64.3351,
-   0,
-   "o2@0:4,6:r o4@0:4,3:r o5@0:2,4:r*"
+   "o1@0:4,9:r o2@0:3,4:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:4,5",
-   66.1838,
+   "0:7,2",
+   56.4865,
    0,
-   "o2@0:4,6:r o4@0:4,3:r o5@0:2,4:r*"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:4,5",
-   68.1838,
-   0,
-   "o2@0:4,7:r o4@0:4,4:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:4,6",
-   70.0324,
-   0,
-   "o2@0:4,7:r o4@0:4,4:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:3,6",
-   71.8811,
-   0,
-   "o2@0:4,7:r o4@0:4,4:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:3,7",
-   73.7297,
-   0,
-   "o2@0:4,6:r o4@0:5,3:r o5@0:2,4:r*"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,7",
-   79.7297,
-   0,
-   "o2@0:4,7:r o4@0:6,2:r o5@0:2,4:r*"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:3,7",
-   81.7297,
-   0,
-   "o2@0:5,6:r o4@0:7,2:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:2,7",
-   83.5784,
-   0,
-   "o2@0:5,6:r o4@0:7,2:r o5@0:2,4:r*"
-  ],
-  [
-   "camp",
-   1,
-   "0:2,7",
-   89.5784,
-   0,
-   "o2@0:7,4:r o4@0:7,1:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:2,8",
-   91.427,
-   0,
-   "o2@0:7,4:r o4@0:7,1:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:1,8",
-   93.2757,
-   0,
-   "o2@0:6,5:r o4@0:7,0:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:0,8",
-   95.1243,
-   "o3:party:enemy",
-   "o2@0:6,5:r o4@0:7,0:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:0,7",
-   96.973,
-   0,
-   "o2@0:5,6:r o4@0:8,0:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:1,7",
-   98.8216,
-   0,
-   "o2@0:5,6:r o4@0:8,0:r o5@0:2,4:r*"
+   "o1@0:3,9:r o2@0:3,5:r o5@0:2,4:r*"
   ],
   [
    "forage",
    0,
-   "0:1,7",
-   98.8216,
+   "0:7,2",
+   56.4865,
    0,
-   "o2@0:5,6:r o4@0:8,0:r o5@0:2,4:r*"
+   "o1@0:3,9:r o2@0:3,5:r o5@0:2,4:r*"
   ],
   [
    "cleanse",
    1,
-   "0:1,7",
-   100.8216,
+   "0:7,2",
+   58.4865,
    0,
-   "o2@0:6,6:r o4@0:7,0:r o5@0:2,4:r*"
+   "o1@0:3,9:r o2@0:3,5:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:2,6",
-   102.6703,
+   "0:8,1",
+   60.3351,
    0,
-   "o2@0:6,6:r o4@0:7,0:r o5@0:2,4:r*"
+   "o1@0:4,9:r o2@0:3,6:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:2,5",
-   104.5189,
+   "0:7,1",
+   62.1838,
    0,
-   "o2@0:7,5:r o4@0:6,1:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:3,4",
-   106.3676,
-   0,
-   "o2@0:7,5:r o4@0:6,1:r o5@0:2,4:r*"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:3,4",
-   108.3676,
-   0,
-   "o2@0:7,6:r o4@0:5,1:r o5@0:2,4:r*"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,4",
-   114.3676,
-   0,
-   "o2@0:8,5:r o4@0:6,1:r o5@0:2,4:r*"
-  ],
-  [
-   "move",
-   1,
-   "0:2,4",
-   116.2162,
-   "o5:party:enemy",
-   "o2@0:8,5:r o4@0:6,1:r"
-  ],
-  [
-   "move",
-   1,
-   "0:3,3",
-   118.0649,
-   0,
-   "o2@0:9,4:r o4@0:6,2:r"
-  ],
-  [
-   "move",
-   1,
-   "0:4,2",
-   119.9135,
-   0,
-   "o2@0:9,4:r o4@0:6,2:r"
-  ],
-  [
-   "move",
-   1,
-   "0:4,3",
-   121.7622,
-   0,
-   "o2@0:8,4:r o4@0:7,1:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:4,3",
-   127.7622,
-   0,
-   "o2@0:7,5:r o4@0:8,1:r"
-  ],
-  [
-   "move",
-   1,
-   "0:4,4",
-   129.6108,
-   0,
-   "o2@0:8,5:r o4@0:8,0:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:4,4",
-   135.6108,
-   0,
-   "o2@0:8,4:r o4@0:8,1:r"
-  ],
-  [
-   "move",
-   1,
-   "0:5,3",
-   137.4595,
-   0,
-   "o2@0:9,4:r o4@0:7,1:r"
-  ],
-  [
-   "move",
-   1,
-   "0:6,3",
-   139.3081,
-   0,
-   "o2@0:9,4:r o4@0:7,1:r"
-  ],
-  [
-   "move",
-   1,
-   "0:6,2",
-   141.1568,
-   0,
-   "o2@0:9,3:r o4@0:7,0:r"
-  ],
-  [
-   "move",
-   1,
-   "0:5,2",
-   143.0054,
-   0,
-   "o2@0:9,3:r o4@0:7,0:r"
+   "o1@0:4,9:r o2@0:3,6:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
    "0:6,1",
-   144.8541,
+   64.0324,
    0,
-   "o2@0:8,3:r o4@0:7,1:r"
+   "o1@0:4,10:r o2@0:3,7:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:5,1",
-   146.7027,
+   "0:6,2",
+   65.8811,
    0,
-   "o2@0:8,3:r o4@0:7,1:r"
+   "o1@0:4,10:r o2@0:3,7:r o5@0:2,4:r*"
   ],
   [
    "cleanse",
    1,
-   "0:5,1",
-   148.7027,
+   "0:6,2",
+   67.8811,
    0,
-   "o2@0:7,3:r o4@0:8,0:r"
+   "o1@0:4,10:r o2@0:3,7:r o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:6,3",
+   69.7297,
+   0,
+   "o1@0:4,9:r o2@0:3,8:r o5@0:2,4:r*"
   ],
   [
    "camp",
    1,
-   "0:5,1",
-   154.7027,
+   "0:6,3",
+   75.7297,
    0,
-   "o2@0:7,4:r o4@0:8,1:r"
+   "o1@0:4,10:r o2@0:4,8:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:4,1",
-   156.5514,
+   "0:5,4",
+   77.5784,
    0,
-   "o2@0:7,5:r o4@0:8,0:r"
+   "o1@0:4,9:r o2@0:4,7:r o5@0:2,4:r*"
   ],
   [
    "move",
    1,
-   "0:4,2",
-   158.4,
+   "0:4,5",
+   79.427,
    0,
-   "o2@0:7,5:r o4@0:8,0:r"
+   "o1@0:4,9:r o2@0:4,7:r o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:3,5",
+   81.2757,
+   0,
+   "o1@0:4,8:r o2@0:3,7:r o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:3,4",
+   83.1243,
+   0,
+   "o1@0:4,8:r o2@0:3,7:r o5@0:2,4:r*"
+  ],
+  [
+   "move",
+   1,
+   "0:2,4",
+   84.973,
+   "o5:party:enemy",
+   "o1@0:4,8:r o2@0:3,7:r"
   ],
   [
    "cleanse",
    1,
-   "0:4,2",
-   160.4,
+   "0:2,4",
+   86.973,
    0,
-   "o2@0:6,5:r o4@0:7,1:r"
+   "o1@0:4,7:r o2@0:3,6:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:2,4",
+   88.973,
+   0,
+   "o1@0:3,7:r o2@0:2,7:r"
   ],
   [
    "move",
    1,
-   "0:5,1",
-   162.2486,
+   "0:2,5",
+   90.8216,
    0,
-   "o2@0:6,5:r o4@0:7,1:r"
+   "o1@0:3,7:r o2@0:2,7:r"
   ],
   [
-   "forage",
+   "cleanse",
+   1,
+   "0:2,5",
+   92.8216,
    0,
-   "0:5,1",
-   162.2486,
+   "o1@0:3,6:r o2@0:2,6:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:2,5",
+   98.8216,
    0,
-   "o2@0:6,5:r o4@0:7,1:r"
+   "o1@0:4,5:r o2@0:1,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,6",
+   100.6703,
+   0,
+   "o1@0:4,4:r o2@0:0,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,7",
+   102.5189,
+   0,
+   "o1@0:4,4:r o2@0:0,7:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:1,7",
+   104.5189,
+   0,
+   "o1@0:4,5:r o2@0:0,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,7",
+   106.3676,
+   0,
+   "o1@0:4,5:r o2@0:0,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,8",
+   108.2162,
+   0,
+   "o1@0:3,5:r o2@0:1,7:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:1,8",
+   114.2162,
+   0,
+   "o1@0:4,5:r o2@0:2,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,8",
+   117.9135,
+   "o3:party:enemy",
+   "o1@0:3,6:r o2@0:1,7:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:1,8",
+   119.9135,
+   0,
+   "o1@0:3,6:r o2@0:1,7:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:1,8",
+   125.9135,
+   0,
+   "o1@0:4,7:r o2@0:1,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,8",
+   127.7622,
+   0,
+   "o1@0:4,7:r o2@0:1,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:3,7",
+   129.6108,
+   0,
+   "o1@0:5,6:r o2@0:2,6:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:3,7",
+   131.6108,
+   0,
+   "o1@0:5,6:r o2@0:2,6:r"
+  ],
+  [
+   "move",
+   1,
+   "0:3,6",
+   133.4595,
+   0,
+   "o1@0:6,5:r o2@0:3,5:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:3,6",
+   135.4595,
+   0,
+   "o1@0:6,5:r o2@0:3,5:r"
+  ],
+  [
+   "move",
+   1,
+   "0:4,6",
+   137.3081,
+   0,
+   "o1@0:5,5:r o2@0:4,5:r"
+  ],
+  [
+   "move",
+   1,
+   "0:5,5",
+   139.1568,
+   "o1:party:party",
+   "o2@0:4,5:r"
+  ],
+  [
+   "move",
+   1,
+   "0:6,5",
+   141.0054,
+   0,
+   "o2@0:3,6:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:6,5",
+   143.0054,
+   0,
+   "o2@0:3,6:r"
+  ],
+  [
+   "move",
+   1,
+   "0:6,6",
+   145.7784,
+   0,
+   "o2@0:2,7:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:6,6",
+   147.7784,
+   0,
+   "o2@0:2,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:7,6",
+   150.5514,
+   0,
+   "o2@0:1,7:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:7,6",
+   152.5514,
+   0,
+   "o2@0:0,7:r"
   ]
  ],
  "worldHashes": {
-  "reeds_of_gethsemane/small": "765233fc2be439fa",
-  "reeds_of_gethsemane/medium": "2a9a0335b8469c4f",
-  "reeds_of_gethsemane/large": "683cdd043fd9aff3",
-  "bay_of_solace/small": "12f1533eb974dd73",
-  "bay_of_solace/medium": "5e2a8ff47ee19fec",
-  "bay_of_solace/large": "1a2f706924ca80c7"
+  "reeds_of_gethsemane/small": "fe04b4426084eb83",
+  "reeds_of_gethsemane/medium": "7e824986fef17d1a",
+  "reeds_of_gethsemane/large": "8fa14102bc36d107",
+  "bay_of_solace/small": "ec4a5ea4b2b2d721",
+  "bay_of_solace/medium": "2c1a648858d90bdd",
+  "bay_of_solace/large": "896d6eb062b50286"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {
-   "steps": 2117,
+   "steps": 2154,
    "encounters": 35,
-   "ambush": 15,
+   "ambush": 18,
    "byCause": {
-    "party": 26,
-    "pack": 8,
-    "camp": 1
+    "party": 28,
+    "pack": 5,
+    "camp": 2
    },
-   "flees": 19,
-   "wins": 16,
-   "caughtAgain": 8,
-   "cleansed": 175,
-   "trailsSeen": 484,
+   "flees": 18,
+   "wins": 17,
+   "caughtAgain": 5,
+   "cleansed": 198,
+   "trailsSeen": 489,
    "days": 606,
-   "blightTiles": 38,
+   "blightTiles": 42,
    "corrupted": 0,
    "stillHunting": 0
   },
   "reeds_of_gethsemane/medium": {
-   "steps": 2361,
-   "encounters": 47,
-   "ambush": 28,
+   "steps": 2349,
+   "encounters": 40,
+   "ambush": 25,
    "byCause": {
-    "party": 35,
-    "pack": 6,
-    "camp": 6
+    "party": 33,
+    "pack": 2,
+    "camp": 5
    },
-   "flees": 21,
-   "wins": 26,
-   "caughtAgain": 6,
-   "cleansed": 259,
-   "trailsSeen": 913,
+   "flees": 15,
+   "wins": 25,
+   "caughtAgain": 2,
+   "cleansed": 287,
+   "trailsSeen": 588,
    "days": 606,
-   "blightTiles": 129,
+   "blightTiles": 135,
    "corrupted": 0,
    "stillHunting": 0
   },
   "reeds_of_gethsemane/large": {
-   "steps": 2294,
+   "steps": 2150,
    "encounters": 71,
    "ambush": 43,
    "byCause": {
@@ -2935,84 +2935,84 @@
     "pack": 10,
     "camp": 8
    },
-   "flees": 38,
-   "wins": 33,
+   "flees": 34,
+   "wins": 37,
    "caughtAgain": 10,
-   "cleansed": 263,
-   "trailsSeen": 868,
+   "cleansed": 178,
+   "trailsSeen": 1313,
    "days": 606,
-   "blightTiles": 158,
-   "corrupted": 0,
+   "blightTiles": 157,
+   "corrupted": 3,
    "stillHunting": 0
   },
   "bay_of_solace/small": {
-   "steps": 2518,
+   "steps": 2539,
    "encounters": 30,
    "ambush": 15,
    "byCause": {
     "party": 22,
-    "pack": 4,
-    "camp": 4
+    "pack": 5,
+    "camp": 3
    },
-   "flees": 13,
-   "wins": 17,
-   "caughtAgain": 4,
-   "cleansed": 180,
-   "trailsSeen": 1030,
+   "flees": 12,
+   "wins": 18,
+   "caughtAgain": 5,
+   "cleansed": 224,
+   "trailsSeen": 781,
    "days": 606,
-   "blightTiles": 49,
+   "blightTiles": 59,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/medium": {
-   "steps": 2603,
+   "steps": 2552,
    "encounters": 60,
-   "ambush": 24,
+   "ambush": 20,
    "byCause": {
-    "party": 35,
-    "pack": 7,
-    "camp": 18
+    "party": 39,
+    "pack": 8,
+    "camp": 13
    },
-   "flees": 38,
-   "wins": 22,
-   "caughtAgain": 7,
-   "cleansed": 260,
-   "trailsSeen": 908,
+   "flees": 33,
+   "wins": 27,
+   "caughtAgain": 8,
+   "cleansed": 233,
+   "trailsSeen": 805,
    "days": 606,
-   "blightTiles": 104,
+   "blightTiles": 96,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/large": {
-   "steps": 2483,
-   "encounters": 50,
-   "ambush": 23,
+   "steps": 2418,
+   "encounters": 45,
+   "ambush": 19,
    "byCause": {
-    "party": 35,
+    "party": 30,
     "pack": 7,
     "camp": 8
    },
-   "flees": 22,
-   "wins": 28,
+   "flees": 19,
+   "wins": 26,
    "caughtAgain": 7,
-   "cleansed": 152,
-   "trailsSeen": 1823,
+   "cleansed": 89,
+   "trailsSeen": 910,
    "days": 606,
-   "blightTiles": 164,
-   "corrupted": 6,
+   "blightTiles": 135,
+   "corrupted": 5,
    "stillHunting": 0
   }
  },
  "pursuit": {
   "normal": {
-   "caught": 76,
-   "cornered": 14,
-   "lost": 26
+   "caught": 74,
+   "cornered": 15,
+   "lost": 27
   },
   "fast": {
-   "caught": 28,
-   "cornered": 11,
-   "lost": 76
+   "caught": 33,
+   "lost": 74,
+   "cornered": 9
   }
  },
  "blightExample": {
@@ -3141,13 +3141,13 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 130,
-   "avgDay": 2.3333
+   "avgDay": 2.5
   },
   "scout reeds_of_gethsemane/medium": {
    "runs": 6,
    "done": 6,
    "huntPoints": 227,
-   "avgDay": 4
+   "avgDay": 4.1667
   },
   "apex reeds_of_gethsemane/medium": {
    "runs": 6,
@@ -3189,7 +3189,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 4.1667
+   "avgDay": 4.3333
   },
   "retrieve reeds_of_gethsemane/large": {
    "runs": 6,
@@ -3267,7 +3267,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 4.5
+   "avgDay": 4.3333
   },
   "apex bay_of_solace/large": {
    "runs": 6,

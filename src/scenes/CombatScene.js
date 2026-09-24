@@ -3594,17 +3594,27 @@ export default class CombatScene extends Phaser.Scene {
       if (Object.keys(boon.party || {}).length) {
         for (const c of standing) {
           c.statusEffects = c.statusEffects || [];
-          c.statusEffects.push({ id: 'hunt_boon', name: `Boon of ${boon.house}`, turns: 99, mods: { ...boon.party } });
+          c.statusEffects.push({ id: 'hunt_boon', name: boon.god ? `Pact with ${boon.name}` : `Boon of ${boon.house}`, turns: 99, mods: { ...boon.party } });
         }
       }
       if (Object.keys(boon.enemies || {}).length) {
         for (const e of this.enemies || []) {
           if (!e || e.status === 'incapacitated' || (e.currentHP ?? 1) <= 0) continue;
           e.statusEffects = e.statusEffects || [];
-          e.statusEffects.push({ id: 'hunt_boon_judgment', name: `Judged by ${boon.house}`, turns: 99, mods: { ...boon.enemies } });
+          e.statusEffects.push({ id: 'hunt_boon_judgment', name: boon.god ? `Touched by ${boon.name}` : `Judged by ${boon.house}`, turns: 99, mods: { ...boon.enemies } });
         }
       }
-      this._log(`✦ ${boon.house[0].toUpperCase() + boon.house.slice(1)}'s boon, level ${boon.level}, is with the party.`);
+      // Yar'galeth's capstone (11c): each hunter's first attack cannot miss
+      // and crits. A status the crit roll already reads (+1000 CritChance: a
+      // guarantee, since a target's Evasion takes half of itself off crit);
+      // the hit roll skips while it is on, and it is taken off after that
+      // hunter's first attack (_applyAbilityToTarget).
+      if (boon.capstone?.id === 'the_true_word') {
+        for (const c of standing) c.statusEffects.push({ id: 'hunt_true_word', name: 'The Word That Is Always True', turns: 99, mods: { CritChance: 1000 } });
+      }
+      this._log(boon.god
+        ? `✦ A pact with ${boon.name}, level ${boon.level}, is on the party.`
+        : `✦ ${boon.house[0].toUpperCase() + boon.house.slice(1)}'s boon, level ${boon.level}, is with the party.`);
     }
   }
 
@@ -3627,6 +3637,20 @@ export default class CombatScene extends Phaser.Scene {
       c.currentHP = Math.min(c.maxHP || 0, (c.currentHP || 0) + heal);
     }
     this._log(`🐢 Final Mercy: grief washes over the party (+${cap.healPercent}% max HP to every hunter still standing).`);
+  }
+
+  /**
+   * What Waits Below (Dagon's capstone, chunk 11c): a hunter who lands a
+   * killing blow on an enemy heals healPercent of their max HP.
+   */
+  _onHuntKill(killer, victim) {
+    const cap = this.huntFight?.boon?.capstone;
+    if (cap?.id !== 'what_waits_below' || !victim?.isEnemy || !(GameState.party || []).includes(killer)) return;
+    if (killer.status === 'incapacitated' || !(killer.currentHP > 0)) return;
+    const heal = Math.floor((killer.maxHP || 0) * (cap.healPercent || 0) / 100);
+    if (heal <= 0) return;
+    killer.currentHP = Math.min(killer.maxHP, killer.currentHP + heal);
+    this._log(`🐊 What Waits Below: ${killer.name} feeds (+${heal} HP).`);
   }
 
   /** The Loop (Ezekiel's capstone, chunk 10b): a hunter's damaging hit may echo. */
@@ -8042,7 +8066,10 @@ export default class CombatScene extends Phaser.Scene {
     // for THIS cast only (e.g. Boulder Toss vs a Frostbitten target) without
     // mutating the shared ability.autoHit flag, which would apply to every
     // cast regardless of the condition that earned it.
-    const usesHitRoll = !friendlyOutcome && isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true && resultMutable?.autoHit !== true;
+    const trueWord = !friendlyOutcome && isWeaponSource && (attacker?.statusEffects || []).some(se => se?.id === 'hunt_true_word');
+    const usesHitRoll = !friendlyOutcome && isWeaponSource && ability.hitCheck !== 'none' && ability.autoHit !== true && resultMutable?.autoHit !== true && !trueWord;
+    // The True Word is spent on this first attack (11c).
+    if (trueWord) attacker.statusEffects = attacker.statusEffects.filter(se => se?.id !== 'hunt_true_word');
     let missed = false;
     let hitChanceShown = null;
 
@@ -8758,6 +8785,7 @@ export default class CombatScene extends Phaser.Scene {
             }
 
             this._onUnitKnockedOut(target);
+            this._onHuntKill?.(user, target);
             if (this.combatEnded) return; // battle ended; stop here
 
             // onKill: effects that fire when this hit kills the target
@@ -9496,6 +9524,7 @@ export default class CombatScene extends Phaser.Scene {
         if (after === 0 && target.status !== 'incapacitated') {
           target.status = 'incapacitated';
           this._onUnitKnockedOut?.(target);
+          this._onHuntKill?.(user, target);
         }
       }
       this._updateHealthBars?.(); this._updateHPMPBars?.();

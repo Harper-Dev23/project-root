@@ -183,6 +183,13 @@ export const GAME_WORLD = {
   tribeName(tribe) {
     return TRIBE_DISPLAY[tribe] || tribe;
   },
+  // False gods (chunk 11c): hidden standing, and a pact's Bond price.
+  falseGod(god, amount) {
+    Standing.addFalseGod(ProgressionManager.getStanding(), god, amount);
+  },
+  bond(house, amount) {
+    Standing.adjustBond(ProgressionManager.getStanding(), house, amount);
+  },
   rivalDevotion(tribe, house, amount) {
     Standing.addRivalDevotion(ProgressionManager.getStanding(), tribe, house, amount);
   },

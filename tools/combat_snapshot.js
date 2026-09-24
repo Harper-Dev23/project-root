@@ -72,7 +72,10 @@ const { SKILLS } = await import('../data/skills.js');
 const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { ENEMY_TYPES } = await import('../data/enemyTypes.js');
 const { rollLoadout, fightScenario } = await import('../src/systems/HuntBeasts.js');
-const { boonEffects } = await import('../src/systems/Boons.js');
+const { boonEffects, pactEffects } = await import('../src/systems/Boons.js');
+const { FALSE_GODS } = await import('../data/falseGods.js');
+/** A false god's pact as HuntEngine._boonForFight hands it to combat (chunk 11c). */
+const pactAt = (god, level) => { const fx = pactEffects(god, level); return { house: null, god, name: FALSE_GODS[god].name, level, party: fx.party, enemies: fx.enemies, capstone: fx.capstone }; };
 const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
 const StandingSys = await import('../src/systems/Standing.js');
 /** A boon as HuntEngine._boonForFight hands it to combat (chunk 10b). */
@@ -899,6 +902,12 @@ const HUNT_FIGHTS = {
     boon: boonAt('jeremiah', 5) },
   'stalker pack, Ezekiel boon 5': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     boon: boonAt('ezekiel', 5) },
+  // Chunk 11c: the same fights under a level-5 false god's pact, curse and
+  // capstone included (What Waits Below; The Word That Is Always True).
+  'great-led pack, Dagon pact 5': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party',
+    boon: pactAt('dagon', 5) },
+  "stalker pack, Yar'galeth pact 5": { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+    boon: pactAt('yargaleth', 5) },
   // Chunk 10c-2: a Watched wipe in the Reeds while your tribe follows
   // Jeremiah. The prophet's offer is made; the first hunter is spoken for and
   // the hunt goes on (hunt.survive); the rest join the Slain. The party stands
@@ -1002,6 +1011,8 @@ function collectHuntFights() {
         ...(def.boon ? [
           'mercy=' + !!host._finalMercyUsed,
           'echoes=' + host.combatEntries.filter(e => (e?.segments || []).some(sg => String(sg.text).includes('repeats!'))).length,
+          ...(def.boon.god ? ['feeds=' + host.combatEntries.filter(e => (e?.segments || []).some(sg => String(sg.text).includes('What Waits Below'))).length,
+            'wordLeft=' + party.filter(c => (c.statusEffects || []).some(se => se.id === 'hunt_true_word')).length] : []),
         ] : []),
       ].join(' ');
     } catch (e) {

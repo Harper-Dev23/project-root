@@ -20,6 +20,7 @@
 //   ground    the ground the site is on ("marsh")
 //   rival     the rival tribe holding the region's house            nullable
 //   beast     the nearest beast family within 3 steps              nullable
+//   falsegod  the false god that tempts in this region (11c)        nullable
 // A template that uses a nullable role must list it in appears.needs; a site
 // whose needs are not met now stays quiet. The validator enforces it.
 //
@@ -31,14 +32,13 @@
 // An outcome is a list of effects, each an object with exactly one verb key.
 // VERBS below: validate(value) returns an error string or null; apply(value,
 // api) does it and returns a line for the player (or null). `api` is what the
-// hunt engine hands over (see HuntEngine._eventApi). falseGod arrives with the
-// false gods (chunk 11c).
+// hunt engine hands over (see HuntEngine._eventApi).
 
 import { Items } from '../../data/items.js';
 
 export const SHAPES = ['choice', 'check', 'puzzle', 'offer', 'trade'];
-export const ROLES = ['danger', 'region', 'house', 'prophet', 'followed', 'ground', 'rival', 'beast'];
-export const NULLABLE_ROLES = ['house', 'prophet', 'rival', 'beast'];
+export const ROLES = ['danger', 'region', 'house', 'prophet', 'followed', 'ground', 'rival', 'beast', 'falsegod'];
+export const NULLABLE_ROLES = ['house', 'prophet', 'rival', 'beast', 'falsegod'];
 export const CORE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 export const PARTY_CHECK_STATS = ['perception', 'foraging', 'cooking'];
 export const HUNGER_STAGES = ['sated', 'fed', 'hungry', 'starving'];
@@ -259,6 +259,19 @@ export const VERBS = {
       return v.cleanse != null ? `The blight recedes (${done} tile${done === 1 ? '' : 's'}).` : `Blight creeps outward (${done} tile${done === 1 ? '' : 's'}).`;
     },
   },
+  falseGod: {
+    // { pact: true }: accept the region's false god's pact, or deepen it one
+    // level (HuntEngine._pactStep pays the price). A number: hidden standing
+    // with that god alone.
+    reader: 'HuntEngine._pactStep (the pact, its price) or GAME_WORLD.falseGod (hidden standing)',
+    validate: (v) => (v && typeof v === 'object' ? (v.pact === true ? null : 'falseGod is a number or { pact: true }') : numErr(v)),
+    apply: (v, api) => {
+      if (typeof v === 'object') return api.pactStep();
+      const n = evalNumber(v, api.roles);
+      if (api.godId && n) api.world.falseGod?.(api.godId, n);
+      return null;
+    },
+  },
   time: {
     reader: 'the clock (HuntEngine._spendTime): the world ticks',
     validate: numErr,
@@ -298,7 +311,7 @@ export function applyEffects(list, api) {
 // ── Where an event may appear (data/events.js `appears`) ──────────────────────
 
 export const APPEARS_KEYS = ['zones', 'houses', 'followed', 'danger', 'grounds', 'setPiece', 'weight', 'maxPerMap',
-  'night', 'hunger', 'questFlag', 'notQuestFlag', 'needs'];
+  'night', 'hunger', 'questFlag', 'notQuestFlag', 'needs', 'pact'];
 
 /**
  * Conditions known when the map is made: region, its house, whether your
@@ -331,6 +344,10 @@ export function dynamicBlock(tpl, ctx) {
   if (a.hunger && !a.hunger.includes(ctx.hunger)) return 'nothing here for you now';
   if (a.questFlag && !ctx.hasQuestFlag?.(a.questFlag)) return 'nothing here for you now';
   if (a.notQuestFlag && ctx.hasQuestFlag?.(a.notQuestFlag)) return 'nothing here for you now';
+  // A false god's temptations (11c): the first only outside a pact, deeper
+  // ones only within one.
+  if (a.pact === true && !ctx.pact) return 'nothing here for you now';
+  if (a.pact === false && ctx.pact) return 'nothing here for you now';
   for (const r of a.needs || []) if (ctx.roles?.[r] == null) return 'nothing here for you now';
   return null;
 }

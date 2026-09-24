@@ -15,15 +15,20 @@
   "reveal",
   "fight",
   "blight",
+  "falseGod",
   "time"
  ],
  "drawn": {
-  "reeds_sinking_mud": 599,
-  "reeds_stranger_at_camp": 598,
-  "reeds_distant_weeping": 598,
-  "bay_wrecked_hull": 600,
-  "bay_lantern_glow": 600,
-  "bay_rising_tide": 600
+  "reeds_sinking_mud": 544,
+  "dagon_hunger": 1058,
+  "reeds_stranger_at_camp": 545,
+  "dagon_whisper": 553,
+  "reeds_distant_weeping": 547,
+  "bay_wrecked_hull": 580,
+  "bay_lantern_glow": 576,
+  "bay_rising_tide": 566,
+  "yargaleth_bubbles": 575,
+  "yargaleth_undertow": 1103
  },
  "lines": {
   "reeds_sinking_mud {\"roll\":20}": [
@@ -78,6 +83,44 @@
   "reeds_stranger_at_camp {\"option\":1}": [
    "option:1",
    "By dawn they are simply gone, as if they were never there."
+  ],
+  "dagon_whisper {\"accept\":true}": [
+   "accept",
+   "The reeds lean toward you. Dagon is pleased.",
+   "A pact with Dagon, level 3: The Offered Breath. The River Never Sated grows."
+  ],
+  "dagon_whisper {\"accept\":false}": [
+   "refuse",
+   "You turn from the water. Somewhere, a prophet notices.",
+   "Jeremiah looks on you more kindly (+1 standing)."
+  ],
+  "dagon_hunger {\"accept\":true}": [
+   "accept",
+   "Dagon takes, and gives more.",
+   "A pact with Dagon, level 4: The Still Water. The River Never Sated grows."
+  ],
+  "dagon_hunger {\"accept\":false}": [
+   "refuse",
+   "You keep your breath. The water stirs, unsated."
+  ],
+  "yargaleth_bubbles {\"accept\":true}": [
+   "accept",
+   "Truths pour into you, too many to hold. Yar'galeth is pleased.",
+   "A pact with Yar'galeth, level 3: Answers Unasked. Orphaned Revelation grows."
+  ],
+  "yargaleth_bubbles {\"accept\":false}": [
+   "refuse",
+   "You stop your ears. Somewhere, a prophet notices.",
+   "Ezekiel looks on you more kindly (+1 standing)."
+  ],
+  "yargaleth_undertow {\"accept\":true}": [
+   "accept",
+   "Yar'galeth shows you more than you can bear.",
+   "A pact with Yar'galeth, level 4: The Undertow. Orphaned Revelation grows."
+  ],
+  "yargaleth_undertow {\"accept\":false}": [
+   "refuse",
+   "You pull back from the water, dizzy with half-truths."
   ],
   "bay_rising_tide {\"roll\":20}": [
    "success",

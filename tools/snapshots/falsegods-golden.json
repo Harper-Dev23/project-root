@@ -1,0 +1,145 @@
+{
+ "effects": {
+  "dagon": [
+   {
+    "party": {
+     "LifeStealPct": 10
+    },
+    "enemies": {},
+    "explore": {
+     "harvestYieldPercent": 30,
+     "supplyEfficiencyPercent": -30
+    },
+    "capstone": null,
+    "names": [
+     "The Offered Breath"
+    ]
+   },
+   {
+    "party": {
+     "LifeStealPct": 10,
+     "PhysicalResist": 15
+    },
+    "enemies": {},
+    "explore": {
+     "harvestYieldPercent": 30,
+     "supplyEfficiencyPercent": -20
+    },
+    "capstone": null,
+    "names": [
+     "The Offered Breath",
+     "The Still Water"
+    ]
+   },
+   {
+    "party": {
+     "LifeStealPct": 10,
+     "PhysicalResist": 15
+    },
+    "enemies": {},
+    "explore": {
+     "harvestYieldPercent": 30,
+     "supplyEfficiencyPercent": -30
+    },
+    "capstone": {
+     "id": "what_waits_below",
+     "healPercent": 15
+    },
+    "names": [
+     "The Offered Breath",
+     "The Still Water",
+     "What Waits Below"
+    ]
+   }
+  ],
+  "yargaleth": [
+   {
+    "party": {
+     "CritChance": 10,
+     "Accuracy": -15
+    },
+    "enemies": {},
+    "explore": {
+     "sightRangeBonus": 2
+    },
+    "capstone": null,
+    "names": [
+     "Answers Unasked"
+    ]
+   },
+   {
+    "party": {
+     "CritChance": 10,
+     "Accuracy": -20
+    },
+    "enemies": {
+     "Evasion": -10
+    },
+    "explore": {
+     "sightRangeBonus": 2,
+     "partyInitiativeBonus": 10
+    },
+    "capstone": null,
+    "names": [
+     "Answers Unasked",
+     "The Undertow"
+    ]
+   },
+   {
+    "party": {
+     "CritChance": 10,
+     "Accuracy": -25
+    },
+    "enemies": {
+     "Evasion": -10
+    },
+    "explore": {
+     "sightRangeBonus": 2,
+     "partyInitiativeBonus": 10
+    },
+    "capstone": {
+     "id": "the_true_word"
+    },
+    "names": [
+     "Answers Unasked",
+     "The Undertow",
+     "The Word That Is Always True"
+    ]
+   }
+  ]
+ },
+ "steps": [
+  [
+   4,
+   [
+    4,
+    -20
+   ]
+  ],
+  [
+   5,
+   [
+    5,
+    -25
+   ]
+  ],
+  [
+   5,
+   []
+  ]
+ ],
+ "stats": {
+  "dagon3": [
+   22.22222222222222,
+   52.22222222222222,
+   1.7368421052631575,
+   -28.263157894736842
+  ],
+  "yargaleth4": [
+   0,
+   2,
+   7.166666666666667,
+   17.166666666666668
+  ]
+ }
+}

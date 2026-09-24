@@ -20,6 +20,7 @@ export const ZONES = {
     deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'wetland',
     divineAlignment: 'jeremiah',
+    falseGod: 'dagon',  // the false god that tempts here (chunk 11c; data/falseGods.js)
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
     // Thick reeds and standing water make for slow, beast-rich going.
     modifiers: { encounterChancePercent: 6, supplyEfficiencyPercent: -5 },
@@ -59,6 +60,7 @@ export const ZONES = {
     deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'coastal',
     divineAlignment: 'ezekiel', // STANDING (owner, 2026-09-18): Bay of Solace = Ezekiel
+    falseGod: 'yargaleth',  // the false god that tempts here (chunk 11c; data/falseGods.js)
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',
     // Open, flat coastline — easy travel, but little cover means fewer encounters too.
     modifiers: { encounterChancePercent: -4, supplyEfficiencyPercent: 8 },

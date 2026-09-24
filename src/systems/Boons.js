@@ -18,6 +18,7 @@
 import {
   FAVOR_BY_GRADE, SHRINE_FAVOR, FOLLOWED_FAVOR_PERCENT, BOON_THRESHOLDS, UNFOLLOWED_MAX, BOONS,
 } from '../../data/boons.js';
+import { FALSE_GODS, PACT_START, PACT_MAX } from '../../data/falseGods.js';
 
 export { SHRINE_FAVOR };
 
@@ -67,6 +68,27 @@ export function boonEffects(house, level) {
     if (L.capstone) out.capstone = { ...L.capstone };
     out.names.push(L.name);
   }
+  return out;
+}
+
+/**
+ * A false god's pact at `level` (chunk 11c; data/falseGods.js): levels
+ * PACT_START..level combined, values of the same key ADDED, plus the curse's
+ * per-level amounts times the level. Same shape as boonEffects.
+ */
+export function pactEffects(god, level) {
+  const out = { party: {}, enemies: {}, explore: {}, capstone: null, names: [] };
+  const def = FALSE_GODS[god];
+  if (!def || !(level >= PACT_START)) return out;
+  const add = (dst, src, k = 1) => { for (const [f, v] of Object.entries(src || {})) dst[f] = (dst[f] || 0) + v * k; };
+  for (let l = PACT_START; l <= Math.min(level, PACT_MAX); l++) {
+    const L = def.levels[l];
+    if (!L) continue;
+    add(out.party, L.party); add(out.enemies, L.enemies); add(out.explore, L.explore);
+    if (L.capstone) out.capstone = { ...L.capstone };
+    out.names.push(L.name);
+  }
+  add(out.party, def.curse.party, level); add(out.enemies, def.curse.enemies, level); add(out.explore, def.curse.explore, level);
   return out;
 }
 
