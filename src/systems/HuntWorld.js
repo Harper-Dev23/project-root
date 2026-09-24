@@ -133,7 +133,7 @@ export function alert(occ, from) {
   occ.alerted = true;
 }
 
-function loseTrail(occ, now) {
+export function loseTrail(occ, now) {
   occ.state = occ.home === 'rooted' ? 'rooted' : 'roaming';
   delete occ.closest;
   delete occ.closerAt;

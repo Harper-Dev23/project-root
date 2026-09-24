@@ -121,7 +121,7 @@ import {
   FORAGE_YIELD, FISH_YIELD, FISH_ITEM, CAMP_TIME, CAMP_SUPPLY, SATED_TIME, campRecoveryPercent,
   recovered, cookDish,
 } from './HuntRules.js';
-import { initWorld, worldTick, alert, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
+import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
 
@@ -135,6 +135,9 @@ export const FIGHT_XP_POOL = 20;
 /** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
  *  The Advance loop's number; cultists pay none (their reward is gear). */
 export const BEAST_FIGHT_HUNT_POINTS = 8;
+/** In-game time a wipe the prophet spoke for costs the party (owner idea B,
+ *  chunk 10c-2): half a day, carried back to a way out. Tuning is chunk 13. */
+export const RESCUE_TIME = 6;
 
 const LOG_LIMIT = 50;
 const HOSTILE = new Set(['beast', 'cultist']);
@@ -741,6 +744,53 @@ function makeMapHunt(s, rng, worldRng, world) {
         ok: true, to: back, time, flips: spent.flips, enemyFreeRound: reason !== 'reload',
         alerted: occ?.kind === 'beast' ? occ.id : null, starved, encounter: this.encounter(),
       };
+    },
+
+    /**
+     * The party wiped, and the prophet spoke for some of it (owner idea B,
+     * chunk 10c-2; CombatScene has already decided who fell). The hunt goes
+     * on instead of ending:
+     *   - the party stands on the nearest way out it knows (the entry or a
+     *     Waystone it has seen), by steps across the map;
+     *   - the fight is over and its occupant stays where it was, not alerted;
+     *   - every pack hunting the party loses the trail;
+     *   - RESCUE_TIME passes (the world ticks), and the knock-outs count
+     *     against Unbroken.
+     * The pack is kept. Refused with no fight pending, or once the hunt is over.
+     */
+    survive({ knockedOut = 0 } = {}) {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      const e = s.encounter;
+      if (!e) return { ok: false, reason: 'no fight to survive' };
+      const to = this._nearestExit();
+      s.encounter = null;
+      s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
+      if (to) { s.from = null; s.pos = to; }
+      for (const o of s.map.occupants) if (o.state === 'hunting') loseTrail(o, s.time);
+      const spent = this._spendTime(RESCUE_TIME);
+      const starved = this.hunger() === 'starving' ? this._starve() : [];
+      this._reveal();
+      this._log({ kind: 'rescued', occupant: e.occId, to, time: s.time });
+      return { ok: true, to, time: RESCUE_TIME, flips: spent.flips, starved, encounter: this.encounter() };
+    },
+
+    /** The nearest exit tile the party has seen, by steps (passages count as one). */
+    _nearestExit() {
+      const seen = new Set([s.pos]);
+      let frontier = [s.pos];
+      while (frontier.length) {
+        const hit = frontier.filter(id => s.map.tiles[id]?.exit && (id === s.map.entry || s.fog[id])).sort()[0];
+        if (hit) return hit;
+        const next = [];
+        for (const id of frontier) {
+          for (const n of mapNeighbors(s.map, id)) {
+            if (seen.has(n) || !isPassable(s.map.tiles[n])) continue;
+            seen.add(n); next.push(n);
+          }
+        }
+        frontier = next;
+      }
+      return s.map.entry;
     },
 
     /** Every objective with its progress now (HuntObjectives.objectiveProgress). */

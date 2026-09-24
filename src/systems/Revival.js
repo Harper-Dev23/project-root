@@ -26,7 +26,7 @@
 
 import ProgressionManager from './ProgressionManager.js';
 import GameState from './GameState.js';
-import { routesBack, spendBond } from './Standing.js';
+import { routesBack, spendBond, followedHouse } from './Standing.js';
 import {
   INTERCESSION_COST_PER_LEVEL, RITE_DAYS_BASE, RITE_DAYS_PER_LEVEL, RITE_TICKETS_PER_LEVEL,
 } from '../../data/standing.js';
@@ -86,6 +86,37 @@ export function beginRite(char, { pm = ProgressionManager, gs = GameState } = {}
   const day = pm.getDaysElapsed();
   char.rite = { startDay: day, untilDay: day + o.rite.days };
   return { ok: true, days: o.rite.days, tickets: o.rite.tickets, untilDay: char.rite.untilDay };
+}
+
+// ── Intercession on the spot (owner idea B, chunk 10c-2) ─────────────────────
+//
+// When the party wipes in a Watched region of the house your tribe follows,
+// the prophet may speak for the fallen before anyone joins the Slain. Each
+// hunter costs what intercession at the lodge would. Nothing here moves a
+// hunter: CombatScene decides who falls, and the hunt goes on (HuntEngine
+// survive) only if someone was saved.
+
+/**
+ * What the prophet offers at a wipe, or null when there is nothing to offer:
+ * not Watched, not your followed house's lands, or the Bond cannot pay for
+ * even one of the fallen.
+ */
+export function spotOffer({ rule, house, fallen }, { pm = ProgressionManager } = {}) {
+  if (rule !== 'watched' || !house || !fallen?.length) return null;
+  const st = pm.getStanding();
+  if (followedHouse(st, pm.tribe) !== house) return null;
+  const bond = st.bond[house] || 0;
+  const hunters = fallen.map(c => ({ char: c, cost: intercessionCost(c) }));
+  if (!hunters.some(h => h.cost <= bond)) return null;
+  return { house, bond, hunters };
+}
+
+/** Pay for the chosen hunters, all or nothing. */
+export function payForSpot(house, chars, { pm = ProgressionManager } = {}) {
+  const total = chars.reduce((t, c) => t + intercessionCost(c), 0);
+  if (!chars.length) return { ok: true, total: 0 };
+  const paid = spendBond(pm.getStanding(), house, total);
+  return paid.ok ? { ok: true, total } : { ...paid, total };
 }
 
 /** Every rite whose days have passed brings its hunter back. Returns who came back. */

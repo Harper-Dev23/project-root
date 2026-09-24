@@ -228,7 +228,7 @@ const VISUAL_METHODS = [
   // menus, panels, screens
   '_renderCharacterInfoBody', '_buildActionMenuRoot', '_rebuildActionMenu',
   '_exitTargetingMode', '_exitPositionTargeting', '_enterPositionTargeting',
-  '_showVictoryScreen', '_showDefeatScreen', '_updateTurnOrderUI',
+  '_showVictoryScreen', '_showDefeatScreen', '_updateTurnOrderUI', '_showIntercessionChoice',
   // log rendering (the log CONTENT is real; only drawing it is skipped)
   '_renderCombatLog', '_scrollCombatLogToBottom',
 ];

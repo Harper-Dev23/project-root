@@ -224,7 +224,7 @@ await shot('05d-back-on-map');
   // A level earned on the map, through the engine's own booking (as the shrine
   // does), then the scene's own redraw: the notice and the new HUD line.
   const lvl = await evaluate(`const sc = window.__T.s(); const b0 = sc.hunt.view().boon.level;
-    sc.hunt._earnFavor((await import('/data/boons.js')).BOON_THRESHOLDS[0], 'test'); sc._refresh();
+    sc.hunt._earnFavor(sc.hunt.view().boon.toNext, 'test'); sc._refresh();   // exactly what the next level needs
     await new Promise(r => setTimeout(r, 300));
     return { b0, b1: sc.hunt.view().boon.level, said: window.__T.textsOf('UIScene').map(t => t.text).find(t => t.includes('boon rises to level')) || null,
       line: window.__T.textsOf('HuntFieldOverlay').map(t => t.text).find(t => t.startsWith('✦ ')) || null };`);

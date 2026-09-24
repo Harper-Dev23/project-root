@@ -22,7 +22,8 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, ap
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
-import { fellRecord } from '../systems/Standing.js';
+import { fellRecord, houseOf } from '../systems/Standing.js';
+import { spotOffer, payForSpot, intercessionCost } from '../systems/Revival.js';
 import { getZone } from '../../data/zones.js';
 import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
@@ -6740,40 +6741,14 @@ export default class CombatScene extends Phaser.Scene {
       this._log('💀 All allies knocked out. You were defeated.');
 
       if (this.isHunt) {
-        // A wipe ends the hunt, and what happens to the fallen is the
-        // region's death rule (DEATH_AND_REVIVAL; chunk 9 decision 10), read
-        // at departure and kept on the hunt. A wipe never kills by itself:
-        //   sheltered  nobody dies: the party is carried back to camp, the
-        //              knocked-out standing at 1 HP
-        //   watched,   the fallen go to the Slain roster (no way back until
-        //   forsaken   chunk 10's intercession and lesser rite)
-        // This applies to an old save's Advance hunt too: before chunk 9 every
-        // hunt wipe sent the party to the Slain, whatever the region.
         const rule = this.huntFight ? this.huntFight.deathRule : (HuntManager.getState()?.deathRule || 'watched');
-        const sheltered = rule === 'sheltered';
-        GameState.party.forEach(char => {
-          if (char.status !== 'incapacitated') return;
-          if (sheltered) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
-          else char.status = 'dead';
-        });
-        // Where they fell (chunk 10a): the ways back read the region's rule and
-        // house off this record (Standing.routesBack).
-        const zoneId = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState())?.zoneId ?? null;
-        const fell = fellRecord({ zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null, rule, day: ProgressionManager.getDaysElapsed() });
-        GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c, fell));
-        // Settles the hunt pack by the same death rule: Sheltered brings it
-        // home, Watched/Forsaken lose it. end() would drop it on the floor,
-        // packed Rations included.
-        if (this.huntFight) {
-          this.huntFight.hunt.wipe();
-          this.huntFight.onFinished?.(this.huntFight.hunt);
-        } else {
-          HuntManager.wipe();
-        }
-        GameState.save('autosave');
-        this._showDefeatScreen('Defeat', sheltered
-          ? 'Your party is carried back to camp. The hunt is over; the pack comes home.'
-          : 'Your fallen join the Slain. The hunt is over; the pack is lost.');
+        // Intercession on the spot (owner idea B, chunk 10c-2): in a Watched
+        // region of the house your tribe follows, the prophet may speak for
+        // the fallen before anyone joins the Slain. The player chooses; the
+        // wipe is finished by _finishHuntWipe either way.
+        const offer = this._intercessionOffer(rule);
+        if (offer) { this._showIntercessionChoice(offer, rule); return; }
+        this._finishHuntWipe(rule, []);
       } else {
         GameState.party.forEach(char => {
           if (char.status === 'incapacitated') char.status = 'dead';
@@ -6781,6 +6756,122 @@ export default class CombatScene extends Phaser.Scene {
         this._showDefeatScreen('Defeat', 'Return to town.');
       }
     }
+  }
+
+  /** Where this hunt fight is, and its house (for the fell record and the offer). */
+  _huntWhere() {
+    const zoneId = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState())?.zoneId ?? null;
+    return { zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null };
+  }
+
+  /** The prophet's offer at this wipe (Revival.spotOffer), or null. Map-hunt fights only. */
+  _intercessionOffer(rule) {
+    if (!this.huntFight) return null;
+    const { prophet } = this._huntWhere();
+    const fallen = GameState.party.filter(c => c.status === 'incapacitated');
+    return spotOffer({ rule, house: houseOf(prophet), fallen });
+  }
+
+  /**
+   * Finish a hunt wipe. `saved` are hunters the prophet spoke for (already
+   * chosen and affordable): they stand at 1 HP and the hunt goes on from the
+   * nearest way out (hunt.survive). Everyone else follows the death rule:
+   *   sheltered  nobody dies: the party is carried back to camp, the
+   *              knocked-out standing at 1 HP
+   *   watched,   the fallen go to the Slain roster, with where they fell
+   *   forsaken   (the ways back read it: Revival.js)
+   * This applies to an old save's Advance hunt too: before chunk 9 every hunt
+   * wipe sent the party to the Slain, whatever the region.
+   */
+  _finishHuntWipe(rule, saved = []) {
+    const sheltered = rule === 'sheltered';
+    const knockedOut = GameState.party.filter(c => c.status === 'incapacitated').length;
+    const { zoneId, prophet } = this._huntWhere();
+    const house = houseOf(prophet);
+    const paid = saved.length ? payForSpot(house, saved) : { ok: true, total: 0 };
+    const spokenFor = paid.ok ? saved : [];
+    GameState.party.forEach(char => {
+      if (char.status !== 'incapacitated') return;
+      if (sheltered || spokenFor.includes(char)) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
+      else char.status = 'dead';
+    });
+    const fell = fellRecord({ zoneId, prophet, rule, day: ProgressionManager.getDaysElapsed() });
+    const fallen = GameState.party.filter(c => c.status === 'dead');
+    fallen.forEach(c => GameState.moveToSlain(c, fell));
+
+    if (spokenFor.length && this.huntFight) {
+      this.huntFight.hunt.survive({ knockedOut });
+      const name = house ? house.charAt(0).toUpperCase() + house.slice(1) : 'The prophet';
+      this._log(`✦ ${name} spoke for ${spokenFor.map(c => c.name).join(', ')} (-${paid.total} Bond standing).`);
+      GameState.save('autosave');
+      this._showDefeatScreen('Spoken For', fallen.length
+        ? `${name} spoke for ${spokenFor.length} of your hunters. ${fallen.length} joined the Slain. You wake near a way out.`
+        : `${name} spoke for every one of your hunters. You wake near a way out.`, {
+        showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight.reopen?.(this),
+      });
+      return;
+    }
+
+    // Settles the hunt pack by the same death rule: Sheltered brings it
+    // home, Watched/Forsaken lose it. end() would drop it on the floor,
+    // packed Rations included.
+    if (this.huntFight) {
+      this.huntFight.hunt.wipe();
+      this.huntFight.onFinished?.(this.huntFight.hunt);
+    } else {
+      HuntManager.wipe();
+    }
+    GameState.save('autosave');
+    this._showDefeatScreen('Defeat', sheltered
+      ? 'Your party is carried back to camp. The hunt is over; the pack comes home.'
+      : 'Your fallen join the Slain. The hunt is over; the pack is lost.');
+  }
+
+  /**
+   * The prophet's offer, as a choice (owner idea B): one row per fallen
+   * hunter, each Intercede or not, their total against the Bond, then
+   * Confirm. Nothing is decided until Confirm; _finishHuntWipe does the rest.
+   */
+  _showIntercessionChoice(offer, rule) {
+    this.time.delayedCall(1000, () => {
+      const { width, height } = this.sys.game.canvas;
+      this._dimBattlefieldForPostCombat();
+      this.actionMenu?.setVisible(false);
+      this.endTurnButton?.setVisible(false); this.fleeButton?.setVisible(false);
+      const chosen = new Set();
+      const name = offer.house.charAt(0).toUpperCase() + offer.house.slice(1);
+      let panel = null;
+      const draw = () => {
+        panel?.destroy(true);
+        panel = this.add.container(0, 0).setDepth(3001);
+        const add = (o) => { panel.add(o); return o; };
+        const total = [...chosen].reduce((t, c) => t + intercessionCost(c), 0);
+        // Laid out from the top so everything but Confirm stays clear of the
+        // combat log in the lower left.
+        const top = 140;
+        add(this.add.text(width / 2, top - 70, 'Your party has fallen', { fontSize: '40px', color: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5));
+        add(this.add.text(width / 2, top - 26, `${name} watches these lands and may speak for your hunters: ${Math.floor(offer.bond)} Bond standing to spend.`,
+          { fontSize: '17px', color: '#ffe9a8', wordWrap: { width: 760 }, align: 'center' }).setOrigin(0.5));
+        add(this.add.text(width / 2, top + 8, `${total} of ${Math.floor(offer.bond)} standing. Whoever is not spoken for joins the Slain.`,
+          { fontSize: '15px', color: '#a8b0bc' }).setOrigin(0.5));
+        offer.hunters.forEach((h, i) => {
+          const y = top + 44 + i * 40;
+          const on = chosen.has(h.char);
+          const affordable = on || total + h.cost <= offer.bond;
+          add(this.add.text(width / 2 - 250, y, `${h.char.name} (Lv ${h.char.level})`, { fontSize: '18px', color: on ? '#9fe09f' : '#dddddd' }).setOrigin(0, 0.5));
+          add(createButton(this, width / 2 + 170, y, on ? `Spoken for (${h.cost})` : `Intercede (${h.cost})`, () => {
+            if (on) chosen.delete(h.char); else if (affordable) chosen.add(h.char);
+            draw();
+          }, affordable ? 'primary' : 'danger', { fontSize: '15px' }));
+        });
+        const fy = top + 44 + offer.hunters.length * 40 + 14;
+        add(createButton(this, width / 2, fy, chosen.size ? 'Confirm' : 'Let them fall', () => {
+          panel.destroy(true);
+          this._finishHuntWipe(rule, [...chosen]);
+        }, chosen.size ? 'primary' : 'danger', { fontSize: '20px' }));
+      };
+      draw();
+    });
   }
 
   _reviveAlliesAfterVictory() {

@@ -1034,4 +1034,20 @@ export function installDevHook(game) {
     sm.bringToTop('UIScene');
     return hunt;
   };
+  /**
+   * window.bmDevDeathRule('watched') makes every region use that death rule
+   * until the page reloads (chunk 10c). No zone is Watched yet, so this is the
+   * only way to reach a real Watched wipe, intercession on the spot included,
+   * from the game. It only changes hunts that depart after it is called.
+   * Returns the rules it set. Call with no argument to see the current ones.
+   */
+  window.bmDevDeathRule = async (rule) => {
+    const { ZONES } = await import('../../../data/zones.js');
+    if (rule) {
+      if (!['sheltered', 'watched', 'forsaken'].includes(rule)) throw new Error(`unknown death rule '${rule}'`);
+      for (const z of Object.values(ZONES)) z.deathRule = rule;
+      console.log(`[bmDevDeathRule] every region is ${rule} until the page reloads`);
+    }
+    return Object.fromEntries(Object.values(ZONES).map(z => [z.id, z.deathRule]));
+  };
 }

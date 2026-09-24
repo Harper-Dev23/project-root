@@ -496,6 +496,7 @@
   "stalker pack, fed for the fight": "WIN first=party turns=18 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=58/14/32/1/40/55 foeHP=0/0/0/0 hunt=win: log=162",
   "stalker pack, fled on the first turn": "FLED first=party turns=0 round=2 allies=6/6 foes=4/4 foeMaxHP=60/64/62/60 allyHP=56/4/32/45/40/55 foeHP=60/64/62/60 hunt=flee:ko=0 log=57",
   "great-led pack, Jeremiah boon 5": "WIN first=party turns=40 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=42/8/32/1/38/48 foeHP=0/0/0/0/0 hunt=win: log=353 mercy=true echoes=0",
-  "stalker pack, Ezekiel boon 5": "WIN first=party turns=13 round=4 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=50/38/29/23/40/54 foeHP=0/0/0/0 hunt=win: log=114 mercy=false echoes=2"
+  "stalker pack, Ezekiel boon 5": "WIN first=party turns=13 round=4 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=50/38/29/23/40/54 foeHP=0/0/0/0 hunt=win: log=114 mercy=false echoes=2",
+  "stalker pack, a Watched wipe in your house's lands, one spoken for": "UNRESOLVED first=enemy turns=0 round=2 allies=1/1 foes=4/4 foeMaxHP=99999/99999/99999/99999 allyHP=1 foeHP=99999/99999/99999/99999 hunt=survive:ko=6 log=43 offer=50/50/50/50/50/50 spoken=Bran@1 slain=5 bond=950"
  }
 }

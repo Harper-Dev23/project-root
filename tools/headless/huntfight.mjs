@@ -389,6 +389,100 @@ function hostBegun(m) {
   return { host, spec };
 }
 
+// =============================================================================
+// Chunk 10c-2: intercession on the spot (owner idea B). A Watched wipe in the
+// lands of the house your tribe follows offers the fallen to the prophet
+// before anyone joins the Slain; whoever is spoken for stands at 1 HP on the
+// nearest way out, and the hunt goes on. The real standing record, the real
+// defeat path, the real hunt.
+console.log('=== intercession on the spot ===');
+{
+  const Standing = await import('../../src/systems/Standing.js');
+  const Revival = await import('../../src/systems/Revival.js');
+  const { RESCUE_TIME } = await import('../../src/systems/HuntEngine.js');
+  /** A save that follows `house`, with `bond` Bond standing to spend. */
+  const follow = (house, bond) => {
+    ProgressionManager.reset();
+    ProgressionManager.setTribe('styx');
+    const st = ProgressionManager.getStanding();
+    Standing.earnFavor(st, 'styx', house, 100);
+    Standing.acceptHouse(st, 'styx', house);
+    st.bond[house] = bond;
+    return st;
+  };
+  const houseOfHunt = (m) => Standing.houseOf(getZone(m.h.getState().zoneId).divineAlignment);
+
+  // 1. The offer appears, and nothing is decided until the player chooses.
+  const a = pendingFight('watched', 1300);
+  check('found a Watched fight to lose', !!a);
+  const house = houseOfHunt(a);
+  let st = follow(house, 1000);
+  const slain0 = GameState.slain.length;
+  const hostA = loseIt(a);
+  const offer = hostA._intercessionOffer('watched');
+  check('a Watched wipe in your own house\'s lands offers every fallen hunter to the prophet',
+    !!offer && offer.house === house && offer.hunters.length === a.party.length && offer.hunters.every(x => x.cost === Revival.intercessionCost(x.char)));
+  check('...and, until the player chooses, nobody has joined the Slain and the hunt is not over',
+    GameState.slain.length === slain0 && !a.h.getState().finished && a.party.every(c => c.status === 'incapacitated'));
+
+  // 2. Two spoken for: the hunt goes on from the nearest way out.
+  const before = a.h.getState();
+  const saved = [a.party[0], a.party[1]];
+  const cost = saved.reduce((t, c) => t + Revival.intercessionCost(c), 0);
+  const packBefore = JSON.stringify(before.pack);
+  hostA._finishHuntWipe('watched', saved);
+  const s1 = a.h.getState();
+  const names = a.party.slice(2).map(c => c.name);
+  check(`two spoken for: they stand at 1 HP, the Bond paid ${cost}`,
+    saved.every(c => c.status === 'alive' && c.currentHP === 1) && st.bond[house] === 1000 - cost);
+  check('...the other four joined the Slain, with where they fell',
+    names.every(n => GameState.slain.some(c => c.name === n && c.fell?.rule === 'watched' && c.fell.house === house)) && GameState.slain.length === slain0 + 4);
+  check('...the hunt goes on: not finished, no fight, the pack kept',
+    !s1.finished && !s1.encounter && JSON.stringify(s1.pack) === packBefore);
+  check('...the party stands on a way out it knows', !!s1.map.tiles[s1.pos].exit && (s1.pos === s1.map.entry || !!s1.fog[s1.pos]), s1.pos);
+  check(`...${RESCUE_TIME} units of time passed, and no pack is still hunting it`,
+    s1.time >= before.time + RESCUE_TIME - 1e-9 && !s1.map.occupants.some(o => o.state === 'hunting'), `${before.time} -> ${s1.time}`);
+  check('...the fought occupant is still on the map, and every knock-out counts against Unbroken',
+    s1.map.occupants.some(o => o.id === before.encounter.occId) && s1.knockouts === (before.knockouts || 0) + a.party.length);
+  check('...logged as a rescue', s1.log.some(e => e.kind === 'rescued'));
+  const back = a.h.move(a.h.view().moves[0]?.tile);
+  check('...and the party can move on', back.ok, back.reason || '');
+
+  // 3. Letting them all fall is an ordinary Watched wipe.
+  const b = pendingFight('watched', 1400);
+  follow(houseOfHunt(b), 1000);
+  const slainB = GameState.slain.length;
+  const hostB = loseIt(b);
+  check('the offer is made again on the next such wipe', !!hostB._intercessionOffer('watched'));
+  hostB._finishHuntWipe('watched', []);
+  check('"Let them fall": every hunter joins the Slain and the hunt ends as a wipe',
+    GameState.slain.length === slainB + b.party.length && b.h.getState().finished === 'wipe');
+
+  // 4. No offer abroad, nor when the Bond cannot pay for anyone.
+  const c = pendingFight('watched', 1500);
+  const other = ['jeremiah', 'ezekiel'].find(x => x !== houseOfHunt(c));
+  const stC = follow(other, 1000);
+  stC.bond[houseOfHunt(c)] = 1000;   // the Bond could pay: only the followed house refuses it
+  const hostC = loseIt(c);
+  check('abroad (your tribe follows another house): no offer, an ordinary wipe',
+    !hostC._intercessionOffer('watched') && c.h.getState().finished === 'wipe');
+  const d = pendingFight('watched', 1600);
+  follow(houseOfHunt(d), 5);
+  const hostD = loseIt(d);
+  check('a Bond too poor to pay for any one hunter: no offer, an ordinary wipe',
+    !hostD._intercessionOffer('watched') && d.h.getState().finished === 'wipe');
+
+  // 5. A choice the Bond cannot cover saves nobody (all or nothing).
+  const e = pendingFight('watched', 1700);
+  st = follow(houseOfHunt(e), 60);   // one hunter (50), not three
+  const hostE = loseIt(e);
+  check('a Bond that covers one hunter still makes the offer', !!hostE._intercessionOffer('watched') && !e.h.getState().finished);
+  const slainE = GameState.slain.length;
+  hostE._finishHuntWipe('watched', e.party.slice(0, 3));
+  check('choosing more than the Bond can pay saves nobody and spends nothing',
+    st.bond[houseOfHunt(e)] === 60 && GameState.slain.length === slainE + e.party.length && e.h.getState().finished === 'wipe');
+}
+
 console.log('=== flee inside the fight: the free round ===');
 {
   const m = meet({ kind: 'beast', from: 1500 });

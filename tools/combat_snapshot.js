@@ -73,6 +73,8 @@ const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { ENEMY_TYPES } = await import('../data/enemyTypes.js');
 const { rollLoadout, fightScenario } = await import('../src/systems/HuntBeasts.js');
 const { boonEffects } = await import('../src/systems/Boons.js');
+const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
+const StandingSys = await import('../src/systems/Standing.js');
 /** A boon as HuntEngine._boonForFight hands it to combat (chunk 10b). */
 const boonAt = (house, level) => { const fx = boonEffects(house, level); return { house, level, party: fx.party, enemies: fx.enemies, capstone: fx.capstone }; };
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
@@ -897,6 +899,12 @@ const HUNT_FIGHTS = {
     boon: boonAt('jeremiah', 5) },
   'stalker pack, Ezekiel boon 5': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     boon: boonAt('ezekiel', 5) },
+  // Chunk 10c-2: a Watched wipe in the Reeds while your tribe follows
+  // Jeremiah. The prophet's offer is made; the first hunter is spoken for and
+  // the hunt goes on (hunt.survive); the rest join the Slain. The party stands
+  // no chance on purpose (1 HP each, the pack unkillable).
+  'stalker pack, a Watched wipe in your house\'s lands, one spoken for': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] },
+    first: 'enemy', watchedWipe: { zoneId: 'reeds_of_gethsemane', house: 'jeremiah', bond: 1000, spare: 1 } },
 };
 
 /** Play a flee's free round out, the way runFight drives enemy turns. */
@@ -925,13 +933,27 @@ function collectHuntFights() {
     };
     occ.loadout = rollLoadout(occ, { itemLevel: 1, itemRarity: 0, seed: 4242 });
     const calls = [];
+    const W = def.watchedWipe;
+    // The save's standing is shared state: kept aside for a Watched-wipe entry
+    // and put back after it, so no other entry can see it.
+    const pmBefore = W ? ProgressionManager.serialize() : null;
+    if (W) {
+      ProgressionManager.reset();
+      ProgressionManager.setTribe('styx');
+      const st = ProgressionManager.getStanding();
+      StandingSys.earnFavor(st, 'styx', W.house, 100);
+      StandingSys.acceptHouse(st, 'styx', W.house);
+      st.bond[W.house] = W.bond;
+    }
     const hunt = {
+      getState: () => ({ zoneId: W ? W.zoneId : null }),
+      survive: ({ knockedOut = 0 } = {}) => { calls.push('survive:ko=' + knockedOut); return { ok: true }; },
       winEncounter: ({ loot = [] } = {}) => { calls.push('win:' + loot.map(i => i.id + '/' + i.rarity).join(',')); return { ok: true, huntPoints: 0 }; },
       wipe: () => { calls.push('wipe'); return { ok: true }; },
       flee: ({ knockedOut = 0 } = {}) => { calls.push('flee:ko=' + knockedOut); return { ok: true }; },
     };
     const huntFight = {
-      hunt, kind: o.kind, first: def.first, itemLevel: 1, xpPool: 20, deathRule: 'sheltered',
+      hunt, kind: o.kind, first: def.first, itemLevel: 1, xpPool: 20, deathRule: W ? 'watched' : 'sheltered',
       scenario: fightScenario(occ, { itemLevel: 1 }),
       ...(def.foodBuff ? { foodBuff: def.foodBuff } : {}),
       ...(def.boon ? { boon: def.boon } : {}),
@@ -939,6 +961,10 @@ function collectHuntFights() {
     let fled = false;
     try {
       host.__begin({ party, partySlots: slotMapFor(party), huntFight });
+      if (W) {
+        for (const u of party) u.currentHP = 1;
+        for (const e of host.enemies) { e.maxHP = 99999; e.currentHP = 99999; }
+      }
       const firstSide = host.turnOrder[0]?.isEnemy ? 'enemy' : 'party';
       const r = runFight(host, (h, actor) => {
         // The flee entry breaks away on the party's first turn and plays the
@@ -948,6 +974,15 @@ function collectHuntFights() {
         const foe = h.enemies.find(e => e.status !== 'incapacitated' && e.currentHP > 0);
         return (atk && foe) ? [{ ability: atk, target: foe }] : [];
       }, { maxTurns: 600 });
+      let offerLine = null;
+      if (W) {
+        const offer = host._intercessionOffer('watched');
+        offerLine = 'offer=' + (offer ? offer.hunters.map(x => x.cost).join('/') : 'none');
+        host._finishHuntWipe('watched', party.slice(0, W.spare));
+        offerLine += ' spoken=' + party.filter(c => c.status === 'alive').map(c => c.name + '@' + c.currentHP).join(',')
+          + ' slain=' + party.filter(c => c.status === 'dead').length
+          + ' bond=' + ProgressionManager.getStanding().bond[W.house];
+      }
       const snap = snapshotBoard(host);
       const alliesUp = snap.allies.filter(a => a.hp > 0).length;
       const foesUp = snap.enemies.filter(e => e.hp > 0).length;
@@ -963,6 +998,7 @@ function collectHuntFights() {
         'foeHP=' + snap.enemies.map(e => e.hp).join('/'),
         'hunt=' + (calls.join(';') || 'none'),
         'log=' + host.combatEntries.length,
+        ...(offerLine ? [offerLine] : []),
         ...(def.boon ? [
           'mercy=' + !!host._finalMercyUsed,
           'echoes=' + host.combatEntries.filter(e => (e?.segments || []).some(sg => String(sg.text).includes('repeats!'))).length,
@@ -971,6 +1007,7 @@ function collectHuntFights() {
     } catch (e) {
       out[label] = 'THREW ' + String(e.message).split('\n')[0].slice(0, 120);
     }
+    if (pmBefore) ProgressionManager.deserialize(pmBefore);
   }
   return out;
 }
