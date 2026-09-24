@@ -432,20 +432,24 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
     // The prophet boon (chunk 10b): level and favor; hover for what it gives.
     const b = v.boon;
+    // A prophet's vigil (11d): unmarked kills off blight cost standing.
+    const vigilLine = b?.vigil ? `${houseName(b.vigil)}'s vigil: each unmarked kill off blight costs ${b.vigilCost} standing.` : null;
+    const vig = b?.vigil ? ' · vigil' : '';
     if (b?.pact) {
       // A false god's pact replaces the prophet's boon for this hunt (11c).
-      const pt = txt(x + 12, y + 41, `✦ ${b.pact.name}'s pact ${b.pact.level} · ${b.pact.curse.name}`, 11, '#c89ae8');
+      const pt = txt(x + 12, y + 41, `✦ ${b.pact.name}'s pact ${b.pact.level} · ${b.pact.curse.name}${vig}`, 11, '#c89ae8');
       pt.setInteractive({ useHandCursor: true });
       let tip = null;
       pt.on('pointerover', () => {
         const lines = [`${b.pact.name}, ${b.pact.title}: a pact, level ${b.pact.level}`,
           ...b.pact.names.map(n => `· ${n}`), `Curse: ${b.pact.curse.text}`, 'The prophet has turned away for this hunt.'];
+        if (vigilLine) lines.push(vigilLine);
         tip = this._box(x + 2, y + HUD_HEIGHT + 4, 420, lines, 20);
       });
       pt.on('pointerout', () => { tip?.destroy(true); tip = null; });
     } else if (b?.house && b.written) {
       const next = b.toNext === null ? (b.level >= 5 ? 'max' : 'max here') : `${fmt(b.favor)} favor, ${fmt(b.toNext)} to next`;
-      const bt = txt(x + 12, y + 41, `✦ ${houseName(b.house)} ${b.level ? `boon ${b.level}` : 'watches'} · ${next}`, 11, '#e8c66a');
+      const bt = txt(x + 12, y + 41, `✦ ${houseName(b.house)} ${b.level ? `boon ${b.level}` : 'watches'} · ${next}${vig}`, 11, '#e8c66a');
       bt.setInteractive({ useHandCursor: true });
       let tip = null;
       bt.on('pointerover', () => {
@@ -453,6 +457,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
           ...b.names.map((n, i) => `${i + 1}. ${n}: ${boonLevelDef(b.house, i + 1)?.text || ''}`)];
         if (!b.level) lines.push('Kill marked beasts, or reach the shrine, to earn favor.');
         if (!b.followed) lines.push('Level 5 only in the lands of the house your tribe follows.');
+        if (vigilLine) lines.push(vigilLine);
         tip = this._box(x + 2, y + HUD_HEIGHT + 4, 420, lines, 20);
       });
       bt.on('pointerout', () => { tip?.destroy(true); tip = null; });

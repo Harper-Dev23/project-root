@@ -116,6 +116,7 @@ import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } f
 import { objectiveProgress, exitReward, completionRewardPercent } from './HuntObjectives.js';
 import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { houseOf } from './Standing.js';
+import { VIGIL_KILL_COST, UNMARKED_KILL_FALSE_GOD } from '../../data/standing.js';
 import * as Boons from './Boons.js';
 import { FALSE_GODS, PACT_START, PACT_MAX, PACT_PRICE } from '../../data/falseGods.js';
 import {
@@ -306,6 +307,7 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   const { rngState, worldRngState, ...rest } = data;
   if (rest.event === undefined) rest.event = null;
   if (rest.boon === undefined) rest.boon = { house: houseOf(getZone(rest.zoneId)?.divineAlignment), followed: false, favor: 0, level: 0 };
+  if (rest.vigil != null && typeof rest.vigil !== 'string') throw new Error('map hunt vigil is not readable');
   if (rest.boon.pact != null && !(FALSE_GODS[rest.boon.pact.god] && Number.isInteger(rest.boon.pact.level))) throw new Error('map hunt pact is not readable');
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
   if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
@@ -726,9 +728,47 @@ function makeMapHunt(s, rng, worldRng, world) {
       } : null;
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
       const favor = this._earnFavor(Boons.killFavor(occ), 'kill');
+      const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked };
+    },
+
+    /**
+     * An unmarked beast was killed (chunk 11d; ENCOUNTERS, EVENTS). The
+     * region's false god always notices (hidden standing +
+     * UNMARKED_KILL_FALSE_GOD, blight or not). Under a vigil, a kill off
+     * blight also costs VIGIL_KILL_COST Bond and devotion with the vigil's
+     * house; on blight it is forgiven (blight-mercy). Returns what it cost,
+     * or null for any other kill.
+     */
+    _unmarkedKill(occ) {
+      if (occ.kind !== 'beast' || occ.mark !== 'unmarked') return null;
+      const god = getZone(s.zoneId)?.falseGod || null;
+      if (god) world.falseGod?.(god, UNMARKED_KILL_FALSE_GOD);
+      const mercy = s.map.tiles[occ.tile]?.ground === 'blight';
+      const cost = s.vigil && !mercy ? VIGIL_KILL_COST : 0;
+      if (cost) world.favor?.(s.vigil, -cost);
+      this._log({ kind: 'unmarked_kill', occupant: occ.id, vigil: s.vigil || null, mercy, cost, time: s.time });
+      return { god, vigil: s.vigil || null, mercy, cost };
+    },
+
+    /** An event's `vigil` verb (11d): the region's house keeps a vigil for the rest of the hunt. */
+    _setVigil(house) {
+      if (!house) return false;
+      s.vigil = house;
+      this._log({ kind: 'vigil', house, time: s.time });
+      return true;
+    },
+
+    /** Is a beast of this mark within 2 steps (the `fight` verb's reach)? For `appears.nearby`. */
+    _nearbyMark(mark) {
+      const here = parseTileId(s.pos);
+      return s.map.occupants.some(o => {
+        if (o.kind !== 'beast' || o.mark !== mark) return false;
+        const p = parseTileId(o.tile);
+        return p.section === here.section && distance(here, p) <= 2;
+      });
     },
 
     /**
@@ -1194,6 +1234,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const quiet = dynamicBlock(tpl, {
         isNight: this.clock().isNight, hunger: this.hunger(), roles, pact: !!s.boon?.pact,
         hasQuestFlag: (f) => !!world.hasQuestFlag?.(f),
+        nearby: (mark) => this._nearbyMark(mark),
       });
       if (quiet) {
         this._log({ kind: 'event_quiet', event: site.templateId, tile, time: s.time });
@@ -1258,6 +1299,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       return {
         s, world, rng, roles: ev.roles, houseId: ev.houseId, rivalId: ev.rivalId, godId: ev.godId || null, SATED_TIME,
         pactStep: () => hunt._pactStep(),
+        setVigil: () => hunt._setVigil(ev.houseId),
         party: () => world.party(),
         noteSupplies: () => hunt._noteSupplies(),
         earnFavor: (n, src) => hunt._earnFavor(n, src),
@@ -1443,6 +1485,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         toNext: Boons.toNext(b.favor, b.followed),
         names: Boons.boonEffects(b.house, b.level).names,
         pact,
+        vigil: s.vigil || null, vigilCost: VIGIL_KILL_COST,
       };
     },
 

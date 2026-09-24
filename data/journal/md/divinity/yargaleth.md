@@ -8,7 +8,7 @@ order: 290
 tags: ["divinity", "false-god"]
 status: "approved"
 teaser: false
-requires: []
+requires: ["lore:divinity/yargaleth"]
 sort: 290
 version: 1
 updatedAt: 2025-10-04

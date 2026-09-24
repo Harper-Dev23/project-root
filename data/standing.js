@@ -70,6 +70,15 @@ export const RITE_TICKETS_PER_LEVEL = 5;
 
 // ── A False God's price (DEATH_AND_REVIVAL; chunk 11c-2). Readers: Revival.js ─
 /** Hidden standing with the god who takes the hunter back, per level. */
+// The prophet's vigil (chunk 11d; owner, 10b): while a hunt's vigil is set,
+// each unmarked kill off blight costs this much Bond standing AND devotion with
+// the vigil's house (blight-mercy waives it). Placeholder until chunk 13.
+// Reader: HuntEngine._unmarkedKill.
+export const VIGIL_KILL_COST = 3;
+// Every unmarked kill (blight too) draws the region's false god's attention:
+// hidden standing + this much. Reader: HuntEngine._unmarkedKill.
+export const UNMARKED_KILL_FALSE_GOD = 1;
+
 export const FALSE_GOD_HIDDEN_PER_LEVEL = 10;
 /** Bond standing lost with the house your tribe follows, per level. */
 export const FALSE_GOD_BOND_PER_LEVEL = 5;

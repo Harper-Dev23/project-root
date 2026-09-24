@@ -8,7 +8,7 @@ order: 220
 tags: ["divinity", "false-god"]
 status: "approved"
 teaser: false
-requires: []
+requires: ["lore:divinity/dagon"]
 sort: 220
 version: 1
 updatedAt: 2025-10-04

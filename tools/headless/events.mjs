@@ -93,6 +93,7 @@ function validateTemplate(id, t) {
   for (const g of a.grounds || []) if (!GROUNDS[g]) say(`unknown ground '${g}'`);
   for (const h of a.hunger || []) if (!E.HUNGER_STAGES.includes(h)) say(`unknown hunger stage '${h}'`);
   for (const r of a.needs || []) if (!E.NULLABLE_ROLES.includes(r)) say(`needs '${r}', which is not a nullable role`);
+  if (a.nearby !== undefined && !E.MARKS.includes(a.nearby)) say(`nearby '${a.nearby}' is not a beast mark`);
   if (a.danger && !(Array.isArray(a.danger) && a.danger.length === 2)) say('danger is [min, max]');
   for (const k of ['weight', 'maxPerMap']) if (a[k] !== undefined && !(a[k] > 0)) say(`${k} must be positive`);
   for (const k of ['questFlag', 'notQuestFlag']) if (a[k] && !QUESTS_SRC.includes(`'${a[k]}'`)) say(`${k} '${a[k]}' is read by no quest`);
@@ -186,6 +187,7 @@ console.log('=== the validator, over every template ===');
     'an unknown item': { ...base, options: [{ label: 'L', effects: [{ item: { id: 'no_such_thing' } }] }] },
     'a quest flag nothing reads': { ...base, options: [{ label: 'L', effects: [{ questFlag: 'made_up_flag' }] }] },
     'lore for an entry that is not hidden': { ...base, options: [{ label: 'L', effects: [{ lore: 'divinity/jeremiah' }] }] },
+    'nearby with no such mark': { ...base, appears: { nearby: 'purple' } },
     'lore for no entry': { ...base, options: [{ label: 'L', effects: [{ lore: 'divinity/nobody' }] }] },
     'an unknown shape': { ...base, shape: 'dance' },
     'an unknown zone': { ...base, appears: { zones: ['atlantis'] } },
@@ -243,7 +245,7 @@ EVENT_TEMPLATES.test_verbs = {
     { text: 'It is done.' }, { huntPoints: 5 }, { xp: 10 }, { hp: { amount: -3, who: 'all' } }, { hunger: 'sated' },
     { item: { id: 'rations', qty: 2 } }, { boon: 5 }, { standing: 2 }, { standing: { amount: -3, target: 'rival' } },
     { tribeRep: { tribe: 'own', amount: 3 } }, { questFlag: 'vendor_row' }, { reveal: { radius: 3 } },
-    { blight: { spread: 2 } }, { blight: { cleanse: 1 } },
+    { blight: { spread: 2 } }, { blight: { cleanse: 1 } }, { vigil: true },
   ],
   refuse: [{ text: 'Refused.' }],
 };
@@ -430,6 +432,7 @@ console.log('=== every verb moves its reader ===');
   check('tribeRep: +3 with your own tribe', same(called('tribeRep'), [['tribeRep', 'styx', 3]]));
   check('questFlag: set through the world', w.flags.has('vendor_row'));
   check('reveal: tiles within 3 steps are no longer unseen', Object.keys(s1.fog).length > fog0, `${fog0} -> ${Object.keys(s1.fog).length}`);
+  check("vigil: the region's house keeps a vigil for the rest of the hunt", s0.vigil == null && s1.vigil === 'jeremiah' && h.view().boon?.vigil === 'jeremiah');
   check('blight: spread 2 then cleansed 1', blight1 === blight0 + 2 - 1, `${blight0} -> ${blight1}`);
   check('the lines read out every effect, the price first', r.lines.length >= 13 && r.lines[0] === '-2 supplies.' && r.lines[1] === 'It is done.', r.lines.join(' / '));
   const frail = [{ name: 'Frail', status: 'alive', currentHP: 2, maxHP: 40 }, { name: 'Hale', status: 'alive', currentHP: 40, maxHP: 40 }];
@@ -438,6 +441,10 @@ console.log('=== every verb moves its reader ===');
   const loreCalls = [];
   E.VERBS.lore.apply('divinity/lake_genesis', { world: { lore: (f) => loreCalls.push(f) } });
   check('lore: unlocks the entry\'s own flag through the world', same(loreCalls, ['lore:divinity/lake_genesis']));
+  const gated = ['divinity/dagon', 'divinity/yargaleth'];
+  check('the two false gods\' journal entries are hidden until their lore test is passed (11d), and are the only gated ones',
+    gated.every(id => same(JOURNAL.get(id), [E.loreFlag(id)])) && [...JOURNAL].filter(([, r]) => r.length).length === 2
+    && gated.every(id => validateTemplate('x', { name: 'T', shape: 'choice', text: 'T', options: [{ label: 'L', effects: [{ lore: id }] }] }).length === 0));
 
   const refused = withSite('test_verbs', { night: null });
   refused.h.move(refused.tile);

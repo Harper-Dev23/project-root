@@ -376,6 +376,25 @@ export const QUEST_LINES = [
     steps: [],
   },
 
+  // A hunt-map quest with no quest code (chunk 11d; EVENTS example 3): the
+  // eel-catcher events in data/events.js set and read these flags.
+  {
+    id:          'eel_catcher',
+    category:    'tribe',
+    title:       'The Eel-Catcher',
+    description: 'An old fisher in the Reeds of Gethsemane traded what they knew for three fish, and promised more.',
+    isAvailable: (pm) => pm.hasQuestFlag('eel_catcher_owed') || pm.hasQuestFlag('eel_catcher_paid'),
+    steps: [
+      {
+        id:          'eel_catcher_return',
+        label:       'Find the eel-catcher again',
+        description: 'The fisher owes you. They mend their nets in the Reeds; look for them on a later hunt.',
+        isActive:   (pm) => pm.hasQuestFlag('eel_catcher_owed'),
+        isComplete: (pm) => pm.hasQuestFlag('eel_catcher_paid'),
+      },
+    ],
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  WEAPON
   // ═══════════════════════════════════════════════════════════════════════════

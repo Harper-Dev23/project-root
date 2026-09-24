@@ -246,6 +246,76 @@ console.log('=== favor ===');
 }
 
 // =============================================================================
+console.log('=== the vigil and unmarked kills (11d) ===');
+{
+  const SD = await import('../../data/standing.js');
+  const E = await import('../../src/systems/EventEffects.js');
+  /** A world that also records the false god's attention. */
+  const watch = (m) => { m.w.godLog = []; m.w.falseGod = (g, n) => m.w.godLog.push([g, n]); return m; };
+  const plain = watch(meet(o => o.kind === 'beast' && o.mark === 'unmarked', { from: 400 }));
+  const god = { reeds_of_gethsemane: 'dagon', bay_of_solace: 'yargaleth' }[plain.zoneId];
+  const rp = plain.h.winEncounter({});
+  check(`an unmarked kill with no vigil: the region's false god notices (+${SD.UNMARKED_KILL_FALSE_GOD} hidden), and no standing is lost`,
+    same(plain.w.godLog, [[god, SD.UNMARKED_KILL_FALSE_GOD]]) && plain.w.favorLog.length === 0 && rp.unmarked?.cost === 0);
+
+  const kept = watch(meet(o => o.kind === 'beast' && o.mark === 'unmarked', { from: 500 }));
+  const house = HOUSE_OF_ZONE[kept.zoneId];
+  check('the vigil verb sets a vigil for the region\'s house', kept.h._setVigil(house) && kept.h.getState().vigil === house && kept.h.view().boon?.vigil === house);
+  const onBlight = kept.h.getState().map.tiles[kept.occ.tile]?.ground === 'blight';
+  const rk = kept.h.winEncounter({});
+  check(`under a vigil, an unmarked kill off blight costs ${SD.VIGIL_KILL_COST} Bond and devotion with that house (and the god still notices)`,
+    !onBlight && same(kept.w.favorLog, [[house, -SD.VIGIL_KILL_COST]]) && kept.w.godLog.length === 1 && rk.unmarked?.cost === SD.VIGIL_KILL_COST,
+    JSON.stringify(kept.w.favorLog));
+
+  const marked = watch(meet(o => o.kind === 'beast' && o.mark === 'marked', { from: 600 }));
+  marked.h._setVigil(HOUSE_OF_ZONE[marked.zoneId]);
+  const rm = marked.h.winEncounter({});
+  check('...a marked kill under a vigil still earns favor, and no god notices', rm.favor > 0 && marked.w.favorLog.every(([, n]) => n > 0) && marked.w.godLog.length === 0 && rm.unmarked === null);
+
+  // Blight-mercy, on a hunt whose tile is blighted (through the save's path).
+  const party = makeParty();
+  const w = world(party); watch({ w });
+  const h0 = createMapHunt('reeds_of_gethsemane', { plan: { objective: 'cull', size: 'medium' }, supplies: 400, seed: 77 }, w);
+  const d = h0.serialize();
+  const bt = Object.keys(d.map.tiles).find(id => id !== d.pos);
+  d.map.tiles[bt].ground = 'blight';
+  d.vigil = 'jeremiah';
+  const h = restoreMapHunt(d, w);
+  check('a vigil survives a save and load', h.getState().vigil === 'jeremiah');
+  const rb = h._unmarkedKill({ id: 'otest', kind: 'beast', mark: 'unmarked', tile: bt });
+  check('blight-mercy: under a vigil, an unmarked kill on blight costs no standing, but the god still notices',
+    rb.mercy && rb.cost === 0 && w.favorLog.length === 0 && same(w.godLog, [['dagon', SD.UNMARKED_KILL_FALSE_GOD]]));
+  check('...a corrupted kill is not an unmarked one', h._unmarkedKill({ id: 'c', kind: 'beast', mark: 'corrupted', tile: bt }) === null && w.godLog.length === 1);
+  const bad = h.serialize(); bad.vigil = 7;
+  let threw = false; try { restoreMapHunt(bad, w); } catch { threw = true; }
+  check('an unreadable vigil is refused on load', threw);
+
+  // appears.nearby: the site opens only with a beast of that mark within 2 steps.
+  const tpl = { name: 'n', text: 't', shape: 'choice', appears: { nearby: 'unmarked' }, options: [] };
+  check('appears.nearby: quiet with no such beast near, open with one',
+    !!E.dynamicBlock(tpl, { nearby: () => false }) && E.dynamicBlock(tpl, { nearby: (m) => m === 'unmarked' }) === null && E.MARKS.includes('unmarked'));
+  const near = h._nearbyMark('unmarked');
+  const occs = h.getState().map.occupants.filter(o => o.kind === 'beast' && o.mark === 'unmarked');
+  const { parseTileId, distance } = await import('../../src/systems/HexGrid.js');
+  const here = parseTileId(h.getState().pos);
+  const truth = occs.some(o => { const p = parseTileId(o.tile); return p.section === here.section && distance(here, p) <= 2; });
+  check('...and the hunt answers it from the real map (within 2 steps, same section)', near === truth, `${near}`);
+  const d2 = h.serialize();
+  const P = parseTileId(d2.pos);
+  const beside = Object.keys(d2.map.tiles).find(id => { const Q = parseTileId(id); return Q.section === P.section && distance(P, Q) === 2 && !d2.map.occupants.some(o => o.tile === id); });
+  d2.map.occupants = d2.map.occupants.filter(o => o.kind !== 'beast');
+  d2.map.occupants.push({ id: 'ubeast', kind: 'beast', mark: 'unmarked', family: 'wolf', tile: beside, roster: [{ grade: 'grown' }], concealment: 0 });
+  const h2 = restoreMapHunt(d2, w);
+  check('...an unmarked beast 2 steps away counts; a marked one does not', h2._nearbyMark('unmarked') === true && h2._nearbyMark('marked') === false && !!beside);
+
+  // The eel-catcher quest reads the flags its events set.
+  const { QUEST_LINES, getQuestState } = await import('../../src/data/quests.js');
+  const q = QUEST_LINES.find(x => x.id === 'eel_catcher');
+  const pmOf = (flags) => ({ hasQuestFlag: (f) => flags.includes(f), completedScenarios: [] });
+  check('the eel-catcher quest: hidden until owed, active while owed, complete once paid',
+    getQuestState(q, pmOf([])) === 'locked' && getQuestState(q, pmOf(['eel_catcher_owed'])) === 'active' && getQuestState(q, pmOf(['eel_catcher_paid'])) === 'completed');
+}
+
 console.log('=== every effect moves its number ===');
 {
   const party0 = makeParty();

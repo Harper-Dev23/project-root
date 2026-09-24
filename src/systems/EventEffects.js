@@ -223,6 +223,12 @@ export const VERBS = {
       return null;
     },
   },
+  vigil: {
+    // true: the region's house keeps a vigil for the rest of the hunt (11d).
+    reader: 'HuntEngine._unmarkedKill: while the vigil is set, an unmarked kill off blight costs Bond and devotion with its house',
+    validate: (v) => (v === true ? null : 'vigil is true'),
+    apply: (v, api) => (api.setVigil() ? "The prophet's watchers will count every unmarked kill." : null),
+  },
   lore: {
     // A journal entry id ('divinity/lake_genesis'). It unlocks the flag
     // loreFlag(id), which that entry must list in its `requires` to be hidden
@@ -311,7 +317,10 @@ export function applyEffects(list, api) {
 // ── Where an event may appear (data/events.js `appears`) ──────────────────────
 
 export const APPEARS_KEYS = ['zones', 'houses', 'followed', 'danger', 'grounds', 'setPiece', 'weight', 'maxPerMap',
-  'night', 'hunger', 'questFlag', 'notQuestFlag', 'needs', 'pact'];
+  'night', 'hunger', 'questFlag', 'notQuestFlag', 'needs', 'pact', 'nearby'];
+
+/** Beast marks a template's `appears.nearby` may ask for (a beast of it within the fight verb's reach). */
+export const MARKS = ['marked', 'unmarked', 'corrupted'];
 
 /**
  * Conditions known when the map is made: region, its house, whether your
@@ -349,5 +358,7 @@ export function dynamicBlock(tpl, ctx) {
   if (a.pact === true && !ctx.pact) return 'nothing here for you now';
   if (a.pact === false && ctx.pact) return 'nothing here for you now';
   for (const r of a.needs || []) if (ctx.roles?.[r] == null) return 'nothing here for you now';
+  // A beast of this mark within 2 steps (11d), the `fight` verb's reach.
+  if (a.nearby && !ctx.nearby?.(a.nearby)) return 'nothing here for you now';
   return null;
 }
