@@ -3575,14 +3575,66 @@ export default class CombatScene extends Phaser.Scene {
    * per-combat reset, which would otherwise wipe it.
    */
   _applyHuntFightStart() {
+    const standing = (GameState.party || []).filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
     const buff = this.huntFight?.foodBuff;
-    if (!buff?.field || !Number.isFinite(buff.amount)) return;
-    for (const c of GameState.party || []) {
-      if (!c || c.status === 'incapacitated' || (c.currentHP ?? 1) <= 0) continue;
-      c.statusEffects = c.statusEffects || [];
-      c.statusEffects.push({ id: 'hunt_food_buff', name: buff.name || 'Well fed', turns: 99, mods: { [buff.field]: buff.amount } });
+    if (buff?.field && Number.isFinite(buff.amount)) {
+      for (const c of standing) {
+        c.statusEffects = c.statusEffects || [];
+        c.statusEffects.push({ id: 'hunt_food_buff', name: buff.name || 'Well fed', turns: 99, mods: { [buff.field]: buff.amount } });
+      }
+      this._log(`🍲 Well fed: ${buff.name || 'a meal'} (+${buff.amount} ${buff.field}) for this fight.`);
     }
-    this._log(`🍲 Well fed: ${buff.name || 'a meal'} (+${buff.amount} ${buff.field}) for this fight.`);
+    // The prophet boon's combat half (chunk 10b; data/boons.js): status mods on
+    // every standing hunter and on every enemy for the whole fight, and the
+    // capstone, which _checkFinalMercy and the echo roll read off huntFight.
+    const boon = this.huntFight?.boon;
+    this._finalMercyUsed = false;
+    if (boon) {
+      if (Object.keys(boon.party || {}).length) {
+        for (const c of standing) {
+          c.statusEffects = c.statusEffects || [];
+          c.statusEffects.push({ id: 'hunt_boon', name: `Boon of ${boon.house}`, turns: 99, mods: { ...boon.party } });
+        }
+      }
+      if (Object.keys(boon.enemies || {}).length) {
+        for (const e of this.enemies || []) {
+          if (!e || e.status === 'incapacitated' || (e.currentHP ?? 1) <= 0) continue;
+          e.statusEffects = e.statusEffects || [];
+          e.statusEffects.push({ id: 'hunt_boon_judgment', name: `Judged by ${boon.house}`, turns: 99, mods: { ...boon.enemies } });
+        }
+      }
+      this._log(`✦ ${boon.house[0].toUpperCase() + boon.house.slice(1)}'s boon, level ${boon.level}, is with the party.`);
+    }
+  }
+
+  /**
+   * Final Mercy (Jeremiah's capstone, chunk 10b): once per fight, the first
+   * time a hunter is down while others still stand, every standing hunter
+   * heals healPercent of their max HP. Called from _updateHealthBars, the one
+   * hook every HP change passes through.
+   */
+  _checkFinalMercy() {
+    const cap = this.huntFight?.boon?.capstone;
+    if (cap?.id !== 'final_mercy' || this._finalMercyUsed || this.combatEnded) return;
+    const party = (GameState.party || []).filter(Boolean);
+    const down = party.some(c => c.status === 'incapacitated' || (c.currentHP ?? 1) <= 0);
+    const standing = party.filter(c => c.status !== 'incapacitated' && c.status !== 'dead' && (c.currentHP ?? 1) > 0);
+    if (!down || !standing.length) return;
+    this._finalMercyUsed = true;
+    for (const c of standing) {
+      const heal = Math.floor((c.maxHP || 0) * (cap.healPercent || 0) / 100);
+      c.currentHP = Math.min(c.maxHP || 0, (c.currentHP || 0) + heal);
+    }
+    this._log(`🐢 Final Mercy: grief washes over the party (+${cap.healPercent}% max HP to every hunter still standing).`);
+  }
+
+  /** The Loop (Ezekiel's capstone, chunk 10b): a hunter's damaging hit may echo. */
+  _boonEchoChance(user, result) {
+    const cap = this.huntFight?.boon?.capstone;
+    if (cap?.id !== 'the_loop' || !result || result.isHeal) return 0;
+    if (!(GameState.party || []).includes(user)) return 0;
+    const hurts = !!result._coreBreakdown || (result.amount || 0) > 0;
+    return hurts ? (cap.echoChance || 0) : 0;
   }
 
 
@@ -4152,6 +4204,7 @@ export default class CombatScene extends Phaser.Scene {
     // purely to repaint bars is harmless. Wrapped so a summon problem can
     // never take the health bars down with it.
     try { this._checkSummonThresholds?.(); } catch (err) { console.error('[summon]', err); }
+    try { this._checkFinalMercy?.(); } catch (err) { console.error('[final mercy]', err); }
 
     const getEffMax = (u) => {
       const down = u?._weaknessDerived?.maxHPDown || 0;
@@ -9014,8 +9067,11 @@ export default class CombatScene extends Phaser.Scene {
     // like a recast having the same one-echo allowance a normal cast gets.
     // So Galvanic Touch can reach 4 hits: cast + echo, recast + echo.
     const repeatBlocked = !!options?.isRepeat && !options?.isRecast;
-    if (!missed && !repeatBlocked && (result?.repeatChance || 0) > 0) {
-      if (Math.random() < result.repeatChance) {
+    // Ezekiel's The Loop adds its echo chance to the skill's own (0 outside a
+    // hunt fight with that boon, so every other fight rolls exactly as before).
+    const echoChance = Math.min(1, (result?.repeatChance || 0) + this._boonEchoChance(user, result));
+    if (!missed && !repeatBlocked && echoChance > 0) {
+      if (Math.random() < echoChance) {
         this._log(`${user?.name ?? 'Attacker'} channels the momentum — ${ability.name} repeats!`);
         this.time.delayedCall(380 * GameplaySettings.animDurationMult(), () => {
           if (this.combatEnded || !target || target.status === 'incapacitated') return;

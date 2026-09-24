@@ -1,0 +1,315 @@
+{
+ "levels": [
+  [
+   0,
+   0,
+   0
+  ],
+  [
+   4,
+   0,
+   0
+  ],
+  [
+   5,
+   1,
+   1
+  ],
+  [
+   9,
+   1,
+   1
+  ],
+  [
+   10,
+   2,
+   2
+  ],
+  [
+   19,
+   2,
+   2
+  ],
+  [
+   20,
+   3,
+   3
+  ],
+  [
+   29,
+   3,
+   3
+  ],
+  [
+   30,
+   4,
+   4
+  ],
+  [
+   39,
+   4,
+   4
+  ],
+  [
+   40,
+   4,
+   5
+  ],
+  [
+   999,
+   4,
+   5
+  ]
+ ],
+ "effects": {
+  "jeremiah": [
+   {
+    "party": {},
+    "enemies": {},
+    "explore": {},
+    "capstone": null,
+    "names": []
+   },
+   {
+    "party": {
+     "PhysicalResist": 10,
+     "ElementalResist": 10,
+     "NecroticResist": 10
+    },
+    "enemies": {},
+    "explore": {},
+    "capstone": null,
+    "names": [
+     "Shell of Sorrow"
+    ]
+   },
+   {
+    "party": {
+     "PhysicalResist": 10,
+     "ElementalResist": 10,
+     "NecroticResist": 10
+    },
+    "enemies": {},
+    "explore": {
+     "supplyEfficiencyPercent": 15
+    },
+    "capstone": null,
+    "names": [
+     "Shell of Sorrow",
+     "Never Halts"
+    ]
+   },
+   {
+    "party": {
+     "PhysicalResist": 15,
+     "ElementalResist": 15,
+     "NecroticResist": 15
+    },
+    "enemies": {
+     "AttackPower": -10
+    },
+    "explore": {
+     "supplyEfficiencyPercent": 15
+    },
+    "capstone": null,
+    "names": [
+     "Shell of Sorrow",
+     "Never Halts",
+     "Rust in Their Hands"
+    ]
+   },
+   {
+    "party": {
+     "PhysicalResist": 15,
+     "ElementalResist": 15,
+     "NecroticResist": 15
+    },
+    "enemies": {
+     "AttackPower": -10
+    },
+    "explore": {
+     "supplyEfficiencyPercent": 15,
+     "sightRangeBonus": 1
+    },
+    "capstone": null,
+    "names": [
+     "Shell of Sorrow",
+     "Never Halts",
+     "Rust in Their Hands",
+     "The Mourning Flight"
+    ]
+   },
+   {
+    "party": {
+     "PhysicalResist": 15,
+     "ElementalResist": 15,
+     "NecroticResist": 15
+    },
+    "enemies": {
+     "AttackPower": -10
+    },
+    "explore": {
+     "supplyEfficiencyPercent": 15,
+     "sightRangeBonus": 1
+    },
+    "capstone": {
+     "id": "final_mercy",
+     "healPercent": 20
+    },
+    "names": [
+     "Shell of Sorrow",
+     "Never Halts",
+     "Rust in Their Hands",
+     "The Mourning Flight",
+     "Final Mercy"
+    ]
+   }
+  ],
+  "ezekiel": [
+   {
+    "party": {},
+    "enemies": {},
+    "explore": {},
+    "capstone": null,
+    "names": []
+   },
+   {
+    "party": {
+     "Accuracy": 10
+    },
+    "enemies": {},
+    "explore": {},
+    "capstone": null,
+    "names": [
+     "Sacred Geometry"
+    ]
+   },
+   {
+    "party": {
+     "Accuracy": 10
+    },
+    "enemies": {},
+    "explore": {
+     "travelTimePercent": 15
+    },
+    "capstone": null,
+    "names": [
+     "Sacred Geometry",
+     "Tilting Thresholds"
+    ]
+   },
+   {
+    "party": {
+     "Accuracy": 15,
+     "CritChance": 10,
+     "CritMult": 0.25
+    },
+    "enemies": {},
+    "explore": {
+     "travelTimePercent": 15
+    },
+    "capstone": null,
+    "names": [
+     "Sacred Geometry",
+     "Tilting Thresholds",
+     "The Pattern Repeats"
+    ]
+   },
+   {
+    "party": {
+     "Accuracy": 15,
+     "CritChance": 10,
+     "CritMult": 0.25
+    },
+    "enemies": {},
+    "explore": {
+     "travelTimePercent": 15,
+     "partyInitiativeBonus": 10
+    },
+    "capstone": null,
+    "names": [
+     "Sacred Geometry",
+     "Tilting Thresholds",
+     "The Pattern Repeats",
+     "Déjà Vu"
+    ]
+   },
+   {
+    "party": {
+     "Accuracy": 15,
+     "CritChance": 10,
+     "CritMult": 0.25
+    },
+    "enemies": {},
+    "explore": {
+     "travelTimePercent": 15,
+     "partyInitiativeBonus": 10
+    },
+    "capstone": {
+     "id": "the_loop",
+     "echoChance": 0.2
+    },
+    "names": [
+     "Sacred Geometry",
+     "Tilting Thresholds",
+     "The Pattern Repeats",
+     "Déjà Vu",
+     "The Loop"
+    ]
+   }
+  ]
+ },
+ "favor": {
+  "marked": {
+   "grades": [
+    "yearling",
+    "yearling",
+    "yearling",
+    "yearling",
+    "yearling",
+    "yearling"
+   ],
+   "favor": 6,
+   "level": 1
+  },
+  "followed": 7.5
+ },
+ "explore": {
+  "supply": [
+   9.736842105263158,
+   24.736842105263158
+  ],
+  "time": [
+   7.5675675675675675,
+   22.56756756756757
+  ],
+  "sight": [
+   2,
+   3
+  ]
+ },
+ "combat": {
+  "dr": [
+   [
+    0.11,
+    0.26
+   ],
+   [
+    0.09,
+    0.24
+   ],
+   [
+    0.04,
+    0.19
+   ]
+  ],
+  "hit": [
+   49,
+   64
+  ],
+  "enemyTurn": [
+   40,
+   32
+  ]
+ }
+}

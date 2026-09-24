@@ -494,6 +494,8 @@
   "great-led pack with parts": "WIN first=party turns=35 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=3/1/22/1/27/47 foeHP=0/0/0/0/0 hunt=win: log=321",
   "cultist band": "WIN first=party turns=15 round=4 allies=6/6 foes=0/3 foeMaxHP=70/58/72 allyHP=56/38/32/48/40/57 foeHP=0/0/0 hunt=win:simple_chest_dex_int/uncommon,simple_chest_con_str/uncommon,simple_chest_wis_con/rare log=96",
   "stalker pack, fed for the fight": "WIN first=party turns=18 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=58/14/32/1/40/55 foeHP=0/0/0/0 hunt=win: log=162",
-  "stalker pack, fled on the first turn": "FLED first=party turns=0 round=2 allies=6/6 foes=4/4 foeMaxHP=60/64/62/60 allyHP=56/4/32/45/40/55 foeHP=60/64/62/60 hunt=flee:ko=0 log=57"
+  "stalker pack, fled on the first turn": "FLED first=party turns=0 round=2 allies=6/6 foes=4/4 foeMaxHP=60/64/62/60 allyHP=56/4/32/45/40/55 foeHP=60/64/62/60 hunt=flee:ko=0 log=57",
+  "great-led pack, Jeremiah boon 5": "WIN first=party turns=40 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=42/8/32/1/38/48 foeHP=0/0/0/0/0 hunt=win: log=353 mercy=true echoes=0",
+  "stalker pack, Ezekiel boon 5": "WIN first=party turns=13 round=4 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=50/38/29/23/40/54 foeHP=0/0/0/0 hunt=win: log=114 mercy=false echoes=2"
  }
 }

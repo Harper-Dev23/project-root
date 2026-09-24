@@ -130,7 +130,7 @@ check('Depart starts a hunt on the hex map and opens the map scene (the Hunt scr
 check('...with the plan\'s objective, size and item level (Retrieve, Small, 3)', dep.objective === 'retrieve' && dep.size === 'small' && dep.level === 3 && dep.layout === 37);
 check('...the plan used up, 60 Rations packed', !dep.planInBag && bagBefore - (await bagRations()) === 60 && dep.supplies >= 120, `supplies ${dep.supplies}`);
 const s0 = await saved();
-check('...and saved at once: the autosave holds the map hunt', s0?.version === 7 && s0?.hunt?.mode === 'map');
+check('...and saved at once: the autosave holds the map hunt', s0?.version === 8 && s0?.hunt?.mode === 'map', `v${s0?.version}`);
 await shot('02-departed');
 
 // ---- 3. Every action autosaves ------------------------------------------------
@@ -201,6 +201,38 @@ check('...the occupant is gone, the kill recorded, and the win saved', won.gone 
   && svWon?.hunt?.mode === 'map' && svWon.hunt.kills.length === pre.kills + 1, JSON.stringify(won));
 await shot('05d-back-on-map');
 
+// ---- 5b''. The prophet boon (chunk 10b): the HUD line, its hover, and the level-up notice ----
+{
+  const bv = await evaluate(`const h = window.__T.s().hunt; const b = h.view().boon; const k = h.getState().kills.at(-1);
+    return { ...b, mark: k?.mark, kind: k?.kind };`);
+  const line = await evaluate(`return window.__T.textsOf('HuntFieldOverlay').map(t => t.text).find(t => t.startsWith('✦ ')) || null;`);
+  check(`the HUD shows the region's boon (${bv.house}, level ${bv.level}, favor ${bv.favor})`,
+    !!line && line.includes(bv.house[0].toUpperCase() + bv.house.slice(1)) && (bv.level ? line.includes(`boon ${bv.level}`) : line.includes('watches')), line);
+  check(`...and the win paid favor only for a marked beast (this kill: ${bv.kind}, ${bv.mark})`, (bv.kind === 'beast' && bv.mark === 'marked') === (bv.favor > 0));
+  const tip = await evaluate(`const sc = window.__T.g().scene.getScene('HuntFieldOverlay');
+    const t = sc.layer.list.find(o => typeof o.text === 'string' && o.text.startsWith('✦ ')); t.emit('pointerover');
+    await new Promise(r => setTimeout(r, 200));
+    const lines = window.__T.textsOf('HuntFieldOverlay').map(x => x.text).filter(x => /Tortoise|Visionary|marked beasts|Level 5 only/.test(x));
+    t.emit('pointerout'); return lines;`);
+  check('hovering it names the house and says how favor is earned', tip.length >= 2, JSON.stringify(tip));
+  if (bv.level > 0) {
+    const said = await evaluate(`return window.__T.textsOf('UIScene').map(t => t.text).find(t => t.includes('boon rises to level')) || null;`);
+    check('...and the level earned in the fight was announced on the map', !!said, said);
+  } else {
+    console.log('    (this kill earned no level, so no level-up notice to check)');
+  }
+  // A level earned on the map, through the engine's own booking (as the shrine
+  // does), then the scene's own redraw: the notice and the new HUD line.
+  const lvl = await evaluate(`const sc = window.__T.s(); const b0 = sc.hunt.view().boon.level;
+    sc.hunt._earnFavor((await import('/data/boons.js')).BOON_THRESHOLDS[0], 'test'); sc._refresh();
+    await new Promise(r => setTimeout(r, 300));
+    return { b0, b1: sc.hunt.view().boon.level, said: window.__T.textsOf('UIScene').map(t => t.text).find(t => t.includes('boon rises to level')) || null,
+      line: window.__T.textsOf('HuntFieldOverlay').map(t => t.text).find(t => t.startsWith('✦ ')) || null };`);
+  check('a level earned on the map is announced in the dialogue bar, and the HUD line shows it',
+    lvl.b1 > lvl.b0 && !!lvl.said && lvl.said.includes(`level ${lvl.b1}`) && lvl.line.includes(`boon ${lvl.b1}`), JSON.stringify(lvl));
+  await shot('05d1-boon');
+}
+
 // ---- 5b'. Harvest (chunk 9d): a beast fight leaves spoils on the map ---------------------
 const kind5 = await evaluate(`const h = window.__T.s().hunt; const k = h.getState().kills.slice(-1)[0]; return k?.kind;`);
 if (kind5 === 'beast') {
@@ -252,7 +284,11 @@ const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t])
 check('walked to an exit', walked === 'there', walked);
 await evaluate(`const s = window.__T.s(); s.panel = null; s.selected = s.v.pos; s._refresh(); return 1;`);
 const home0 = await bagRations();
-const pts0 = await evaluate(`const PM = (await import('/src/systems/ProgressionManager.js')).default; return PM.huntPoints;`);
+const pts0 = await evaluate(`const PM = (await import('/src/systems/ProgressionManager.js')).default;
+  // Every Hunt Point paid from here to the check below, with who paid it.
+  window.__hpCalls = []; const orig = PM.addHuntPoints.bind(PM);
+  PM.addHuntPoints = (n) => { window.__hpCalls.push({ n, at: (new Error().stack || '').split(String.fromCharCode(10)).slice(2, 6).map(l => l.trim()).join(' < ') }); return orig(n); };
+  return PM.huntPoints;`);
 await clickText('^Leave the hunt$');
 const enter = await findText('Enter', 'UIScene');
 if (enter) await click(enter.x, enter.y);
@@ -265,13 +301,14 @@ const after = await evaluate(`const { HuntManager } = await import('/src/systems
 const sv = await saved();
 check('leaving ends the hunt: the holder drops it and the save holds no hunt', after.finished === 'exit' && !after.active && sv?.hunt === null);
 check('...unspent Rations come home to the bag', (await bagRations()) >= home0, `${home0} -> ${await bagRations()}`);
-// The primary was not done, so no completion reward. A bonus objective pays on
-// top whatever the primary (7d); since 9c Unbroken can be done by the fights
-// this run wins, and the plan's bonus is rolled unseeded, so it may or may not
-// be one. What is paid must be exactly the bonuses the engine reports done.
-check('...no completion reward (the objective was not done); only done bonus objectives pay',
-  !after.primaryDone && after.completion === 0 && after.pts - pts0 === after.bonusPts,
-  `${pts0} -> ${after.pts}, bonuses ${JSON.stringify(after.bonuses)} = ${after.bonusPts}`);
+// What leaving pays is exactly what the engine reports: the completion reward
+// if (and only if) the primary is done, plus each done bonus objective (7d).
+// The plan is rolled unseeded and the walk is random, so the Retrieve site may
+// or may not have been crossed on the way (a run on 2026-09-24 did: 21 + 15);
+// the rule, not one outcome, is what is checked.
+check('...leaving pays the completion reward only if the primary is done, plus the done bonus objectives',
+  (after.primaryDone ? after.completion > 0 : after.completion === 0) && after.pts - pts0 === after.completion + after.bonusPts,
+  `${pts0} -> ${after.pts}: primary ${after.primaryDone ? 'done' : 'not done'} ${after.completion}, bonuses ${JSON.stringify(after.bonuses)} = ${after.bonusPts}; paid: ${JSON.stringify(await evaluate('return window.__hpCalls;'))}`);
 await clickText('^Return to camp$');
 await sleep(500);
 await evaluate(`window.__T.g().scene.getScene('TownScene')._enterHuntGate(); await new Promise(r => setTimeout(r, 900)); return 1;`);

@@ -72,6 +72,9 @@ const { SKILLS } = await import('../data/skills.js');
 const { COMBAT_SCENARIOS } = await import('../data/combatScenarios.js');
 const { ENEMY_TYPES } = await import('../data/enemyTypes.js');
 const { rollLoadout, fightScenario } = await import('../src/systems/HuntBeasts.js');
+const { boonEffects } = await import('../src/systems/Boons.js');
+/** A boon as HuntEngine._boonForFight hands it to combat (chunk 10b). */
+const boonAt = (house, level) => { const fx = boonEffects(house, level); return { house, level, party: fx.party, enemies: fx.enemies, capstone: fx.capstone }; };
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
 const CombatScene = CombatSceneMod.default
   || Object.values(CombatSceneMod).find(v => typeof v === 'function');
@@ -886,6 +889,14 @@ const HUNT_FIGHTS = {
   'stalker pack, fed for the fight': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     foodBuff: { field: 'AttackPower', amount: 10, source: 'ember_pepper', name: 'Ember Pepper' } },
   'stalker pack, fled on the first turn': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party', flee: true },
+  // Chunk 10b: the same fights under a level-5 prophet boon, capstone and all.
+  // Final Mercy needs a hunter to fall, so Jeremiah's is the hard Great-led
+  // pack; The Loop is on the plain stalker pack. Each records whether its
+  // capstone fired.
+  'great-led pack, Jeremiah boon 5': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party',
+    boon: boonAt('jeremiah', 5) },
+  'stalker pack, Ezekiel boon 5': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+    boon: boonAt('ezekiel', 5) },
 };
 
 /** Play a flee's free round out, the way runFight drives enemy turns. */
@@ -923,6 +934,7 @@ function collectHuntFights() {
       hunt, kind: o.kind, first: def.first, itemLevel: 1, xpPool: 20, deathRule: 'sheltered',
       scenario: fightScenario(occ, { itemLevel: 1 }),
       ...(def.foodBuff ? { foodBuff: def.foodBuff } : {}),
+      ...(def.boon ? { boon: def.boon } : {}),
     };
     let fled = false;
     try {
@@ -951,6 +963,10 @@ function collectHuntFights() {
         'foeHP=' + snap.enemies.map(e => e.hp).join('/'),
         'hunt=' + (calls.join(';') || 'none'),
         'log=' + host.combatEntries.length,
+        ...(def.boon ? [
+          'mercy=' + !!host._finalMercyUsed,
+          'echoes=' + host.combatEntries.filter(e => (e?.segments || []).some(sg => String(sg.text).includes('repeats!'))).length,
+        ] : []),
       ].join(' ');
     } catch (e) {
       out[label] = 'THREW ' + String(e.message).split('\n')[0].slice(0, 120);

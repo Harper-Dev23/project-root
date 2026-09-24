@@ -57,6 +57,13 @@ import { CAMP_TIME, CAMP_SUPPLY, FORAGE_TIME, FISH_TIME, SCOUT_TIME } from '../.
 import { CLEANSE_TIME } from '../../systems/HuntWorld.js';
 import { HuntManager } from '../../systems/HuntManager.js';
 import GameState from '../../systems/GameState.js';
+import { levelDef as boonLevelDef } from '../../systems/Boons.js';
+
+// The boon level each hunt has already announced (chunk 10b), kept per hunt
+// instance so a level earned in a fight is announced when the map reopens,
+// and a reload (a new instance) never re-announces an old one.
+const _boonAnnounced = new WeakMap();
+const houseName = (h) => (h ? h.charAt(0).toUpperCase() + h.slice(1) : '');
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 export const FIELD_WINDOW = { x: 179, y: 14, w: 922, h: 692 };
@@ -190,6 +197,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._drawTiles();
     this._drawMarkers();
     this._drawHUD();
+    this._announceBoon();
     if (v.finished) this._drawFinished();
     else if (v.encounter) this._drawEncounter();
     else if (v.spoils) this._drawHarvest();
@@ -412,9 +420,26 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // Where and what.
     const zone = getZone(v.zoneId);
     const sizeName = MAP_SIZES[v.plan.size]?.name || v.plan.size;
-    txt(x + 12, y + 7, `${zone?.name || v.zoneId}`, 15, '#f2e6c8');
+    txt(x + 12, y + 5, `${zone?.name || v.zoneId}`, 15, '#f2e6c8');
     const sec = v.sections > 1 ? ` · Section ${v.section + 1} of ${v.sections}` : '';
-    txt(x + 12, y + 32, `${sizeName} · ${v.weather?.name || ''}${sec}`, 12, '#a8b0bc');
+    txt(x + 12, y + 25, `${sizeName} · ${v.weather?.name || ''}${sec}`, 12, '#a8b0bc');
+
+    // The prophet boon (chunk 10b): level and favor; hover for what it gives.
+    const b = v.boon;
+    if (b?.house && b.written) {
+      const next = b.toNext === null ? (b.level >= 5 ? 'max' : 'max here') : `${fmt(b.favor)} favor, ${fmt(b.toNext)} to next`;
+      const bt = txt(x + 12, y + 41, `✦ ${houseName(b.house)} ${b.level ? `boon ${b.level}` : 'watches'} · ${next}`, 11, '#e8c66a');
+      bt.setInteractive({ useHandCursor: true });
+      let tip = null;
+      bt.on('pointerover', () => {
+        const lines = [`${houseName(b.house)}, ${b.title}${b.followed ? ' (your house)' : ''}`,
+          ...b.names.map((n, i) => `${i + 1}. ${n}: ${boonLevelDef(b.house, i + 1)?.text || ''}`)];
+        if (!b.level) lines.push('Kill marked beasts, or reach the shrine, to earn favor.');
+        if (!b.followed) lines.push('Level 5 only in the lands of the house your tribe follows.');
+        tip = this._box(x + 2, y + HUD_HEIGHT + 4, 420, lines, 20);
+      });
+      bt.on('pointerout', () => { tip?.destroy(true); tip = null; });
+    }
 
     // Supplies and hunger.
     const sx = x + 270;
@@ -700,6 +725,18 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this.layer.add(box);
   }
 
+  /** A boon level earned since this hunt last announced one (in a fight, too). */
+  _announceBoon() {
+    const b = this.v.boon;
+    if (!b?.house) return;
+    if (!_boonAnnounced.has(this.hunt)) { _boonAnnounced.set(this.hunt, b.level); return; }
+    if (b.level <= _boonAnnounced.get(this.hunt)) return;
+    _boonAnnounced.set(this.hunt, b.level);
+    const d = boonLevelDef(b.house, b.level);
+    SoundManager.play('reward');
+    this._say(`✦ ${houseName(b.house)}'s boon rises to level ${b.level}: ${d?.name || ''}. ${d?.text || ''}`);
+  }
+
   _logLine(e) {
     const day = (t) => `D${Math.floor((t || 0) / 12) + 1}`;
     const item = (id) => Items[id]?.name || id;
@@ -720,6 +757,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'fight': return `${day(e.time)} The fight began${e.food ? `, well fed on ${item(e.food)}` : ''}.`;
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
+      case 'boon': return `${day(e.time)} ✦ ${houseName(e.house)}'s boon, level ${e.level}${e.name ? `: ${e.name}` : ''}.`;
       case 'exit': return `${day(e.time)} Left the hunt: ${e.huntPoints} Hunt Points.`;
       case 'wipe': return `${day(e.time)} The party fell.`;
       default: return null;

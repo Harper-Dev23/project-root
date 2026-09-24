@@ -160,6 +160,15 @@ export const GAME_WORLD = {
     // A hunt's XP is a pool split across the party, not paid to each hunter.
     GameState.awardXPPool(pool);
   },
+  // Standing (chunk 10b): favor earned on a hunt raises the Bond's standing
+  // and your tribe's devotion with that house at once; the hunt reads which
+  // house your tribe follows once, at departure.
+  favor(house, amount) {
+    Standing.earnFavor(ProgressionManager.getStanding(), ProgressionManager.tribe, house, amount);
+  },
+  followedHouse() {
+    return Standing.followedHouse(ProgressionManager.getStanding(), ProgressionManager.tribe);
+  },
   bankItems(items, { found }) {
     // Found items are new acquisitions and get the inventory's "new" dot;
     // leftovers of what was brought are coming back, not arriving.

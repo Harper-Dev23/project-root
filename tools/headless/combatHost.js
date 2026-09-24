@@ -327,6 +327,13 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
     host[name] = function () { count(name); return []; };
   }
 
+  // _updateHealthBars is drawing, except for the logic it hosts because every
+  // HP change passes through it. Final Mercy (chunk 10b) is gated on a hunt
+  // boon, so running it here moves no fight without one. The summon check it
+  // also hosts is NOT run: that would move the recorded fights, and is a
+  // separate, pre-existing gap (summons never fire headless).
+  host._updateHealthBars = function () { count('_updateHealthBars'); this._checkFinalMercy?.(); return chain; };
+
   // The result of _createWeaknessOverlays is passed to slot.add(), so an inert
   // object is enough - but it must not be an array, since the engine spreads
   // the status bars and not this.

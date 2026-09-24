@@ -201,10 +201,13 @@ export function hungerStage({ supplies, zeroSince, satedUntil, time }) {
  * hunt-bundle fields partyStats already reads (partyInitiativeBonus is added
  * after the initiative average; a buff names its own field).
  */
-export function momentMods(mods, { stage, foodBuff, time }) {
+export function momentMods(mods, { stage, foodBuff, time, boon = null }) {
   const m = { ...mods };
   m.partyInitiativeBonus = (m.partyInitiativeBonus || 0) + (HUNGER_INITIATIVE[stage] || 0);
   if (foodBuff && time < foodBuff.until) m[foodBuff.field] = (m[foodBuff.field] || 0) + foodBuff.amount;
+  // The prophet boon's exploration half (chunk 10b): Boons.boonEffects().explore,
+  // added straight, like any named party-wide source.
+  for (const [f, v] of Object.entries(boon || {})) m[f] = (m[f] || 0) + v;
   return m;
 }
 

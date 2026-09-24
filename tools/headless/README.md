@@ -50,6 +50,13 @@ save reaches v8 (rep x10, the standing record, old Slain as Watched deaths).
 rescale, the claiming rule, seasons, `GAME_WORLD`'s daily tick and the v8
 migration. Its golden is `tools/snapshots/standing-golden.json`.
 
+`boons.mjs` covers prophet boons (`src/systems/Boons.js`, `data/boons.js`,
+chunk 10b): the content, favor from marked kills and the shrine, every
+effect moving its real consumer, and both capstones in the real fight host.
+Its golden is `tools/snapshots/boons-golden.json`. The host's
+`_updateHealthBars` stub runs Final Mercy's check (the summon check it also
+hosts still does not run headless, a pre-existing gap).
+
 `pack.mjs` covers item stacking, Rations and the hunt pack: merge and split,
 and what a clean exit or a wipe under each death rule does to the pack.
 

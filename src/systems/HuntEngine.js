@@ -112,6 +112,8 @@ import { partyStats } from './PartyStats.js';
 import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } from './HuntManager.js';
 import { objectiveProgress, exitReward, completionRewardPercent } from './HuntObjectives.js';
 import { isItemInstance } from './ItemFactory.js';
+import { houseOf } from './Standing.js';
+import * as Boons from './Boons.js';
 import {
   huntMods, moveCost, clockAt, sightRange, visibleTiles, occupantBand,
   occupantView, SCOUT_TIME, BANDS,
@@ -224,6 +226,10 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     finished: null,
     reward: null,
     pack,
+    // The prophet boon (chunk 10b): the region's house, whether your tribe
+    // follows it (read once, at departure, like the modifier bundle), and the
+    // favor and level this hunt has earned. Ends with the hunt.
+    boon: newBoon(zone, world),
     log: [],
   };
   const hunt = makeMapHunt(s, rng, worldRng, world);
@@ -275,7 +281,14 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   }
   if (!data.mods || !data.weather) throw new Error('map hunt is missing its weather or modifiers');
   if (!isSeed(data.rngState) || !isSeed(data.worldRngState)) throw new Error('map hunt has no random-stream state');
+  // Optional in a save: a hunt saved before 10b has no boon and starts one at
+  // nothing, with the house its region names and not followed.
+  if (data.boon !== undefined && !(data.boon && (data.boon.house === null || typeof data.boon.house === 'string')
+      && typeof data.boon.followed === 'boolean' && Number.isFinite(data.boon.favor) && Number.isFinite(data.boon.level))) {
+    throw new Error('map hunt boon is not readable');
+  }
   const { rngState, worldRngState, ...rest } = data;
+  if (rest.boon === undefined) rest.boon = { house: houseOf(getZone(rest.zoneId)?.divineAlignment), followed: false, favor: 0, level: 0 };
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
   if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
   return hunt;
@@ -283,6 +296,12 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
 
 function clone(v) {
   return JSON.parse(JSON.stringify(v));
+}
+
+/** A hunt's boon at departure: the region's house, and whether your tribe follows it. */
+function newBoon(zone, world) {
+  const house = houseOf(zone?.divineAlignment);
+  return { house, followed: !!house && world.followedHouse?.() === house, favor: 0, level: 0 };
 }
 
 function makeMapHunt(s, rng, worldRng, world) {
@@ -306,7 +325,10 @@ function makeMapHunt(s, rng, worldRng, world) {
     /** The party's stats right now: live party, the hunt's bundle, this
      *  moment's hunger and food buff. */
     stats() {
-      return partyStats(world.party(), momentMods(s.mods, { stage: this.hunger(), foodBuff: s.foodBuff, time: s.time }));
+      return partyStats(world.party(), momentMods(s.mods, {
+        stage: this.hunger(), foodBuff: s.foodBuff, time: s.time,
+        boon: Boons.boonEffects(s.boon?.house, s.boon?.level || 0).explore,
+      }));
     },
 
     /** Sated / fed / hungry / starving (HuntRules.hungerStage). */
@@ -567,6 +589,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         itemLevel, deathRule: s.deathRule,
         xpPool: Math.round(FIGHT_XP_POOL * (1 + (s.mods.xpPercent || 0) / 100)),
         scenario: fightScenario(occ, { itemLevel, zoneName: zone?.name }),
+        boon: this._boonForFight(),
       };
     },
 
@@ -680,9 +703,10 @@ function makeMapHunt(s, rng, worldRng, world) {
         at: s.time,
       } : null;
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
+      const favor = this._earnFavor(Boons.killFavor(occ), 'kill');
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor };
     },
 
     /**
@@ -828,6 +852,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         encounter: this.encounter(),
         objectives: objectiveProgress(s),
         spoils: this._spoilsView(),
+        boon: this.boon(),
         finished: s.finished,
       };
     },
@@ -945,7 +970,11 @@ function makeMapHunt(s, rng, worldRng, world) {
     _arrive() {
       const p = s.map.objectives.primary;
       if (p.id === 'retrieve' && s.pos === p.site && !s.retrieved) { s.retrieved = true; this._log({ kind: 'retrieved', tile: s.pos, time: s.time }); }
-      if (p.id === 'commune' && s.pos === p.site && !s.communed) { s.communed = true; this._log({ kind: 'communed', tile: s.pos, time: s.time }); }
+      if (p.id === 'commune' && s.pos === p.site && !s.communed) {
+        s.communed = true;
+        this._log({ kind: 'communed', tile: s.pos, time: s.time });
+        this._earnFavor(Boons.SHRINE_FAVOR, 'shrine');
+      }
     },
 
     /** Where a fleeing party goes: back where it came from if that is open,
@@ -1040,6 +1069,45 @@ function makeMapHunt(s, rng, worldRng, world) {
         if (band === 'identified' && !s.unmasked.includes(occ.id) && occupantConcealment(s.map, occ) > 100) s.unmasked.push(occ.id);
       }
       return range;
+    },
+
+    /**
+     * Favor earned with the region's house (chunk 10b): booked on the hunt's
+     * boon (faster in your followed house's lands), raising its level, and
+     * written to the save's standing through the world as it happens
+     * (decision 9): the Bond and your tribe's devotion. Returns what was booked.
+     */
+    _earnFavor(raw, source) {
+      const b = s.boon;
+      if (!b?.house || !(raw > 0)) return 0;
+      const booked = Boons.gain(raw, b.followed);
+      b.favor += booked;
+      world.favor?.(b.house, booked);
+      const level = Boons.levelFor(b.favor, b.followed);
+      if (level > b.level) {
+        b.level = level;
+        this._log({ kind: 'boon', house: b.house, level, name: Boons.levelDef(b.house, level)?.name || null, source, time: s.time });
+      }
+      return booked;
+    },
+
+    /** The boon as the HUD shows it. */
+    boon() {
+      const b = s.boon || { house: null, followed: false, favor: 0, level: 0 };
+      return {
+        house: b.house, followed: b.followed, favor: b.favor, level: b.level,
+        written: Boons.hasBoons(b.house), title: Boons.houseTitle(b.house),
+        toNext: Boons.toNext(b.favor, b.followed),
+        names: Boons.boonEffects(b.house, b.level).names,
+      };
+    },
+
+    /** What CombatScene applies for the boon (fightSpec.boon), or null at level 0. */
+    _boonForFight() {
+      const b = s.boon;
+      if (!b?.house || !(b.level > 0) || !Boons.hasBoons(b.house)) return null;
+      const fx = Boons.boonEffects(b.house, b.level);
+      return { house: b.house, level: b.level, party: fx.party, enemies: fx.enemies, capstone: fx.capstone };
     },
 
     _log(entry) {

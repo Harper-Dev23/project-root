@@ -272,6 +272,11 @@ export function partyStats(party, mods = {}) {
   for (const id of passiveIds) {
     for (const [f, v] of Object.entries(EXPLORATION_PASSIVES[id]?.effect || {})) passives[f] += v;
   }
+  // A named source in the bundle can widen Sight too (a prophet boon, chunk
+  // 10b: Jeremiah's Mourning Flight). Only this field: partyInitiativeBonus is
+  // already read from the bundle below, so folding it in here would count it
+  // twice.
+  passives.sightRangeBonus += Number(mods.sightRangeBonus) || 0;
 
   const initiativeAvg = n ? members.reduce((t, c) => t + computeEffectiveInitiative(c), 0) / n : 0;
 

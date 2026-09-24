@@ -179,13 +179,16 @@ function walk({ zoneId, size, seed, supplies = 60, steps = STEPS, planMods = {},
     if (onStep) hunt = onStep(hunt, i, world) || hunt;
     const to = chooseMove(hunt, pick, stood);
     const before = hunt.getState();
+    // The move is charged at the stats it starts with. Read them now: the
+    // move can end in a fight won in settle(), and a won marked fight can
+    // raise the prophet boon (chunk 10b), which changes stats() after.
+    const st = hunt.stats();
     const res = hunt.move(to);
     if (res.ok) settle(hunt);
     if (!res.ok) { problems.push(`step ${i}: move refused: ${res.reason}`); break; }
     stood.add(to);
     charged += res.supply;
     const s = hunt.getState();
-    const st = hunt.stats();
     const expected = R.moveCost(s.map.tiles[to], st);
     if (before.supplies <= EPS) movedAtZero++;
     if (res.contact) contacts[res.contact.knew]++;
@@ -201,7 +204,7 @@ function walk({ zoneId, size, seed, supplies = 60, steps = STEPS, planMods = {},
     for (const id of seen) if (!nowSeen.has(id)) problems.push(`step ${i}: fog un-revealed ${id}`);
     for (const [id, f] of Object.entries(before.fog)) if (!s.fog[id]) problems.push(`step ${i}: ${id} went back to unseen (was ${f})`);
     seen = nowSeen;
-    const range = R.sightRange(s.map, s.pos, st.passives.sightRangeBonus);
+    const range = R.sightRange(s.map, s.pos, hunt.stats().passives.sightRangeBonus);   // Sight as it stands after the move (a won fight may have raised it)
     const vis = new Set(R.visibleTiles(s.map, s.pos, { range }));
     for (const [id, f] of Object.entries(s.fog)) if ((f === 'visible') !== vis.has(id)) problems.push(`step ${i}: fog of ${id} is ${f}, Sight disagrees`);
     for (const occ of s.map.occupants) {
