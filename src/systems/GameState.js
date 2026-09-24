@@ -4,6 +4,8 @@ import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { addToList } from './ItemStacks.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
+import { newStanding, LEGACY_FELL } from './Standing.js';
+import { REP_SCALE } from './TribeRelations.js';
 // Diagnostics imports nothing from the project, so this direction is safe and
 // can never become a cycle. See the header of that file.
 import Diagnostics from './Diagnostics.js';
@@ -291,7 +293,7 @@ function describeWriteError(e) {
 // Once a version has been pushed, players hold saves at that version, and a
 // migration that already ran will never run again for them. So a later change
 // to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
 const MIGRATIONS = {
@@ -337,6 +339,33 @@ const MIGRATIONS = {
   // refuse the save instead. Old saves' plan-vendor stock has no base per
   // slot; HuntPlans.currentPlanStock rolls it again once, at runtime.
   7: (data) => data,
+  // v8: standing (Exploration System v2, chunk 10a).
+  //   - progression.standing, the save-wide record (Standing.js): the Bond,
+  //     legacy, the season's devotion table. Season 1 begins on the save's
+  //     current day, so an old save never opens straight into a season end.
+  //     Its seed is a hash of the save itself, so migrating the same save
+  //     twice gives the same record.
+  //   - tribe reputation rescaled x REP_SCALE (decision 10): every stored
+  //     score is multiplied by the same factor as the thresholds, so no save
+  //     changes rank.
+  //   - every Slain hunter gets a `fell` record. Before v8 nobody recorded
+  //     where they fell; they are all Watched deaths with no house (owner,
+  //     2026-09-18), so the lesser rite is open to them and intercession not.
+  8: (data) => {
+    const pr = data.progression || (data.progression = {});
+    if (pr.tribeRep && typeof pr.tribeRep === 'object') {
+      for (const k of Object.keys(pr.tribeRep)) if (Number.isFinite(pr.tribeRep[k])) pr.tribeRep[k] *= REP_SCALE;
+    }
+    if (!pr.standing) {
+      const day = Number.isFinite(pr.daysElapsed) ? pr.daysElapsed : 0;
+      const ids = (data.characters || []).concat(data.slain || []).map(c => c?.id ?? '').join('|');
+      let h = 0x811C9DC5;
+      for (const ch of `${ids}#${day}#${pr.tribe || ''}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+      pr.standing = newStanding(h, day);
+    }
+    for (const c of data.slain || []) if (c && !c.fell) c.fell = { ...LEGACY_FELL };
+    return data;
+  },
 };
 
 /**
@@ -617,8 +646,14 @@ const GameState = {
     });
   },
 
-  /** Moves a character (already status === 'dead') out of characters/party and into Slain. */
-  moveToSlain(charObj) {
+  /**
+   * Moves a character (already status === 'dead') out of characters/party and
+   * into Slain. `fell` is where they fell (Standing.fellRecord): the region,
+   * its house and death rule, the day. The ways back read it; a hunter with
+   * none is treated as an old Watched death.
+   */
+  moveToSlain(charObj, fell = null) {
+    charObj.fell = fell ? { ...fell } : { ...LEGACY_FELL };
     this.characters = this.characters.filter(c => c !== charObj);
     this.party = this.party.filter(c => c !== charObj);
     if (!this.slain.includes(charObj)) this.slain.push(charObj);

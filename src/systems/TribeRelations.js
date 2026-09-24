@@ -15,13 +15,20 @@
  *   6  Allied     / Champion     — locked for non-own tribes
  *
  * Score thresholds (same numeric scale for both own and other tribes):
- *   < −50     → index 0
- *   −50…−21   → index 1
- *   −20…−6    → index 2
- *   −5…+25    → index 3  (starting band — wide so Styx/Zafaar modifiers don't shift level)
- *   +26…+65   → index 4
- *   +66…+105  → index 5
- *   +106+     → index 6  (own tribe only; non-own tribe capped at +105)
+ *   < −500      → index 0
+ *   −500…−201   → index 1
+ *   −200…−51    → index 2
+ *   −50…+259    → index 3  (starting band — wide so Styx/Zafaar modifiers don't shift level)
+ *   +260…+659   → index 4
+ *   +660…+1059  → index 5
+ *   +1060+      → index 6  (own tribe only; non-own tribe capped at +1050)
+ *
+ * Rescaled ×REP_SCALE in chunk 10a (Exploration System v2, decision 10): the
+ * top is meant to take several seasons (SCALING's pacing principle), not
+ * three leader quests. Stored scores were multiplied by the same factor in
+ * the v8 save migration, so no save changed rank. The leader quest stayed
+ * +40, and your own tribe now also gains 1 rep per HUNT_POINTS_PER_REP Hunt
+ * Points you earn (data/standing.js, GAME_WORLD.awardHuntPoints).
  */
 
 export const TRIBE_IDS = ['elseth', 'styx', 'lesse', 'zafaar'];
@@ -40,21 +47,24 @@ export const TRIBE_DISPLAY = {
  * the Neutral/Initiate band before any leader quests.
  */
 export const DEFAULT_TRIBE_REP = {
-  elseth:  0,
-  styx:    5,
-  lesse:   0,
-  zafaar: -5,
+  elseth:   0,
+  styx:    50,
+  lesse:    0,
+  zafaar: -50,
 };
+
+/** The factor chunk 10a rescaled every threshold and stored score by (save v8). */
+export const REP_SCALE = 10;
 
 /** Rep awarded when a tribe leader's challenge is acknowledged (flag cleared). */
 export const LEADER_QUEST_REP_GAIN = 40;
 
 /** Max score allowed for tribes that are NOT the player's own tribe. */
-const OTHER_TRIBE_SCORE_CAP = 105; // keeps them at Friendly max (index 5)
+const OTHER_TRIBE_SCORE_CAP = 1050; // keeps them at Friendly max (index 5)
 
 // ── Threshold table ───────────────────────────────────────────────────────────
 
-const THRESHOLDS = [-50, -20, -5, 26, 66, 106];
+const THRESHOLDS = [-500, -200, -50, 260, 660, 1060];
 //                  ^1   ^2   ^3  ^4  ^5  ^6   (lower bound of each level above 0)
 
 /**

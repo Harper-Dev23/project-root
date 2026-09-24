@@ -9,6 +9,13 @@
 // touches save data and persists between page reloads.
 
 import { DEFAULT_TRIBE_REP, clampRepScore, TRIBE_IDS } from './TribeRelations.js';
+import { newStanding, joinSeason, STANDING_VERSION } from './Standing.js';
+
+// A standing record's seed (it orders the rivals' houses each season). Taken
+// from the clock, NOT Math.random: the harness seeds Math.random for its
+// goldens, and a draw here on reset or load would shift every one of them.
+let _seedCounter = 0;
+const freshStandingSeed = () => ((Date.now() >>> 0) ^ Math.imul(++_seedCounter, 0x9E3779B1)) >>> 0;
 
 const DEFAULT_TRIBE_HUNT_POINTS = Object.fromEntries(TRIBE_IDS.map(id => [id, 0]));
 
@@ -250,6 +257,21 @@ const ProgressionManager = {
   // Managed entirely via PartyGearManager helpers.
   partyGear: {},
 
+  // Standing, save-wide (Exploration System v2, chunk 10a): the Bond, legacy,
+  // the season's devotion table and who holds each house. One plain record;
+  // its rules are in Standing.js. Created fresh on reset(), and by the v8
+  // save migration for older saves.
+  standing: null,
+
+  /** The standing record, created on first use (a boot that neither reset nor loaded). */
+  getStanding() {
+    if (!this.standing) {
+      this.standing = newStanding(freshStandingSeed(), this.daysElapsed || 0);
+      joinSeason(this.standing, this.tribe);
+    }
+    return this.standing;
+  },
+
   // ----- Dev bypass --------------------------------------------------------
 
   isBypassEnabled() {
@@ -347,6 +369,16 @@ const ProgressionManager = {
     this.tribeHuntPoints[tribeId] = Math.max(0, current + amount);
   },
 
+  /**
+   * A season ended (Standing.dayBreak, from GAME_WORLD.dayBreaks): the four
+   * tribes' Hunt Point race starts over, NPC parties' tallies with it. The
+   * player's own lifetime huntPoints score is untouched.
+   */
+  resetSeasonRace() {
+    this.tribeHuntPoints = { ...DEFAULT_TRIBE_HUNT_POINTS };
+    this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
+  },
+
   getPartyPoints(tribeId, partyId) {
     return this.tribeHuntingParties?.[tribeId]?.[partyId] ?? 0;
   },
@@ -403,6 +435,7 @@ const ProgressionManager = {
     if (this.tribe) return false;   // already chosen — no take-backs
     this.tribe = tribeId;
     this.tribeTickets += 1;         // the Tribe Ticket mentioned in the demo doc
+    joinSeason(this.getStanding(), tribeId);   // the season's devotion race, from legacy
     this.clearQuestFlag('tribe_choice');
     return true;
   },
@@ -529,6 +562,7 @@ const ProgressionManager = {
         Object.entries(this.tribeHuntingParties).map(([k, v]) => [k, { ...v }])
       ),
       partyGear: _deepClonePartyGear(this.partyGear),
+      standing: this.standing ? JSON.parse(JSON.stringify(this.standing)) : null,
     };
   },
 
@@ -562,6 +596,11 @@ const ProgressionManager = {
       }
     }
     this.partyGear = _deepClonePartyGear(data.partyGear);
+    // Every save from v8 carries it (the migration creates it for older ones).
+    // A missing or unknown shape starts fresh rather than half-loading.
+    this.standing = (data.standing && data.standing.v === STANDING_VERSION)
+      ? JSON.parse(JSON.stringify(data.standing)) : newStanding(freshStandingSeed(), this.daysElapsed);
+    joinSeason(this.standing, this.tribe);
   },
 
   reset() {
@@ -582,6 +621,7 @@ const ProgressionManager = {
     this.tribeHuntPoints     = { ...DEFAULT_TRIBE_HUNT_POINTS };
     this.tribeHuntingParties = { styx: {}, zafaar: {}, elseth: {}, lesse: {} };
     this.partyGear           = {};
+    this.standing            = newStanding(freshStandingSeed(), 0);
   },
 };
 

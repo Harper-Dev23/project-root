@@ -374,7 +374,7 @@ console.log('=== a real v4 save holding a plan migrates to v6 ===');
   const oldPlan = fixture.inventory.find(i => i.id === 'hunt_plan');
   check('the fixture is a v4 save holding a plan with no item level',
     fixture.version === 4 && oldPlan && oldPlan.itemLevel == null && !('bonusObjectives' in oldPlan));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 7);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 8);
 
   // Plans in a character's own bag and in a tribe stash must migrate too.
   const withMore = JSON.parse(JSON.stringify(fixture));
@@ -398,7 +398,7 @@ console.log('=== a real v4 save holding a plan migrates to v6 ===');
 
   GameState.save('v4plan');
   const rewritten = JSON.parse(store.get('bmSave_v4plan'));
-  check('re-saved as v7, the plan keeping its item level', rewritten.version === 7
+  check('re-saved as v8, the plan keeping its item level', rewritten.version === 8
     && rewritten.inventory.find(i => i.id === 'hunt_plan')?.itemLevel === 1);
 
   const reloaded = GameState.load('v4plan');

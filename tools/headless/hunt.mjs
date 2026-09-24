@@ -314,7 +314,7 @@ console.log('=== the v3 fixture save ===');
 {
   const fixture = JSON.parse(fs.readFileSync(new URL('../snapshots/save-v3-fixture.json', import.meta.url), 'utf8'));
   check('the fixture really is a v3 save with no hunt field', fixture.version === 3 && !('hunt' in fixture));
-  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 7);
+  check(`this build writes v${SAVE_VERSION}`, SAVE_VERSION === 8);
 
   const checked = GameState.checkSave(fixture);
   check('checkSave accepts it (the import path)', checked.ok, checked.reason || '');
@@ -334,7 +334,7 @@ console.log('=== the v3 fixture save ===');
 
   GameState.save('v3');
   const rewritten = JSON.parse(store.get('bmSave_v3'));
-  check('re-saved as v7 with hunt: null', rewritten.version === 7 && rewritten.hunt === null);
+  check('re-saved as v8 with hunt: null', rewritten.version === SAVE_VERSION && SAVE_VERSION === 8 && rewritten.hunt === null);
 }
 
 // =============================================================================
@@ -364,7 +364,7 @@ console.log('=== the v4 fixture save, mid-hunt ===');
 
   GameState.save('v4');
   const rewritten = JSON.parse(store.get('bmSave_v4'));
-  check('re-saved as v7, its hunt as v2', rewritten.version === 7 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
+  check('re-saved as v8, its hunt as v2', rewritten.version === 8 && rewritten.hunt?.v === HUNT_STATE_VERSION && HUNT_STATE_VERSION === 2);
 
   // Exiting the old hunt returns no Rations: it packed none, it bought supplies.
   const out = HuntManager.exit();
@@ -408,7 +408,7 @@ console.log('=== the v6 fixture save, mid Advance hunt (chunk 8c) ===');
 
   GameState.save('v6');
   const rewritten = JSON.parse(store.get('bmSave_v6'));
-  check('re-saved as v7, its Advance hunt still with no mode', rewritten.version === 7 && rewritten.hunt?.v === 2 && !('mode' in rewritten.hunt));
+  check('re-saved as v8, its Advance hunt still with no mode', rewritten.version === 8 && rewritten.hunt?.v === 2 && !('mode' in rewritten.hunt));
   HuntManager.end();
 }
 
@@ -432,7 +432,7 @@ console.log('=== a map hunt in the save (chunk 8c) ===');
   const before = strip(h.serialize());
   GameState.save('map1');
   const raw = JSON.parse(store.get('bmSave_map1'));
-  check('saved as v7, the hunt with mode "map" beside HuntEngine\'s own shape', raw.version === 7 && raw.hunt?.mode === 'map' && raw.hunt.v === 1);
+  check('saved as v8, the hunt with mode "map" beside HuntEngine\'s own shape', raw.version === 8 && raw.hunt?.mode === 'map' && raw.hunt.v === 1);
   check('checkSave accepts it (the import path)', GameState.checkSave(raw).ok);
   HuntManager.end();
   GameState.load('map1');

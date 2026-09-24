@@ -66,6 +66,7 @@
 
 import { EncounterRoller } from './EncounterRoller.js';
 import { TribeHuntSimulator } from './TribeHuntSimulator.js';
+import * as Standing from './Standing.js';
 import { getPlayerPartyId } from '../../data/tribeHuntingParties.js';
 import { combineModifiers } from './HuntModifiers.js';
 import { rollWeather } from '../../data/weather.js';
@@ -130,17 +131,29 @@ export const GAME_WORLD = {
   },
   dayBreaks() {
     ProgressionManager.advanceDay();
+    // Standing (chunk 10a): the rivals court their houses once a day, and a
+    // season that has run its length ends here (Standing.dayBreak), BEFORE
+    // the tribes' day below, so the new day's points count for the new
+    // season. The Hunt Point race lives on ProgressionManager, so its reset
+    // is done here, after the winner was read.
+    const pm = ProgressionManager;
+    const r = Standing.dayBreak(pm.getStanding(), pm.getDaysElapsed(), pm.tribe, { ...pm.tribeHuntPoints });
+    if (r.season) pm.resetSeasonRace();
     // Other tribes' background progress ticks once per in-game day — far
     // coarser than the player's own per-advance turn. It still rolls with
     // Math.random: it is save-wide world state, written by the same autosave
     // as the move that caused it, so a reload cannot re-roll it separately.
     TribeHuntSimulator.tick();
+    return r;
   },
   awardHuntPoints(amount) {
     ProgressionManager.addHuntPoints(amount);
     if (ProgressionManager.tribe) {
       const playerPartyId = getPlayerPartyId(ProgressionManager.tribe);
       if (playerPartyId) ProgressionManager.addPartyPoints(ProgressionManager.tribe, playerPartyId, amount);
+      // Your own tribe's regard grows with what you bring home (decision 10).
+      const rep = Standing.repFromHuntPoints(ProgressionManager.getStanding(), amount);
+      if (rep > 0) ProgressionManager.addTribeRep(ProgressionManager.tribe, rep);
     }
   },
   awardXP(pool) {

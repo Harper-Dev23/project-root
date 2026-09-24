@@ -76,6 +76,9 @@ const HB = await import('../../src/systems/HuntBeasts.js');
 const BP = await import('../../data/beastParts.js');
 const { ENEMY_TYPES } = await import('../../data/enemyTypes.js');
 const { Items } = await import('../../data/items.js');
+const { getZone } = await import('../../data/zones.js');
+const { houseOf } = await import('../../src/systems/Standing.js');
+const ProgressionManager = (await import('../../src/systems/ProgressionManager.js')).default;
 const { getItemComputedData } = await import('../../src/systems/ItemFactory.js');
 const { calculateDerivedStats } = await import('../../src/systems/CharacterBuilder.js');
 const { makeRng } = await import('../../src/systems/seededRng.js');
@@ -307,6 +310,13 @@ function pendingFight(rule, from) {
     const sw = wa.h.getState();
     check('Watched: every fallen hunter joins the Slain', GameState.slain.length === before + names.length && names.every(n => GameState.slain.some(c => c.name === n)));
     check('Watched: the hunt is over as a wipe and the pack is lost', sw.finished === 'wipe' && wa.world.banked.length === 0);
+    // Chunk 10a: each fallen hunter carries where they fell, read by the ways
+    // back (Standing.routesBack): the region, its house, the rule, the day.
+    const zone = getZone(sw.zoneId);
+    const fallen = GameState.slain.slice(before);
+    const want = { zoneId: sw.zoneId, house: houseOf(zone.divineAlignment), rule: 'watched', day: ProgressionManager.getDaysElapsed() };
+    check('Watched: every fallen hunter records where they fell (zone, house, rule, day)',
+      fallen.length === names.length && fallen.every(c => same(c.fell, want)), JSON.stringify(fallen[0]?.fell));
   }
 
   // An old save's Advance hunt (both starter zones are Sheltered): the same

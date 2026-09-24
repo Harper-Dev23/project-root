@@ -22,6 +22,8 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, ap
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
+import { fellRecord } from '../systems/Standing.js';
+import { getZone } from '../../data/zones.js';
 import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
@@ -6701,7 +6703,11 @@ export default class CombatScene extends Phaser.Scene {
           if (sheltered) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
           else char.status = 'dead';
         });
-        GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c));
+        // Where they fell (chunk 10a): the ways back read the region's rule and
+        // house off this record (Standing.routesBack).
+        const zoneId = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState())?.zoneId ?? null;
+        const fell = fellRecord({ zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null, rule, day: ProgressionManager.getDaysElapsed() });
+        GameState.party.filter(c => c.status === 'dead').forEach(c => GameState.moveToSlain(c, fell));
         // Settles the hunt pack by the same death rule: Sheltered brings it
         // home, Watched/Forsaken lose it. end() would drop it on the floor,
         // packed Rations included.

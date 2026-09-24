@@ -1,0 +1,293 @@
+{
+ "repIndexAtBounds": [
+  [
+   -501,
+   0
+  ],
+  [
+   -500,
+   1
+  ],
+  [
+   -201,
+   1
+  ],
+  [
+   -200,
+   2
+  ],
+  [
+   -51,
+   2
+  ],
+  [
+   -50,
+   3
+  ],
+  [
+   259,
+   3
+  ],
+  [
+   260,
+   4
+  ],
+  [
+   659,
+   4
+  ],
+  [
+   660,
+   5
+  ],
+  [
+   1059,
+   5
+  ],
+  [
+   1060,
+   6
+  ]
+ ],
+ "defaults": {
+  "elseth": 0,
+  "styx": 50,
+  "lesse": 0,
+  "zafaar": -50
+ },
+ "huntsToRank": {
+  "member": 29,
+  "trusted": 74,
+  "champion": 118,
+  "huntPointsPerHunt": 45
+ },
+ "claiming": {
+  "accept": {
+   "holds": {
+    "jeremiah": "styx",
+    "ezekiel": null,
+    "isaiah": null,
+    "daniel": null
+   },
+   "mine": {
+    "jeremiah": 100,
+    "ezekiel": 0,
+    "isaiah": 0,
+    "daniel": 0
+   }
+  },
+  "switch": {
+   "holds": {
+    "jeremiah": null,
+    "ezekiel": "styx",
+    "isaiah": null,
+    "daniel": null
+   },
+   "mine": {
+    "jeremiah": 100,
+    "ezekiel": 100,
+    "isaiah": 0,
+    "daniel": 0
+   }
+  },
+  "take": {
+   "holds": {
+    "jeremiah": null,
+    "ezekiel": null,
+    "isaiah": "styx",
+    "daniel": null
+   },
+   "mine": {
+    "jeremiah": 0,
+    "ezekiel": 0,
+    "isaiah": 155,
+    "daniel": 0
+   }
+  },
+  "dither": {
+   "target": "jeremiah",
+   "claims": [
+    {
+     "kind": "claim",
+     "tribe": "elseth",
+     "house": "jeremiah",
+     "day": 38
+    },
+    {
+     "kind": "claim",
+     "tribe": "zafaar",
+     "house": "ezekiel",
+     "day": 38
+    }
+   ]
+  },
+  "heldSafe": {
+   "holds": {
+    "jeremiah": "zafaar",
+    "ezekiel": "elseth",
+    "isaiah": "lesse",
+    "daniel": "styx"
+   }
+  }
+ },
+ "seasonTrace": [
+  {
+   "day": 26,
+   "kind": "claim",
+   "tribe": "elseth",
+   "house": "isaiah"
+  },
+  {
+   "day": 33,
+   "kind": "claim",
+   "tribe": "lesse",
+   "house": "daniel"
+  },
+  {
+   "day": 34,
+   "kind": "accept",
+   "house": "jeremiah"
+  },
+  {
+   "day": 58,
+   "kind": "claim",
+   "tribe": "styx",
+   "house": "ezekiel"
+  },
+  {
+   "day": 210,
+   "kind": "season",
+   "season": 1,
+   "endedDay": 210,
+   "winner": "zafaar",
+   "held": "jeremiah",
+   "won": true,
+   "legacyGain": 20
+  },
+  {
+   "day": 230,
+   "kind": "accept",
+   "house": "jeremiah"
+  },
+  {
+   "day": 240,
+   "kind": "claim",
+   "tribe": "elseth",
+   "house": "isaiah"
+  },
+  {
+   "day": 240,
+   "kind": "claim",
+   "tribe": "styx",
+   "house": "ezekiel"
+  },
+  {
+   "day": 242,
+   "kind": "claim",
+   "tribe": "lesse",
+   "house": "daniel"
+  },
+  {
+   "day": 420,
+   "kind": "season",
+   "season": 2,
+   "endedDay": 420,
+   "winner": "zafaar",
+   "held": "jeremiah",
+   "won": true,
+   "legacyGain": 20
+  },
+  {
+   "day": 429,
+   "kind": "accept",
+   "house": "jeremiah"
+  },
+  {
+   "day": 450,
+   "kind": "claim",
+   "tribe": "styx",
+   "house": "ezekiel"
+  },
+  {
+   "day": 453,
+   "kind": "claim",
+   "tribe": "elseth",
+   "house": "isaiah"
+  },
+  {
+   "day": 477,
+   "kind": "claim",
+   "tribe": "lesse",
+   "house": "daniel"
+  },
+  {
+   "day": 630,
+   "kind": "season",
+   "season": 3,
+   "endedDay": 630,
+   "winner": "zafaar",
+   "held": "jeremiah",
+   "won": true,
+   "legacyGain": 20
+  }
+ ],
+ "seasonEnd": {
+  "legacy": {
+   "jeremiah": 60,
+   "ezekiel": 0,
+   "isaiah": 0,
+   "daniel": 0
+  },
+  "devotion": {
+   "jeremiah": 75,
+   "ezekiel": 0,
+   "isaiah": 0,
+   "daniel": 0
+  },
+  "season": {
+   "n": 4,
+   "startDay": 630
+  }
+ },
+ "gameWorldClaims": [
+  {
+   "day": 28,
+   "kind": "claim",
+   "tribe": "elseth",
+   "house": "isaiah"
+  },
+  {
+   "day": 30,
+   "kind": "claim",
+   "tribe": "zafaar",
+   "house": "daniel"
+  },
+  {
+   "day": 42,
+   "kind": "claim",
+   "tribe": "lesse",
+   "house": "jeremiah"
+  }
+ ],
+ "migration": {
+  "rep": {
+   "elseth": 0,
+   "styx": 450,
+   "lesse": 0,
+   "zafaar": 250
+  },
+  "standingSeason": {
+   "n": 1,
+   "startDay": 9
+  },
+  "fell": [
+   {
+    "zoneId": null,
+    "house": null,
+    "rule": "watched",
+    "day": null,
+    "legacy": true
+   }
+  ]
+ }
+}

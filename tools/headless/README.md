@@ -41,6 +41,15 @@ before hunts were saved. Keep it: it is what proves old saves still migrate.
 mid-hunt by the v4 build (chunk 2, `25c26ac`), before stacking and the hunt
 pack. It proves a v4 save reaches v5 and its v1 hunt still resumes.
 
+`tools/snapshots/save-v7-fixture.json` is a real save written by the v7 build
+(`969967d`, before standing) through the real `GameState.save`, in Node: a
+pledged tribe with rep, one Slain hunter, and a live map hunt. It proves a v7
+save reaches v8 (rep x10, the standing record, old Slain as Watched deaths).
+
+`standing.mjs` covers standing (`src/systems/Standing.js`, chunk 10a): the rep
+rescale, the claiming rule, seasons, `GAME_WORLD`'s daily tick and the v8
+migration. Its golden is `tools/snapshots/standing-golden.json`.
+
 `pack.mjs` covers item stacking, Rations and the hunt pack: merge and split,
 and what a clean exit or a wipe under each death rule does to the pack.
 
