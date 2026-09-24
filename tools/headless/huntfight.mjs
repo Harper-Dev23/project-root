@@ -485,6 +485,45 @@ console.log('=== intercession on the spot ===');
     st.bond[houseOfHunt(e)] === 60 && GameState.slain.length === slainE + e.party.length && e.h.getState().finished === 'wipe');
 }
 
+// Chunk 11c-2: a Forsaken wipe is offered to the region's false god instead.
+// No affordability gate: the price is hidden standing with the god, and Bond
+// standing with your house only where your tribe follows it.
+console.log("=== a false god's price on the spot ===");
+{
+  const Standing = await import('../../src/systems/Standing.js');
+  const { FALSE_GOD_HIDDEN_PER_LEVEL, FALSE_GOD_BOND_PER_LEVEL } = await import('../../data/standing.js');
+  const f = pendingFight('forsaken', 1800);
+  check('found a Forsaken fight to lose', !!f);
+  const god = getZone(f.h.getState().zoneId).falseGod;
+  const house = Standing.houseOf(getZone(f.h.getState().zoneId).divineAlignment);
+  ProgressionManager.reset();
+  ProgressionManager.setTribe('styx');
+  const st = ProgressionManager.getStanding();
+  Standing.earnFavor(st, 'styx', house, 100);
+  Standing.acceptHouse(st, 'styx', house);
+  st.bond[house] = 0;   // nothing to spend: the god does not ask for it
+  const slain0 = GameState.slain.length;
+  const host = loseIt(f);
+  const offer = host._intercessionOffer('forsaken');
+  check("a Forsaken wipe offers every fallen hunter to the region's false god, even with no Bond to spend",
+    !!god && offer?.kind === 'falseGod' && offer.god === god && offer.hunters.length === f.party.length && !f.h.getState().finished);
+  const saved = [f.party[0]];
+  const lvl = saved[0].level || 1;
+  host._finishHuntWipe('forsaken', saved);
+  const s1 = f.h.getState();
+  check(`one given back: at 1 HP, hidden standing +${FALSE_GOD_HIDDEN_PER_LEVEL * lvl} with the god, Bond -${FALSE_GOD_BOND_PER_LEVEL * lvl}`,
+    saved[0].status === 'alive' && saved[0].currentHP === 1
+    && st.falseGods?.[god] === FALSE_GOD_HIDDEN_PER_LEVEL * lvl && st.bond[house] === -FALSE_GOD_BOND_PER_LEVEL * lvl,
+    `${st.falseGods?.[god]} / ${st.bond[house]}`);
+  check('...the rest joined the Slain with the god on their record, and the hunt goes on',
+    GameState.slain.length === slain0 + f.party.length - 1
+    && GameState.slain.slice(slain0).every(c => c.fell?.rule === 'forsaken' && c.fell.god === god) && !s1.finished);
+  const g = pendingFight('watched', 1900);
+  ProgressionManager.reset();
+  const hostG = loseIt(g);
+  check("a Watched wipe is never the false god's", hostG._intercessionOffer('watched')?.kind !== 'falseGod');
+}
+
 console.log('=== flee inside the fight: the free round ===');
 {
   const m = meet({ kind: 'beast', from: 1500 });

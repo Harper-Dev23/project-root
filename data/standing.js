@@ -67,3 +67,9 @@ export const RITE_DAYS_BASE = 2;
 export const RITE_DAYS_PER_LEVEL = 1;
 /** ...and an offering of this many Hunt Tickets per level. */
 export const RITE_TICKETS_PER_LEVEL = 5;
+
+// ── A False God's price (DEATH_AND_REVIVAL; chunk 11c-2). Readers: Revival.js ─
+/** Hidden standing with the god who takes the hunter back, per level. */
+export const FALSE_GOD_HIDDEN_PER_LEVEL = 10;
+/** Bond standing lost with the house your tribe follows, per level. */
+export const FALSE_GOD_BOND_PER_LEVEL = 5;

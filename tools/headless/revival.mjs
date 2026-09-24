@@ -106,6 +106,33 @@ console.log('=== which way is open ===');
 }
 
 // =============================================================================
+console.log("=== a False God's price (11c-2) ===");
+{
+  const reeds = S.fellRecord({ zoneId: 'reeds_of_gethsemane', prophet: 'jeremiah', rule: 'forsaken', day: 0, god: 'dagon' });
+  let { st, fallen: [f] } = setup([reeds], { bond: 20 });
+  f.level = 3;
+  const o = R.revivalOptions(f);
+  check("a Forsaken death: the region's false god offers its price (and nothing else does)",
+    o.falseGod.open && o.falseGod.god === 'dagon' && o.falseGod.hidden === 30 && o.falseGod.bond === 15 && !o.intercession.open && !o.rite.open);
+  const dev = st.devotion.styx.jeremiah;
+  const r = R.acceptFalseGod(f);
+  check('taking it: the hunter is back in camp at once, hidden standing +30 with Dagon, Bond -15 with your house, devotion untouched',
+    r.ok && GameState.characters.includes(f) && !GameState.slain.includes(f) && f.status === 'alive'
+    && st.falseGods?.dagon === 30 && st.bond.jeremiah === 5 && st.devotion.styx.jeremiah === dev);
+  ({ st, fallen: [f] } = setup([reeds], { bond: 0 }));
+  const r2 = R.acceptFalseGod(f);
+  check('...never refused for lack of standing: the Bond goes below 0', r2.ok && st.bond.jeremiah < 0);
+  ({ st, fallen: [f] } = setup([reeds]));
+  const lg = R.letGo(f);
+  const after = R.revivalOptions(f);
+  check('letting them go is final: no way back is open, and the price is refused', lg.ok && after.falseGod.lost && !after.falseGod.open
+    && !after.intercession.open && !after.rite.open && !R.acceptFalseGod(f).ok);
+  GameState.save('rv3'); GameState.load('rv3');
+  check('...and it survives a save and load', GameState.slain.some(c => c.id === f.id && c.fell?.lost === true));
+  const watched = setup([S.fellRecord({ zoneId: 'reeds_of_gethsemane', prophet: 'jeremiah', rule: 'watched', day: 0, god: 'dagon' })]).fallen[0];
+  check("a Watched death is never the false god's, nor can it be let go", !R.revivalOptions(watched).falseGod.open && !R.letGo(watched).ok);
+}
+
 console.log('=== intercession ===');
 {
   let { st, fallen: [h, a] } = setup([home, abroad], { bond: 5 });

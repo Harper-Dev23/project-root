@@ -159,8 +159,23 @@ export default class LodgeShrineOverlay extends Phaser.Scene {
         this._text(bx, ry + 56, `The rite: ${o.rite.active.daysLeft} day${o.rite.active.daysLeft === 1 ? '' : 's'} left`, 13, '#e8c66a', 'normal', 1);
         return;
       }
+      // A Forsaken death (11c-2): only the region's false god can give them
+      // back, at a price; or they are let go, for good.
+      if (o.falseGod.lost) {
+        this._text(bx, ry + 56, 'Let go. They are lost for good.', 12, '#c07070', 'normal', 1);
+        return;
+      }
+      if (o.falseGod.open) {
+        const key = `god:${c.id}`, goKey = `letgo:${c.id}`;
+        const price = `${o.falseGod.name}'s price${o.falseGod.bond ? `: -${o.falseGod.bond} standing` : ''}`;
+        const b1 = this._button(0, ry + 64, this._armed === key ? 'Confirm' : price, () => this._arm(key, () => this._acceptGod(c)), this._armed === key ? 'danger' : 'primary', 12);
+        b1.x = bx - b1.width / 2;
+        const b2 = this._button(0, ry + 64, this._armed === goKey ? 'Confirm' : 'Let go', () => this._arm(goKey, () => this._letGo(c)), 'danger', 12);
+        b2.x = bx - b1.width - 8 - b2.width / 2;
+        return;
+      }
       if (!o.intercession.open && !o.rite.open) {
-        this._text(bx, ry + 56, 'Only a False God could bring them back.', 12, '#c07070', 'normal', 1);
+        this._text(bx, ry + 56, 'No way back is open to them.', 12, '#c07070', 'normal', 1);
         return;
       }
       let right = bx;
@@ -195,6 +210,22 @@ export default class LodgeShrineOverlay extends Phaser.Scene {
     if (!r.ok) { this._msg = `Cannot: ${r.reason}.`; SoundManager.play('handsClick'); return; }
     SoundManager.play('reward');
     this._msg = `${cap(r.house)} speaks for ${c.name}, who returns to camp (-${r.cost} standing).`;
+    GameState.save('autosave');
+  }
+
+  _acceptGod(c) {
+    const r = Revival.acceptFalseGod(c);
+    if (!r.ok) { this._msg = `Cannot: ${r.reason}.`; SoundManager.play('handsClick'); return; }
+    SoundManager.play('reward');
+    this._msg = `${r.name} gives ${c.name} back. It will remember${r.bond ? `, and ${cap(r.house)} knows (-${r.bond} standing)` : ''}.`;
+    GameState.save('autosave');
+  }
+
+  _letGo(c) {
+    const r = Revival.letGo(c);
+    if (!r.ok) { this._msg = `Cannot: ${r.reason}.`; SoundManager.play('handsClick'); return; }
+    SoundManager.play('handsClick');
+    this._msg = `You let ${c.name} go. The lodge keeps their name.`;
     GameState.save('autosave');
   }
 

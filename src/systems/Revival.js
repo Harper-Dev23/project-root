@@ -29,7 +29,10 @@ import GameState from './GameState.js';
 import { routesBack, spendBond, followedHouse } from './Standing.js';
 import {
   INTERCESSION_COST_PER_LEVEL, RITE_DAYS_BASE, RITE_DAYS_PER_LEVEL, RITE_TICKETS_PER_LEVEL,
+  FALSE_GOD_HIDDEN_PER_LEVEL, FALSE_GOD_BOND_PER_LEVEL,
 } from '../../data/standing.js';
+import { addFalseGod, adjustBond } from './Standing.js';
+import { FALSE_GODS } from '../../data/falseGods.js';
 
 const lvl = (char) => Math.max(1, Number(char?.level) || 1);
 
@@ -41,6 +44,31 @@ export function riteTerms(char) {
   return { days: RITE_DAYS_BASE + RITE_DAYS_PER_LEVEL * lvl(char), tickets: RITE_TICKETS_PER_LEVEL * lvl(char) };
 }
 
+/**
+ * A False God's price (chunk 11c-2): the only way back from a Forsaken death.
+ * The god of the region they fell in takes them back at once; the price is
+ * hidden standing with that god and Bond standing with the house your tribe
+ * follows (none if it follows none). Neither can be refused for lack of
+ * standing: the Bond may go below 0. Letting them go (letGo) is final.
+ */
+export function falseGodPrice(char, { pm = ProgressionManager } = {}) {
+  const lvl = Math.max(1, Number(char?.level) || 1);
+  const house = followedHouse(pm.getStanding(), pm.tribe);
+  return { hidden: FALSE_GOD_HIDDEN_PER_LEVEL * lvl, bond: house ? FALSE_GOD_BOND_PER_LEVEL * lvl : 0, house };
+}
+
+function payFalseGod(god, chars, pm) {
+  const st = pm.getStanding();
+  let hidden = 0, bond = 0, house = null;
+  for (const c of chars) {
+    const p = falseGodPrice(c, { pm });
+    hidden += p.hidden; bond += p.bond; house = p.house;
+  }
+  addFalseGod(st, god, hidden);
+  if (house && bond) adjustBond(st, house, -bond);
+  return { hidden, bond, house };
+}
+
 /** What each way back looks like for a Slain hunter right now. */
 export function revivalOptions(char, { pm = ProgressionManager } = {}) {
   const st = pm.getStanding();
@@ -50,8 +78,14 @@ export function revivalOptions(char, { pm = ProgressionManager } = {}) {
   const have = house ? (st.bond[house] || 0) : 0;
   const terms = riteTerms(char);
   const day = pm.getDaysElapsed();
+  const god = char?.fell?.rule === 'forsaken' && FALSE_GODS[char.fell.god] ? char.fell.god : null;
   return {
     fell: char?.fell || null,
+    falseGod: {
+      open: !!god && !char.fell.lost,
+      god, name: god ? FALSE_GODS[god].name : null, lost: !!char?.fell?.lost,
+      ...falseGodPrice(char, { pm }),
+    },
     intercession: {
       open: routes.intercession && !char.rite,
       house, cost, have, canPay: have >= cost,
@@ -74,6 +108,23 @@ export function intercede(char, { pm = ProgressionManager, gs = GameState } = {}
   if (!paid.ok) return paid;
   gs.reviveFromSlain(char);
   return { ok: true, house: o.intercession.house, cost: o.intercession.cost };
+}
+
+/** Take a False God's price at the lodge: the hunter returns to camp now. */
+export function acceptFalseGod(char, { pm = ProgressionManager, gs = GameState } = {}) {
+  if (!gs.slain.includes(char)) return { ok: false, reason: 'not among the Slain' };
+  const o = revivalOptions(char, { pm });
+  if (!o.falseGod.open) return { ok: false, reason: o.falseGod.lost ? 'they are gone' : 'no false god will take them' };
+  const paid = payFalseGod(o.falseGod.god, [char], pm);
+  gs.reviveFromSlain(char);
+  return { ok: true, god: o.falseGod.god, name: o.falseGod.name, ...paid };
+}
+
+/** Refuse the False God's price for good: the hunter is lost (the one permanent loss). */
+export function letGo(char, { gs = GameState } = {}) {
+  if (!gs.slain.includes(char) || char.fell?.rule !== 'forsaken') return { ok: false, reason: 'only a Forsaken death can be let go' };
+  char.fell.lost = true;
+  return { ok: true };
 }
 
 /** Begin the lesser rite: pay the offering; the hunter returns when the days have passed. */
@@ -109,6 +160,17 @@ export function spotOffer({ rule, house, fallen }, { pm = ProgressionManager } =
   const hunters = fallen.map(c => ({ char: c, cost: intercessionCost(c) }));
   if (!hunters.some(h => h.cost <= bond)) return null;
   return { house, bond, hunters };
+}
+
+/** A False God's offer at a Forsaken wipe (11c-2): every fallen hunter, at a price. */
+export function falseGodOffer({ rule, god, fallen }, { pm = ProgressionManager } = {}) {
+  if (rule !== 'forsaken' || !FALSE_GODS[god] || !fallen?.length) return null;
+  return { kind: 'falseGod', god, name: FALSE_GODS[god].name, hunters: fallen.map(c => ({ char: c, ...falseGodPrice(c, { pm }) })) };
+}
+
+/** Pay a False God for the chosen hunters on the spot. */
+export function payFalseGodSpot(god, chars, { pm = ProgressionManager } = {}) {
+  return { ok: true, ...payFalseGod(god, chars, pm) };
 }
 
 /** Pay for the chosen hunters, all or nothing. */

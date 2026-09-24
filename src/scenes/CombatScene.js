@@ -23,7 +23,8 @@ import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, ap
 import ProgressionManager from '../systems/ProgressionManager.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { fellRecord, houseOf } from '../systems/Standing.js';
-import { spotOffer, payForSpot, intercessionCost } from '../systems/Revival.js';
+import { FALSE_GODS } from '../../data/falseGods.js';
+import { spotOffer, payForSpot, intercessionCost, falseGodOffer, payFalseGodSpot } from '../systems/Revival.js';
 import { getZone } from '../../data/zones.js';
 import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
@@ -6809,14 +6810,16 @@ export default class CombatScene extends Phaser.Scene {
   /** Where this hunt fight is, and its house (for the fell record and the offer). */
   _huntWhere() {
     const zoneId = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState())?.zoneId ?? null;
-    return { zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null };
+    return { zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null, god: getZone(zoneId)?.falseGod ?? null };
   }
 
   /** The prophet's offer at this wipe (Revival.spotOffer), or null. Map-hunt fights only. */
   _intercessionOffer(rule) {
     if (!this.huntFight) return null;
-    const { prophet } = this._huntWhere();
+    const { prophet, god } = this._huntWhere();
     const fallen = GameState.party.filter(c => c.status === 'incapacitated');
+    // A Forsaken wipe: the region's false god offers instead (11c-2).
+    if (rule === 'forsaken') return falseGodOffer({ rule, god, fallen });
     return spotOffer({ rule, house: houseOf(prophet), fallen });
   }
 
@@ -6834,25 +6837,30 @@ export default class CombatScene extends Phaser.Scene {
   _finishHuntWipe(rule, saved = []) {
     const sheltered = rule === 'sheltered';
     const knockedOut = GameState.party.filter(c => c.status === 'incapacitated').length;
-    const { zoneId, prophet } = this._huntWhere();
+    const { zoneId, prophet, god } = this._huntWhere();
     const house = houseOf(prophet);
-    const paid = saved.length ? payForSpot(house, saved) : { ok: true, total: 0 };
+    const byGod = rule === 'forsaken';
+    const paid = !saved.length ? { ok: true, total: 0 } : byGod ? payFalseGodSpot(god, saved) : payForSpot(house, saved);
     const spokenFor = paid.ok ? saved : [];
     GameState.party.forEach(char => {
       if (char.status !== 'incapacitated') return;
       if (sheltered || spokenFor.includes(char)) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
       else char.status = 'dead';
     });
-    const fell = fellRecord({ zoneId, prophet, rule, day: ProgressionManager.getDaysElapsed() });
+    const fell = fellRecord({ zoneId, prophet, rule, day: ProgressionManager.getDaysElapsed(), god });
     const fallen = GameState.party.filter(c => c.status === 'dead');
     fallen.forEach(c => GameState.moveToSlain(c, fell));
 
     if (spokenFor.length && this.huntFight) {
       this.huntFight.hunt.survive({ knockedOut });
-      const name = house ? house.charAt(0).toUpperCase() + house.slice(1) : 'The prophet';
-      this._log(`✦ ${name} spoke for ${spokenFor.map(c => c.name).join(', ')} (-${paid.total} Bond standing).`);
+      const name = byGod ? (FALSE_GODS[god]?.name || 'Something') : house ? house.charAt(0).toUpperCase() + house.slice(1) : 'The prophet';
+      this._log(byGod
+        ? `✦ ${name} gave back ${spokenFor.map(c => c.name).join(', ')}. It will remember.`
+        : `✦ ${name} spoke for ${spokenFor.map(c => c.name).join(', ')} (-${paid.total} Bond standing).`);
       GameState.save('autosave');
-      this._showDefeatScreen('Spoken For', fallen.length
+      this._showDefeatScreen(byGod ? 'Given Back' : 'Spoken For', byGod
+        ? `${name} gave back ${spokenFor.length} of your hunters, at a price. You wake near a way out.`
+        : fallen.length
         ? `${name} spoke for ${spokenFor.length} of your hunters. ${fallen.length} joined the Slain. You wake near a way out.`
         : `${name} spoke for every one of your hunters. You wake near a way out.`, {
         showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight.reopen?.(this),
@@ -6887,27 +6895,34 @@ export default class CombatScene extends Phaser.Scene {
       this.actionMenu?.setVisible(false);
       this.endTurnButton?.setVisible(false); this.fleeButton?.setVisible(false);
       const chosen = new Set();
-      const name = offer.house.charAt(0).toUpperCase() + offer.house.slice(1);
+      const byGod = offer.kind === 'falseGod';
+      const name = byGod ? offer.name : offer.house.charAt(0).toUpperCase() + offer.house.slice(1);
       let panel = null;
       const draw = () => {
         panel?.destroy(true);
         panel = this.add.container(0, 0).setDepth(3001);
         const add = (o) => { panel.add(o); return o; };
-        const total = [...chosen].reduce((t, c) => t + intercessionCost(c), 0);
+        const cost = (c) => (byGod ? offer.hunters.find(x => x.char === c).bond : intercessionCost(c));
+        const total = [...chosen].reduce((t, c) => t + cost(c), 0);
         // Laid out from the top so everything but Confirm stays clear of the
         // combat log in the lower left.
         const top = 140;
         add(this.add.text(width / 2, top - 70, 'Your party has fallen', { fontSize: '40px', color: '#ff6666', fontStyle: 'bold' }).setOrigin(0.5));
-        add(this.add.text(width / 2, top - 26, `${name} watches these lands and may speak for your hunters: ${Math.floor(offer.bond)} Bond standing to spend.`,
+        add(this.add.text(width / 2, top - 26, byGod
+          ? `${name} offers to give them back. It asks nothing now; it will remember, and your house will know.`
+          : `${name} watches these lands and may speak for your hunters: ${Math.floor(offer.bond)} Bond standing to spend.`,
           { fontSize: '17px', color: '#ffe9a8', wordWrap: { width: 760 }, align: 'center' }).setOrigin(0.5));
-        add(this.add.text(width / 2, top + 8, `${total} of ${Math.floor(offer.bond)} standing. Whoever is not spoken for joins the Slain.`,
+        add(this.add.text(width / 2, top + 8, byGod
+          ? `${total} Bond standing with your house. Whoever is not taken back joins the Slain.`
+          : `${total} of ${Math.floor(offer.bond)} standing. Whoever is not spoken for joins the Slain.`,
           { fontSize: '15px', color: '#a8b0bc' }).setOrigin(0.5));
         offer.hunters.forEach((h, i) => {
           const y = top + 44 + i * 40;
           const on = chosen.has(h.char);
-          const affordable = on || total + h.cost <= offer.bond;
+          const affordable = byGod || on || total + h.cost <= offer.bond;
           add(this.add.text(width / 2 - 250, y, `${h.char.name} (Lv ${h.char.level})`, { fontSize: '18px', color: on ? '#9fe09f' : '#dddddd' }).setOrigin(0, 0.5));
-          add(createButton(this, width / 2 + 170, y, on ? `Spoken for (${h.cost})` : `Intercede (${h.cost})`, () => {
+          const label = byGod ? (on ? `Taken back (-${h.bond})` : `Take them back (-${h.bond})`) : (on ? `Spoken for (${h.cost})` : `Intercede (${h.cost})`);
+          add(createButton(this, width / 2 + 170, y, label, () => {
             if (on) chosen.delete(h.char); else if (affordable) chosen.add(h.char);
             draw();
           }, affordable ? 'primary' : 'danger', { fontSize: '15px' }));

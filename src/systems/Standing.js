@@ -299,8 +299,10 @@ export function repFromHuntPoints(st, huntPoints) {
  * its death rule, and the save-clock day. Read by routesBack (and 10c's lodge
  * shrine and the on-the-spot intercession).
  */
-export function fellRecord({ zoneId = null, prophet = null, rule = 'watched', day = null } = {}) {
-  return { zoneId, house: houseOf(prophet), rule, day };
+export function fellRecord({ zoneId = null, prophet = null, rule = 'watched', day = null, god = null } = {}) {
+  const rec = { zoneId, house: houseOf(prophet), rule, day };
+  if (rule === 'forsaken') rec.god = god;   // whose price can bring them back (11c-2, Revival.js)
+  return rec;
 }
 
 /** An old save's Slain (before chunk 10): a Watched death, no house (owner, 2026-09-18). */
