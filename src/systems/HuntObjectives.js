@@ -96,7 +96,7 @@ function judge(s, obj, { atExit }) {
       return { have, need: 1, done: !!s.retrieved && atExit, carriedHome: true };
     }
     case 'commune': {
-      // Reaching the shrine, until Events v2 (chunk 11) gives it a resolution.
+      // The shrine's event resolved (chunk 11b; HuntEngine.resolveEvent).
       const have = s.communed ? 1 : 0;
       return { have, need: 1, done: !!s.communed };
     }

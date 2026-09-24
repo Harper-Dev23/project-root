@@ -80,7 +80,7 @@
 // everything earned and forfeits only the completion reward. A wipe pays none
 // of it. After either, every action is refused.
 //   retrieved   the Retrieve item has been taken (by standing on its site)
-//   communed    the shrine has been reached (Commune, until Events v2)
+//   communed    the shrine's event has been resolved (Commune; chunk 11b)
 //   unmasked    occupants identified while their concealment was above 100
 //
 // ── What the map scene reads (chunk 8a) ─────────────────────────────────────
@@ -1038,11 +1038,8 @@ function makeMapHunt(s, rng, worldRng, world) {
     _arrive() {
       const p = s.map.objectives.primary;
       if (p.id === 'retrieve' && s.pos === p.site && !s.retrieved) { s.retrieved = true; this._log({ kind: 'retrieved', tile: s.pos, time: s.time }); }
-      if (p.id === 'commune' && s.pos === p.site && !s.communed) {
-        s.communed = true;
-        this._log({ kind: 'communed', tile: s.pos, time: s.time });
-        this._earnFavor(Boons.SHRINE_FAVOR, 'shrine');
-      }
+      // Commune completes when the shrine's event is resolved (chunk 11b),
+      // not on arrival: see resolveEvent.
     },
 
     /** Where a fleeing party goes: back where it came from if that is open,
@@ -1379,6 +1376,13 @@ function makeMapHunt(s, rng, worldRng, world) {
       } else if (ev.site.feature === 'shrine') {
         const f = s.map.features.find(x => x.kind === 'shrine' && x.tile === ev.site.tile);
         if (f) f.resolved = true;
+        // The region's shrine, resolved (any branch): Commune is done, and the
+        // prophet notices (chunk 11b; the favor was paid on arrival before).
+        if (!s.communed) {
+          s.communed = true;
+          this._log({ kind: 'communed', tile: ev.site.tile, time: s.time });
+          this._earnFavor(Boons.SHRINE_FAVOR, 'shrine');
+        }
       }
       const lines = applyEffects(effects, this._eventApi(ev));
       this._reveal();

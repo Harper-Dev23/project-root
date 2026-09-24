@@ -1337,7 +1337,22 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
         case 'scout': step = nextStep(h, id => o.sites.includes(id) && !s.fog[id]); break;
         case 'apex': step = nextStep(h, id => occs.some(x => x.id === o.occupant && x.tile === id)); break;
         case 'cull': case 'named_quarry': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.family === o.family && x.tile === id)); break;
-        case 'retrieve': case 'commune': step = nextStep(h, id => id === o.site); break;
+        case 'retrieve': step = nextStep(h, id => id === o.site); break;
+        // Commune: the shrine's event must be opened and resolved (chunk
+        // 11b). The last step opens it for real; any branch completes it.
+        case 'commune': {
+          step = nextStep(h, id => id === o.site);
+          if (step === o.site) {
+            h.__rawMove(step);
+            const ev = h.view().event;
+            // What the event itself pays is counted apart, like a fight's.
+            const before = world.paid.length;
+            if (ev) h.resolveEvent(ev.shape === 'choice' ? { option: 0 } : ev.shape === 'check' ? { roll: 20 } : ev.shape === 'puzzle' ? { answer: 0 } : { accept: false });
+            world.eventPaid = (world.eventPaid || 0) + world.paid.slice(before).reduce((a, b) => a + b, 0);
+            continue;
+          }
+          break;
+        }
         case 'pathfinder': step = nextStep(h, id => !s.fog[id]) || nextStep(h, id => mapNeighbors(s.map, id).some(n => !s.fog[n])); break;
         case 'great_quarry': step = nextStep(h, id => occs.some(x => x.kind === 'beast' && x.tile === id && x.roster.some(m => m.grade === 'great'))); break;
         // Unbroken (checkable since 9c): win one fight with nobody knocked out.
@@ -1395,7 +1410,7 @@ console.log('=== every objective is completable and pays at the exit ===');
           const r = solve({ zoneId, size, objective, seed: 10000 + k, itemLevel, planMods });
           row.runs++;
           const want = O.completionReward(size, O.completionRewardPercent(planMods, itemLevel));
-          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints + (r.world.fightPaid || 0)) {
+          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints + (r.world.fightPaid || 0) + (r.world.eventPaid || 0)) {
             row.done++; row.days += R.clockAt(r.h.getState().time).day; row.huntPoints += r.r.reward.huntPoints;
           } else fails.push(`${zoneId}/${size}/${objective} ${10000 + k}: ${r.stuck || JSON.stringify(r.r?.reward?.progress?.[0])}`);
         }

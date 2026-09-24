@@ -219,10 +219,15 @@ console.log('=== favor ===');
     if (!nb) continue;
     d.pos = nb;
     const h2 = restoreMapHunt(d, w);
-    const mv = h2.move(site);
-    if (mv.ok && h2.getState().communed) shrine = { h: h2, w };
+    // The shrine's event must open (not walked past) and be resolved: that
+    // completes Commune and pays the favor (chunk 11b).
+    const mv = h2.__rawMove(site);
+    if (!mv.ok || !h2.view().event) continue;
+    const before = h2.getState().boon.favor;
+    h2.resolveEvent({ option: 0 });
+    if (h2.getState().communed && before === 0) shrine = { h: h2, w };
   }
-  check('reaching the shrine pays SHRINE_FAVOR once', !!shrine && shrine.h.getState().boon.favor === BD.SHRINE_FAVOR && same(shrine.w.favorLog, [['jeremiah', BD.SHRINE_FAVOR]])
+  check("resolving the shrine's event pays SHRINE_FAVOR once", !!shrine && shrine.h.getState().boon.favor === BD.SHRINE_FAVOR && same(shrine.w.favorLog, [['jeremiah', BD.SHRINE_FAVOR]])
     && shrine.h.getState().boon.level === 1);
 
   // The real game world: favor reaches the save's standing.

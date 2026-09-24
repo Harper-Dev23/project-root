@@ -57,12 +57,16 @@ import { CAMP_TIME, CAMP_SUPPLY, FORAGE_TIME, FISH_TIME, SCOUT_TIME } from '../.
 import { CLEANSE_TIME } from '../../systems/HuntWorld.js';
 import { HuntManager } from '../../systems/HuntManager.js';
 import GameState from '../../systems/GameState.js';
+import DiceToken from '../../ui/DiceToken.js';
 import { levelDef as boonLevelDef } from '../../systems/Boons.js';
+import { EVENT_TEMPLATES } from '../../../data/events.js';
 
 // The boon level each hunt has already announced (chunk 10b), kept per hunt
 // instance so a level earned in a fight is announced when the map reopens,
 // and a reload (a new instance) never re-announces an old one.
 const _boonAnnounced = new WeakMap();
+const STAT_NAME = { STR: 'Strength', DEX: 'Dexterity', CON: 'Constitution', INT: 'Intelligence', WIS: 'Wisdom', CHA: 'Charisma',
+  perception: 'Perception', foraging: 'Foraging', cooking: 'Cooking' };
 const houseName = (h) => (h ? h.charAt(0).toUpperCase() + h.slice(1) : '');
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
@@ -199,6 +203,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._drawHUD();
     this._announceBoon();
     if (v.finished) this._drawFinished();
+    else if (this._eventResult) this._drawEventResult();
     else if (v.encounter) this._drawEncounter();
     else if (v.event) this._drawEvent();
     else if (v.spoils) this._drawHarvest();
@@ -758,6 +763,11 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'fight': return `${day(e.time)} The fight began${e.food ? `, well fed on ${item(e.food)}` : ''}.`;
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
+      case 'event_open': return null;
+      case 'event_quiet': return `${day(e.time)} Something is here, but ${EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs'}.`;
+      case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
+      case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
+      case 'rescued': return `${day(e.time)} Spoken for: you woke near a way out.`;
       case 'boon': return `${day(e.time)} ✦ ${houseName(e.house)}'s boon, level ${e.level}${e.name ? `: ${e.name}` : ''}.`;
       case 'exit': return `${day(e.time)} Left the hunt: ${e.huntPoints} Hunt Points.`;
       case 'wipe': return `${day(e.time)} The party fell.`;
@@ -788,19 +798,111 @@ export default class HuntFieldOverlay extends Phaser.Scene {
   }
 
   /**
-   * An event site the party stands on (chunk 11a). Until the event screen
-   * arrives (11b), the panel names it and lets the party walk away, which
-   * costs nothing and leaves the site: the hunt is never stuck on one.
+   * The event the party stands on (chunk 11b; EVENTS: five shapes). Every
+   * shape can be walked away from, which costs nothing and leaves the site.
+   *   choice  one button per option
+   *   check   the stat, who rolls and the DC; Roll rolls the hunt's die, then
+   *           the dice token lands on that face and the outcome shows
+   *   puzzle  the prompt and one button per answer
+   *   offer   what accepting costs, Accept (only if it can be paid), Refuse
+   *   trade   what is asked and what the pack holds, Trade (only if carried),
+   *           Refuse
    */
   _drawEvent() {
     const ev = this.v.event;
-    const lines = [ev.text, 'Events can be played in the next update. Walking away costs nothing; the site stays.'];
-    const width = 360, height = 50 + this._linesHeight(lines, 360) + 60;
+    const width = 380;
+    const lines = [ev.text];
+    let buttons = [];
+    const act = (pick) => () => this._resolveEvent(pick);
+    if (ev.shape === 'choice') buttons = ev.options.map(o => [o.label, act({ option: o.index }), 'primary']);
+    if (ev.shape === 'check') {
+      const c = ev.check;
+      const mod = c.modifier >= 0 ? `+${c.modifier}` : `${c.modifier}`;
+      lines.push(`${STAT_NAME[c.stat] || c.stat} check, DC ${c.dc}: ${c.who === 'the party' ? 'the party' : c.who} rolls d20 ${mod}.`);
+      buttons = [['Roll', () => this._rollCheck(), 'primary']];
+    }
+    if (ev.shape === 'puzzle') {
+      lines.push(ev.prompt);
+      buttons = ev.answers.map((a, k) => [a, act({ answer: k }), 'primary']);
+    }
+    if (ev.shape === 'offer') {
+      if (ev.offer.supplyCost > 0) lines.push(`It costs ${fmt(ev.offer.supplyCost)} supplies${ev.offer.canAccept ? '' : ' (you have too few)'}.`);
+      buttons = [[ev.offer.label, ev.offer.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), ev.offer.canAccept ? 'primary' : 'danger'],
+        ['Refuse', act({ accept: false }), 'primary']];
+    }
+    if (ev.shape === 'trade') {
+      lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (you carry ${g.have})`).join(', ')}.`);
+      buttons = [['Trade', ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), ev.trade.canAccept ? 'primary' : 'danger'],
+        ['Refuse', act({ accept: false }), 'primary']];
+    }
+    buttons.push(['Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary']);
+    const diceRoom = ev.shape === 'check' ? 120 : 0;
+    const height = 50 + this._linesHeight(lines, width) + diceRoom + buttons.length * 38 + 16;
     const p = this._sidePanel(ev.tile, width, height);
     this._panelText(p, p.px + 10, p.py + 8, ev.name, 17, '#e8c66a');
-    let ty = p.py + 36;
-    ty = this._panelLines(p, ty, lines);
-    this._panelButton(p, p.px + width / 2, ty + 22, 'Walk away', () => this._act('leave', () => this.hunt.leaveEvent()));
+    let ty = this._panelLines(p, p.py + 36, lines) + 8;
+    if (diceRoom) { this._diceSpot = { x: p.px + width / 2, y: ty + diceRoom / 2, w: width - 40, h: diceRoom - 10 }; ty += diceRoom; }
+    for (const [label, cb, style] of buttons) {
+      this._panelButton(p, p.px + width / 2, ty + 16, label, cb, style);
+      ty += 38;
+    }
+  }
+
+  /** Resolve the open event through the engine, then show what happened. */
+  _resolveEvent(pick) {
+    const ev = this.v.event;
+    const res = this._act('event', () => this.hunt.resolveEvent(pick));
+    if (res?.ok) this._showEventResult(ev, res);
+  }
+
+  /**
+   * A check: the hunt rolls its own die first (so a reload never re-rolls), the
+   * result is saved, and then the dice token lands on that face. The outcome is
+   * shown when it lands.
+   */
+  _rollCheck() {
+    if (this._rolling) return;
+    const ev = this.v.event;
+    const res = this.hunt.resolveEvent({});
+    if (!res?.ok) { this._say(res?.reason ? `Cannot: ${res.reason}.` : 'Cannot do that.'); return; }
+    this.onAction?.(this.hunt);
+    this._rolling = true;
+    const spot = this._diceSpot || { x: MAP.x + MAP.w / 2, y: MAP.y + MAP.h / 2, w: 300, h: 110 };
+    const token = new DiceToken(this, { x: spot.x, y: spot.y, width: spot.w, height: spot.h, depth: 30, value: res.roll.die,
+      onSettled: () => {
+        this.time.delayedCall(350, () => {
+          token.destroy();
+          this._rolling = false;
+          this._showEventResult(ev, res);
+        });
+      } });
+    SoundManager.play('select');
+    token.roll();
+  }
+
+  _showEventResult(ev, res) {
+    const lines = [...res.lines];
+    if (res.roll) {
+      const r = res.roll;
+      lines.unshift(`Rolled ${r.die} ${r.modifier >= 0 ? '+' : '-'} ${Math.abs(r.modifier)} = ${r.total} against DC ${r.dc}: ${res.branch === 'success' ? 'success' : 'failure'}.`);
+    }
+    if (!lines.length) lines.push(res.branch === 'refuse' ? 'You leave it be.' : 'Nothing more comes of it.');
+    this._eventResult = { name: ev.name, lines, success: res.branch !== 'failure' };
+    if (res.encounter) SoundManager.play('handsClick');
+    else if (res.branch === 'failure') SoundManager.play('handsClick');
+    else SoundManager.play('reward');
+    this._refresh();
+  }
+
+  /** What an event came to. Continue clears it; a fight it started is next. */
+  _drawEventResult() {
+    const r = this._eventResult;
+    const width = 380;
+    const height = 50 + this._linesHeight(r.lines, width) + 54;
+    const p = this._sidePanel(this.v.pos, width, height);
+    this._panelText(p, p.px + 10, p.py + 8, r.name, 17, r.success ? '#e8c66a' : '#d88a7a');
+    const ty = this._panelLines(p, p.py + 36, r.lines) + 8;
+    this._panelButton(p, p.px + width / 2, ty + 16, 'Continue', () => { this._eventResult = null; this._refresh(); });
   }
 
   /**
@@ -945,6 +1047,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (res.starved?.length) out.push(`Starving: ${res.starved.map(s => s.name).join(', ')} lost HP.`);
     if (kind === 'scout' && res.view?.exact) out.push('Scouted: you know exactly what is there.');
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points.`);
+    if (kind === 'move' && res.quiet) out.push(`Something is here, but ${res.quiet}.`);
+    if (kind === 'leave') out.push('You walk on. It will still be there.');
     return out.join(' ');
   }
 

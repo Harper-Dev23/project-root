@@ -336,6 +336,39 @@ console.log('=== a site on a real hunt ===');
 }
 
 // =============================================================================
+console.log('=== the Commune shrine is an event ===');
+{
+  const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+  let done = null;
+  for (let sd = 1; sd < 60 && !done; sd++) {
+    const party = makeParty();
+    const w = recordingWorld(party);
+    const h0 = createMapHunt('reeds_of_gethsemane', { plan: { objective: 'commune', size: 'small' }, supplies: 200, seed: sd }, w);
+    const d = h0.serialize();
+    const site = d.map.objectives.primary.site;
+    const nb = [...mapNeighbors(d.map, site)].find(id => d.map.tiles[id] && !d.map.occupants.some(o => o.tile === id) && id !== d.map.entry);
+    if (!nb) continue;
+    d.pos = nb;
+    const h = restoreMapHunt(d, w);
+    const r = h.move(site);
+    if (!r.ok || !r.event) continue;
+    done = { h, w, site, arrived: { communed: h.getState().communed, favor: h.getState().boon.favor, obj: h.objectives()[0].done, id: r.event.templateId } };
+  }
+  check('stepping onto the shrine opens its set piece, and does not yet complete Commune',
+    !!done && done.arrived.id === ZONES.reeds_of_gethsemane.setPieces.shrine && !done.arrived.communed && !done.arrived.obj && done.arrived.favor === 0);
+  if (done) {
+    const r = done.h.resolveEvent({ option: 2 });
+    const st = done.h.getState();
+    check("...resolving it (any branch, even leaving it undisturbed) completes Commune and pays the shrine's favor once",
+      r.ok && st.communed && done.h.objectives()[0].done && st.boon.favor === 5 && done.w.calls.filter(c => c[0] === 'favor').length === 1);
+    const off = done.h.view().moves.find(m => m.tile !== done.site);
+    done.h.move(off.tile);
+    const back = done.h.move(done.site);
+    check('...and a resolved shrine does not open again', back.ok && !back.event && done.h.getState().boon.favor === 5);
+  }
+}
+
+// =============================================================================
 console.log('=== every branch of every real template resolves ===');
 {
   const lines = {};
