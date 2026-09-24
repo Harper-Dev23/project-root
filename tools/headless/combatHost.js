@@ -328,11 +328,16 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
   }
 
   // _updateHealthBars is drawing, except for the logic it hosts because every
-  // HP change passes through it. Final Mercy (chunk 10b) is gated on a hunt
-  // boon, so running it here moves no fight without one. The summon check it
-  // also hosts is NOT run: that would move the recorded fights, and is a
-  // separate, pre-existing gap (summons never fire headless).
-  host._updateHealthBars = function () { count('_updateHealthBars'); this._checkFinalMercy?.(); return chain; };
+  // HP change passes through it: HP-threshold summons (encounter 5's
+  // Reckoning adds) and Final Mercy (chunk 10b). The co-op server runs this
+  // host, so before the summon check ran here co-op fights never summoned
+  // at all (owner report, 2026-09-24).
+  host._updateHealthBars = function () {
+    count('_updateHealthBars');
+    this._checkSummonThresholds?.();
+    this._checkFinalMercy?.();
+    return chain;
+  };
 
   // The result of _createWeaknessOverlays is passed to slot.add(), so an inert
   // object is enough - but it must not be an array, since the engine spreads

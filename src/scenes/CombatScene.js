@@ -5717,6 +5717,20 @@ export default class CombatScene extends Phaser.Scene {
       if (ref) this._netUnits.set(ref, u);
     }
 
+    // An add the server summoned mid-fight (a co-op client never summons its
+    // own, see _checkSummonThresholds): build it here through the same
+    // _summonEnemy, at the server's slot, and give it the server's id, so
+    // every later broadcast about it resolves.
+    for (const u of state.units) {
+      if (!u?.add || this._netUnits.has(u.ref) || this._findUnitByRef(u.ref)) continue;
+      const summoner = this._netUnits.get(u.add.summoner) || this._findUnitByRef(u.add.summoner);
+      if (!summoner?.summon) continue;
+      const add = this._summonEnemy(summoner.summon, summoner, { slotId: u.slot, quiet: true });
+      if (!add) continue;
+      add.uid = u.ref;
+      this._netUnits.set(u.ref, add);
+    }
+
     let applied = 0;
     for (const u of state.units) {
       const unit = this._netUnits.get(u.ref) || this._findUnitByRef(u.ref);
@@ -6477,6 +6491,11 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _checkSummonThresholds() {
+    // A co-op client never summons: the server runs the fight and its adds,
+    // and a client that summoned too put a second, local add on its own board
+    // that the server never knew (it could not be hit for real and never
+    // acted). The server's add reaches the client through _applyNetState.
+    if (this.isCoop) return;
     if (this.combatEnded || !Array.isArray(this.enemies)) return;
     for (const e of this.enemies) {
       if (!e || e.status === 'incapacitated' || !e.summon) continue;
@@ -6508,9 +6527,11 @@ export default class CombatScene extends Phaser.Scene {
    * existing index valid and cannot disturb currentTurnIndex — the exact
    * bookkeeping that has bitten this file before.
    */
-  _summonEnemy(spec, summoner) {
+  _summonEnemy(spec, summoner, { slotId = null, quiet = false } = {}) {
     if (this.combatEnded || !spec?.type) return null;
-    const slot = (this.enemySlots || []).find(sl => sl && !sl.occupied);
+    // A co-op client building the server's add puts it where the server did.
+    const slot = (slotId != null && (this.enemySlots || []).find(sl => sl && sl.slotId === slotId && !sl.occupied))
+      || (this.enemySlots || []).find(sl => sl && !sl.occupied);
     if (!slot) {
       this._log(`${summoner?.name || 'The summoner'} reaches for reinforcements — but there is no room.`);
       return null;
@@ -6528,11 +6549,14 @@ export default class CombatScene extends Phaser.Scene {
       isAdd: true,
     });
     if (!enemy) return null;
+    // Who called it, so a co-op server can tell its clients (session.js state()).
+    enemy._summonerRef = this._unitRef(summoner);
 
     if (Array.isArray(this.turnOrder)) this.turnOrder.push(enemy);
     this._refreshTurnOrderUI?.();
     this._updateHealthBars?.();
-    this._log(`${summoner?.name || 'The summoner'} calls forth ${enemy.name}!`);
+    // The server's own log line already reaches a co-op client.
+    if (!quiet) this._log(`${summoner?.name || 'The summoner'} calls forth ${enemy.name}!`);
     this._playStatusVFX?.(enemy, { kind: 'buff' });
     return enemy;
   }

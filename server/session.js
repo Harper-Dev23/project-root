@@ -291,6 +291,9 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         // never need to travel -- every client rolls the same gear from the
         // fight's gearSeed -- so two letters per slot is the whole payload.
         gear: u.isEnemy ? gearFlags(u) : undefined,
+        // A summoned add: who called it, so each client builds the same add
+        // through its own _summonEnemy (CombatScene._applyNetState).
+        add: u.isAdd ? { summoner: u._summonerRef ?? null } : undefined,
       });
 
       return {
