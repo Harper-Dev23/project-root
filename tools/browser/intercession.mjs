@@ -59,7 +59,7 @@ const dep = await evaluate(`
 check('a map hunt departs in the Reeds under the Watched rule', dep.rule === 'watched' && dep.field, JSON.stringify(dep));
 
 const walked = await evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   for (let i = 0; i < 400; i++) {

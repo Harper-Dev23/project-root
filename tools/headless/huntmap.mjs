@@ -59,6 +59,7 @@ const { GROUNDS, RELIEF, FORD, isPassable, tileCosts } = await import('../../dat
 const { MAP_SIZES, PRIMARY_OBJECTIVES, GRADES, COMPOSITIONS, UNMASK_MAX_CONCEALMENT } = await import('../../data/huntMapGen.js');
 const { PLACEMENT_NEEDS, BONUS_OBJECTIVES } = await import('../../data/planAffixes.js');
 const { ZONES } = await import('../../data/zones.js');
+const { EVENT_TEMPLATES } = await import('../../data/events.js');
 const Gen = await import('../../src/systems/HuntMapGen.js');
 const { generateHuntMap, validateHuntMap, unhandledNeeds, NEED_HANDLERS, occupantConcealment,
         revealableShare, yieldingSpots, objectiveRouteTime, swiftDeadline, planMapInputs, shiftGrades } = Gen;
@@ -139,11 +140,11 @@ console.log('=== grounds, relief, regions ===');
   check('every family a ground favours is native somewhere', ids.every(g => GROUNDS[g].families.every(f => allNatives.has(f))));
   for (const z of ZONE_IDS) {
     const zone = ZONES[z];
-    const evIds = ['environmental', 'microZone', 'flexible'].flatMap(c => (zone.encounterTable[c] || []).map(e => e.id));
+    // Event templates live in data/events.js since chunk 11a; the shrine is a set piece there.
     check(`${zone.name}: palette of real grounds, no blight; relief of real relief; apex native; shrine is a real event; house ${zone.divineAlignment}`,
       Object.keys(zone.palette).every(g => GROUNDS[g] && g !== 'blight') && Object.values(zone.palette).some(w => w > 0)
       && Object.keys(zone.relief).every(r => RELIEF[r]) && !!zone.natives[zone.apex.family]
-      && evIds.includes(zone.setPieces.shrine) && !!zone.divineAlignment);
+      && !!EVENT_TEMPLATES[zone.setPieces.shrine]?.appears?.setPiece && !!zone.divineAlignment);
   }
 }
 

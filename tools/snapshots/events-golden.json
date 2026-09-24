@@ -1,0 +1,132 @@
+{
+ "verbs": [
+  "text",
+  "huntPoints",
+  "xp",
+  "hp",
+  "supplies",
+  "hunger",
+  "item",
+  "boon",
+  "standing",
+  "tribeRep",
+  "questFlag",
+  "lore",
+  "reveal",
+  "fight",
+  "blight",
+  "time"
+ ],
+ "drawn": {
+  "reeds_sinking_mud": 599,
+  "reeds_stranger_at_camp": 598,
+  "reeds_distant_weeping": 598,
+  "bay_wrecked_hull": 600,
+  "bay_lantern_glow": 600,
+  "bay_rising_tide": 600
+ },
+ "lines": {
+  "reeds_sinking_mud {\"roll\":20}": [
+   "success",
+   "You catch yourself on a reed clump and pull free.",
+   "+2 Hunt Points."
+  ],
+  "reeds_sinking_mud {\"roll\":1}": [
+   "failure",
+   "You sink to the waist before hauling free, soaked and shaken.",
+   "Halvard lost 4 HP."
+  ],
+  "reeds_sunken_shrine {\"option\":0}": [
+   "option:0",
+   "The grief in the air eases, if only for a moment.",
+   "+3 Hunt Points.",
+   "+5 XP for the party."
+  ],
+  "reeds_sunken_shrine {\"option\":1}": [
+   "option:1",
+   "You find nothing but old wax and waterlogged cloth.",
+   "+1 Hunt Points."
+  ],
+  "reeds_sunken_shrine {\"option\":2}": [
+   "option:2",
+   "Some things are better left to the dead."
+  ],
+  "reeds_distant_weeping {\"answer\":0}": [
+   "failure",
+   "The weeping only deepens, swallowed by the reeds."
+  ],
+  "reeds_distant_weeping {\"answer\":1}": [
+   "success",
+   "The weeping pauses, as if heard. You feel strangely lighter.",
+   "+4 Hunt Points.",
+   "+8 XP for the party."
+  ],
+  "reeds_distant_weeping {\"answer\":2}": [
+   "failure",
+   "The weeping only deepens, swallowed by the reeds."
+  ],
+  "reeds_distant_weeping {\"answer\":3}": [
+   "failure",
+   "The weeping only deepens, swallowed by the reeds."
+  ],
+  "reeds_stranger_at_camp {\"option\":0}": [
+   "option:0",
+   "They offer no name, only a riddle about sorrow, and are gone by morning.",
+   "+3 Hunt Points.",
+   "+5 XP for the party."
+  ],
+  "reeds_stranger_at_camp {\"option\":1}": [
+   "option:1",
+   "By dawn they are simply gone, as if they were never there."
+  ],
+  "bay_rising_tide {\"roll\":20}": [
+   "success",
+   "You push through the surf before it deepens further.",
+   "+2 Hunt Points."
+  ],
+  "bay_rising_tide {\"roll\":1}": [
+   "failure",
+   "The cold water saps your strength before you reach dry sand.",
+   "Halvard lost 3 HP."
+  ],
+  "bay_wrecked_hull {\"option\":0}": [
+   "option:0",
+   "Among the rotted planks you find something salvageable.",
+   "+3 Hunt Points.",
+   "+5 XP for the party."
+  ],
+  "bay_wrecked_hull {\"option\":1}": [
+   "option:1",
+   "Whatever crew once sailed her, they are long past needing the wreck.",
+   "+1 Hunt Points."
+  ],
+  "bay_driftwood_idol {\"answer\":0}": [
+   "success",
+   "The idol seems to settle, as if satisfied.",
+   "+4 Hunt Points.",
+   "+8 XP for the party."
+  ],
+  "bay_driftwood_idol {\"answer\":1}": [
+   "failure",
+   "The driftwood idol topples in the wind, unanswered."
+  ],
+  "bay_driftwood_idol {\"answer\":2}": [
+   "failure",
+   "The driftwood idol topples in the wind, unanswered."
+  ],
+  "bay_driftwood_idol {\"answer\":3}": [
+   "failure",
+   "The driftwood idol topples in the wind, unanswered."
+  ],
+  "bay_lantern_glow {\"option\":0}": [
+   "option:0",
+   "The light drifts closer, then winks out entirely.",
+   "+2 Hunt Points.",
+   "+4 XP for the party."
+  ],
+  "bay_lantern_glow {\"option\":1}": [
+   "option:1",
+   "You don't look back. Some things are better not seen clearly."
+  ]
+ }
+}

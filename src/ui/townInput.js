@@ -13,7 +13,7 @@
 /** Screens a hunt is played on. While any of them is open, the town sleeps. */
 export const HUNT_SCREENS = [
   'HuntHubOverlay', 'HuntFieldOverlay', 'HuntMapOverlay', 'HuntPlanPickerOverlay',
-  'HuntEncounterOverlay', 'HuntEventOverlay',
+  'HuntEncounterOverlay',
 ];
 
 /**

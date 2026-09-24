@@ -202,7 +202,7 @@ const measured = [];
       const world = recordingWorld();
       const potion = createItemInstance('healing_potion');
       const hunt = createHunt(ZONE, { supplies: CAMP_ISSUE + PACKED, seed: 9, bring: [S.makeStack('rations', PACKED), potion] }, world);
-      for (let i = 0; i < STEPS; i++) { hunt.advance(); if (hunt.hasPendingEncounter()) hunt.getState().pendingEncounter.kind === 'event' ? hunt.resolveEncounter({ text: '', huntPoints: 0 }) : (hunt.engagePending(), hunt.resolveCombatEncounter({ won: true, type: 'beast' })); }
+      for (let i = 0; i < STEPS; i++) { hunt.advance(); if (hunt.hasPendingEncounter()) { hunt.engagePending(); hunt.resolveCombatEncounter({ won: true, type: 'beast' }); } }
       hunt.addFound(createItemInstance('hardened_dagger', { rarity: 'rare' }));
       hunt.addFound(S.makeStack('rations', 3));
       hunt.addFound(S.makeStack('rations', 2));
@@ -257,8 +257,7 @@ console.log('=== Rations left = min(packed, supplies left), every step of real h
         for (let i = 0; i < 400; i++) {
           const st = hunt.getState();
           const p = st.pendingEncounter;
-          if (p?.kind === 'event') hunt.resolveEncounter({ text: '', huntPoints: 0 });
-          else if (p?.kind === 'encounter') { hunt.engagePending(); hunt.resolveCombatEncounter({ won: true, type: p.type }); }
+          if (p?.kind === 'encounter') { hunt.engagePending(); hunt.resolveCombatEncounter({ won: true, type: p.type }); }
           else if (st.supplies <= 0) break;
           else hunt.advance();
           const now = hunt.getState();

@@ -920,7 +920,7 @@ export default class TownScene extends Phaser.Scene {
    * a hunt live behind it, nor show a hunt the loaded save does not have.
    */
   _syncHuntScreen() {
-    const HUNT_SCREENS = ['HuntEncounterOverlay', 'HuntEventOverlay', 'HuntMapOverlay', 'HuntPlanPickerOverlay', 'HuntHubOverlay', 'HuntFieldOverlay'];
+    const HUNT_SCREENS = ['HuntEncounterOverlay', 'HuntMapOverlay', 'HuntPlanPickerOverlay', 'HuntHubOverlay', 'HuntFieldOverlay'];
     const up = (key) => this.scene.isActive(key) || this.scene.isPaused(key);
     const open = HUNT_SCREENS.filter(up);
     // Stopped outright: they may be showing a hunt that is no longer loaded.

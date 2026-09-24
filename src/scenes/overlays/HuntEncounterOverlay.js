@@ -9,8 +9,8 @@
 // Engaging is saved before the fight starts, so reloading mid-fight resolves
 // it as a flee rather than offering a second attempt (HuntManager.js).
 //
-// Pending EVENTS (non-fight) skip this screen entirely and go straight to
-// HuntEventOverlay — see HuntHubOverlay._investigate().
+// The Advance loop no longer rolls events (retired in chunk 11a); hunts on the
+// hex map run events from data/events.js instead.
 //
 // Launched with: scene.launch('HuntEncounterOverlay', { encounter })
 

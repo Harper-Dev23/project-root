@@ -77,7 +77,9 @@ const IF = await import('../../src/systems/ItemFactory.js');
 const PS = await import('../../src/systems/PartyStats.js');
 const HB = await import('../../src/systems/HuntBeasts.js');
 const { DROP_POOL } = await import('../../src/systems/PartyGearManager.js');
-const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+const { createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+// Walkers here are not about events: a hunt walks away from any it opens (chunk 11a).
+const { createMapHunt, restoreMapHunt } = (await import('./walkAway.js')).walkingAway({ createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt });
 const { makeRng } = await import('../../src/systems/seededRng.js');
 const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
 const { huntItemLevel } = await import('../../src/systems/HuntScaling.js');

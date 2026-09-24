@@ -55,7 +55,7 @@ const bagRations = () => evaluate(`const GS = (await import('/src/systems/GameSt
 
 // Walk the map hunt toward a goal through the scene's own action path.
 const walkTo = (goal) => evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   const goalOf = (st) => ${goal};
@@ -278,6 +278,41 @@ check('...the party fell back, a fled beast pack hunts it, and the flee is saved
   !after4.enc && after4.flees === pre4.flees + 1 && (pre4.kind === 'beast' ? after4.hunting === 'hunting' : true) && after4.fled && sv4?.hunt?.flees === pre4.flees + 1,
   JSON.stringify({ kind: pre4.kind, ...after4 }));
 await shot('05g-after-flee');
+
+// ---- 5h. An event site (chunk 11a): it opens, and walking away leaves it ------------
+{
+  const opened = await evaluate(`
+    const s = window.__T.s(); const h = s.hunt;
+    const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
+    const { isPassable } = await import('/data/grounds.js');
+    if (h.encounter()) h.flee();
+    for (let i = 0; i < 400; i++) {
+      const st = h.getState();
+      if (h.encounter()) { s._act('flee', () => h.flee()); continue; }
+      const sites = new Set(st.map.occupants.filter(o => o.kind === 'event').map(o => o.tile));
+      const prev = new Map([[st.pos, null]]); const q = [st.pos]; let g = null;
+      for (let k = 0; k < q.length && !g; k++) for (const n of mapNeighbors(st.map, q[k])) {
+        if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (sites.has(n)) { g = n; break; } }
+      if (!g) return { found: false };
+      let t = g; while (prev.get(t) !== st.pos) t = prev.get(t);
+      // The last step opens the site for real (the walker's own moves walk away).
+      if (t === g) { s._act('move', () => (h.__rawMove || h.move)(t)); if (h.view().event) return { found: true, tile: g, id: h.view().event.templateId }; continue; }
+      s._act('move', () => h.move(t));
+    }
+    return { found: false };`);
+  check('walked onto an event site, and it opened', opened.found, JSON.stringify(opened));
+  if (opened.found) {
+    await sleep(400);
+    const panel = await evaluate(`return window.__T.textsOf('HuntFieldOverlay').map(t => t.text);`);
+    const ev = await evaluate(`return window.__T.s().hunt.view().event;`);
+    check('the map shows its name and text, and offers Walk away', panel.includes(ev.name) && panel.includes(ev.text) && panel.includes('Walk away'), ev.name);
+    await shot('05h-event');
+    await clickText('^Walk away$');
+    await sleep(400);
+    const after = await evaluate(`const h = window.__T.s().hunt; return { open: !!h.view().event, still: h.getState().map.occupants.some(o => o.kind === 'event' && o.tile === ${JSON.stringify(opened.tile)}) };`);
+    check('Walk away (clicked) closes it, and the site stays for later', !after.open && after.still, JSON.stringify(after));
+  }
+}
 
 // ---- 6. Leave through an exit -------------------------------------------------------
 const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t]) => t.exit).map(([id]) => id))");

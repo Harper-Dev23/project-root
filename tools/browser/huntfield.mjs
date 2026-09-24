@@ -140,12 +140,21 @@ await clickText('^Back$').catch(() => {});
 // ---- 7. Camp panel, with fish in the pack -------------------------------------
 // Walk (through the engine) until a tile can be fished, then fish by click.
 await evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
-  for (let i = 0; i < 60; i++) {
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
+  const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
+  const { isPassable } = await import('/data/grounds.js');
+  for (let i = 0; i < 200; i++) {
     if (h.encounter()) h.flee();
     const st = h.getState();
     if (st.map.tiles[st.pos].fishing && !st.gathered[st.pos]) break;
-    const ms = h.view().moves; h.move(ms[i % ms.length].tile);
+    // Step toward the nearest unfished fishing tile (breadth-first).
+    const want = (id) => st.map.tiles[id].fishing && !st.gathered[id];
+    const prev = new Map([[st.pos, null]]); const q = [st.pos]; let g = null;
+    for (let k = 0; k < q.length && !g; k++) for (const n of mapNeighbors(st.map, q[k])) {
+      if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (want(n)) { g = n; break; } }
+    if (!g) break;
+    let t = g; while (prev.get(t) !== st.pos) t = prev.get(t);
+    h.move(t);
   }
   if (h.encounter()) h.flee();
   s.panel = null; s.selected = h.view().pos; s._refresh(); return true;
@@ -175,7 +184,7 @@ check('the Log button closes it again', !(await findText('^Hunt log')));
 
 // ---- 9. An encounter: walk until one starts, then flee by click ------------------
 const gotEnc = await evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   for (let i = 0; i < 300 && !h.encounter(); i++) {
@@ -221,7 +230,7 @@ if (gotEnc) {
 
 // ---- 10. Cross into section 2 through the passage --------------------------------
 const crossed = await evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   const st0 = h.getState(); if (!st0.map.passages.length) return 'no passage';
@@ -251,7 +260,7 @@ if (crossed === 'at passage') {
 
 // ---- 11. Leave: walk back to an exit, click Leave, confirm in the dialogue bar ---
 const atExit = await evaluate(`
-  const s = window.__T.s(); const h = s.hunt;
+  const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   for (let i = 0; i < 300 && !h.getState().map.tiles[h.getState().pos].exit; i++) {

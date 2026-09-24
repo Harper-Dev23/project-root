@@ -5,9 +5,9 @@
 //
 // Turn-based, not timer-based: advance() is called once per player click of
 // an "Advance" button. If a roll produces an encounter, it sits as a
-// "pending" encounter (hidden from the player) until resolveEncounter() is
+// "pending" fight (hidden from the player) until resolveCombatEncounter() is
 // called — that's what the Investigate/Resolve flow in HuntEncounterOverlay
-// drives. Hunt Points are only awarded on resolution, not on the roll.
+// drives. (Events were retired from this loop in chunk 11a.) Hunt Points are only awarded on resolution, not on the roll.
 //
 // Region modifiers, the chosen Hunt Plan's modifiers, and a randomly-rolled
 // weather effect (revealed only once the hunt starts, not during loadout)
@@ -67,6 +67,7 @@
 import { EncounterRoller } from './EncounterRoller.js';
 import { TribeHuntSimulator } from './TribeHuntSimulator.js';
 import * as Standing from './Standing.js';
+import { TRIBE_DISPLAY } from './TribeRelations.js';
 import { completeRites } from './Revival.js';
 import { getPlayerPartyId } from '../../data/tribeHuntingParties.js';
 import { combineModifiers } from './HuntModifiers.js';
@@ -92,7 +93,6 @@ const DEPTH_CHANCE_MULTIPLIER   = 0.01;
 const MAX_ENCOUNTER_CHANCE      = 0.6;
 const LOG_LIMIT                 = 50;
 const BASE_BEAST_FIGHT_HUNT_POINTS = 8; // awarded on winning a Beast fight, before the Hunt Points modifier
-const CHECK_DIE_SIDES           = 20;
 
 /**
  * Shape version of a serialized hunt — the `hunt` field of a save. Separate
@@ -171,6 +171,34 @@ export const GAME_WORLD = {
   },
   followedHouse() {
     return Standing.followedHouse(ProgressionManager.getStanding(), ProgressionManager.tribe);
+  },
+  // Events (chunk 11a): what the outcome verbs and a template's conditions
+  // reach outside the hunt (EventEffects.VERBS).
+  houseHolder(house) {
+    return Standing.holderOf(ProgressionManager.getStanding(), house);
+  },
+  ownTribe() {
+    return ProgressionManager.tribe || null;
+  },
+  tribeName(tribe) {
+    return TRIBE_DISPLAY[tribe] || tribe;
+  },
+  rivalDevotion(tribe, house, amount) {
+    Standing.addRivalDevotion(ProgressionManager.getStanding(), tribe, house, amount);
+  },
+  tribeRep(tribe, amount) {
+    ProgressionManager.addTribeRep(tribe, amount);
+  },
+  hasQuestFlag(flag) {
+    return ProgressionManager.hasQuestFlag(flag);
+  },
+  questFlag(flag, on) {
+    if (on) ProgressionManager.setQuestFlag(flag); else ProgressionManager.clearQuestFlag(flag);
+  },
+  lore(flag) {
+    // Loaded on use: JournalState reads browser storage as it loads, and the
+    // co-op server imports this file (through CombatScene).
+    import('./JournalState.js').then(m => m.JournalState.addUnlock(flag)).catch(err => console.error('[lore]', err));
   },
   bankItems(items, { found }) {
     // Found items are new acquisitions and get the inventory's "new" dot;
@@ -252,6 +280,9 @@ export function restoreHunt(data, world = GAME_WORLD) {
   const state = clone(rest);
   const hunt = makeHunt(state, rngFromState(rngState), world);
 
+  // An old save may hold one of the retired Advance-loop events pending
+  // (chunk 11a): it is dropped, as if the turn had been quiet.
+  if (state.pendingEncounter?.kind === 'event') state.pendingEncounter = null;
   // Reloading mid-fight counts as fleeing. See the header.
   if (state.pendingEncounter?.kind === 'encounter' && state.pendingEncounter.engaged) {
     hunt._flee('The fight was broken off. You fled, and it paid nothing.');
@@ -387,62 +418,15 @@ function makeHunt(s, rng, world) {
 
       if (rng() < chance) {
         const rolled = EncounterRoller.roll(s.zoneId, s.depth, s.combinedModifiers.beastChanceWeight, s.isNight, rng);
-        // Copied, because a pending event carries its zone entry, which is
-        // shared data and must never be written through.
+        // Only fights now: the Advance loop's events were retired in chunk
+        // 11a (events are data/events.js templates, on the hex map).
         s.pendingEncounter = rolled ? clone(rolled) : null;
-        // A check's die is rolled HERE, with the hunt's stream, and shown by
-        // the dice token later. Rolling it when the event screen opens made
-        // every reload a fresh roll of the die.
-        if (s.pendingEncounter?.eventDef?.kind === 'check') {
-          s.pendingEncounter.dieRoll = 1 + Math.floor(rng() * CHECK_DIE_SIDES);
-        }
       }
 
       return {
         ...this.getState(),
         ended: s.supplies <= 0,
       };
-    },
-
-    /**
-     * Resolves a pending 'event' (non-fight) encounter once HuntEncounterOverlay
-     * has worked out an `outcome` via EventResolver (a choice's outcome, a
-     * check's success/failure branch, or a puzzle's success/failure branch):
-     * `{ text, huntPoints, xp?, hpDelta? }`. Hunt Points are scaled by the Hunt
-     * Points modifier same as combat; XP goes through the shared leveling path;
-     * hpDelta (rare, modest) lands on one random living party member and is
-     * clamped so events can never be lethal — that's what combat is for.
-     * 'encounter' (fight) pending entries are resolved by resolveCombatEncounter()
-     * instead. Returns the resolved log entry, or null if nothing was pending.
-     */
-    resolveEncounter(outcome) {
-      if (!s.pendingEncounter || s.pendingEncounter.kind !== 'event' || !outcome) return null;
-
-      const pending = s.pendingEncounter;
-      s.pendingEncounter = null;
-
-      const huntPoints = Math.round((outcome.huntPoints || 0) * (1 + s.combinedModifiers.huntPointsPercent / 100));
-
-      if (outcome.xp > 0) world.awardXP(outcome.xp);
-      if (outcome.hpDelta) this._applyHpDelta(outcome.hpDelta);
-
-      const resolved = {
-        kind: 'event',
-        type: pending.type,
-        label: outcome.text ? `${pending.label} ${outcome.text}` : pending.label,
-        huntPoints,
-      };
-
-      this._awardAndLog(resolved);
-      return resolved;
-    },
-
-    /** Applies a (clamped, never-lethal) HP change to one random living party member. */
-    _applyHpDelta(amount) {
-      const living = world.party().filter(c => c.status !== 'dead' && c.status !== 'incapacitated');
-      if (living.length === 0) return;
-      const target = living[Math.floor(rng() * living.length)];
-      target.currentHP = Math.min(target.maxHP, Math.max(1, target.currentHP + amount));
     },
 
     /**
@@ -648,10 +632,6 @@ export const HuntManager = {
 
   advance() {
     return _mode === 'advance' && _current ? _current.advance() : null;
-  },
-
-  resolveEncounter(outcome) {
-    return _mode === 'advance' && _current ? _current.resolveEncounter(outcome) : null;
   },
 
   engagePending() {

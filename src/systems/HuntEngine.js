@@ -106,12 +106,15 @@ import { Items } from '../../data/items.js';
 import { addToList, makeStack, takeFromList, countInList, partMaterial } from './ItemStacks.js';
 import { HARVEST_TIME, MEAT_TIME_PER_BODY, MEAT_BY_GRADE, SPECIMEN_RARITIES } from '../../data/beastParts.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
-import { parseTileId } from './HexGrid.js';
+import { parseTileId, distance } from './HexGrid.js';
+import { EVENT_TEMPLATES } from '../../data/events.js';
+import { applyEffects, fillText, dynamicBlock, evalNumber, rollD20, statModifier, ratingModifier,
+  CORE_STATS } from './EventEffects.js';
 import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
 import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } from './HuntManager.js';
 import { objectiveProgress, exitReward, completionRewardPercent } from './HuntObjectives.js';
-import { isItemInstance } from './ItemFactory.js';
+import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { houseOf } from './Standing.js';
 import * as Boons from './Boons.js';
 import {
@@ -176,9 +179,10 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
   // First draw: the weather, as createHunt rolls it. Second: the map's seed.
   const weather = rollWeather(rng, planMods.foulWeatherPercent || 0);
   const mapSeed = Math.floor(rng() * 0x100000000) >>> 0;
+  const boon0 = newBoon(zone, world);
   const map = generateHuntMap({
     zoneId, objective: plan.objective, size: plan.size, seed: mapSeed,
-    bonusObjectives: plan.bonusObjectives || [], mods: planMods,
+    bonusObjectives: plan.bonusObjectives || [], mods: planMods, followed: boon0.followed,
   });
   const { pack, extraSupplies } = packAtDeparture(bring, planMods);
   const start = supplies + extraSupplies;
@@ -232,7 +236,11 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     // The prophet boon (chunk 10b): the region's house, whether your tribe
     // follows it (read once, at departure, like the modifier bundle), and the
     // favor and level this hunt has earned. Ends with the hunt.
-    boon: newBoon(zone, world),
+    boon: boon0,
+    // The event site the party stands on, open until it is resolved or walked
+    // away from (chunk 11a): { templateId, site: { occId?, tile }, roles,
+    // houseId, rivalId }. Null otherwise; optional in a save.
+    event: null,
     log: [],
   };
   const hunt = makeMapHunt(s, rng, worldRng, world);
@@ -290,7 +298,12 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
       && typeof data.boon.followed === 'boolean' && Number.isFinite(data.boon.favor) && Number.isFinite(data.boon.level))) {
     throw new Error('map hunt boon is not readable');
   }
+  if (data.event != null && !(EVENT_TEMPLATES[data.event.templateId] && typeof data.event.site?.tile === 'string'
+      && data.map.tiles[data.event.site.tile] && data.event.roles && typeof data.event.roles === 'object')) {
+    throw new Error('map hunt pending event is not readable');
+  }
   const { rngState, worldRngState, ...rest } = data;
+  if (rest.event === undefined) rest.event = null;
   if (rest.boon === undefined) rest.boon = { house: houseOf(getZone(rest.zoneId)?.divineAlignment), followed: false, favor: 0, level: 0 };
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
   if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
@@ -320,6 +333,7 @@ function makeMapHunt(s, rng, worldRng, world) {
   const frozen = () => {
     if (s.finished) return { ok: false, reason: 'the hunt is over' };
     if (s.encounter) return { ok: false, reason: 'a fight is under way: win it or flee' };
+    if (s.event) return { ok: false, reason: 'an event is waiting: see it through or walk away' };
     leaveSpoils();
     return null;
   };
@@ -380,7 +394,10 @@ function makeMapHunt(s, rng, worldRng, world) {
       const starved = this.hunger() === 'starving' ? this._starve() : [];
       this._reveal();
       const contact = occ ? { id: occ.id, kind: occ.kind, knew } : null;
-      return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved };
+      // An event site opens when the party arrives, unless a fight came first.
+      const event = s.encounter ? null : this._openEventAt(s.pos);
+      return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved,
+        event: event?.quiet ? null : event, quiet: event?.quiet || null };
     },
 
     /**
@@ -591,7 +608,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         partyInitiative: e.partyInitiative, enemyInitiative: e.enemyInitiative,
         itemLevel, deathRule: s.deathRule,
         xpPool: Math.round(FIGHT_XP_POOL * (1 + (s.mods.xpPercent || 0) / 100)),
-        scenario: fightScenario(occ, { itemLevel, zoneName: zone?.name }),
+        scenario: this._weakened(occ, fightScenario(occ, { itemLevel, zoneName: zone?.name })),
         boon: this._boonForFight(),
       };
     },
@@ -903,6 +920,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         objectives: objectiveProgress(s),
         spoils: this._spoilsView(),
         boon: this.boon(),
+        event: this.event(),
         finished: s.finished,
       };
     },
@@ -1119,6 +1137,262 @@ function makeMapHunt(s, rng, worldRng, world) {
         if (band === 'identified' && !s.unmasked.includes(occ.id) && occupantConcealment(s.map, occ) > 100) s.unmasked.push(occ.id);
       }
       return range;
+    },
+
+    // ── Events (chunk 11a; EVENTS, data/events.js, EventEffects.js) ──────────
+
+    /** The event site on a tile: an event occupant, or a shrine set piece. */
+    _eventSiteAt(tile) {
+      const occ = s.map.occupants.find(o => o.kind === 'event' && o.tile === tile);
+      if (occ) return { occId: occ.id, tile, templateId: occ.eventId };
+      const f = s.map.features.find(x => x.kind === 'shrine' && x.tile === tile && x.eventId && !x.resolved);
+      return f ? { tile, templateId: f.eventId, feature: 'shrine' } : null;
+    },
+
+    /** The roles a template's text and numbers are filled from, here and now. */
+    _eventRoles(tile) {
+      const zone = getZone(s.zoneId);
+      const houseId = s.boon?.house || null;
+      const cap = (w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : null);
+      const holder = houseId ? (world.houseHolder?.(houseId) ?? null) : null;
+      const rivalId = holder && holder !== world.ownTribe?.() ? holder : null;
+      const here = parseTileId(tile);
+      let beast = null, best = Infinity;
+      for (const o of s.map.occupants) {
+        if (o.kind !== 'beast') continue;
+        const p = parseTileId(o.tile);
+        if (p.section !== here.section) continue;
+        const d = distance(here, p);
+        if (d <= 3 && d < best) { best = d; beast = zone?.natives?.[o.family]?.name || o.family; }
+      }
+      return {
+        roles: {
+          danger: zone?.danger || 1,
+          region: zone?.name || s.zoneId,
+          house: cap(houseId),
+          prophet: cap(zone?.divineAlignment || null),
+          followed: !!s.boon?.followed,
+          ground: GROUNDS[s.map.tiles[tile]?.ground]?.name || s.map.tiles[tile]?.ground || null,
+          rival: rivalId ? (world.tribeName?.(rivalId) || cap(rivalId)) : null,
+          beast,
+        },
+        houseId, rivalId,
+      };
+    },
+
+    /**
+     * The party has arrived on `tile`: open its event site, if it has one and
+     * its moment is right (decision 2). A site whose moment is not right stays
+     * quiet and unspent. Returns the event view, { quiet: reason }, or null.
+     */
+    _openEventAt(tile) {
+      const site = this._eventSiteAt(tile);
+      if (!site) return null;
+      const tpl = EVENT_TEMPLATES[site.templateId];
+      if (!tpl) return null;
+      const { roles, houseId, rivalId } = this._eventRoles(tile);
+      const quiet = dynamicBlock(tpl, {
+        isNight: this.clock().isNight, hunger: this.hunger(), roles,
+        hasQuestFlag: (f) => !!world.hasQuestFlag?.(f),
+      });
+      if (quiet) {
+        this._log({ kind: 'event_quiet', event: site.templateId, tile, time: s.time });
+        return { quiet };
+      }
+      s.event = { templateId: site.templateId, site: { occId: site.occId || null, tile, feature: site.feature || null }, roles, houseId, rivalId };
+      this._log({ kind: 'event_open', event: site.templateId, tile, time: s.time });
+      return this.event();
+    },
+
+    /** The stat a check reads, and its modifier: the best living hunter's, or a party stat. */
+    _checkStat(stat) {
+      if (CORE_STATS.includes(stat)) {
+        const living = world.party().filter(c => c && c.status !== 'dead' && c.status !== 'incapacitated');
+        let who = null, value = 10;
+        for (const c of living) { const v = c.totalStats?.[stat] ?? c.stats?.[stat] ?? 10; if (!who || v > value) { who = c; value = v; } }
+        return { stat, value, modifier: statModifier(value), who: who?.name || null };
+      }
+      const value = this.stats()[stat] ?? 50;
+      return { stat, value, modifier: ratingModifier(value), who: 'the party' };
+    },
+
+    /** Supplies an outcome would take, so an Offer can say whether it can be paid. */
+    _supplyCost(list, roles) {
+      return (list || []).reduce((t, e) => (e.supplies != null ? t - Math.min(0, evalNumber(e.supplies, roles)) : t), 0);
+    },
+
+    _packCount(id) {
+      return countInList(s.pack.found, id) + countInList(s.pack.brought, id);
+    },
+
+    /** What the event panel shows for the open event (null when none is open). */
+    event() {
+      const ev = s.event;
+      if (!ev) return null;
+      const tpl = EVENT_TEMPLATES[ev.templateId];
+      const r = ev.roles;
+      const out = { templateId: ev.templateId, name: fillText(tpl.name, r), shape: tpl.shape, text: fillText(tpl.text, r), tile: ev.site.tile };
+      if (tpl.shape === 'choice') out.options = tpl.options.map((o, i) => ({ index: i, label: fillText(o.label, r) }));
+      if (tpl.shape === 'check') out.check = { ...this._checkStat(tpl.check.stat), dc: Math.round(evalNumber(tpl.check.dc, r)) };
+      if (tpl.shape === 'puzzle') { out.prompt = fillText(tpl.prompt, r); out.answers = tpl.answers.map(a => fillText(a, r)); }
+      if (tpl.shape === 'offer') {
+        const need = this._supplyCost(tpl.price, r);
+        out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need };
+      }
+      if (tpl.shape === 'trade') {
+        const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
+        out.trade = { give, canAccept: give.every(g => g.have >= g.qty) };
+      }
+      return out;
+    },
+
+    /** What the outcome verbs are handed (EventEffects.VERBS). */
+    _eventApi(ev) {
+      const hunt = this;
+      return {
+        s, world, rng, roles: ev.roles, houseId: ev.houseId, rivalId: ev.rivalId, SATED_TIME,
+        party: () => world.party(),
+        noteSupplies: () => hunt._noteSupplies(),
+        earnFavor: (n, src) => hunt._earnFavor(n, src),
+        spendTime: (n) => hunt._spendTime(n),
+        addItem(id, qty) {
+          if (Items[id]?.stackable) addToList(s.pack.found, makeStack(id, qty));
+          else for (let i = 0; i < qty; i++) { const inst = createItemInstance(id); if (inst) addToList(s.pack.found, inst); }
+        },
+        revealAround(radius) {
+          const here = parseTileId(s.pos);
+          let n = 0;
+          for (const [id, t] of Object.entries(s.map.tiles)) {
+            const p = parseTileId(id);
+            if (p.section !== here.section || s.fog[id] || distance(here, p) > radius) continue;
+            s.fog[id] = 'remembered';
+            s.seenGround[id] = t.ground;
+            n++;
+          }
+          return n;
+        },
+        startFight(weaken) {
+          const here = parseTileId(s.pos);
+          const near = s.map.occupants.filter(o => HOSTILE.has(o.kind)).map(o => ({ o, p: parseTileId(o.tile) }))
+            .filter(x => x.p.section === here.section && distance(here, x.p) <= 2)
+            .sort((a, b) => distance(here, a.p) - distance(here, b.p) || (a.o.id < b.o.id ? -1 : 1));
+          const occ = near[0]?.o;
+          if (!occ) return null;
+          if (weaken > 0) occ.weakened = Math.max(occ.weakened || 0, Math.min(90, weaken));
+          hunt._ensureLoadout(occ);
+          s.encounter = makeEncounter(occ, {
+            cause: 'event', knew: 'identified', ambush: false, partyInitiative: hunt.stats().partyInitiative, at: s.time, tile: occ.tile,
+          });
+          return occ;
+        },
+        cleanseNear(n) {
+          const here = parseTileId(s.pos);
+          const blighted = Object.entries(s.map.tiles).filter(([, t]) => t.ground === 'blight')
+            .map(([id]) => ({ id, p: parseTileId(id) })).filter(x => x.p.section === here.section)
+            .sort((a, b) => distance(here, a.p) - distance(here, b.p) || (a.id < b.id ? -1 : 1)).slice(0, n);
+          for (const { id } of blighted) {
+            const t = s.map.tiles[id];
+            t.ground = t.blightedFrom || s.landGround;
+            delete t.blightedFrom;
+            s.cleansed.push(id);
+          }
+          return blighted.length;
+        },
+        spreadNear(n) {
+          const here = parseTileId(s.pos);
+          const clean = Object.entries(s.map.tiles).filter(([id, t]) => t.ground !== 'blight' && isPassable(t) && !t.exit && id !== s.pos)
+            .map(([id]) => ({ id, p: parseTileId(id) })).filter(x => x.p.section === here.section)
+            .sort((a, b) => distance(here, a.p) - distance(here, b.p) || (a.id < b.id ? -1 : 1)).slice(0, n);
+          for (const { id } of clean) {
+            const t = s.map.tiles[id];
+            t.blightedFrom = t.ground;
+            t.ground = 'blight';
+          }
+          return clean.length;
+        },
+      };
+    },
+
+    /** A weakened occupant's fight: each member's HP cut by its `weakened` percent. */
+    _weakened(occ, scenario) {
+      const w = occ?.weakened || 0;
+      if (!(w > 0)) return scenario;
+      for (const e of scenario.enemies || []) e.hpMult = (e.hpMult ?? 1) * (1 - w / 100);
+      return scenario;
+    },
+
+    /**
+     * Resolve the open event (decision 3). `pick` by shape:
+     *   choice { option }, check { roll? } (the dice token's face, or the hunt
+     *   rolls), puzzle { answer }, offer { accept }, trade { accept }.
+     * The outcome's effects are applied in order; the site is spent. Returns
+     * { ok, branch, lines, roll?, encounter }.
+     */
+    resolveEvent(pick = {}) {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      const ev = s.event;
+      if (!ev) return { ok: false, reason: 'no event is open' };
+      const tpl = EVENT_TEMPLATES[ev.templateId];
+      const r = ev.roles;
+      let effects, branch, roll = null;
+      if (tpl.shape === 'choice') {
+        const o = tpl.options[pick.option];
+        if (!o) return { ok: false, reason: 'no such option' };
+        effects = o.effects; branch = `option:${pick.option}`;
+      } else if (tpl.shape === 'check') {
+        const c = this._checkStat(tpl.check.stat);
+        roll = rollD20(rng, pick.roll);
+        const dc = Math.round(evalNumber(tpl.check.dc, r));
+        const ok = roll + c.modifier >= dc;
+        effects = ok ? tpl.success : tpl.failure; branch = ok ? 'success' : 'failure';
+        roll = { die: roll, modifier: c.modifier, total: roll + c.modifier, dc, who: c.who };
+      } else if (tpl.shape === 'puzzle') {
+        if (!Number.isInteger(pick.answer) || !tpl.answers[pick.answer]) return { ok: false, reason: 'no such answer' };
+        const ok = pick.answer === tpl.correct;
+        effects = ok ? tpl.success : tpl.failure; branch = ok ? 'success' : 'failure';
+      } else if (tpl.shape === 'offer') {
+        if (pick.accept) {
+          if (s.supplies < this._supplyCost(tpl.price, r)) return { ok: false, reason: 'you cannot pay the price' };
+          effects = [...(tpl.price || []), ...(tpl.reward || [])]; branch = 'accept';
+        } else { effects = tpl.refuse || []; branch = 'refuse'; }
+      } else if (tpl.shape === 'trade') {
+        if (pick.accept) {
+          if (!tpl.give.every(g => this._packCount(g.id) >= g.qty)) return { ok: false, reason: 'you do not carry what they ask' };
+          for (const g of tpl.give) {
+            let need = g.qty;
+            for (const list of [s.pack.found, s.pack.brought]) {
+              const take = Math.min(need, countInList(list, g.id));
+              if (take > 0) { takeFromList(list, g.id, take); need -= take; }
+            }
+          }
+          effects = tpl.receive || []; branch = 'accept';
+        } else { effects = tpl.refuse || []; branch = 'refuse'; }
+      } else {
+        return { ok: false, reason: `unknown shape '${tpl.shape}'` };
+      }
+      // The site is spent before its effects run, so a fight it starts or a
+      // world tick it causes sees the map as it now is.
+      s.event = null;
+      if (ev.site.occId) {
+        const i = s.map.occupants.findIndex(o => o.id === ev.site.occId);
+        if (i >= 0) s.map.occupants.splice(i, 1);
+      } else if (ev.site.feature === 'shrine') {
+        const f = s.map.features.find(x => x.kind === 'shrine' && x.tile === ev.site.tile);
+        if (f) f.resolved = true;
+      }
+      const lines = applyEffects(effects, this._eventApi(ev));
+      this._reveal();
+      this._log({ kind: 'event', event: ev.templateId, branch, time: s.time });
+      return { ok: true, branch, lines, roll, encounter: this.encounter() };
+    },
+
+    /** Walk away from the open event (decision 3): nothing is lost, the site stays. */
+    leaveEvent() {
+      if (!s.event) return { ok: false, reason: 'no event is open' };
+      const id = s.event.templateId;
+      s.event = null;
+      this._log({ kind: 'event_left', event: id, time: s.time });
+      return { ok: true };
     },
 
     /**

@@ -149,6 +149,18 @@ export function earnFavor(st, playerTribe, house, amount) {
   return true;
 }
 
+/**
+ * A rival tribe's devotion with a house moves (an event's `standing` verb with
+ * target "rival", chunk 11a: sabotage, EVENTS). Never below 0. A rival that
+ * drops below the claim threshold keeps its hold; only the player's lead takes
+ * a house (canAccept).
+ */
+export function addRivalDevotion(st, tribe, house, amount) {
+  if (!HOUSES.includes(house) || !st.devotion?.[tribe] || !Number.isFinite(amount)) return false;
+  st.devotion[tribe][house] = Math.max(0, st.devotion[tribe][house] + amount);
+  return true;
+}
+
 /** Spend Bond standing (intercession, 10c). Refused, and nothing spent, if the Bond cannot pay. */
 export function spendBond(st, house, cost) {
   if (!HOUSES.includes(house) || !(cost >= 0)) return { ok: false, reason: 'bad spend' };

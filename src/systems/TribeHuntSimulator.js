@@ -7,7 +7,7 @@
 // be hunting on any given visit either.
 //
 // The player's own tribe's `isPlayerSlot` party is the one exception — its
-// points come directly from HuntManager.resolveEncounter(), never from here.
+// points come from the player's own hunts (GAME_WORLD.awardHuntPoints), never from here.
 
 import { TRIBE_IDS } from './TribeRelations.js';
 import { getPartiesForTribe } from '../../data/tribeHuntingParties.js';

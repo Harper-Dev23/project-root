@@ -200,6 +200,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._announceBoon();
     if (v.finished) this._drawFinished();
     else if (v.encounter) this._drawEncounter();
+    else if (v.event) this._drawEvent();
     else if (v.spoils) this._drawHarvest();
     else if (this.panel === 'eat') this._drawEat();
     else if (this.panel === 'camp') this._drawCamp();
@@ -649,7 +650,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const zoneId = this.v.zoneId;
     const stale = o.stale ? ' (last seen, may have moved)' : '';
     if (o.band === 'sensed') return [`Something is here, but you cannot make it out${stale}.`];
-    if (o.kind === 'event') return ['Something worth a look (events come in a later update).'];
+    if (o.kind === 'event') return ['Something worth a look.'];
     const lines = [];
     if (o.kind === 'cultist') lines.push(`Cultists, ${o.size}${stale}.`);
     else lines.push(`${familyName(zoneId, o.family)}, ${o.size}, up to ${o.topGrade}${stale}.`);
@@ -784,6 +785,22 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // Fleeing is done from inside the fight (chunk 9c, decision 8), where the
     // enemy's free round is played: the panel only starts it.
     this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
+  }
+
+  /**
+   * An event site the party stands on (chunk 11a). Until the event screen
+   * arrives (11b), the panel names it and lets the party walk away, which
+   * costs nothing and leaves the site: the hunt is never stuck on one.
+   */
+  _drawEvent() {
+    const ev = this.v.event;
+    const lines = [ev.text, 'Events can be played in the next update. Walking away costs nothing; the site stays.'];
+    const width = 360, height = 50 + this._linesHeight(lines, 360) + 60;
+    const p = this._sidePanel(ev.tile, width, height);
+    this._panelText(p, p.px + 10, p.py + 8, ev.name, 17, '#e8c66a');
+    let ty = p.py + 36;
+    ty = this._panelLines(p, ty, lines);
+    this._panelButton(p, p.px + width / 2, ty + 22, 'Walk away', () => this._act('leave', () => this.hunt.leaveEvent()));
   }
 
   /**

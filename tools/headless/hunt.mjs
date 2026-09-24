@@ -3,7 +3,7 @@
 // The hunt engine's golden master, and the proof that a hunt survives a save.
 // Exploration's counterpart to tools/combat_snapshot.js. It drives the REAL
 // createHunt / restoreHunt / GameState.save / GameState.load; nothing is
-// re-implemented here, and event outcomes go through the real EventResolver.
+// re-implemented here. (Its events were retired in chunk 11a: this loop rolls fights only.)
 //
 // What it proves (IMPLEMENTATION_PLAN, chunk 1):
 //   - save -> reload mid-hunt gives an identical state AND identical next rolls
@@ -61,7 +61,6 @@ const { SAVE_VERSION } = await import('../../src/systems/GameState.js');
 const ProgressionManager = (await import('../../src/systems/ProgressionManager.js')).default;
 const { HuntManager, createHunt, restoreHunt, HUNT_STATE_VERSION } = await import('../../src/systems/HuntManager.js');
 const { makeRng, rngFromState } = await import('../../src/systems/seededRng.js');
-const { EventResolver } = await import('../../src/systems/EventResolver.js');
 const { ZONES } = await import('../../data/zones.js');
 const { makeParty } = await import('./fixtures.js');
 
@@ -88,21 +87,6 @@ function testParty() {
   return ['A', 'B', 'C'].map(id => ({ id, status: 'alive', currentHP: 30, maxHP: 30 }));
 }
 
-/**
- * The outcome a player would reach, through the real resolver. Choices take the
- * first option and puzzles the first answer: a fixed script, not a strategy.
- * Checks use the die the hunt rolled, against a flat stat of 12.
- */
-function outcomeFor(eventDef) {
-  if (eventDef.kind === 'choice') return EventResolver.resolveChoice(eventDef, 0);
-  if (eventDef.kind === 'puzzle') return EventResolver.resolvePuzzle(eventDef, 0);
-  return null;
-}
-function checkOutcome(pending) {
-  const def = pending.eventDef;
-  const r = EventResolver.rollCheck(def.stat, def.dc, { [def.stat]: 12 }, pending.dieRoll);
-  return r.success ? def.success : def.failure;
-}
 
 /**
  * One scripted step: resolve what is pending, otherwise advance. Fights are
@@ -112,11 +96,7 @@ function checkOutcome(pending) {
 function step(hunt) {
   const st = hunt.getState();
   const p = st.pendingEncounter;
-  if (p?.kind === 'event') {
-    const outcome = p.eventDef.kind === 'check' ? checkOutcome(p) : outcomeFor(p.eventDef);
-    const r = hunt.resolveEncounter(outcome);
-    return { do: 'event', id: p.eventDef.id, die: p.dieRoll ?? null, hp: r?.huntPoints ?? null };
-  }
+  // The Advance loop rolls fights only since chunk 11a (its events retired).
   if (p?.kind === 'encounter') {
     hunt.engagePending();
     const r = hunt.resolveCombatEncounter({ won: true, type: p.type });
@@ -127,7 +107,7 @@ function step(hunt) {
   const q = a.pendingEncounter;
   return {
     do: 'advance', supplies: a.supplies, depth: a.depth, day: a.day, night: a.isNight,
-    rolled: q ? (q.kind === 'event' ? `event:${q.eventDef.id}` : `fight:${q.scenarioId}`) : null,
+    rolled: q ? (q.kind === 'event' ? `event:${q.eventDef?.id}` : `fight:${q.scenarioId}`) : null,
   };
 }
 
@@ -194,9 +174,8 @@ const golden = { rngHead: [], hunts: {} };
   const every = Object.values(golden.hunts).every(h => h.trace.length > 0 && h.trace.at(-1));
   check(`${n} scripted hunts ran to the end`, n === ZONE_IDS.length * 4 && every, `${steps} steps`);
 
-  const checks = Object.values(golden.hunts).flatMap(h => h.trace.filter(s => s.do === 'event' && s.die !== null));
-  check('every check event carried a die rolled by the hunt, 1-20',
-    checks.length > 0 && checks.every(s => Number.isInteger(s.die) && s.die >= 1 && s.die <= 20), `${checks.length} checks`);
+  const rolledEvents = Object.values(golden.hunts).flatMap(h => h.trace.filter(s => s.do === 'event' || String(s.rolled || '').startsWith('event:')));
+  check('the Advance loop rolls no events (retired in chunk 11a)', rolledEvents.length === 0, `${rolledEvents.length} events`);
 
   const again = playOut(createHunt(ZONE_IDS[0], { supplies: 60, seed: 1 }, recordingWorld(testParty())));
   check('the same seed plays the same hunt twice', same(again, golden.hunts[`${ZONE_IDS[0]}/s1`].trace));
@@ -260,19 +239,6 @@ function freshGame() {
   }
   check('reload gives an identical hunt state', allState, `${points} save points, 2 zones x 3 seeds x 5 depths`);
   check('...and identical next rolls (12 steps on from each)', allNext);
-
-  // A pending check: its die survives the reload.
-  freshGame();
-  HuntManager.start(ZONE_IDS[0], { supplies: 60, seed: 1 });
-  let guard = 0;
-  while (HuntManager.getState().pendingEncounter?.eventDef?.kind !== 'check' && guard++ < 400) {
-    const s = step(HuntManager.current());
-    if (!s) { HuntManager.start(ZONE_IDS[0], { supplies: 60, seed: 100 + guard }); }
-  }
-  const die = HuntManager.getState().pendingEncounter?.dieRoll;
-  GameState.save('hunt_die');
-  GameState.load('hunt_die');
-  check('a pending check keeps its die across a reload', Number.isInteger(die) && HuntManager.getState().pendingEncounter?.dieRoll === die, `die ${die}`);
 
   // The saved hunt is plain JSON.
   const s = HuntManager.current().serialize();
@@ -354,8 +320,8 @@ console.log('=== the v4 fixture save, mid-hunt ===');
   check('its hunt came back, where it was', HuntManager.isActive() && st.zoneId === fixture.hunt.zoneId
     && st.supplies === fixture.hunt.supplies && st.depth === fixture.hunt.depth && st.weather.id === fixture.hunt.weather.id,
     `${st.zoneId}, supplies ${st.supplies}, depth ${st.depth}`);
-  check('...with its pending event and its stream intact',
-    same(st.pendingEncounter, fixture.hunt.pendingEncounter) && HuntManager.current().serialize().rngState === fixture.hunt.rngState);
+  check("...its pending event dropped (the Advance loop's events were retired in 11a), its stream intact",
+    fixture.hunt.pendingEncounter?.kind === 'event' && st.pendingEncounter === null && HuntManager.current().serialize().rngState === fixture.hunt.rngState);
   check('...upgraded to a v2 hunt: an empty pack and its zone death rule',
     same(st.pack.brought, []) && same(st.pack.found, []) && st.pack.rationsLeft === 0 && st.deathRule === 'sheltered');
   check('its bag came through unstacked, as it was',
@@ -422,7 +388,7 @@ console.log('=== a map hunt in the save (chunk 8c) ===');
   HuntManager.startMap(ZONE_IDS[0], { plan, supplies: 80, seed: 77 });
   check('startMap: the holder has a map hunt', HuntManager.mode() === 'map' && HuntManager.isActive());
   check('...and the Advance-only calls do nothing to it',
-    HuntManager.advance() === null && HuntManager.resolveEncounter('x') === null && HuntManager.engagePending() === false
+    HuntManager.advance() === null && HuntManager.engagePending() === false
     && HuntManager.addFound({ id: 'x' }) === false && HuntManager.exit() === null && HuntManager.hasPendingEncounter() === false);
   check('...getState() reports idle (CombatScene cannot read a map hunt as an Advance hunt)',
     HuntManager.getState().zoneId === null && HuntManager.getState().combinedModifiers === null);
@@ -444,6 +410,7 @@ console.log('=== a map hunt in the save (chunk 8c) ===');
   const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
   const { isPassable } = await import('../../data/grounds.js');
   while (!h2.encounter() && steps++ < 400) {
+    if (h2.view().event) h2.leaveEvent();   // an event site on the way: walk on (chunk 11a)
     const s = h2.getState();
     const targets = new Set(s.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile));
     const prev = new Map([[s.pos, null]]); const q = [s.pos]; let goal = null;

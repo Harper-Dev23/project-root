@@ -33,12 +33,14 @@ import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_W
          UNMASK_MAX_CONCEALMENT } from '../../data/huntMapGen.js';
 import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
 import { getZone } from '../../data/zones.js';
+import { EVENT_TEMPLATES } from '../../data/events.js';
+import { staticEligible } from './EventEffects.js';
+import { houseOf } from './Standing.js';
 import { makeRng } from './seededRng.js';
 
 /** Shape version of a generated map. Bump when the output shape changes. */
 export const HUNT_MAP_VERSION = 1;
 
-const EVENT_CATEGORIES = ['environmental', 'microZone', 'flexible'];
 const GRADE_RANK = Object.fromEntries(GRADES.map((g, i) => [g, i]));
 
 // ── small helpers ────────────────────────────────────────────────────────────
@@ -322,7 +324,7 @@ export const NEED_HANDLERS = {
   shrine: {
     place(ctx, obj) {
       const eventId = ctx.zone.setPieces?.shrine;
-      if (!eventId || !ctx.eventDefs.has(eventId)) return ctx.fail(`zone has no shrine set piece`);
+      if (!eventId || !ctx.eventDefs.get(eventId)?.appears?.setPiece) return ctx.fail(`zone has no shrine set piece`);
       const tile = ctx.pickTile({ minEntryDist: 2, noBlight: true }) || ctx.pickTile({ noBlight: true });
       if (!tile) return ctx.fail('no tile for the shrine');
       ctx.addFeature({ kind: 'shrine', tile, eventId });
@@ -488,8 +490,10 @@ export function planMapInputs(view) {
  * @param {string[]} [o.bonusObjectives]  BONUS_OBJECTIVES keys
  * @param {object} [o.mods]          the plan's modifier fields: encounterChancePercent,
  *                                   gradeShiftPercent, leanCountryPercent, blightPatches
+ * @param {boolean} [o.followed]     your tribe follows the region's house (chunk 11a):
+ *                                   read by event templates' `appears.followed`
  */
-export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {} }) {
+export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
   if (!zone.palette || !zone.relief || !zone.natives || !zone.apex) throw new Error(`zone '${zoneId}' has no generator data`);
@@ -500,7 +504,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
 
   const problems = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods });
+    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed });
     if (map.failed) { problems.push(map.failed); continue; }
     const v = validateHuntMap(map);
     if (v.ok) return map;
@@ -509,7 +513,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   throw new Error(`no valid map for ${zoneId}/${objective}/${size} seed ${seed}: ${problems.slice(-3).join(' | ')}`);
 }
 
-function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods }) {
+function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false }) {
   const rng = makeRng(attemptSeed(seed, attempt, zone.id));
   const sizeDef = MAP_SIZES[size];
   const map = {
@@ -619,8 +623,12 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   const entryDist = reach;
   const maxEntryDist = Math.max(...reach.values());
   const occupied = new Set([...reserved, ...map.features.map(f => f.tile)]);
-  const eventDefs = new Map();
-  for (const cat of EVENT_CATEGORIES) for (const ev of zone.encounterTable?.[cat] || []) eventDefs.set(ev.id, { ...ev, category: cat });
+  // Event templates this region may hold (data/events.js, chunk 11a): the
+  // conditions known now, less the site's ground, which is checked per tile.
+  const eventCtx = { zoneId: zone.id, house: houseOf(zone.divineAlignment), followed: !!followed, danger: zone.danger || 1 };
+  const eventDefs = new Map(Object.entries(EVENT_TEMPLATES)
+    .filter(([, t]) => staticEligible(t, { ...eventCtx, ground: null }))
+    .map(([id, t]) => [id, { id, ...t }]));
   const danger = zone.danger || 1;
   const house = zone.divineAlignment || null;
   let nextOcc = 1;
@@ -724,17 +732,22 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   }
 
   // ── 3f. event sites, about one per 8 tiles ─────────────────────────────────
-  const setPieceIds = new Set(Object.values(zone.setPieces || {}));
-  const eventPool = [...eventDefs.values()].filter(ev => !setPieceIds.has(ev.id));
+  // Each site draws a template that suits its tile's ground, weighted, and no
+  // template more often than its maxPerMap (default once).
+  const eventPool = [...eventDefs.values()].filter(ev => !ev.appears?.setPiece);
   const eventCount = Math.round(allIds.length / DENSITY.tilesPerEvent);
-  let deck = [];
+  const drawn = {};
   for (let i = 0; i < eventCount && eventPool.length && !failed; i++) {
-    if (!deck.length) deck = shuffle(rng, eventPool.map(ev => ev.id));
     const tile = ctx.pickTile({ minEntryDist: 1 });
     if (!tile) break;
-    const id = deck.pop();
-    map.occupants.push({ id: `o${nextOcc++}`, kind: 'event', tile, eventId: id,
-      category: eventDefs.get(id).category, concealment: OCCUPANT_CONCEALMENT.event });
+    const fits = eventPool.filter(ev => (drawn[ev.id] || 0) < (ev.appears?.maxPerMap ?? 1)
+      && staticEligible(ev, { ...eventCtx, ground: map.tiles[tile].ground }));
+    if (!fits.length) continue;
+    const total = fits.reduce((t, ev) => t + (ev.appears?.weight ?? 1), 0);
+    let r = rng() * total;
+    const pick = fits.find(ev => (r -= (ev.appears?.weight ?? 1)) < 0) || fits[fits.length - 1];
+    drawn[pick.id] = (drawn[pick.id] || 0) + 1;
+    map.occupants.push({ id: `o${nextOcc++}`, kind: 'event', tile, eventId: pick.id, concealment: OCCUPANT_CONCEALMENT.event });
     occupied.add(tile);
   }
 

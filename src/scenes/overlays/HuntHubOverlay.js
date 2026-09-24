@@ -394,21 +394,13 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._render();
   }
 
-  /** Fights get the small low-key preview; Events skip straight to the full, locked-in event screen. */
+  /** A pending fight gets the small low-key preview. The Advance loop has no events any more (chunk 11a). */
   _investigate() {
-    this.scene.pause();
     const pending = HuntManager.getState().pendingEncounter;
-    const overlayKey = pending?.kind === 'encounter' ? 'HuntEncounterOverlay' : 'HuntEventOverlay';
-    this.scene.launch(overlayKey, { encounter: pending });
-    this.scene.bringToTop(overlayKey);
-  }
-
-  /** Called by HuntEncounterOverlay/HuntEventOverlay after the player resolves the pending encounter. */
-  /** Called by HuntEncounterOverlay once it's worked out a choice/check/puzzle outcome. */
-  onEncounterResolved(outcome) {
-    HuntManager.resolveEncounter(outcome);
-    GameState.save('autosave');
-    this._render();
+    if (pending?.kind !== 'encounter') return;
+    this.scene.pause();
+    this.scene.launch('HuntEncounterOverlay', { encounter: pending });
+    this.scene.bringToTop('HuntEncounterOverlay');
   }
 
   _returnToCamp() {

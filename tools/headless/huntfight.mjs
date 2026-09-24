@@ -70,7 +70,9 @@ const CombatSceneMod = await import('../../src/scenes/CombatScene.js');
 const CombatScene = CombatSceneMod.default || Object.values(CombatSceneMod).find(v => typeof v === 'function');
 const { computeEffectiveInitiative } = await import('../../src/systems/CombatLogic.js');
 const GameState = (await import('../../src/systems/GameState.js')).default;
-const { createMapHunt, restoreMapHunt, FIGHT_XP_POOL, BEAST_FIGHT_HUNT_POINTS } = await import('../../src/systems/HuntEngine.js');
+const { createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt, FIGHT_XP_POOL, BEAST_FIGHT_HUNT_POINTS } = await import('../../src/systems/HuntEngine.js');
+// Walkers here are not about events: a hunt walks away from any it opens (chunk 11a).
+const { createMapHunt, restoreMapHunt } = (await import('./walkAway.js')).walkingAway({ createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt });
 const { HuntManager } = await import('../../src/systems/HuntManager.js');
 const HB = await import('../../src/systems/HuntBeasts.js');
 const BP = await import('../../data/beastParts.js');
