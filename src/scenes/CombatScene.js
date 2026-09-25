@@ -6842,6 +6842,11 @@ export default class CombatScene extends Phaser.Scene {
   /** The prophet's offer at this wipe (Revival.spotOffer), or null. Map-hunt fights only. */
   _intercessionOffer(rule) {
     if (!this.huntFight) return null;
+    // Not in co-op v1 (chunk 12 decision 5): the server hosts, each player's
+    // own Bond would pay for their own hunters, and several saves deciding at
+    // once while the hunt waits is its own design. A co-op wipe ends the hunt
+    // by the death rule; the lodge's routes stay open to each player.
+    if (this.isAuthoritativeHost) return null;
     const { prophet, god } = this._huntWhere();
     const fallen = this._party().filter(c => c.status === 'incapacitated');
     // A Forsaken wipe: the region's false god offers instead (11c-2).

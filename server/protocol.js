@@ -40,8 +40,8 @@ function makeCode(len = 4) {
  *
  * All hunt state is in memory, so this is the whole of a fight's durability: a
  * refresh, a dropped wifi, a laptop lid. Long enough to walk back from a
- * dropped connection, short enough that an abandoned fight does not hold a
- * seat on a one-hunt-per-process server forever.
+ * dropped connection, short enough that an abandoned fight does not sit in
+ * memory forever. For a hunt lobby it is also how long the host may be gone.
  */
 export const RESUME_GRACE_MS = 5 * 60 * 1000;
 
@@ -57,17 +57,23 @@ export function createHub({ CombatScene, codeFactory = makeCode,
   const lobbies = new Map();   // code -> lobby
   const byConn = new Map();    // conn -> { code, playerId }
 
+  // A lobby is under way once a pit fight or a hunt has started. A hunt lobby
+  // (mode 'hunt', chunk 12b) outlives its fights: lobby.session is only ever
+  // the fight in progress, and lobby.hunt is the hunt around it.
+  const started = (lobby) => !!lobby.session || !!lobby.hunt;
+
   const send = (conn, msg) => { try { conn.send(msg); } catch { /* dead socket */ } };
   const fail = (conn, reason) => send(conn, { t: 'error', reason });
 
   const lobbyView = (lobby) => ({
     t: 'lobby',
     code: lobby.code,
+    mode: lobby.mode,
     scenarioId: lobby.scenarioId,
     hostId: lobby.hostId,
     limit: PARTY_LIMIT,
     used: lobby.players.reduce((n, p) => n + p.hunters.length, 0),
-    started: !!lobby.session,
+    started: started(lobby),
     isPublic: !!lobby.isPublic,
     players: lobby.players.map(p => ({
       id: p.id,
@@ -108,11 +114,11 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     if (actorConn && result.privateLog?.length) {
       send(actorConn, { t: 'privateLog', log: result.privateLog });
     }
+    if (result.state.ended && lobby.hunt) return huntFightOver(lobby);
     if (result.state.ended) {
       // A finished hunt is not worth holding a seat for. The grace period on
       // disconnect exists so a dropped connection can come back to a fight in
-      // progress; there is nothing to come back to once it is over, and on a
-      // one-hunt-per-process server holding it would block the next one.
+      // progress; there is nothing to come back to once it is over.
       lobby.finished = true;
       const units = result.state.units;
       const won = units.filter(u => u.side === 'enemy').every(u => u.hp <= 0);
@@ -132,6 +138,68 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     }
   };
 
+  // ---- hunt lobbies (Exploration v2, chunk 12b) ----------------------------
+  //
+  // The host's client runs the hunt (AUTHORITY_MODEL); this server stores its
+  // latest snapshot WITHOUT reading it, relays it to the guests, carries
+  // guests' move intents to the host, and runs each fight. The rules:
+  //   - every snapshot carries a version; the host's must go up, and a move
+  //     aimed at any version but the latest is refused as stale
+  //   - the hunt is frozen while a fight is live: moves and snapshots are
+  //     refused, not queued
+  //   - guests only move (chunk 12 decision 3); everything else is the host's
+  //   - the host gone past the grace period ends the hunt for the guests, as a
+  //     clean exit from the last snapshot (COOP_EXPLORATION rule 7)
+
+  /** Bigger than any real snapshot (65 KB measured) by a wide margin, and
+   *  inside the socket's 1 MB message cap with room for the envelope. */
+  const MAX_SNAPSHOT_BYTES = 512 * 1024;
+
+  const hostOf = (lobby) => lobby.players.find(p => p.id === lobby.hostId) || null;
+  /** Every player's hunters, each stamped with its owner: what a client needs
+   *  to build the merged party (a pit fight's `started` sends the same). */
+  const rosterOf = (lobby) => lobby.players.flatMap(p =>
+    (p.hunters || []).map(h => ({ ...h, ownerId: p.id })));
+  const guestsOf = (lobby) => lobby.players.filter(p => p.id !== lobby.hostId);
+  const huntView = (lobby) => ({ t: 'huntState', version: lobby.hunt.version, snapshot: lobby.hunt.snapshot });
+
+  /**
+   * A map-hunt fight has ended. Everyone is told how; the HOST also gets what
+   * to apply to its real hunt (session.huntOutcome) and every hunter's state
+   * for the map to carry on with. The lobby is NOT finished: the hunt goes on,
+   * and the next fight gets a fresh session. The message is kept until the
+   * host sends its next snapshot (proof it applied it), so a host that drops
+   * at this moment gets it again on resume.
+   */
+  function huntFightOver(lobby) {
+    const session = lobby.session;
+    const outcome = session.huntOutcome;
+    const msg = {
+      t: 'over',
+      hunt: true,
+      outcome: outcome?.result === 'won' ? 'victory' : outcome?.result === 'fled' ? 'fled' : 'defeat',
+      huntOutcome: outcome,
+      rewards: outcome?.result === 'won' ? session.rewards() : null,
+      vitals: session.vitals(),
+      fightVersion: lobby.hunt.version,
+      players: lobby.players.map(p => p.id),
+    };
+    lobby.hunt.lastOver = msg;
+    lobby.session = null;
+    broadcast(lobby, msg);
+  }
+
+  /** End a hunt for everyone and let the lobby go. */
+  function endHunt(lobby, reason, report = null) {
+    lobby.hunt.finished = true;
+    lobby.finished = true;
+    clearTimeout(lobby.hunt.hostGoneTimer);
+    broadcast(lobby, { t: 'huntEnded', reason, report,
+      version: lobby.hunt.version, snapshot: lobby.hunt.snapshot });
+    lobbies.delete(lobby.code);
+    for (const p of lobby.players) if (p.conn) byConn.delete(p.conn);
+  }
+
   const handlers = {
     /** { t:'create', name, scenarioId, hunters } */
     create(conn, msg) {
@@ -140,6 +208,10 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       const lobby = {
         code,
         scenarioId: msg.scenarioId || 'training_encounter_1',
+        // 'pit' is one fight; 'hunt' is a map hunt run by the host's client,
+        // with a fight on this server each time the party meets something.
+        mode: msg.mode === 'hunt' ? 'hunt' : 'pit',
+        hunt: null,
         hostId: playerId,
         players: [],
         session: null,
@@ -169,7 +241,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         && lobby.players.find(p => p.clientId && p.clientId === msg.clientId);
       if (mine) return handlers._resume(conn, lobby, mine);
 
-      if (lobby.session) return fail(conn, 'that hunt has already started');
+      if (started(lobby)) return fail(conn, 'that hunt has already started');
       const playerId = 'p' + (lobby.players.length + 1);
       return handlers._seat(conn, lobby, playerId, msg);
     },
@@ -200,10 +272,21 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       // is no earlier copy to fall back on -- the returning client has no
       // history at all.
       send(conn, lobbyView(lobby));
+      if (lobby.hunt) {
+        // The hunt as it stands, then (if one is on) the fight. A returning
+        // host is also told how the last fight ended if it never applied it
+        // (lastOver is cleared by the host's next snapshot).
+        send(conn, { t: 'huntStarted', roster: rosterOf(lobby) });
+        if (lobby.hunt.snapshot != null) send(conn, huntView(lobby));
+        if (player.id === lobby.hostId) {
+          clearTimeout(lobby.hunt.hostGoneTimer);
+          lobby.hunt.hostGoneTimer = null;
+          if (lobby.hunt.lastOver && !lobby.session) send(conn, lobby.hunt.lastOver);
+        }
+      }
       if (lobby.session) {
-        const roster = lobby.players.flatMap(p =>
-          (p.hunters || []).map(h => ({ ...h, ownerId: p.id })));
-        send(conn, { t: 'started', state: lobby.session.state(), roster });
+        send(conn, { t: 'started', state: lobby.session.state(), roster: rosterOf(lobby),
+          gearSeed: lobby.session.gearSeed, huntFight: lobby.session.huntFight });
       }
       broadcast(lobby, lobbyView(lobby));
     },
@@ -233,7 +316,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
     /** { t:'setHunters', hunters } - replaces this player's selection. */
     setHunters(conn, msg, lobby, player) {
-      if (lobby.session) return fail(conn, 'the hunt has started');
+      if (started(lobby)) return fail(conn, 'the hunt has started');
       const hunters = Array.isArray(msg.hunters) ? msg.hunters : [];
       const left = budgetLeft(lobby, player.id);
       if (hunters.length > left) {
@@ -273,7 +356,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
      * `slotId: null` clears a placement, which is always allowed.
      */
     claimSlot(conn, msg, lobby, player) {
-      if (lobby.session) return fail(conn, 'the hunt has started');
+      if (started(lobby)) return fail(conn, 'the hunt has started');
 
       const refOf = (h) => h.instanceId || h.id;
       const hunter = player.hunters.find(h => refOf(h) === msg.ref);
@@ -301,7 +384,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
     /** { t:'ready', ready } */
     ready(conn, msg, lobby, player) {
-      if (lobby.session) return fail(conn, 'the hunt has started');
+      if (started(lobby)) return fail(conn, 'the hunt has started');
       if (!player.hunters.length) return fail(conn, 'bring at least one hunter');
       player.ready = msg.ready !== false;
       broadcast(lobby, lobbyView(lobby));
@@ -309,7 +392,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
     /** { t:'start' } - host only, everyone ready. */
     start(conn, msg, lobby, player) {
-      if (lobby.session) return fail(conn, 'already started');
+      if (started(lobby)) return fail(conn, 'already started');
       if (player.id !== lobby.hostId) return fail(conn, 'only the host can start');
       if (!lobby.players.every(p => p.ready)) return fail(conn, 'not everyone is ready');
 
@@ -319,6 +402,16 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       // first judge deaths against the wrong party -- a wiped party kept
       // "fighting" forever -- and this start refused. Held by
       // server/concurrent_test.mjs, which plays two fights interleaved.
+
+      // A hunt lobby starts the HUNT, not a fight: the host's client builds
+      // it from everyone's hunters and sends its first snapshot; fights come
+      // later, one huntFight at a time.
+      if (lobby.mode === 'hunt') {
+        const total = lobby.players.reduce((n, p) => n + p.hunters.length, 0);
+        if (total > PARTY_LIMIT) return fail(conn, `the party is ${total} hunters; the shared limit is ${PARTY_LIMIT}`);
+        lobby.hunt = { version: 0, snapshot: null, finished: false, lastOver: null, hostGoneTimer: null };
+        return broadcast(lobby, { t: 'huntStarted', roster: rosterOf(lobby) });
+      }
 
       try {
         lobby.session = createSession({
@@ -373,6 +466,111 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     },
 
     /**
+     * { t:'huntSnapshot', version, snapshot } - host only. The hunt as the
+     * host's client now holds it (HuntEngine.serialize()), stored as-is and
+     * relayed to every guest. The version must go up; that is what lets a
+     * stale move be told from a current one.
+     */
+    huntSnapshot(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host runs the hunt');
+      if (lobby.session) return fail(conn, 'the hunt waits while the fight is on');
+      const version = Number(msg.version);
+      if (!Number.isInteger(version) || version <= h.version) {
+        return fail(conn, `snapshot version ${msg.version} is not newer than ${h.version}`);
+      }
+      if (msg.snapshot == null) return fail(conn, 'a snapshot needs its hunt');
+      const bytes = JSON.stringify(msg.snapshot).length;
+      if (bytes > MAX_SNAPSHOT_BYTES) return fail(conn, `the snapshot is ${bytes} bytes; the limit is ${MAX_SNAPSHOT_BYTES}`);
+      h.version = version;
+      h.snapshot = msg.snapshot;
+      h.lastOver = null;     // the host has moved on, so it applied the last fight
+      for (const g of guestsOf(lobby)) if (g.conn) send(g.conn, huntView(lobby));
+    },
+
+    /**
+     * { t:'move', tile, version } - anyone asks to move the party token. The
+     * host resolves it (AUTHORITY_MODEL: anyone may move, the host decides).
+     * Refused here, to the asker only, if a fight is live or the move was
+     * aimed at an older state than the latest.
+     */
+    move(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      if (lobby.session) return fail(conn, 'the hunt waits while the fight is on');
+      if (Number(msg.version) !== h.version) return fail(conn, 'the hunt has moved on; try again');
+      if (msg.tile == null || typeof msg.tile === 'object') return fail(conn, 'a move needs a tile');
+      const host = hostOf(lobby);
+      if (!host?.conn) return fail(conn, 'the host is away');
+      send(host.conn, { t: 'moveIntent', from: player.id, name: player.name, tile: msg.tile, version: h.version });
+    },
+
+    /** { t:'huntRefuse', to, reason } - host only: tell one player why their
+     *  move was not taken (the host's hunt said no). */
+    huntRefuse(conn, msg, lobby, player) {
+      if (!lobby.hunt) return fail(conn, 'no hunt is under way');
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host can do that');
+      const to = lobby.players.find(p => p.id === msg.to);
+      if (to?.conn) send(to.conn, { t: 'error', reason: String(msg.reason ?? 'the host refused that').slice(0, 200) });
+    },
+
+    /**
+     * { t:'huntFight', version, spec, vitals } - host only: the party met
+     * something, and the host's hunt has begun the fight (beginFight()). The
+     * server runs it like any co-op fight; `over` tells the host how it ended
+     * (huntOutcome) to apply to its real hunt, and the hunt is frozen until
+     * then. `vitals` are the hunters' HP/MP/status on the map.
+     */
+    huntFight(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host runs the hunt');
+      if (lobby.session) return fail(conn, 'a fight is already on');
+      if (Number(msg.version) !== h.version) return fail(conn, 'that fight is from an older state of the hunt');
+      try {
+        lobby.session = createSession({
+          CombatScene,
+          players: lobby.players.map(p => ({ id: p.id, name: p.name, hunters: p.hunters })),
+          quickCombat: lobby.quickCombat,
+          seed: null,
+          huntFight: msg.spec,
+          vitals: msg.vitals || null,
+        });
+      } catch (e) {
+        return fail(conn, e.message);
+      }
+      h.lastOver = null;
+      broadcast(lobby, { t: 'started', state: lobby.session.state(), roster: rosterOf(lobby),
+        gearSeed: lobby.session.gearSeed, huntFight: lobby.session.huntFight });
+      // A fight can end before anyone acts: an ambush that wipes the party in
+      // the enemy's opening turns.
+      if (lobby.session.isOver) huntFightOver(lobby);
+    },
+
+    /** { t:'flee' } - host only (chunk 12 decision 3): the party breaks away
+     *  from a map-hunt fight, on one of the party's turns. */
+    flee(conn, msg, lobby, player) {
+      if (!lobby.hunt || !lobby.session) return fail(conn, 'there is no fight to flee');
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host can call the retreat');
+      const result = lobby.session.flee();
+      if (!result.ok) return fail(conn, result.reason);
+      pushResult(lobby, result, conn);
+    },
+
+    /**
+     * { t:'huntEnd', reason, report } - host only: the hunt is over (an exit,
+     * a wipe). `report` is what each guest's save takes home (chunk 12d);
+     * relayed as-is. The lobby goes with it.
+     */
+    huntEnd(conn, msg, lobby, player) {
+      if (!lobby.hunt || lobby.hunt.finished) return fail(conn, 'no hunt is under way');
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host can end the hunt');
+      if (lobby.session) return fail(conn, 'finish the fight first');
+      endHunt(lobby, String(msg.reason || 'exit').slice(0, 40), msg.report ?? null);
+    },
+
+    /**
      * { t:'browse' } - the list of joinable public lobbies.
      *
      * Deliberately answered for ANY connection, seated or not: browsing is how
@@ -386,10 +584,11 @@ export function createHub({ CombatScene, codeFactory = makeCode,
      */
     browse(conn) {
       const open = [...lobbies.values()]
-        .filter(l => l.isPublic && !l.session)
+        .filter(l => l.isPublic && !started(l))
         .filter(l => l.players.some(p => p.conn))
         .map(l => ({
           code: l.code,
+          mode: l.mode,
           scenarioId: l.scenarioId,
           host: l.players.find(p => p.id === l.hostId)?.name || '?',
           players: l.players.length,
@@ -404,7 +603,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     /** { t:'setPublic', isPublic } - host only. */
     setPublic(conn, msg, lobby, player) {
       if (player.id !== lobby.hostId) return fail(conn, 'only the host can do that');
-      if (lobby.session) return fail(conn, 'the hunt has started');
+      if (started(lobby)) return fail(conn, 'the hunt has started');
       lobby.isPublic = msg.isPublic === true;
       broadcast(lobby, lobbyView(lobby));
     },
@@ -422,6 +621,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     /** { t:'sync' } - a client asking for the whole picture again. */
     sync(conn, msg, lobby) {
       if (lobby.session) send(conn, { t: 'state', state: lobby.session.state(), log: [] });
+      else if (lobby.hunt?.snapshot != null) send(conn, huntView(lobby));
       else send(conn, lobbyView(lobby));
     },
   };
@@ -469,8 +669,20 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       // started keeps their seat: their hunters are on the board and their
       // turn still has to be taken, so the seat is held for a reconnect rather
       // than deleted mid-fight.
-      if (!lobby.session && player) {
+      if (!started(lobby) && player) {
         lobby.players = lobby.players.filter(p => p !== player);
+      }
+
+      // The host of a hunt dropped. No host migration in v1 (AUTHORITY_MODEL):
+      // if they are not back within the grace period the hunt ends, and for
+      // the guests it is a clean exit from the last snapshot (COOP_EXPLORATION
+      // rule 7). A returning host clears this in _resume.
+      if (lobby.hunt && !lobby.hunt.finished && player?.id === lobby.hostId) {
+        clearTimeout(lobby.hunt.hostGoneTimer);
+        lobby.hunt.hostGoneTimer = setTimeout(() => {
+          if (lobbies.get(lobby.code) === lobby && !hostOf(lobby)?.conn) endHunt(lobby, 'host_gone');
+        }, resumeGraceMs);
+        lobby.hunt.hostGoneTimer.unref?.();
       }
 
       if (!lobby.players.every(p => !p.conn)) {
@@ -482,7 +694,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       // instant the last socket drops -- which is what used to happen, so two
       // players on one flaky connection, or one player refreshing while alone,
       // destroyed the fight outright with no way back.
-      if (!lobby.session || lobby.finished) return lobbies.delete(lobby.code);
+      if (!started(lobby) || lobby.finished) return lobbies.delete(lobby.code);
 
       clearTimeout(lobby._reapTimer);
       lobby._reapTimer = setTimeout(() => {

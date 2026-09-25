@@ -74,8 +74,66 @@ function gearFlags(unit) {
  * server should - and the ambient randomness is left alone. Seeding here
  * replaces the global Math.random, so a server that seeded every session would
  * have each new hunt reset the randomness of every hunt already in progress.
+ *
+ * `huntFight` makes this a map-hunt fight (Exploration v2, chunk 12b): the
+ * host's HuntEngine.beginFight() spec, as JSON (see huntFightFrom). The hunt
+ * itself stays on the host's client; the scene gets a recording stand-in, and
+ * `session.huntOutcome` is what the host applies to its real hunt afterwards.
+ * `vitals` ({ ref: { hp, mp, status } }) carry each hunter's state in from the
+ * map, because a hunt's fights do not start at full health.
  */
-export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null, quickCombat = false, gearSeed = null }) {
+/**
+ * A hunter's HP and MP from the map, onto the fighter the session just built.
+ * Only a real number within the hunter's own maximum is taken, and HP is at
+ * least 1: on the map nobody is ever down (Starving never kills; the knocked
+ * out stand at 1 HP after every fight, flee and Sheltered wipe), and a hunter
+ * handed in at 0 sat in the turn order unable to act -- a fight could open on
+ * their turn. Status is not taken from the wire.
+ */
+function applyVitals(char, v) {
+  if (!v || typeof v !== 'object') return;
+  const clamp = (n, min, max) => Math.max(min, Math.min(max, Math.floor(n)));
+  if (Number.isFinite(v.hp)) char.currentHP = clamp(v.hp, 1, char.maxHP);
+  if (Number.isFinite(v.mp)) char.currentMP = clamp(v.mp, 0, char.maxMP);
+}
+
+/**
+ * The host's beginFight() spec (JSON, as it crossed the wire) made into what
+ * CombatScene reads as `huntFight`, with a stand-in for the hunt.
+ *
+ * The real hunt lives on the host's client (AUTHORITY_MODEL); the server never
+ * holds one. CombatScene calls hunt.winEncounter / flee / wipe / survive where
+ * the fight ends, and hunt.getState() for the zone; the stand-in answers
+ * getState from the spec's zoneId and RECORDS the ending, which the protocol
+ * sends back for the host to apply to its real hunt. `reopen` and
+ * `onFinished` belong to the single-player map scene and are left out.
+ */
+export function huntFightFrom(spec) {
+  if (!spec || typeof spec !== 'object') throw new Error('a hunt fight needs its spec');
+  const scenario = spec.scenario;
+  if (!scenario || typeof scenario !== 'object' || !Array.isArray(scenario.enemies) || !scenario.enemies.length) {
+    throw new Error('a hunt fight needs a scenario with enemies');
+  }
+  if (typeof scenario.id !== 'string') throw new Error('a hunt fight scenario needs an id');
+  const out = { spec, outcome: null };
+  const record = (result, extra = {}) => {
+    out.outcome = { result, deathRule: spec.deathRule ?? null, ...extra };
+    return { ok: true };
+  };
+  const stand = {
+    getState: () => ({ zoneId: spec.zoneId ?? null }),
+    winEncounter: ({ loot = [], knockedOut = 0 } = {}) => record('won', { loot, knockedOut }),
+    flee: ({ knockedOut = 0 } = {}) => record('fled', { knockedOut }),
+    wipe: () => record('wipe'),
+    // No intercession on the spot in co-op v1 (chunk 12 decision 5), so the
+    // scene never calls this here; if it ever did, it is recorded, not lost.
+    survive: ({ knockedOut = 0 } = {}) => record('survived', { knockedOut }),
+  };
+  out.fight = { ...spec, scenario, hunt: stand };
+  return out;
+}
+
+export function createSession({ CombatScene, players = [], scenarioId = 'training_encounter_1', seed = null, quickCombat = false, gearSeed = null, huntFight = null, vitals = null }) {
   if (!CombatScene) throw new Error('createSession needs the CombatScene class');
   if (!players.length) throw new Error('a session needs at least one player');
 
@@ -162,6 +220,8 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
       char.currentHP = char.maxHP;
       char.currentMP = char.maxMP;
       char.status = 'active';
+      // A hunt fight starts where the map left each hunter (applyVitals).
+      applyVitals(char, vitals?.[char.instanceId || char.id]);
       party.push(char);
 
       const want = Number(wire.slotId);
@@ -199,7 +259,11 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
   // from the server's own empty bag. The acting client spends the real item.
   host.isAuthoritativeHost = true;
 
-  host.__begin({ party, partySlots: slotMap, scenarioId });
+  // A map-hunt fight: the host's spec plus a hunt that only records.
+  const hunt = huntFight ? huntFightFrom(huntFight) : null;
+  if (hunt) scenarioId = hunt.fight.scenario.id;
+
+  host.__begin({ party, partySlots: slotMap, scenarioId, huntFight: hunt?.fight || null });
   startCombat(host);
 
   // Every state that goes out carries a version, bumped once per mutation.
@@ -219,6 +283,9 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     gearSeed: fightGearSeed,
     players: players.map(p => ({ id: p.id, name: p.name })),
     host,
+    // A map-hunt fight's spec as the host sent it (the scenario included), for
+    // the clients to build the same board; null for a pit fight.
+    huntFight: hunt ? hunt.spec : null,
     party,
 
     /** Whose turn it is, and whether a human owns them. */
@@ -335,6 +402,12 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
           if (isItemInstance(inst) && inst._droppable) loot.push(inst);
         }
       }
+      if (hunt) {
+        // A map-hunt fight pays an XP POOL, split over the whole party (each
+        // client pays its own hunters' share), and its drops go into the
+        // hunt's pack through the host's winEncounter, not into anyone's bag.
+        return { scenarioId, hunt: true, xpPool: hunt.spec.xpPool ?? 0, loot };
+      }
       return {
         scenarioId,
         xpReward: scenario.xpReward ?? 0,
@@ -343,6 +416,55 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         // not unfair, and what co-op games normally do among friends.
         loot,
       };
+    },
+
+    /**
+     * How a map-hunt fight ended, for the HOST to apply to its real hunt:
+     * { result: 'won' | 'fled' | 'wipe', loot, knockedOut, deathRule }, or
+     * null while the fight is live (and always for a pit fight). The scene
+     * called the stand-in hunt exactly where it calls a real one.
+     */
+    get huntOutcome() {
+      return hunt ? hunt.outcome : null;
+    },
+
+    /**
+     * Every hunter's state at this moment, { ref: { hp, mp, status } }: what
+     * the map carries on with after the fight. The mirror of `vitals` in.
+     */
+    vitals() {
+      return Object.fromEntries(party.map(c => [c.instanceId || c.id,
+        { hp: c.currentHP, mp: c.currentMP, status: c.status }]));
+    },
+
+    /**
+     * The party flees a map-hunt fight (CombatScene._startFlee): on a hunter's
+     * turn, every living enemy gets one free turn, then the fight ends as a
+     * flee (or as a wipe, if the free round finishes the party). Who may call
+     * it is the protocol's rule (the hunt's host); the session only checks
+     * that it can happen now.
+     */
+    flee() {
+      if (!hunt) return { ok: false, reason: 'there is no fleeing a pit fight' };
+      if (host.combatEnded) return { ok: false, reason: 'the fight is over' };
+      const actor = host._currentChar?.();
+      if (!actor || actor.ownerId == null) return { ok: false, reason: "flee on one of the party's turns" };
+      const from = host.combatEntries.length;
+      version++;
+      host._startFlee();
+      host.__drain();
+      let guard = 0;
+      while (!host.combatEnded) {
+        if (++guard > 200) throw new Error('the free round never ended');
+        const before = host.currentTurnIndex;
+        host.__drain();
+        const npc = host._currentChar?.();
+        if (!host.combatEnded && host.currentTurnIndex === before && npc?.isEnemy) {
+          host._takeEnemyTurn_viaLogic(npc);
+          host.__drain();
+        }
+      }
+      return { ok: true, log: session.logSince(from), events: host.__takeEvents(), state: session.state() };
     },
 
     /**

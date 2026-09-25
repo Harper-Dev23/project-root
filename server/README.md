@@ -54,11 +54,42 @@ without error and silently drops every skill's `apply()` function — 15 of 19 o
 a level-5 hunter. Skills therefore cross as ids and are rehydrated from
 `SKILLS`; an unknown id throws rather than vanishing.
 
+## Many fights per process
+
+Each combat host owns its party (`CombatScene._party()`), so one process runs
+any number of fights at once; until chunk 12a every host assigned the
+module-singleton `GameState.party` and a second live fight was refused.
+The server also writes nothing into its own `GameState`: no autosave, no loot
+in its bag, no progression, no Slain. `concurrent_test.mjs` holds all of it.
+
 ## Protocol
 
 Client → server: `create`, `join`, `setHunters`, `ready`, `start`, `act`,
 `endTurn`, `sync`.
 Server → client: `joined`, `lobby`, `started`, `state`, `over`, `error`.
+
+### Hunt lobbies (`create` with `mode: 'hunt'`)
+
+The host's client runs the map hunt; this server never reads it. A hunt lobby
+outlives its fights: `lobby.hunt` is the hunt, `lobby.session` only ever the
+fight in progress. `hunt_test.mjs` drives all of it through messages.
+
+| message | who | what |
+|---|---|---|
+| `start` | host | starts the HUNT, not a fight: everyone gets `huntStarted` with the roster |
+| `huntSnapshot {version, snapshot}` | host | stored as-is, relayed to guests as `huntState`; version must go up; 512 KB cap |
+| `move {tile, version}` | anyone | reaches the host as `moveIntent`; refused if stale or a fight is live |
+| `huntRefuse {to, reason}` | host | tells one player why their move was not taken |
+| `huntFight {version, spec, vitals}` | host | `spec` is `HuntEngine.beginFight()` + `zoneId`; `vitals` the map's HP/MP. Runs a fight; `started` carries `huntFight` |
+| `flee` | host | the party breaks away, on one of the party's turns |
+| `huntEnd {reason, report}` | host | guests get `huntEnded`; the lobby goes |
+
+A hunt fight's `over` carries `huntOutcome` (`won` / `fled` / `wipe`, the loot,
+knock-outs, the death rule) for the HOST to apply to its real hunt, and every
+hunter's `vitals`. It is re-sent to a host that resumes before its next
+snapshot. The hunt is frozen while a fight is live. A host gone past the grace
+period ends the hunt: guests get `huntEnded` with reason `host_gone` and the
+last snapshot. No intercession on the spot in co-op v1.
 
 **Every `state` carries a `version`.** Read it. Several broadcasts can be in
 flight at once — an action and the end of turn that follows it — so "the next
