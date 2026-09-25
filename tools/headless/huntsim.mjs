@@ -102,6 +102,8 @@ const { getXPNeededForLevel, LEVEL_CAP } = await import('../../data/xpTable.js')
 const { makeRng } = await import('../../src/systems/seededRng.js');
 const { parseImport } = await import('../../src/systems/SaveTransfer.js');
 const { getWeaponSkillsFor, getClassSkillsFor } = await import('../../data/skills.js');
+const { pickBaseId, createItemInstance } = await import('../../src/systems/ItemFactory.js');
+const { rebuildCharacterStats } = await import('../../src/systems/CharacterBuilder.js');
 
 /** Camp when the living party holds less than this share of its max HP. */
 const CAMP_BELOW_HP = 0.5;
@@ -142,7 +144,38 @@ function partyAt(level, size) {
   if (SAVE_TEXT) return partyFromSave();
   const specs = HUNTERS.slice(0, size).map(h => ({ ...h, stats: statsAt(h.stats, level) }));
   const party = makeParty(specs, { level });
+  if (GEAR !== 'none') party.forEach((c, i) => gearUp(c, HUNTERS[i], level, i));
   return { party, slots: slotMapFor(party, specs) };
+}
+
+/**
+ * --gear (default uncommon; owner, chunk 13a): one item per slot, rolled by
+ * the game's own code at item level = the party's level and the given
+ * rarity. Bases come from pickBaseId, the drops' base picker (tiers weighted
+ * by item level); the weapon keeps the hunter's weapon type (bone bases left
+ * out: they are a 1% overlay, not a tier); ring and amulet from all twelve.
+ * Seeded by level, hunter and slot, so a level's party is the same in every
+ * hunt and every run. --gear none is the bare fixture (starter weapon only).
+ */
+const GEAR = (() => { const i = process.argv.indexOf('--gear'); return i >= 0 ? process.argv[i + 1] : 'uncommon'; })();
+const GEAR_SLOTS = ['weaponMain', 'head', 'chest', 'legs', 'gloves', 'boots', 'ring', 'amulet'];
+function gearUp(char, spec, level, index) {
+  GEAR_SLOTS.forEach((slot, j) => {
+    const rng = makeRng((level * 7919 + index * 131 + j * 17 + 1) >>> 0);
+    const ids = Object.keys(Items).filter(id => {
+      const it = Items[id];
+      if (it.natural || it.type === 'part' || /^bone_/.test(id)) return false;
+      if (slot === 'weaponMain') return it.type === 'weapon' && it.weaponType === spec.weaponType;
+      return it.type === 'armor' && it.slot === slot;
+    });
+    const base = pickBaseId(ids, level, { rng });
+    const inst = createItemInstance(base, { rarity: GEAR, itemLevel: level, rng });
+    if (!inst) throw new Error(`--gear: could not roll ${base} for ${slot}`);
+    char.equipment[slot] = inst;
+  });
+  rebuildCharacterStats(char);
+  char.currentHP = char.maxHP;
+  char.currentMP = char.maxMP;
 }
 
 /**
@@ -211,6 +244,8 @@ function fightPlayer(rand) {
   return (host, actor) => {
     let casts = 0;
     for (let guard = 0; guard < 4 && !host.combatEnded; guard++) {
+      // A reaction to the last cast can knock the actor out mid-turn.
+      if (!alive(actor) || !host.turnOrder.includes(actor)) break;
       // The action menu's kit (CombatScene: own skills, weapon, class), by id.
       const kit = new Map();
       for (const s of [...(actor.skills || []), ...getWeaponSkillsFor(actor), ...getClassSkillsFor(actor)]) if (s?.id && !kit.has(s.id)) kit.set(s.id, s);
@@ -421,6 +456,11 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
     }
     let step = planStep(h, v, goal, { avoid: avoid && !prim.done ? true : policy !== 'thorough' });
     if (!step && !prim.done) {
+      // The target is known but no known way leads to it (another section,
+      // its passage unseen): explore until one does.
+      step = planStep(h, v, (id) => !v.tiles[id], { avoid: true });
+    }
+    if (!step && !prim.done) {
       // Nothing left to explore and the target is not in sight: give up and leave.
       step = planStep(h, v, (id) => !!v.tiles[id]?.exit, { avoid: true });
       if (!step && v.tiles[v.pos]?.exit) { h.exit(); break; }
@@ -520,6 +560,53 @@ const seeds = Number(opt('seeds', smoke ? 2 : 10));
 const seedBase = Number(opt('seed-base', 1000));
 const rations = Number(opt('rations', R.RATIONS_PACK_CAP));
 const quiet = flag('quiet');
+
+// ---------------------------------------------------------------------------
+// --calibrate: the same party and the same fight player against the pit's
+// fixed fights, the owner's yardsticks (chunk 13a): a level 2-3 party should
+// beat encounter 3, level 4 encounters 4 and 5, and a strong level-5 party in
+// good gear Gorrek Reckoning V. Win rate and rounds per scenario and level.
+
+const CAL_SCENARIOS = list('scenarios', ['training_encounter_3', 'training_encounter_4', 'training_encounter_5',
+  'training_encounter_6', 'training_encounter_6_reckoning_3', 'training_encounter_6_reckoning_5']);
+
+function calibrationFight(level, partySize, scenarioId, fightSeed) {
+  const { party, slots } = partyAt(level, partySize);
+  seedCombat(fightSeed);
+  const host = createCombatHost(CombatScene);
+  host.__begin({ party, partySlots: slots, scenarioId });
+  const res = runFight(host, fightPlayer(makeRng(fightSeed ^ 0x5bd1e995)), { maxTurns: MAX_FIGHT_TURNS });
+  const won = (host.enemies || []).every(e => e.status === 'incapacitated' || e.status === 'dead' || e.currentHP <= 0);
+  const rounds = host.combatRound - (host._combatStartRound ?? host.combatRound) + 1;
+  return { won, rounds, capped: res.hitTurnCap };
+}
+
+if (flag('calibrate')) {
+  const t = Date.now();
+  const rows = [];
+  for (const partySize of partySizes) for (const level of levels) {
+    const row = { key: SAVE_TEXT ? `save L${level} p${partySize}` : `gear ${GEAR} L${String(level).padStart(2)} p${partySize}` };
+    for (const sc of CAL_SCENARIOS) {
+      const out = [];
+      quietEngine();
+      try { for (let k = 0; k < seeds; k++) out.push(calibrationFight(level, partySize, sc, (seedBase + k) * 2654435761 >>> 0)); }
+      finally { loud(); }
+      const wins = out.filter(o => o.won);
+      row[sc] = `${Math.round(100 * wins.length / out.length)}% ${wins.length ? r1(mean(wins.map(o => o.rounds))) + 'r' : ''}${out.some(o => o.capped) ? ' CAP' : ''}`;
+    }
+    rows.push(row);
+    if (!quiet) realLog(row.key + '  ' + CAL_SCENARIOS.map(sc => row[sc]).join(' | '));
+  }
+  const short = (sc) => sc.replace('training_encounter_', 'enc').replace('_reckoning_', ' R');
+  const head = ['', ...CAL_SCENARIOS.map(short)];
+  const body = rows.map(r => [r.key, ...CAL_SCENARIOS.map(sc => r[sc])]);
+  const w = head.map((h, i) => Math.max(h.length, ...body.map(b => b[i].length)));
+  realLog('\nCALIBRATION: win rate and mean rounds of the wins, ' + seeds + ' fights each');
+  realLog(head.map((h, i) => (i ? h.padStart(w[i]) : h.padEnd(w[i]))).join('  '));
+  for (const b of body) realLog(b.map((x, i) => (i ? x.padStart(w[i]) : x.padEnd(w[i]))).join('  '));
+  realLog(`\n${((Date.now() - t) / 1000).toFixed(1)} s; heap ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB`);
+  process.exit(0);
+}
 
 const t0 = Date.now();
 const cells = [];
