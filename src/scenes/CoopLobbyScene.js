@@ -28,6 +28,12 @@ import CombatScene from './CombatScene.js';
 import { createCoopHunt } from '../systems/CoopHunt.js';
 import { GAME_WORLD } from '../systems/HuntManager.js';
 import { takeDeparture } from './overlays/HuntHubOverlay.js';
+import { gameTarget } from '../systems/CoopRewards.js';
+import { countInList, takeFromList } from '../systems/ItemStacks.js';
+import { rationPackCap } from '../systems/HuntRules.js';
+
+/** Rations are pledged in steps, as on the Hunt screen. */
+const RATION_STEP = 10;
 
 const SERVER_KEY = 'coop_server_url';
 // The last lobby this browser was seated in, for reconnecting after a crash.
@@ -69,6 +75,22 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // A hunt lobby's host: { zoneId, plan, rationsToPack, label } from the
     // Hunt screen. Null for training, and for every guest.
     this.huntDeparture = data.huntDeparture || null;
+    // Rations this player brings to a hunt (COOP_EXPLORATION rule 2): the
+    // host's were chosen on the Hunt screen; a guest picks them here.
+    this.rations = this.huntDeparture?.rationsToPack || 0;
+  }
+
+  /** The most Rations this player can bring: what the bag holds, within the
+   *  Hunt screen's packing cap. */
+  _rationsCap() {
+    return Math.min(countInList(GameState.inventory || [], 'rations'), rationPackCap(GameState.party || []));
+  }
+
+  _adjustRations(delta) {
+    if (this.huntDeparture) return this._say('Your Rations were packed on the Hunt screen.');
+    this.rations = Math.max(0, Math.min(this._rationsCap(), this.rations + delta));
+    if (this.client?.playerId) this.client.setRations(this.rations);
+    this._refresh();
   }
 
   /** Is this lobby (the one we are in, or the one we would host) a hunt? */
@@ -384,6 +406,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.nextScenario = createButton(this, width / 2 + 180, 548, '>',
       () => this._cycleScenario(1));
 
+    // A hunt lobby: the Rations this player brings (rule 2).
+    this.rationsText = this.add.text(width / 2, 494, '', { ...FONTS.body, fontSize: '15px', color: '#c8ccd4' }).setOrigin(0.5);
+    this.rationsLess = createButton(this, width / 2 - 230, 494, '−', () => this._adjustRations(-RATION_STEP));
+    this.rationsMore = createButton(this, width / 2 + 230, 494, '+', () => this._adjustRations(RATION_STEP));
+
     this.status = this.add.text(width / 2, 588, '', { ...FONTS.body, color: '#d08c8c' })
       .setOrigin(0.5);
 
@@ -483,6 +510,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
         // code back. Reconnecting needs the code, and nobody reads a lobby
         // code expecting to have to write it down.
         try { localStorage.setItem(LAST_CODE_KEY, this.client.code || ''); } catch { }
+        // Tell the server what this player brings to a hunt.
+        if (!msg?.resumed && this.isHuntLobby && this.rations > 0) this.client.setRations(this.rations);
         this._say(msg?.resumed ? 'Rejoined your hunt.' : '');
         this._refresh();
       }),
@@ -598,9 +627,17 @@ export default class CoopLobbyScene extends Phaser.Scene {
    * snapshot. Everyone then goes to the map, over the town, with the socket
    * handed to the hunt.
    */
-  _enterHunt() {
+  async _enterHunt() {
     this._handingOff = true;
-    const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD });
+    const target = await gameTarget();
+    // A guest's pledged Rations leave their own bag now (decision 6); the
+    // host's leave with its departure below. What is left comes back split.
+    if (!this.client.isHost) {
+      const pledged = this.client.contributions?.[this.client.playerId] || 0;
+      if (pledged > 0) takeFromList(GameState.inventory, 'rations', pledged);
+      GameState.save('autosave');
+    }
+    const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD, target });
     if (coop.isHost && this.huntDeparture) {
       const { plan, supplies, bring } = takeDeparture(this.huntDeparture);
       coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring });
@@ -640,6 +677,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.footerCaption?.setText(hunt ? 'HUNT' : 'FIGHT');
     this.scenarioText.setText(hunt ? (lobby?.label || this.huntDeparture?.label || '') : (scenario?.name || this.scenarioId));
     const canPick = (!inLobby || this.client.isHost) && !hunt;
+    const mineR = this.rations;
+    this.rationsText.setVisible(hunt);
+    this.rationsText.setText(hunt ? `Rations you bring: ${mineR}  (in your bag: ${countInList(GameState.inventory || [], 'rations')})${this.huntDeparture ? '  · packed on the Hunt screen' : ''}` : '');
+    this.rationsLess.setVisible(hunt && !this.huntDeparture);
+    this.rationsMore.setVisible(hunt && !this.huntDeparture);
     this.prevScenario.setVisible(canPick);
     this.nextScenario.setVisible(canPick);
 

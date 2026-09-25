@@ -944,6 +944,11 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         ['Refuse', act({ accept: false }), 'primary']];
     }
     buttons.push(['Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary']);
+    // A co-op guest reads the event; the host chooses (chunk 12 decision 3).
+    if (this.coop && !this.coop.isHost) {
+      lines.push('The host decides.');
+      buttons = [['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']];
+    }
     const diceRoom = ev.shape === 'check' ? 120 : 0;
     const height = 50 + this._linesHeight(lines, width) + diceRoom + buttons.length * 38 + 16;
     const p = this._sidePanel(ev.tile, width, height);
@@ -1064,6 +1069,17 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    */
   _drawHarvest() {
     const sp = this.v.spoils;
+    if (this.coop && !this.coop.isHost) {
+      // The host chooses what to take; a guest sees what is there.
+      const fam = HUNT_BEASTS[sp.family];
+      const lines = [`${sp.parts.length} part${sp.parts.length === 1 ? '' : 's'} to take, and the meat.`, 'The host decides what to harvest.'];
+      const width = 340, height = 50 + this._linesHeight(lines, width) + 50;
+      const p = this._sidePanel(null, width, height);
+      this._panelText(p, p.px + 10, p.py + 8, `Spoils: ${sp.bodies} ${fam?.name || 'beast'}${sp.bodies > 1 ? 's' : ''}`, 16, '#f2e6c8');
+      const ty = this._panelLines(p, p.py + 36, lines) + 8;
+      this._panelButton(p, p.px + width / 2, ty + 16, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+      return;
+    }
     const fam = HUNT_BEASTS[sp.family];
     const shown = (p) => this.harvestCommons || p.rarity !== 'common';
     const commons = sp.parts.filter(p => p.rarity === 'common').length;

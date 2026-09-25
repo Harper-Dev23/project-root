@@ -80,6 +80,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       id: p.id,
       name: p.name,
       ready: p.ready,
+      rations: p.rations || 0,
       hunters: p.hunters.map(h => ({
         ref: h.instanceId || h.id,
         name: h.name,
@@ -157,6 +158,8 @@ export function createHub({ CombatScene, codeFactory = makeCode,
   const MAX_SNAPSHOT_BYTES = 512 * 1024;
 
   const hostOf = (lobby) => lobby.players.find(p => p.id === lobby.hostId) || null;
+  /** What each player pledged to the hunt pack, { playerId: Rations }. */
+  const contributionsOf = (lobby) => Object.fromEntries(lobby.players.map(p => [p.id, p.rations || 0]));
   /** Every player's hunters, each stamped with its owner: what a client needs
    *  to build the merged party (a pit fight's `started` sends the same). */
   const rosterOf = (lobby) => lobby.players.flatMap(p =>
@@ -280,7 +283,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         // The hunt as it stands, then (if one is on) the fight. A returning
         // host is also told how the last fight ended if it never applied it
         // (lastOver is cleared by the host's next snapshot).
-        send(conn, { t: 'huntStarted', roster: rosterOf(lobby) });
+        send(conn, { t: 'huntStarted', roster: rosterOf(lobby), contributions: lobby.hunt.contributions });
         if (lobby.hunt.snapshot != null) send(conn, huntView(lobby));
         if (player.id === lobby.hostId) {
           clearTimeout(lobby.hunt.hostGoneTimer);
@@ -386,6 +389,21 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       broadcast(lobby, lobbyView(lobby));
     },
 
+    /**
+     * { t:'setRations', qty } - a hunt lobby: how many Rations this player
+     * brings from their own camp bag (COOP_EXPLORATION rule 2). They leave
+     * that player's bag when the hunt starts, and what is left comes back
+     * split by what each brought. The client only offers what is in its bag.
+     */
+    setRations(conn, msg, lobby, player) {
+      if (started(lobby)) return fail(conn, 'the hunt has started');
+      if (lobby.mode !== 'hunt') return fail(conn, 'only a hunt takes Rations');
+      const qty = Math.floor(Number(msg.qty));
+      if (!Number.isFinite(qty) || qty < 0 || qty > 999) return fail(conn, 'that is not a number of Rations');
+      player.rations = qty;
+      broadcast(lobby, lobbyView(lobby));
+    },
+
     /** { t:'ready', ready } */
     ready(conn, msg, lobby, player) {
       if (started(lobby)) return fail(conn, 'the hunt has started');
@@ -413,8 +431,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       if (lobby.mode === 'hunt') {
         const total = lobby.players.reduce((n, p) => n + p.hunters.length, 0);
         if (total > PARTY_LIMIT) return fail(conn, `the party is ${total} hunters; the shared limit is ${PARTY_LIMIT}`);
-        lobby.hunt = { version: 0, snapshot: null, finished: false, lastOver: null, hostGoneTimer: null };
-        return broadcast(lobby, { t: 'huntStarted', roster: rosterOf(lobby) });
+        lobby.hunt = { version: 0, snapshot: null, finished: false, lastOver: null, hostGoneTimer: null,
+          contributions: contributionsOf(lobby) };
+        return broadcast(lobby, { t: 'huntStarted', roster: rosterOf(lobby), contributions: lobby.hunt.contributions });
       }
 
       try {

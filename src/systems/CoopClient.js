@@ -185,6 +185,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
     // ---- a co-op map hunt (server/README.md, "Hunt lobbies") ---------------
     // The host's client runs the hunt; these only carry it (CoopHunt.js).
+    setRations(qty) { return client.send({ t: 'setRations', qty }); },
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
     move(tile, version) { return client.send({ t: 'move', tile, version }); },
     huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },
@@ -280,6 +281,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
       case 'huntStarted':
         client.roster = msg.roster || [];
+        client.contributions = msg.contributions || {};
         client.status = CoopStatus.HUNTING;
         emit('huntStarted', msg);
         emit('status', client.status);

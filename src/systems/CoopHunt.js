@@ -24,10 +24,17 @@
 // is chunk 12d (COOP_EXPLORATION's seven rules).
 //
 // The snapshot the server relays (opaque to it):
-//   { v: 1, hunt: HuntEngine serialize(), ledger: [{ verb, args }], vitals }
+//   { v: 1, id, hunt: HuntEngine serialize(), ledger: [{ verb, args }], vitals }
+//
+// Taking it home (chunk 12d): when the hunt ends, or a guest leaves, each
+// client applies the ledger to its own save (CoopRewards.applyTakeHome, the
+// seven rules), exactly once per entry.
 
 import { createMapHunt, restoreMapHunt } from './HuntEngine.js';
 import { fromWireCharacter } from './CoopWire.js';
+import { applyTakeHome, cleanExitEntries, OWN_TRIBE } from './CoopRewards.js';
+import { makeStack } from './ItemStacks.js';
+import { Items } from '../../data/items.js';
 
 export const COOP_SNAPSHOT_VERSION = 1;
 
@@ -52,6 +59,10 @@ export function hostWorld(party, reads, ledger) {
     w[verb] = (...args) => { ledger.push({ verb, args: plain(args) }); };
   }
   for (const r of READS) w[r] = (...args) => reads?.[r]?.(...args);
+  // Regard for "the host's own tribe" is each player's own tribe (rule 4).
+  w.tribeRep = (tribe, amount) => {
+    ledger.push({ verb: 'tribeRep', args: plain([tribe && tribe === reads?.ownTribe?.() ? OWN_TRIBE : tribe, amount]) });
+  };
   // A quest flag set earlier in THIS hunt is not in the host's save yet (it is
   // in the ledger), but the hunt must see it: the eel-catcher's return event
   // reads the flag its request set.
@@ -81,7 +92,7 @@ function guestWorld(party) {
  *   reads    the host's save, for the engine's reads (the game passes
  *            GAME_WORLD); ignored on a guest
  */
-export function createCoopHunt({ client, reads = null } = {}) {
+export function createCoopHunt({ client, reads = null, target = null } = {}) {
   if (!client) throw new Error('a co-op hunt needs its client');
   const listeners = new Map();
   const emit = (event, payload) => {
@@ -118,6 +129,10 @@ export function createCoopHunt({ client, reads = null } = {}) {
     hunt: null,           // host: the real hunt; guest: the newest read-only copy
     version: 0,
     ledger,
+    id: null,             // the hunt's own id, for each save's take-home record
+    // What each player pledged to the pack (rule 2), from the server.
+    contributions: { ...(client.contributions || {}) },
+    tookHome: null,       // this save's summary, once it has taken its share
     fighting: null,       // the spec of the fight in progress, as the server sent it
     ended: null,          // the huntEnded message, once the hunt is over
 
@@ -131,14 +146,46 @@ export function createCoopHunt({ client, reads = null } = {}) {
 
     /** The snapshot the server stores and relays. */
     snapshot() {
-      return { v: COOP_SNAPSHOT_VERSION, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals() };
+      return { v: COOP_SNAPSHOT_VERSION, id: ch.id, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals() };
+    },
+
+    /**
+     * Take this save's share home (chunk 12d): every ledger entry it has not
+     * applied yet, and -- when the hunt did not finish (the host gone, or this
+     * guest leaving) -- the clean exit the last snapshot would have made
+     * (rule 7). `target` is the save (CoopRewards.gameTarget in the game).
+     * Once closed, never again.
+     */
+    takeHome(t = target) {
+      if (!t || !ch.id || !ch.hunt) return null;
+      const rec = t.record();
+      const r = rec[ch.id] || (rec[ch.id] = { applied: 0, closed: false });
+      if (r.closed) return null;
+      const entries = ledger.slice(r.applied);
+      if (!ch.hunt.view().finished) entries.push(...cleanExitEntries(lastEnv || ch.snapshot()));
+      const myRefs = party.filter(c => c.ownerId === client.playerId).map(refOf);
+      const sum = applyTakeHome(entries, {
+        me: client.playerId, hostId: client.hostId, contributions: ch.contributions,
+        partySize: party.length, zoneId: ch.hunt.view().zoneId, myRefs, vitals: vitals(),
+      }, t);
+      r.applied = ledger.length;
+      r.closed = true;
+      t.save?.();
+      ch.tookHome = sum;
+      emit('tookHome', sum);
+      return sum;
     },
 
     /** Stop listening (the lobby or the game is leaving the hunt). */
     dispose() { for (const off of unsubs.splice(0)) { try { off(); } catch { } } },
 
-    /** Leave the co-op hunt: stop listening and close the socket. */
-    leave() { ch.dispose(); try { client.disconnect(); } catch { } },
+    /** Leave the co-op hunt: take this save's share home (a guest leaving
+     *  early takes a clean exit, rule 7), stop listening, close the socket. */
+    leave() {
+      if (!ch.isHost || ch.hunt?.view().finished) ch.takeHome();
+      ch.dispose();
+      try { client.disconnect(); } catch { }
+    },
 
     client,
 
@@ -175,6 +222,7 @@ export function createCoopHunt({ client, reads = null } = {}) {
     // snapshot the server held, ledger and all (COOP_EXPLORATION rule 7).
     if (!ch.isHost && msg.snapshot) applySnapshot(msg.snapshot);
     ch.ended = msg;
+    ch.takeHome();
     emit('ended', msg);
   }));
   unsubs.push(client.on('error', (reason) => emit('refused', reason)));
@@ -199,7 +247,17 @@ export function createCoopHunt({ client, reads = null } = {}) {
     /** Depart: the host's plan and region, everyone's hunters. */
     ch.begin = ({ zoneId, plan, supplies, bring = [], seed } = {}) => {
       if (ch.hunt) throw new Error('this co-op hunt has already begun');
-      const opts = { plan, supplies, bring };
+      // The guests' pledged Rations go into the same pack (rule 2); each
+      // guest took them out of their own bag when the hunt started.
+      const packed = [...bring];
+      let total = supplies;
+      for (const [pid, qty] of Object.entries(ch.contributions)) {
+        if (pid === client.playerId || !(qty > 0)) continue;
+        packed.push(makeStack('rations', qty));
+        total += qty * (Items.rations?.supply ?? 1);
+      }
+      ch.id = 'coop-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      const opts = { plan, supplies: total, bring: packed };
       if (seed != null) opts.seed = seed;
       ch.hunt = createMapHunt(zoneId, opts, world);
       publish();
@@ -269,12 +327,15 @@ export function createCoopHunt({ client, reads = null } = {}) {
   }
 
   // ── Guest ───────────────────────────────────────────────────────────────────
+  let lastEnv = null;
   function applySnapshot(env) {
     if (!env || env.v !== COOP_SNAPSHOT_VERSION) {
       emit('refused', `this game cannot read the host's hunt (snapshot ${env?.v})`);
       return;
     }
     applyVitals(env.vitals);
+    lastEnv = env;
+    ch.id = env.id || ch.id;
     ch.hunt = restoreMapHunt(env.hunt, guestWorld(party), { view: true });
     ledger.splice(0, ledger.length, ...(env.ledger || []));
     emit('changed', ch.view());

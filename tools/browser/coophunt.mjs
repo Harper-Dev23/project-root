@@ -116,7 +116,12 @@ try {
 
   // ── 2. The guest joins from the ordinary co-op entry ────────────────────────
   await G.loadGame();
-  await bootWith(G, 3);
+  await bootWith(G, 3, `
+    const { InventorySystem } = await import('/src/systems/InventorySystem.js');
+    const { makeStack } = await import('/src/systems/ItemStacks.js');
+    InventorySystem.addGlobalItem(makeStack('rations', 30));`);
+  const guestRations = () => G.evaluate(`const GS = (await import('/src/systems/GameState.js')).default;
+    return GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`);
   await G.evaluate(`window.sceneManager.loadScene('${LOBBY}', 'Opening the lobby…', { scenarioIds: ['training_encounter_1'], scenarioId: 'training_encounter_1' }); return true;`);
   await waitFor(G, `window.__T.g().scene.isActive('${LOBBY}')`);
   await sleep(500);
@@ -130,6 +135,11 @@ try {
   await G.shot('02-lobby');
 
   // ── 3. Ready, Start: both on the map ────────────────────────────────────────
+  // 12d: the guest pledges 10 Rations (one click of +).
+  await G.clickText('^[+]$', LOBBY);
+  await sleep(400);
+  check('the guest pledges Rations in the lobby, and the host sees it',
+    !!(await G.findText('^Rations you bring: 10', LOBBY)) && await waitFor(H, `window.__T.g().scene.getScene('${LOBBY}').client.lobby.players.find(p => p.id !== 'p1')?.rations === 10`, 4000));
   await G.clickText('^Toggle Ready$', LOBBY);
   await H.clickText('^Toggle Ready$', LOBBY);
   await sleep(400);
@@ -138,6 +148,9 @@ try {
   check('Start: the host is on the map', await onMap(H));
   check('...and so is the guest', await onMap(G));
   const bag1 = await bag();
+  check("the guest's pledged 10 Rations left the guest's bag at Start", (await guestRations()) === 20, `${await guestRations()}`);
+  check("...and are in the hunt's pack with the host's 20",
+    (await H.evaluate(`return window.__T.s().coop.hunt.getState().pack.brought.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`)) === 30);
   check('the host\'s plan and packed Rations were spent at the start', !bag1.plan && bag1.rations === bag0.rations - 20, `${JSON.stringify(bag0)} -> ${JSON.stringify(bag1)}`);
   await sleep(600);
   check('the guest\'s map says co-op, the host\'s says host',
@@ -235,6 +248,15 @@ try {
   check('the guest\'s Leave (confirmed) takes the guest back to town',
     await waitFor(G, `!window.__T.g().scene.isActive('${MAP}') && window.__T.g().scene.isActive('TownScene')`, 6000));
   await G.shot('09-guest-left');
+  // A guest leaving early takes a clean exit home (rule 7): the Rations left,
+  // split by what each brought, and the pack's finds, into the REAL save.
+  const home = await G.evaluate(`const GS = (await import('/src/systems/GameState.js')).default;
+    const rec = GS.flags?.coopHunts || {}; const r = Object.values(rec)[0];
+    const saved = JSON.parse(localStorage.getItem('bmSave_autosave') || 'null');
+    return { closed: !!r?.closed, rations: GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0),
+      savedClosed: !!Object.values(saved?.flags?.coopHunts || {})[0]?.closed };`);
+  check("the guest's save took its share home once, and saved it", home.closed && home.savedClosed, JSON.stringify(home));
+  check("...Rations came back to the guest's bag (a share of what was left)", home.rations > 20 && home.rations <= 30, `${home.rations}`);
 
   check('no uncaught errors on the host\'s page', H.errors.length === 0, H.errors.slice(0, 3).join(' | '));
   check('no uncaught errors on the guest\'s page', G.errors.length === 0, G.errors.slice(0, 3).join(' | '));

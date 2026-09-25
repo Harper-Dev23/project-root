@@ -33,6 +33,10 @@ const { createCoopHunt, LEDGER_VERBS } = await import('../src/systems/CoopHunt.j
 const { toWireCharacter } = await import('../src/systems/CoopWire.js');
 const { makeParty } = await import('../tools/headless/fixtures.js');
 const { makeRng } = await import('../src/systems/seededRng.js');
+const { fromWireCharacter } = await import('../src/systems/CoopWire.js');
+const { makeStack, stackQty } = await import('../src/systems/ItemStacks.js');
+const { xpShare } = await import('../data/xpTable.js');
+const { Items } = await import('../data/items.js');
 const GameState = (await import('../src/systems/GameState.js')).default;
 const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
@@ -77,7 +81,34 @@ const clone = (n, from = 0) => JSON.parse(JSON.stringify(roster.slice(from, from
 const reads = { followedHouse: () => null, houseHolder: () => null, ownTribe: () => 'zafaar', tribeName: (t) => t, hasQuestFlag: () => false };
 
 /** Seat a host and a guest in a started hunt lobby; return both controllers. */
-async function setup(code, { resumeGraceMs } = {}) {
+/**
+ * One player's SAVE, as a take-home target (CoopRewards.applyTakeHome): their
+ * own hunters (separate objects from the hunt's copies, as a real save's are)
+ * and a world that records what it is paid. Two of these stand in for two
+ * players' saves, which one Node process cannot otherwise hold.
+ */
+function saveFor(from, ownTribe) {
+  const chars = clone(3, from).map(w => fromWireCharacter(w));
+  const got = { huntPoints: 0, found: [], brought: [], days: 0, nights: 0, favor: [], rep: [], slain: [], flags: [] };
+  const world = {
+    nightFalls() { got.nights++; }, dayBreaks() { got.days++; },
+    awardHuntPoints(n) { got.huntPoints += n; },
+    bankItems(items, { found }) { (found ? got.found : got.brought).push(...items); },
+    favor(...a) { got.favor.push(a); }, falseGod() {}, bond() {}, rivalDevotion() {},
+    tribeRep(t, n) { got.rep.push([t, n]); }, questFlag(...a) { got.flags.push(a); }, lore() {},
+    ownTribe: () => ownTribe,
+  };
+  const rec = {};
+  return {
+    chars, got, world,
+    hunter: (ref) => chars.find(c => (c.instanceId || c.id) === ref) || null,
+    awardXPTo: (cs, n) => GameState.awardXPTo(cs, n),
+    moveToSlain: (c, fell) => { got.slain.push({ name: c.name, fell }); },
+    day: () => 1, record: () => rec, save() {},
+  };
+}
+
+async function setup(code, { resumeGraceMs, rations = [0, 0] } = {}) {
   const hub = createHub({ CombatScene, codeFactory: () => code, ...(resumeGraceMs ? { resumeGraceMs } : {}) });
   const WS = socketsFor(hub);
   const hostC = createCoopClient({ url: 'mem://', WebSocketImpl: WS });
@@ -89,13 +120,16 @@ async function setup(code, { resumeGraceMs } = {}) {
   await until(() => hostC.code, 'the host seated');
   guestC.send({ t: 'join', code, name: 'Gus', hunters: clone(3, 3), clientId: code + '-guest' });
   await until(() => guestC.playerId, 'the guest seated');
+  if (rations[0]) hostC.setRations(rations[0]);
+  if (rations[1]) guestC.setRations(rations[1]);
   hostC.setReady(true); guestC.setReady(true);
-  await until(() => hostC.lobby?.players?.every(p => p.ready), 'both ready');
+  await until(() => hostC.lobby?.players?.every(p => p.ready) && hostC.lobby.players.every((p, i) => (p.rations || 0) === rations[i]), 'both ready');
   hostC.startHunt();
   await until(() => hostC.status === 'hunting' && guestC.status === 'hunting', 'huntStarted');
-  const host = createCoopHunt({ client: hostC, reads });
-  const guest = createCoopHunt({ client: guestC });
-  return { hub, WS, hostC, guestC, host, guest, lobby: hub.lobbies.get(code) };
+  const hostSave = saveFor(0, 'zafaar'), guestSave = saveFor(3, 'elseth');
+  const host = createCoopHunt({ client: hostC, reads, target: hostSave });
+  const guest = createCoopHunt({ client: guestC, target: guestSave });
+  return { hub, WS, hostC, guestC, host, guest, hostSave, guestSave, lobby: hub.lobbies.get(code) };
 }
 
 /** Walk the host's hunt (as the host clicking) until it meets an encounter. */
@@ -112,10 +146,12 @@ async function walkToEncounter(S, seed, kind = 'beast') {
   return null;
 }
 /** A host whose walk meets the wanted encounter, trying seeds in turn. */
-async function departToEncounter(code, kind, from, opts) {
+async function departToEncounter(code, kind, from, opts = {}) {
   for (let seed = from; seed < from + 60; seed++) {
     const S = await setup(code + seed, opts);
-    S.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'cull', size: 'medium', mods: {}, bonusObjectives: [] }, supplies: 300, seed });
+    const own = opts.rations?.[0] || 0;
+    S.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'cull', size: 'medium', mods: {}, bonusObjectives: [] },
+      supplies: 60 + own * (Items.rations?.supply ?? 1), bring: own ? [makeStack('rations', own)] : [], seed });
     if (await walkToEncounter(S, seed, kind)) return S;
     S.hostC.disconnect(); S.guestC.disconnect();
   }
@@ -251,6 +287,145 @@ console.log('=== a wipe ends the hunt by itself ===');
   check('the fallen are in the ledger, under the death rule', ended.report.ledger.some(e => e.verb === 'fell' && e.args[0] === W.host.hunt.getState().deathRule), JSON.stringify(ended.report.ledger.find(e => e.verb === 'fell')));
 }
 
+// =============================================================================
+// Chunk 12d: what each save takes home (COOP_EXPLORATION's seven rules).
+const { mapNeighbors } = await import('../src/systems/HuntMapGen.js');
+const { isPassable } = await import('../data/grounds.js');
+const { exitReward } = await import('../src/systems/HuntObjectives.js');
+const { ZONES } = await import('../data/zones.js');
+const K = Items.rations?.supply ?? 1;
+const ledgerSum = (led, verb) => led.filter(e => e.verb === verb).reduce((t, e) => t + (e.args[0] || 0), 0);
+const ids = (items) => items.map(i => i.id + '/' + (i.rarity || '') + '/' + stackQty(i)).sort();
+const qtyOf = (items) => items.filter(i => i.id === 'rations').reduce((t, i) => t + stackQty(i), 0);
+/** Walk the host to the nearest exit tile, fleeing anything met, then leave. */
+function walkOut(S) {
+  for (let i = 0; i < 400; i++) {
+    const v = S.host.view();
+    if (v.finished) return true;
+    if (v.encounter) { S.host.act(h => h.flee()); continue; }
+    if (v.event) { S.host.act(h => h.leaveEvent()); continue; }
+    if (v.spoils) { S.host.act(h => h.harvest({ take: [], meat: false })); continue; }
+    const st = S.host.hunt.getState();
+    if (st.map.tiles[st.pos].exit) { S.host.act(h => h.exit()); continue; }
+    const prev = new Map([[st.pos, null]]); const q = [st.pos]; let g = null;
+    for (let k = 0; k < q.length && !g; k++) for (const n of mapNeighbors(st.map, q[k])) {
+      if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (st.map.tiles[n].exit) { g = n; break; } }
+    if (!g) return false;
+    let t = g; while (prev.get(t) !== st.pos) t = prev.get(t);
+    S.host.move(t);
+  }
+  return false;
+}
+
+console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
+{
+  const R = await departToEncounter('RAT', 'beast', 100, { rations: [20, 10] });
+  const st0 = R.host.hunt.getState();
+  check('the pack holds both players\' pledged Rations (20 + 10)', qtyOf(st0.pack.brought) === 30, `${qtyOf(st0.pack.brought)}`);
+  check('...and the hunt started with the camp issue plus all 30', st0.maxSupplies === 60 + 30 * K, `${st0.maxSupplies}`);
+  check('both sides know what each brought', same(R.host.contributions, { p1: 20, p2: 10 }) && same(R.guest.contributions, { p1: 20, p2: 10 }));
+  R.host.fight();
+  await until(() => R.host.fighting && R.guest.fighting, 'the fight');
+  for (const u of R.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  await playFight(R);
+  await until(() => !R.host.fighting && R.guest.version === R.host.version, 'the win applied');
+  // Harvest everything, so the pack has finds to take home.
+  const sp = R.host.view().spoils;
+  const took = sp ? R.host.act(h => h.harvest({ take: sp.parts.map(p => p.id), meat: true })) : null;
+  check('the host harvested the kill into the pack', took?.ok && R.host.hunt.getState().pack.found.length > 0, `${R.host.hunt.getState().pack.found.length} found`);
+  check('the host walked the party out through an exit', walkOut(R) && R.host.view().finished === 'exit');
+  await until(() => R.host.tookHome && R.guest.tookHome, 'both took home');
+  const led = R.host.ledger, hg = R.hostSave.got, gg = R.guestSave.got;
+  const hpAll = ledgerSum(led, 'awardHuntPoints');
+  check('rule 1: every save gets the hunt\'s Hunt Points in full (fights and completion)', hg.huntPoints === hpAll && gg.huntPoints === hpAll && hpAll > 0, `${hpAll} each`);
+  const found = led.filter(e => e.verb === 'bankItems' && e.args[1]?.found).flatMap(e => e.args[0]);
+  check('rule 1: the finds are COPIED to every save', same(ids(hg.found), ids(found)) && same(ids(gg.found), ids(found)), `${found.length} items`);
+  // Expected by the real awardXPTo on fresh copies: each pool's share, split
+  // over all six, paid in order to that player's own three.
+  const pools = led.filter(e => e.verb === 'awardXP').map(e => e.args[0]);
+  const expect = (from) => { const cs = clone(3, from).map(w => fromWireCharacter(w)); for (const p of pools) GameState.awardXPTo(cs, xpShare(p, 6)); return cs.map(c => [c.level, c.experience || 0]); };
+  const have = (save) => save.chars.map(c => [c.level, c.experience || 0]);
+  check('rule 1: XP is the pool split over all six, each save paying only its own hunters',
+    pools.length > 0 && same(have(R.hostSave), expect(0)) && same(have(R.guestSave), expect(3)), `pools ${pools.join(',')}`);
+  const left = qtyOf(led.filter(e => e.verb === 'bankItems' && !e.args[1]?.found).flatMap(e => e.args[0]));
+  const hr = qtyOf(hg.brought), gr = qtyOf(gg.brought);
+  check('rule 2: the Rations left come back split by what each brought (the host takes the rounding)',
+    left > 0 && hr + gr === left && gr === Math.floor(left * 10 / 30), `${left} left: host ${hr}, guest ${gr}`);
+  const days = led.filter(e => e.verb === 'dayBreaks').length, nights = led.filter(e => e.verb === 'nightFalls').length;
+  check('rule 5: every calendar advances by the hunt (each nightfall and daybreak)', hg.days === days && gg.days === days && hg.nights === nights && gg.nights === nights, `${nights} nights, ${days} days`);
+  check('rule 4: every Bond records the hunt\'s favor', same(hg.favor, gg.favor) && hg.favor.length === led.filter(e => e.verb === 'favor').length, `${hg.favor.length} entries`);
+  const again = R.guest.takeHome();
+  check('taken home ONCE: a second take-home pays nothing', again === null && gg.huntPoints === hpAll);
+}
+
+console.log('=== 12d: the Rations split, with a remainder ===');
+{
+  const { broughtShare } = await import('../src/systems/CoopRewards.js');
+  const items = [makeStack('rations', 25)];
+  const c = { p1: 20, p2: 10 };
+  const h = qtyOf(broughtShare(items, { contributions: c, me: 'p1', hostId: 'p1' }));
+  const g = qtyOf(broughtShare(items, { contributions: c, me: 'p2', hostId: 'p1' }));
+  check('25 left of 20 + 10 brought: the guest gets floor(25 x 10/30) = 8, the host the other 17', g === 8 && h === 17, `host ${h}, guest ${g}`);
+  const three = { p1: 0, p2: 7, p3: 7 };
+  const s3 = ['p1', 'p2', 'p3'].map(me => qtyOf(broughtShare([makeStack('rations', 5)], { contributions: three, me, hostId: 'p1' })));
+  check('...and nothing is lost or made up: a host who brought none still takes the rounding', s3.reduce((t, n) => t + n, 0) === 5 && s3[1] === 2 && s3[2] === 2, s3.join(','));
+}
+
+console.log('=== 12d: tribe regard goes to each player\'s own tribe ===');
+{
+  const { hostWorld } = await import('../src/systems/CoopHunt.js');
+  const { applyTakeHome } = await import('../src/systems/CoopRewards.js');
+  const led = [];
+  const w = hostWorld([], { ownTribe: () => 'zafaar' }, led);
+  w.tribeRep('zafaar', 2); w.tribeRep('elseth', -1);
+  const g = saveFor(3, 'styx');
+  applyTakeHome(led, { me: 'p2', hostId: 'p1', myRefs: [] }, g);
+  check('the host\'s "own tribe +2" lands on the GUEST\'s own tribe; a named rival stays named', same(g.got.rep, [['styx', 2], ['elseth', -1]]), JSON.stringify(g.got.rep));
+}
+
+console.log('=== 12d: a Watched wipe: each save loses only its own ===');
+{
+  // The starter regions are Sheltered; for this hunt the Reeds are Watched,
+  // the way the game's bmDevDeathRule hook does it (read at departure).
+  const was = ZONES.reeds_of_gethsemane.deathRule;
+  ZONES.reeds_of_gethsemane.deathRule = 'watched';
+  const X = await departToEncounter('WAT', 'beast', 300);
+  ZONES.reeds_of_gethsemane.deathRule = was;
+  check('the hunt is Watched', X.host.hunt.getState().deathRule === 'watched');
+  X.host.fight();
+  await until(() => X.host.fighting && X.guest.fighting, 'the Watched fight');
+  for (const u of X.lobby.session.party) u.currentHP = 1;
+  for (const e of X.lobby.session.host.enemies) { e.maxHP = 99999; e.currentHP = 99999; }
+  await playFight(X, { attack: false });
+  await until(() => X.host.tookHome && X.guest.tookHome, 'both took home');
+  const hs = X.hostSave.got.slain.map(s => s.name).sort(), gs = X.guestSave.got.slain.map(s => s.name).sort();
+  check('rule 6: each save sends only its OWN fallen to the Slain, under the Watched rule',
+    same(hs, X.hostSave.chars.map(c => c.name).sort()) && same(gs, X.guestSave.chars.map(c => c.name).sort())
+    && [...X.hostSave.got.slain, ...X.guestSave.got.slain].every(s => s.fell.rule === 'watched' && s.fell.zoneId === 'reeds_of_gethsemane'),
+    `host ${hs.join(',')} / guest ${gs.join(',')}`);
+  check('...and a Watched wipe brings nothing home', X.guestSave.got.found.length === 0 && X.guestSave.got.brought.length === 0);
+}
+
+console.log('=== 12d: a guest who leaves early takes a clean exit, once ===');
+{
+  const L = await departToEncounter('LEA', 'beast', 100, { rations: [0, 20] });
+  L.host.act(h => h.flee());
+  await until(() => L.guest.version === L.host.version, 'caught up');
+  const env = L.host.snapshot();
+  const s = L.host.hunt.getState();
+  const reward = exitReward(s);
+  L.guest.leave();
+  const gg = L.guestSave.got;
+  check('the leaving guest takes the pack\'s finds so far (copied)', same(ids(gg.found), ids(s.pack.found)), `${s.pack.found.length} items`);
+  check(`...the completion reward only if the objectives are done (here: ${reward.primaryDone ? 'done' : 'not done'})`,
+    gg.huntPoints === ledgerSum(env.ledger, 'awardHuntPoints') + reward.huntPoints, `${gg.huntPoints}`);
+  const rLeft = Math.min(20, Math.floor(s.supplies / K + 1e-9));
+  check('...and the Rations left, being the only one who brought any', qtyOf(gg.brought) === rLeft, `${rLeft}`);
+  const before = JSON.stringify(gg);
+  L.guest.takeHome();
+  check('...and never twice', JSON.stringify(gg) === before && L.guestSave.record()[L.guest.id]?.closed === true);
+}
+
 console.log('=== the host gone ===');
 {
   const G = await setup('GONE', { resumeGraceMs: 30 });
@@ -265,6 +440,7 @@ console.log('=== the host gone ===');
   await new Promise(r => setTimeout(r, 80));
   await until(() => ended, 'host_gone');
   check('the guest ends "host_gone", holding the last snapshot\'s ledger', ended.reason === 'host_gone' && JSON.stringify(G.guest.ledger) === ledger && !!G.guest.view());
+  check('...and took that clean exit home (rule 7), once', !!G.guest.tookHome && G.guestSave.record()[G.guest.id]?.closed === true);
 }
 
 S.hostC.disconnect(); S.guestC.disconnect();
