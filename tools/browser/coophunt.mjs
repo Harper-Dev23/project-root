@@ -60,7 +60,8 @@ stage('starting Edge');
 const B = await startBrowser({ mode, port, outDir: out, prefix: `${mode}-host` });
 const H = B;                                   // the host's page
 stage('host page up');
-const G = await B.openPage(`${mode}-guest`);   // the guest's page
+// Its own origin, so its own localStorage: two players, two saves (12d).
+const G = await B.openPage(`${mode}-guest`, { hostName: 'localhost' });   // the guest's page
 stage('guest page up');
 const { check, sleep } = B;
 const LOBBY = 'CoopLobbyScene', MAP = 'HuntFieldOverlay', HUB = 'HuntHubOverlay';
@@ -241,10 +242,33 @@ try {
   check('both maps have the fight won and the encounter gone', !ha.encounter && !ga.encounter && JSON.stringify(ha) === JSON.stringify(ga), JSON.stringify(ga));
   await G.shot('08-back-on-map-guest');
 
+  // ── 6b. The host reloads the page and rejoins (chunk 12d) ────────────────
+  const guestPos = await posOf(G);
+  await H.loadGame();
+  await H.bootToTown(`const GS = (await import('/src/systems/GameState.js')).default; GS.load('autosave');`);
+  check("the host's reloaded save holds its co-op hunt", await H.evaluate(`const GS = (await import('/src/systems/GameState.js')).default; return !!GS.flags?.coopActive?.isHost;`));
+  check('the town offers to rejoin it', await waitFor(H, `window.__T.uiTexts().some(t => /You were in a co-op hunt/.test(t.text))`, 8000));
+  await H.shot('10-rejoin-offer');
+  // The button, not the message (which says "Enter to rejoin").
+  await H.clickText('^\\[ Enter \\]$', 'UIScene');
+  check('Enter: the host is back on the map', await onMap(H));
+  await sleep(600);
+  check("...where the party stood, the same map as the guest's", (await posOf(H)) === guestPos && (await posOf(G)) === guestPos, `${await posOf(H)} / ${guestPos}`);
+  const next = await H.evaluate(`const s = window.__T.s(); const v = s.coop.view();
+    if (v.spoils) s._act('leave', () => s.hunt.harvest({ take: [], meat: false }));
+    const m = s.coop.view().moves.find(x => s.coop.view().layout.includes(x.tile)); if (!m) return null;
+    s._act('move', () => s.hunt.move(m.tile)); return m.tile;`);
+  check('...and carries on: its next move reaches the guest', !!next && await waitFor(G, `window.__T.s().coop.view().pos === ${JSON.stringify(next)}`, 6000), next);
+  await H.shot('11-host-rejoined');
+
   // ── 7. The guest leaves ─────────────────────────────────────────────────────
+  // Leave is offered on the party's own tile: select it first.
+  const own = await G.evaluate(`const s = window.__T.s(); const c = s.center(s.coop.view().pos); return { x: c.x, y: c.y };`);
+  await G.click(own.x, own.y);
+  await sleep(300);
   await G.clickText('^Leave the co-op hunt$');
   await sleep(300);
-  await G.clickText('Enter', 'UIScene').catch(async () => G.clickText('^\\[? ?Enter', 'UIScene'));
+  await G.clickText('^\\[ Enter \\]$', 'UIScene');
   check('the guest\'s Leave (confirmed) takes the guest back to town',
     await waitFor(G, `!window.__T.g().scene.isActive('${MAP}') && window.__T.g().scene.isActive('TownScene')`, 6000));
   await G.shot('09-guest-left');

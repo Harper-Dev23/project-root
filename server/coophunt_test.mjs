@@ -105,6 +105,8 @@ function saveFor(from, ownTribe) {
     awardXPTo: (cs, n) => GameState.awardXPTo(cs, n),
     moveToSlain: (c, fell) => { got.slain.push({ name: c.name, fell }); },
     day: () => 1, record: () => rec, save() {},
+    active: null,
+    remember(r) { this.active = JSON.parse(JSON.stringify(r)); }, forget() { this.active = null; },
   };
 }
 
@@ -118,8 +120,10 @@ async function setup(code, { resumeGraceMs, rations = [0, 0] } = {}) {
   // what a returning tab reclaims its seat with.
   hostC.send({ t: 'create', mode: 'hunt', name: 'Hana', hunters: clone(3, 0), clientId: code + '-host' });
   await until(() => hostC.code, 'the host seated');
+  hostC.clientId = code + '-host';      // as joinLobby records it
   guestC.send({ t: 'join', code, name: 'Gus', hunters: clone(3, 3), clientId: code + '-guest' });
   await until(() => guestC.playerId, 'the guest seated');
+  guestC.clientId = code + '-guest';
   if (rations[0]) hostC.setRations(rations[0]);
   if (rations[1]) guestC.setRations(rations[1]);
   hostC.setReady(true); guestC.setReady(true);
@@ -358,6 +362,32 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   check('taken home ONCE: a second take-home pays nothing', again === null && gg.huntPoints === hpAll);
 }
 
+console.log('=== two fights in one hunt ===');
+{
+  const T = await departToEncounter('TWO', 'beast', 100);
+  T.host.fight();
+  await until(() => T.host.fighting && T.guest.fighting, 'the first fight');
+  for (const u of T.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  await playFight(T);
+  await until(() => !T.host.fighting && T.guest.version === T.host.version, 'the first win applied');
+  if (T.host.view().spoils) T.host.act(h => h.harvest({ take: [], meat: false }));
+  // A SECOND fight in the same hunt. CoopClient once had a huntFight method
+  // AND a huntFight property (the live spec): the first fight's spec
+  // overwrote the method, and every guest read "a fight is on" from it.
+  check('between fights no side thinks a fight is on', T.hostC.huntFight === null && T.guestC.huntFight === null && !T.guest.fighting);
+  const second = await walkToEncounter(T, 555, 'beast') || await walkToEncounter(T, 556, 'cultist');
+  if (second) {
+    const r2 = T.host.fight();
+    await until(() => T.host.fighting && T.guest.fighting, 'the second fight');
+    for (const u of T.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
+    await playFight(T);
+    await until(() => !T.host.fighting && T.guest.version === T.host.version, 'the second win applied');
+    check('a second fight in the same hunt starts, is won and applied', r2.ok && T.host.hunt.getState().kills.length === 2, `${T.host.hunt.getState().kills.length} kills`);
+    const sp2 = T.host.view().spoils;
+    if (sp2) T.host.act(h => h.harvest({ take: [], meat: false }));
+  } else check('a second encounter was found', false);
+}
+
 console.log('=== 12d: the Rations split, with a remainder ===');
 {
   const { broughtShare } = await import('../src/systems/CoopRewards.js');
@@ -424,6 +454,96 @@ console.log('=== 12d: a guest who leaves early takes a clean exit, once ===');
   const before = JSON.stringify(gg);
   L.guest.takeHome();
   check('...and never twice', JSON.stringify(gg) === before && L.guestSave.record()[L.guest.id]?.closed === true);
+}
+
+// =============================================================================
+// Chunk 12d-2: the hunt survives a reload (each save keeps a record of it).
+/** A new client for a returning player: the record's seat id, the same code. */
+async function rejoin(S, rec, label) {
+  const c = createCoopClient({ url: 'mem://', WebSocketImpl: S.WS });
+  await c.connect();
+  c.joinLobby({ code: rec.code, name: label, hunters: [], clientId: rec.clientId });
+  await until(() => c.resumed && (c.status === 'hunting' || c.status === 'fighting') && c.hunt, `${label} back in the hunt`);
+  return c;
+}
+
+console.log('=== 12d-2: the host reloads and carries on ===');
+{
+  const S = await setup('RLD', { rations: [0, 0] });
+  S.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'scout', size: 'small', mods: {}, bonusObjectives: [] }, supplies: 100, seed: 11 });
+  for (let i = 0; i < 3; i++) { const v = S.host.view(); if (v.encounter || v.event || !v.moves.length) break; S.host.move(v.moves[0].tile); }
+  await until(() => S.guest.version === S.host.version, 'caught up');
+  const rec = S.hostSave.active;
+  check('the host\'s save keeps a record of the hunt, current to the last snapshot',
+    rec?.code === S.hostC.code && rec.version === S.host.version && rec.isHost && same(rec.env.ledger, S.host.ledger) && !!rec.clientId);
+  check('...and so does the guest\'s', S.guestSave.active?.version === S.host.version && !S.guestSave.active.isHost);
+  const posBefore = S.host.view().pos;
+  S.host.dispose(); S.hostC.disconnect();
+  const back = await rejoin(S, rec, 'Hana');
+  const host2 = createCoopHunt({ client: back, reads, target: S.hostSave, resume: rec });
+  check('the returning host rebuilds the hunt where it was, identical to the guest\'s', host2.view().pos === posBefore && same(host2.view(), S.guest.view()) && host2.version === S.guest.version);
+  const v = host2.view();
+  const t = v.moves.find(m => !v.occupants.some(o => o.tile === m.tile))?.tile ?? v.moves[0].tile;
+  host2.move(t);
+  await until(() => S.guest.version === host2.version, 'the guest sees the host\'s next move');
+  check('...and carries on: its next move reaches the guest, the version going on from the server\'s', S.guest.view().pos === host2.view().pos && host2.version === rec.version + 1);
+}
+
+console.log('=== 12d-2: the host misses a fight\'s end, then comes back ===');
+{
+  const M = await departToEncounter('MIS', 'beast', 100);
+  M.host.fight();
+  await until(() => M.host.fighting && M.guest.fighting, 'the fight');
+  const rec = M.hostSave.active;
+  // The host's game stops listening (a crash mid-fight); its client still
+  // plays its turns here, so the fight can end without it.
+  M.host.dispose();
+  for (const u of M.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  await playFight(M);
+  await until(() => M.guest.fighting === null, 'the fight over');
+  check('the fight is over and the host never applied it (the server holds it)', !!M.lobby.hunt.lastOver && M.hostSave.active.version === rec.version);
+  M.hostC.disconnect();
+  const back = await rejoin(M, rec, 'Hana');
+  await until(() => back.lastOver, 'the resent ending');
+  const host2 = createCoopHunt({ client: back, reads, target: M.hostSave, resume: rec });
+  await until(() => M.guest.version === host2.version, 'the applied win reaches the guest');
+  const st = host2.hunt.getState();
+  check('on its return the host applies the win it missed: the kill, the pool, published', st.kills.length === 1 && !st.encounter
+    && host2.ledger.some(e => e.verb === 'awardXP') && same(M.guest.view(), host2.view()) && !M.lobby.hunt.lastOver);
+}
+
+console.log('=== 12d-2: the host returns while the fight is still on ===');
+{
+  const F = await departToEncounter('MID', 'beast', 300);
+  F.host.fight();
+  await until(() => F.host.fighting && F.guest.fighting, 'the fight');
+  const rec = F.hostSave.active;
+  F.host.dispose(); F.hostC.disconnect();
+  const back = await rejoin(F, rec, 'Hana');
+  await until(() => back.huntFight, 'the live fight');
+  const host2 = createCoopHunt({ client: back, reads, target: F.hostSave, resume: rec });
+  check('the returning host is back in the live fight', !!host2.fighting && host2.fighting.occId === F.guest.fighting.occId);
+  F.hostC = back;
+  for (const u of F.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  await playFight(F);
+  await until(() => !host2.fighting && F.guest.version === host2.version, 'the win applied');
+  check('...plays it out, and applies the win', host2.hunt.getState().kills.length === 1 && same(F.guest.view(), host2.view()));
+}
+
+console.log('=== 12d-2: a reload after the lobby is gone ===');
+{
+  const { takeHomeFromRecord } = await import('../src/systems/CoopRewards.js');
+  const Z = await departToEncounter('GNE', 'beast', 100, { rations: [0, 20] });
+  Z.host.act(h => h.flee());
+  await until(() => Z.guest.version === Z.host.version, 'caught up');
+  const rec = Z.guestSave.active;
+  Z.guest.dispose(); Z.guestC.disconnect();   // the guest's browser crashed
+  const s = Z.host.hunt.getState();
+  const sum = takeHomeFromRecord(rec, Z.guestSave);
+  check('the guest\'s save takes the clean exit from its record: the Rations left, the finds',
+    !!sum && qtyOf(Z.guestSave.got.brought) === Math.min(20, Math.floor(s.supplies / K + 1e-9)) && same(ids(Z.guestSave.got.found), ids(s.pack.found)), JSON.stringify(sum));
+  check('...clears the record', Z.guestSave.active === null && Z.guestSave.record()[rec.id]?.closed === true);
+  check('...and never twice', takeHomeFromRecord(rec, Z.guestSave) === null);
 }
 
 console.log('=== the host gone ===');

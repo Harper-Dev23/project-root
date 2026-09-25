@@ -151,15 +151,20 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     },
 
     createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit', label = '' }) {
+      client.clientId = coopClientId();
       return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode, label,
-        clientId: coopClientId() });
+        clientId: client.clientId });
     },
-    joinLobby({ code, name, hunters }) {
+    /** `clientId` is only passed to reclaim a seat this SAVE held in an
+     *  earlier session (a co-op hunt after a reload, chunk 12d); otherwise it
+     *  is this tab's own. */
+    joinLobby({ code, name, hunters, clientId = null }) {
+      client.clientId = clientId || coopClientId();
       // Sending the id on an ordinary join is what makes reconnecting work
       // without a separate "rejoin" flow: the server recognises a seat this
       // browser already holds and hands it back, fight in progress and all.
       // Typing the same code you were already in IS the reconnect.
-      return client.send({ t: 'join', code, name, hunters, clientId: coopClientId() });
+      return client.send({ t: 'join', code, name, hunters, clientId: client.clientId });
     },
     setHunters(hunters) { return client.send({ t: 'setHunters', hunters }); },
     setReady(ready = true) { return client.send({ t: 'ready', ready }); },
@@ -189,7 +194,9 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
     move(tile, version) { return client.send({ t: 'move', tile, version }); },
     huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },
-    huntFight(version, spec, vitals) { return client.send({ t: 'huntFight', version, spec, vitals }); },
+    // Named send*, not huntFight: that is the live fight's spec (below), and a
+    // method of the same name overwrote it (12d found it: every guest "saw" a fight).
+    sendHuntFight(version, spec, vitals) { return client.send({ t: 'huntFight', version, spec, vitals }); },
     flee() { return client.send({ t: 'flee' }); },
     huntEnd(reason, report) { return client.send({ t: 'huntEnd', reason, report }); },
   };
@@ -275,6 +282,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       case 'over':
         // A hunt fight's end is not the end of the hunt: the lobby goes on.
         client.status = msg.hunt ? CoopStatus.HUNTING : CoopStatus.ENDED;
+        // Kept: a co-op hunt built a moment later (a resume) still applies it.
+        if (msg.hunt) { client.lastOver = msg; client.huntFight = null; }
         emit('over', msg);
         emit('status', client.status);
         break;

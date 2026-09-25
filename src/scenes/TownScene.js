@@ -927,11 +927,29 @@ export default class TownScene extends Phaser.Scene {
     open.forEach(key => this.scene.stop(key));
     if (HuntManager.isActive()) {
       this._enterHuntGate();
+    } else if (GameState.flags?.coopActive) {
+      // This save was in a co-op hunt (chunk 12d): a reload, a crash, a
+      // closed tab. Offer to rejoin; the lobby takes the clean exit instead
+      // if the hunt is gone.
+      this._offerCoopRejoin();
     } else if (open.length) {
       // HuntHubOverlay disables Town input while open; stopping it bypasses
       // its own _close(), which is what normally gives input back.
       this.input.enabled = true;
     }
+  }
+
+  /** Ask whether to rejoin the co-op hunt this save was in (chunk 12d). */
+  _offerCoopRejoin() {
+    const rec = GameState.flags?.coopActive;
+    const ui = this.scene.get('UIScene');
+    if (!rec || !ui?.showConfirmationDialogue) return;
+    ui.showConfirmationDialogue(
+      `You were in a co-op hunt (lobby ${rec.code}${rec.isHost ? ', your hunt' : ''}). Enter to rejoin it; if it is over, you take home your share.`,
+      () => {
+        ui.resetBottomBar();
+        window.sceneManager.loadScene('CoopLobbyScene', 'Rejoining the hunt…', { resumeCoop: GameState.flags?.coopActive });
+      });
   }
 
   // ===========================================================

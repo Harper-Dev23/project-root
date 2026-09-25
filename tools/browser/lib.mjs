@@ -77,12 +77,14 @@ export async function startBrowser({ mode = 'webgl', port = 9333, outDir = path.
   /**
    * A SECOND page in the same browser (chunk 12c: two players, one browser,
    * which the owner's RAM allows). Same driver, its own screenshot prefix.
-   * Pages share the profile, so they share localStorage: give each its own
-   * party in memory, not through the save.
+   * Pages share the profile, so on one origin they share localStorage (one
+   * save for two players). `hostName: 'localhost'` serves this page from a
+   * different origin than the first page's 127.0.0.1, so each has its own.
    */
-  const openPage = async (pagePrefix) => {
+  const openPage = async (pagePrefix, { hostName = null } = {}) => {
     const t = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
-    return pageDriver(t.webSocketDebuggerUrl, { gameUrl, outDir, prefix: pagePrefix });
+    const url = hostName ? gameUrl.replace('127.0.0.1', hostName) : gameUrl;
+    return pageDriver(t.webSocketDebuggerUrl, { gameUrl: url, outDir, prefix: pagePrefix });
   };
 
   return { ...driver, mode, outDir, close, openPage, gameUrl };

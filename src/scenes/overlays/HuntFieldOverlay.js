@@ -189,6 +189,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       return;
     }
     if (this.coop) this._wireCoop();
+    // Rejoined while the party is mid-fight (chunk 12d): straight to it.
+    if (this.coop?.fighting) { const f = this.coop.fighting; this.time.delayedCall(50, () => this._enterCoopFight(f)); }
     if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.selected = this.hunt.view().pos;
     this._refresh();

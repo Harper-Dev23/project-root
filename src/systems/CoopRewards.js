@@ -149,6 +149,30 @@ export function applyTakeHome(entries, ctx, target) {
   return sum;
 }
 
+/**
+ * Take a hunt home from this save's RECORD alone (chunk 12d): the player
+ * reloaded, and the lobby is gone (the host long gone, or the server
+ * restarted). Rule 7's clean exit from the last snapshot the save kept, with
+ * whatever of its ledger this save had not applied. Once, like takeHome.
+ */
+export function takeHomeFromRecord(rec, target) {
+  if (!rec?.env || !rec.id) return null;
+  const all = target.record();
+  const r = all[rec.id] || (all[rec.id] = { applied: 0, closed: false });
+  if (r.closed) { target.forget?.(); return null; }
+  const led = rec.env.ledger || [];
+  const entries = [...led.slice(r.applied), ...cleanExitEntries(rec.env)];
+  const sum = applyTakeHome(entries, {
+    me: rec.playerId, hostId: rec.hostId, contributions: rec.contributions, partySize: rec.partySize,
+    zoneId: rec.zoneId, myRefs: rec.myRefs || [], vitals: rec.env.vitals,
+  }, target);
+  r.applied = led.length;
+  r.closed = true;
+  target.forget?.();
+  target.save?.();
+  return sum;
+}
+
 /** How the host's ledger names "the host's own tribe" (tribeRep), so each
  *  player's regard goes to their OWN tribe (rule 4). */
 export const OWN_TRIBE = '@own';
@@ -169,6 +193,9 @@ export async function gameTarget() {
     moveToSlain: (c, fell) => GameState.moveToSlain(c, fell),
     day: () => ProgressionManager.getDaysElapsed(),
     record: () => ((GameState.flags ||= {}).coopHunts ||= {}),
+    // The hunt this save is in, for a reload (CoopHunt's remember()).
+    remember: (rec) => { (GameState.flags ||= {}).coopActive = rec; GameState.save('autosave'); },
+    forget: () => { if (GameState.flags) delete GameState.flags.coopActive; },
     save: () => GameState.save('autosave'),
   };
 }

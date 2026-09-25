@@ -92,7 +92,7 @@ function guestWorld(party) {
  *   reads    the host's save, for the engine's reads (the game passes
  *            GAME_WORLD); ignored on a guest
  */
-export function createCoopHunt({ client, reads = null, target = null } = {}) {
+export function createCoopHunt({ client, reads = null, target = null, resume = null } = {}) {
   if (!client) throw new Error('a co-op hunt needs its client');
   const listeners = new Map();
   const emit = (event, payload) => {
@@ -170,6 +170,7 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
       }, t);
       r.applied = ledger.length;
       r.closed = true;
+      t.forget?.();
       t.save?.();
       ch.tookHome = sum;
       emit('tookHome', sum);
@@ -227,11 +228,31 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
   }));
   unsubs.push(client.on('error', (reason) => emit('refused', reason)));
 
+  /**
+   * This save's record of the hunt it is in (chunk 12d), kept with every
+   * snapshot: enough to rejoin after a reload (the seat's client id, the
+   * server, the code), and, if the lobby is gone by then, to take the clean
+   * exit from the last snapshot (CoopRewards.takeHomeFromRecord). Cleared
+   * once the share is home.
+   */
+  function remember(env) {
+    if (!target?.remember || !env || ch.tookHome) return;
+    target.remember({
+      v: 1, id: env.id, code: client.code, serverUrl: client.url, clientId: client.clientId || null,
+      playerId: client.playerId, hostId: client.hostId, isHost: ch.isHost,
+      contributions: ch.contributions, partySize: party.length,
+      myRefs: party.filter(c => c.ownerId === client.playerId).map(refOf),
+      zoneId: env.hunt?.zoneId ?? null, version: ch.version, env,
+    });
+  }
+
   // ── Host ────────────────────────────────────────────────────────────────────
   let endSent = false;
   function publish() {
     ch.version++;
-    client.huntSnapshot(ch.version, ch.snapshot());
+    const env = ch.snapshot();
+    client.huntSnapshot(ch.version, env);
+    remember(env);
     emit('changed', ch.view());
     const fin = ch.hunt.view().finished;
     if (fin && !endSent) {
@@ -285,7 +306,7 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
       const spec = ch.hunt?.beginFight();
       if (!spec?.ok) return spec || { ok: false, reason: 'the hunt has not begun' };
       publish();
-      client.huntFight(ch.version, plain({ ...spec, zoneId: ch.hunt.getState().zoneId }), vitals());
+      client.sendHuntFight(ch.version, plain({ ...spec, zoneId: ch.hunt.getState().zoneId }), vitals());
       return { ok: true, spec };
     };
 
@@ -306,8 +327,9 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
     // applies it in single player: winEncounter / flee / wipe. The fight's XP
     // pool goes into the ledger (single player pays it from CombatScene; here
     // each save pays its own hunters' share, 12d), and so do the fallen.
-    unsubs.push(client.on('over', (msg) => {
-      if (!msg?.hunt) return;
+    unsubs.push(client.on('over', (msg) => applyOver(msg)));
+    function applyOver(msg) {
+      if (!msg?.hunt || !ch.hunt) return;
       ch.fighting = null;
       applyVitals(msg.vitals);
       const o = msg.huntOutcome || {};
@@ -323,7 +345,25 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
       }
       publish();
       emit('fightOver', msg);
-    }));
+    }
+
+    // ── A host coming back (chunk 12d): the hunt was in this save (its
+    // record), and the server kept the newest snapshot, which is what the
+    // guests have; the host carries on from it, with its version. A fight the
+    // server is still running is joined; one that ended while the host was
+    // away is applied now (the server re-sends it until the next snapshot).
+    if (resume) {
+      const server = client.hunt;
+      const env = server?.snapshot?.v === COOP_SNAPSHOT_VERSION && server.version >= (resume.version || 0) ? server.snapshot : resume.env;
+      ch.version = Math.max(server?.version || 0, resume.version || 0);
+      ch.id = env.id;
+      ledger.splice(0, ledger.length, ...(env.ledger || []));
+      applyVitals(env.vitals);
+      ch.hunt = restoreMapHunt(env.hunt, world, { view: true });   // keep a pending encounter
+      endSent = !!ch.hunt.view().finished;
+      if (client.huntFight) ch.fighting = client.huntFight;
+      else if (client.lastOver?.fightVersion === ch.version && ch.hunt.view().encounter) applyOver(client.lastOver);
+    }
   }
 
   // ── Guest ───────────────────────────────────────────────────────────────────
@@ -337,6 +377,7 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
     lastEnv = env;
     ch.id = env.id || ch.id;
     ch.hunt = restoreMapHunt(env.hunt, guestWorld(party), { view: true });
+    remember(env);
     ledger.splice(0, ledger.length, ...(env.ledger || []));
     emit('changed', ch.view());
   }
@@ -344,8 +385,10 @@ export function createCoopHunt({ client, reads = null, target = null } = {}) {
   if (!ch.isHost) {
     const onState = (h) => { ch.version = h.version; applySnapshot(h.snapshot); };
     unsubs.push(client.on('huntState', onState));
-    // A snapshot that arrived before this was built (a resume, a slow scene).
+    // A snapshot that arrived before this was built (a resume, a slow scene),
+    // and a fight already on.
     if (client.hunt) onState(client.hunt);
+    if (client.huntFight) ch.fighting = client.huntFight;
 
     // A guest's move is a request; the host's next snapshot is the answer.
     ch.move = (tile) => {

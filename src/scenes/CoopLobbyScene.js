@@ -28,7 +28,7 @@ import CombatScene from './CombatScene.js';
 import { createCoopHunt } from '../systems/CoopHunt.js';
 import { GAME_WORLD } from '../systems/HuntManager.js';
 import { takeDeparture } from './overlays/HuntHubOverlay.js';
-import { gameTarget } from '../systems/CoopRewards.js';
+import { gameTarget, takeHomeFromRecord } from '../systems/CoopRewards.js';
 import { countInList, takeFromList } from '../systems/ItemStacks.js';
 import { rationPackCap } from '../systems/HuntRules.js';
 
@@ -78,6 +78,32 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // Rations this player brings to a hunt (COOP_EXPLORATION rule 2): the
     // host's were chosen on the Hunt screen; a guest picks them here.
     this.rations = this.huntDeparture?.rationsToPack || 0;
+    // Rejoining a co-op hunt this save was in (chunk 12d): its record,
+    // GameState.flags.coopActive, offered by the town after a reload.
+    this.resumeCoop = data.resumeCoop || null;
+  }
+
+  /**
+   * Rejoin the co-op hunt in this save's record: the same server, the same
+   * code, and the seat's own client id (a reload may be a new tab). If the
+   * lobby is gone -- or the seat -- this save takes the clean exit from the
+   * last snapshot it kept (rule 7), and the record is cleared.
+   */
+  async _resumeRecord() {
+    const rec = this.resumeCoop;
+    const node = this.serverInput?.getChildByName?.('server');
+    if (node && rec.serverUrl) node.value = rec.serverUrl;
+    try { await this._connect(); } catch { return this._say('Could not reach the server. Try again, or come back later.'); }
+    const gone = async (reason) => {
+      const sum = takeHomeFromRecord(rec, await gameTarget());
+      this.resumeCoop = null;
+      this._say(`That hunt is over (${reason}). You take home what the pack held${sum ? `: ${sum.huntPoints} Hunt Points, ${sum.items} finds, ${sum.rations} Rations` : ''}.`);
+    };
+    const off = this.client.on('error', (reason) => {
+      if (/no lobby with that code|already started|already connected/.test(reason)) { off(); gone(reason); }
+    });
+    this._unsubs.push(off);
+    this.client.joinLobby({ code: rec.code, name: this._playerName('Hunter'), hunters: [], clientId: rec.clientId });
   }
 
   /** The most Rations this player can bring: what the bag holds, within the
@@ -134,6 +160,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
       this.chosen.add(c.instanceId || c.id);
     }
     this._refresh();
+    // Rejoining a co-op hunt from this save's record (chunk 12d).
+    if (this.resumeCoop) { this._say('Rejoining your co-op hunt…'); this._resumeRecord(); }
 
     // Escape leaves, which is what a player reaches for first. Cleared on
     // shutdown so the binding cannot fire into a dead scene.
@@ -630,15 +658,22 @@ export default class CoopLobbyScene extends Phaser.Scene {
   async _enterHunt() {
     this._handingOff = true;
     const target = await gameTarget();
-    // A guest's pledged Rations leave their own bag now (decision 6); the
-    // host's leave with its departure below. What is left comes back split.
-    if (!this.client.isHost) {
+    const resumed = !!this.client.resumed;
+    // A returning player: the server sends the newest snapshot right after
+    // huntStarted; the hunt is built from it, so wait for it (briefly).
+    for (let i = 0; resumed && !this.client.hunt && i < 40; i++) await new Promise(r => setTimeout(r, 50));
+    // A guest's pledged Rations leave their own bag now (decision 6), once:
+    // not again on a rejoin. The host's leave with its departure below.
+    if (!this.client.isHost && !resumed) {
       const pledged = this.client.contributions?.[this.client.playerId] || 0;
       if (pledged > 0) takeFromList(GameState.inventory, 'rations', pledged);
       GameState.save('autosave');
     }
-    const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD, target });
-    if (coop.isHost && this.huntDeparture) {
+    // A host coming back carries on from this save's record (chunk 12d).
+    const rec = GameState.flags?.coopActive;
+    const resume = resumed && this.client.isHost && rec?.code === this.client.code ? rec : null;
+    const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD, target, resume });
+    if (coop.isHost && this.huntDeparture && !resume) {
       const { plan, supplies, bring } = takeDeparture(this.huntDeparture);
       coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring });
       // One write for the plan and the Rations spent (the co-op hunt itself
@@ -649,6 +684,9 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _enterFight() {
+    // A co-op HUNT's fight (a rejoin mid-fight) is the hunt's to open, from
+    // the map: CoopHunt holds it and the map scene enters it.
+    if (this.client.huntFight) return;
     // Marks the shutdown below as a HANDOFF rather than an exit, so the socket
     // survives into the fight.
     this._handingOff = true;
