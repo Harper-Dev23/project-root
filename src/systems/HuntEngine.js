@@ -1177,7 +1177,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         if (band === 'nothing') delete s.sightings[occ.id];
         else s.sightings[occ.id] = { tile: occ.tile, band, at: now };
         // Unmask: identified while hidden past 100 (occupant + ground).
-        if (band === 'identified' && !s.unmasked.includes(occ.id) && occupantConcealment(s.map, occ) > 100) s.unmasked.push(occ.id);
+        // The apex is identified by rule, not by Perception (occupantBand), so it never counts.
+        if (band === 'identified' && !occ.apex && !s.unmasked.includes(occ.id) && occupantConcealment(s.map, occ) > 100) s.unmasked.push(occ.id);
       }
       return range;
     },

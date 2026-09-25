@@ -166,8 +166,13 @@ export function betterBand(a, b) {
 }
 
 /** Detection band for an occupant where it stands (its own concealment plus
- *  the ground's, occupantConcealment). */
+ *  the ground's, occupantConcealment). The region's apex is never hidden
+ *  (chunk 13c): its lair gives it away, so it is identified whenever its tile
+ *  is in sight. Before this it was placed as a lone Great beast, the
+ *  stealthiest composition, and was out of a starting party's Detection on
+ *  most maps (Apex hunts completed 25-30%, measured by huntsim). */
 export function occupantBand(map, occ, perception) {
+  if (occ.apex) return 'identified';
   return detectionBand(perception, occupantConcealment(map, occ));
 }
 

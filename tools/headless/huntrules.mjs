@@ -64,7 +64,7 @@ const { createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt } = a
 const { createMapHunt, restoreMapHunt } = (await import('./walkAway.js')).walkingAway({ createMapHunt: rawCreateMapHunt, restoreMapHunt: rawRestoreMapHunt });
 const R = await import('../../src/systems/HuntRules.js');
 const { partyStats } = await import('../../src/systems/PartyStats.js');
-const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+const { mapNeighbors, occupantConcealment: HMG_conceal } = await import('../../src/systems/HuntMapGen.js');
 const { tileCosts, isPassable, GROUNDS } = await import('../../data/grounds.js');
 const { tileId } = await import('../../src/systems/HexGrid.js');
 const { makeRng } = await import('../../src/systems/seededRng.js');
@@ -96,6 +96,47 @@ console.log('=== rules on hand-built inputs ===');
   check('Detection: at the concealment -> identified', R.detectionBand(P, P) === 'identified');
   check(`Detection: ${R.SENSED_MARGIN} below -> sensed`, R.detectionBand(P, P + R.SENSED_MARGIN) === 'sensed');
   check(`Detection: ${R.SENSED_MARGIN + 1} below -> nothing`, R.detectionBand(P, P + R.SENSED_MARGIN + 1) === 'nothing');
+
+  // Chunk 13c: the apex is never hidden. On real apex maps, Perception 0
+  // identifies the apex wherever it stands, while any other occupant on the
+  // same map with a concealment is not identified at 0.
+  let apexMaps = 0, apexOk = 0, othersOk = true, hiddenApex = null;
+  for (let k = 0; k < 40; k++) {
+    const zoneId = ZONES[k % 2];
+    const hh = rawCreateMapHunt(zoneId, { plan: { objective: 'apex', size: SIZES[k % 3] }, supplies: 60, seed: 4200 + k }, recordingWorld(makeParty()));
+    const map = hh.getState().map;
+    const apex = map.occupants.find(o => o.apex);
+    apexMaps++;
+    if (apex && R.occupantBand(map, apex, 0) === 'identified') apexOk++;
+    for (const o of map.occupants) if (!o.apex && o.kind !== 'event' && HMG_conceal(map, o) > 0 && R.occupantBand(map, o, 0) === 'identified') othersOk = false;
+    if (!hiddenApex && apex && HMG_conceal(map, apex) > 100) hiddenApex = { zoneId, seed: 4200 + k, size: SIZES[k % 3] };
+  }
+  check('the apex is identified at Perception 0 on every apex map (13c)', apexOk === apexMaps, `${apexOk}/${apexMaps}`);
+  check('...and nothing else with any concealment is', othersOk);
+  // A sighted apex hidden past 100 by its ground must not count for Unmask
+  // (a cult band's bonus objective): walk until it is in sight, never onto it.
+  if (hiddenApex) {
+    const hh = rawCreateMapHunt(hiddenApex.zoneId, { plan: { objective: 'apex', size: hiddenApex.size }, supplies: 400, seed: hiddenApex.seed }, recordingWorld(makeParty()));
+    const apexId = hh.getState().map.occupants.find(o => o.apex).id;
+    for (let i = 0; i < 200 && !hh.getState().sightings[apexId]; i++) {
+      const st = hh.getState();
+      const at = st.map.occupants.find(o => o.id === apexId).tile;
+      const prev = new Map([[st.pos, null]]); const q = [st.pos]; let step = null;
+      for (let j = 0; j < q.length && !step; j++) for (const n of mapNeighbors(st.map, q[j])) {
+        if (prev.has(n) || !isPassable(st.map.tiles[n]) || n === at) continue;
+        prev.set(n, q[j]); q.push(n);
+        if (mapNeighbors(st.map, n).includes(at)) { let a = n; while (prev.get(a) !== st.pos) a = prev.get(a); step = a; break; }
+      }
+      if (!step) break;
+      const r = hh.move(step);
+      if (hh.view().event) hh.leaveEvent();
+      if (hh.encounter()) hh.winEncounter();   // fights are free wins here, as in solve()
+      if (!r.ok) break;
+    }
+    const st = hh.getState();
+    check('an apex hidden past 100 by its ground is identified in sight and does not count for Unmask',
+      st.sightings[apexId]?.band === 'identified' && !st.unmasked.includes(apexId), JSON.stringify(hiddenApex));
+  } else check('found an apex map with the apex hidden past 100 (for the Unmask case)', false);
   golden.constants = {
     BASE_SIGHT_RANGE: R.BASE_SIGHT_RANGE, SENSED_MARGIN: R.SENSED_MARGIN,
     MIN_MOVE_COST_SHARE: R.MIN_MOVE_COST_SHARE, PHASE_UNITS: R.PHASE_UNITS, SCOUT_TIME: R.SCOUT_TIME,

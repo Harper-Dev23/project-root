@@ -698,7 +698,10 @@ const report = {
   meta: { at: new Date().toISOString(), args, seeds, seedBase, rations, zones: zoneIds, sizes, objectives, levels, partySizes, policies, ms: elapsed },
   cells, bySizeLevel, bySizeObjective, byZone, pace,
 };
-if (opt('json')) { fs.writeFileSync(opt('json'), JSON.stringify(report, null, 1)); realLog('report written to ' + opt('json')); }
+// One line per row, so a committed report stays small and a before/after diff reads row by row.
+const compactJSON = (obj) => '{\n' + Object.entries(obj).map(([k, v]) => JSON.stringify(k) + ': '
+  + (Array.isArray(v) ? '[\n' + v.map(x => '  ' + JSON.stringify(x)).join(',\n') + '\n]' : JSON.stringify(v))).join(',\n') + '\n}\n';
+if (opt('json')) { fs.writeFileSync(opt('json'), compactJSON(report)); realLog('report written to ' + opt('json')); }
 
 if (opt('compare')) {
   const before = JSON.parse(fs.readFileSync(opt('compare'), 'utf8'));
