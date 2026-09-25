@@ -53,7 +53,11 @@ export async function startBrowser({ mode = 'webgl', port = 9333, outDir = path.
     ? ['--disable-gpu', '--disable-webgl', '--disable-webgl2', '--disable-3d-apis']
     : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
   const edge = spawn(EDGE, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${prof}`,
-    '--window-size=1280,720', '--hide-scrollbars', '--mute-audio', '--autoplay-policy=no-user-gesture-required', ...flags, 'about:blank'],
+    '--window-size=1280,720', '--hide-scrollbars', '--mute-audio', '--autoplay-policy=no-user-gesture-required',
+    // Two pages at once (coophunt.mjs): a background tab gets no animation
+    // frames, and Phaser stops. Harmless with one page.
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
+    ...flags, 'about:blank'],
     { stdio: 'ignore' });
 
   let targets;
@@ -62,7 +66,31 @@ export async function startBrowser({ mode = 'webgl', port = 9333, outDir = path.
     await sleep(200);
   }
   const page = targets.find(t => t.type === 'page');
-  const ws = new WebSocket(page.webSocketDebuggerUrl);
+  const driver = await pageDriver(page.webSocketDebuggerUrl, { gameUrl, outDir, prefix });
+
+  const close = async () => {
+    await driver.send('Browser.close').catch(() => {});
+    edge.kill();
+    server.close();
+  };
+
+  /**
+   * A SECOND page in the same browser (chunk 12c: two players, one browser,
+   * which the owner's RAM allows). Same driver, its own screenshot prefix.
+   * Pages share the profile, so they share localStorage: give each its own
+   * party in memory, not through the save.
+   */
+  const openPage = async (pagePrefix) => {
+    const t = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
+    return pageDriver(t.webSocketDebuggerUrl, { gameUrl, outDir, prefix: pagePrefix });
+  };
+
+  return { ...driver, mode, outDir, close, openPage, gameUrl };
+}
+
+/** Drive one page over the DevTools protocol (the helpers every check uses). */
+async function pageDriver(wsUrl, { gameUrl, outDir, prefix }) {
+  const ws = new WebSocket(wsUrl);
   await new Promise(r => ws.addEventListener('open', r, { once: true }));
   let nextId = 1;
   const pending = new Map();
@@ -74,6 +102,8 @@ export async function startBrowser({ mode = 'webgl', port = 9333, outDir = path.
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
   });
   const send = (method, params = {}) => new Promise((res, rej) => { const id = nextId++; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params })); });
+  // Every page behaves as if focused, so a second page never pauses the first.
+  await send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
   const evaluate = async (expr) => {
     const r = await send('Runtime.evaluate', { expression: `(async () => { ${expr} })()`, awaitPromise: true, returnByValue: true });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
@@ -158,11 +188,5 @@ export async function startBrowser({ mode = 'webgl', port = 9333, outDir = path.
   const checks = [];
   const check = (label, ok, detail = '') => { checks.push({ label, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '   ' + detail : ''}`); };
 
-  const close = async () => {
-    await send('Browser.close').catch(() => {});
-    edge.kill();
-    server.close();
-  };
-
-  return { mode, outDir, send, evaluate, shot, click, hover, key, loadGame, bootToTown, findText, clickText, check, checks, errors, close, sleep };
+  return { send, evaluate, shot, click, hover, key, loadGame, bootToTown, findText, clickText, check, checks, errors, sleep };
 }

@@ -41,6 +41,16 @@
 // TEST "Win" button of chunk 8 is gone (owner decision 7). A fight in a
 // sandboxed dev hunt still uses the REAL party (CombatScene fights
 // GameState.party), so its XP and HP are real; only the hunt is sandboxed.
+//
+// ── Co-op (chunk 12c) ──────────────────────────────────────────────────────
+// Opened with `coop` (a CoopHunt, from CoopLobbyScene.openCoopHunt) instead
+// of `hunt`, this draws the co-op hunt: `this.hunt` is coop.field(), which
+// looks like a hunt to everything below. On the host every action runs on the
+// real hunt and is published; a guest's move is sent to the host, and every
+// other action is refused with the reason. The map redraws on each snapshot.
+// Fight hands everyone to the same server fight; "Back to the Hunt" reopens
+// this on the same CoopHunt. Nothing here saves: the host's hunt is not in the
+// save yet, and what the hunt earns is in its ledger (applied in 12d).
 
 import { wakeTown } from '../../ui/townInput.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
@@ -116,7 +126,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
   }
 
   init(data) {
-    this.hunt = data?.hunt || null;
+    this.coop = data?.coop || null;
+    this.hunt = this.coop ? this.coop.field() : (data?.hunt || null);
+    this._coopUnsubs = [];
     this.onDone = typeof data?.onDone === 'function' ? data.onDone : null;
     this.onAction = typeof data?.onAction === 'function' ? data.onAction : null;
     this.onFinished = typeof data?.onFinished === 'function' ? data.onFinished : null;
@@ -164,6 +176,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this.mapZone.on('pointerout', () => this.hoverGfx?.clear());
 
     this.events.once('shutdown', () => {
+      for (const off of this._coopUnsubs.splice(0)) { try { off(); } catch { } }
       this.mapZone?.off('pointermove', this._onPointerMove);
       this.mapZone?.off('pointerdown', this._onPointerDown);
       if (this._dialogueTimer) this._dialogueTimer.remove(false);
@@ -175,8 +188,62 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this.add.text(640, 360, 'No hunt to show.', { fontFamily: FONT, fontSize: '22px', color: '#e0e0e0' }).setOrigin(0.5);
       return;
     }
+    if (this.coop) this._wireCoop();
+    if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.selected = this.hunt.view().pos;
     this._refresh();
+  }
+
+  /** Listen to the co-op hunt: every change redraws; a fight takes everyone
+   *  to it; a refusal or a teammate's move is said in the dialogue bar. */
+  _wireCoop() {
+    const c = this.coop;
+    this._coopUnsubs.push(
+      c.on('changed', () => {
+        if (!this.hunt.view()) return;
+        if (!this.selected) this.selected = this.hunt.view().pos;
+        this._refresh();
+      }),
+      c.on('fight', (spec) => this._enterCoopFight(spec)),
+      c.on('ended', () => this._refresh()),
+      c.on('refused', (reason) => this._say(`Cannot: ${reason}.`)),
+      c.on('moved', (m) => this._say(`${m.name} moved the party.`)),
+    );
+  }
+
+  /** A guest's map before the host's first snapshot has arrived. */
+  _drawWaiting() {
+    if (this.layer) this.layer.destroy(true);
+    this.layer = this.add.container(0, 0).setDepth(1);
+    this.layer.add(this.add.text(640, 360, this.coop?.ended ? 'The hunt is over.' : 'Waiting for the host…',
+      { fontFamily: FONT, fontSize: '22px', color: '#e0e0e0' }).setOrigin(0.5));
+    const b = createButton(this, 640, 420, 'Leave', () => this._close(), 'danger');
+    this.layer.add(b);
+  }
+
+  /**
+   * The host started the fight (a co-op hunt, chunk 12c): everyone goes to
+   * the same server fight. `reopen` brings this map back on the same hunt.
+   */
+  _enterCoopFight(spec) {
+    const coop = this.coop;
+    const client = coop.client;
+    SoundManager.play('select');
+    this.scene.stop();
+    window.sceneManager.loadScene('CombatScene', spec.ambush ? 'Ambush!' : 'The hunt turns to a fight!', {
+      mode: 'coop',
+      coopClient: client,
+      coopHunt: coop,
+      scenarioId: spec.scenario.id,
+      gearSeed: client.gearSeed ?? null,
+      huntFight: {
+        ...spec,
+        reopen: (scene) => {
+          scene.scene.launch('HuntFieldOverlay', { coop, onDone: () => coop.leave() });
+          scene.scene.bringToTop('UIScene');
+        },
+      },
+    });
   }
 
   /** Keep the town asleep under the map: an overlay closing over the hunt
@@ -191,6 +258,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
   _refresh() {
     this._panelRect = null;
+    if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.v = this.hunt.view();
     const v = this.v;
     if (this.selected && !v.layout.includes(this.selected)) this.selected = v.pos;
@@ -202,7 +270,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._drawMarkers();
     this._drawHUD();
     this._announceBoon();
-    if (v.finished) this._drawFinished();
+    if (v.finished || this.coop?.ended) this._drawFinished();
     else if (this._eventResult) this._drawEventResult();
     else if (v.encounter) this._drawEncounter();
     else if (v.event) this._drawEvent();
@@ -426,7 +494,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // Where and what.
     const zone = getZone(v.zoneId);
     const sizeName = MAP_SIZES[v.plan.size]?.name || v.plan.size;
-    txt(x + 12, y + 5, `${zone?.name || v.zoneId}`, 15, '#f2e6c8');
+    txt(x + 12, y + 5, `${zone?.name || v.zoneId}${this.coop ? (this.coop.isHost ? ' · co-op (host)' : ' · co-op') : ''}`, 15, '#f2e6c8');
     const sec = v.sections > 1 ? ` · Section ${v.section + 1} of ${v.sections}` : '';
     txt(x + 12, y + 25, `${sizeName} · ${v.weather?.name || ''}${sec}`, 12, '#a8b0bc');
 
@@ -510,6 +578,13 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this.scene.bringToTop('PartyManagementScene');
     }, 'primary', { fontSize: '14px' });
     this.layer.add(partyBtn);
+  }
+
+  /** A co-op guest leaves (the host goes on; the host leaves by the hunt's exit). */
+  _confirmLeaveCoop() {
+    const ui = this._uiScene();
+    if (ui?.showConfirmationDialogue) ui.showConfirmationDialogue('Leave this co-op hunt? The host goes on without you.', () => { ui.resetBottomBar(); this._close(); });
+    else this._close();
   }
 
   /** A small text panel; returns its container. */
@@ -637,8 +712,17 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const move = v.moves.find(m => m.tile === id);
     const own = id === v.pos;
 
-    // Buttons for this tile.
+    // Buttons for this tile. A co-op guest only moves (chunk 12 decision 3):
+    // everything else is the host's, so it is said rather than offered, and
+    // leaving the co-op hunt takes the place of the actions.
     const acts = [];
+    if (this.coop && !this.coop.isHost) {
+      if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._act('move', () => this.hunt.move(id))]);
+      if (own) {
+        lines.push('The host forages, camps and chooses; you can move the party.');
+        acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
+      }
+    } else {
     if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._act('move', () => this.hunt.move(id))]);
     if (occ && !occ.exact && v.fog[id] === 'visible') acts.push([`Scout (${SCOUT_TIME} time)`, () => this._act('scout', () => this.hunt.scout(occ.id))]);
     if (own) {
@@ -652,6 +736,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       acts.push([`Camp… (${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
       if (t?.ground === 'blight') acts.push([`Cleanse (${CLEANSE_TIME} time)`, () => this._act('cleanse', () => this.hunt.cleanse())]);
       if (t?.exit) acts.push(['Leave the hunt', () => this._confirmExit(), 'danger']);
+    }
     }
 
     const width = 300;
@@ -809,8 +894,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     ty = this._panelLines(p, ty, lines);
     ty += 10;
     // Fleeing is done from inside the fight (chunk 9c, decision 8), where the
-    // enemy's free round is played: the panel only starts it.
-    this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
+    // enemy's free round is played: the panel only starts it. In a co-op hunt
+    // the host starts it for everyone.
+    if (this.coop && !this.coop.isHost) this._panelText(p, p.px + 10, ty + 4, 'Waiting for the host to fight.', 14, '#e8c66a');
+    else this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
   }
 
   /**
@@ -936,6 +1023,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * saved with the encounter pending, so a reload mid-fight is a flee.
    */
   _fight() {
+    if (this.coop) {
+      // The server runs it; everyone is taken there by the 'fight' event.
+      const res = this.coop.fight();
+      if (!res?.ok) this._say(res?.reason ? `Cannot: ${res.reason}.` : 'Cannot fight.');
+      return;
+    }
     // beginFight (chunk 9c) is fightSpec plus the party's "next fight" food
     // buff, which it uses up: so the hunt is saved before the fight starts.
     const spec = this.hunt.beginFight();
@@ -1020,6 +1113,19 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
   _drawFinished() {
     const v = this.v;
+    const ended = this.coop?.ended;
+    if (ended && !v.finished) {
+      // A co-op hunt ended for us without the hunt finishing: the host left.
+      const lines = ended.reason === 'host_gone'
+        ? ['The host has been gone too long. The hunt ends here.', 'For you this is a clean exit: what the pack held is yours.']
+        : ['The hunt is over.'];
+      const width = 380, height = 60 + this._linesHeight(lines, 380) + 50;
+      const p = this._sidePanel(null, width, height);
+      this._panelText(p, p.px + 10, p.py + 8, 'The hunt is over', 18, '#f2e6c8');
+      const ty = this._panelLines(p, p.py + 38, lines);
+      this._panelButton(p, p.px + width / 2, ty + 24, 'Return to camp', () => this._close(), 'confirm');
+      return;
+    }
     const exitLog = [...v.log].reverse().find(l => l.kind === 'exit' || l.kind === 'wipe');
     const lines = v.finished === 'exit'
       ? [`You left the hunt on day ${v.clock.day}.`, `Hunt Points: ${exitLog?.huntPoints ?? 0}.`,

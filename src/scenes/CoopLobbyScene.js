@@ -3,9 +3,13 @@
 // The co-op lobby: connect to a server, host or join by code, choose which of
 // your hunters to bring, and start the fight.
 //
-// Scoped to TRAINING scenarios on purpose. The exploration/hunt gate will want
-// its own entry point later, but nothing here assumes exploration exists, and
-// the shared party of six is the game's own existing party cap rather than a
+// Two kinds of lobby. A TRAINING lobby is one pit fight. A HUNT lobby (chunk
+// 12c) is a co-op map hunt: the host arrives from the Hunt screen's "Depart
+// with friends" carrying the region, plan and Rations it chose there; guests
+// join the same way as for training. When the host starts it, the host's
+// departure is spent (takeDeparture) and the map opens for everyone, run by
+// CoopHunt: the host's game runs the hunt, the server runs its fights. The
+// shared party of six is the game's own existing party cap rather than a
 // multiplayer invention.
 //
 // The scene holds no rules. Whether an action is legal, whose turn it is and
@@ -21,6 +25,9 @@ import { createCoopClient, CoopStatus } from '../systems/CoopClient.js';
 import { toWireCharacter } from '../systems/CoopWire.js';
 import { GameplaySettings } from '../systems/GameplaySettings.js';
 import CombatScene from './CombatScene.js';
+import { createCoopHunt } from '../systems/CoopHunt.js';
+import { GAME_WORLD } from '../systems/HuntManager.js';
+import { takeDeparture } from './overlays/HuntHubOverlay.js';
 
 const SERVER_KEY = 'coop_server_url';
 // The last lobby this browser was seated in, for reconnecting after a crash.
@@ -59,6 +66,14 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this._handingOff = false;
     this.wantPublic = false;      // private unless the host opts in
     this.browsing = false;
+    // A hunt lobby's host: { zoneId, plan, rationsToPack, label } from the
+    // Hunt screen. Null for training, and for every guest.
+    this.huntDeparture = data.huntDeparture || null;
+  }
+
+  /** Is this lobby (the one we are in, or the one we would host) a hunt? */
+  get isHuntLobby() {
+    return this.client?.lobby ? this.client.lobby.mode === 'hunt' : !!this.huntDeparture;
   }
 
   create() {
@@ -78,7 +93,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       // so nothing can reach a scene behind this one.
       .setInteractive();
 
-    this.add.text(width / 2, 44, 'CO-OP TRAINING', {
+    this.titleText = this.add.text(width / 2, 44, this.huntDeparture ? 'CO-OP HUNT' : 'CO-OP TRAINING', {
       ...FONTS.heading, color: MENU_THEME.titleColor,
     }).setOrigin(0.5);
 
@@ -360,7 +375,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _buildFooter(width, height) {
-    this.add.text(width / 2, 528, 'FIGHT',
+    this.footerCaption = this.add.text(width / 2, 528, 'FIGHT',
       { ...FONTS.muted, fontSize: '12px', color: '#7d838d' }).setOrigin(0.5);
     this.scenarioText = this.add.text(width / 2, 552,
       '', { ...FONTS.body, fontSize: '20px', color: MENU_THEME.titleColor }).setOrigin(0.5);
@@ -474,6 +489,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       this.client.on('error', reason => this._say(reason)),
       this.client.on('closed', () => this._say('Disconnected from the server.')),
       this.client.on('started', () => this._enterFight()),
+      this.client.on('huntStarted', () => this._enterHunt()),
       this.client.on('lobbies', (list) => {
         this._browseList = list;
         this.browsing = true;
@@ -502,6 +518,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.client.createLobby({
       name: this._playerName('Host'),
       scenarioId: this.scenarioId,
+      mode: this.huntDeparture ? 'hunt' : 'pit',
+      label: this.huntDeparture?.label || '',
       hunters: this._hunters(),
       // The host's combat speed paces the recording for the whole hunt, so
       // everyone watches the same fight at the same rate.
@@ -573,6 +591,26 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.scene.get('UIScene')?.refreshUI?.();
   }
 
+  /**
+   * The hunt has started (a hunt lobby). The host spends its departure (the
+   * plan and packed Rations, exactly as a solo Depart does) and begins the
+   * hunt over everyone's hunters; a guest waits for the host's first
+   * snapshot. Everyone then goes to the map, over the town, with the socket
+   * handed to the hunt.
+   */
+  _enterHunt() {
+    this._handingOff = true;
+    const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD });
+    if (coop.isHost && this.huntDeparture) {
+      const { plan, supplies, bring } = takeDeparture(this.huntDeparture);
+      coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring });
+      // One write for the plan and the Rations spent (the co-op hunt itself
+      // is not in the save: 12d).
+      GameState.save('autosave');
+    }
+    openCoopHunt(this, coop);
+  }
+
   _enterFight() {
     // Marks the shutdown below as a HANDOFF rather than an exit, so the socket
     // survives into the fight.
@@ -597,8 +635,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     const inLobby = !!this.client?.playerId;
 
     const scenario = COMBAT_SCENARIOS[lobby?.scenarioId || this.scenarioId];
-    this.scenarioText.setText(scenario?.name || this.scenarioId);
-    const canPick = !inLobby || this.client.isHost;
+    const hunt = this.isHuntLobby;
+    this.titleText?.setText(hunt ? 'CO-OP HUNT' : 'CO-OP TRAINING');
+    this.footerCaption?.setText(hunt ? 'HUNT' : 'FIGHT');
+    this.scenarioText.setText(hunt ? (lobby?.label || this.huntDeparture?.label || '') : (scenario?.name || this.scenarioId));
+    const canPick = (!inLobby || this.client.isHost) && !hunt;
     this.prevScenario.setVisible(canPick);
     this.nextScenario.setVisible(canPick);
 
@@ -674,7 +715,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       row.setVisible(showBrowse && !!e);
       if (!e) return;
       row.setText(`${e.code}   ${e.host}   ${e.used}/${e.limit}   ` +
-        (COMBAT_SCENARIOS[e.scenarioId]?.name || e.scenarioId));
+        (e.mode === 'hunt' ? `Hunt: ${e.label || '?'}` : (COMBAT_SCENARIOS[e.scenarioId]?.name || e.scenarioId)));
       row.setColor('#c8ccd4');
     });
     if (showBrowse) this.lobbyTitle.setText('Open hunts  (click one to join)');
@@ -693,4 +734,20 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
     this.startBtn.setVisible(!inLobby || this.client.isHost);
   }
+}
+
+/**
+ * Open the map for a co-op hunt (chunk 12c): wake the town (the map draws in
+ * its window, between the sidebars) and launch the map scene on the hunt.
+ * Leaving it closes the co-op hunt. Also how CombatScene reopens it after a
+ * fight (through huntFight.reopen).
+ */
+export function openCoopHunt(scene, coop) {
+  const sm = scene.scene;
+  if (sm.isActive('CoopLobbyScene') || sm.isSleeping('CoopLobbyScene')) sm.stop('CoopLobbyScene');
+  sm.wake('TownScene');
+  sm.wake('UIScene');
+  if (sm.isActive('HuntFieldOverlay') || sm.isPaused('HuntFieldOverlay')) sm.stop('HuntFieldOverlay');
+  sm.launch('HuntFieldOverlay', { coop, onDone: () => coop.leave() });
+  sm.bringToTop('UIScene');
 }

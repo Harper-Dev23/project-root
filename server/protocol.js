@@ -69,6 +69,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     t: 'lobby',
     code: lobby.code,
     mode: lobby.mode,
+    label: lobby.label,
     scenarioId: lobby.scenarioId,
     hostId: lobby.hostId,
     limit: PARTY_LIMIT,
@@ -212,6 +213,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         // with a fight on this server each time the party meets something.
         mode: msg.mode === 'hunt' ? 'hunt' : 'pit',
         hunt: null,
+        // What a hunt lobby is hunting, in words the host's game wrote
+        // ("Reeds of Gethsemane: Scout, Small"), for the guests and the list.
+        label: String(msg.label ?? '').slice(0, 120),
         hostId: playerId,
         players: [],
         session: null,
@@ -444,7 +448,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
     /** { t:'act', actor, skill, target } */
     act(conn, msg, lobby, player) {
-      if (!lobby.session) return fail(conn, 'the hunt has not started');
+      if (!lobby.session) return fail(conn, lobby.hunt ? 'there is no fight on' : 'the hunt has not started');
       const result = lobby.session.act(player.id, {
         actor: msg.actor, skill: msg.skill, target: msg.target,
         // A movement skill's destination. Only a finite slot id is passed on.
@@ -459,7 +463,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
     /** { t:'endTurn' } */
     endTurn(conn, msg, lobby, player) {
-      if (!lobby.session) return fail(conn, 'the hunt has not started');
+      if (!lobby.session) return fail(conn, lobby.hunt ? 'there is no fight on' : 'the hunt has not started');
       const result = lobby.session.endTurn(player.id);
       if (!result.ok) return fail(conn, result.reason);
       pushResult(lobby, result);
@@ -589,6 +593,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         .map(l => ({
           code: l.code,
           mode: l.mode,
+          label: l.label,
           scenarioId: l.scenarioId,
           host: l.players.find(p => p.id === l.hostId)?.name || '?',
           players: l.players.length,

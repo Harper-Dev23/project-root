@@ -136,7 +136,33 @@ export function createCoopHunt({ client, reads = null } = {}) {
 
     /** Stop listening (the lobby or the game is leaving the hunt). */
     dispose() { for (const off of unsubs.splice(0)) { try { off(); } catch { } } },
+
+    /** Leave the co-op hunt: stop listening and close the socket. */
+    leave() { ch.dispose(); try { client.disconnect(); } catch { } },
+
+    client,
+
+    /**
+     * The hunt as the map scene sees one (HuntFieldOverlay reads view() and
+     * acts through the engine's methods). Every action goes through act(), so
+     * the host publishes it and a guest is refused; move() is the one thing a
+     * guest may do. Built once, so the scene can key things by it.
+     */
+    field() {
+      if (fieldFacade) return fieldFacade;
+      fieldFacade = new Proxy({}, {
+        get(_, prop) {
+          if (prop === 'view') return () => ch.view();
+          if (prop === 'move') return (tile) => ch.move(tile);
+          if (prop === 'then' || typeof prop === 'symbol') return undefined;   // not a promise
+          return (...args) => ch.act(h => (typeof h[prop] === 'function'
+            ? h[prop](...args) : { ok: false, reason: `the hunt cannot ${String(prop)}` }));
+        },
+      });
+      return fieldFacade;
+    },
   };
+  let fieldFacade = null;
 
   // ── Both sides ──────────────────────────────────────────────────────────────
   unsubs.push(client.on('started', () => {

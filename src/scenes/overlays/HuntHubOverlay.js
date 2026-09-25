@@ -61,6 +61,24 @@ const DEATH_RULE_TEXT = {
   forsaken:  'Forsaken: a wipe loses everything in your pack.',
 };
 
+/**
+ * Spend a departure: the packed Rations come out of the camp bag (into the
+ * hunt pack, at risk from here) and a general plan is used up (the basic plan
+ * is free and was never in the bag). Returns what the hunt starts with: the
+ * plan's map inputs (base type -> objective and size, item level -> tier and
+ * rewards), the supplies, and what is brought. One definition for the solo
+ * Depart and the co-op host's start (CoopLobbyScene), so they cannot drift.
+ * The caller saves.
+ */
+export function takeDeparture({ plan, rationsToPack = 0 }) {
+  const packed = Math.max(0, Math.min(rationsToPack, countInList(GameState.inventory, 'rations'), rationPackCap(GameState.party)));
+  const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
+  const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
+  const view = huntPlanView(plan);
+  if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
+  return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring: rations ? [rations] : [] };
+}
+
 export default class HuntHubOverlay extends Phaser.Scene {
   constructor() {
     super({ key: 'HuntHubOverlay' });
@@ -230,7 +248,30 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
     this._renderPartyStats(left, modY + 102, width - 80, zone, plan);
 
-    this._button(x + width / 2, bottom - 50, 'Depart', () => this._depart(), 'confirm');
+    this._button(x + width / 2 - 110, bottom - 50, 'Depart', () => this._depart(), 'confirm');
+    // Co-op (chunk 12c): the same departure, taken into a co-op lobby. Nothing
+    // is spent until the hunt actually starts there (CoopLobbyScene).
+    this._button(x + width / 2 + 110, bottom - 50, 'Depart with friends', () => this._departWithFriends(), 'primary');
+  }
+
+  /**
+   * Open the co-op lobby as a HUNT lobby, carrying this departure: region,
+   * plan and Rations as chosen here. The lobby spends them (takeDeparture)
+   * only when the host starts the hunt, so backing out costs nothing.
+   */
+  _departWithFriends() {
+    if (!GameState.party?.length) return;
+    SoundManager.play('select');
+    const plan = this._plan();
+    const zone = getZone(this.zoneId);
+    const huntDeparture = {
+      zoneId: this.zoneId,
+      plan,
+      rationsToPack: this.rationsToPack,
+      label: `${zone?.name || this.zoneId}: ${getItemComputedData(plan).name}`,
+    };
+    this.scene.stop();
+    window.sceneManager.loadScene('CoopLobbyScene', 'Opening the lobby…', { huntDeparture });
   }
 
   /**
@@ -297,24 +338,11 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
   _depart() {
     SoundManager.play('select');
-    const packed = Math.min(this.rationsToPack, this._rationsInBag(), rationPackCap(GameState.party));
-    const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
-    // Out of the bag and into the pack: from here they are at risk.
-    const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
-    const plan = this._plan();
-    // Every new hunt is a hunt on the hex map (chunk 8c): the plan's base type
-    // sets the objective and the map size, its item level the tier implicit
-    // and the bonus rewards. The Advance loop only lives on in old saves.
-    const view = huntPlanView(plan);
-    HuntManager.startMap(this.zoneId, {
-      plan: { ...planMapInputs(view), itemLevel: view.itemLevel },
-      supplies, bring: rations ? [rations] : [],
-    });
+    // Every new hunt is a hunt on the hex map (chunk 8c). The Advance loop
+    // only lives on in old saves.
+    const { plan, supplies, bring } = takeDeparture({ plan: this._plan(), rationsToPack: this.rationsToPack });
+    HuntManager.startMap(this.zoneId, { plan, supplies, bring });
     this.rationsToPack = 0;
-
-    // A general plan is used up on departure; the basic plan is free and
-    // unlimited, and was never in the bag.
-    if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
     this.huntPlanInstance = null;
 
     // One write for the rations, the plan and the new hunt, so a reload can

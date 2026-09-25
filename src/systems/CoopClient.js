@@ -150,8 +150,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return true;
     },
 
-    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit' }) {
-      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode,
+    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit', label = '' }) {
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode, label,
         clientId: coopClientId() });
     },
     joinLobby({ code, name, hunters }) {

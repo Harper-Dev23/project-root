@@ -358,6 +358,9 @@ export default class CombatScene extends Phaser.Scene {
     // was real.
     this.isCoop = (this.combatType === 'coop');
     this.coopClient = data.coopClient || null;
+    // A co-op map hunt's controller (CoopHunt, chunk 12c), when this fight is
+    // one of its fights. It owns the socket across fights.
+    this.coopHunt = data.coopHunt || null;
     this.coopParty = [];        // every player's hunters, ours and theirs
     this._coopUnsubs = [];
     this.huntContext = data.huntContext || null; // { type: 'beast'|'cultist' }
@@ -508,7 +511,8 @@ export default class CombatScene extends Phaser.Scene {
     this._createActionMenu(layout.actionMenu.x, layout.actionMenu.y);
     this._createActionLights(layout.actionLights.x, layout.actionLights.y);
     this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
-    if (this.huntFight) this._createFleeButton(layout.endTurn.x, layout.endTurn.y - 60);
+    // In a co-op hunt only the host calls the retreat (chunk 12 decision 3).
+    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(layout.endTurn.x, layout.endTurn.y - 60);
     this._highlightCurrentTurn();
     this._createCombatLog();
     this._postLocalChatLines(this.localChatScript?.onCombatStart?.(this._buildLocalChatCtx()));
@@ -1793,6 +1797,10 @@ export default class CombatScene extends Phaser.Scene {
    * where the LOCAL SAVE is meant (_applyCoopRewards, the teardown sweep).
    */
   _party() {
+    // A co-op client's board is the shared roster, never this player's saved
+    // party (who may not even be in the fight): anything reached here on a
+    // client must not touch the save (chunk 12c).
+    if (this.isCoop) return this.coopParty || [];
     return this.hostParty || GameState.party || [];
   }
 
@@ -3561,6 +3569,8 @@ export default class CombatScene extends Phaser.Scene {
    */
   _startFlee() {
     if (!this.huntFight || this.combatEnded || this._fleeing) return;
+    // Co-op: the server plays the free round; the host asks for it.
+    if (this.isCoop) { this.coopClient?.flee(); return; }
     const actor = this._currentChar?.();
     if (!actor || actor.isEnemy) return;
     const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);
@@ -3603,6 +3613,7 @@ export default class CombatScene extends Phaser.Scene {
    * per-combat reset, which would otherwise wipe it.
    */
   _applyHuntFightStart() {
+    if (this.isCoop) return;   // the server puts it on (chunk 12c); a client only draws
     const standing = this._party().filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
     const buff = this.huntFight?.foodBuff;
     if (buff?.field && Number.isFinite(buff.amount)) {
@@ -3652,6 +3663,7 @@ export default class CombatScene extends Phaser.Scene {
    * hook every HP change passes through.
    */
   _checkFinalMercy() {
+    if (this.isCoop) return;   // capstones are the server's to run in co-op (chunk 12c)
     const cap = this.huntFight?.boon?.capstone;
     if (cap?.id !== 'final_mercy' || this._finalMercyUsed || this.combatEnded) return;
     const party = this._party().filter(Boolean);
@@ -3671,6 +3683,7 @@ export default class CombatScene extends Phaser.Scene {
    * killing blow on an enemy heals healPercent of their max HP.
    */
   _onHuntKill(killer, victim) {
+    if (this.isCoop) return;
     const cap = this.huntFight?.boon?.capstone;
     if (cap?.id !== 'what_waits_below' || !victim?.isEnemy || !this._party().includes(killer)) return;
     if (killer.status === 'incapacitated' || !(killer.currentHP > 0)) return;
@@ -3682,6 +3695,7 @@ export default class CombatScene extends Phaser.Scene {
 
   /** The Loop (Ezekiel's capstone, chunk 10b): a hunter's damaging hit may echo. */
   _boonEchoChance(user, result) {
+    if (this.isCoop) return 0;
     const cap = this.huntFight?.boon?.capstone;
     if (cap?.id !== 'the_loop' || !result || result.isHeal) return 0;
     if (!this._party().includes(user)) return 0;
@@ -5474,6 +5488,16 @@ export default class CombatScene extends Phaser.Scene {
 
     off.push(client.on('over', (msg) => {
       this.combatEnded = true;
+      if (msg.hunt) {
+        // A co-op MAP-HUNT fight (chunk 12c). Nothing is paid here: the
+        // host's hunt takes the outcome (CoopHunt) and every save-side effect
+        // rides in its ledger (12d). Every screen leads back to the map.
+        const back = { showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight?.reopen?.(this) };
+        if (msg.outcome === 'victory') this._showVictoryScreen('Victory!', [], null, msg.rewards?.loot || [], []);
+        else if (msg.outcome === 'fled') this._showDefeatScreen('Fled', 'You broke away. They will be hunting you.', back);
+        else this._showDefeatScreen('Defeat', 'The party fell. The hunt is over.', back);
+        return;
+      }
       if (msg.outcome === 'victory') {
         const earned = this._applyCoopRewards(msg);
         this._showVictoryScreen('Victory!', earned.xpSummary, earned.progressReward,
@@ -5508,8 +5532,9 @@ export default class CombatScene extends Phaser.Scene {
 
       // Leaving the fight ends the session. The lobby deliberately does NOT
       // close the socket when it hands off to this scene, so closing it here
-      // is what finally releases it.
-      this.coopClient?.disconnect();
+      // is what finally releases it. A co-op HUNT goes on after its fight:
+      // the socket belongs to the hunt (CoopHunt), which closes it.
+      if (!this.coopHunt) this.coopClient?.disconnect();
       this.coopClient = null;
     });
 
