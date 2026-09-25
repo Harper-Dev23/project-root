@@ -352,6 +352,36 @@ golden.mapsHash = hash.digest('hex');
 console.log(`    sha256 of all maps: ${golden.mapsHash}`);
 
 // =============================================================================
+console.log('=== pack size follows the danger (chunk 13c) ===');
+{
+  // Every Pack, every Alpha's followers and every Cull quarry pack on real
+  // maps sits inside its region's PACK_SIZE_BY_DANGER band, inside
+  // ENCOUNTERS' 4-8.
+  const { PACK_SIZE_BY_DANGER } = await import('../../data/huntMapGen.js');
+  let packs = 0, alphas = 0, culls = 0;
+  const bad = [];
+  for (const zoneId of Object.keys(ZONES).filter(id => ZONES[id].palette)) {
+    const band = PACK_SIZE_BY_DANGER.find(b => (ZONES[zoneId].danger || 1) <= b.maxDanger);
+    for (let k = 0; k < 100; k++) for (const objective of ['cull', 'scout', 'apex']) {
+      const m = Gen.generateHuntMap({ zoneId, objective, size: ['small', 'medium', 'large'][k % 3], seed: 31000 + k });
+      const cullFamily = m.objectives.primary.id === 'cull' ? m.objectives.primary.family : null;
+      for (const o of m.occupants) {
+        if (o.composition === 'pack') {
+          packs++; if (o.family === cullFamily) culls++;
+          if (o.roster.length < band.pack[0] || o.roster.length > band.pack[1]) bad.push(`${zoneId} ${o.id} pack of ${o.roster.length}`);
+        } else if (o.composition === 'alpha') {
+          alphas++;
+          const f = o.roster.length - 1;
+          if (f < band.alphaFollowers[0] || f > band.alphaFollowers[1]) bad.push(`${zoneId} ${o.id} alpha with ${f}`);
+        }
+      }
+    }
+  }
+  check('every pack, alpha and Cull quarry pack is within its danger band (4-8 overall)',
+    !bad.length && packs > 0 && alphas > 0 && culls > 0 && PACK_SIZE_BY_DANGER.every(b => b.pack[0] >= 4 && b.pack[1] <= 8),
+    bad.length ? bad.slice(0, 5).join('; ') : `${packs} packs (${culls} Cull quarry), ${alphas} alphas on 600 maps`);
+}
+
 console.log('=== the demand prefixes move the map (paired seeds, real generator) ===');
 {
   const N = 200;

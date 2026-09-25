@@ -262,17 +262,12 @@
  "favor": {
   "marked": {
    "grades": [
-    "yearling",
-    "yearling",
-    "yearling",
-    "yearling",
-    "yearling",
-    "yearling"
+    "grown"
    ],
-   "favor": 6,
-   "level": 1
+   "favor": 2,
+   "level": 0
   },
-  "followed": 7.5
+  "followed": 2.5
  },
  "explore": {
   "supply": [
@@ -308,8 +303,8 @@
    64
   ],
   "enemyTurn": [
-   126,
-   108
+   88,
+   75
   ]
  }
 }

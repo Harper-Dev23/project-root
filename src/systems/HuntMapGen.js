@@ -28,7 +28,7 @@
 import { neighbors, distance, tileId, parseTileId, fromOffset, inSectionBounds,
          SECTION_COLS, SECTION_ROWS } from './HexGrid.js';
 import { GROUNDS, RELIEF, FORAGE_YIELDING, tileCosts, isPassable } from '../../data/grounds.js';
-import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_WEIGHTS_BY_DANGER,
+import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_WEIGHTS_BY_DANGER, PACK_SIZE_BY_DANGER,
          COMPOSITIONS, OCCUPANT_CONCEALMENT, CULTIST_BAND, MARKED_SHARE, MAX_ATTEMPTS,
          UNMASK_MAX_CONCEALMENT } from '../../data/huntMapGen.js';
 import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
@@ -296,7 +296,7 @@ export const NEED_HANDLERS = {
         const need = obj.count - familyCount(ctx.map, obj.family, ctx.reach);
         const tile = ctx.pickTile({ noBlight: true, hostile: true, weight: 'encounter', family: obj.family });
         if (!tile) return ctx.fail(`no tile for ${obj.family}`);
-        const size = Math.max(4, Math.min(8, need));
+        const size = Math.max(ctx.packSize.pack[0], Math.min(ctx.packSize.pack[1], need));
         const grade = ctx.rollGrade();
         ctx.addBeast(tile, { family: obj.family, composition: 'pack',
           roster: Array.from({ length: size }, () => ({ type: obj.family, grade })), quarry: true });
@@ -635,9 +635,10 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
 
   const baseGrades = (GRADE_WEIGHTS_BY_DANGER.find(b => danger <= b.maxDanger) || GRADE_WEIGHTS_BY_DANGER.at(-1)).weights;
   const gradeWeights = shiftGrades(baseGrades, map.mods.gradeShiftPercent);
+  const packSize = PACK_SIZE_BY_DANGER.find(b => danger <= b.maxDanger) || PACK_SIZE_BY_DANGER.at(-1);
 
   const ctx = {
-    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0,
+    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0, packSize,
     stepDist: (a, b) => {
       const A = parseTileId(a), B = parseTileId(b);
       return A.section === B.section ? distance(A, B) : (entryDist.get(a) ?? 0) + (entryDist.get(b) ?? 0);
@@ -728,7 +729,7 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     if (rng() < (zone.cultistShare || 0)) { ctx.addCultists(tile); continue; }
     const fam = ctx.pickFamily(tile);
     const comp = pickWeighted(rng, comps);
-    ctx.addBeast(tile, { family: fam, composition: comp, roster: buildRoster(rng, comp, fam, ctx.rollGrade, gradeWeights) });
+    ctx.addBeast(tile, { family: fam, composition: comp, roster: buildRoster(rng, comp, fam, ctx.rollGrade, gradeWeights, packSize) });
   }
 
   // ── 3f. event sites, about one per 8 tiles ─────────────────────────────────
@@ -847,7 +848,7 @@ export function shiftGrades(weights, pct) {
 }
 
 /** A filler occupant's roster from its named composition (ENCOUNTERS). */
-function buildRoster(rng, comp, family, rollGrade, weights) {
+function buildRoster(rng, comp, family, rollGrade, weights, size) {
   const m = (grade) => ({ type: family, grade });
   switch (comp) {
     case 'lone': {
@@ -858,14 +859,14 @@ function buildRoster(rng, comp, family, rollGrade, weights) {
       return [m('prime'), ...Array.from({ length: randInt(rng, 2, 3) }, () => m('yearling'))];
     case 'alpha': {
       const lead = pickWeighted(rng, [['prime', weights.prime], ['great', weights.great]]);
-      return [m(lead), ...Array.from({ length: randInt(rng, 4, 6) }, () => m('grown'))];
+      return [m(lead), ...Array.from({ length: randInt(rng, ...size.alphaFollowers) }, () => m('grown'))];
     }
     case 'scourge':
       return Array.from({ length: randInt(rng, 6, 8) }, () => m('great'));
     case 'pack':
     default: {
       const g = rollGrade();
-      return Array.from({ length: randInt(rng, 4, 8) }, () => m(g));
+      return Array.from({ length: randInt(rng, ...size.pack) }, () => m(g));
     }
   }
 }

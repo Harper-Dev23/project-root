@@ -83,6 +83,21 @@ export const GRADE_WEIGHTS_BY_DANGER = [
 ];
 
 /**
+ * How many beasts a Pack holds, and how many Grown follow an Alpha, by the
+ * region's danger (chunk 13c). ENCOUNTERS' "packs are 4-8" is kept: danger
+ * sets where in that range a pack falls. Measured before this (huntsim,
+ * level 1-2 party of six at danger 1): packs of 7 lost 75% of fights, packs
+ * of 8 93%, packs of 4 3%. Read by HuntMapGen: buildRoster (filler packs and
+ * alphas) and the Cull objective's quarry packs (native_family).
+ */
+export const PACK_SIZE_BY_DANGER = [
+  { maxDanger: 2,  pack: [4, 5], alphaFollowers: [3, 4] },
+  { maxDanger: 5,  pack: [4, 6], alphaFollowers: [3, 5] },
+  { maxDanger: 7,  pack: [5, 7], alphaFollowers: [4, 6] },
+  { maxDanger: 10, pack: [5, 8], alphaFollowers: [4, 7] },
+];
+
+/**
  * Named compositions (ENCOUNTERS): an occupant is a roster of 1-8 members, each
  * with its own grade. `weight` is how often each is chosen for a filler pack;
  * Scourge only appears from `minDanger`. `concealment` is the occupant's own,

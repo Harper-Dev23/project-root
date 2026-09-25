@@ -1317,12 +1317,12 @@
   ]
  ],
  "walkHashes": {
-  "reeds_of_gethsemane/small": "5072d50db901f49e",
-  "reeds_of_gethsemane/medium": "75048ac29867e927",
-  "reeds_of_gethsemane/large": "69e6ee624c354c7b",
-  "bay_of_solace/small": "e90130a1b1430e8d",
-  "bay_of_solace/medium": "a47b6e65d8e24290",
-  "bay_of_solace/large": "6d20acf50b1148c9"
+  "reeds_of_gethsemane/small": "2e56b33ed1ab5edd",
+  "reeds_of_gethsemane/medium": "5a46cc9c1824d239",
+  "reeds_of_gethsemane/large": "445c19810db7c16b",
+  "bay_of_solace/small": "8a5e8669ca2fdfc8",
+  "bay_of_solace/medium": "4f1da8ce2698c0f1",
+  "bay_of_solace/large": "c8b920160c3003a6"
  },
  "walkStats": {
   "reeds_of_gethsemane/small": {
@@ -1331,7 +1331,7 @@
    "daysAtEnd": 12.24,
    "mapRevealed": 0.9859,
    "timePerMove": 2.3398,
-   "supplyPerMove": 2.1141,
+   "supplyPerMove": 2.1726,
    "contactsBy": {
     "identified": 8,
     "sensed": 34,
@@ -1344,7 +1344,7 @@
    "daysAtEnd": 11.52,
    "mapRevealed": 0.9082,
    "timePerMove": 2.2017,
-   "supplyPerMove": 2.0086,
+   "supplyPerMove": 2.0214,
    "contactsBy": {
     "identified": 12,
     "sensed": 45,
@@ -1355,9 +1355,9 @@
    "hunts": 25,
    "movesEach": 60,
    "daysAtEnd": 11.84,
-   "mapRevealed": 0.7996,
+   "mapRevealed": 0.7974,
    "timePerMove": 2.2769,
-   "supplyPerMove": 2.0416,
+   "supplyPerMove": 2.0513,
    "contactsBy": {
     "identified": 20,
     "sensed": 54,
@@ -1367,9 +1367,9 @@
   "bay_of_solace/small": {
    "hunts": 25,
    "movesEach": 60,
-   "daysAtEnd": 6.8,
+   "daysAtEnd": 6.92,
    "mapRevealed": 0.9881,
-   "timePerMove": 1.2791,
+   "timePerMove": 1.2931,
    "supplyPerMove": 1.3123,
    "contactsBy": {
     "identified": 43,
@@ -1380,9 +1380,9 @@
   "bay_of_solace/medium": {
    "hunts": 25,
    "movesEach": 60,
-   "daysAtEnd": 7.04,
+   "daysAtEnd": 7.08,
    "mapRevealed": 0.922,
-   "timePerMove": 1.3021,
+   "timePerMove": 1.3103,
    "supplyPerMove": 1.3086,
    "contactsBy": {
     "identified": 48,
@@ -1395,7 +1395,7 @@
    "movesEach": 60,
    "daysAtEnd": 6.8,
    "mapRevealed": 0.7055,
-   "timePerMove": 1.2765,
+   "timePerMove": 1.2792,
    "supplyPerMove": 1.2455,
    "contactsBy": {
     "identified": 46,
@@ -1416,31 +1416,31 @@
  },
  "naturalistExample": {
   "plain": {
-   "id": "o5",
+   "id": "o4",
    "band": "identified",
    "kind": "beast",
    "size": "several",
    "family": "wading_heron",
    "mark": "unmarked",
-   "topGrade": "prime",
-   "tile": "0:7,6",
+   "topGrade": "grown",
+   "tile": "0:3,7",
    "at": 0,
    "stale": false
   },
   "naturalist": {
-   "id": "o5",
+   "id": "o4",
    "band": "identified",
    "kind": "beast",
    "size": "several",
    "family": "wading_heron",
    "mark": "unmarked",
-   "topGrade": "prime",
+   "topGrade": "grown",
    "exact": true,
    "count": 5,
    "roster": [
     {
      "type": "wading_heron",
-     "grade": "prime"
+     "grade": "grown"
     },
     {
      "type": "wading_heron",
@@ -1459,8 +1459,8 @@
      "grade": "grown"
     }
    ],
-   "composition": "Alpha and pack",
-   "tile": "0:7,6",
+   "composition": "Pack",
+   "tile": "0:3,7",
    "at": 0,
    "stale": false
   }
@@ -2290,12 +2290,12 @@
   ]
  ],
  "mixedHashes": {
-  "reeds_of_gethsemane/small": "04b86b0443b15055",
-  "reeds_of_gethsemane/medium": "65daf3be4c71816a",
+  "reeds_of_gethsemane/small": "7fc8e546094de3d6",
+  "reeds_of_gethsemane/medium": "32b3fc4900181c7f",
   "reeds_of_gethsemane/large": "5a42e0ca0ca70e60",
   "bay_of_solace/small": "62509a4afd2c83d4",
-  "bay_of_solace/medium": "02fc2cf7c3fb5111",
-  "bay_of_solace/large": "79ba609f2ee29360"
+  "bay_of_solace/medium": "fdf6affca5305e16",
+  "bay_of_solace/large": "1a9f09b0afcd1c9b"
  },
  "mixedTallies": {
   "reeds_of_gethsemane/small": {
@@ -2883,9 +2883,9 @@
   "reeds_of_gethsemane/small": "d3136a3119acaed3",
   "reeds_of_gethsemane/medium": "9cb4f2d74125f148",
   "reeds_of_gethsemane/large": "02ec988a733a0f21",
-  "bay_of_solace/small": "ec4a5ea4b2b2d721",
+  "bay_of_solace/small": "c74039b4e3181b86",
   "bay_of_solace/medium": "6730eaadf3e0b5e2",
-  "bay_of_solace/large": "6aa1104caaad0160"
+  "bay_of_solace/large": "d75a87b71fe8d385"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {
@@ -2939,14 +2939,14 @@
    "wins": 40,
    "caughtAgain": 14,
    "cleansed": 218,
-   "trailsSeen": 1490,
+   "trailsSeen": 1489,
    "days": 606,
    "blightTiles": 158,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/small": {
-   "steps": 2539,
+   "steps": 2532,
    "encounters": 30,
    "ambush": 13,
    "byCause": {
@@ -2984,7 +2984,7 @@
    "stillHunting": 0
   },
   "bay_of_solace/large": {
-   "steps": 2550,
+   "steps": 2533,
    "encounters": 59,
    "ambush": 28,
    "byCause": {
@@ -2996,7 +2996,7 @@
    "wins": 34,
    "caughtAgain": 7,
    "cleansed": 239,
-   "trailsSeen": 1240,
+   "trailsSeen": 1239,
    "days": 606,
    "blightTiles": 146,
    "corrupted": 2,
@@ -3159,7 +3159,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 227,
-   "avgDay": 2.6667
+   "avgDay": 3.8333
   },
   "retrieve reeds_of_gethsemane/medium": {
    "runs": 6,
@@ -3189,7 +3189,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 4.8333
+   "avgDay": 4
   },
   "retrieve reeds_of_gethsemane/large": {
    "runs": 6,
@@ -3249,7 +3249,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 227,
-   "avgDay": 1.3333
+   "avgDay": 1.5
   },
   "retrieve bay_of_solace/medium": {
    "runs": 6,
@@ -3279,7 +3279,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 2.3333
+   "avgDay": 3.1667
   },
   "retrieve bay_of_solace/large": {
    "runs": 6,

@@ -34,10 +34,10 @@
     "pack": 43.9
    },
    "gradesPct": {
-    "yearling": 34,
-    "grown": 44.3,
-    "prime": 16.9,
-    "great": 4.8
+    "yearling": 35.5,
+    "grown": 41.2,
+    "prime": 17.8,
+    "great": 5.5
    },
    "waystonesPer100": 14,
    "swiftDeadlineDay": {
@@ -81,10 +81,10 @@
     "pack": 44.9
    },
    "gradesPct": {
-    "yearling": 30.3,
-    "grown": 33.4,
-    "prime": 26.4,
-    "great": 10
+    "yearling": 31.9,
+    "grown": 30.6,
+    "prime": 27.1,
+    "great": 10.4
    },
    "waystonesPer100": 8.8,
    "swiftDeadlineDay": {
@@ -112,28 +112,28 @@
    "blightPct": 2,
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 5,
-   "cultistPct": 24.7,
+   "cultistPct": 23.7,
    "eventSitesPerMap": 8,
    "forageSpotsPerMap": 51.7,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 2.6,
-    "marked": 55.9,
-    "unmarked": 41.6
+    "corrupted": 2.3,
+    "marked": 58.9,
+    "unmarked": 38.8
    },
    "compositionsPct": {
-    "alpha": 11.3,
-    "lone": 23,
-    "matriarch": 18.8,
-    "pack": 47
+    "alpha": 11.1,
+    "lone": 21.7,
+    "matriarch": 16.1,
+    "pack": 51
    },
    "gradesPct": {
-    "yearling": 34.2,
-    "grown": 45.8,
-    "prime": 15.3,
-    "great": 4.7
+    "yearling": 36.5,
+    "grown": 42.6,
+    "prime": 15.8,
+    "great": 5.1
    },
-   "waystonesPer100": 15.6,
+   "waystonesPer100": 18,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -159,28 +159,28 @@
    "blightPct": 40.1,
    "unreachablePocketPct": 0,
    "hostilesPerMap": 6,
-   "cultistPct": 24.1,
+   "cultistPct": 23.7,
    "eventSitesPerMap": 8,
    "forageSpotsPerMap": 32.64,
    "barrenPerMap": 16.55,
    "marksPct": {
-    "corrupted": 41.7,
-    "marked": 35.7,
-    "unmarked": 22.7
+    "corrupted": 39.7,
+    "marked": 38,
+    "unmarked": 22.4
    },
    "compositionsPct": {
-    "alpha": 12,
-    "lone": 23.4,
-    "matriarch": 19.3,
-    "pack": 45.3
+    "alpha": 11.8,
+    "lone": 22.3,
+    "matriarch": 17.8,
+    "pack": 48.1
    },
    "gradesPct": {
-    "yearling": 29.9,
-    "grown": 31.7,
-    "prime": 28.1,
-    "great": 10.3
+    "yearling": 30.4,
+    "grown": 30.8,
+    "prime": 28,
+    "great": 10.8
    },
-   "waystonesPer100": 15.6,
+   "waystonesPer100": 16.4,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -206,28 +206,28 @@
    "blightPct": 1.2,
    "unreachablePocketPct": 0.2,
    "hostilesPerMap": 8,
-   "cultistPct": 22.6,
+   "cultistPct": 21.8,
    "eventSitesPerMap": 11,
    "forageSpotsPerMap": 76.6,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 1.4,
-    "marked": 55,
-    "unmarked": 43.6
+    "corrupted": 1.3,
+    "marked": 57,
+    "unmarked": 41.8
    },
    "compositionsPct": {
-    "alpha": 12.2,
-    "lone": 24.9,
-    "matriarch": 19.2,
-    "pack": 43.6
+    "alpha": 11.6,
+    "lone": 23.8,
+    "matriarch": 18.8,
+    "pack": 45.8
    },
    "gradesPct": {
-    "yearling": 34.7,
-    "grown": 45.6,
-    "prime": 17.1,
-    "great": 2.5
+    "yearling": 36.7,
+    "grown": 42.5,
+    "prime": 17.9,
+    "great": 2.8
    },
-   "waystonesPer100": 19.2,
+   "waystonesPer100": 20,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 6,
@@ -253,28 +253,28 @@
    "blightPct": 28.4,
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 9,
-   "cultistPct": 23.6,
+   "cultistPct": 23.2,
    "eventSitesPerMap": 11,
    "forageSpotsPerMap": 56.55,
    "barrenPerMap": 28.53,
    "marksPct": {
-    "corrupted": 32.2,
-    "marked": 38.6,
-    "unmarked": 29.2
+    "corrupted": 31.5,
+    "marked": 40.5,
+    "unmarked": 28
    },
    "compositionsPct": {
-    "alpha": 11.9,
-    "lone": 21.4,
-    "matriarch": 19.7,
-    "pack": 46.9
+    "alpha": 11.6,
+    "lone": 20.8,
+    "matriarch": 18.6,
+    "pack": 49.1
    },
    "gradesPct": {
-    "yearling": 30,
-    "grown": 33,
-    "prime": 28.1,
-    "great": 9
+    "yearling": 30.7,
+    "grown": 30.2,
+    "prime": 29.4,
+    "great": 9.8
    },
-   "waystonesPer100": 18,
+   "waystonesPer100": 18.4,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 5,
@@ -317,10 +317,10 @@
     "pack": 50.2
    },
    "gradesPct": {
-    "yearling": 39.2,
-    "grown": 40.8,
-    "prime": 15,
-    "great": 5
+    "yearling": 40.8,
+    "grown": 37.7,
+    "prime": 15.9,
+    "great": 5.6
    },
    "waystonesPer100": 2.8,
    "swiftDeadlineDay": {
@@ -365,10 +365,10 @@
     "pack": 42.7
    },
    "gradesPct": {
-    "yearling": 25.5,
-    "grown": 32.1,
-    "prime": 27.4,
-    "great": 15
+    "yearling": 27.2,
+    "grown": 29.5,
+    "prime": 28.1,
+    "great": 15.2
    },
    "waystonesPer100": 5.6,
    "swiftDeadlineDay": {
@@ -397,28 +397,28 @@
    "blightPct": 1.8,
    "unreachablePocketPct": 0,
    "hostilesPerMap": 5,
-   "cultistPct": 19,
+   "cultistPct": 18.5,
    "eventSitesPerMap": 8,
    "forageSpotsPerMap": 51.02,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 2.7,
-    "marked": 56.9,
-    "unmarked": 40.4
+    "corrupted": 2.6,
+    "marked": 59.2,
+    "unmarked": 38.3
    },
    "compositionsPct": {
-    "alpha": 11,
-    "lone": 27.2,
-    "matriarch": 18.8,
-    "pack": 43.1
+    "alpha": 10.4,
+    "lone": 26.2,
+    "matriarch": 17.7,
+    "pack": 45.7
    },
    "gradesPct": {
-    "yearling": 37.7,
-    "grown": 42.1,
-    "prime": 16.7,
-    "great": 3.5
+    "yearling": 39.1,
+    "grown": 39.7,
+    "prime": 17.3,
+    "great": 3.9
    },
-   "waystonesPer100": 7.6,
+   "waystonesPer100": 8.8,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -445,26 +445,26 @@
    "blightPct": 40.6,
    "unreachablePocketPct": 0,
    "hostilesPerMap": 6,
-   "cultistPct": 18.7,
+   "cultistPct": 18.8,
    "eventSitesPerMap": 8,
    "forageSpotsPerMap": 32.89,
    "barrenPerMap": 16.68,
    "marksPct": {
-    "corrupted": 53,
-    "marked": 29.7,
-    "unmarked": 17.3
+    "corrupted": 50.5,
+    "marked": 32.8,
+    "unmarked": 16.7
    },
    "compositionsPct": {
-    "alpha": 13.3,
-    "lone": 23.7,
-    "matriarch": 20.4,
-    "pack": 42.6
+    "alpha": 12.5,
+    "lone": 22.7,
+    "matriarch": 19.2,
+    "pack": 45.6
    },
    "gradesPct": {
-    "yearling": 26.9,
-    "grown": 34.9,
-    "prime": 28.9,
-    "great": 9.3
+    "yearling": 28.5,
+    "grown": 31.6,
+    "prime": 29.5,
+    "great": 10.4
    },
    "waystonesPer100": 8.4,
    "swiftDeadlineDay": {
@@ -493,28 +493,28 @@
    "blightPct": 1.2,
    "unreachablePocketPct": 0.4,
    "hostilesPerMap": 7,
-   "cultistPct": 19.8,
+   "cultistPct": 18.6,
    "eventSitesPerMap": 10.96,
    "forageSpotsPerMap": 76.94,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 2,
-    "marked": 55.1,
-    "unmarked": 42.9
+    "corrupted": 1.9,
+    "marked": 56.8,
+    "unmarked": 41.3
    },
    "compositionsPct": {
-    "alpha": 13.7,
-    "lone": 21.7,
-    "matriarch": 18.9,
-    "pack": 45.7
+    "alpha": 12.9,
+    "lone": 22.1,
+    "matriarch": 18.6,
+    "pack": 46.4
    },
    "gradesPct": {
-    "yearling": 33.4,
-    "grown": 46.2,
-    "prime": 17.3,
-    "great": 3.1
+    "yearling": 35.2,
+    "grown": 42.8,
+    "prime": 18.5,
+    "great": 3.6
    },
-   "waystonesPer100": 14.4,
+   "waystonesPer100": 15.6,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -541,28 +541,28 @@
    "blightPct": 28.7,
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 8,
-   "cultistPct": 19.8,
+   "cultistPct": 19.5,
    "eventSitesPerMap": 11,
    "forageSpotsPerMap": 56.48,
    "barrenPerMap": 28.49,
    "marksPct": {
-    "corrupted": 42.7,
-    "marked": 32.6,
-    "unmarked": 24.6
+    "corrupted": 41.6,
+    "marked": 34.9,
+    "unmarked": 23.5
    },
    "compositionsPct": {
-    "alpha": 12.8,
-    "lone": 23,
-    "matriarch": 19.9,
-    "pack": 44.3
+    "alpha": 12,
+    "lone": 22.9,
+    "matriarch": 19,
+    "pack": 46.1
    },
    "gradesPct": {
-    "yearling": 27.8,
-    "grown": 35.4,
-    "prime": 27.7,
-    "great": 9.2
+    "yearling": 28.8,
+    "grown": 32,
+    "prime": 29.3,
+    "great": 9.9
    },
-   "waystonesPer100": 12.8,
+   "waystonesPer100": 14,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -571,15 +571,15 @@
    "retriedPct": 3.2
   }
  },
- "mapsHash": "4f9dca2c56e735f46d8582c01212f64082b373dac94d560844189386f052efb1",
+ "mapsHash": "cb23d03e6ac40a64fefaa88ea109c48b7b62dea56d27a8c224146b9bca7a2b86",
  "prefixEffects": {
   "teeming": [
    5,
    6
   ],
   "elder": [
-   18.9,
-   35.5
+   20.6,
+   37
   ],
   "lean": [
    49.93,
@@ -681,8 +681,8 @@
    "occupants": [
     "0:8,2 marked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 60)",
     "0:6,1 cultists x4",
-    "0:8,4 marked marsh_stalker Alpha and pack: great,grown,grown,grown,grown,grown,grown (roaming, concealment 40)",
-    "0:4,8 marked wading_heron Alpha and pack: great,grown,grown,grown,grown,grown,grown (roaming, concealment 80)",
+    "0:8,4 marked marsh_stalker Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 40)",
+    "0:4,8 marked wading_heron Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 80)",
     "0:3,2 cultists x3",
     "0:7,2 event riddle_stones",
     "0:2,8 event dagon_whisper",
@@ -754,10 +754,10 @@
    "occupants": [
     "0:1,5 marked marsh_stalker Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
     "0:4,4 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling (roaming, concealment 60)",
-    "0:2,4 unmarked marsh_stalker Pack: grown,grown,grown,grown,grown,grown,grown (roaming, concealment 100)",
-    "0:6,5 unmarked marsh_stalker Pack: prime,prime,prime,prime,prime,prime,prime,prime (roaming, concealment 60)",
+    "0:2,4 unmarked marsh_stalker Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
+    "0:6,5 unmarked marsh_stalker Pack: prime,prime,prime,prime,prime (roaming, concealment 60)",
     "0:-3,8 cultists x2",
-    "0:-2,6 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 80)",
+    "0:-2,6 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 80)",
     "0:8,3 unmarked wading_heron Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
     "0:0,3 unmarked marsh_stalker Matriarch and young: prime,yearling,yearling (rooted, concealment 100)",
     "0:4,6 event dagon_whisper",
@@ -835,7 +835,7 @@
    "occupants": [
     "0:2,5 marked tide_crab Pack: grown,grown,grown,grown,grown (roaming, concealment 40)",
     "0:1,7 cultists x2",
-    "0:6,3 marked shore_gull Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
+    "0:6,3 marked shore_gull Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
     "0:2,8 event bay_rising_tide",
     "0:4,6 event prophet_vigil",
     "0:7,4 event riddle_stones",
@@ -901,9 +901,9 @@
    "occupants": [
     "0:0,9 marked shore_gull Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
     "0:4,5 unmarked shore_gull Lone: yearling (roaming, concealment 60)",
-    "0:4,6 marked tide_crab Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
+    "0:4,6 marked tide_crab Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
     "0:1,6 unmarked shore_gull Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 40)",
-    "0:-1,10 unmarked shore_gull Alpha and pack: prime,grown,grown,grown,grown (roaming, concealment 40)",
+    "0:-1,10 unmarked shore_gull Alpha and pack: prime,grown,grown,grown (roaming, concealment 40)",
     "0:2,4 event rival_camp",
     "0:0,6 event bay_rising_tide",
     "0:6,4 event bay_lantern_glow",
@@ -985,7 +985,7 @@
    ],
    "occupants": [
     "1:3,4 marked shore_gull Pack: grown,grown,grown,grown,grown (roaming, concealment 60)",
-    "1:4,7 unmarked tide_crab Pack: yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
+    "1:4,7 unmarked tide_crab Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
     "1:4,3 unmarked tide_crab Pack: prime,prime,prime,prime (roaming, concealment 60)",
     "0:3,5 cultists x3",
     "1:3,6 unmarked tide_crab Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 40)",
