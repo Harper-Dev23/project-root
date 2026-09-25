@@ -254,8 +254,12 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
  * Rebuild a map hunt from serialize() output. Throws on anything it does not
  * recognise rather than half-restoring it. A fight in progress is not saved,
  * so a restored hunt with an encounter pending resolves it as a flee.
+ *
+ * `{ view: true }` is a co-op guest's copy (chunk 12c): the host's snapshot
+ * rebuilt only to be drawn. It keeps a pending encounter as it is, because
+ * the host is about to fight it; nothing but view() is ever called on it.
  */
-export function restoreMapHunt(data, world = GAME_WORLD) {
+export function restoreMapHunt(data, world = GAME_WORLD, { view = false } = {}) {
   if (!data || typeof data !== 'object') throw new Error('no map hunt data');
   if (data.v !== MAP_HUNT_STATE_VERSION) throw new Error(`unknown map hunt version ${data.v} (this build reads ${MAP_HUNT_STATE_VERSION})`);
   if (!getZone(data.zoneId)) throw new Error(`unknown hunt zone '${data.zoneId}'`);
@@ -310,7 +314,7 @@ export function restoreMapHunt(data, world = GAME_WORLD) {
   if (rest.vigil != null && typeof rest.vigil !== 'string') throw new Error('map hunt vigil is not readable');
   if (rest.boon.pact != null && !(FALSE_GODS[rest.boon.pact.god] && Number.isInteger(rest.boon.pact.level))) throw new Error('map hunt pact is not readable');
   const hunt = makeMapHunt(clone(rest), rngFromState(rngState), rngFromState(worldRngState), world);
-  if (rest.encounter && !rest.finished) hunt.flee({ reason: 'reload' });
+  if (rest.encounter && !rest.finished && !view) hunt.flee({ reason: 'reload' });
   return hunt;
 }
 

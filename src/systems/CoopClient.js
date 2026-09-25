@@ -57,6 +57,7 @@ export const CoopStatus = {
   CONNECTED: 'connected',
   LOBBY: 'lobby',
   FIGHTING: 'fighting',
+  HUNTING: 'hunting',     // a co-op map hunt, between fights (chunk 12c)
   ENDED: 'ended',
   CLOSED: 'closed',
 };
@@ -79,6 +80,10 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     roster: [],       // every player's hunters, from the 'started' message
     openLobbies: [],  // public lobbies, from the last browse()
     log: [],          // combat log accumulated across broadcasts
+    // A co-op map hunt (chunk 12c): the newest snapshot the host published,
+    // and the spec of the hunt fight in progress (null in a pit fight).
+    hunt: null,       // { version, snapshot }
+    huntFight: null,
     lastError: null,
 
     /** Subscribe. Returns an unsubscribe function. */
@@ -145,8 +150,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return true;
     },
 
-    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false }) {
-      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic,
+    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit' }) {
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode,
         clientId: coopClientId() });
     },
     joinLobby({ code, name, hunters }) {
@@ -177,6 +182,15 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       // position rather than a unit. Omitted for every other action.
       return client.send({ t: 'act', actor, skill, target, targetSlot });
     },
+
+    // ---- a co-op map hunt (server/README.md, "Hunt lobbies") ---------------
+    // The host's client runs the hunt; these only carry it (CoopHunt.js).
+    huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
+    move(tile, version) { return client.send({ t: 'move', tile, version }); },
+    huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },
+    huntFight(version, spec, vitals) { return client.send({ t: 'huntFight', version, spec, vitals }); },
+    flee() { return client.send({ t: 'flee' }); },
+    huntEnd(reason, report) { return client.send({ t: 'huntEnd', reason, report }); },
   };
 
   function emit(event, payload) {
@@ -205,6 +219,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
       case 'started':
         client.state = msg.state;
+        client.huntFight = msg.huntFight || null;
         // The full hunter data for EVERY player, sent once. The board cannot
         // be built from the lobby view alone, which carries only names.
         client.roster = msg.roster || [];
@@ -257,8 +272,33 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
         break;
 
       case 'over':
-        client.status = CoopStatus.ENDED;
+        // A hunt fight's end is not the end of the hunt: the lobby goes on.
+        client.status = msg.hunt ? CoopStatus.HUNTING : CoopStatus.ENDED;
         emit('over', msg);
+        emit('status', client.status);
+        break;
+
+      case 'huntStarted':
+        client.roster = msg.roster || [];
+        client.status = CoopStatus.HUNTING;
+        emit('huntStarted', msg);
+        emit('status', client.status);
+        break;
+
+      case 'huntState':
+        // Like boards, an older snapshot is discarded, never applied.
+        if (client.hunt && msg.version <= client.hunt.version) break;
+        client.hunt = { version: msg.version, snapshot: msg.snapshot };
+        emit('huntState', client.hunt);
+        break;
+
+      case 'moveIntent':
+        emit('moveIntent', msg);
+        break;
+
+      case 'huntEnded':
+        client.status = CoopStatus.ENDED;
+        emit('huntEnded', msg);
         emit('status', client.status);
         break;
 
