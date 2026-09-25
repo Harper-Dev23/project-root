@@ -580,11 +580,14 @@ console.log('=== flee inside the fight: the free round ===');
   for (const u of m.party) if (u !== actor) host._onUnitKnockedOut(u);
   actor.currentHP = 1;
   for (const e of host.enemies) { e.derived.Accuracy = 500; }
+  // Only what the free round writes: meet() flees any other kind of
+  // encounter on its way here, which denser maps (13c) make likely.
+  const logFrom = m.h.getState().log.length;
   host._startFlee();
   playFreeRound(host);
   const s1 = m.h.getState();
   check('if the last hunter falls in the free round, it is a wipe (Sheltered), not a flee',
-    s1.finished === 'wipe' && !s1.log.some(l => l.kind === 'flee' && l.reason === 'fled'), `finished ${s1.finished}`);
+    s1.finished === 'wipe' && !s1.log.slice(logFrom).some(l => l.kind === 'flee' && l.reason === 'fled'), `finished ${s1.finished}`);
 }
 
 console.log('=== Unbroken: knock-outs in won fights ===');

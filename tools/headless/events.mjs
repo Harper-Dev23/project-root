@@ -296,6 +296,9 @@ function withSite(templateId, { zoneId = 'reeds_of_gethsemane', seed = 71, night
   const tile = h0.view().moves[0].tile;
   d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
   d.map.occupants.push({ id: 'otest', kind: 'event', tile, eventId: templateId, concealment: 0 });
+  // A quiet world for event tests (13c): no predator takes up a chase and
+  // interrupts the steps these checks script.
+  for (const o of d.map.occupants) o.noticed = true;
   if (night !== null) { let t = d.time; while (clockAt(t).isNight !== night) t += 1; d.time = t; d.world.time = t; }
   if (extra) extra(d, tile);
   return { h: restoreMapHunt(d, w), w, tile, party };
@@ -312,7 +315,9 @@ console.log('=== a site on a real hunt ===');
   check('...an open event survives a reload', again.view().event?.templateId === 'reeds_distant_weeping');
   const left = h.leaveEvent();
   check('walking away costs nothing and leaves the site', left.ok && !h.view().event && h.getState().map.occupants.some(o => o.id === 'otest'));
-  const back = h.move(h.view().moves.find(m => m.tile !== tile).tile);
+  // Back to the entry, which the generator keeps clear of hostiles (a
+  // neighbour of the site may hold a pack at 13c's density).
+  const back = h.move(h.getState().map.entry);
   const re = back.ok && h.move(tile);
   check('...and stepping onto it again opens it again', !!re?.event);
 

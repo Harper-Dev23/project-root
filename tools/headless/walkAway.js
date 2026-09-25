@@ -14,6 +14,9 @@ export function walkAway(hunt) {
   const move = hunt.move.bind(hunt);
   hunt.__rawMove = move;   // for a test that wants an event to open after all
   hunt.move = (to) => {
+    // Since 13c a won fight or a harvest can open the site the party stands
+    // on (HuntEngine._openEventHere); walk away from that one first too.
+    if (hunt.view().event) hunt.leaveEvent();
     const r = move(to);
     if (hunt.view().event) hunt.leaveEvent();
     return r;

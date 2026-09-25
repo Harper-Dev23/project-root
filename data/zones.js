@@ -33,8 +33,10 @@ export const ZONES = {
     // filled from here (HUNT_PLANS, roles). Which grounds each favours is on
     // the ground (GROUNDS[..].families). Names are placeholders until the
     // beast families land (chunk 9).
+    // `predator: true`: a Roaming pack of it that notices the party hunts it
+    // (WORLD_SIM "a few predator families"; HuntWorld.stepPack, chunk 13c).
     natives: {
-      marsh_stalker: { name: 'Marsh Stalker' },
+      marsh_stalker: { name: 'Marsh Stalker', predator: true },
       wading_heron:  { name: 'Wading Heron' },
     },
     apex: { family: 'marsh_stalker' },
@@ -69,7 +71,7 @@ export const ZONES = {
     relief: { flat: 90, hills: 10, highland: 0 },
     natives: {
       tide_crab:  { name: 'Tide Crab' },
-      shore_gull: { name: 'Shore Gull' },
+      shore_gull: { name: 'Shore Gull', predator: true },
     },
     apex: { family: 'tide_crab' },
     cultistShare: 0.2,

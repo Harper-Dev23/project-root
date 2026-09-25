@@ -446,7 +446,10 @@ console.log('=== the scout action ===');
     for (const zoneId of ZONES) {
       const world = recordingWorld(makeParty());
       const h = createMapHunt(zoneId, { plan: { objective: 'scout', size: 'medium' }, supplies: 60, seed: 7600 + k }, world);
-      const sensed = h.view().occupants.find(v => v.band === 'sensed');
+      // A sensed HOSTILE: since 13c's wider sensed band an event site on
+      // concealing ground can be sensed too, and it has no roster to reveal.
+      const truth = new Map(h.getState().map.occupants.map(o => [o.id, o]));
+      const sensed = h.view().occupants.find(v => v.band === 'sensed' && ['beast', 'cultist'].includes(truth.get(v.id)?.kind));
       if (!sensed) continue;
       const hidden = h.getState().map.occupants.find(o => !h.getState().sightings[o.id]);
       const before = h.getState();
@@ -748,6 +751,11 @@ console.log('=== camp ===');
   // Use serialize/restore to put the cress in, so nothing reaches into the live state.
   const data = h.serialize();
   addToList(data.pack.found, makeStack('marsh_cress', 1));
+  // A quiet night (13c): this checks the recovery percent, so no predator may
+  // take up the chase and find the camp partway through (that path is
+  // checked by 'camp found' below). Each pack has already had its one notice.
+  const { loseTrail } = await import('../../src/systems/HuntWorld.js');
+  for (const o of data.map.occupants) { o.noticed = true; if (o.state === 'hunting') loseTrail(o, data.time); }
   const h2 = restoreMapHunt(data, recordingWorld(p));
   while (!R.clockAt(h2.getState().time).isNight) stepTo(h2, () => true);
   const travelBefore = h2.stats().travelTimePercent;
@@ -755,7 +763,8 @@ console.log('=== camp ===');
   if (h2.foodInPack()[R.FISH_ITEM]) {
     const c2 = h2.camp({ meals: [{ main: R.FISH_ITEM, addition: 'marsh_cress' }] });
     check('camp at night: recovers 35% (x1.25 Field Rites)', c2.ok && c2.night && Math.abs(c2.recoveryPercent - 35 * 1.25) < EPS
-      && p.slice(0, 5).every((c, i) => c.currentHP === R.recovered(hpB[i], c.maxHP, 35 * 1.25)));
+      && p.slice(0, 5).every((c, i) => c.currentHP === R.recovered(hpB[i], c.maxHP, 35 * 1.25)),
+      JSON.stringify({ ok: c2.ok, night: c2.night, pct: c2.recoveryPercent, found: c2.found, reason: c2.reason }));
     check('fish + marsh cress at Cooking 55 is Fine: its buff lands and moves travelTimePercent by 10',
       c2.dishes[0].quality === 'fine' && h2.view().foodBuff?.field === 'travelTimePercent'
       && Math.abs(h2.stats().travelTimePercent - travelBefore - 10) < EPS);
@@ -872,6 +881,49 @@ const B = await import('../../src/systems/HuntBeasts.js');
 
 console.log('=== 7c rules on hand-built inputs ===');
 {
+  // Chunk 13c: predators notice the party (WORLD_SIM). A hand-built Reeds
+  // section: a Marsh Stalker pack (predator) near a party on open ground.
+  const { tileId } = await import('../../src/systems/HexGrid.js');
+  const t = (q, r, sec = 0) => tileId(sec, q, r);
+  const world = (partyGround, occ, others = []) => ({
+    zoneId: 'reeds_of_gethsemane', pos: t(4, 4),
+    map: { tiles: { [t(4, 4)]: { ground: partyGround } }, occupants: [occ, ...others] },
+  });
+  const pack = (over = {}) => ({ id: 'o1', kind: 'beast', family: 'marsh_stalker', tile: t(4, 6), state: 'roaming', ...over });
+  const R2 = HMG.PREDATOR_NOTICE_RANGE;
+  check(`predator: a Roaming Marsh Stalker ${R2} steps away notices a party on grass (13c)`, W.predatorNotices(world('grass', pack()), pack()) === true);
+  check('...not on ground that hides the party from PACK_PERCEPTION (thicket)', W.predatorNotices(world('thicket', pack()), pack()) === false);
+  check('...not one step too far, nor from another section', W.predatorNotices(world('grass', pack({ tile: t(4, 7) })), pack({ tile: t(4, 7) })) === false
+    && W.predatorNotices(world('grass', pack({ tile: t(4, 5, 1) })), pack({ tile: t(4, 5, 1) })) === false);
+  check('...not a family its region does not mark predator (Wading Heron)', W.predatorNotices(world('grass', pack({ family: 'wading_heron' })), pack({ family: 'wading_heron' })) === false);
+  {
+    // On real hunts: a detected predator taking up the chase is logged
+    // ('scent', its family only when identified); the log never names a
+    // pack that is not a region predator or had not noticed the party.
+    let scents = 0, bad = [];
+    for (let k = 0; k < 40 && scents < 3; k++) {
+      const zoneId = ['reeds_of_gethsemane', 'bay_of_solace'][k % 2];
+      const hh = createMapHunt(zoneId, { plan: { objective: 'scout', size: 'large' }, supplies: 400, seed: 7700 + k }, recordingWorld(makeParty()));
+      const pick = makeRng(7700 + k);
+      for (let i = 0; i < 150 && !hh.getState().finished; i++) {
+        if (hh.encounter()) { hh.winEncounter(); continue; }
+        const mv = hh.view().moves;
+        if (!mv.length) break;
+        const r = hh.move(mv[Math.floor(pick() * mv.length)].tile);
+        if (r.flips?.includes('scent')) {
+          const e = [...hh.view().log].reverse().find(l => l.kind === 'scent');
+          const occ = hh.getState().map.occupants.find(o => o.id === e?.occupant);
+          scents++;
+          if (!e || (occ && (!occ.noticed || !getZone(zoneId).natives[occ.family]?.predator)) || (e.family && e.family !== occ?.family)) bad.push(`${zoneId} ${7700 + k}`);
+        }
+      }
+    }
+    check('a detected predator that takes up the chase is logged, and the move says so (13c)', scents > 0 && !bad.length, `${scents} seen${bad.length ? '; bad: ' + bad.join(', ') : ''}`);
+  }
+  check('...only once a hunt, and not while another pack already hunts the party',
+    W.predatorNotices(world('grass', pack({ noticed: true })), pack({ noticed: true })) === false
+    && W.predatorNotices(world('grass', pack(), [{ id: 'o2', kind: 'beast', state: 'hunting', tile: t(1, 1) }]), pack()) === false);
+
   // Chunk 9a: an occupant's initiative is its members' average, each from its
   // real enemy type (HuntBeasts; beastparts.mjs checks it in depth).
   check('occupant initiative: the average of its members real types (chunk 9a)',
@@ -1231,7 +1283,9 @@ console.log('=== blight, cleansing and corruption ===');
     check('cleanse: refused where there is no blight', !h.cleanse().ok);
     const countBlight = (x) => Object.values(x.map.tiles).filter(t => t.ground === 'blight').length;
     const n0 = countBlight(after);
-    while (h.getState().world.day < after.world.day + 1) h.camp();
+    // Bounded, and a pack that finds the camp is a free win here (13c: predators hunt now;
+    // unbounded, a found camp refused every later camp() and this never ended).
+    for (let i = 0; i < 50 && h.getState().world.day < after.world.day + 1; i++) { if (h.encounter()) h.winEncounter(); h.camp(); }
     const a1 = h.getState();
     check('the next day, blight spreads a ring and takes the cleansed tile back while its source lives',
       a1.map.tiles[ring1].ground === 'blight' && countBlight(a1) > n0, `${n0} -> ${countBlight(a1)} tiles`);
@@ -1239,7 +1293,7 @@ console.log('=== blight, cleansing and corruption ===');
     const h2 = restoreMapHunt({ ...h.serialize(), pos: src.tile, from: null, encounter: null }, recordingWorld(makeParty()));
     const k = h2.cleanse();
     const n1 = countBlight(h2.getState());
-    for (let day = h2.getState().world.day, i = 0; h2.getState().world.day < day + 3 && i < 50; i++) h2.camp();
+    for (let day = h2.getState().world.day, i = 0; h2.getState().world.day < day + 3 && i < 50; i++) { if (h2.encounter()) h2.winEncounter(); h2.camp(); }
     check('cleansing the source\'s tile destroys it; after three more days the blight has not grown',
       k.ok && k.sourceDestroyed && countBlight(h2.getState()) <= n1, `${n1} -> ${countBlight(h2.getState())}`);
     golden.blightExample = { ring1, before: n0, nextDay: countBlight(a1), afterSourceKilled: countBlight(h2.getState()) };
@@ -1255,7 +1309,7 @@ console.log('=== blight, cleansing and corruption ===');
       beast.tile = tile; beast.mark = mark; beast.state = 'rooted'; beast.home = 'rooted'; beast.nextStepAt = null; beast.blightSince = null;
       dd.world.time = dd.time;
     });
-    for (let i = 0; i < 5; i++) h.camp();
+    for (let i = 0; i < 5; i++) { if (h.encounter()) h.winEncounter(); h.camp(); }
     return h.getState().map.occupants.find(o => o.id === id);
   };
   const u = turn('unmarked'), m = turn('marked');
@@ -1269,7 +1323,7 @@ console.log('=== trails and Restless ===');
   let seenTrails = 0, fadedOk = true, bandOk = true;
   for (let k = 0; k < 10; k++) {
     const h = createMapHunt(ZONES[k % 2], { plan: { objective: 'scout', size: 'medium', mods: { restlessPercent: 50 } }, supplies: 200, seed: 9800 + k }, recordingWorld(makeParty()));
-    for (let i = 0; i < 8; i++) h.camp();
+    for (let i = 0; i < 8; i++) { if (h.encounter()) h.winEncounter(); h.camp(); }
     const s = h.getState(), st = h.stats(), v = h.view();
     for (const t of Object.values(s.trails)) if (s.world.time - t.at > W.TRAIL_TIME + EPS) fadedOk = false;
     for (const tv of v.trails) {
@@ -1344,6 +1398,9 @@ console.log('=== 7d rules ===');
  * (combat is chunk 9), then walks to the nearest exit and leaves.
  */
 function nextStep(h, isGoal, { avoid = true } = {}) {
+  // Never walk onto a band Unmask still needs (13c): at the denser maps the
+  // avoid-nothing fallback walked through it and killed it unmasked.
+  const keep = h.__unmaskKeep ? h.__unmaskKeep() : null;
   const s = h.getState();
   const hostileAt = new Set(s.map.occupants.filter(o => o.kind !== 'event').map(o => o.tile));
   const prev = new Map([[s.pos, null]]);
@@ -1358,6 +1415,7 @@ function nextStep(h, isGoal, { avoid = true } = {}) {
     for (const n of [...mapNeighbors(s.map, id)].sort()) {
       if (prev.has(n) || !isPassable(s.map.tiles[n])) continue;
       if (avoid && hostileAt.has(n) && !isGoal(n)) continue;
+      if (keep?.has(n)) continue;
       prev.set(n, id);
       queue.push(n);
     }
@@ -1369,6 +1427,9 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
   const world = payingWorld(party);
   const h = createMapHunt(zoneId, { plan: { objective, size, bonusObjectives: bonus, mods: planMods, itemLevel }, supplies: 400, seed }, world);
   const exitTiles = new Set(h.getState().map.exits);
+  if (bonus.includes('unmask')) {
+    h.__unmaskKeep = () => { const st = h.getState(); return new Set(st.map.occupants.filter(o => occupantConcealment(st.map, o) > 100 && !st.unmasked.includes(o.id)).map(o => o.tile)); };
+  }
   let stuck = null;
   for (let i = 0; i < maxActions; i++) {
     // A won beast fight pays its own Hunt Points (chunk 9b); tallied apart so
@@ -1396,9 +1457,14 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
         // Commune: the shrine's event must be opened and resolved (chunk
         // 11b). The last step opens it for real; any branch completes it.
         case 'commune': {
-          step = nextStep(h, id => id === o.site);
+          // On the shrine already: a pack caught the party there, the fight
+          // came first (13c). Leave the bodies; the shrine then opens
+          // (HuntEngine._openEventHere) and is resolved like an arrival.
+          const here = s.pos === o.site;
+          if (here && h.view().spoils) h.harvest({ take: [], meat: false });
+          step = here ? o.site : nextStep(h, id => id === o.site);
           if (step === o.site) {
-            h.__rawMove(step);
+            if (!here) h.__rawMove(step);
             const ev = h.view().event;
             // What the event itself pays is counted apart, like a fight's.
             const before = world.paid.length;
@@ -1432,6 +1498,7 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
           const sensed = hid.find(x => s.sightings[x.id]?.band === 'sensed' && s.sightings[x.id].tile === x.tile && s.fog[x.tile] === 'visible');
           if (sensed) { h.scout(sensed.id); continue; }
           step = nextStep(h, id => hid.some(x => mapNeighbors(s.map, x.tile).includes(id)));
+          if (!step) stuck = `no path (unmask): pos ${s.pos}; hidden ${hid.map(x => `${x.id} ${x.kind}/${x.state}/${occupantConcealment(s.map, x)}@${x.tile} seen:${s.sightings[x.id]?.band || '-'}`).join(', ')}`;
           break;
         }
         default: stuck = `no strategy for ${open.id}`;
@@ -1444,7 +1511,7 @@ function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods =
       }
       step = nextStep(h, id => exitTiles.has(id));
     }
-    if (!step) { stuck = `no path (${open ? open.id : 'exit'})`; break; }
+    if (!step) { stuck = stuck || `no path (${open ? open.id : 'exit'})`; break; }
     h.move(step);
   }
   return { h, world, exited: false, stuck: stuck || 'ran out of actions' };
@@ -1529,6 +1596,7 @@ console.log('=== every objective is completable and pays at the exit ===');
       s.level = 10; s.exploration = { picks: { 2: { rating: 'perception' }, 4: { rating: 'perception' }, 6: { rating: 'perception' }, 8: { rating: 'perception' }, 10: { rating: 'perception' } } }; return p; };
     const best = partyStats(eyes(), { perceptionBonus: 20 }).perception;
     let runs = 0, done = 0, reachableButFailed = 0;
+    const unmaskFails = [];
     const concs = [];
     for (const zoneId of ZONES) for (const size of SIZES) for (let k = 0; k < 10; k++) {
       const r = solve({ zoneId, size, bonus: ['unmask'], seed: 11000 + k, itemLevel: 8, planMods: { perceptionBonus: 20 }, party: eyes() });
@@ -1541,10 +1609,10 @@ console.log('=== every objective is completable and pays at the exit ===');
       concs.push(...hidden);
       const b = r.r?.reward?.progress?.find(p => p.id === 'unmask');
       if (r.exited && b?.done) done++;
-      else if (reachable) reachableButFailed++;
+      else { if (reachable) reachableButFailed++; unmaskFails.push(`${zoneId}/${size}/${11000 + k}: ${r.stuck || (r.exited ? 'left, not done' : 'not left')}`); }
     }
     check(`Unmask: completed on every map where an occupant that stays put is hidden within reach (Perception ${best} + ${R.SENSED_MARGIN} to scout it)`,
-      reachableButFailed === 0);
+      reachableButFailed === 0, unmaskFails.join(' | '));
     // Chunk 8 (owner): Unmask's band is capped at the best reachable
     // Perception + SENSED_MARGIN, so it can be done on EVERY map. The cap is a
     // data constant; if the Perception ceiling moves, this fails until someone

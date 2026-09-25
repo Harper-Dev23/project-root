@@ -55,7 +55,7 @@ export const PRIMARY_OBJECTIVES = {
  * a floor the scaling never goes under.
  */
 export const DENSITY = {
-  tilesPerFight: 12.5,
+  tilesPerFight: 7,
   tilesPerEvent: 8,
   /** Tiles around the entry kept clear of hostile occupants, in steps. */
   entryClearance: 1,
@@ -151,8 +151,20 @@ export const MAX_ATTEMPTS = 40;
 // grade (decision 5); since chunk 9a it comes from the real enemy types and
 // what they wear (HuntBeasts.occupantInitiative).
 
-/** A searching pack's "perception", against a camp's concealment (decision 7). */
+/** A searching pack's "perception", against a camp's concealment (decision 7),
+ *  and a predator's against the party's tile (PREDATOR_NOTICE_RANGE). */
 export const PACK_PERCEPTION = 40;
+
+/**
+ * WORLD_SIM: "only alerted packs, and a few predator families, hunt the
+ * party". The predator half was never built (chunk 13c found it). A Roaming
+ * pack of a family its region marks `predator: true` (data/zones.js natives)
+ * that stands within this many steps of the party, in its section, and
+ * detects it (PACK_PERCEPTION against the party's tile concealment: cover
+ * hides you), starts Hunting. Once per pack per hunt: a predator that loses
+ * the trail lets the party be. Read by HuntWorld.stepPack.
+ */
+export const PREDATOR_NOTICE_RANGE = 2;
 
 /** A pack's speed on the party's 0-100 rating scale (decision 8). A party whose
  *  Speed rating beats it shakes off a Hunting pack in half the time. */

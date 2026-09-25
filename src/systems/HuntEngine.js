@@ -135,9 +135,11 @@ export const MAP_HUNT_STATE_VERSION = 1;
 
 /** A won fight's XP pool, split over the party (GameState.awardXPPool), before
  *  the plan's xpPercent. Was the Advance loop's 20 (chunk 9 decision 9);
- *  60 in chunk 13c, beside the completion pool paid at the exit
+ *  60 in chunk 13c-4, then 32 in 13c-5 once hunts held 3-4x the fights
+ *  (32, not 30: a party of 4-6 takes 25% of the pool, a whole 8 each),
+ *  beside the completion pool paid at the exit
  *  (HuntObjectives.COMPLETION_XP_POOL), tuned with huntsim. */
-export const FIGHT_XP_POOL = 60;
+export const FIGHT_XP_POOL = 32;
 /** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
  *  The Advance loop's number; cultists pay none (their reward is gear). */
 export const BEAST_FIGHT_HUNT_POINTS = 8;
@@ -689,7 +691,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const spent = time > 0 ? this._spendTime(time) : { flips: [], encounter: null };
       this._reveal();
       this._log({ kind: 'harvest', specimens, materials, meat: meatGot, time: s.time });
-      return { ok: true, specimens, materials, meat: meatGot, time, flips: spent.flips, encounter: this.encounter() };
+      return { ok: true, specimens, materials, meat: meatGot, time, flips: spent.flips, encounter: this.encounter(), event: this._openEventHere() };
     },
 
     /**
@@ -736,7 +738,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere() };
     },
 
     /**
@@ -993,6 +995,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      */
     _spendTime(units, { camping = false } = {}) {
       const start = s.time;
+      const noticedBefore = new Set(s.map.occupants.filter(o => o.noticed).map(o => o.id));
       const campConcealment = camping
         ? (GROUNDS[s.map.tiles[s.pos].ground]?.concealment || 0) + (this.stats().passives.campConcealmentBonus || 0)
         : 0;
@@ -1007,6 +1010,16 @@ function makeMapHunt(s, rng, worldRng, world) {
       });
       const spent = camping && tick.encounter ? Math.max(0, Math.min(units, tick.stoppedAt - start)) : units;
       const flips = this._advanceTime(spent);
+      // A predator took up the chase (chunk 13c, HuntWorld.predatorNotices).
+      // The party learns of it only if it has detected that pack: then the
+      // log says so and the action's flips carry 'scent' for the dialogue bar.
+      for (const o of s.map.occupants) {
+        if (!o.noticed || noticedBefore.has(o.id)) continue;
+        const band = this._bandOf(o);
+        if (band === 'nothing') continue;
+        this._log({ kind: 'scent', occupant: o.id, family: band === 'identified' ? o.family : null, time: s.time });
+        if (!flips.includes('scent')) flips.push('scent');
+      }
       if (tick.encounter && !s.log.some(l => l.kind === 'encounter' && l.at === tick.encounter.at && l.occId === tick.encounter.occId)) {
         this._log({ kind: 'encounter', ...tick.encounter, time: s.time });
       }
@@ -1236,6 +1249,21 @@ function makeMapHunt(s, rng, worldRng, world) {
      * its moment is right (decision 2). A site whose moment is not right stays
      * quiet and unspent. Returns the event view, { quiet: reason }, or null.
      */
+    /**
+     * A site under the party opens once nothing else is pending (chunk 13c).
+     * An event opens on arrival by a move, unless a fight came first; before
+     * this, a party that won a fight on a site (a pack reaching it on the
+     * shrine, which predators made common) stood on it and nothing opened
+     * until it stepped off and back. Called after a win with no spoils, and
+     * after the spoils are harvested or walked away from. Null otherwise, and
+     * for a quiet site.
+     */
+    _openEventHere() {
+      if (s.finished || s.encounter || s.spoils || s.event) return null;
+      const ev = this._openEventAt(s.pos);
+      return ev?.quiet ? null : ev;
+    },
+
     _openEventAt(tile) {
       const site = this._eventSiteAt(tile);
       if (!site) return null;

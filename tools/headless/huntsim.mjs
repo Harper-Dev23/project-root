@@ -60,6 +60,7 @@
 //     --compare FILE       print each cell's change against an earlier --json report
 //     --smoke              a small fixed run with invariant checks; exits 1 on a failure
 //     --quiet              no per-cell progress lines
+//     --camp-below 0.7     camp when the living party holds less than this share of its HP (default 0.7)
 //     --trace              print every fight: both sides after it and its last log lines
 
 const args = process.argv.slice(2);
@@ -99,6 +100,7 @@ const { isPassable, GROUNDS } = await import('../../data/grounds.js');
 const { Items } = await import('../../data/items.js');
 const { ZONES, getZone } = await import('../../data/zones.js');
 const R = await import('../../src/systems/HuntRules.js');
+const { packFindsCamp } = await import('../../src/systems/HuntWorld.js');
 const { getXPNeededForLevel, LEVEL_CAP } = await import('../../data/xpTable.js');
 const { makeRng } = await import('../../src/systems/seededRng.js');
 const { parseImport } = await import('../../src/systems/SaveTransfer.js');
@@ -108,7 +110,7 @@ const { rebuildCharacterStats } = await import('../../src/systems/CharacterBuild
 const { hunterExploration, owedExplorationPicks, applyExplorationPick, partyStats } = await import('../../src/systems/PartyStats.js');
 
 /** Camp when the living party holds less than this share of its max HP. */
-const CAMP_BELOW_HP = 0.5;
+const CAMP_BELOW_HP = Number(process.argv.includes("--camp-below") ? process.argv[process.argv.indexOf("--camp-below") + 1] : 0.7);
 /** Heal an ally below this share of its max HP. */
 const HEAL_BELOW_HP = 0.5;
 /** Forage when supplies fall below this. */
@@ -333,7 +335,9 @@ function fight(h, party, slots, fightSeed, rec) {
   const grades = spec.scenario.enemies.map(e => e.grade || '-');
   const hpIn = Math.round(100 * hpBefore);
   rec.fights.push({ outcome, cause, rounds, hunterTurns, ambush: !!spec.ambush, first: spec.first, enemies: spec.scenario.enemies.length, kind: spec.kind,
-    family: h.getState().kills.at(-1)?.family ?? spec.scenario.enemies[0]?.type ?? null, grades, hpIn });
+    family: h.getState().kills.at(-1)?.family ?? spec.scenario.enemies[0]?.type ?? null, grades, hpIn,
+    partyInitiative: spec.partyInitiative, enemyInitiative: spec.enemyInitiative,
+    hpOut: Math.round(100 * livingHPShare(party)), kos: party.filter(c => c.currentHP <= 1).length });
   return outcome;
 }
 
@@ -401,6 +405,7 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
   };
   xpSink = {};
   let campsInARow = 0;
+  let campedHere = false;   // stepped into cover to camp: camp next, do not step again
   let stuck = null;
   const avoid = true;
   for (let a = 0; a < MAX_ACTIONS; a++) {
@@ -433,8 +438,20 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
       const raw = Object.keys(h.foodInPack()).find(id => Items[id]?.food?.rawEdible);
       if (raw && h.eat(raw, 1).ok) { rec.eats++; continue; }
     }
-    // Camp when hurt.
+    // Camp when hurt, in cover: a hunting pack finds a camp only if its
+    // perception beats the camp tile's concealment (HuntWorld.packFindsCamp),
+    // so a player steps into the best-hidden neighbour first when it hides
+    // better than here (one step, known ground, no hostile seen on it).
     if (livingHPShare(party) < CAMP_BELOW_HP && campsInARow < MAX_CAMPS_IN_A_ROW) {
+      const concOf = (id) => GROUNDS[v.tiles[id]?.ground]?.concealment || 0;
+      const hostileAt = new Set(v.occupants.map(o => o.tile));
+      const cover = v.moves.filter(m => v.tiles[m.tile] && !hostileAt.has(m.tile))
+        .sort((a, b) => concOf(b.tile) - concOf(a.tile) || a.tile.localeCompare(b.tile))[0];
+      if (!campedHere && cover && concOf(cover.tile) > concOf(v.pos) && !packFindsCamp(concOf(cover.tile))) {
+        const r = h.move(cover.tile);
+        if (r.ok) { rec.moves++; campedHere = true; continue; }
+      }
+      campedHere = false;
       const r = h.camp({ meals: mealsFrom(h) });
       if (r.ok) { rec.camps++; campsInARow++; continue; }
     }

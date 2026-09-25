@@ -871,6 +871,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
       case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
       case 'rescued': return `${day(e.time)} Spoken for: you woke near a way out.`;
+      case 'scent': return `${day(e.time)} ${e.family ? `The ${familyName(this.v?.zoneId, e.family)} pack` : 'Something'} caught your scent and is coming for you.`;
       case 'boon': return `${day(e.time)} ✦ ${houseName(e.house)}'s boon, level ${e.level}${e.name ? `: ${e.name}` : ''}.`;
       case 'exit': return `${day(e.time)} Left the hunt: ${e.huntPoints} Hunt Points.`;
       case 'wipe': return `${day(e.time)} The party fell.`;
@@ -1184,6 +1185,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const out = [];
     if (res.flips?.includes('night')) out.push('Night falls.');
     if (res.flips?.includes('day')) out.push('A new day breaks.');
+    if (res.flips?.includes('scent')) {
+      const e = [...(this.hunt.view().log || [])].reverse().find(l => l.kind === 'scent');
+      out.push(e?.family ? `The ${familyName(this.hunt.view().zoneId, e.family)} pack has caught your scent.` : 'Something has caught your scent.');
+    }
     if (kind === 'forage' || kind === 'fish') out.push(`${kind === 'fish' ? 'Caught' : 'Found'} ${res.qty} ${Items[res.item]?.name || res.item}.`);
     if (kind === 'eat') out.push(`+${fmt(res.supply)} supplies.`);
     if (kind === 'camp') out.push(`Camped: recovered ${Math.round(res.recoveryPercent)}% HP and MP${res.found ? ', then a pack found the camp' : ''}.`);

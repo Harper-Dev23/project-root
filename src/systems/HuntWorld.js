@@ -34,11 +34,12 @@
 import { parseTileId, distance } from './HexGrid.js';
 import { GROUNDS, isPassable } from '../../data/grounds.js';
 import {
-  DAY_TIME_UNITS, PACK_PERCEPTION, PACK_SPEED, OCCUPANT_CONCEALMENT,
+  DAY_TIME_UNITS, PACK_PERCEPTION, PACK_SPEED, OCCUPANT_CONCEALMENT, PREDATOR_NOTICE_RANGE,
 } from '../../data/huntMapGen.js';
 import { mapNeighbors } from './HuntMapGen.js';
 import { detectionBand } from './HuntRules.js';
 import { occupantInitiative } from './HuntBeasts.js';
+import { getZone } from '../../data/zones.js';
 
 /** A Roaming pack steps every ROAM_STEP units; a Hunting one every HUNT_STEP. */
 export const ROAM_STEP = 4;
@@ -197,7 +198,9 @@ export function worldTick(s, to, ctx) {
     for (const o of beasts) {
       if (o.nextStepAt != null && o.nextStepAt <= now + EPS && s.map.occupants.includes(o)) {
         stepPack(s, o, now, ctx);
-        if (s.encounter) { ctx.onEvent?.(); return { stoppedAt: now, encounter: s.encounter }; }
+        // Trails fade on this path too (13c): it used to skip fadeTrails, so a
+        // trail past TRAIL_TIME stayed in view until the next tick.
+        if (s.encounter) { fadeTrails(s); ctx.onEvent?.(); return { stoppedAt: now, encounter: s.encounter }; }
       }
     }
     if (dayAt <= now + EPS) {
@@ -220,6 +223,27 @@ function fadeTrails(s) {
   for (const [id, t] of Object.entries(s.trails)) if (s.world.time - t.at > TRAIL_TIME + EPS) delete s.trails[id];
 }
 
+/**
+ * Does a Roaming predator notice the party (WORLD_SIM; PREDATOR_NOTICE_RANGE)?
+ * Its family must be a `predator` among the region's natives, it has not
+ * noticed the party before this hunt, it is in the party's section within
+ * range, and it detects the party: PACK_PERCEPTION against the concealment
+ * of the ground the party stands on.
+ */
+export function predatorNotices(s, occ) {
+  if (occ.noticed || occ.kind !== 'beast') return false;
+  if (!getZone(s.zoneId)?.natives?.[occ.family]?.predator) return false;
+  // One chase at a time: while any pack hunts the party, no predator takes
+  // up another (WORLD_SIM: the map must not become a chase). Measured before
+  // this rule: half of all wipes were a second hunter arriving straight
+  // after a fight, the party under 60% HP and no chance to camp.
+  if (s.map.occupants.some(o => o.state === 'hunting')) return false;
+  const a = parseTileId(occ.tile), b = parseTileId(s.pos);
+  if (a.section !== b.section || distance(a, b) > PREDATOR_NOTICE_RANGE) return false;
+  const conc = GROUNDS[s.map.tiles[s.pos]?.ground]?.concealment || 0;
+  return detectionBand(PACK_PERCEPTION, conc) === 'identified';
+}
+
 function stepPack(s, occ, now, ctx) {
   const from = occ.tile;
   if (occ.state === 'roaming') {
@@ -234,6 +258,7 @@ function stepPack(s, occ, now, ctx) {
     const to = opts[Math.floor(ctx.rng() * opts.length)];
     leaveTrail(s, occ, from, to, now);
     occ.tile = to;
+    if (predatorNotices(s, occ)) { alert(occ, now); occ.noticed = true; }
     return;
   }
   if (occ.state !== 'hunting') { occ.nextStepAt = null; return; }

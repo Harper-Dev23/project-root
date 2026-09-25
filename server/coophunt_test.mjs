@@ -472,6 +472,9 @@ console.log('=== 12d-2: the host reloads and carries on ===');
   const S = await setup('RLD', { rations: [0, 0] });
   S.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'scout', size: 'small', mods: {}, bonusObjectives: [] }, supplies: 100, seed: 11 });
   for (let i = 0; i < 3; i++) { const v = S.host.view(); if (v.encounter || v.event || !v.moves.length) break; S.host.move(v.moves[0].tile); }
+  // Walk away from a site the walk ended on (13c's denser maps moved what
+  // moves[0] reaches): an open event refuses the "next move" checked below.
+  if (S.host.view().event) S.host.act(h => h.leaveEvent());
   await until(() => S.guest.version === S.host.version, 'caught up');
   const rec = S.hostSave.active;
   check('the host\'s save keeps a record of the hunt, current to the last snapshot',
@@ -486,7 +489,8 @@ console.log('=== 12d-2: the host reloads and carries on ===');
   const t = v.moves.find(m => !v.occupants.some(o => o.tile === m.tile))?.tile ?? v.moves[0].tile;
   host2.move(t);
   await until(() => S.guest.version === host2.version, 'the guest sees the host\'s next move');
-  check('...and carries on: its next move reaches the guest, the version going on from the server\'s', S.guest.view().pos === host2.view().pos && host2.version === rec.version + 1);
+  check('...and carries on: its next move reaches the guest, the version going on from the server\'s', S.guest.view().pos === host2.view().pos && host2.version === rec.version + 1,
+    JSON.stringify({ guestPos: S.guest.view().pos, hostPos: host2.view().pos, v: host2.version, rec: rec.version, enc: !!host2.view().encounter, ev: !!host2.view().event }));
 }
 
 console.log('=== 12d-2: the host misses a fight\'s end, then comes back ===');

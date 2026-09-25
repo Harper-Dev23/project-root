@@ -346,7 +346,11 @@ export const ENEMY_TYPES = {
     skin: 'portrait_oskar',
     maxHP: 50,
     maxMP: 10,
-    baseStats: { STR: 8, DEX: 7, CON: 5, INT: 2, WIS: 3, CHA: 7 },
+    // CHA 7 -> 4 (chunk 13c): a predator that hunts the party (data/zones.js)
+    // acted first against every party below level 10 (Initiative ~8-9 against
+    // a starting party's ~7). Who acts first sets a fight's cost: at level 1 a
+    // won fight cost the party ~17% HP when it acted first, ~39% when not.
+    baseStats: { STR: 8, DEX: 7, CON: 5, INT: 2, WIS: 3, CHA: 4 },
     derivedBonus: { Resilience: 10 },
     skills: ['oskar_rending_bite', 'oskar_maw_rip', 'basic_attack'],
     aiProfile: 'oskar_beast',
@@ -359,7 +363,8 @@ export const ENEMY_TYPES = {
     skin: 'portrait_laki',
     maxHP: 36,
     maxMP: 12,
-    baseStats: { STR: 5, DEX: 9, CON: 4, INT: 3, WIS: 5, CHA: 6 },
+    // CHA 6 -> 5 (chunk 13c): see the Marsh Stalker.
+    baseStats: { STR: 5, DEX: 9, CON: 4, INT: 3, WIS: 5, CHA: 5 },
     derivedBonus: { Evasion: 10 },
     skills: ['laki_hooting_taunt', 'laki_silent_dive', 'basic_attack'],
     aiProfile: 'laki_beast',
@@ -385,7 +390,8 @@ export const ENEMY_TYPES = {
     skin: 'portrait_laki',
     maxHP: 28,
     maxMP: 10,
-    baseStats: { STR: 4, DEX: 8, CON: 3, INT: 2, WIS: 3, CHA: 9 },
+    // CHA 9 -> 6 (chunk 13c): see the Marsh Stalker; still the quickest family.
+    baseStats: { STR: 4, DEX: 8, CON: 3, INT: 2, WIS: 3, CHA: 6 },
     derivedBonus: { Evasion: 15 },
     skills: ['kiro_toxic_spit', 'basic_attack'],
     aiProfile: 'kiro_beast',
