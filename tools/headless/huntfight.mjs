@@ -796,13 +796,13 @@ console.log('=== harvest: the spoils of a won beast fight ===');
 }
 {
   // Stacking keeps grades apart; a part is never worn.
-  const mk = (grade, rarity = 'uncommon') => partMaterial({ id: 'part_marsh_stalker_chest', rarity, grade, itemLevel: 1 }, 1);
+  const mk = (grade, rarity = 'uncommon') => partMaterial({ id: 'part_crocodile_chest', rarity, grade, itemLevel: 1 }, 1);
   check('material of the same grade and rarity stacks; another grade or rarity does not',
     canStack(mk('grown'), mk('grown')) && !canStack(mk('grown'), mk('prime')) && !canStack(mk('grown'), mk('grown', 'common')));
   check('an item with no grade stacks exactly as before', canStack(makeStack('rations', 1), makeStack('rations', 2)));
   const hunter = makeParty()[0];
-  const fang = partMaterial({ id: 'part_marsh_stalker_weaponMain', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
-  const hide = partMaterial({ id: 'part_marsh_stalker_chest', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
+  const fang = partMaterial({ id: 'part_crocodile_weaponMain', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
+  const hide = partMaterial({ id: 'part_crocodile_chest', rarity: 'common', grade: 'grown', itemLevel: 1 }, 1);
   const before = JSON.stringify(hunter.equipment);
   check('a hunter cannot wear a part (not the natural-weapon fangs, not a hide)',
     JSON.stringify(equipItem(hunter, fang, 'weaponMain').equipment) === before && JSON.stringify(equipItem(hunter, hide, 'chest').equipment) === before);

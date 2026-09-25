@@ -18,28 +18,28 @@
    "blightPct": 2.9,
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 6,
-   "cultistPct": 23.9,
+   "cultistPct": 23.7,
    "eventSitesPerMap": 5,
    "forageSpotsPerMap": 31.08,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 4.4,
-    "marked": 54.9,
-    "unmarked": 40.8
+    "corrupted": 4.5,
+    "marked": 55.7,
+    "unmarked": 39.8
    },
    "compositionsPct": {
-    "alpha": 12.3,
-    "lone": 22.3,
-    "matriarch": 22,
-    "pack": 43.4
+    "alpha": 15.7,
+    "lone": 21.2,
+    "matriarch": 23.6,
+    "pack": 39.5
    },
    "gradesPct": {
-    "yearling": 37.3,
-    "grown": 41.3,
-    "prime": 17.9,
-    "great": 3.5
+    "yearling": 36.4,
+    "grown": 42.3,
+    "prime": 17.7,
+    "great": 3.6
    },
-   "waystonesPer100": 14,
+   "waystonesPer100": 13.6,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -65,26 +65,26 @@
    "blightPct": 55.8,
    "unreachablePocketPct": 0,
    "hostilesPerMap": 7,
-   "cultistPct": 22.7,
+   "cultistPct": 24.1,
    "eventSitesPerMap": 4.99,
    "forageSpotsPerMap": 15.22,
    "barrenPerMap": 7.82,
    "marksPct": {
-    "corrupted": 63.4,
-    "marked": 22.9,
-    "unmarked": 13.7
+    "corrupted": 62.7,
+    "marked": 23.7,
+    "unmarked": 13.6
    },
    "compositionsPct": {
-    "alpha": 11.4,
-    "lone": 22.2,
-    "matriarch": 20.8,
-    "pack": 45.6
+    "alpha": 13.6,
+    "lone": 21.8,
+    "matriarch": 23,
+    "pack": 41.5
    },
    "gradesPct": {
-    "yearling": 32,
-    "grown": 30.3,
-    "prime": 27.8,
-    "great": 9.9
+    "yearling": 33,
+    "grown": 31.1,
+    "prime": 26.7,
+    "great": 9.2
    },
    "waystonesPer100": 8.4,
    "swiftDeadlineDay": {
@@ -112,31 +112,31 @@
    "blightPct": 2,
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 9,
-   "cultistPct": 23.3,
+   "cultistPct": 23.6,
    "eventSitesPerMap": 8,
    "forageSpotsPerMap": 51.7,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 2.7,
-    "marked": 54.5,
+    "corrupted": 2.9,
+    "marked": 54.3,
     "unmarked": 42.8
    },
    "compositionsPct": {
-    "alpha": 12.5,
-    "lone": 20.9,
-    "matriarch": 17.7,
-    "pack": 48.9
+    "alpha": 14.2,
+    "lone": 20.5,
+    "matriarch": 21.7,
+    "pack": 43.5
    },
    "gradesPct": {
-    "yearling": 36.6,
-    "grown": 43.2,
-    "prime": 16.5,
-    "great": 3.7
+    "yearling": 37,
+    "grown": 42,
+    "prime": 17.5,
+    "great": 3.5
    },
    "waystonesPer100": 18,
    "swiftDeadlineDay": {
     "min": 4,
-    "median": 4,
+    "median": 5,
     "max": 10
    },
    "retriedPct": 1.2
@@ -164,23 +164,23 @@
    "forageSpotsPerMap": 32.64,
    "barrenPerMap": 16.55,
    "marksPct": {
-    "corrupted": 46.4,
-    "marked": 31.3,
-    "unmarked": 22.3
+    "corrupted": 46.7,
+    "marked": 30.7,
+    "unmarked": 22.7
    },
    "compositionsPct": {
-    "alpha": 12.9,
-    "lone": 22.6,
-    "matriarch": 18,
-    "pack": 46.4
+    "alpha": 13.4,
+    "lone": 23.2,
+    "matriarch": 21.1,
+    "pack": 42.3
    },
    "gradesPct": {
-    "yearling": 31.3,
-    "grown": 31.5,
-    "prime": 27.3,
-    "great": 9.9
+    "yearling": 32.4,
+    "grown": 30.6,
+    "prime": 27.9,
+    "great": 9.1
    },
-   "waystonesPer100": 16.4,
+   "waystonesPer100": 16.8,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 4,
@@ -206,28 +206,28 @@
    "blightPct": 1.2,
    "unreachablePocketPct": 0.2,
    "hostilesPerMap": 14,
-   "cultistPct": 23.5,
+   "cultistPct": 24.5,
    "eventSitesPerMap": 11,
    "forageSpotsPerMap": 76.6,
    "barrenPerMap": 0,
    "marksPct": {
-    "corrupted": 1.6,
-    "marked": 54.9,
-    "unmarked": 43.6
+    "corrupted": 1.4,
+    "marked": 54.5,
+    "unmarked": 44
    },
    "compositionsPct": {
-    "alpha": 13,
-    "lone": 22.7,
-    "matriarch": 19.3,
-    "pack": 45
+    "alpha": 13.9,
+    "lone": 22.2,
+    "matriarch": 22.5,
+    "pack": 41.5
    },
    "gradesPct": {
-    "yearling": 35.6,
-    "grown": 43.5,
-    "prime": 18.2,
-    "great": 2.6
+    "yearling": 37,
+    "grown": 42.1,
+    "prime": 18.5,
+    "great": 2.5
    },
-   "waystonesPer100": 20,
+   "waystonesPer100": 20.4,
    "swiftDeadlineDay": {
     "min": 4,
     "median": 6,
@@ -253,31 +253,31 @@
    "blightPct": 28.4,
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 16,
-   "cultistPct": 23.6,
+   "cultistPct": 23.9,
    "eventSitesPerMap": 11,
    "forageSpotsPerMap": 56.55,
    "barrenPerMap": 28.53,
    "marksPct": {
-    "corrupted": 33.4,
-    "marked": 36,
-    "unmarked": 30.5
+    "corrupted": 33.8,
+    "marked": 35.9,
+    "unmarked": 30.3
    },
    "compositionsPct": {
-    "alpha": 13.3,
-    "lone": 20,
-    "matriarch": 19.2,
-    "pack": 47.4
+    "alpha": 13.8,
+    "lone": 21.5,
+    "matriarch": 22.8,
+    "pack": 42
    },
    "gradesPct": {
-    "yearling": 31.1,
-    "grown": 31.7,
-    "prime": 28.5,
-    "great": 8.8
+    "yearling": 32.6,
+    "grown": 30.7,
+    "prime": 28,
+    "great": 8.6
    },
    "waystonesPer100": 18.4,
    "swiftDeadlineDay": {
     "min": 4,
-    "median": 6,
+    "median": 5,
     "max": 13
    },
    "retriedPct": 3.6
@@ -571,19 +571,19 @@
    "retriedPct": 3.2
   }
  },
- "mapsHash": "c922add84e43830303dbdae0acfd0f58d87e6b1259f99ee02a7db97d5ea99359",
+ "mapsHash": "1fde704733d10c6b4c563adceda2af4b5a11ee74a412aac66dc754e77f6e11ad",
  "prefixEffects": {
   "teeming": [
    8.5,
    10.5
   ],
   "elder": [
-   19.7,
-   36.7
+   20.7,
+   37.5
   ],
   "lean": [
    49.93,
-   24.64
+   24.65
   ],
   "blight": [
    0,
@@ -602,25 +602,25 @@
     "section 0",
     "",
     "             ~ ~ mK",
-    "            tVtBm^mK",
+    "            tVtVm^mK",
     "           mEt^t^m",
     "          ~ t^~ ~ ~",
-    "           ~ =V~ ~ g",
-    "          ~ ~ w w wS",
-    "           wVw wBwV",
+    "           ~ =B~ ~ g",
+    "          ~ ~ w wBwS",
+    "           wVw w wV",
     "        w wSwBwBwV",
     "             w w",
     ""
    ],
    "occupants": [
-    "0:6,2 marked wading_heron Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
+    "0:4,5 marked marsh_bat Pack: grown,grown,grown,grown,grown (roaming, concealment 20)",
     "0:8,1 cultists x2",
     "0:8,2 cultists x3",
-    "0:3,8 unmarked marsh_stalker Pack: grown,grown,grown,grown (roaming, concealment 80)",
-    "0:4,7 marked marsh_stalker Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 80)",
-    "0:2,8 unmarked marsh_stalker Alpha and pack: prime,grown,grown,grown (roaming, concealment 80)",
+    "0:3,8 unmarked marsh_bat Pack: grown,grown,grown,grown (roaming, concealment 80)",
+    "0:5,6 marked marsh_viper Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 80)",
+    "0:2,8 unmarked bog_frog Alpha and pack: prime,grown,grown,grown (roaming, concealment 80)",
     "0:5,2 event bitter_roots",
-    "0:4,5 event eel_catcher_request",
+    "0:6,2 event eel_catcher_request",
     "0:4,8 event crossing_tracks",
     "0:5,7 event reeds_distant_weeping",
     "0:2,7 event shrine_of_house"
@@ -652,10 +652,10 @@
      "params": {
       "count": 5
      },
-     "family": "wading_heron",
+     "family": "marsh_bat",
      "count": 5,
      "route": [
-      "0:6,2"
+      "0:4,5"
      ]
     }
    ]
@@ -670,8 +670,8 @@
    "drawn": [
     "section 0",
     "                mS",
-    "             mKm m",
-    "        mKmBmVm m mBmB",
+    "             mKm mB",
+    "        mKmBmVm m m mB",
     "       mSm m w m m mBm",
     "        m w w gVgVg gB",
     "         m w w g g g",
@@ -682,15 +682,15 @@
     "            ~ ~ w^"
    ],
    "occupants": [
-    "0:8,2 marked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 60)",
+    "0:8,1 marked crocodile Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 60)",
     "0:6,1 cultists x4",
-    "0:8,4 marked marsh_stalker Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 40)",
-    "0:4,8 marked wading_heron Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 80)",
+    "0:8,4 marked swamp_crab Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 40)",
+    "0:4,8 marked marsh_bat Alpha and pack: great,grown,grown,grown,grown (roaming, concealment 80)",
     "0:3,2 cultists x3",
-    "0:8,3 unmarked marsh_stalker Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
-    "0:1,7 marked marsh_stalker Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
-    "0:9,2 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling (roaming, concealment 60)",
-    "0:4,2 unmarked marsh_stalker Lone: prime (roaming, concealment 80)",
+    "0:8,3 unmarked crocodile Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
+    "0:1,7 marked bog_frog Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
+    "0:9,2 unmarked crocodile Pack: yearling,yearling,yearling,yearling (roaming, concealment 60)",
+    "0:4,2 unmarked swamp_crab Lone: prime (roaming, concealment 80)",
     "0:5,6 event reeds_lore_test",
     "0:5,4 event reeds_sinking_mud",
     "0:6,4 event hunting_blind",
@@ -729,10 +729,10 @@
      "params": {
       "count": 5
      },
-     "family": "marsh_stalker",
+     "family": "crocodile",
      "count": 5,
      "route": [
-      "0:8,2"
+      "0:8,1"
      ]
     }
    ]
@@ -759,20 +759,20 @@
     "      mSmVmVm wVw w ~"
    ],
    "occupants": [
-    "0:1,5 marked marsh_stalker Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
-    "0:4,4 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling (roaming, concealment 60)",
-    "0:2,4 unmarked marsh_stalker Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
-    "0:6,5 unmarked marsh_stalker Pack: prime,prime,prime,prime,prime (roaming, concealment 60)",
+    "0:1,5 marked swamp_crab Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
+    "0:4,4 unmarked bog_frog Pack: yearling,yearling,yearling,yearling (roaming, concealment 60)",
+    "0:2,4 unmarked nutria Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
+    "0:6,5 unmarked bog_frog Pack: prime,prime,prime,prime,prime (roaming, concealment 60)",
     "0:-3,8 cultists x2",
-    "0:-2,6 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 80)",
-    "0:8,3 unmarked wading_heron Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
-    "0:0,3 unmarked marsh_stalker Matriarch and young: prime,yearling,yearling (rooted, concealment 100)",
+    "0:-2,6 unmarked bog_frog Pack: yearling,yearling,yearling,yearling,yearling (roaming, concealment 80)",
+    "0:8,3 unmarked marsh_bat Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
+    "0:0,3 unmarked nutria Matriarch and young: prime,yearling,yearling (rooted, concealment 100)",
     "0:2,6 cultists x3",
     "0:4,3 cultists x4",
-    "0:2,5 unmarked marsh_stalker Alpha and pack: prime,grown,grown,grown,grown (roaming, concealment 100)",
+    "0:2,5 unmarked nutria Alpha and pack: prime,grown,grown,grown,grown (roaming, concealment 100)",
     "0:-1,5 cultists x3",
-    "0:8,5 marked marsh_stalker Pack: grown,grown,grown,grown (roaming, concealment 100)",
-    "0:6,2 marked marsh_stalker Pack: grown,grown,grown,grown (roaming, concealment 40)",
+    "0:8,5 marked swamp_crab Pack: grown,grown,grown,grown (roaming, concealment 100)",
+    "0:6,2 marked nutria Pack: grown,grown,grown,grown (roaming, concealment 40)",
     "0:2,3 event hunting_blind",
     "0:2,2 event eel_catcher_return",
     "0:4,5 event dagon_hunger",
@@ -816,7 +816,7 @@
      "params": {
       "count": 5
      },
-     "family": "marsh_stalker",
+     "family": "swamp_crab",
      "count": 5,
      "route": [
       "0:1,5"

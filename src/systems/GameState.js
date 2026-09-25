@@ -2,6 +2,7 @@ import { SKILLS } from '../../data/skills.js'; // adjust path if needed
 import { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP, xpShare } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { addToList } from './ItemStacks.js';
+import { legacyItemId } from '../../data/beastParts.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
 import { newStanding, LEGACY_FELL } from './Standing.js';
@@ -52,6 +53,8 @@ function deserializeItem(entry) {
     out.rarity = out.quality;
     delete out.quality;
   }
+  // Re-keyed beast families (chunk 14a): parts harvested under an old id.
+  out.id = legacyItemId(out.id);
   return out;
 }
 function serializeInventory(arr) { return Array.isArray(arr) ? arr.map(serializeItem).filter(Boolean) : []; }

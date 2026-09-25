@@ -886,33 +886,33 @@ function collect() {
  * it exercises is gated on huntFight, so no entry above can move with it.
  */
 const HUNT_FIGHTS = {
-  'stalker pack, party first': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party' },
-  'stalker pack, ambushed':    { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'enemy' },
+  'crocodile pack, party first': { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party' },
+  'crocodile pack, ambushed':    { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'enemy' },
   'great-led pack with parts': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party' },
   'cultist band':              { occ: { id: 'o3', kind: 'cultist', grades: [null, null, null] }, first: 'party' },
   // Chunk 9c: a fight fed by a "next fight" meal, and a fight fled at once.
-  'stalker pack, fed for the fight': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+  'crocodile pack, fed for the fight': { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     foodBuff: { field: 'AttackPower', amount: 10, source: 'ember_pepper', name: 'Ember Pepper' } },
-  'stalker pack, fled on the first turn': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party', flee: true },
+  'crocodile pack, fled on the first turn': { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party', flee: true },
   // Chunk 10b: the same fights under a level-5 prophet boon, capstone and all.
   // Final Mercy needs a hunter to fall, so Jeremiah's is the hard Great-led
-  // pack; The Loop is on the plain stalker pack. Each records whether its
+  // pack; The Loop is on the plain crocodile pack. Each records whether its
   // capstone fired.
   'great-led pack, Jeremiah boon 5': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party',
     boon: boonAt('jeremiah', 5) },
-  'stalker pack, Ezekiel boon 5': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+  'crocodile pack, Ezekiel boon 5': { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     boon: boonAt('ezekiel', 5) },
   // Chunk 11c: the same fights under a level-5 false god's pact, curse and
   // capstone included (What Waits Below; The Word That Is Always True).
   'great-led pack, Dagon pact 5': { occ: { id: 'o2', kind: 'beast', family: 'tide_crab', grades: ['grown', 'great', 'grown', 'yearling', 'grown'] }, first: 'party',
     boon: pactAt('dagon', 5) },
-  "stalker pack, Yar'galeth pact 5": { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
+  "crocodile pack, Yar'galeth pact 5": { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] }, first: 'party',
     boon: pactAt('yargaleth', 5) },
   // Chunk 10c-2: a Watched wipe in the Reeds while your tribe follows
   // Jeremiah. The prophet's offer is made; the first hunter is spoken for and
   // the hunt goes on (hunt.survive); the rest join the Slain. The party stands
   // no chance on purpose (1 HP each, the pack unkillable).
-  'stalker pack, a Watched wipe in your house\'s lands, one spoken for': { occ: { id: 'o1', kind: 'beast', family: 'marsh_stalker', grades: ['grown', 'grown', 'grown', 'grown'] },
+  'crocodile pack, a Watched wipe in your house\'s lands, one spoken for': { occ: { id: 'o1', kind: 'beast', family: 'crocodile', grades: ['grown', 'grown', 'grown', 'grown'] },
     first: 'enemy', watchedWipe: { zoneId: 'reeds_of_gethsemane', house: 'jeremiah', bond: 1000, spare: 1 } },
 };
 

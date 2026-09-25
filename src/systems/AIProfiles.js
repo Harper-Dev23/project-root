@@ -568,6 +568,59 @@ export const AI_PROFILES = {
       return null;
     }
   },
+  // Map-hunt beasts and cult bands (chunk 14a). One profile for every kit,
+  // driven by the kit itself: the enemy type's `skills` list IS the priority
+  // order. Reactions in it are armed once (the idempotent pattern above).
+  // Then the first usable skill with a legal target wins, legality asked of
+  // the engine's own gates (_abilityActorGateReason /
+  // _abilityTargetGateReason: reach, required weaknesses, HP thresholds), so
+  // a finisher listed first fires only when its condition holds. A payoff
+  // (requiresWeakness) aims at the most afflicted legal target; the rest aim
+  // down the type's lane (`aimLane`, default front). Self skills
+  // (targetRequirement 'self') are used only below half HP. Basic Attack
+  // last. A new family needs only data: a type with a kit in priority order.
+  hunt_beast: {
+    decide(npc, scene, enemies) {
+      const kit = Array.isArray(npc.skills) ? npc.skills : [];
+      for (const id of kit) {
+        const sk = SKILLS[id];
+        if (sk?.mechanic !== 'reaction' || !scene?.reactions?.arm) continue;
+        if (!scene.reactions.listPrepared?.(npc)?.some(r => r.id === id)) scene.reactions.arm(npc, sk);
+      }
+      const foes = packFoes(npc, buildTargetList(npc, scene, enemies).foes);
+      const aim = npc.aimLane || 'front';
+      const lane = aim === 'back' ? BACK_LANE : FRONT_LANE;
+      for (const id of kit) {
+        const sk = SKILLS[id];
+        if (!sk || sk.mechanic === 'reaction' || id === 'basic_attack') continue;
+        if (!canUseSkill(npc, id)) continue;
+        if (scene?._abilityActorGateReason?.(npc, sk)) continue;
+        if (sk.targetRequirement === 'self') {
+          if (hpRatio(npc) < 0.5) return buildAction(id, npc);
+          continue;
+        }
+        if (sk.targetRequirement === 'ally') {
+          // Support: the most hurt ally under 60% HP that the engine allows.
+          const hurt = alliesOf(npc, scene).filter(a => hpRatio(a) < 0.6 && !scene?._abilityTargetGateReason?.(npc, a, sk))
+            .sort((a, b) => hpRatio(a) - hpRatio(b));
+          if (hurt.length) return buildAction(id, hurt[0]);
+          continue;
+        }
+        const legal = foes.filter(f => !scene?._abilityTargetGateReason?.(npc, f, sk));
+        if (!legal.length) continue;
+        const req = Array.isArray(sk.requiresWeakness) ? sk.requiresWeakness[0] : sk.requiresWeakness;
+        const target = (req?.family && highestWeakness(legal, req.family, req.tierAtLeast ?? req.tier ?? 1, lane))
+          || packTarget(legal, aim);
+        if (target) return buildAction(id, target);
+      }
+      if (canUseSkill(npc, 'basic_attack')) {
+        const target = packTarget(foes, aim);
+        if (target) return buildAction('basic_attack', target);
+      }
+      return null;
+    }
+  },
+
   oskar_beast: {
     decide(npc, scene, enemies) {
       // Reflex Bite — armed once and left armed (idempotent, same pattern

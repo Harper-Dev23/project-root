@@ -24,6 +24,7 @@ import { DAY_TIME_UNITS, GRADES, COMPOSITIONS } from '../../data/huntMapGen.js';
 import { combineModifiers } from './HuntModifiers.js';
 import { mapNeighbors, occupantConcealment } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
+import { CULT_BANDS } from '../../data/beastParts.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,8 @@ export function occupantView(occ, band, { exact = false } = {}) {
   if (occ.kind === 'event') return { ...v, eventId: occ.eventId };
   const roster = occ.roster || [];
   v.size = sizeWord(roster.length);
+  // Which cult an identified band serves (chunk 14a, CULT_BANDS).
+  if (occ.kind === 'cultist' && CULT_BANDS[occ.cult]) v.cult = CULT_BANDS[occ.cult].name;
   if (occ.kind === 'beast') {
     v.family = occ.family;
     v.mark = occ.mark;

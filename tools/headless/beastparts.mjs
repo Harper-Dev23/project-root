@@ -101,12 +101,13 @@ console.log('=== content: families, types, skills, AI ===');
     const z = Z.getZone(id);
     Object.keys(z.natives || {}).forEach(f => placed.add(f));
     if (z.apex?.family) placed.add(z.apex.family);
+    for (const e of z.apex?.escort || []) placed.add(e.family);
   }
   check('every family a starter zone can place has a HUNT_BEASTS entry', [...placed].every(f => BP.HUNT_BEASTS[f]),
     [...placed].filter(f => !BP.HUNT_BEASTS[f]).join(', '));
   check('every HUNT_BEASTS family is placed somewhere (no dead family)', FAMILIES.every(f => placed.has(f)));
   const aiNames = new Set(Object.keys(AI_PROFILES));
-  const types = [...FAMILIES.map(f => BP.HUNT_BEASTS[f].type), ...BP.HUNT_CULTIST_TYPES];
+  const types = [...FAMILIES.map(f => BP.HUNT_BEASTS[f].type), ...BP.HUNT_CULTIST_TYPES, ...Object.values(BP.CULT_BANDS).flatMap(b => b.types)];
   const bad = [];
   for (const t of types) {
     const T = ENEMY_TYPES[t];
@@ -115,6 +116,18 @@ console.log('=== content: families, types, skills, AI ===');
     if (!aiNames.has(T.aiProfile)) bad.push(`${t}: ai ${T.aiProfile}`);
   }
   check('every beast and cultist type exists, with real skills and AI profiles', bad.length === 0, bad.join('; ') || `${types.length} types`);
+  // 14a: a skin the game never loads shows no portrait (chunk 12 found two).
+  // The loaded keys are read from the game's own load.image calls.
+  const fsx = await import('node:fs'); const pathx = await import('node:path');
+  const loaded = new Set();
+  const walk = (d) => { for (const e of fsx.readdirSync(d, { withFileTypes: true })) { const p = pathx.join(d, e.name); if (e.isDirectory()) walk(p); else if (p.endsWith('.js')) for (const m of fsx.readFileSync(p, 'utf8').matchAll(/load\.image\(\s*['"]([^'"]+)['"]/g)) loaded.add(m[1]); } };
+  walk('src');
+  const unloaded = types.filter(t => ENEMY_TYPES[t] && !loaded.has(ENEMY_TYPES[t].skin)).map(t => `${t}: ${ENEMY_TYPES[t].skin}`);
+  check('every hunt beast and cultist type wears a portrait the game loads', loaded.size > 0 && !unloaded.length, unloaded.join('; ') || `${loaded.size} loaded keys`);
+  check('re-keyed families: old part ids load as the new ones, others unchanged (legacyItemId)',
+    BP.legacyItemId('part_marsh_stalker_chest') === 'part_crocodile_chest' && BP.legacyItemId('part_wading_heron_amulet') === 'part_scarlet_ibis_amulet'
+    && BP.legacyItemId('part_tide_crab_chest') === 'part_tide_crab_chest' && BP.legacyItemId('rations') === 'rations'
+    && Object.values(BP.LEGACY_PART_FAMILIES).every(f => !!BP.HUNT_BEASTS[f]));
   golden.types = Object.fromEntries(types.map(t => {
     const T = ENEMY_TYPES[t];
     return [t, { maxHP: T.maxHP, maxMP: T.maxMP, baseStats: T.baseStats, derivedBonus: T.derivedBonus || null, skills: T.skills, aiProfile: T.aiProfile, initiative: HB.memberInitiative(t) }];
@@ -164,15 +177,15 @@ console.log('=== part pools ===');
       if (new Set(pools.prefixes.map(d => d.family)).size < 2 || new Set(pools.suffixes.map(d => d.family)).size < 2) {
         bad.push(`${family}/${slot}: an epic (2+2) needs two families on each side`);
       }
-      if (family === 'marsh_stalker') summary[slot] = { prefixes: [...new Set(pools.prefixes.map(d => d.family))], suffixes: [...new Set(pools.suffixes.map(d => d.family))] };
+      if (family === 'crocodile') summary[slot] = { prefixes: [...new Set(pools.prefixes.map(d => d.family))], suffixes: [...new Set(pools.suffixes.map(d => d.family))] };
     }
   }
   check('every part pool: no Max HP/MP, signature where it belongs, two families per side', bad.length === 0, bad.join('; '));
 
   // Peripheral = PERIPHERAL_SCALE of the core ranges: compare the same key in
   // a core pool of the same theme (legs vs chest share PhysicalResist).
-  const core = new Map(IF.getPartPools('marsh_stalker', 'chest').prefixes.map(d => [d.key, d.range]));
-  const periph = IF.getPartPools('marsh_stalker', 'legs').prefixes.filter(d => core.has(d.key));
+  const core = new Map(IF.getPartPools('crocodile', 'chest').prefixes.map(d => [d.key, d.range]));
+  const periph = IF.getPartPools('crocodile', 'legs').prefixes.filter(d => core.has(d.key));
   const scaledOk = periph.length > 0 && periph.every(d => {
     const [a, b] = core.get(d.key);
     const min = Math.max(1, Math.round(a * BP.PERIPHERAL_SCALE));
@@ -320,11 +333,11 @@ console.log('=== part rarity ===');
 console.log('=== loadouts ===');
 const occOf = (family, grades, id = 'o7') => ({ id, kind: 'beast', family, roster: grades.map(g => ({ type: family, grade: g })) });
 {
-  const occ = occOf('marsh_stalker', ['great', 'grown', 'yearling']);
+  const occ = occOf('crocodile', ['great', 'grown', 'yearling']);
   const a = HB.rollLoadout(occ, { itemLevel: 3, itemRarity: 0, seed: 77 });
   const b = HB.rollLoadout(occ, { itemLevel: 3, itemRarity: 0, seed: 77 });
   const c = HB.rollLoadout(occ, { itemLevel: 3, itemRarity: 0, seed: 78 });
-  const slots = Object.keys(BP.HUNT_BEASTS.marsh_stalker.parts).sort();
+  const slots = Object.keys(BP.HUNT_BEASTS.crocodile.parts).sort();
   check('one gear set per member, each with the family\'s slots', a.length === 3 && a.every(g => same(Object.keys(g).sort(), slots)));
   check('deterministic for a seed; another seed differs', same(noIds(a), noIds(b)) && !same(noIds(a), noIds(c)));
   check('every part records its member\'s grade and the region item level',
@@ -343,7 +356,7 @@ const occOf = (family, grades, id = 'o7') => ({ id, kind: 'beast', family, roste
       const c = { common: 0, uncommon: 0, rare: 0, epic: 0 };
       let parts = 0, affixes = 0;
       for (let k = 0; k < 2000; k++) {
-        const [gear] = HB.rollLoadout(occOf('marsh_stalker', [g], `o${k}`), { itemLevel: 1, itemRarity: ir, seed: 90000 + k });
+        const [gear] = HB.rollLoadout(occOf('crocodile', [g], `o${k}`), { itemLevel: 1, itemRarity: ir, seed: 90000 + k });
         for (const p of Object.values(gear)) { parts++; c[p.rarity]++; affixes += p.prefixes.length + p.suffixes.length; }
       }
       stats[`${g}@${ir}`] = { ...Object.fromEntries(RARITIES.map(r => [r, r2(100 * c[r] / parts)])), affixesPerBeast: r2(affixes / 2000) };
@@ -406,7 +419,7 @@ console.log('=== power per family and grade (real _spawnEnemy) ===');
     }
   }
   golden.powerAtItemLevel1 = power;
-  const st = power.marsh_stalker;
+  const st = power.crocodile;
   check('grade makes a beast harder: HP and damage rise Yearling -> Great', st.great.maxHP > st.yearling.maxHP && st.great.dice >= st.yearling.dice,
     `HP ${st.yearling.maxHP} -> ${st.great.maxHP}, dice ${st.yearling.dice} -> ${st.great.dice}`);
 }

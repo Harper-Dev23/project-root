@@ -760,7 +760,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (o.band === 'sensed') return [`Something is here, but you cannot make it out${stale}.`];
     if (o.kind === 'event') return ['Something worth a look.'];
     const lines = [];
-    if (o.kind === 'cultist') lines.push(`Cultists, ${o.size}${stale}.`);
+    if (o.kind === 'cultist') lines.push(`${o.cult ? `${o.cult} cultists` : 'Cultists'}, ${o.size}${stale}.`);
     else lines.push(`${familyName(zoneId, o.family)}, ${o.size}, up to ${o.topGrade}${stale}.`);
     if (o.mark && o.mark !== 'unmarked') lines.push(o.mark === 'marked' ? 'Marked by a prophet.' : 'Corrupted.');
     if (o.exact) lines.push(`Exactly: ${o.roster.map(m => m.grade || m.type).join(', ')}${o.composition ? ` (${o.composition})` : ''}.`);

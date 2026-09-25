@@ -30,17 +30,17 @@
 //   tint                        the hunt scene (chunk 8), until tile art exists
 
 export const GROUNDS = {
-  grass:      { name: 'Grass',      cost: 1, passable: true,  blocksSight: false, concealment: 20, encounterBias: 0.5, forage: 'modest', families: [],                               tint: 0x8fb45a },
+  grass:      { name: 'Grass',      cost: 1, passable: true,  blocksSight: false, concealment: 20, encounterBias: 0.5, forage: 'modest', families: ['nutria', 'scarlet_ibis'],                               tint: 0x8fb45a },
   heath:      { name: 'Heath',      cost: 1, passable: true,  blocksSight: false, concealment: 40, encounterBias: 1.0, forage: 'modest', families: ['shore_gull'],                   tint: 0x9a8a5e },
   shingle:    { name: 'Shingle',    cost: 1, passable: true,  blocksSight: false, concealment: 20, encounterBias: 0.5, forage: 'modest', families: ['tide_crab', 'shore_gull'],      tint: 0xb9b1a0 },
   hardpan:    { name: 'Hardpan',    cost: 1, supplyCost: 2, passable: true, blocksSight: false, concealment: 10, encounterBias: 0.5, forage: 'little', families: [],            tint: 0xc9a66b },
   dunes:      { name: 'Dunes',      cost: 3, supplyCost: 4, passable: true, blocksSight: false, concealment: 20, encounterBias: 0.5, forage: 'little', families: ['tide_crab'], tint: 0xe2cf8f },
   snowfield:  { name: 'Snowfield',  cost: 2, supplyCost: 3, passable: true, blocksSight: false, concealment: 10, encounterBias: 0.5, forage: 'little', families: [],            tint: 0xe8eef2 },
-  woodland:   { name: 'Woodland',   cost: 2, timeCost: 3,   passable: true, blocksSight: true,  concealment: 60, encounterBias: 1.0, forage: 'good',   families: ['marsh_stalker'], tint: 0x4f7a3a },
+  woodland:   { name: 'Woodland',   cost: 2, timeCost: 3,   passable: true, blocksSight: true,  concealment: 60, encounterBias: 1.0, forage: 'good',   families: ['marsh_bat', 'marsh_viper'], tint: 0x4f7a3a },
   rainforest: { name: 'Rainforest', cost: 3, timeCost: 4,   passable: true, blocksSight: true,  concealment: 80, encounterBias: 1.5, forage: 'good',   families: [],            tint: 0x2f6b3a },
-  thicket:    { name: 'Thicket',    cost: 2, passable: true,  blocksSight: true,  concealment: 80, encounterBias: 2.0, forage: 'good',   families: ['marsh_stalker'],                tint: 0x6b8f3e },
-  marsh:      { name: 'Marsh',      cost: 3, passable: true,  blocksSight: false, concealment: 40, encounterBias: 1.5, forage: 'good',   families: ['marsh_stalker', 'wading_heron'], tint: 0x5f7f64 },
-  bog:        { name: 'Bog',        cost: 4, passable: true,  blocksSight: false, concealment: 60, encounterBias: 1.5, forage: 'modest', families: ['wading_heron'],                 tint: 0x4b5a43 },
+  thicket:    { name: 'Thicket',    cost: 2, passable: true,  blocksSight: true,  concealment: 80, encounterBias: 2.0, forage: 'good',   families: ['marsh_viper', 'nutria'],                tint: 0x6b8f3e },
+  marsh:      { name: 'Marsh',      cost: 3, passable: true,  blocksSight: false, concealment: 40, encounterBias: 1.5, forage: 'good',   families: ['crocodile', 'snapping_turtle', 'bog_frog', 'swamp_crab', 'scarlet_ibis'], tint: 0x5f7f64 },
+  bog:        { name: 'Bog',        cost: 4, passable: true,  blocksSight: false, concealment: 60, encounterBias: 1.5, forage: 'modest', families: ['bog_frog', 'snapping_turtle'],                 tint: 0x4b5a43 },
   scree:      { name: 'Scree',      cost: 3, timeCost: 2,   passable: true, blocksSight: false, concealment: 20, encounterBias: 0.5, forage: 'little', families: [],            tint: 0x8c8479 },
   // Blight is placed, not rolled: the generator paints it around a source
   // (TERRAIN_TYPES). It reads backwards on purpose: the worst ground to cross,
@@ -49,7 +49,7 @@ export const GROUNDS = {
   cliff:      { name: 'Cliff',      cost: null, passable: false, blocksSight: true,  concealment: 0, encounterBias: 0, forage: 'none',    families: [],                               tint: 0x5a534c },
   // Rivers and lakes are tiles, not hex edges; a crossing is a FORD (below).
   // Water is fished from a tile beside it, never stood on without a ford.
-  water:      { name: 'Water',      cost: null, passable: false, blocksSight: false, concealment: 0, encounterBias: 0, forage: 'fishing', families: ['wading_heron'],             tint: 0x3f6f95 },
+  water:      { name: 'Water',      cost: null, passable: false, blocksSight: false, concealment: 0, encounterBias: 0, forage: 'fishing', families: ['crocodile'],             tint: 0x3f6f95 },
 };
 
 /** Relief overlays the ground. Hills and highland block sight past them and

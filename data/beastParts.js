@@ -83,18 +83,64 @@ export const SIGNATURE_SLOTS = ['weaponMain', 'amulet'];
  * slot to the anatomy word its part is named for.
  */
 export const HUNT_BEASTS = {
-  marsh_stalker: {
-    name: 'Marsh Stalker', type: 'hunt_marsh_stalker', signature: 'lacerate',
+  // ── The Reeds of Gethsemane (chunk 14a): eight families and the apex.
+  // crocodile was marsh_stalker, scarlet_ibis was wading_heron
+  // (LEGACY_PART_IDS keeps parts already harvested under the old ids).
+  crocodile: {
+    name: 'Crocodile', type: 'hunt_crocodile', signature: 'lacerate',
     weaponDamage: { min: 6, max: 8 },
-    parts: { weaponMain: 'Fangs', weaponOff: 'Claws', head: 'Skull', chest: 'Hide', legs: 'Haunches',
-             gloves: 'Forepaws', boots: 'Hind Paws', ring: 'Eyes', amulet: 'Heart' },
+    parts: { weaponMain: 'Jaws', weaponOff: 'Tail', head: 'Skull', chest: 'Scutes', legs: 'Haunches',
+             gloves: 'Forelimbs', boots: 'Hind Feet', ring: 'Eyes', amulet: 'Heart' },
   },
-  wading_heron: {
-    name: 'Wading Heron', type: 'hunt_wading_heron', signature: 'disorient',
+  marsh_viper: {
+    name: 'Marsh Viper', type: 'hunt_marsh_viper', signature: 'toxic',
+    weaponDamage: { min: 4, max: 6 },
+    parts: { weaponMain: 'Fangs', head: 'Head Scales', chest: 'Scales', ring: 'Eyes', amulet: 'Venom Gland' },
+  },
+  bog_frog: {
+    name: 'Bog Frog', type: 'hunt_bog_frog', signature: 'disorient',
+    weaponDamage: { min: 4, max: 5 },
+    parts: { weaponMain: 'Tongue', head: 'Skull', chest: 'Skin', legs: 'Haunches', boots: 'Webbed Feet',
+             ring: 'Eyes', amulet: 'Glands' },
+  },
+  swamp_crab: {
+    name: 'Swamp Crab', type: 'hunt_swamp_crab', signature: 'lacerate',
+    weaponDamage: { min: 5, max: 7 },
+    parts: { weaponMain: 'Great Pincer', weaponOff: 'Lesser Pincer', head: 'Eyestalks', chest: 'Carapace',
+             legs: 'Walking Legs', ring: 'Eyes', amulet: 'Gland' },
+  },
+  nutria: {
+    name: 'Nutria', type: 'hunt_nutria', signature: 'disease',
+    weaponDamage: { min: 4, max: 5 },
+    parts: { weaponMain: 'Incisors', head: 'Skull', chest: 'Pelt', legs: 'Haunches', gloves: 'Forepaws',
+             boots: 'Hind Paws', ring: 'Eyes', amulet: 'Heart' },
+  },
+  marsh_bat: {
+    name: 'Marsh Bat', type: 'hunt_marsh_bat', signature: 'curse',
+    weaponDamage: { min: 3, max: 5 },
+    parts: { weaponMain: 'Fangs', head: 'Skull', chest: 'Pelt', gloves: 'Wings', boots: 'Claws',
+             ring: 'Ears', amulet: 'Heart' },
+  },
+  snapping_turtle: {
+    name: 'Snapping Turtle', type: 'hunt_snapping_turtle', signature: 'expose',
+    weaponDamage: { min: 6, max: 8 },
+    parts: { weaponMain: 'Hooked Jaw', head: 'Skull', chest: 'Carapace', legs: 'Plastron', gloves: 'Foreclaws',
+             boots: 'Hind Claws', ring: 'Eyes', amulet: 'Lure' },
+  },
+  scarlet_ibis: {
+    name: 'Scarlet Ibis', type: 'hunt_scarlet_ibis', signature: 'expose',
     weaponDamage: { min: 5, max: 7 },
     parts: { weaponMain: 'Beak', head: 'Crest', chest: 'Plumage', legs: 'Shanks',
              gloves: 'Wings', boots: 'Feet', ring: 'Eyes', amulet: 'Heart' },
   },
+  // The Reeds' apex only (zones: apex.family), never a filler pack.
+  vowkeeper: {
+    name: 'Vowkeeper', type: 'hunt_vowkeeper', signature: 'lacerate',
+    weaponDamage: { min: 9, max: 12 },
+    parts: { weaponMain: 'Jaws', weaponOff: 'Tail', head: 'Skull', chest: 'Vow-Stone Hide', legs: 'Haunches',
+             gloves: 'Forelimbs', boots: 'Hind Feet', ring: 'Eyes', amulet: 'Swallowed Vow' },
+  },
+  // ── The Bay of Solace (its own pass is 14e).
   tide_crab: {
     name: 'Tide Crab', type: 'hunt_tide_crab', signature: 'expose',
     weaponDamage: { min: 6, max: 7 },
@@ -109,8 +155,33 @@ export const HUNT_BEASTS = {
   },
 };
 
-/** A cultist band's members alternate between these types, by roster index. */
+/** A cultist band's members alternate between these types, by roster index,
+ *  when the band has no cult (CULT_BANDS). */
 export const HUNT_CULTIST_TYPES = ['hunt_cult_zealot', 'hunt_cult_adept'];
+
+/**
+ * Cult bands by the false god behind them (chunk 14a; the Starter Zones
+ * draft). A band's members alternate between `types`, by roster index.
+ * Readers: HuntMapGen addCultists (stamps occ.cult, the god; 14c makes it the
+ * hunt's rolled god), HuntBeasts.memberType, the map's occupant view (name).
+ */
+export const CULT_BANDS = {
+  yargaleth: { name: 'Drowned Choir', types: ['hunt_choir_confessor', 'hunt_choir_cantor'] },
+  dagon:     { name: 'Temple of the Gill', types: ['hunt_gill_baptist', 'hunt_gill_priest'] },
+};
+
+/**
+ * Part ids from families that were re-keyed (chunk 14a): the loader maps an
+ * item with an old id to its new one (GameState deserializeItem). Owner:
+ * only the owner's save is on this branch, so re-keying is fine; this keeps
+ * the parts already in its bags.
+ */
+export const LEGACY_PART_FAMILIES = { marsh_stalker: 'crocodile', wading_heron: 'scarlet_ibis' };
+export function legacyItemId(id) {
+  const m = /^part_([a-z_]+?)_(weaponMain|weaponOff|head|chest|legs|gloves|boots|ring|amulet)$/.exec(id || '');
+  if (!m || !LEGACY_PART_FAMILIES[m[1]]) return id;
+  return `part_${LEGACY_PART_FAMILIES[m[1]]}_${m[2]}`;
+}
 
 /** The armour slot a cultist wears (and drops): the Advance loop's chest drop. */
 export const CULTIST_GEAR_SLOT = 'chest';

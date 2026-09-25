@@ -33,7 +33,7 @@
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items } from '../../data/items.js';
 import {
-  HUNT_BEASTS, HUNT_CULTIST_TYPES, CULTIST_GEAR_SLOT, GRADE_HP_SCALE, partBaseId,
+  HUNT_BEASTS, HUNT_CULTIST_TYPES, CULT_BANDS, CULTIST_GEAR_SLOT, GRADE_HP_SCALE, partBaseId,
 } from '../../data/beastParts.js';
 import { calculateDerivedStats } from './CharacterBuilder.js';
 import { createItemInstance, getItemComputedData, pickBaseId } from './ItemFactory.js';
@@ -49,7 +49,11 @@ export function loadoutSeed(huntSeed, occ) {
 
 /** The combat enemy type a roster member fights as. */
 export function memberType(occ, index) {
-  if (occ.kind === 'cultist') return HUNT_CULTIST_TYPES[index % HUNT_CULTIST_TYPES.length];
+  if (occ.kind === 'cultist') {
+    // A band serving a false god fights as its cult (CULT_BANDS, chunk 14a).
+    const types = CULT_BANDS[occ.cult]?.types || HUNT_CULTIST_TYPES;
+    return types[index % types.length];
+  }
   const fam = HUNT_BEASTS[occ.roster[index]?.type] || HUNT_BEASTS[occ.family];
   if (!fam) throw new Error(`no hunt beast for family '${occ.roster[index]?.type || occ.family}'`);
   return fam.type;
@@ -169,11 +173,13 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
     };
   });
   const lead = occ.kind === 'cultist' ? 'Cultists' : (HUNT_BEASTS[occ.family]?.name || 'Beasts');
+  const cult = occ.kind === 'cultist' ? CULT_BANDS[occ.cult]?.name : null;
   return {
     id: `hunt_map_${occ.id}`,
-    name: occ.kind === 'cultist' ? 'Cultist band' : `${lead}${occ.roster.length > 1 ? ' pack' : ''}`,
+    name: occ.kind === 'cultist' ? (cult || 'Cultist band') : `${lead}${occ.roster.length > 1 ? ' pack' : ''}`,
     description: zoneName ? `A fight in the ${zoneName}.` : 'A fight on the hunt.',
-    portraitKey: occ.kind === 'cultist' ? 'soldier_portrait' : 'beast_portrait',
+    // The lead member's own portrait (14a): the old keys were never loaded.
+    portraitKey: ENEMY_TYPES[enemies[0]?.type]?.skin || null,
     loot: { itemLevel, maxBaseTier: 1 },
     enemies,
   };

@@ -1,13 +1,13 @@
 {
  "types": {
-  "hunt_marsh_stalker": {
-   "maxHP": 50,
+  "hunt_crocodile": {
+   "maxHP": 56,
    "maxMP": 10,
    "baseStats": {
-    "STR": 8,
-    "DEX": 7,
-    "CON": 5,
-    "INT": 2,
+    "STR": 9,
+    "DEX": 5,
+    "CON": 6,
+    "INT": 1,
     "WIS": 3,
     "CHA": 4
    },
@@ -15,14 +15,144 @@
     "Resilience": 10
    },
    "skills": [
-    "oskar_rending_bite",
     "oskar_maw_rip",
+    "oskar_rending_bite",
     "basic_attack"
    ],
-   "aiProfile": "oskar_beast",
+   "aiProfile": "hunt_beast",
    "initiative": 4
   },
-  "hunt_wading_heron": {
+  "hunt_marsh_viper": {
+   "maxHP": 30,
+   "maxMP": 12,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 9,
+    "CON": 3,
+    "INT": 2,
+    "WIS": 4,
+    "CHA": 5
+   },
+   "derivedBonus": {
+    "Evasion": 15
+   },
+   "skills": [
+    "kiro_venom_reflex",
+    "kiro_corrosive_bite",
+    "kiro_toxic_spit",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 5
+  },
+  "hunt_bog_frog": {
+   "maxHP": 26,
+   "maxMP": 12,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 7,
+    "CON": 4,
+    "INT": 2,
+    "WIS": 4,
+    "CHA": 5
+   },
+   "derivedBonus": {
+    "Evasion": 10
+   },
+   "skills": [
+    "laki_silent_dive",
+    "laki_hooting_taunt",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 5
+  },
+  "hunt_swamp_crab": {
+   "maxHP": 46,
+   "maxMP": 10,
+   "baseStats": {
+    "STR": 7,
+    "DEX": 4,
+    "CON": 7,
+    "INT": 1,
+    "WIS": 3,
+    "CHA": 3
+   },
+   "derivedBonus": {
+    "PhysicalResist": 20
+   },
+   "skills": [
+    "rogue_hamstring",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 3
+  },
+  "hunt_nutria": {
+   "maxHP": 22,
+   "maxMP": 8,
+   "baseStats": {
+    "STR": 5,
+    "DEX": 6,
+    "CON": 4,
+    "INT": 1,
+    "WIS": 3,
+    "CHA": 5
+   },
+   "derivedBonus": null,
+   "skills": [
+    "oskar_infectious_claw",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 5
+  },
+  "hunt_marsh_bat": {
+   "maxHP": 20,
+   "maxMP": 12,
+   "baseStats": {
+    "STR": 3,
+    "DEX": 9,
+    "CON": 3,
+    "INT": 2,
+    "WIS": 5,
+    "CHA": 6
+   },
+   "derivedBonus": {
+    "Evasion": 20
+   },
+   "skills": [
+    "laki_startle",
+    "warlock_hex",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 6
+  },
+  "hunt_snapping_turtle": {
+   "maxHP": 60,
+   "maxMP": 10,
+   "baseStats": {
+    "STR": 8,
+    "DEX": 3,
+    "CON": 9,
+    "INT": 1,
+    "WIS": 3,
+    "CHA": 2
+   },
+   "derivedBonus": {
+    "PhysicalResist": 20,
+    "Resilience": 10
+   },
+   "skills": [
+    "oskar_reflex_bite",
+    "berserker_crushing_blow",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 2
+  },
+  "hunt_scarlet_ibis": {
    "maxHP": 36,
    "maxMP": 12,
    "baseStats": {
@@ -37,11 +167,37 @@
     "Evasion": 10
    },
    "skills": [
-    "laki_hooting_taunt",
-    "laki_silent_dive",
+    "rogue_sneak_attack",
+    "fighter_heavy_slash",
     "basic_attack"
    ],
-   "aiProfile": "laki_beast",
+   "aiProfile": "hunt_beast",
+   "initiative": 5
+  },
+  "hunt_vowkeeper": {
+   "maxHP": 220,
+   "maxMP": 48,
+   "baseStats": {
+    "STR": 10,
+    "DEX": 5,
+    "CON": 9,
+    "INT": 2,
+    "WIS": 4,
+    "CHA": 5
+   },
+   "derivedBonus": {
+    "PhysicalResist": 20,
+    "Resilience": 20
+   },
+   "skills": [
+    "oskar_reflex_bite",
+    "berserker_death_spiral",
+    "oskar_maw_rip",
+    "berserker_crushing_blow",
+    "oskar_rending_bite",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
    "initiative": 5
   },
   "hunt_tide_crab": {
@@ -123,6 +279,86 @@
    ],
    "aiProfile": "rogue_dummy",
    "initiative": 8
+  },
+  "hunt_choir_confessor": {
+   "maxHP": 50,
+   "maxMP": 26,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 5,
+    "CON": 5,
+    "INT": 7,
+    "WIS": 5,
+    "CHA": 6
+   },
+   "derivedBonus": null,
+   "skills": [
+    "warlock_curse_amplify",
+    "warlock_hex",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 6
+  },
+  "hunt_choir_cantor": {
+   "maxHP": 46,
+   "maxMP": 26,
+   "baseStats": {
+    "STR": 4,
+    "DEX": 6,
+    "CON": 4,
+    "INT": 6,
+    "WIS": 6,
+    "CHA": 6
+   },
+   "derivedBonus": null,
+   "skills": [
+    "laki_hooting_taunt",
+    "warlock_dark_bolts",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 6
+  },
+  "hunt_gill_baptist": {
+   "maxHP": 58,
+   "maxMP": 20,
+   "baseStats": {
+    "STR": 7,
+    "DEX": 6,
+    "CON": 6,
+    "INT": 2,
+    "WIS": 4,
+    "CHA": 5
+   },
+   "derivedBonus": null,
+   "skills": [
+    "rogue_hamstring",
+    "rogue_poisoned_knife",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 5
+  },
+  "hunt_gill_priest": {
+   "maxHP": 48,
+   "maxMP": 30,
+   "baseStats": {
+    "STR": 3,
+    "DEX": 4,
+    "CON": 5,
+    "INT": 5,
+    "WIS": 8,
+    "CHA": 6
+   },
+   "derivedBonus": null,
+   "skills": [
+    "healer_heal",
+    "warlock_dark_bolts",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 6
   }
  },
  "GRADE_HP_SCALE": {
@@ -132,18 +368,72 @@
   "great": 1.7
  },
  "partBases": {
-  "marsh_stalker": [
-   "weaponMain:Fangs",
-   "weaponOff:Claws",
+  "crocodile": [
+   "weaponMain:Jaws",
+   "weaponOff:Tail",
    "head:Skull",
-   "chest:Hide",
+   "chest:Scutes",
+   "legs:Haunches",
+   "gloves:Forelimbs",
+   "boots:Hind Feet",
+   "ring:Eyes",
+   "amulet:Heart"
+  ],
+  "marsh_viper": [
+   "weaponMain:Fangs",
+   "head:Head Scales",
+   "chest:Scales",
+   "ring:Eyes",
+   "amulet:Venom Gland"
+  ],
+  "bog_frog": [
+   "weaponMain:Tongue",
+   "head:Skull",
+   "chest:Skin",
+   "legs:Haunches",
+   "boots:Webbed Feet",
+   "ring:Eyes",
+   "amulet:Glands"
+  ],
+  "swamp_crab": [
+   "weaponMain:Great Pincer",
+   "weaponOff:Lesser Pincer",
+   "head:Eyestalks",
+   "chest:Carapace",
+   "legs:Walking Legs",
+   "ring:Eyes",
+   "amulet:Gland"
+  ],
+  "nutria": [
+   "weaponMain:Incisors",
+   "head:Skull",
+   "chest:Pelt",
    "legs:Haunches",
    "gloves:Forepaws",
    "boots:Hind Paws",
    "ring:Eyes",
    "amulet:Heart"
   ],
-  "wading_heron": [
+  "marsh_bat": [
+   "weaponMain:Fangs",
+   "head:Skull",
+   "chest:Pelt",
+   "gloves:Wings",
+   "boots:Claws",
+   "ring:Ears",
+   "amulet:Heart"
+  ],
+  "snapping_turtle": [
+   "weaponMain:Hooked Jaw",
+   "head:Skull",
+   "chest:Carapace",
+   "legs:Plastron",
+   "gloves:Foreclaws",
+   "boots:Hind Claws",
+   "ring:Eyes",
+   "amulet:Lure"
+  ],
+  "scarlet_ibis": [
    "weaponMain:Beak",
    "head:Crest",
    "chest:Plumage",
@@ -152,6 +442,17 @@
    "boots:Feet",
    "ring:Eyes",
    "amulet:Heart"
+  ],
+  "vowkeeper": [
+   "weaponMain:Jaws",
+   "weaponOff:Tail",
+   "head:Skull",
+   "chest:Vow-Stone Hide",
+   "legs:Haunches",
+   "gloves:Forelimbs",
+   "boots:Hind Feet",
+   "ring:Eyes",
+   "amulet:Swallowed Vow"
   ],
   "tide_crab": [
    "weaponMain:Great Pincer",
@@ -589,45 +890,273 @@
   }
  },
  "powerAtItemLevel1": {
-  "marsh_stalker": {
+  "crocodile": {
    "yearling": {
-    "maxHP": 46.08,
-    "PDR": 4.45,
+    "maxHP": 52.08,
+    "PDR": 4.67,
     "Evasion": 2.75,
-    "Accuracy": 10.32,
+    "Accuracy": 8.32,
     "Initiative": 4.73,
     "dice": 7.51,
     "buildupPct": 8.1
    },
    "grown": {
-    "maxHP": 61.53,
-    "PDR": 5.58,
+    "maxHP": 69.53,
+    "PDR": 5.98,
     "Evasion": 3.97,
-    "Accuracy": 12.78,
+    "Accuracy": 10.78,
     "Initiative": 5.18,
     "dice": 7.93,
     "buildupPct": 11.95
    },
    "prime": {
-    "maxHP": 81.85,
-    "PDR": 6.97,
+    "maxHP": 92.13,
+    "PDR": 7.42,
     "Evasion": 5.65,
-    "Accuracy": 15.6,
+    "Accuracy": 13.6,
     "Initiative": 6.05,
     "dice": 8.27,
     "buildupPct": 15.23
    },
    "great": {
-    "maxHP": 108.83,
-    "PDR": 7.92,
+    "maxHP": 122.43,
+    "PDR": 8.48,
     "Evasion": 7.17,
-    "Accuracy": 17.48,
+    "Accuracy": 15.48,
     "Initiative": 6.75,
     "dice": 8.63,
     "buildupPct": 21.25
    }
   },
-  "wading_heron": {
+  "marsh_viper": {
+   "yearling": {
+    "maxHP": 27.68,
+    "PDR": 2.47,
+    "Evasion": 15.65,
+    "Accuracy": 10.82,
+    "Initiative": 5.28,
+    "dice": 5.43,
+    "buildupPct": 6.88
+   },
+   "grown": {
+    "maxHP": 37.53,
+    "PDR": 3.02,
+    "Evasion": 16.12,
+    "Accuracy": 11.53,
+    "Initiative": 5.73,
+    "dice": 5.83,
+    "buildupPct": 11.23
+   },
+   "prime": {
+    "maxHP": 49.25,
+    "PDR": 3.02,
+    "Evasion": 17.12,
+    "Accuracy": 13.35,
+    "Initiative": 6,
+    "dice": 6.09,
+    "buildupPct": 15.78
+   },
+   "great": {
+    "maxHP": 66.07,
+    "PDR": 3.68,
+    "Evasion": 17.32,
+    "Accuracy": 14.58,
+    "Initiative": 6.62,
+    "dice": 6.42,
+    "buildupPct": 23
+   }
+  },
+  "bog_frog": {
+   "yearling": {
+    "maxHP": 26.63,
+    "PDR": 3.78,
+    "Evasion": 11.78,
+    "Accuracy": 8.98,
+    "Initiative": 5.65,
+    "dice": 4.91,
+    "buildupPct": 6.58
+   },
+   "grown": {
+    "maxHP": 35.8,
+    "PDR": 4.87,
+    "Evasion": 13.17,
+    "Accuracy": 9.73,
+    "Initiative": 6.42,
+    "dice": 5.31,
+    "buildupPct": 10.22
+   },
+   "prime": {
+    "maxHP": 48.12,
+    "PDR": 6.15,
+    "Evasion": 14.28,
+    "Accuracy": 11.7,
+    "Initiative": 6.78,
+    "dice": 5.57,
+    "buildupPct": 17.48
+   },
+   "great": {
+    "maxHP": 64.93,
+    "PDR": 7.55,
+    "Evasion": 15.07,
+    "Accuracy": 12.95,
+    "Initiative": 7.7,
+    "dice": 5.87,
+    "buildupPct": 22.63
+   }
+  },
+  "swamp_crab": {
+   "yearling": {
+    "maxHP": 45.92,
+    "PDR": 25.05,
+    "Evasion": 1.27,
+    "Accuracy": 6.58,
+    "Initiative": 3.65,
+    "dice": 6.44,
+    "buildupPct": 6.05
+   },
+   "grown": {
+    "maxHP": 61.7,
+    "PDR": 25.65,
+    "Evasion": 2.2,
+    "Accuracy": 8.65,
+    "Initiative": 3.95,
+    "dice": 6.84,
+    "buildupPct": 11.63
+   },
+   "prime": {
+    "maxHP": 81.98,
+    "PDR": 26.72,
+    "Evasion": 2.9,
+    "Accuracy": 10.23,
+    "Initiative": 4.6,
+    "dice": 7.14,
+    "buildupPct": 16.27
+   },
+   "great": {
+    "maxHP": 108.88,
+    "PDR": 27.52,
+    "Evasion": 3.92,
+    "Accuracy": 11.48,
+    "Initiative": 5.18,
+    "dice": 7.47,
+    "buildupPct": 22.68
+   }
+  },
+  "nutria": {
+   "yearling": {
+    "maxHP": 23.58,
+    "PDR": 3.7,
+    "Evasion": 2.3,
+    "Accuracy": 8.75,
+    "Initiative": 5.57,
+    "dice": 4.91,
+    "buildupPct": 7.05
+   },
+   "grown": {
+    "maxHP": 31.77,
+    "PDR": 4.9,
+    "Evasion": 3.93,
+    "Accuracy": 10.57,
+    "Initiative": 6.12,
+    "dice": 5.31,
+    "buildupPct": 10.18
+   },
+   "prime": {
+    "maxHP": 42.75,
+    "PDR": 6.2,
+    "Evasion": 5.48,
+    "Accuracy": 12.48,
+    "Initiative": 6.72,
+    "dice": 5.57,
+    "buildupPct": 17.05
+   },
+   "great": {
+    "maxHP": 57.63,
+    "PDR": 7.47,
+    "Evasion": 6.43,
+    "Accuracy": 14.83,
+    "Initiative": 7.55,
+    "dice": 5.87,
+    "buildupPct": 21.28
+   }
+  },
+  "marsh_bat": {
+   "yearling": {
+    "maxHP": 20.43,
+    "PDR": 3.02,
+    "Evasion": 21.78,
+    "Accuracy": 11.62,
+    "Initiative": 6.53,
+    "dice": 4.4,
+    "buildupPct": 6.58
+   },
+   "grown": {
+    "maxHP": 27.4,
+    "PDR": 3.82,
+    "Evasion": 23.17,
+    "Accuracy": 12.62,
+    "Initiative": 7.13,
+    "dice": 4.8,
+    "buildupPct": 10.22
+   },
+   "prime": {
+    "maxHP": 36.62,
+    "PDR": 4.2,
+    "Evasion": 24.28,
+    "Accuracy": 15.45,
+    "Initiative": 7.42,
+    "dice": 5.05,
+    "buildupPct": 17.48
+   },
+   "great": {
+    "maxHP": 49.43,
+    "PDR": 5.22,
+    "Evasion": 25.07,
+    "Accuracy": 17.13,
+    "Initiative": 8.17,
+    "dice": 5.33,
+    "buildupPct": 22.63
+   }
+  },
+  "snapping_turtle": {
+   "yearling": {
+    "maxHP": 59.58,
+    "PDR": 26.37,
+    "Evasion": 2.3,
+    "Accuracy": 5.75,
+    "Initiative": 2.57,
+    "dice": 7.51,
+    "buildupPct": 7.05
+   },
+   "grown": {
+    "maxHP": 79.77,
+    "PDR": 27.52,
+    "Evasion": 3.93,
+    "Accuracy": 7.57,
+    "Initiative": 3.12,
+    "dice": 7.93,
+    "buildupPct": 10.18
+   },
+   "prime": {
+    "maxHP": 105.02,
+    "PDR": 28.7,
+    "Evasion": 5.48,
+    "Accuracy": 9.48,
+    "Initiative": 3.72,
+    "dice": 8.27,
+    "buildupPct": 17.05
+   },
+   "great": {
+    "maxHP": 139.28,
+    "PDR": 29.97,
+    "Evasion": 6.43,
+    "Accuracy": 11.83,
+    "Initiative": 4.55,
+    "dice": 8.63,
+    "buildupPct": 21.28
+   }
+  },
+  "scarlet_ibis": {
    "yearling": {
     "maxHP": 33.92,
     "PDR": 3.7,
@@ -663,6 +1192,44 @@
     "Initiative": 7.55,
     "dice": 7.47,
     "buildupPct": 21.28
+   }
+  },
+  "vowkeeper": {
+   "yearling": {
+    "maxHP": 179.87,
+    "PDR": 26.45,
+    "Evasion": 2.75,
+    "Accuracy": 8.32,
+    "Initiative": 5.73,
+    "dice": 11.11,
+    "buildupPct": 8.1
+   },
+   "grown": {
+    "maxHP": 239.53,
+    "PDR": 27.58,
+    "Evasion": 3.97,
+    "Accuracy": 10.78,
+    "Initiative": 6.18,
+    "dice": 11.57,
+    "buildupPct": 11.95
+   },
+   "prime": {
+    "maxHP": 313.13,
+    "PDR": 28.97,
+    "Evasion": 5.65,
+    "Accuracy": 13.6,
+    "Initiative": 7.05,
+    "dice": 12.07,
+    "buildupPct": 15.23
+   },
+   "great": {
+    "maxHP": 411.43,
+    "PDR": 29.92,
+    "Evasion": 7.17,
+    "Accuracy": 15.48,
+    "Initiative": 7.75,
+    "dice": 12.55,
+    "buildupPct": 21.25
    }
   },
   "tide_crab": {
@@ -743,8 +1310,8 @@
   }
  },
  "contactFirsts": {
-  "party": 65,
-  "enemy": 40,
+  "party": 70,
+  "enemy": 35,
   "ambush": 15
  }
 }

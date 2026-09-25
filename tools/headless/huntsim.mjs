@@ -122,7 +122,7 @@ const MAX_FIGHT_TURNS = 800;
 const MAX_CAMPS_IN_A_ROW = 4;
 /** --trace: print every fight (party and enemies after it, the last log lines). */
 const TRACE = args.includes('--trace');
-const TRACE_LINES = 25;
+const TRACE_LINES = process.argv.includes("--trace-lines") ? Number(process.argv[process.argv.indexOf("--trace-lines") + 1]) : 25;
 
 // ---------------------------------------------------------------------------
 // The party

@@ -33,6 +33,7 @@ import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_W
          UNMASK_MAX_CONCEALMENT } from '../../data/huntMapGen.js';
 import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
 import { getZone } from '../../data/zones.js';
+import { CULT_BANDS } from '../../data/beastParts.js';
 import { EVENT_TEMPLATES } from '../../data/events.js';
 import { staticEligible } from './EventEffects.js';
 import { houseOf } from './Standing.js';
@@ -161,6 +162,12 @@ export function occupantConcealment(map, occ) {
   return (occ.concealment || 0) + (GROUNDS[tile?.ground]?.concealment || 0);
 }
 
+/** Whether a region's native family may take a composition (natives[f].compositions; none listed = any). */
+function familyAllows(zone, family, comp) {
+  const only = zone?.natives?.[family]?.compositions;
+  return !Array.isArray(only) || only.includes(comp);
+}
+
 /** Beast members of one family on reachable occupants. */
 function familyCount(map, family, reach) {
   let n = 0;
@@ -274,8 +281,11 @@ export const NEED_HANDLERS = {
       const tile = ctx.pickTile({ minEntryDist: ctx.farDist(), noBlight: true, hostile: true, weight: 'encounter' })
                 || ctx.pickTile({ noBlight: true, hostile: true, weight: 'encounter' });
       if (!tile) return ctx.fail('no tile for the apex');
-      const occ = ctx.addBeast(tile, { family: ctx.zone.apex.family, composition: 'lone',
-        roster: [{ type: ctx.zone.apex.family, grade: 'great' }], state: 'rooted', quarry: true });
+      // An apex may come with an escort (zones apex.escort, 14a): one Great
+      // beast acting once a round could not be the elite fight it should be.
+      const escort = (ctx.zone.apex.escort || []).flatMap(e => Array.from({ length: e.count || 1 }, () => ({ type: e.family, grade: e.grade || 'grown' })));
+      const occ = ctx.addBeast(tile, { family: ctx.zone.apex.family, composition: escort.length ? 'alpha' : 'lone',
+        roster: [{ type: ctx.zone.apex.family, grade: 'great' }, ...escort], state: 'rooted', quarry: true });
       occ.apex = true;
       obj.occupant = occ.id;
       obj.family = occ.family;
@@ -289,7 +299,9 @@ export const NEED_HANDLERS = {
 
   native_family: {
     place(ctx, obj) {
-      const natives = Object.keys(ctx.zone.natives);
+      // Only a family that runs in packs can be culled (14a: a Cull of
+      // solitary snapping turtles would need a dozen lone occupants).
+      const natives = Object.keys(ctx.zone.natives).filter(f => familyAllows(ctx.zone, f, 'pack'));
       obj.family = natives[Math.floor(ctx.rng() * natives.length)];
       obj.count = obj.params.count;
       while (familyCount(ctx.map, obj.family, ctx.reach) < obj.count) {
@@ -689,6 +701,10 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
         concealment: ambush ? OCCUPANT_CONCEALMENT.cultAmbusher : OCCUPANT_CONCEALMENT.cultist,
       };
       if (ambush) occ.ambush = true;
+      // Chunk 14a: the band serves the region's false god (CULT_BANDS), which
+      // sets its members' types. No draw, so the map is unchanged. 14c makes
+      // this the god the hunt rolled at departure.
+      if (CULT_BANDS[zone.falseGod]) occ.cult = zone.falseGod;
       map.occupants.push(occ); occupied.add(tile);
       return occ;
     },
@@ -728,7 +744,9 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     if (!tile) break;
     if (rng() < (zone.cultistShare || 0)) { ctx.addCultists(tile); continue; }
     const fam = ctx.pickFamily(tile);
-    const comp = pickWeighted(rng, comps);
+    // A family may keep to some shapes only (natives[f].compositions, 14a).
+    const famComps = comps.filter(([c]) => familyAllows(zone, fam, c));
+    const comp = pickWeighted(rng, famComps.length ? famComps : comps);
     ctx.addBeast(tile, { family: fam, composition: comp, roster: buildRoster(rng, comp, fam, ctx.rollGrade, gradeWeights, packSize) });
   }
 

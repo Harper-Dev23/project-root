@@ -35,11 +35,22 @@ export const ZONES = {
     // beast families land (chunk 9).
     // `predator: true`: a Roaming pack of it that notices the party hunts it
     // (WORLD_SIM "a few predator families"; HuntWorld.stepPack, chunk 13c).
+    // The flagship roster (chunk 14a, owner 2026-09-25; data/beastParts.js).
     natives: {
-      marsh_stalker: { name: 'Marsh Stalker', predator: true },
-      wading_heron:  { name: 'Wading Heron' },
+      crocodile:       { name: 'Crocodile', predator: true },
+      marsh_viper:     { name: 'Marsh Viper', predator: true },
+      bog_frog:        { name: 'Bog Frog' },
+      swamp_crab:      { name: 'Swamp Crab' },
+      nutria:          { name: 'Nutria' },
+      marsh_bat:       { name: 'Marsh Bat' },
+      // Solitary: alone or a mother with young, never a pack (and never a
+      // Cull quarry). HuntMapGen familyAllows.
+      snapping_turtle: { name: 'Snapping Turtle', compositions: ['lone', 'matriarch'] },
+      scarlet_ibis:    { name: 'Scarlet Ibis' },
     },
-    apex: { family: 'marsh_stalker' },
+    // The Vowkeeper: an ancient crocodile grown over with prayer stones.
+    // Its brood lies with it (escort, read by HuntMapGen apex_beast).
+    apex: { family: 'vowkeeper', name: 'the Vowkeeper', escort: [{ family: 'crocodile', grade: 'grown', count: 3 }] },
     cultistShare: 0.25,   // share of hostile occupants that are cultist bands
     // The shrine a Commune plan sends you to: an event template (data/events.js).
     setPieces: { shrine: 'reeds_sunken_shrine' },

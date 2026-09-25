@@ -489,16 +489,16 @@
   "training_encounter_6": "LOSS turns=22 round=6 allies=0/6 foes=1/1 allyHP=0/0/0/0/0/0 foeHP=830 log=232"
  },
  "huntFights": {
-  "stalker pack, party first": "WIN first=party turns=19 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=52/23/28/7/40/55 foeHP=0/0/0/0 hunt=win: log=172",
-  "stalker pack, ambushed": "WIN first=enemy turns=20 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=41/1/32/16/33/27 foeHP=0/0/0/0 hunt=win: log=202",
+  "crocodile pack, party first": "WIN first=party turns=21 round=5 allies=6/6 foes=0/4 foeMaxHP=68/72/70/68 allyHP=58/38/32/36/25/43 foeHP=0/0/0/0 hunt=win: log=136",
+  "crocodile pack, ambushed": "WIN first=enemy turns=23 round=5 allies=6/6 foes=0/4 foeMaxHP=68/72/70/68 allyHP=43/13/32/36/40/46 foeHP=0/0/0/0 hunt=win: log=172",
   "great-led pack with parts": "WIN first=party turns=35 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=3/1/22/1/27/47 foeHP=0/0/0/0/0 hunt=win: log=321",
   "cultist band": "WIN first=party turns=15 round=4 allies=6/6 foes=0/3 foeMaxHP=70/58/72 allyHP=56/38/32/48/40/57 foeHP=0/0/0 hunt=win:simple_chest_dex_int/uncommon,simple_chest_con_str/uncommon,simple_chest_wis_con/rare log=96",
-  "stalker pack, fed for the fight": "WIN first=party turns=18 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=52/23/28/7/40/55 foeHP=0/0/0/0 hunt=win: log=168",
-  "stalker pack, fled on the first turn": "FLED first=party turns=0 round=2 allies=6/6 foes=4/4 foeMaxHP=60/64/62/60 allyHP=56/4/32/45/40/55 foeHP=60/64/62/60 hunt=flee:ko=0 log=57",
+  "crocodile pack, fed for the fight": "WIN first=party turns=20 round=5 allies=6/6 foes=0/4 foeMaxHP=68/72/70/68 allyHP=58/38/32/36/25/43 foeHP=0/0/0/0 hunt=win: log=133",
+  "crocodile pack, fled on the first turn": "FLED first=party turns=0 round=2 allies=6/6 foes=4/4 foeMaxHP=68/72/70/68 allyHP=58/13/32/50/40/58 foeHP=68/72/70/68 hunt=flee:ko=0 log=31",
   "great-led pack, Jeremiah boon 5": "WIN first=party turns=40 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=42/8/32/1/38/48 foeHP=0/0/0/0/0 hunt=win: log=353 mercy=true echoes=0",
-  "stalker pack, Ezekiel boon 5": "WIN first=party turns=13 round=4 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=50/38/29/23/40/54 foeHP=0/0/0/0 hunt=win: log=114 mercy=false echoes=2",
+  "crocodile pack, Ezekiel boon 5": "WIN first=party turns=12 round=4 allies=6/6 foes=0/4 foeMaxHP=68/72/70/68 allyHP=58/32/32/36/31/58 foeHP=0/0/0/0 hunt=win: log=97 mercy=false echoes=5",
   "great-led pack, Dagon pact 5": "WIN first=party turns=38 round=9 allies=6/6 foes=0/5 foeMaxHP=126/70/72/70/54 allyHP=40/1/32/1/37/58 foeHP=0/0/0/0/0 hunt=win: log=351 mercy=false echoes=0 feeds=5 wordLeft=0",
-  "stalker pack, Yar'galeth pact 5": "WIN first=party turns=20 round=5 allies=6/6 foes=0/4 foeMaxHP=60/64/62/60 allyHP=58/8/32/1/40/43 foeHP=0/0/0/0 hunt=win: log=172 mercy=false echoes=0 feeds=0 wordLeft=0",
-  "stalker pack, a Watched wipe in your house's lands, one spoken for": "UNRESOLVED first=enemy turns=0 round=2 allies=1/6 foes=4/4 foeMaxHP=99999/99999/99999/99999 allyHP=1/0/0/0/0/0 foeHP=99999/99999/99999/99999 hunt=survive:ko=6 log=43 offer=50/50/50/50/50/50 spoken=Bran@1 slain=5 bond=950"
+  "crocodile pack, Yar'galeth pact 5": "WIN first=party turns=19 round=5 allies=6/6 foes=0/4 foeMaxHP=68/72/70/68 allyHP=58/19/32/31/34/58 foeHP=0/0/0/0 hunt=win: log=130 mercy=false echoes=0 feeds=0 wordLeft=0",
+  "crocodile pack, a Watched wipe in your house's lands, one spoken for": "UNRESOLVED first=enemy turns=2 round=3 allies=1/6 foes=4/4 foeMaxHP=99999/99999/99999/99999 allyHP=1/0/0/0/0/0 foeHP=99971/99999/99999/99999 hunt=survive:ko=6 log=58 offer=50/50/50/50/50/50 spoken=Bran@1 slain=5 bond=950"
  }
 }

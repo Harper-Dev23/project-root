@@ -341,40 +341,156 @@ export const ENEMY_TYPES = {
   //
   // The Advance loop's hunt_* types above are untouched: old saves' Advance
   // hunts still fight them.
-  hunt_marsh_stalker: {
-    name: 'Marsh Stalker',
+  // ── The Reeds of Gethsemane (chunk 14a, the flagship roster) ──────────────
+  // Eight families, each its own weakness, all on the generic `hunt_beast` AI:
+  // `skills` is the priority order (a finisher listed first fires only when
+  // its condition holds). Kits are composed from existing skills; signature
+  // skills come after the playtest. CHA sets Initiative: chunk 13c measured
+  // that who acts first decides a fight's cost (level 1: ~17% HP party-first,
+  // ~39% enemy-first), so the predators stay near a starting party's ~7.
+  // Portraits are placeholders among the loaded ones (ART_GUIDE).
+  hunt_crocodile: {
+    // Predator (data/zones.js). Was hunt_marsh_stalker (13c: CHA 7 -> 4).
+    name: 'Crocodile',
     skin: 'portrait_oskar',
-    maxHP: 50,
+    maxHP: 56,
     maxMP: 10,
-    // CHA 7 -> 4 (chunk 13c): a predator that hunts the party (data/zones.js)
-    // acted first against every party below level 10 (Initiative ~8-9 against
-    // a starting party's ~7). Who acts first sets a fight's cost: at level 1 a
-    // won fight cost the party ~17% HP when it acted first, ~39% when not.
-    baseStats: { STR: 8, DEX: 7, CON: 5, INT: 2, WIS: 3, CHA: 4 },
+    baseStats: { STR: 9, DEX: 5, CON: 6, INT: 1, WIS: 3, CHA: 4 },
     derivedBonus: { Resilience: 10 },
-    skills: ['oskar_rending_bite', 'oskar_maw_rip', 'basic_attack'],
-    aiProfile: 'oskar_beast',
+    skills: ['oskar_maw_rip', 'oskar_rending_bite', 'basic_attack'],
+    aiProfile: 'hunt_beast',
     isEnemy: true,
     tags: ['beast'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
-  hunt_wading_heron: {
-    name: 'Wading Heron',
+  hunt_marsh_viper: {
+    // Predator. Spits from cover, then bites what the venom has softened.
+    name: 'Marsh Viper',
+    skin: 'portrait_kiro',
+    maxHP: 30,
+    maxMP: 12,
+    baseStats: { STR: 4, DEX: 9, CON: 3, INT: 2, WIS: 4, CHA: 5 },
+    derivedBonus: { Evasion: 15 },
+    skills: ['kiro_venom_reflex', 'kiro_corrosive_bite', 'kiro_toxic_spit', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    aimLane: 'back',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_bog_frog: {
+    // Croaks the party into a daze, then leaps on the dazed.
+    name: 'Bog Frog',
+    skin: 'portrait_laki',
+    maxHP: 26,
+    maxMP: 12,
+    baseStats: { STR: 4, DEX: 7, CON: 4, INT: 2, WIS: 4, CHA: 5 },
+    derivedBonus: { Evasion: 10 },
+    skills: ['laki_silent_dive', 'laki_hooting_taunt', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_swamp_crab: {
+    // Armoured; its pincer hamstrings.
+    name: 'Swamp Crab',
+    skin: 'portrait_kiro',
+    maxHP: 46,
+    maxMP: 10,
+    baseStats: { STR: 7, DEX: 4, CON: 7, INT: 1, WIS: 3, CHA: 3 },
+    derivedBonus: { PhysicalResist: 20 },
+    skills: ['rogue_hamstring', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_nutria: {
+    // Swarming rodents carrying marsh sickness (the draft's "affliction on hit").
+    name: 'Nutria',
+    skin: 'portrait_oskar',
+    maxHP: 22,
+    maxMP: 8,
+    baseStats: { STR: 5, DEX: 6, CON: 4, INT: 1, WIS: 3, CHA: 5 },
+    skills: ['oskar_infectious_claw', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_marsh_bat: {
+    // Night flyers, an ill omen: their bite leaves a curse. Hard to hit;
+    // shriek back when struck; go for the back rank.
+    name: 'Marsh Bat',
+    skin: 'portrait_laki',
+    maxHP: 20,
+    maxMP: 12,
+    baseStats: { STR: 3, DEX: 9, CON: 3, INT: 2, WIS: 5, CHA: 6 },
+    derivedBonus: { Evasion: 20 },
+    skills: ['laki_startle', 'warlock_hex', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    aimLane: 'back',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_snapping_turtle: {
+    // Alligator snapping turtle: a slow tank whose hooked jaw crushes and
+    // snaps back at whatever strikes it.
+    name: 'Snapping Turtle',
+    skin: 'portrait_oskar',
+    // 72 HP / 25 PDR measured as a fortress in packs (14a); now solitary too.
+    maxHP: 60,
+    maxMP: 10,
+    baseStats: { STR: 8, DEX: 3, CON: 9, INT: 1, WIS: 3, CHA: 2 },
+    derivedBonus: { PhysicalResist: 20, Resilience: 10 },
+    skills: ['oskar_reflex_bite', 'berserker_crushing_blow', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_scarlet_ibis: {
+    // Was hunt_wading_heron (13c: CHA 6 -> 5). A spear-beaked wader that
+    // opens a hunter up, then stabs down into the gap.
+    name: 'Scarlet Ibis',
     skin: 'portrait_laki',
     maxHP: 36,
     maxMP: 12,
-    // CHA 6 -> 5 (chunk 13c): see the Marsh Stalker.
     baseStats: { STR: 5, DEX: 9, CON: 4, INT: 3, WIS: 5, CHA: 5 },
     derivedBonus: { Evasion: 10 },
-    skills: ['laki_hooting_taunt', 'laki_silent_dive', 'basic_attack'],
-    aiProfile: 'laki_beast',
+    skills: ['rogue_sneak_attack', 'fighter_heavy_slash', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_vowkeeper: {
+    // The Reeds' apex (always Great): an ancient crocodile whose back has
+    // grown over with the Reeds' floating prayer stones, each a vow made at
+    // the Lament Pools and broken. The stones turn blades (Physical Resist,
+    // Resilience); it bites back when struck, crushes to open a wound, and
+    // finishes with a death roll (Death Spiral) once a hunter is both
+    // Exposed and Lacerated. Elite, not a boss: a little below encounter 3
+    // (owner, 2026-09-25); tuned with huntsim.
+    name: 'Vowkeeper',
+    skin: 'portrait_oskar',
+    // 90 HP / 24 MP alone measured as a pushover (level 1 party of six: 3 rounds,
+    // 15% HP); it ran dry of MP (Reflex Bite costs 3 each time it is struck).
+    maxHP: 220,
+    maxMP: 48,
+    baseStats: { STR: 10, DEX: 5, CON: 9, INT: 2, WIS: 4, CHA: 5 },
+    derivedBonus: { PhysicalResist: 20, Resilience: 20 },
+    skills: ['oskar_reflex_bite', 'berserker_death_spiral', 'oskar_maw_rip', 'berserker_crushing_blow', 'oskar_rending_bite', 'basic_attack'],
+    aiProfile: 'hunt_beast',
     isEnemy: true,
     tags: ['beast'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
   hunt_tide_crab: {
     name: 'Tide Crab',
-    skin: 'beast_portrait',
+    skin: 'portrait_kiro',   // was beast_portrait, never loaded (14a)
     maxHP: 56,
     maxMP: 8,
     baseStats: { STR: 7, DEX: 4, CON: 7, INT: 1, WIS: 3, CHA: 4 },
@@ -401,7 +517,7 @@ export const ENEMY_TYPES = {
   },
   hunt_cult_zealot: {
     name: 'Cult Zealot',
-    skin: 'soldier_portrait',
+    skin: 'dummy_portrait_equipped_fighter',   // was soldier_portrait, never loaded (14a)
     maxHP: 60,
     maxMP: 20,
     baseStats: { STR: 7, DEX: 5, CON: 5, INT: 3, WIS: 4, CHA: 6 },
@@ -413,12 +529,74 @@ export const ENEMY_TYPES = {
   },
   hunt_cult_adept: {
     name: 'Cult Adept',
-    skin: 'rogue_portrait',
+    skin: 'dummy_portrait_equipped_rogue',   // was rogue_portrait, never loaded (14a)
     maxHP: 48,
     maxMP: 24,
     baseStats: { STR: 4, DEX: 8, CON: 4, INT: 5, WIS: 4, CHA: 8 },
     skills: ['rogue_poisoned_knife', 'basic_attack'],
     aiProfile: 'rogue_dummy',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+
+  // ── Cult bands (chunk 14a; data/beastParts.js CULT_BANDS picks them by the
+  // false god behind the band). Generic hunt_beast AI; kits in priority order.
+  hunt_choir_confessor: {
+    // The Drowned Choir (Yar'galeth): "confessors gone wrong", forcing a
+    // confession out of you, true or not. Curses, then deepens it.
+    name: 'Choir Confessor',
+    skin: 'dummy_portrait_equipped_warlock',
+    maxHP: 50,
+    maxMP: 26,
+    baseStats: { STR: 4, DEX: 5, CON: 5, INT: 7, WIS: 5, CHA: 6 },
+    skills: ['warlock_curse_amplify', 'warlock_hex', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    aimLane: 'back',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_choir_cantor: {
+    // The Drowned Choir's singers: a dirge that dazes, and drowned words
+    // that rot.
+    name: 'Choir Cantor',
+    skin: 'dummy_portrait_equipped_wizard',
+    maxHP: 46,
+    maxMP: 26,
+    baseStats: { STR: 4, DEX: 6, CON: 4, INT: 6, WIS: 6, CHA: 6 },
+    skills: ['laki_hooting_taunt', 'warlock_dark_bolts', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    aimLane: 'back',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_gill_baptist: {
+    // The Temple of the Gill (Dagon): baptism as drowning. Hamstrings so you
+    // cannot get out of the water, then the poisoned blade.
+    name: 'Gill Baptist',
+    skin: 'dummy_portrait_equipped_rogue',
+    maxHP: 58,
+    maxMP: 20,
+    baseStats: { STR: 7, DEX: 6, CON: 6, INT: 2, WIS: 4, CHA: 5 },
+    skills: ['rogue_hamstring', 'rogue_poisoned_knife', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['cultist'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_gill_priest: {
+    // Keeps the congregation standing (heals the most hurt ally below 60%),
+    // otherwise casts rot from the altar.
+    name: 'Gill Priest',
+    skin: 'dummy_portrait_equipped_healer',
+    maxHP: 48,
+    maxMP: 30,
+    baseStats: { STR: 3, DEX: 4, CON: 5, INT: 5, WIS: 8, CHA: 6 },
+    skills: ['healer_heal', 'warlock_dark_bolts', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    aimLane: 'back',
     isEnemy: true,
     tags: ['cultist'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },

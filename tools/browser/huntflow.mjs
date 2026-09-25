@@ -321,7 +321,13 @@ const took = await walkTo("new Set([st.map.objectives.primary.site])");
 check('walked to the Retrieve site and took the item', took === 'there' && await evaluate('return window.__T.s().hunt.getState().retrieved === true;'), took);
 const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t]) => t.exit).map(([id]) => id))");
 check('walked to an exit', walked === 'there', walked);
-await evaluate(`const s = window.__T.s(); s.panel = null; s.selected = s.v.pos; s._refresh(); return 1;`);
+// A fight on the way in leaves spoils (or opens a site) under the party; the
+// scene shows those before the tile panel, so walk away from both first, as a
+// player would (14a: the denser Reeds made a last-step fight likely).
+await evaluate(`const s = window.__T.s(); const h = s.hunt;
+  if (h.view().spoils) s._act('harvest', () => h.harvest({ take: [], meat: false }));
+  if (h.view().event) s._act('leave', () => h.leaveEvent());
+  s.panel = null; s.selected = s.v.pos; s._refresh(); return 1;`);
 const home0 = await bagRations();
 const pts0 = await evaluate(`const PM = (await import('/src/systems/ProgressionManager.js')).default;
   // Every Hunt Point paid from here to the check below, with who paid it.

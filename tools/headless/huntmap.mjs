@@ -59,6 +59,7 @@ const { GROUNDS, RELIEF, FORD, isPassable, tileCosts } = await import('../../dat
 const { MAP_SIZES, PRIMARY_OBJECTIVES, GRADES, COMPOSITIONS, UNMASK_MAX_CONCEALMENT } = await import('../../data/huntMapGen.js');
 const { PLACEMENT_NEEDS, BONUS_OBJECTIVES } = await import('../../data/planAffixes.js');
 const { ZONES } = await import('../../data/zones.js');
+const { HUNT_BEASTS } = await import('../../data/beastParts.js');
 const { EVENT_TEMPLATES } = await import('../../data/events.js');
 const Gen = await import('../../src/systems/HuntMapGen.js');
 const { generateHuntMap, validateHuntMap, unhandledNeeds, NEED_HANDLERS, occupantConcealment,
@@ -141,9 +142,11 @@ console.log('=== grounds, relief, regions ===');
   for (const z of ZONE_IDS) {
     const zone = ZONES[z];
     // Event templates live in data/events.js since chunk 11a; the shrine is a set piece there.
-    check(`${zone.name}: palette of real grounds, no blight; relief of real relief; apex native; shrine is a real event; house ${zone.divineAlignment}`,
+    check(`${zone.name}: palette of real grounds, no blight; relief of real relief; apex (and its escort) real hunt families; shrine is a real event; house ${zone.divineAlignment}`,
       Object.keys(zone.palette).every(g => GROUNDS[g] && g !== 'blight') && Object.values(zone.palette).some(w => w > 0)
-      && Object.keys(zone.relief).every(r => RELIEF[r]) && !!zone.natives[zone.apex.family]
+      && Object.keys(zone.relief).every(r => RELIEF[r])
+      // 14a: the apex may be apex-only (the Reeds' Vowkeeper), not a native.
+      && !!HUNT_BEASTS[zone.apex.family] && (zone.apex.escort || []).every(e => !!HUNT_BEASTS[e.family])
       && !!EVENT_TEMPLATES[zone.setPieces.shrine]?.appears?.setPiece && !!zone.divineAlignment);
   }
 }
@@ -380,6 +383,32 @@ console.log('=== pack size follows the danger (chunk 13c) ===');
   check('every pack, alpha and Cull quarry pack is within its danger band (4-8 overall)',
     !bad.length && packs > 0 && alphas > 0 && culls > 0 && PACK_SIZE_BY_DANGER.every(b => b.pack[0] >= 4 && b.pack[1] <= 8),
     bad.length ? bad.slice(0, 5).join('; ') : `${packs} packs (${culls} Cull quarry), ${alphas} alphas on 600 maps`);
+}
+
+console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a) ===');
+{
+  const { CULT_BANDS } = await import('../../data/beastParts.js');
+  const reeds = ZONES.reeds_of_gethsemane;
+  let turtles = 0, turtleBad = [], cullBad = [], apexOk = 0, apexN = 0, bands = 0, bandBad = [];
+  for (let k = 0; k < 60; k++) for (const objective of ['cull', 'apex', 'scout']) {
+    const m = Gen.generateHuntMap({ zoneId: 'reeds_of_gethsemane', objective, size: ['small', 'medium', 'large'][k % 3], seed: 32000 + k });
+    for (const o of m.occupants) {
+      if (o.family === 'snapping_turtle') { turtles++; if (!(reeds.natives.snapping_turtle.compositions || []).includes(o.composition)) turtleBad.push(`${o.composition}`); }
+      if (o.kind === 'cultist') { bands++; if (o.cult !== reeds.falseGod || !CULT_BANDS[o.cult]) bandBad.push(String(o.cult)); }
+    }
+    if (objective === 'cull' && m.objectives.primary.family === 'snapping_turtle') cullBad.push(32000 + k);
+    if (objective === 'apex') {
+      apexN++;
+      const ap = m.occupants.find(o => o.apex);
+      const esc = reeds.apex.escort[0];
+      if (ap && ap.family === reeds.apex.family && ap.roster[0].grade === 'great' && ap.roster[0].type === reeds.apex.family
+        && ap.roster.length === 1 + esc.count && ap.roster.slice(1).every(r => r.type === esc.family && r.grade === esc.grade)) apexOk++;
+    }
+  }
+  check('Snapping Turtles only alone or with young, never a Cull quarry (natives compositions)', turtles > 0 && !turtleBad.length && !cullBad.length,
+    `${turtles} turtle occupants${turtleBad.length ? '; bad: ' + turtleBad.slice(0, 3) : ''}${cullBad.length ? '; culls: ' + cullBad.slice(0, 3) : ''}`);
+  check('the Vowkeeper is always Great, with its brood of Grown Crocodiles (apex escort)', apexOk === apexN, `${apexOk}/${apexN}`);
+  check("every Reeds cult band serves the region's false god and has a cult (CULT_BANDS)", bands > 0 && !bandBad.length, `${bands} bands`);
 }
 
 console.log('=== the demand prefixes move the map (paired seeds, real generator) ===');

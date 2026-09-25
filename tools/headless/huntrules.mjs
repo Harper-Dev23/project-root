@@ -115,8 +115,17 @@ console.log('=== rules on hand-built inputs ===');
   check('...and nothing else with any concealment is', othersOk);
   // A sighted apex hidden past 100 by its ground must not count for Unmask
   // (a cult band's bonus objective): walk until it is in sight, never onto it.
+  // Since 14a the apex can come with an escort (worse concealment), so no
+  // map may hide it past 100 on its own: build the case from a real map.
+  if (!hiddenApex) hiddenApex = { zoneId: ZONES[0], seed: 4200, size: 'medium', force: true };
   if (hiddenApex) {
-    const hh = rawCreateMapHunt(hiddenApex.zoneId, { plan: { objective: 'apex', size: hiddenApex.size }, supplies: 400, seed: hiddenApex.seed }, recordingWorld(makeParty()));
+    let hh = rawCreateMapHunt(hiddenApex.zoneId, { plan: { objective: 'apex', size: hiddenApex.size }, supplies: 400, seed: hiddenApex.seed }, recordingWorld(makeParty()));
+    if (hiddenApex.force) {
+      const d = hh.serialize();
+      const ap = d.map.occupants.find(o => o.apex);
+      ap.concealment = 101 - (GROUNDS[d.map.tiles[ap.tile].ground]?.concealment || 0);
+      hh = restoreMapHunt(d, recordingWorld(makeParty()));
+    }
     const apexId = hh.getState().map.occupants.find(o => o.apex).id;
     for (let i = 0; i < 200 && !hh.getState().sightings[apexId]; i++) {
       const st = hh.getState();
@@ -882,20 +891,20 @@ const B = await import('../../src/systems/HuntBeasts.js');
 console.log('=== 7c rules on hand-built inputs ===');
 {
   // Chunk 13c: predators notice the party (WORLD_SIM). A hand-built Reeds
-  // section: a Marsh Stalker pack (predator) near a party on open ground.
+  // section: a Crocodile pack (predator) near a party on open ground.
   const { tileId } = await import('../../src/systems/HexGrid.js');
   const t = (q, r, sec = 0) => tileId(sec, q, r);
   const world = (partyGround, occ, others = []) => ({
     zoneId: 'reeds_of_gethsemane', pos: t(4, 4),
     map: { tiles: { [t(4, 4)]: { ground: partyGround } }, occupants: [occ, ...others] },
   });
-  const pack = (over = {}) => ({ id: 'o1', kind: 'beast', family: 'marsh_stalker', tile: t(4, 6), state: 'roaming', ...over });
+  const pack = (over = {}) => ({ id: 'o1', kind: 'beast', family: 'crocodile', tile: t(4, 6), state: 'roaming', ...over });
   const R2 = HMG.PREDATOR_NOTICE_RANGE;
-  check(`predator: a Roaming Marsh Stalker ${R2} steps away notices a party on grass (13c)`, W.predatorNotices(world('grass', pack()), pack()) === true);
+  check(`predator: a Roaming Crocodile ${R2} steps away notices a party on grass (13c)`, W.predatorNotices(world('grass', pack()), pack()) === true);
   check('...not on ground that hides the party from PACK_PERCEPTION (thicket)', W.predatorNotices(world('thicket', pack()), pack()) === false);
   check('...not one step too far, nor from another section', W.predatorNotices(world('grass', pack({ tile: t(4, 7) })), pack({ tile: t(4, 7) })) === false
     && W.predatorNotices(world('grass', pack({ tile: t(4, 5, 1) })), pack({ tile: t(4, 5, 1) })) === false);
-  check('...not a family its region does not mark predator (Wading Heron)', W.predatorNotices(world('grass', pack({ family: 'wading_heron' })), pack({ family: 'wading_heron' })) === false);
+  check('...not a family its region does not mark predator (Scarlet Ibis)', W.predatorNotices(world('grass', pack({ family: 'scarlet_ibis' })), pack({ family: 'scarlet_ibis' })) === false);
   {
     // On real hunts: a detected predator taking up the chase is logged
     // ('scent', its family only when identified); the log never names a
@@ -927,8 +936,8 @@ console.log('=== 7c rules on hand-built inputs ===');
   // Chunk 9a: an occupant's initiative is its members' average, each from its
   // real enemy type (HuntBeasts; beastparts.mjs checks it in depth).
   check('occupant initiative: the average of its members real types (chunk 9a)',
-    B.occupantInitiative({ kind: 'beast', family: 'marsh_stalker', roster: [{ type: 'marsh_stalker', grade: 'great' }, { type: 'marsh_stalker', grade: 'yearling' }] })
-      === B.memberInitiative('hunt_marsh_stalker')
+    B.occupantInitiative({ kind: 'beast', family: 'crocodile', roster: [{ type: 'crocodile', grade: 'great' }, { type: 'crocodile', grade: 'yearling' }] })
+      === B.memberInitiative('hunt_crocodile')
     && B.occupantInitiative({ id: 'o1', kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }] })
       === (B.memberInitiative('hunt_cult_zealot') + B.memberInitiative('hunt_cult_adept')) / 2);
   check('who acts first: ambush is decisive; otherwise higher initiative, ties to the party',
@@ -939,12 +948,12 @@ console.log('=== 7c rules on hand-built inputs ===');
     W.trailLostTime(HMG.PACK_SPEED) === W.TRAIL_LOST_TIME && W.trailLostTime(HMG.PACK_SPEED + 1) === W.TRAIL_LOST_TIME_FAST);
   check(`camp found: pack perception ${HMG.PACK_PERCEPTION} at or above the camp's concealment`,
     W.packFindsCamp(HMG.PACK_PERCEPTION) && !W.packFindsCamp(HMG.PACK_PERCEPTION + 1));
-  const tr = { family: 'marsh_stalker', to: '0:1,1', at: 0 };
+  const tr = { family: 'crocodile', to: '0:1,1', at: 0 };
   const conc = GROUNDS.grass.concealment + W.TRAIL_CONCEALMENT;
   check('trails read through the Detection bands; age only with Perception well above',
     W.trailView(tr, 'grass', conc - R.SENSED_MARGIN - 1, 5) === null
     && W.trailView(tr, 'grass', conc - 1, 5)?.band === 'sensed' && W.trailView(tr, 'grass', conc - 1, 5).family === undefined
-    && W.trailView(tr, 'grass', conc, 5)?.family === 'marsh_stalker' && W.trailView(tr, 'grass', conc, 5).age === undefined
+    && W.trailView(tr, 'grass', conc, 5)?.family === 'crocodile' && W.trailView(tr, 'grass', conc, 5).age === undefined
     && W.trailView(tr, 'grass', conc + W.TRAIL_AGE_MARGIN, 5)?.age === 5);
   golden.world7c = {
     ROAM_STEP: W.ROAM_STEP, HUNT_STEP: W.HUNT_STEP, TRAIL_LOST_TIME: W.TRAIL_LOST_TIME, TRAIL_LOST_TIME_FAST: W.TRAIL_LOST_TIME_FAST,
@@ -1414,13 +1423,17 @@ function nextStep(h, isGoal, { avoid = true } = {}) {
     }
     for (const n of [...mapNeighbors(s.map, id)].sort()) {
       if (prev.has(n) || !isPassable(s.map.tiles[n])) continue;
-      if (avoid && hostileAt.has(n) && !isGoal(n)) continue;
-      if (keep?.has(n)) continue;
+      if (avoid === true && hostileAt.has(n) && !isGoal(n)) continue;
+      if (keep?.has(n) && !(avoid === 'last')) continue;
       prev.set(n, id);
       queue.push(n);
     }
   }
-  return avoid ? nextStep(h, isGoal, { avoid: false }) : null;
+  // Last resort (14a): walk through an Unmask band only if there is no
+  // other way at all (it can wall off a site on the Reeds' new maps).
+  if (avoid === true) return nextStep(h, isGoal, { avoid: false });
+  if (avoid === false && keep?.size) return nextStep(h, isGoal, { avoid: 'last' });
+  return null;
 }
 
 function solve({ zoneId, size, objective = 'scout', bonus = [], seed, planMods = {}, itemLevel = 5, party = makeParty(), maxActions = 900 }) {
