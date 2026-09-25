@@ -743,8 +743,8 @@
   }
  },
  "contactFirsts": {
-  "party": 32,
-  "enemy": 42,
-  "ambush": 40
+  "party": 38,
+  "enemy": 58,
+  "ambush": 18
  }
 }

@@ -1,7 +1,7 @@
 {
  "constants": {
   "BASE_SIGHT_RANGE": 2,
-  "SENSED_MARGIN": 15,
+  "SENSED_MARGIN": 30,
   "MIN_MOVE_COST_SHARE": 0.25,
   "PHASE_UNITS": 6,
   "SCOUT_TIME": 2
@@ -687,7 +687,7 @@
    "0:1,9",
    0,
    64.7027,
-   "o1:nothing",
+   "o1:sensed",
    61
   ],
   [
@@ -729,7 +729,7 @@
    "0:1,8",
    0,
    73.9459,
-   "o4:nothing",
+   "o4:sensed",
    61
   ],
   [
@@ -906,7 +906,7 @@
    "0:4,7",
    56.0695,
    5.5459,
-   "o1:nothing",
+   "o1:sensed",
    10
   ],
   [
@@ -1130,7 +1130,7 @@
    "1:1,5",
    0,
    73.0216,
-   "o7:nothing",
+   "o7:sensed",
    51
   ],
   [
@@ -1235,7 +1235,7 @@
    "1:3,8",
    0,
    97.9784,
-   "o2:nothing",
+   "o2:sensed",
    73
   ],
   [
@@ -1317,12 +1317,12 @@
   ]
  ],
  "walkHashes": {
-  "reeds_of_gethsemane/small": "36c9c154ce88a6f3",
-  "reeds_of_gethsemane/medium": "7c788ece63a82283",
-  "reeds_of_gethsemane/large": "060d4065175e9ba4",
-  "bay_of_solace/small": "dd85292be2a7f954",
-  "bay_of_solace/medium": "9eadd7c144c9b96d",
-  "bay_of_solace/large": "fe06b54bbb7071b8"
+  "reeds_of_gethsemane/small": "5072d50db901f49e",
+  "reeds_of_gethsemane/medium": "75048ac29867e927",
+  "reeds_of_gethsemane/large": "69e6ee624c354c7b",
+  "bay_of_solace/small": "e90130a1b1430e8d",
+  "bay_of_solace/medium": "a47b6e65d8e24290",
+  "bay_of_solace/large": "6d20acf50b1148c9"
  },
  "walkStats": {
   "reeds_of_gethsemane/small": {
@@ -1334,8 +1334,8 @@
    "supplyPerMove": 2.1141,
    "contactsBy": {
     "identified": 8,
-    "sensed": 24,
-    "nothing": 31
+    "sensed": 34,
+    "nothing": 21
    }
   },
   "reeds_of_gethsemane/medium": {
@@ -1347,8 +1347,8 @@
    "supplyPerMove": 2.0086,
    "contactsBy": {
     "identified": 12,
-    "sensed": 15,
-    "nothing": 49
+    "sensed": 45,
+    "nothing": 19
    }
   },
   "reeds_of_gethsemane/large": {
@@ -1360,8 +1360,8 @@
    "supplyPerMove": 2.0416,
    "contactsBy": {
     "identified": 20,
-    "sensed": 31,
-    "nothing": 54
+    "sensed": 54,
+    "nothing": 31
    }
   },
   "bay_of_solace/small": {
@@ -1373,8 +1373,8 @@
    "supplyPerMove": 1.3123,
    "contactsBy": {
     "identified": 43,
-    "sensed": 18,
-    "nothing": 6
+    "sensed": 24,
+    "nothing": 0
    }
   },
   "bay_of_solace/medium": {
@@ -1386,8 +1386,8 @@
    "supplyPerMove": 1.3086,
    "contactsBy": {
     "identified": 48,
-    "sensed": 30,
-    "nothing": 11
+    "sensed": 41,
+    "nothing": 0
    }
   },
   "bay_of_solace/large": {
@@ -1399,15 +1399,15 @@
    "supplyPerMove": 1.2455,
    "contactsBy": {
     "identified": 46,
-    "sensed": 26,
-    "nothing": 13
+    "sensed": 39,
+    "nothing": 0
    }
   }
  },
  "firstSightBands": {
   "identified": 1095,
-  "sensed": 308,
-  "nothing": 322
+  "sensed": 526,
+  "nothing": 104
  },
  "testPartyStats": {
   "perception": 60,
@@ -2880,18 +2880,18 @@
   ]
  ],
  "worldHashes": {
-  "reeds_of_gethsemane/small": "fe04b4426084eb83",
+  "reeds_of_gethsemane/small": "d3136a3119acaed3",
   "reeds_of_gethsemane/medium": "9cb4f2d74125f148",
-  "reeds_of_gethsemane/large": "b331c51bef016364",
+  "reeds_of_gethsemane/large": "02ec988a733a0f21",
   "bay_of_solace/small": "ec4a5ea4b2b2d721",
   "bay_of_solace/medium": "6730eaadf3e0b5e2",
-  "bay_of_solace/large": "b31310762599bea0"
+  "bay_of_solace/large": "6aa1104caaad0160"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {
    "steps": 2154,
    "encounters": 35,
-   "ambush": 18,
+   "ambush": 15,
    "byCause": {
     "party": 28,
     "pack": 5,
@@ -2901,7 +2901,7 @@
    "wins": 17,
    "caughtAgain": 5,
    "cleansed": 198,
-   "trailsSeen": 489,
+   "trailsSeen": 585,
    "days": 606,
    "blightTiles": 42,
    "corrupted": 0,
@@ -2910,7 +2910,7 @@
   "reeds_of_gethsemane/medium": {
    "steps": 2298,
    "encounters": 55,
-   "ambush": 32,
+   "ambush": 24,
    "byCause": {
     "party": 42,
     "pack": 11,
@@ -2920,7 +2920,7 @@
    "wins": 25,
    "caughtAgain": 11,
    "cleansed": 252,
-   "trailsSeen": 613,
+   "trailsSeen": 637,
    "days": 606,
    "blightTiles": 141,
    "corrupted": 1,
@@ -2929,7 +2929,7 @@
   "reeds_of_gethsemane/large": {
    "steps": 2230,
    "encounters": 83,
-   "ambush": 61,
+   "ambush": 49,
    "byCause": {
     "party": 59,
     "pack": 14,
@@ -2939,7 +2939,7 @@
    "wins": 40,
    "caughtAgain": 14,
    "cleansed": 218,
-   "trailsSeen": 1365,
+   "trailsSeen": 1490,
    "days": 606,
    "blightTiles": 158,
    "corrupted": 0,
@@ -2948,7 +2948,7 @@
   "bay_of_solace/small": {
    "steps": 2539,
    "encounters": 30,
-   "ambush": 15,
+   "ambush": 13,
    "byCause": {
     "party": 22,
     "pack": 5,
@@ -2986,7 +2986,7 @@
   "bay_of_solace/large": {
    "steps": 2550,
    "encounters": 59,
-   "ambush": 32,
+   "ambush": 28,
    "byCause": {
     "party": 39,
     "pack": 7,

@@ -55,6 +55,7 @@
 //     --sec-round N --sec-move N   real seconds per combat round / map action,
 //                          for the real-minutes column (blank without them)
 //     --save FILE          play with the party of an exported save instead of the fixtures
+//     --fightlog FILE      every fight as one JSON line (outcome, who went first, roster, HP going in)
 //     --json FILE          write the full report
 //     --compare FILE       print each cell's change against an earlier --json report
 //     --smoke              a small fixed run with invariant checks; exits 1 on a failure
@@ -104,6 +105,7 @@ const { parseImport } = await import('../../src/systems/SaveTransfer.js');
 const { getWeaponSkillsFor, getClassSkillsFor } = await import('../../data/skills.js');
 const { pickBaseId, createItemInstance } = await import('../../src/systems/ItemFactory.js');
 const { rebuildCharacterStats } = await import('../../src/systems/CharacterBuilder.js');
+const { hunterExploration, owedExplorationPicks, applyExplorationPick, partyStats } = await import('../../src/systems/PartyStats.js');
 
 /** Camp when the living party holds less than this share of its max HP. */
 const CAMP_BELOW_HP = 0.5;
@@ -145,7 +147,26 @@ function partyAt(level, size) {
   const specs = HUNTERS.slice(0, size).map(h => ({ ...h, stats: statsAt(h.stats, level) }));
   const party = makeParty(specs, { level });
   if (GEAR !== 'none') party.forEach((c, i) => gearUp(c, HUNTERS[i], level, i));
+  takePicks(party);
   return { party, slots: slotMapFor(party, specs) };
+}
+
+/**
+ * The exploration picks owed at levels 2/4/6/8/10, taken as the owner's own
+ * party took them (chunk 13c): one scout, the hunter with the best
+ * Perception, puts every pick into Perception; everyone else raises their own
+ * best rating. Recorded through the game's applyExplorationPick.
+ */
+function takePicks(party) {
+  const scout = [...party].sort((a, b) => hunterExploration(b).ratings.perception - hunterExploration(a).ratings.perception)[0];
+  for (const c of party) {
+    for (const level of owedExplorationPicks(c)) {
+      const r = hunterExploration(c).ratings;
+      const rating = c === scout ? 'perception' : Object.keys(r).sort((a, b) => r[b] - r[a] || a.localeCompare(b))[0];
+      const done = applyExplorationPick(c, level, { rating });
+      if (!done.ok) throw new Error(`pick for ${c.name} at ${level}: ${done.reason}`);
+    }
+  }
 }
 
 /**
@@ -285,6 +306,7 @@ function fight(h, party, slots, fightSeed, rec) {
   const spec = h.beginFight();
   if (!spec.ok) throw new Error('beginFight refused: ' + spec.reason);
   const killsBefore = h.getState().kills.length;
+  const hpBefore = livingHPShare(party);
   const cause = h.encounter()?.cause || null;
   seedCombat(fightSeed);
   const host = createCombatHost(CombatScene);
@@ -308,7 +330,10 @@ function fight(h, party, slots, fightSeed, rec) {
   else if (st.kills.length > killsBefore) outcome = 'won';
   else if (res.hitTurnCap) { h.flee({ reason: 'fled' }); outcome = 'capped'; }
   else outcome = 'other';
-  rec.fights.push({ outcome, cause, rounds, hunterTurns, ambush: !!spec.ambush, first: spec.first, enemies: spec.scenario.enemies.length, kind: spec.kind });
+  const grades = spec.scenario.enemies.map(e => e.grade || '-');
+  const hpIn = Math.round(100 * hpBefore);
+  rec.fights.push({ outcome, cause, rounds, hunterTurns, ambush: !!spec.ambush, first: spec.first, enemies: spec.scenario.enemies.length, kind: spec.kind,
+    family: h.getState().kills.at(-1)?.family ?? spec.scenario.enemies[0]?.type ?? null, grades, hpIn });
   return outcome;
 }
 
@@ -372,7 +397,7 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
     zoneId, size, objective, level, partySize, policy, seed: huntSeed,
     fights: [], moves: 0, camps: 0, forages: 0, eats: 0, harvests: 0, harvestTime: 0,
     events: 0, supplyStart: h.view().supplies, supplyMin: h.view().supplies, zeroMoves: 0,
-    hungryMoves: 0, actions: 0,
+    hungryMoves: 0, actions: 0, perception: h.stats().perception,
   };
   xpSink = {};
   let campsInARow = 0;
@@ -509,6 +534,7 @@ function summarise(recs) {
     donePct: r1(100 * mean(recs.map(r => (r.outcome === 'exit' && r.primaryDone ? 1 : 0)))),
     wipePct: r1(100 * mean(recs.map(r => (r.outcome === 'wipe' ? 1 : 0)))),
     stuck: recs.filter(r => r.outcome === 'stuck').length,
+    perception: r1(mean(recs.map(r => r.perception))),
     moves: r1(mean(recs.map(r => r.moves))),
     actions: r1(mean(recs.map(r => r.actions))),
     days: r1(mean(recs.map(r => r.day))),
@@ -641,7 +667,7 @@ function rollup(by) {
 }
 
 const COLS = [
-  ['n', 'n'], ['done%', 'donePct'], ['wipe%', 'wipePct'], ['stuck', 'stuck'], ['moves', 'moves'], ['acts', 'actions'], ['days', 'days'],
+  ['n', 'n'], ['done%', 'donePct'], ['wipe%', 'wipePct'], ['stuck', 'stuck'], ['perc', 'perception'], ['moves', 'moves'], ['acts', 'actions'], ['days', 'days'],
   ['fights', 'fights'], ['rd/fight', 'roundsPerFight'], ['rounds', 'rounds'], ['ambush%', 'ambushPct'], ['caught%', 'caughtPct'], ['fightWin%', 'fightWinPct'], ['enemy1st%', 'enemyFirstPct'],
   ['supUsed', 'suppliesUsed'], ['ranOut%', 'ranOutPct'], ['camps', 'camps'], ['harvT', 'harvestTime'], ['KOs', 'knockouts'], ['events', 'events'],
   ['XP/hunter', 'xpPerHunter'], ['HuntPts', 'huntPoints'], ['fightHP', 'fightHuntPoints'], ['exitHP', 'exitHuntPoints'],
@@ -693,6 +719,11 @@ for (const p of pace) {
     : `${p.hunts} hunts, ${p.rounds} combat rounds, ${p.actions} map actions` + (p.hours != null ? `, ~${p.hours} real hours` : '  (real hours need --sec-round and --sec-move)')));
 }
 realLog(`\n${all.length} hunts, ${all.reduce((t, r) => t + r.fights.length, 0)} fights in ${(elapsed / 1000).toFixed(1)} s; heap ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB`);
+
+if (opt('fightlog')) {
+  fs.writeFileSync(opt('fightlog'), all.flatMap(r => r.fights.map(f => JSON.stringify({ zone: r.zoneId, size: r.size, level: r.level, party: r.partySize, seed: r.seed, ...f }))).join('\n') + '\n');
+  realLog('fight log written to ' + opt('fightlog'));
+}
 
 const report = {
   meta: { at: new Date().toISOString(), args, seeds, seedBase, rations, zones: zoneIds, sizes, objectives, levels, partySizes, policies, ms: elapsed },

@@ -110,9 +110,10 @@ export const OCCUPANT_CONCEALMENT = {
  * Unmask's hidden band is never concealed past this (owner, chunk 8,
  * 2026-09-19). It is the best Perception the game can reach today (120: a
  * level-10 Ferrow Shepherd with five Perception picks and a T1 of Keen Eyes)
- * plus SENSED_MARGIN (15), the reach of the scout action. Without it 8 of 60
- * maps had no band any party could find. The harness fails if the Perception
- * ceiling moves away from it. Boons (chunk 10) may raise it.
+ * plus SENSED_MARGIN (15 then), the reach of the scout action. Without it 8 of 60
+ * maps had no band any party could find. The harness fails if the cap moves
+ * out of that reach. SENSED_MARGIN became 30 in chunk 13c, which only widens
+ * the reach, so the cap (and every map) stayed. Boons (chunk 10) may raise it.
  */
 export const UNMASK_MAX_CONCEALMENT = 135;
 

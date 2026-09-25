@@ -34,8 +34,11 @@ export const BASE_SIGHT_RANGE = 2;
  * Detection's middle band: Perception at least this far below concealment is
  * "sensed". Was 3 in TERRAIN_TYPES, written before concealment moved to the
  * 0-100 scale in steps of 10-20, where 3 almost never applied (decision 1).
+ * 15 -> 30 in chunk 13c: at 15 a starting party (Perception 40-50) could not
+ * detect 58-89% of the Reeds' hostiles at all, so most fights were blind
+ * ambushes (huntsim). Identifying still takes Perception at the concealment.
  */
-export const SENSED_MARGIN = 15;
+export const SENSED_MARGIN = 30;
 
 /** A move always costs at least this share of the tile's cost, on each axis,
  *  however much efficiency the party has: travel is never free (decision 3). */
