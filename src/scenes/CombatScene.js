@@ -432,7 +432,7 @@ export default class CombatScene extends Phaser.Scene {
       // resolve against until that arrives a moment later.
       this.turnOrder = [...this.coopParty, ...(this.enemies || [])];
     } else {
-      this.turnOrder = this._blockOrder(GameState.party, this.enemies || []);
+      this.turnOrder = this._blockOrder(this._party(), this.enemies || []);
 
       // Skipped in co-op: this reads GameState.party, which holds the LOCAL
       // player's real characters rather than the fight's roster, so running it
@@ -1681,11 +1681,11 @@ export default class CombatScene extends Phaser.Scene {
 
   _placePartyMembers() {
     // Build lookup: instanceId -> char
-    const party = GameState.party || [];
+    const party = this._party();
     const idToChar = new Map(party.map(c => [c.instanceId || c.id, c]));
 
     // 1) First, place anyone with an explicit saved slot
-    const slotMap = GameState.partySlots || {};
+    const slotMap = this.hostPartySlots || GameState.partySlots || {};
     const used = new Set();
 
     this.allySlots.forEach(slot => {
@@ -1777,7 +1777,33 @@ export default class CombatScene extends Phaser.Scene {
    * next `.update()` throws. That took out the whole of create().
    */
   _boardAllies() {
-    return this.isCoop ? (this.coopParty || []) : (GameState.party || []);
+    return this.isCoop ? (this.coopParty || []) : this._party();
+  }
+
+  /**
+   * The party this fight is fought and judged with.
+   *
+   * A host that owns its board (the co-op server, the headless harness) hands
+   * the party in and it lives on the scene as `hostParty`; the game itself
+   * sets nothing and reads the saved party as it always has. This is what
+   * lets one process run many fights (chunk 12a): `GameState` is a module
+   * singleton, so when every host assigned `GameState.party`, the fight begun
+   * first judged deaths against the party begun last, and a wiped party kept
+   * fighting forever. Never read `GameState.party` for the board, except
+   * where the LOCAL SAVE is meant (_applyCoopRewards, the teardown sweep).
+   */
+  _party() {
+    return this.hostParty || GameState.party || [];
+  }
+
+  /**
+   * Save, unless this scene is an authoritative host. The co-op server runs
+   * the real victory and defeat paths, but it owns nobody's save: each client
+   * applies the result to its own. Before chunk 12a the server autosaved its
+   * own empty GameState after every fight.
+   */
+  _autosave() {
+    if (!this.isAuthoritativeHost) GameState.save('autosave');
   }
 
   _updateInitiativeBars() {
@@ -3558,11 +3584,11 @@ export default class CombatScene extends Phaser.Scene {
   _onCombatFled() {
     this.combatEnded = true;
     this._resetAllCooldowns();
-    const knockedOut = GameState.party.filter(c => c.status === 'incapacitated').length;
+    const knockedOut = this._party().filter(c => c.status === 'incapacitated').length;
     this._reviveKnockedOutParty();
     this.huntFight.hunt.flee({ knockedOut });
     this._log('🏃 The party broke away.');
-    GameState.save('autosave');
+    this._autosave();
     this._showDefeatScreen('Fled', 'You broke away. They will be hunting you.', {
       showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight.reopen?.(this),
     });
@@ -3577,7 +3603,7 @@ export default class CombatScene extends Phaser.Scene {
    * per-combat reset, which would otherwise wipe it.
    */
   _applyHuntFightStart() {
-    const standing = (GameState.party || []).filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
+    const standing = this._party().filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
     const buff = this.huntFight?.foodBuff;
     if (buff?.field && Number.isFinite(buff.amount)) {
       for (const c of standing) {
@@ -3628,7 +3654,7 @@ export default class CombatScene extends Phaser.Scene {
   _checkFinalMercy() {
     const cap = this.huntFight?.boon?.capstone;
     if (cap?.id !== 'final_mercy' || this._finalMercyUsed || this.combatEnded) return;
-    const party = (GameState.party || []).filter(Boolean);
+    const party = this._party().filter(Boolean);
     const down = party.some(c => c.status === 'incapacitated' || (c.currentHP ?? 1) <= 0);
     const standing = party.filter(c => c.status !== 'incapacitated' && c.status !== 'dead' && (c.currentHP ?? 1) > 0);
     if (!down || !standing.length) return;
@@ -3646,7 +3672,7 @@ export default class CombatScene extends Phaser.Scene {
    */
   _onHuntKill(killer, victim) {
     const cap = this.huntFight?.boon?.capstone;
-    if (cap?.id !== 'what_waits_below' || !victim?.isEnemy || !(GameState.party || []).includes(killer)) return;
+    if (cap?.id !== 'what_waits_below' || !victim?.isEnemy || !this._party().includes(killer)) return;
     if (killer.status === 'incapacitated' || !(killer.currentHP > 0)) return;
     const heal = Math.floor((killer.maxHP || 0) * (cap.healPercent || 0) / 100);
     if (heal <= 0) return;
@@ -3658,7 +3684,7 @@ export default class CombatScene extends Phaser.Scene {
   _boonEchoChance(user, result) {
     const cap = this.huntFight?.boon?.capstone;
     if (cap?.id !== 'the_loop' || !result || result.isHeal) return 0;
-    if (!(GameState.party || []).includes(user)) return 0;
+    if (!this._party().includes(user)) return 0;
     const hurts = !!result._coreBreakdown || (result.amount || 0) > 0;
     return hurts ? (cap.echoChance || 0) : 0;
   }
@@ -6434,7 +6460,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _resetAllCooldowns() {
-    const party = GameState.party || [];
+    const party = this._party();
     const foes = this.enemies || [];
     for (const unit of [...party, ...foes]) {
       if (!unit) continue;
@@ -6591,7 +6617,7 @@ export default class CombatScene extends Phaser.Scene {
     // summoner that keeps spawning could make a fight unwinnable, and the
     // player would be forced to clear pressure rather than choosing to.
     const anyEnemiesAlive = this.enemies.some(e => e?.status !== 'incapacitated' && !e.isAdd);
-    const anyAlliesAlive = GameState.party.some(p => p?.status !== 'incapacitated');
+    const anyAlliesAlive = this._party().some(p => p?.status !== 'incapacitated');
 
     if (!anyEnemiesAlive) {
       this._onCombatVictory();
@@ -6615,11 +6641,11 @@ export default class CombatScene extends Phaser.Scene {
     // Who is down at the end, BEFORE they are stood back up below: the hunt
     // counts knock-outs for the Unbroken bonus objective (chunk 9c). Nobody is
     // revived mid-fight, so the fight's end sees every one of them.
-    const huntKnockedOut = this.huntFight ? GameState.party.filter(c => c?.status === 'incapacitated').length : 0;
+    const huntKnockedOut = this.huntFight ? this._party().filter(c => c?.status === 'incapacitated').length : 0;
 
     if (this.isTraining) {
       this._log('🏆 Training complete — all party members are fully restored.');
-      GameState.party.forEach(char => {
+      this._party().forEach(char => {
         char.status = 'alive';
         char.currentHP = char.maxHP;
         char.currentMP = char.maxMP;
@@ -6642,7 +6668,7 @@ export default class CombatScene extends Phaser.Scene {
 
     if (this.isTraining) {
       const perClear = this.scenarioData?.xpReward ?? 0;
-      const survivors = GameState.party.filter(c => c && c.status !== 'dead');
+      const survivors = this._party().filter(c => c && c.status !== 'dead');
 
       // Reckoning tiers pay EVERY clear, to everyone. The base six still pay
       // only a character's first personal clear.
@@ -6675,8 +6701,8 @@ export default class CombatScene extends Phaser.Scene {
       if (xpReward > 0) {
         // A hunt fight's XP is a pool split across the party (SCALING).
         const result = this.isHunt
-          ? GameState.awardXPPool(xpReward)
-          : GameState.awardPartyXP(xpReward);
+          ? GameState.awardXPPool(xpReward, this._party())
+          : GameState.awardPartyXP(xpReward, this._party());
         leveledUpNames = result.leveledUpNames;
         xpSummary.push(...result.summaries);
       }
@@ -6699,7 +6725,7 @@ export default class CombatScene extends Phaser.Scene {
           // purchases and quest rewards all already went through here.
           // A map-hunt fight's drops go into the hunt PACK instead, at risk
           // until the exit (HUNT_STRUCTURE): hunt.winEncounter takes them below.
-          if (!this.huntFight) InventorySystem.addGlobalItem(inst);
+          if (!this.huntFight && !this.isAuthoritativeHost) InventorySystem.addGlobalItem(inst);
           loot.push(inst);
         }
       }
@@ -6729,9 +6755,9 @@ export default class CombatScene extends Phaser.Scene {
       }
     } else {
       // Record progression and collect ticket reward for the victory screen.
-      progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
+      if (!this.isAuthoritativeHost) progressReward = ProgressionManager.onScenarioComplete(this.scenarioId);
     }
-    GameState.save('autosave');
+    this._autosave();
 
     // Pass summary to victory screen
     this._showVictoryScreen('Victory!', xpSummary, progressReward, loot, leveledUpNames);
@@ -6764,8 +6790,8 @@ export default class CombatScene extends Phaser.Scene {
     const left = (this.enemies || []).filter(e => e && e.status !== 'incapacitated').length;
     this._log(`⏳ Time! ${turnLimit} rounds gone and ${left} still standing.`);
     this._log('😂 The crowd roars with laughter.');
-    this._restorePartyFull?.(GameState.party);
-    GameState.party.forEach(char => {
+    this._restorePartyFull?.(this._party());
+    this._party().forEach(char => {
       char.status = 'alive';
       char.currentHP = char.maxHP;
       char.currentMP = char.maxMP;
@@ -6783,7 +6809,7 @@ export default class CombatScene extends Phaser.Scene {
 
     if (this.isTraining) {
       this._log('⚠ Training lost — restoring party to full HP/MP.');
-      this._restorePartyFull(GameState.party);
+      this._restorePartyFull(this._party());
       this._showDefeatScreen('Defeat (Training)', 'You can retry immediately.', { showRetry: true, showExit: true });
     }
     else {
@@ -6799,7 +6825,7 @@ export default class CombatScene extends Phaser.Scene {
         if (offer) { this._showIntercessionChoice(offer, rule); return; }
         this._finishHuntWipe(rule, []);
       } else {
-        GameState.party.forEach(char => {
+        this._party().forEach(char => {
           if (char.status === 'incapacitated') char.status = 'dead';
         });
         this._showDefeatScreen('Defeat', 'Return to town.');
@@ -6817,7 +6843,7 @@ export default class CombatScene extends Phaser.Scene {
   _intercessionOffer(rule) {
     if (!this.huntFight) return null;
     const { prophet, god } = this._huntWhere();
-    const fallen = GameState.party.filter(c => c.status === 'incapacitated');
+    const fallen = this._party().filter(c => c.status === 'incapacitated');
     // A Forsaken wipe: the region's false god offers instead (11c-2).
     if (rule === 'forsaken') return falseGodOffer({ rule, god, fallen });
     return spotOffer({ rule, house: houseOf(prophet), fallen });
@@ -6836,20 +6862,20 @@ export default class CombatScene extends Phaser.Scene {
    */
   _finishHuntWipe(rule, saved = []) {
     const sheltered = rule === 'sheltered';
-    const knockedOut = GameState.party.filter(c => c.status === 'incapacitated').length;
+    const knockedOut = this._party().filter(c => c.status === 'incapacitated').length;
     const { zoneId, prophet, god } = this._huntWhere();
     const house = houseOf(prophet);
     const byGod = rule === 'forsaken';
     const paid = !saved.length ? { ok: true, total: 0 } : byGod ? payFalseGodSpot(god, saved) : payForSpot(house, saved);
     const spokenFor = paid.ok ? saved : [];
-    GameState.party.forEach(char => {
+    this._party().forEach(char => {
       if (char.status !== 'incapacitated') return;
       if (sheltered || spokenFor.includes(char)) { char.status = 'alive'; char.currentHP = Math.max(1, char.currentHP || 0); }
       else char.status = 'dead';
     });
     const fell = fellRecord({ zoneId, prophet, rule, day: ProgressionManager.getDaysElapsed(), god });
-    const fallen = GameState.party.filter(c => c.status === 'dead');
-    fallen.forEach(c => GameState.moveToSlain(c, fell));
+    const fallen = this._party().filter(c => c.status === 'dead');
+    if (!this.isAuthoritativeHost) fallen.forEach(c => GameState.moveToSlain(c, fell));
 
     if (spokenFor.length && this.huntFight) {
       this.huntFight.hunt.survive({ knockedOut });
@@ -6857,7 +6883,7 @@ export default class CombatScene extends Phaser.Scene {
       this._log(byGod
         ? `✦ ${name} gave back ${spokenFor.map(c => c.name).join(', ')}. It will remember.`
         : `✦ ${name} spoke for ${spokenFor.map(c => c.name).join(', ')} (-${paid.total} Bond standing).`);
-      GameState.save('autosave');
+      this._autosave();
       this._showDefeatScreen(byGod ? 'Given Back' : 'Spoken For', byGod
         ? `${name} gave back ${spokenFor.length} of your hunters, at a price. You wake near a way out.`
         : fallen.length
@@ -6877,7 +6903,7 @@ export default class CombatScene extends Phaser.Scene {
     } else {
       HuntManager.wipe();
     }
-    GameState.save('autosave');
+    this._autosave();
     this._showDefeatScreen('Defeat', sheltered
       ? 'Your party is carried back to camp. The hunt is over; the pack comes home.'
       : 'Your fallen join the Slain. The hunt is over; the pack is lost.');
@@ -6938,7 +6964,7 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _reviveAlliesAfterVictory() {
-    GameState.party.forEach(char => {
+    this._party().forEach(char => {
       if (char.status === 'incapacitated') {
         char.status = 'alive';
         char.currentHP = 1;
@@ -10467,7 +10493,7 @@ export default class CombatScene extends Phaser.Scene {
     }
   }
   _weaknessDecayAll() {
-    const all = [...GameState.party, ...(this.enemies || [])];
+    const all = [...this._party(), ...(this.enemies || [])];
     for (const u of all) this._weaknessDecayUnit(u);
   }
 
@@ -13017,7 +13043,7 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       // default: first alive opposing party member
-      return givenTarget || GameState.party.find(p => !p.isEnemy && p.status !== 'incapacitated') || null;
+      return givenTarget || this._party().find(p => !p.isEnemy && p.status !== 'incapacitated') || null;
     };
 
     switch (action.type) {
@@ -13997,7 +14023,7 @@ export default class CombatScene extends Phaser.Scene {
 
   _reviveKnockedOutParty() {
     // Ensure no party member exits combat with 0 HP — they get 1 HP minimum.
-    GameState.party.forEach(char => {
+    this._party().forEach(char => {
       if ((char.currentHP ?? 0) <= 0 || char.status === 'incapacitated') {
         char.currentHP = 1;
         char.status = 'alive';
@@ -14078,7 +14104,7 @@ export default class CombatScene extends Phaser.Scene {
   update(time) {
     const units = this._wkPulseUnits || (this._wkPulseUnits = []);
     units.length = 0;
-    const party = GameState.party || [];
+    const party = this._party();
     for (let i = 0; i < party.length; i++) units.push(party[i]);
     const foes = this.enemies || [];
     for (let i = 0; i < foes.length; i++) units.push(foes[i]);

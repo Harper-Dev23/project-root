@@ -601,12 +601,12 @@ const GameState = {
     char.clearedScenarios[scenarioId] = true;
   },
 
-  awardPartyXP(amount) {
+  awardPartyXP(amount, party = this.party) {
     const leveledUpNames = [];
     const summaries = [];
     if (amount <= 0) return { leveledUpNames, summaries };
 
-    this.party.forEach(char => {
+    (party || []).forEach(char => {
       if (char.status === 'dead') return;
 
       // At the cap XP stops accruing entirely rather than piling up invisibly:

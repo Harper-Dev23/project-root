@@ -17,7 +17,6 @@
 // gate-parity check in verify.mjs exists to make that omission visible.
 
 import { DevFlags } from '../../src/systems/DevFlags.js';
-import GameState from '../../src/systems/GameState.js';
 
 /**
  * Starts combat exactly as create() does (CombatScene.js:451-459): index to -1
@@ -131,7 +130,7 @@ export function runFight(host, plan, { maxTurns = 400 } = {}) {
 /**
  * A compact, comparable picture of the board - the unit of a golden master.
  *
- * Rosters come from GameState.party and host.enemies rather than from the
+ * Rosters come from the host's own party (host._party()) and host.enemies rather than from the
  * slots, because _removeUnit clears slot.char when a unit goes down: reading
  * the slots would make a wipe look like an empty board, which is the one
  * outcome a snapshot most needs to record.
@@ -160,7 +159,7 @@ export function snapshotBoard(host) {
     round: host.combatRound,
     ended: host.combatEnded,
     turn: host._currentChar()?.name ?? null,
-    allies: (GameState.party || []).map(unit),
+    allies: host._party().map(unit),
     enemies: (host.enemies || []).map(unit),
     zones: Object.fromEntries(
       Object.entries(host.slotEffects || {})

@@ -313,23 +313,12 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       if (player.id !== lobby.hostId) return fail(conn, 'only the host can start');
       if (!lobby.players.every(p => p.ready)) return fail(conn, 'not everyone is ready');
 
-      // ONE LIVE FIGHT PER PROCESS. This is not a policy choice, it is a
-      // property of the engine: `GameState` is a module singleton, every
-      // host's __begin() assigns `GameState.party`, and
-      // _checkVictoryCondition reads `GameState.party` to decide whether the
-      // party has fallen. A second concurrent session therefore silently
-      // makes the FIRST one check the wrong party for deaths -- observed
-      // directly: a wiped party kept "fighting", with six enemies taking
-      // turns forever because defeat was never detected.
-      //
-      // Refusing loudly beats corrupting two fights quietly. Scaling out is
-      // one process per hunt, which is cheap for a turn-based game; the
-      // alternative is threading state through 23 GameState.party reads in a
-      // 12,500-line file for no gameplay benefit.
-      const busy = [...lobbies.values()].find(l => l !== lobby && l.session && !l.session.isOver);
-      if (busy) {
-        return fail(conn, 'this server is already running a hunt; only one at a time');
-      }
+      // Many fights run in one process. Each combat host owns its party
+      // (CombatScene._party(), chunk 12a). Before that every host assigned
+      // the module-singleton GameState.party, so a second live fight made the
+      // first judge deaths against the wrong party -- a wiped party kept
+      // "fighting" forever -- and this start refused. Held by
+      // server/concurrent_test.mjs, which plays two fights interleaved.
 
       try {
         lobby.session = createSession({

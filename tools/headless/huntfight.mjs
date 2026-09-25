@@ -562,7 +562,7 @@ console.log('=== flee inside the fight: the free round ===');
   for (const u of m.party) { if (u !== actor) { u.currentHP = 1; } else { u.maxHP = 9999; u.currentHP = 9999; } }
   let koAtEnd = -1;
   const origFled = host._onCombatFled;
-  host._onCombatFled = function () { koAtEnd = GameState.party.filter(c => c.status === 'incapacitated').length; return origFled.call(this); };
+  host._onCombatFled = function () { koAtEnd = this._party().filter(c => c.status === 'incapacitated').length; return origFled.call(this); };
   host._startFlee();
   playFreeRound(host);
   const s1 = m.h.getState();

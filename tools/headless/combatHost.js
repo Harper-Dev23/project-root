@@ -34,7 +34,6 @@ if (!globalThis.Phaser) {
 }
 
 import { chain } from './phaserStub.js';
-import GameState from '../../src/systems/GameState.js';
 import EventBus from '../../src/systems/EventBus.js';
 import ReactionSystem from '../../src/systems/ReactionSystem.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
@@ -401,8 +400,12 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
     const scenario = huntFight?.scenario || COMBAT_SCENARIOS[scenarioId];
     if (!scenario) throw new Error('unknown scenario: ' + scenarioId);
 
-    GameState.party = party;
-    GameState.partySlots = partySlots;
+    // The host OWNS its party; GameState is never written (chunk 12a). It is
+    // a module singleton, and when every host assigned GameState.party the
+    // fight begun first judged deaths against the party begun last. The scene
+    // reads this through _party().
+    this.hostParty = party;
+    this.hostPartySlots = partySlots;
     this.huntFight = huntFight;
     if (huntFight) {
       this.combatType = 'hunt';
@@ -417,7 +420,7 @@ export function createCombatHost(CombatScene, { installReactions = true } = {}) 
     this._placeEnemies(this.scenarioId);
 
     // The scene's own block order, so the host can never build a different one.
-    this.turnOrder = this._blockOrder(GameState.party, this.enemies || []);
+    this.turnOrder = this._blockOrder(this._party(), this.enemies || []);
 
     this._resetAllCooldowns();
 
