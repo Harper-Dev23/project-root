@@ -290,7 +290,10 @@ console.log('=== save -> reload continues identically ===');
         runs++;
         const w = walk({ zoneId, size, seed, steps: 30, onStep: (hunt, i, world) => (i === at
           ? restoreMapHunt(JSON.parse(JSON.stringify(hunt.serialize())), world) : null) });
-        if (!same(w.hunt.serialize(), straight.hunt.serialize()) || !same(w.trace, straight.trace)) bad++;
+        // Item instance ids come from Math.random, not the hunt's seed, so two
+        // walks never share them (a won fight's spoils); everything rolled must.
+        const noIds = (x) => JSON.stringify(x, (k, v) => (k === 'instanceId' ? undefined : v));
+        if (noIds(w.hunt.serialize()) !== noIds(straight.hunt.serialize()) || !same(w.trace, straight.trace)) bad++;
       }
     }
   }

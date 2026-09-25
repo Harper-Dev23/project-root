@@ -113,7 +113,7 @@
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 5,
    "cultistPct": 24.7,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 8,
    "forageSpotsPerMap": 51.7,
    "barrenPerMap": 0,
    "marksPct": {
@@ -160,7 +160,7 @@
    "unreachablePocketPct": 0,
    "hostilesPerMap": 6,
    "cultistPct": 24.1,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 8,
    "forageSpotsPerMap": 32.64,
    "barrenPerMap": 16.55,
    "marksPct": {
@@ -207,7 +207,7 @@
    "unreachablePocketPct": 0.2,
    "hostilesPerMap": 8,
    "cultistPct": 22.6,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 11,
    "forageSpotsPerMap": 76.6,
    "barrenPerMap": 0,
    "marksPct": {
@@ -254,7 +254,7 @@
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 9,
    "cultistPct": 23.6,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 11,
    "forageSpotsPerMap": 56.55,
    "barrenPerMap": 28.53,
    "marksPct": {
@@ -398,7 +398,7 @@
    "unreachablePocketPct": 0,
    "hostilesPerMap": 5,
    "cultistPct": 19,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 8,
    "forageSpotsPerMap": 51.02,
    "barrenPerMap": 0,
    "marksPct": {
@@ -446,7 +446,7 @@
    "unreachablePocketPct": 0,
    "hostilesPerMap": 6,
    "cultistPct": 18.7,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 8,
    "forageSpotsPerMap": 32.89,
    "barrenPerMap": 16.68,
    "marksPct": {
@@ -494,7 +494,7 @@
    "unreachablePocketPct": 0.4,
    "hostilesPerMap": 7,
    "cultistPct": 19.8,
-   "eventSitesPerMap": 5.98,
+   "eventSitesPerMap": 10.96,
    "forageSpotsPerMap": 76.94,
    "barrenPerMap": 0,
    "marksPct": {
@@ -542,7 +542,7 @@
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 8,
    "cultistPct": 19.8,
-   "eventSitesPerMap": 6,
+   "eventSitesPerMap": 11,
    "forageSpotsPerMap": 56.48,
    "barrenPerMap": 28.49,
    "marksPct": {
@@ -571,7 +571,7 @@
    "retriedPct": 3.2
   }
  },
- "mapsHash": "e84830c5fad2212e1916339f294257903b9cef4846b3fc21ec42e95172c9e1e2",
+ "mapsHash": "4f9dca2c56e735f46d8582c01212f64082b373dac94d560844189386f052efb1",
  "prefixEffects": {
   "teeming": [
    5,
@@ -583,7 +583,7 @@
   ],
   "lean": [
    49.93,
-   24.67
+   24.7
   ],
   "blight": [
    0,
@@ -616,11 +616,11 @@
     "0:6,2 marked wading_heron Pack: grown,grown,grown,grown,grown (roaming, concealment 100)",
     "0:8,1 cultists x2",
     "0:8,2 cultists x3",
-    "0:3,8 event dagon_whisper",
-    "0:2,8 event dagon_hunger",
-    "0:7,5 event reeds_distant_weeping",
-    "0:2,9 event reeds_stranger_at_camp",
-    "0:4,7 event reeds_sinking_mud"
+    "0:3,8 event reeds_lore_test",
+    "0:2,8 event eel_catcher_return",
+    "0:7,5 event riddle_stones",
+    "0:2,9 event rival_camp",
+    "0:4,7 event dagon_whisper"
    ],
    "objectives": [
     {
@@ -668,11 +668,11 @@
     "section 0",
     "                mS",
     "             mKm m",
-    "        mKm m m mVmBm",
+    "        mKm m m mVmBmV",
     "       mSm m w m m m m",
     "        m w w g g g gB",
     "         m w w g g g",
-    "          m^w wVg gVgV",
+    "          mVw wVg gVgV",
     "       m^m^w w w g gS",
     "      g^w^wVwVw wBg",
     "       gE~ ~ ~ w^w^",
@@ -684,12 +684,14 @@
     "0:8,4 marked marsh_stalker Alpha and pack: great,grown,grown,grown,grown,grown,grown (roaming, concealment 40)",
     "0:4,8 marked wading_heron Alpha and pack: great,grown,grown,grown,grown,grown,grown (roaming, concealment 80)",
     "0:3,2 cultists x3",
-    "0:7,2 event reeds_stranger_at_camp",
-    "0:2,8 event reeds_sinking_mud",
-    "0:6,6 event dagon_whisper",
-    "0:1,8 event dagon_hunger",
-    "0:4,6 event reeds_distant_weeping",
-    "0:7,6 event dagon_hunger"
+    "0:7,2 event riddle_stones",
+    "0:2,8 event dagon_whisper",
+    "0:6,6 event hunting_blind",
+    "0:1,8 event hermit",
+    "0:4,6 event prophet_vigil",
+    "0:7,6 event dagon_hunger",
+    "0:9,2 event dagon_hunger",
+    "0:2,6 event eel_catcher_request"
    ],
    "objectives": [
     {
@@ -740,12 +742,12 @@
     "        w ~",
     "       ~ =VmEt t",
     "    t^m^m t t g g",
-    "   tBt t t t g g mVmB",
+    "   tBt t tVtVg g mVmB",
     "wSt^t t tBt mBg g m t",
     " w w t tBt m g g mBt t",
-    "  wBw wVg g gVmVg t t tS",
-    "   w w^g g gVm m w w ~",
-    "  wKw w g g m mSw w",
+    "  wBw wVg gVgVmVg t t tS",
+    "   w w^g g gVm mVw w ~",
+    "  wKw w gVg m mSw w",
     "     m m m m m w w ~",
     "      mSm m m w w w ~"
    ],
@@ -758,12 +760,17 @@
     "0:-2,6 unmarked marsh_stalker Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 80)",
     "0:8,3 unmarked wading_heron Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 60)",
     "0:0,3 unmarked marsh_stalker Matriarch and young: prime,yearling,yearling (rooted, concealment 100)",
-    "0:4,6 event reeds_distant_weeping",
-    "0:0,6 event reeds_stranger_at_camp",
+    "0:4,6 event dagon_whisper",
+    "0:0,6 event riddle_stones",
     "0:4,1 event reeds_sinking_mud",
-    "0:3,6 event dagon_hunger",
-    "0:7,3 event dagon_whisper",
-    "0:2,7 event dagon_hunger"
+    "0:3,6 event fresh_carcass",
+    "0:7,3 event shrine_of_house",
+    "0:2,7 event hunting_blind",
+    "0:4,3 event bitter_roots",
+    "0:0,8 event crossing_tracks",
+    "0:3,3 event hermit",
+    "0:2,6 event reeds_lore_test",
+    "0:4,7 event prophet_vigil"
    ],
    "objectives": [
     {
@@ -829,11 +836,11 @@
     "0:2,5 marked tide_crab Pack: grown,grown,grown,grown,grown (roaming, concealment 40)",
     "0:1,7 cultists x2",
     "0:6,3 marked shore_gull Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
-    "0:2,8 event yargaleth_bubbles",
-    "0:4,6 event bay_rising_tide",
-    "0:7,4 event bay_wrecked_hull",
-    "0:3,6 event bay_lantern_glow",
-    "0:8,2 event yargaleth_undertow"
+    "0:2,8 event bay_rising_tide",
+    "0:4,6 event prophet_vigil",
+    "0:7,4 event riddle_stones",
+    "0:3,6 event bitter_roots",
+    "0:8,2 event shrine_of_house"
    ],
    "objectives": [
     {
@@ -882,12 +889,12 @@
     "",
     "         ~",
     "      ~ ~ ~ s   sSs",
-    "     g g h h s^s s sV",
+    "     g g h hVs^s s sV",
     "      gSgVh^h^s^sV~ ~",
     "     g gVg^g sBsV~ ~ ~",
     "      gVgBg g sBs ~ ~",
     "       ~ g g g = ~ ~ ~",
-    "      ~ s ~ g ~ sE~",
+    "      ~ s ~ gV~ sE~",
     "     ~ sSsBs s",
     "        sB"
    ],
@@ -897,12 +904,14 @@
     "0:4,6 marked tide_crab Pack: yearling,yearling,yearling,yearling,yearling,yearling,yearling (roaming, concealment 40)",
     "0:1,6 unmarked shore_gull Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 40)",
     "0:-1,10 unmarked shore_gull Alpha and pack: prime,grown,grown,grown,grown (roaming, concealment 40)",
-    "0:2,4 event bay_rising_tide",
-    "0:0,6 event yargaleth_bubbles",
-    "0:6,4 event yargaleth_undertow",
-    "0:1,5 event bay_wrecked_hull",
-    "0:5,5 event bay_lantern_glow",
-    "0:8,3 event yargaleth_undertow"
+    "0:2,4 event rival_camp",
+    "0:0,6 event bay_rising_tide",
+    "0:6,4 event bay_lantern_glow",
+    "0:1,5 event prophet_vigil",
+    "0:5,5 event bay_lore_test",
+    "0:8,3 event shrine_of_house",
+    "0:2,8 event yargaleth_bubbles",
+    "0:4,3 event fresh_carcass"
    ],
    "objectives": [
     {
@@ -956,9 +965,9 @@
     "         hVs sVs s^",
     "      s s h s sVs^s^",
     "     sPs h hKs s^s^sE",
-    "        h h h h h h^",
-    "         hSs s h h^h^",
-    "          s^s^sVhBh",
+    "        h h h h hVh^",
+    "         hSs s h h^hV",
+    "          sVsVsVhBh",
     "           s^s^  h",
     "",
     "section 1",
@@ -967,7 +976,7 @@
     "            m mVs   s",
     "         s mBm s s sS",
     "        s hBd d s s s",
-    "         hPd d s s s s",
+    "         hPd d s sVs s",
     "        hKh dBs s sV",
     "         s ~ ~ sBs",
     "        s g ~ ~ s",
@@ -982,12 +991,17 @@
     "1:3,6 unmarked tide_crab Matriarch and young: prime,yearling,yearling,yearling (rooted, concealment 40)",
     "0:4,8 marked shore_gull Lone: prime (roaming, concealment 80)",
     "1:1,6 cultists x4",
-    "1:6,6 event yargaleth_bubbles",
-    "0:5,3 event bay_lantern_glow",
-    "0:3,3 event yargaleth_undertow",
+    "1:6,6 event bay_rising_tide",
+    "0:5,3 event bay_lore_test",
+    "0:3,3 event yargaleth_bubbles",
     "0:3,8 event yargaleth_undertow",
-    "0:5,4 event bay_rising_tide",
-    "1:6,2 event bay_wrecked_hull"
+    "0:5,4 event prophet_vigil",
+    "1:6,2 event riddle_stones",
+    "0:2,8 event crossing_tracks",
+    "0:1,8 event hermit",
+    "0:6,7 event yargaleth_undertow",
+    "0:5,6 event bitter_roots",
+    "1:6,5 event bay_wrecked_hull"
    ],
    "objectives": [
     {

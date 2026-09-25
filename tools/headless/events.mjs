@@ -385,8 +385,22 @@ console.log('=== every branch of every real template resolves ===');
     for (const pick of picks) {
       try {
         // A template for inside a pact (11c) is met with one already begun.
-        const inPact = t.appears?.pact === true ? (d) => { d.boon.pact = { god: ZONES[zoneId].falseGod, level: 3 }; } : null;
-        const { h, tile } = withSite(id, { zoneId, night: t.appears?.night ?? false, extra: inPact });
+        // ...and each 11d moment is set up the same way: a beast of the mark
+        // within 2 steps, a hungry party, the goods a trade asks for, the flag.
+        const a = t.appears || {};
+        const moment = (d, site) => {
+          if (a.pact === true) d.boon.pact = { god: ZONES[zoneId].falseGod, level: 3 };
+          if (a.nearby) {
+            const b = d.map.occupants.find(o => o.kind === 'beast');
+            const S = parseTileId(site);
+            const spot = Object.keys(d.map.tiles).find(id => { const P = parseTileId(id); return id !== site && id !== d.pos && P.section === S.section && distance(P, S) === 2 && !d.map.occupants.some(o => o.tile === id); });
+            b.tile = spot; b.mark = a.nearby;
+          }
+          if (a.hunger && !a.hunger.includes('fed') && !a.hunger.includes('sated')) { d.supplies = 0; d.zeroSince = d.time; }
+          for (const g of t.give || []) d.pack.found.push(makeStack(g.id, g.qty));
+        };
+        const { h, w, tile } = withSite(id, { zoneId, night: a.night ?? false, extra: moment });
+        if (a.questFlag) w.flags.add(a.questFlag);
         const opened = h.move(tile);
         if (!opened.event) { problems.push(`${id}: did not open (${opened.quiet || opened.reason})`); continue; }
         const r = h.resolveEvent(pick);
