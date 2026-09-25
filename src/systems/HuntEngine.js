@@ -134,9 +134,10 @@ import { huntItemLevel } from './HuntScaling.js';
 export const MAP_HUNT_STATE_VERSION = 1;
 
 /** A won fight's XP pool, split over the party (GameState.awardXPPool), before
- *  the plan's xpPercent. The Advance loop's number (chunk 9 decision 9);
- *  tuning is chunk 13. */
-export const FIGHT_XP_POOL = 20;
+ *  the plan's xpPercent. Was the Advance loop's 20 (chunk 9 decision 9);
+ *  60 in chunk 13c, beside the completion pool paid at the exit
+ *  (HuntObjectives.COMPLETION_XP_POOL), tuned with huntsim. */
+export const FIGHT_XP_POOL = 60;
 /** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
  *  The Advance loop's number; cultists pay none (their reward is gear). */
 export const BEAST_FIGHT_HUNT_POINTS = 8;
@@ -873,8 +874,10 @@ function makeMapHunt(s, rng, worldRng, world) {
       const reward = exitReward(s);
       const pack = this._finish('exit');
       if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
-      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone };
-      this._log({ kind: 'exit', tile: s.pos, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, time: s.time });
+      // Completion XP (chunk 13c): the world splits it over the party.
+      if (reward.xpPool > 0) world.awardXP?.(reward.xpPool);
+      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, xpPool: reward.xpPool };
+      this._log({ kind: 'exit', tile: s.pos, huntPoints: reward.huntPoints, xpPool: reward.xpPool, primaryDone: reward.primaryDone, time: s.time });
       return { ok: true, reward, pack };
     },
 
@@ -963,7 +966,10 @@ function makeMapHunt(s, rng, worldRng, world) {
         occupants,
         trails,
         encounter: this.encounter(),
-        objectives: objectiveProgress(s),
+        // After a clean exit, judged as the exit judged them: a carried-home
+        // objective (Retrieve, Provisioner, Trophy) is done only at the exit,
+        // so the end panel said "Retrieve not done" on a hunt that paid for it.
+        objectives: objectiveProgress(s, { atExit: s.finished === 'exit' }),
         spoils: this._spoilsView(),
         boon: this.boon(),
         event: this.event(),

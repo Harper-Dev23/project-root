@@ -240,7 +240,7 @@ function simWorld(party) {
   w.dayBreaks = () => {};
   w.awardHuntPoints = (n) => { w.huntPoints.push(n); };
   w.bankItems = (items) => { w.banked += items.length; };
-  w.awardXP = () => {};
+  w.awardXP = (pool) => GameState.awardXPPool(pool, party);   // as GAME_WORLD.awardXP: completion and event XP
   w.favor = () => {};
   w.falseGod = () => {};
   w.bond = () => 0;

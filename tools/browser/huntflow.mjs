@@ -315,6 +315,10 @@ await shot('05g-after-flee');
 }
 
 // ---- 6. Leave through an exit -------------------------------------------------------
+// Take the Retrieve item first (13c), so leaving pays the completion reward
+// and the completion XP, and the end panel's XP line is checked for real.
+const took = await walkTo("new Set([st.map.objectives.primary.site])");
+check('walked to the Retrieve site and took the item', took === 'there' && await evaluate('return window.__T.s().hunt.getState().retrieved === true;'), took);
 const walked = await walkTo("new Set(Object.entries(st.map.tiles).filter(([, t]) => t.exit).map(([id]) => id))");
 check('walked to an exit', walked === 'there', walked);
 await evaluate(`const s = window.__T.s(); s.panel = null; s.selected = s.v.pos; s._refresh(); return 1;`);
@@ -324,6 +328,8 @@ const pts0 = await evaluate(`const PM = (await import('/src/systems/ProgressionM
   window.__hpCalls = []; const orig = PM.addHuntPoints.bind(PM);
   PM.addHuntPoints = (n) => { window.__hpCalls.push({ n, at: (new Error().stack || '').split(String.fromCharCode(10)).slice(2, 6).map(l => l.trim()).join(' < ') }); return orig(n); };
   return PM.huntPoints;`);
+const partyXP = `const GS = (await import('/src/systems/GameState.js')).default; return GS.party.map(c => [c.level, c.experience || 0]);`;
+const xp0 = await evaluate(partyXP);
 await clickText('^Leave the hunt$');
 const enter = await findText('Enter', 'UIScene');
 if (enter) await click(enter.x, enter.y);
@@ -332,9 +338,21 @@ await shot('06-left');
 const after = await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.js'); const PM = (await import('/src/systems/ProgressionManager.js')).default;
   const rw = window.__T.s().hunt.getState().reward;
   return { active: HuntManager.isActive(), finished: window.__T.s().v.finished, pts: PM.huntPoints,
-    completion: rw?.completion, primaryDone: rw?.primaryDone, bonusPts: (rw?.bonuses || []).reduce((t, b) => t + (b.huntPoints || 0), 0), bonuses: (rw?.bonuses || []).map(b => b.id) };`);
+    completion: rw?.completion, xpPool: rw?.xpPool || 0, primaryDone: rw?.primaryDone, bonusPts: (rw?.bonuses || []).reduce((t, b) => t + (b.huntPoints || 0), 0), bonuses: (rw?.bonuses || []).map(b => b.id) };`);
 const sv = await saved();
 check('leaving ends the hunt: the holder drops it and the save holds no hunt', after.finished === 'exit' && !after.active && sv?.hunt === null);
+// Completion XP (13c): paid only with the primary done, reaching every
+// hunter as a fight pool's share, and the end panel says so exactly then.
+const endPanel = await evaluate(`return window.__T.textsOf('HuntFieldOverlay').map(t => t.text).join(' | ');`);
+const xp1 = await evaluate(partyXP);
+const share = await evaluate(`const { xpShare } = await import('/data/xpTable.js'); return xpShare(${after.xpPool}, ${xp0.length});`);
+check('...each hunter gained the completion XP share, split as a fight pool is (13c)',
+  after.xpPool > 0 && xp1.every(([l, x], i) => l > xp0[i][0] || x - xp0[i][1] === share), JSON.stringify({ pool: after.xpPool, share, before: xp0, after: xp1 }));
+check('...the end panel shows the completion XP exactly when it was paid (13c)',
+  after.primaryDone ? endPanel.includes(`Completion XP: ${after.xpPool}`) : after.xpPool === 0 && !endPanel.includes('Completion XP'),
+  after.primaryDone ? `primary done, ${after.xpPool} XP` : 'primary not done');
+check('...and it says the objective is done, judged as the exit judged it (13c)',
+  !after.primaryDone || (/Objective: \S+ done/.test(endPanel) && !/Objective: \S+ not done/.test(endPanel)), endPanel.slice(0, 200));
 check('...unspent Rations come home to the bag', (await bagRations()) >= home0, `${home0} -> ${await bagRations()}`);
 // What leaving pays is exactly what the engine reports: the completion reward
 // if (and only if) the primary is done, plus each done bonus objective (7d).

@@ -39,7 +39,7 @@ import { stackQty } from './ItemStacks.js';
 export function cleanExitEntries(env) {
   const led = [];
   const record = (verb) => (...args) => { led.push({ verb, args: JSON.parse(JSON.stringify(args)) }); };
-  const world = { party: () => [], bankItems: record('bankItems'), awardHuntPoints: record('awardHuntPoints') };
+  const world = { party: () => [], bankItems: record('bankItems'), awardHuntPoints: record('awardHuntPoints'), awardXP: record('awardXP') };
   const hunt = restoreMapHunt(env.hunt, world, { view: true });
   const s = hunt.getState();
   if (s.finished) return [];                 // it ended properly; the ledger has it
@@ -48,6 +48,7 @@ export function cleanExitEntries(env) {
   if (out.home.brought.length) world.bankItems(out.home.brought, { found: false });
   if (out.home.found.length) world.bankItems(out.home.found, { found: true });
   if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
+  if (reward.xpPool > 0) world.awardXP(reward.xpPool);
   return led;
 }
 

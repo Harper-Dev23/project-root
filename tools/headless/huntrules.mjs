@@ -1308,6 +1308,8 @@ function payingWorld(party) {
   const w = recordingWorld(party);
   w.paid = []; w.banked = [];
   w.awardHuntPoints = (n) => { w.paid.push(n); };
+  w.xp = [];
+  w.awardXP = (n) => { w.xp.push(n); };   // completion XP (13c), event XP
   w.bankItems = (items, { found }) => { w.banked.push({ found, items: items.map(i => `${i.id}x${i.qty || 1}`) }); };
   return w;
 }
@@ -1323,6 +1325,15 @@ console.log('=== 7d rules ===');
     O.completionReward('small', 0) === 20 && O.completionReward('medium', 0) === 35 && O.completionReward('large', 0) === 50
     && O.completionReward('small', 35) === 27);
   check(`bonus reward: ${O.BONUS_HUNT_POINTS_PER_ITEM_LEVEL} per plan item level`, O.bonusReward(1) === 5 && O.bonusReward(8) === 40);
+  check(`completion XP pool (13c): ${O.COMPLETION_XP_POOL.small} / ${O.COMPLETION_XP_POOL.medium} / ${O.COMPLETION_XP_POOL.large} by size, scaled by xpPercent`,
+    O.completionXP('small', 0) === O.COMPLETION_XP_POOL.small && O.completionXP('large', 50) === Math.round(O.COMPLETION_XP_POOL.large * 1.5) && O.completionXP('nope', 0) === 0);
+  {
+    // Leaving from the entry at once: the primary is not done, so no completion XP is paid.
+    const w = payingWorld(makeParty());
+    const hh = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'small' }, supplies: 60, seed: 9100 }, w);
+    const r = hh.exit();
+    check('an exit with the primary not done pays no completion XP (13c)', r.ok && r.reward.primaryDone === false && r.reward.xpPool === 0 && w.xp.length === 0);
+  }
   golden.leaving7d = { COMPLETION_HUNT_POINTS: O.COMPLETION_HUNT_POINTS, BONUS_HUNT_POINTS_PER_ITEM_LEVEL: O.BONUS_HUNT_POINTS_PER_ITEM_LEVEL, PENDING_UNTIL: O.PENDING_UNTIL };
 }
 
@@ -1454,7 +1465,8 @@ console.log('=== every objective is completable and pays at the exit ===');
           const r = solve({ zoneId, size, objective, seed: 10000 + k, itemLevel, planMods });
           row.runs++;
           const want = O.completionReward(size, O.completionRewardPercent(planMods, itemLevel));
-          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints + (r.world.fightPaid || 0) + (r.world.eventPaid || 0)) {
+          if (r.exited && r.r.reward.primaryDone && r.r.reward.completion === want && r.world.paid.reduce((a, b) => a + b, 0) === r.r.reward.huntPoints + (r.world.fightPaid || 0) + (r.world.eventPaid || 0)
+            && r.r.reward.xpPool === O.completionXP(size, 0) && r.world.xp.at(-1) === r.r.reward.xpPool) {
             row.done++; row.days += R.clockAt(r.h.getState().time).day; row.huntPoints += r.r.reward.huntPoints;
           } else fails.push(`${zoneId}/${size}/${objective} ${10000 + k}: ${r.stuck || JSON.stringify(r.r?.reward?.progress?.[0])}`);
         }
@@ -1463,7 +1475,27 @@ console.log('=== every objective is completable and pays at the exit ===');
       }
     }
   }
-  check('all 5 primaries x 2 regions x 3 sizes x 6 seeds: completed, left, and paid exactly completionReward', fails.length === 0, fails.slice(0, 3).join(' | '));
+  check('all 5 primaries x 2 regions x 3 sizes x 6 seeds: completed, left, and paid exactly completionReward and the completion XP pool (13c)', fails.length === 0, fails.slice(0, 3).join(' | '));
+  {
+    // Co-op (13c): a guest whose host is gone takes the clean exit the last
+    // snapshot would have made (CoopRewards.cleanExitEntries, rule 7), and
+    // that now includes the completion XP. A Retrieve hunt walked until the
+    // item is taken, snapshotted before anyone leaves.
+    const { cleanExitEntries } = await import('../../src/systems/CoopRewards.js');
+    const w = payingWorld(makeParty());
+    const hh = rawCreateMapHunt(ZONES[1], { plan: { objective: 'retrieve', size: 'small' }, supplies: 400, seed: 9200 }, w);
+    const site = hh.getState().map.objectives.primary.site;
+    for (let i = 0; i < 300 && !hh.getState().retrieved; i++) {
+      if (hh.encounter()) { hh.winEncounter(); continue; }
+      if (hh.view().event) { hh.leaveEvent(); continue; }
+      const step = nextStep(hh, id => id === site);
+      if (!step) break;
+      hh.move(step);
+    }
+    const led = hh.getState().retrieved ? cleanExitEntries({ hunt: hh.serialize() }) : [];
+    const xp = led.filter(e => e.verb === 'awardXP').map(e => e.args[0]);
+    check('co-op: a host-gone clean exit pays the completion XP pool too (13c)', xp.length === 1 && xp[0] === O.completionXP('small', 0), JSON.stringify({ retrieved: hh.getState().retrieved, xp }));
+  }
   // Bonuses, on a Scout plan.
   const bonusFails = [], pendingOk = [];
   for (const id of Object.keys(BONUS_OBJECTIVES)) {

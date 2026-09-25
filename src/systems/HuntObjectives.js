@@ -42,6 +42,21 @@ export function completionRewardPercent(planMods = {}, itemLevel = 1) {
   return (Number(planMods.completionRewardPercent) || 0) + implicit;
 }
 
+/**
+ * The completion XP pool by map size (chunk 13c, owner OK'd XP at the exit),
+ * paid at a clean exit with the primary objective done, split over the party
+ * like a fight's pool (GameState.awardXPPool, through the world's awardXP),
+ * before the plan's xpPercent. Tuned with huntsim against SCALING's target
+ * of level 10 in ~40 small / ~23 medium / ~16 large hunts: fights alone paid
+ * about 2 XP a hunter a hunt, ~25x too slow.
+ */
+export const COMPLETION_XP_POOL = { small: 240, medium: 440, large: 640 };
+
+/** The completion XP pool for a size and the plan's xpPercent, whole points. */
+export function completionXP(size, xpPercent = 0) {
+  return Math.round((COMPLETION_XP_POOL[size] || 0) * (1 + (xpPercent || 0) / 100));
+}
+
 /** The completion reward in Hunt Points for a size and percent, whole points. */
 export function completionReward(size, percent) {
   return Math.round((COMPLETION_HUNT_POINTS[size] || 0) * (1 + (percent || 0) / 100));
@@ -175,6 +190,7 @@ export function exitReward(s) {
     completion,
     bonuses,
     huntPoints: completion + bonuses.reduce((t, b) => t + b.huntPoints, 0),
+    xpPool: primaryDone ? completionXP(s.plan.size, s.mods?.xpPercent || 0) : 0,
     progress,
   };
 }
