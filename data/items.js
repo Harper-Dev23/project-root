@@ -1293,6 +1293,9 @@ export const Items = {
     damage: { min: 14, max: 21 },          // + flat 0-2 / 0-3 rolled: 14-16 / 21-24
     bonuses: {},
     historicRolls: { damageFlat: { min: [0, 2], max: [0, 3] }, stats: { STR: [5, 7], CON: [2, 4] } },
+    // Heavy Heart: each hit lays 1 Grief (data/historicEffects.js GRIEF).
+    effects: { onHitGrief: 1 },
+    grantsSkills: ['sorrowfall'],
     description: 'The grip is all sharp edges, and still it calls your hands to it. You are undeterred.',
   },
   the_unconfessed: {
@@ -1306,7 +1309,10 @@ export const Items = {
     historic: true,
     unique: true,
     bonuses: {},
-    historicRolls: { stats: { CHA: [2, 4] }, misc: { physToNecroPercent: [25, 35] } },
+    historicRolls: { stats: { CHA: [2, 4] }, misc: { physToNecroPercent: [25, 35] }, effects: { curseOnHitTarget: [50, 70] } },
+    // On hit: Curse on the target (rolled above) and 30 on the wearer; Curse
+    // of the Unshriven: +15% necrotic dealt and taken while cursed.
+    effects: { curseOnHitSelf: 30, unshrivenPct: 15 },
     description: 'Whatever was never said, given weight.',
   },
   sunken_nave: {
@@ -1325,6 +1331,8 @@ export const Items = {
       derived: { PhysicalResist: [8, 12], Evasion: [-10, -10] },
       misc: { resilience: [15, 25] },
     },
+    // Rooted (data/historicEffects.js ROOTED).
+    effects: { rooted: 1 },
     description: 'Root-bound stone from the drowned cathedral.',
   },
 

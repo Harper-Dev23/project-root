@@ -18,6 +18,7 @@ import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items, RARITY_ORDER } from '../../data/items.js';
 import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack, dislodgeLodges } from '../../data/skills.js';
+import { GRIEF, ROOTED, rootedStacks } from '../../data/historicEffects.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
@@ -29,7 +30,7 @@ import { getZone } from '../../data/zones.js';
 import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
-import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase } from '../systems/ItemFactory.js';
+import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase, mergeHistoricEffects } from '../systems/ItemFactory.js';
 import { makeRng, isSeed } from '../systems/seededRng.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
@@ -1595,6 +1596,10 @@ export default class CombatScene extends Phaser.Scene {
     // Track movement for momentum_strike and similar skills
     const actor = this._currentChar?.();
     if (actor && actor === unit) this.currentActorMovedThisTurn = true;
+    // Rooted (Sunken Nave, 14b): any move of this unit, its own or a forced
+    // one, uproots it; and it gains no stack at the end of this turn.
+    unit._movedThisTurn = true;
+    this._uproot(unit);
 
     // --- rebuild visuals at destination ---
     // Use your existing portrait builder (works for both allies and enemies)
@@ -2386,6 +2391,12 @@ export default class CombatScene extends Phaser.Scene {
     if (view?.lifeStealPct) {
       enemy.gearEffects = enemy.gearEffects || {};
       enemy.gearEffects.lifeStealPct = (enemy.gearEffects.lifeStealPct || 0) + view.lifeStealPct;
+    }
+    // Historic items' own mechanics work on an enemy that wears them (chunk
+    // 14b: the Ghost Captain's Unconfessed), through the same merge as hunters.
+    if (view?.effects) {
+      enemy.gearEffects = enemy.gearEffects || {};
+      enemy.gearEffects.historic = mergeHistoricEffects(enemy.gearEffects.historic || {}, view.effects);
     }
   }
 
@@ -7949,7 +7960,7 @@ export default class CombatScene extends Phaser.Scene {
       && ((result.physical || 0) || (result.elemental || 0) || (result.necrotic || 0))) {
       const converted = applyGearConversionAndPercent(
         { physical: result.physical || 0, elemental: result.elemental || 0, necrotic: result.necrotic || 0 },
-        user
+        user, { target }
       );
       result.physical = converted.physical;
       result.elemental = converted.elemental;
@@ -7977,7 +7988,7 @@ export default class CombatScene extends Phaser.Scene {
         if (!sp || (sp.physical == null && sp.elemental == null && sp.necrotic == null)) continue;
         const spConverted = applyGearConversionAndPercent(
           { physical: sp.physical || 0, elemental: sp.elemental || 0, necrotic: sp.necrotic || 0 },
-          user, { silent: true }
+          user, { silent: true, target: sp.target || sp.char || null }
         );
         sp.physical = spConverted.physical;
         sp.elemental = spConverted.elemental;
@@ -8738,6 +8749,16 @@ export default class CombatScene extends Phaser.Scene {
             const healed = Math.max(1, Math.ceil(dmg * lifeStealPct));
             user.currentHP = Math.min(user.maxHP, user.currentHP + healed);
             this._showFloatingNumber?.(healed, user, true);
+          }
+
+          // Historic items' on-hit effects (chunk 14b; gearEffects.historic,
+          // merged for hunters and enemies alike): Heavy Heart lays Grief;
+          // The Unconfessed curses the target and its own wearer.
+          const hx = user?.gearEffects?.historic;
+          if (hx && dmg > 0 && target && target !== user) {
+            if (hx.onHitGrief) this._applyGrief(target, hx.onHitGrief);
+            if (hx.curseOnHitTarget) this._applyWeaknessBuildup(target, { curse: hx.curseOnHitTarget }, { user, ability });
+            if (hx.curseOnHitSelf) this._applyWeaknessBuildup(user, { curse: hx.curseOnHitSelf }, { user });
           }
 
           // (onMeleeHitBy/onHitBy heal-attacker/buildup and nextHitBuildup
@@ -9688,7 +9709,7 @@ export default class CombatScene extends Phaser.Scene {
       // Independent gear-conversion + gear% per hit — silent:true so this
       // doesn't pollute the primary's own breakdown log (see the earlier
       // Sacred Shockwave splash-duplication fix this same session).
-      bd = applyGearConversionAndPercent(bd, user, { silent: true });
+      bd = applyGearConversionAndPercent(bd, user, { silent: true, target: occupant });
       // Independent Lightning Jolt roll per hit.
       const { joltTotal } = applyLightningJolt(occupant);
       if (joltTotal > 0) bd.elemental += joltTotal;
@@ -13285,6 +13306,8 @@ export default class CombatScene extends Phaser.Scene {
         // Resolve delayed one-shot payloads (e.g. Glacial Strike's Trapped Fire)
         // before the normal duration tick below removes/logs the status.
         this._applyEndOfTurnProcs(previousChar);
+        // Rooted (Sunken Nave, 14b): a turn ended without moving adds a stack.
+        this._rootedTurnEnd(previousChar);
 
         // === NEW: tick down timed statuses (includes Cinders) ===
         this._tickDownStatusDurations(previousChar);
@@ -13705,9 +13728,53 @@ export default class CombatScene extends Phaser.Scene {
     char.statusEffects = char.statusEffects.filter(se => se?.id !== id);
   }
 
+  // ── Historic item mechanics (chunk 14b; data/historicEffects.js) ─────────
+
+  /** Lay `n` stacks of Grief on a unit (capped); each stack is
+   *  GRIEF.perStackPct AttackPower, lasting GRIEF.turns of its own turns. */
+  _applyGrief(unit, n = 1) {
+    if (!unit || !(n > 0) || unit.status === 'incapacitated') return 0;
+    unit.statusEffects = unit.statusEffects || [];
+    let se = unit.statusEffects.find(x => x?.id === 'grief');
+    if (!se) { se = { id: 'grief', name: 'Grief', turns: GRIEF.turns, stacks: 0, mods: {} }; unit.statusEffects.push(se); }
+    se.stacks = Math.min(GRIEF.maxStacks, (se.stacks || 0) + n);
+    se.turns = Math.max(se.turns || 0, GRIEF.turns);
+    se.mods = { AttackPower: GRIEF.perStackPct * se.stacks };
+    this._log?.(`${unit.name} is weighed down by Grief (${se.stacks}).`);
+    return se.stacks;
+  }
+
+  /** Rooted at the end of its owner's turn: no move this turn adds a stack. */
+  _rootedTurnEnd(unit) {
+    const moved = !!unit?._movedThisTurn;
+    if (unit) unit._movedThisTurn = false;
+    if (!unit?.gearEffects?.historic?.rooted || moved || unit.status === 'incapacitated') return;
+    unit.statusEffects = unit.statusEffects || [];
+    let se = unit.statusEffects.find(x => x?.id === 'rooted');
+    if (!se) { se = { id: 'rooted', name: 'Rooted', permanent: true, stacks: 0, mods: {} }; unit.statusEffects.push(se); }
+    if (se.stacks >= ROOTED.maxStacks) return;
+    se.stacks += 1;
+    se.mods = Object.fromEntries(Object.entries(ROOTED.perStack).map(([k, v]) => [k, v * se.stacks]));
+    this._log?.(`${unit.name} takes root (${se.stacks}).`);
+  }
+
+  /** Moving clears Rooted. */
+  _uproot(unit) {
+    const i = (unit?.statusEffects || []).findIndex(x => x?.id === 'rooted');
+    if (i < 0) return;
+    unit.statusEffects.splice(i, 1);
+    this._log?.(`${unit.name} is uprooted.`);
+  }
+
   _addStatusEffects(target, effects = []) {
     if (!target || !Array.isArray(effects) || effects.length === 0) return;
     target.statusEffects = target.statusEffects || [];
+    // Rooted (Sunken Nave, 14b): roots are not pinned. Immobilize does not take.
+    if (rootedStacks(target) > 0 && effects.some(e => e?.id === 'immobilized')) {
+      this._log?.(`${target.name} is Rooted: the Immobilize does not take.`);
+      effects = effects.filter(e => e?.id !== 'immobilized');
+      if (!effects.length) return;
+    }
 
     // Fields with real, non-generic merge/default semantics — everything
     // else (onHitBy, onHit, nextHitBuildup, nextHitOnly, onNextDamageTaken,

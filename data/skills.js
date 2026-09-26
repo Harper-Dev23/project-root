@@ -13,6 +13,7 @@ import { weaknessIntensityMult, weaknessTierFromMeter, weaknessDecayAmount, weak
 import { DevFlags } from '../src/systems/DevFlags.js';
 import { resolveAOESplash } from '../src/systems/aoeResolver.js';
 import { GameplaySettings } from '../src/systems/GameplaySettings.js';
+import { GRIEF, SORROWFALL, griefStacks } from './historicEffects.js';
 
 
 // Transpose Fire/Lightning/Cold (Performer class skills) share one
@@ -885,6 +886,53 @@ const RAW_SKILLS = {
       return {};
     },
     description: 'Reduce all cooldowns of an ally by 3 turns. CD 3.'
+  },
+
+  // ── Historic-granted skills (chunk 14b; data/historicEffects.js) ──────────
+  // Sorrowfall, granted by Burden of Dreams (grantsSkills). `special`, like
+  // the ring-granted Hasten, so it never enters the mace kit that
+  // getWeaponSkillsFor hands every mace wielder; the `attack` tag still makes
+  // it a weapon hit for accuracy and evasion. No stat requirement: with STR
+  // Proficiency SORROWFALL.flashing.value it becomes Flashing Grief, laying
+  // GRIEF.maxStacks of Grief before the blow. Skill% is ONE additive number
+  // (feedback_additive_damage_bonuses): base + per-Grief bonus.
+  'sorrowfall': {
+    id: 'sorrowfall',
+    name: 'Sorrowfall',
+    type: 'special',
+    mechanic: 'active',
+    versionTag: 'v3.23',
+    typedDamage: true,
+    grantedBy: 'burden_of_dreams',
+    actionCost: 'major',
+    mpCost: 8,
+    cooldown: 3,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack'],
+    apply: (attacker, target, scene) => {
+      const ability = SKILLS?.sorrowfall;
+      const f = SORROWFALL.flashing;
+      if (getProficiency(attacker, f.stat) >= f.value && scene?._applyGrief) {
+        scene._log?.(`${attacker.name}'s Sorrowfall is Flashing Grief!`);
+        scene._applyGrief(target, GRIEF.maxStacks);
+      }
+      const stacks = griefStacks(target);
+      const pct = SORROWFALL.basePct + SORROWFALL.perGriefPct * stacks;
+      const roll = calculateDamage(attacker, target, ability);
+      let { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        attacker, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillPct: pct, skillLabel: `${ability?.name || 'Skill'} weapon damage (${pct}%${stacks ? `, ${stacks} Grief` : ''})`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      return { ...roll, physical, elemental, necrotic, amount };
+    },
+    description: 'Deals 180% weapon damage, +25% for each stack of Grief on the target. With STR Proficiency 17 it becomes Flashing Grief: lays 3 Grief before the blow. Granted by Burden of Dreams.'
   },
 
   // ── LE\'SSE Ring-Granted Skills ───────────────────────────────────────────

@@ -1544,6 +1544,12 @@ export function rollHistoricInto(mods, spec, rng = Math.random) {
       (out[group] = out[group] || {})[key] = v;
     }
   }
+  // effects: a Historic item's own mechanics that roll (e.g. The Unconfessed's
+  // curse on hit). Kept on the rolls only; getItemComputedData merges them
+  // over the base's fixed `effects` into view.effects.
+  for (const [key, range] of Object.entries(spec.effects || {})) {
+    (out.effects = out.effects || {})[key] = roll(range);
+  }
   if (spec.damageFlat) {
     mods.damageFlat = mods.damageFlat || { min: 0, max: 0 };
     out.damageFlat = {};
@@ -1555,6 +1561,19 @@ export function rollHistoricInto(mods, spec, rng = Math.random) {
     }
   }
   return out;
+}
+
+/**
+ * Merge an item's Historic `effects` into a unit's gearEffects.historic
+ * (chunk 14b). Numbers add, anything else is set. The ONE merge used for
+ * hunters (CharacterBuilder) and enemies (CombatScene._equipEnemyItem), so a
+ * new effect needs only data and its reader, never another copy list.
+ */
+export function mergeHistoricEffects(into, effects) {
+  for (const [k, v] of Object.entries(effects || {})) {
+    into[k] = typeof v === 'number' ? (into[k] || 0) + v : (v ?? into[k]);
+  }
+  return into;
 }
 
 /** Item instance type guard (unchanged behavior) */
@@ -1587,6 +1606,10 @@ export function getItemComputedData(itemRef) {
     name: displayName || base.name,
     rarity: rarity || base.rarity || base.quality || 'common',
   };
+  // A Historic item's effects: the base's fixed ones, then this copy's rolled
+  // ones (chunk 14b).
+  const rolledFx = isItemInstance(itemRef) ? itemRef.historicRolls?.effects : null;
+  if (base.effects || rolledFx) view.effects = { ...(base.effects || {}), ...(rolledFx || {}) };
 
   if (instanceMods) {
 

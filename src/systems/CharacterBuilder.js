@@ -3,7 +3,7 @@ import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { SKILLS } from '../../data/skills.js';
 import { Items } from '../../data/items.js';
 import GameState from './GameState.js';
-import { getItemComputedData } from './ItemFactory.js';
+import { getItemComputedData, mergeHistoricEffects } from './ItemFactory.js';
 // --- Constants ------------------------------------------------
 // NET TOTALS ARE NORMALISED: every race sums to +6, every class to +3, so
 // any race/class pairing lands on exactly +9. Previously races ranged 2-6
@@ -535,6 +535,7 @@ export function rebuildCharacterStats(character) {
     necroticDamagePercent: 0,
     healingPercent: 0,
     resilience: 0,
+    historic: {},
     weaponBuildupPercent: {},
     physicalBuildupPercent: 0,
     elementalBuildupPercent: 0,
@@ -581,6 +582,8 @@ export function rebuildCharacterStats(character) {
 
     // Historic item base properties (not affix-based)
     if (view?.lifeStealPct) gearEffects.lifeStealPct += view.lifeStealPct;
+    // Historic items' own mechanics (chunk 14b): one merged block.
+    if (view?.effects) mergeHistoricEffects(gearEffects.historic, view.effects);
 
     if (view?._miscMods) {
       const misc = view._miscMods;
@@ -710,6 +713,7 @@ export function rebuildCharacterStats(character) {
     elementalBuildupPercent: gearEffects.elementalBuildupPercent,
     necroticBuildupPercent: gearEffects.necroticBuildupPercent,
     lifeStealPct: gearEffects.lifeStealPct,
+    historic: { ...gearEffects.historic },
     // Jewelry passives — read by CombatScene for battle-start effects and proc rolls
     physToElemPercent: gearEffects.physToElemPercent,
     physToNecroPercent: gearEffects.physToNecroPercent,

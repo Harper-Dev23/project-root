@@ -2,6 +2,7 @@ import { Items } from '../../data/items.js';
 import { lightningJoltOdds } from './StatusEffects.js';
 import { getItemComputedData, isItemInstance } from '../systems/ItemFactory.js';
 import { WeaknessV3, weaknessIntensityMult, WeaknessAliases, familyIntensityMult, } from '../systems/StatusEffects.js';
+import { UNSHRIVEN } from '../../data/historicEffects.js';
 
 // --------------------------------------------------
 // Small utils
@@ -1547,6 +1548,19 @@ export function applyTypedDamageModifiers(breakdown, attacker, target, opts = {}
 // Legacy (non-typed) skills don't call this — they keep the original early
 // application inside calculateDamage()/applyDamageModifiers unchanged.
 // --------------------------------------------------
+/**
+ * Curse of the Unshriven's bonus for a unit now, in percent (chunk 14b;
+ * data/historicEffects.js UNSHRIVEN): 0 unless it wears the effect and is at
+ * Curse tier 1+; then its base % scaled by its own curse meter on the curse
+ * family's curve (familyIntensityMult, as other curse effects), capped.
+ */
+export function unshrivenPct(unit) {
+  const base = unit?.gearEffects?.historic?.unshrivenPct || 0;
+  if (!base || (unit?.weakness?.tiers?.curse | 0) < 1) return 0;
+  const intensity = familyIntensityMult('curse', unit.weakness.meters?.curse | 0);
+  return Math.min(UNSHRIVEN.cap, base * intensity);
+}
+
 export function applyGearConversionAndPercent(breakdown, attacker, opts = {}) {
   let physical = breakdown?.physical | 0;
   let elemental = breakdown?.elemental | 0;
@@ -1609,6 +1623,23 @@ export function applyGearConversionAndPercent(breakdown, attacker, opts = {}) {
         from: Math.round(gearPrevTotal), to: Math.round(gearNewTotal),
       });
     } catch { }
+  }
+
+  // Curse of the Unshriven (The Unconfessed, chunk 14b): the wearer deals, and
+  // takes, more necrotic while it carries Curse. After gear conversion on
+  // purpose, so the amulet's own converted necrotic counts (the Le'sse
+  // lesson). `opts.target` is the one hit; a dealt and a taken bonus on the
+  // same hit multiply (they belong to two different units).
+  if (necrotic > 0) {
+    const dealt = unshrivenPct(attacker);
+    const taken = unshrivenPct(opts.target);
+    if (dealt || taken) {
+      const prev = necrotic;
+      necrotic *= (1 + dealt / 100) * (1 + taken / 100);
+      if (!silent) {
+        try { _pushBreakdown({ label: `Curse of the Unshriven (${dealt ? `+${Math.round(dealt)}% dealt` : ''}${dealt && taken ? ', ' : ''}${taken ? `+${Math.round(taken)}% taken` : ''})`, mult: necrotic / prev, from: Math.round(prev), to: Math.round(necrotic) }); } catch { }
+      }
+    }
   }
 
   physical = Math.max(0, Math.floor(physical));
