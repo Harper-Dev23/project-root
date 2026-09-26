@@ -3,6 +3,7 @@ import { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP, xpShare } from '../
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { addToList } from './ItemStacks.js';
 import { legacyItemId } from '../../data/beastParts.js';
+import { Items } from '../../data/items.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
 import ProgressionManager from './ProgressionManager.js';
 import { newStanding, LEGACY_FELL } from './Standing.js';
@@ -647,6 +648,62 @@ const GameState = {
       char.currentHP = char.maxHP;
       char.currentMP = char.maxMP ?? char.currentMP;
     });
+  },
+
+  // ── The Historic ledger (chunk 14b; vault IMPLEMENTATION_PLAN, "Historic
+  // items and bosses") ──────────────────────────────────────────────────────
+  // One of each Historic item exists in the realm. "Held" is DERIVED from the
+  // save, never stored, so it cannot drift: any copy on a hunter (equipped or
+  // carried, the Slain included), in the camp bag, the tribe stash or the
+  // hunt's pack. What is recorded is only what cannot be derived: returns to
+  // the world (flags.historicLedger), and later a rival tribe's claim.
+
+  /** Every item instance this save holds anywhere. */
+  _allHeldItems() {
+    const out = [];
+    const take = (x) => { if (x && typeof x === 'object' && x.id) out.push(x); };
+    for (const c of [...(this.characters || []), ...(this.slain || [])]) {
+      Object.values(c.equipment || {}).forEach(take);
+      (c.inventory || []).forEach(take);
+    }
+    (this.inventory || []).forEach(take);
+    Object.values(this.tribeStash || {}).forEach(list => (list || []).forEach(take));
+    const hunt = this._huntHooks ? this._huntHooks.serialize() : this._rawHunt;
+    for (const list of [hunt?.pack?.brought, hunt?.pack?.found]) (list || []).forEach(take);
+    return out;
+  },
+
+  /** Does this save hold a copy of the item anywhere? */
+  ownsItem(itemId) {
+    return this._allHeldItems().some(i => i.id === itemId);
+  },
+
+  /**
+   * Is a Historic item still out in the world? Its sources (a boss's lair
+   * chest, the Ghost Captain, a chance find) give it only then; while the
+   * player holds it they give something else. (Rival claims come later.)
+   */
+  historicInWild(itemId) {
+    return !this.ownsItem(itemId);
+  },
+
+  /**
+   * The lodge ritual (LodgeShrineOverlay): return a Historic item from the
+   * camp bag to its natural place. The copy is gone, with its history and
+   * renown; the item is back in the wild, so its source can give it again,
+   * rolled anew. Only an item whose base names a `home` can be returned.
+   */
+  returnHistoric(instance, day = null) {
+    const i = (this.inventory || []).indexOf(instance);
+    if (i < 0) return { ok: false, reason: 'it must be in the camp bag' };
+    const home = Items[instance.id]?.home;
+    if (!Items[instance.id]?.historic || !home) return { ok: false, reason: 'it has no place to return to' };
+    this.inventory.splice(i, 1);
+    const led = (this.flags.historicLedger = this.flags.historicLedger || {});
+    const e = (led[instance.id] = led[instance.id] || { returned: 0 });
+    e.returned += 1;
+    e.lastReturnedDay = day;
+    return { ok: true, home };
   },
 
   /**

@@ -311,8 +311,10 @@ function combatItemAbility(itemId, count = 1) {
 
 // Returns all item IDs of a given type/slot from the Items catalogue.
 function getItemIdsByTypeSlot(type, slot) {
+  // Historic items are one of each in the realm (chunk 14b): never in a random
+  // pool. (Adding the Reeds' three put Sunken Nave on encounter 4's enemies.)
   return Object.entries(Items)
-    .filter(([, it]) => it?.type === type && (!slot || it?.slot === slot))
+    .filter(([, it]) => it?.type === type && (!slot || it?.slot === slot) && !it?.historic)
     .map(([id]) => id);
 }
 // ─────────────────────────────────────────────────────────────────────────────

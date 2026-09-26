@@ -1376,7 +1376,9 @@ export function createItemInstance(id, opts = {}) {
     const rolled = rollFixedAffix(base.fixedAffix, rng);
     // Treat it as a suffix so buildInstanceModifiers processes it
     suffixes = [rolled];
-  } else if (pools && (opts.rollAffixes ?? (rarity !== 'common'))) {
+  } else if (pools && !base.historic && (opts.rollAffixes ?? (rarity !== 'common'))) {
+    // (Historic bases never roll pool affixes: their lines are their own,
+    // rolled from historicRolls below.)
     const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(rarity, rng);
     prefixes = pickUnique(pools.prefixes, nPre, rng, itemLevel);
     suffixes = pickUnique(pools.suffixes, nSuf, rng, itemLevel);
@@ -1418,6 +1420,15 @@ export function createItemInstance(id, opts = {}) {
   if (base.unique) instance.unique = true;
   if (base.tribe) instance.tribe = base.tribe;
   if (base.grantsSkills) instance.grantsSkills = [...base.grantsSkills];
+
+  // Historic items roll within fixed ranges (chunk 14b, owner): a base's
+  // `historicRolls` names each line and its [lo, hi]; the rolled values land in
+  // the same instanceMods fields affixes use (stats, damageFlat, derived,
+  // misc), so every existing reader of those fields applies them unchanged.
+  // The rolls are kept on the instance for the tooltip.
+  if (base.historicRolls) {
+    instance.historicRolls = rollHistoricInto(instance.instanceMods, base.historicRolls, rng);
+  }
 
   // Carry through historic item flags
   if (base.historic) {
@@ -1514,6 +1525,36 @@ function buildAffixedName(baseName, prefixes, suffixes, rng = Math.random) {
   if (pre)        return `${pre} ${baseName}`;
   if (suf)        return `${baseName} ${suf}`;
   return baseName;
+}
+
+/**
+ * Roll a Historic base's ranges into an instance's modifiers (chunk 14b).
+ * `spec` groups: stats / derived / misc  -> { key: [lo, hi] } (whole numbers),
+ * damageFlat -> { min: [lo, hi], max: [lo, hi] }. Adds onto what is there and
+ * returns the rolled values, grouped the same way.
+ */
+export function rollHistoricInto(mods, spec, rng = Math.random) {
+  const roll = ([lo, hi]) => lo + Math.floor(rng() * (hi - lo + 1));
+  const out = {};
+  for (const group of ['stats', 'derived', 'misc']) {
+    for (const [key, range] of Object.entries(spec[group] || {})) {
+      const v = roll(range);
+      mods[group] = mods[group] || {};
+      mods[group][key] = (mods[group][key] || 0) + v;
+      (out[group] = out[group] || {})[key] = v;
+    }
+  }
+  if (spec.damageFlat) {
+    mods.damageFlat = mods.damageFlat || { min: 0, max: 0 };
+    out.damageFlat = {};
+    for (const end of ['min', 'max']) {
+      if (!spec.damageFlat[end]) continue;
+      const v = roll(spec.damageFlat[end]);
+      mods.damageFlat[end] = (mods.damageFlat[end] || 0) + v;
+      out.damageFlat[end] = v;
+    }
+  }
+  return out;
 }
 
 /** Item instance type guard (unchanged behavior) */

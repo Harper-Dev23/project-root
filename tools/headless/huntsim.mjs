@@ -187,7 +187,7 @@ function gearUp(char, spec, level, index) {
     const rng = makeRng((level * 7919 + index * 131 + j * 17 + 1) >>> 0);
     const ids = Object.keys(Items).filter(id => {
       const it = Items[id];
-      if (it.natural || it.type === 'part' || /^bone_/.test(id)) return false;
+      if (it.natural || it.type === 'part' || it.historic || /^bone_/.test(id)) return false;
       if (slot === 'weaponMain') return it.type === 'weapon' && it.weaponType === spec.weaponType;
       return it.type === 'armor' && it.slot === slot;
     });

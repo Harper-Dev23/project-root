@@ -61,7 +61,7 @@ export function memberType(occ, index) {
 
 /** Armour bases a cultist can wear in a slot (as CombatScene's random drop). */
 function armorBases(slot) {
-  return Object.entries(Items).filter(([, it]) => it?.type === 'armor' && it?.slot === slot).map(([id]) => id);
+  return Object.entries(Items).filter(([, it]) => it?.type === 'armor' && it?.slot === slot && !it?.historic).map(([id]) => id);
 }
 
 /**

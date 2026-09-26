@@ -29,6 +29,7 @@ import * as Standing from '../../systems/Standing.js';
 import * as Revival from '../../systems/Revival.js';
 import { HOUSES, CLAIM_THRESHOLD, RIVAL_GRACE_DAYS, SEASON_DAYS } from '../../../data/standing.js';
 import { ZONES } from '../../../data/zones.js';
+import { Items } from '../../../data/items.js';
 
 const FONT = 'Georgia';
 const cap = (h) => (h ? h.charAt(0).toUpperCase() + h.slice(1) : '');
@@ -36,6 +37,17 @@ const num = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const HOUSE_ROW_H = 118;
 const FALLEN_ROW_H = 92;   // name, where they fell, then the ways back on their own line
 const FALLEN_SHOWN = 5;
+
+/** A Historic copy's rolled lines, for the return ritual (ItemFactory historicRolls). */
+function historicRollsText(it) {
+  const r = it.historicRolls || {};
+  const parts = [];
+  if (r.damageFlat) parts.push(`damage +${r.damageFlat.min || 0}/+${r.damageFlat.max || 0}`);
+  for (const [k, v] of Object.entries(r.stats || {})) parts.push(`${k} ${v >= 0 ? '+' : ''}${v}`);
+  for (const [k, v] of Object.entries(r.derived || {})) parts.push(`${k} ${v >= 0 ? '+' : ''}${v}`);
+  for (const [k, v] of Object.entries(r.misc || {})) parts.push(`${k} ${v >= 0 ? '+' : ''}${v}`);
+  return parts.length ? `This copy: ${parts.join(', ')}` : 'This copy has no rolled lines.';
+}
 
 /** The hunting grounds in a house's lands (a minor's region counts). */
 function landsOf(house) {
@@ -85,7 +97,15 @@ export default class LodgeShrineOverlay extends Phaser.Scene {
       followed ? '#ffdd88' : '#cccccc', 'bold');
 
     this._drawHouses(b.x + 40, b.y + 118, st, followed);
-    this._drawFallen(b.x + 680, b.y + 118);
+    // Right side: the Fallen, or Historic items to return to the world (14b).
+    const rx = b.x + 680, ry = b.y + 118;
+    this._right = this._right || 'fallen';
+    for (const [tab, label, cx] of [['fallen', 'The Fallen', rx + 330], ['historic', 'Historic Items', rx + 450]]) {
+      this._button(cx, ry + 8, label, () => { this._right = tab; this._armed = null; this._msg = ''; this._render(); },
+        this._right === tab ? 'confirm' : 'primary', 12);
+    }
+    if (this._right === 'historic') this._drawHistoric(rx, ry);
+    else this._drawFallen(rx, ry);
 
     this._text(b.x + 40, b.bottom - 34, this._msg || `Hunt Tickets: ${ProgressionManager.huntTickets}`, 14, this._msg ? '#ffe9a8' : '#9aa4b4');
   }
@@ -196,6 +216,46 @@ export default class LodgeShrineOverlay extends Phaser.Scene {
       }
     });
     if (slain.length > FALLEN_SHOWN) this._text(x, y + 28 + FALLEN_SHOWN * FALLEN_ROW_H, `…and ${slain.length - FALLEN_SHOWN} more.`, 13, '#888888');
+  }
+
+  // ── Historic items (chunk 14b) ─────────────────────────────────────────────
+  // One of each exists in the realm. Returning one sends it back to its
+  // natural place: this copy and its history are gone, and its source can give
+  // it again, rolled anew (GameState.returnHistoric). Only from the camp bag.
+
+  _drawHistoric(x, y) {
+    this._text(x, y, 'Historic Items', 16, MENU_THEME.accentHover, 'bold');
+    this._text(x, y + 26, 'Return one to its place in the world. Its history is lost; the world may give it again, changed.', 12, '#a8b0bc')
+      .setWordWrapWidth(300);
+    const held = (GameState.inventory || []).filter(it => Items[it.id]?.historic && Items[it.id]?.home);
+    const worn = GameState._allHeldItems().filter(it => Items[it.id]?.historic && Items[it.id]?.home && !held.includes(it));
+    if (!held.length) {
+      this._text(x, y + 74, worn.length ? `Carried or worn: ${worn.map(it => Items[it.id].name).join(', ')}. Put it in the camp bag to return it.`
+        : 'You hold no Historic item that has a place to return to.', 13, '#888888').setWordWrapWidth(500);
+      return;
+    }
+    held.slice(0, FALLEN_SHOWN).forEach((it, i) => {
+      const ry = y + 74 + i * FALLEN_ROW_H;
+      const base = Items[it.id];
+      const g = this.add.graphics();
+      this._layer.add(g);
+      g.fillStyle(0x000000, 0.25).fillRect(x, ry, 520, FALLEN_ROW_H - 8);
+      g.lineStyle(1, 0xd4a017, 0.8).strokeRect(x, ry, 520, FALLEN_ROW_H - 8);
+      this._text(x + 10, ry + 6, base.name, 15, '#d4a017', 'bold');
+      this._text(x + 10, ry + 28, historicRollsText(it), 12, '#a8b0bc').setWordWrapWidth(360);
+      const key = `return:${it.instanceId}`;
+      const btn = this._button(0, ry + 64, this._armed === key ? 'Confirm' : `Return to ${base.home.place}`,
+        () => this._arm(key, () => this._returnHistoric(it)), this._armed === key ? 'danger' : 'primary', 12);
+      btn.x = x + 510 - btn.width / 2;
+    });
+  }
+
+  _returnHistoric(it) {
+    const r = GameState.returnHistoric(it, ProgressionManager.getDaysElapsed());
+    if (!r.ok) { this._msg = `Cannot: ${r.reason}.`; SoundManager.play('handsClick'); return; }
+    SoundManager.play('select');
+    this._msg = `${Items[it.id].name} returns to ${r.home.place}. The world may give it again.`;
+    GameState.save('autosave');
   }
 
   _whereFell(f) {

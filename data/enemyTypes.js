@@ -466,7 +466,7 @@ export const ENEMY_TYPES = {
     tags: ['beast'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
-  hunt_vowkeeper: {
+  hunt_vowback_crocodile: {
     // The Reeds' apex (always Great): an ancient crocodile whose back has
     // grown over with the Reeds' floating prayer stones, each a vow made at
     // the Lament Pools and broken. The stones turn blades (Physical Resist,
@@ -474,7 +474,7 @@ export const ENEMY_TYPES = {
     // finishes with a death roll (Death Spiral) once a hunter is both
     // Exposed and Lacerated. Elite, not a boss: a little below encounter 3
     // (owner, 2026-09-25); tuned with huntsim.
-    name: 'Vowkeeper',
+    name: 'Vowback Crocodile',
     skin: 'portrait_oskar',
     // 90 HP / 24 MP alone measured as a pushover (level 1 party of six: 3 rounds,
     // 15% HP); it ran dry of MP (Reflex Bite costs 3 each time it is struck).

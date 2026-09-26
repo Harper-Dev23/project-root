@@ -174,7 +174,7 @@
    "aiProfile": "hunt_beast",
    "initiative": 5
   },
-  "hunt_vowkeeper": {
+  "hunt_vowback_crocodile": {
    "maxHP": 220,
    "maxMP": 48,
    "baseStats": {
@@ -443,7 +443,7 @@
    "ring:Eyes",
    "amulet:Heart"
   ],
-  "vowkeeper": [
+  "vowback_crocodile": [
    "weaponMain:Jaws",
    "weaponOff:Tail",
    "head:Skull",
@@ -1194,7 +1194,7 @@
     "buildupPct": 21.28
    }
   },
-  "vowkeeper": {
+  "vowback_crocodile": {
    "yearling": {
     "maxHP": 179.87,
     "PDR": 26.45,

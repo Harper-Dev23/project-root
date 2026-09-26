@@ -48,9 +48,9 @@ export const ZONES = {
       snapping_turtle: { name: 'Snapping Turtle', compositions: ['lone', 'matriarch'] },
       scarlet_ibis:    { name: 'Scarlet Ibis' },
     },
-    // The Vowkeeper: an ancient crocodile grown over with prayer stones.
+    // The Vowback Crocodile: an ancient crocodile grown over with prayer stones.
     // Its brood lies with it (escort, read by HuntMapGen apex_beast).
-    apex: { family: 'vowkeeper', name: 'the Vowkeeper', escort: [{ family: 'crocodile', grade: 'grown', count: 3 }] },
+    apex: { family: 'vowback_crocodile', name: 'the Vowback Crocodile', escort: [{ family: 'crocodile', grade: 'grown', count: 3 }] },
     cultistShare: 0.25,   // share of hostile occupants that are cultist bands
     // The shrine a Commune plan sends you to: an event template (data/events.js).
     setPieces: { shrine: 'reeds_sunken_shrine' },

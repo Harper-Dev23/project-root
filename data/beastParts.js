@@ -134,8 +134,8 @@ export const HUNT_BEASTS = {
              gloves: 'Wings', boots: 'Feet', ring: 'Eyes', amulet: 'Heart' },
   },
   // The Reeds' apex only (zones: apex.family), never a filler pack.
-  vowkeeper: {
-    name: 'Vowkeeper', type: 'hunt_vowkeeper', signature: 'lacerate',
+  vowback_crocodile: {
+    name: 'Vowback Crocodile', type: 'hunt_vowback_crocodile', signature: 'lacerate',
     weaponDamage: { min: 9, max: 12 },
     parts: { weaponMain: 'Jaws', weaponOff: 'Tail', head: 'Skull', chest: 'Vow-Stone Hide', legs: 'Haunches',
              gloves: 'Forelimbs', boots: 'Hind Feet', ring: 'Eyes', amulet: 'Swallowed Vow' },

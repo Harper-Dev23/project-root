@@ -145,7 +145,7 @@ console.log('=== grounds, relief, regions ===');
     check(`${zone.name}: palette of real grounds, no blight; relief of real relief; apex (and its escort) real hunt families; shrine is a real event; house ${zone.divineAlignment}`,
       Object.keys(zone.palette).every(g => GROUNDS[g] && g !== 'blight') && Object.values(zone.palette).some(w => w > 0)
       && Object.keys(zone.relief).every(r => RELIEF[r])
-      // 14a: the apex may be apex-only (the Reeds' Vowkeeper), not a native.
+      // 14a: the apex may be apex-only (the Reeds' Vowback Crocodile), not a native.
       && !!HUNT_BEASTS[zone.apex.family] && (zone.apex.escort || []).every(e => !!HUNT_BEASTS[e.family])
       && !!EVENT_TEMPLATES[zone.setPieces.shrine]?.appears?.setPiece && !!zone.divineAlignment);
   }
@@ -407,7 +407,7 @@ console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a
   }
   check('Snapping Turtles only alone or with young, never a Cull quarry (natives compositions)', turtles > 0 && !turtleBad.length && !cullBad.length,
     `${turtles} turtle occupants${turtleBad.length ? '; bad: ' + turtleBad.slice(0, 3) : ''}${cullBad.length ? '; culls: ' + cullBad.slice(0, 3) : ''}`);
-  check('the Vowkeeper is always Great, with its brood of Grown Crocodiles (apex escort)', apexOk === apexN, `${apexOk}/${apexN}`);
+  check('the Vowback Crocodile is always Great, with its brood of Grown Crocodiles (apex escort)', apexOk === apexN, `${apexOk}/${apexN}`);
   check("every Reeds cult band serves the region's false god and has a cult (CULT_BANDS)", bands > 0 && !bandBad.length, `${bands} bands`);
 }
 

@@ -103,6 +103,25 @@ const sv2 = await saved();
 check('...and both are in the autosave', !sv2.slain.some(c => c.name === names.home) && sv2.slain.find(c => c.name === names.abroad)?.rite?.untilDay === afterR.rite?.untilDay);
 await shot('03-fallen');
 
+// ---- 3b. Historic items: the return ritual (chunk 14b) -----------------------
+await evaluate(`const GS = (await import('/src/systems/GameState.js')).default; const IF = await import('/src/systems/ItemFactory.js');
+  window.__bod = IF.createItemInstance('burden_of_dreams'); GS.inventory.push(window.__bod); return 1;`);
+await clickText('^Historic Items$', SH);
+await sleep(450);
+t = await texts();
+const rolls = await evaluate(`return window.__bod.historicRolls;`);
+check('the Historic Items tab lists Burden of Dreams from the camp bag, with this copy\'s rolled lines',
+  t.includes('Burden of Dreams') && t.some(x => x.startsWith('This copy:') && x.includes(`STR +${rolls.stats.STR}`)) && t.includes("Return to the Mourning Beast's lair"),
+  t.filter(x => x.startsWith('This copy') || x.startsWith('Return')).join(' | '));
+await shot('03b-historic');
+await twice("^Return to the Mourning Beast's lair$");
+const after = await evaluate(`const GS = (await import('/src/systems/GameState.js')).default; const r = localStorage.getItem('bmSave_autosave');
+  return { inBag: GS.inventory.includes(window.__bod), wild: GS.historicInWild('burden_of_dreams'), led: JSON.parse(r)?.flags?.historicLedger?.burden_of_dreams || null };`);
+t = await texts();
+check('Return (two clicks): the copy leaves the bag, the item is back in the wild, the return is in the autosave, and the shrine says so',
+  !after.inBag && after.wild && after.led?.returned === 1 && t.some(x => x.startsWith('Burden of Dreams returns to')), JSON.stringify(after));
+await shot('03c-returned');
+
 // ---- 4. Closing brings the lodge back ---------------------------------------
 await clickText('^✕$|^X$|^Close$', SH).catch(() => {});
 await sleep(200);

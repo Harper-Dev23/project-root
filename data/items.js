@@ -1273,6 +1273,61 @@ export const Items = {
     description: 'A two-handed blade of impossible sharpness. It drinks deep of whatever it cuts. The edge never dulls.\n\n[10% Lifesteal]  [Soulbound]',
   },
 
+  // ── The Reeds of Gethsemane's Historic items (chunk 14b; vault
+  // IMPLEMENTATION_PLAN "The Reeds' three Historic items — final sheet").
+  // One of each in the realm (the Historic ledger, GameState.historicInWild).
+  // `historicRolls` are rolled per copy (ItemFactory.rollHistoricInto) into the
+  // same modifier fields affixes use. Each item's unique mechanic is wired in
+  // 14b-1b with its reader, never before.
+  burden_of_dreams: {
+    id: 'burden_of_dreams',
+    // Its natural place: the lodge ritual returns it here (GameState.returnHistoric).
+    home: { zone: 'reeds_of_gethsemane', place: "the Mourning Beast's lair" },
+    name: 'Burden of Dreams',
+    type: 'weapon',
+    weaponType: 'mace_2h',
+    rarity: 'historic',
+    historic: true,
+    unique: true,
+    hands: 2,
+    damage: { min: 14, max: 21 },          // + flat 0-2 / 0-3 rolled: 14-16 / 21-24
+    bonuses: {},
+    historicRolls: { damageFlat: { min: [0, 2], max: [0, 3] }, stats: { STR: [5, 7], CON: [2, 4] } },
+    description: 'The grip is all sharp edges, and still it calls your hands to it. You are undeterred.',
+  },
+  the_unconfessed: {
+    id: 'the_unconfessed',
+    // Its natural place: the lodge ritual returns it here (GameState.returnHistoric).
+    home: { zone: 'reeds_of_gethsemane', place: "the Lament Pools" },
+    name: 'The Unconfessed',
+    type: 'armor',
+    slot: 'amulet',
+    rarity: 'historic',
+    historic: true,
+    unique: true,
+    bonuses: {},
+    historicRolls: { stats: { CHA: [2, 4] }, misc: { physToNecroPercent: [25, 35] } },
+    description: 'Whatever was never said, given weight.',
+  },
+  sunken_nave: {
+    id: 'sunken_nave',
+    // Its natural place: the lodge ritual returns it here (GameState.returnHistoric).
+    home: { zone: 'reeds_of_gethsemane', place: "the Submerged Cathedral Roots" },
+    name: 'Sunken Nave',
+    type: 'armor',
+    slot: 'legs',
+    rarity: 'historic',
+    historic: true,
+    unique: true,
+    bonuses: {},
+    historicRolls: {
+      stats: { CON: [3, 5], STR: [1, 3] },
+      derived: { PhysicalResist: [8, 12], Evasion: [-10, -10] },
+      misc: { resilience: [15, 25] },
+    },
+    description: 'Root-bound stone from the drowned cathedral.',
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // === Hunt Plans ===
   // Generic loadout items chosen before departing on a Hunt (see HuntHubOverlay).
