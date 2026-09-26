@@ -129,6 +129,7 @@ import {
 import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
+import { regionFlag } from './HuntQuests.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
@@ -188,6 +189,8 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
   const map = generateHuntMap({
     zoneId, objective: plan.objective, size: plan.size, seed: mapSeed,
     bonusObjectives: plan.bonusObjectives || [], mods: planMods, followed: boon0.followed,
+    // What the save's active quest steps need in this region (chunk 14b-2).
+    questSites: world.questSites?.(zoneId) || [],
   });
   const { pack, extraSupplies } = packAtDeparture(bring, planMods);
   const start = supplies + extraSupplies;
@@ -717,6 +720,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         roster: occ.roster.map(m => ({ ...m })), tile: occ.tile, at: s.time,
       };
       s.kills.push(kill);
+      // Region progress quests read (chunk 14b-2; HuntQuests.js).
+      if (occ.apex) world.questFlag?.(regionFlag('apex_slain', s.zoneId), true);
       delete s.sightings[occ.id];
       s.encounter = null;
       s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
@@ -875,6 +880,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (!s.map.tiles[s.pos].exit) return { ok: false, reason: 'you can only leave from the entry or a Waystone' };
       const reward = exitReward(s);
       const pack = this._finish('exit');
+      if (reward.primaryDone) world.questFlag?.(regionFlag('hunted', s.zoneId), true);
       if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
       // Completion XP (chunk 13c): the world splits it over the party.
       if (reward.xpPool > 0) world.awardXP?.(reward.xpPool);
@@ -950,7 +956,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         passages: s.map.passages.flatMap(({ a, b }) => [{ tile: a, to: b }, { tile: b, to: a }]).filter(p => known(p.tile)),
         features: s.map.features.filter(f => known(f.tile))
           .map(f => (f.destroyed ? { kind: f.kind, tile: f.tile, destroyed: true } : { kind: f.kind, tile: f.tile })),
-        objectiveSites: this._objectiveSites(),
+        objectiveSites: [...this._objectiveSites(), ...this._questSites()],
         moves,
         zoneId: s.zoneId,
         plan: { ...s.plan, bonusObjectives: [...s.plan.bonusObjectives] },
@@ -1097,6 +1103,15 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (p.id === 'retrieve') return [{ objective: 'retrieve', tile: p.site, done: !!s.retrieved }];
       if (p.id === 'commune') return [{ objective: 'commune', tile: p.site, done: !!s.communed }];
       return [];
+    },
+
+    /** Quest sites (chunk 14b-2), marked from departure: done once resolved. */
+    _questSites() {
+      return (s.map.questSites || []).map(q => ({
+        objective: 'quest', tile: q.tile, step: q.step, name: EVENT_TEMPLATES[q.eventId]?.name || q.eventId,
+        night: EVENT_TEMPLATES[q.eventId]?.appears?.night === true,
+        done: !s.map.occupants.some(o => o.id === q.occId),
+      }));
     },
 
     /** Standing on the Retrieve site takes the item; on the shrine, communes. */

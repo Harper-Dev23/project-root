@@ -47,7 +47,7 @@ export const COOP_SNAPSHOT_VERSION = 1;
  */
 export const LEDGER_VERBS = ['nightFalls', 'dayBreaks', 'awardHuntPoints', 'awardXP', 'favor', 'falseGod',
   'bond', 'rivalDevotion', 'tribeRep', 'questFlag', 'lore', 'bankItems'];
-const READS = ['followedHouse', 'houseHolder', 'ownTribe', 'tribeName', 'hasQuestFlag'];
+const READS = ['followedHouse', 'houseHolder', 'ownTribe', 'tribeName', 'hasQuestFlag', 'questSites'];
 
 const plain = (v) => JSON.parse(JSON.stringify(v ?? null));
 const refOf = (c) => c?.instanceId || c?.id;

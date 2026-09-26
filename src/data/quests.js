@@ -280,6 +280,61 @@ export const QUEST_LINES = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  //  REGIONS (chunk 14b-2)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // A step with `huntSite` makes every hunt in that region hold the site while
+  // the step is active (src/systems/HuntQuests.js). `hunted:<zone>` and
+  // `apex_slain:<zone>` are set by the hunt engine.
+
+  {
+    id:          'weeping_in_the_reeds',
+    category:    'region',
+    title:       'The Weeping in the Reeds',
+    description: 'The Reeds of Gethsemane grieve. Something in them grieves loudest of all.',
+    isAvailable: (pm) => pm.tribe !== null,
+    steps: [
+      {
+        id:          'wr_hunt',
+        label:       'Hunt the Reeds',
+        description: 'Take a hunt plan into the Reeds of Gethsemane and see its main objective done.',
+        isActive:   (pm) => pm.tribe !== null,
+        isComplete: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+      },
+      {
+        id:          'wr_apex',
+        label:       'The Vowback Crocodile',
+        description: 'The mourners speak of an old crocodile grown over with prayer stones, the Reeds\' apex. Kill it: an Apex plan sends you after it.',
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+      },
+      {
+        id:          'wr_pools',
+        label:       'The Lament Pools',
+        description: 'Something weeps in the Reeds at night. Your next Reeds hunt will mark the Lament Pools on its map. Be there after dark.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_lament_pools', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('mb_weeping_heard'),
+      },
+      {
+        id:          'wr_signs',
+        label:       'Signs of the Mourner',
+        description: 'Follow the weeping to where it goes to ground. Your next Reeds hunt will mark the trail.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_mourner_signs', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('mb_weeping_heard'),
+        isComplete: (pm) => pm.hasQuestFlag('mb_signs_found'),
+      },
+      {
+        // Completed by the lodge's first Mourner's Offering (14b-3).
+        id:          'wr_offer',
+        label:       'The Tribe\'s Offer',
+        description: 'Return to your lodge. Your tribe will know what the signs mean.',
+        isActive:   (pm) => pm.hasQuestFlag('mb_signs_found'),
+        isComplete: (pm) => pm.hasQuestFlag('mb_offer_taken'),
+      },
+    ],
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   //  DIVINE
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -465,6 +520,7 @@ export const QUEST_LINES = [
 /** Ordered tab definitions used by the UI. */
 export const QUEST_CATEGORIES = [
   { id: 'main',         label: 'Main'         },
+  { id: 'region',       label: 'Regions'      },
   { id: 'tribe',        label: 'Tribe'        },
   { id: 'divine',       label: 'Divine'       },
   { id: 'weapon',       label: 'Weapon'       },

@@ -88,6 +88,30 @@ export const EVENT_TEMPLATES = {
     ],
   },
 
+  // ── The Weeping in the Reeds (chunk 14b-2): quest sites ─────────────────────
+  // Set pieces placed only by an active quest step (src/data/quests.js
+  // `huntSite`, HuntQuests.questSitesFor). Every option sets the step's flag,
+  // so the step cannot be failed, only walked past.
+  reeds_lament_pools: {
+    name: 'The Lament Pools',
+    shape: 'choice',
+    text: 'Black pools lie still among the reeds. From them comes weeping: many voices, none of them near, all of them drowned.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
+    options: [
+      { label: 'Listen', effects: [{ text: 'The weeping takes words, then names: the names of the drowned. Something vast turns over beneath the water, and is gone.' }, { questFlag: 'mb_weeping_heard' }, { xp: '{danger}*8' }] },
+      { label: 'Kneel at the edge and grieve with it', effects: [{ text: 'You grieve for no one you knew. The pools grow quiet, as if they heard. Far off, something answers with a howl.' }, { questFlag: 'mb_weeping_heard' }, { huntPoints: '{danger}*4' }] },
+    ],
+  },
+  reeds_mourner_signs: {
+    name: 'Signs of the Mourner',
+    shape: 'check',
+    text: 'The reeds here are flattened in a wide swathe, and the mud holds prints bigger than any crocodile\'s. Scraps of burial cloth hang from the stems.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    check: { stat: 'perception', dc: '{danger}+12' },
+    success: [{ text: 'You read the trail back to where it goes to ground: a hollow beneath the Lament Pools. The Mourner sleeps there, and it does not sleep alone.' }, { questFlag: 'mb_signs_found' }, { xp: '{danger}*10' }],
+    failure: [{ text: 'The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on.' }, { questFlag: 'mb_signs_found' }],
+  },
+
   // ── False gods' temptations (chunk 11c) ─────────────────────────────────────
   // Accepting starts the region's false god's pact at level 3, or deepens it.
   // The price (hidden standing, Bond standing, the curse) is the engine's.

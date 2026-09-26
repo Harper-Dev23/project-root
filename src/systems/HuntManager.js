@@ -81,6 +81,7 @@ import { InventorySystem } from './InventorySystem.js';
 import ProgressionManager from './ProgressionManager.js';
 import GameState from './GameState.js';
 import { createMapHunt, restoreMapHunt } from './HuntEngine.js';
+import { questSitesFor } from './HuntQuests.js';
 
 // Tuned so a base-loadout hunt (no extra Hunt Tickets spent on supplies)
 // guarantees at least one full day+night cycle (12 advances) and typically
@@ -198,6 +199,10 @@ export const GAME_WORLD = {
   },
   hasQuestFlag(flag) {
     return ProgressionManager.hasQuestFlag(flag);
+  },
+  // The sites this save's active quest steps need in a region (chunk 14b-2).
+  questSites(zoneId) {
+    return questSitesFor(zoneId, ProgressionManager);
   },
   questFlag(flag, on) {
     if (on) ProgressionManager.setQuestFlag(flag); else ProgressionManager.clearQuestFlag(flag);

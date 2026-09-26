@@ -99,6 +99,25 @@
    "option:1",
    "By dawn they are simply gone, as if they were never there."
   ],
+  "reeds_lament_pools {\"option\":0}": [
+   "option:0",
+   "The weeping takes words, then names: the names of the drowned. Something vast turns over beneath the water, and is gone.",
+   "+8 XP for the party."
+  ],
+  "reeds_lament_pools {\"option\":1}": [
+   "option:1",
+   "You grieve for no one you knew. The pools grow quiet, as if they heard. Far off, something answers with a howl.",
+   "+4 Hunt Points."
+  ],
+  "reeds_mourner_signs {\"roll\":20}": [
+   "success",
+   "You read the trail back to where it goes to ground: a hollow beneath the Lament Pools. The Mourner sleeps there, and it does not sleep alone.",
+   "+10 XP for the party."
+  ],
+  "reeds_mourner_signs {\"roll\":1}": [
+   "failure",
+   "The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on."
+  ],
   "dagon_whisper {\"accept\":true}": [
    "accept",
    "The reeds lean toward you. Dagon is pleased.",

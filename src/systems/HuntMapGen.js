@@ -504,8 +504,13 @@ export function planMapInputs(view) {
  *                                   gradeShiftPercent, leanCountryPercent, blightPatches
  * @param {boolean} [o.followed]     your tribe follows the region's house (chunk 11a):
  *                                   read by event templates' `appears.followed`
+ * @param {object[]} [o.questSites]  sites the save's active quest steps need
+ *                                   here (chunk 14b-2; HuntQuests.questSitesFor):
+ *                                   [{ step, eventId, far }]. Each is an event
+ *                                   occupant placed for certain; none, and the
+ *                                   map is exactly what it was without them.
  */
-export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false }) {
+export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [] }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
   if (!zone.palette || !zone.relief || !zone.natives || !zone.apex) throw new Error(`zone '${zoneId}' has no generator data`);
@@ -513,10 +518,11 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   if (!MAP_SIZES[size]) throw new Error(`unknown size '${size}'`);
   if (!Number.isFinite(seed)) throw new Error('seed must be a number');
   for (const b of bonusObjectives) if (!BONUS_OBJECTIVES[b]) throw new Error(`unknown bonus objective '${b}'`);
+  for (const q of questSites) if (!EVENT_TEMPLATES[q?.eventId]?.appears?.setPiece) throw new Error(`quest site '${q?.step}' names '${q?.eventId}', not a set-piece event`);
 
   const problems = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed });
+    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites });
     if (map.failed) { problems.push(map.failed); continue; }
     const v = validateHuntMap(map);
     if (v.ok) return map;
@@ -525,7 +531,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   throw new Error(`no valid map for ${zoneId}/${objective}/${size} seed ${seed}: ${problems.slice(-3).join(' | ')}`);
 }
 
-function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false }) {
+function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [] }) {
   const rng = makeRng(attemptSeed(seed, attempt, zone.id));
   const sizeDef = MAP_SIZES[size];
   const map = {
@@ -732,6 +738,20 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   if (!failed) for (const { obj, need } of jobs.filter(j => !NEED_HANDLERS[j.need].late)) NEED_HANDLERS[need].place(ctx, obj);
   if (!failed) for (const { obj, need } of jobs.filter(j => NEED_HANDLERS[j.need].late && j.need !== 'exit')) NEED_HANDLERS[need].place(ctx, obj);
   for (const o of [primary, ...bonus]) if (!o.route) o.route = [];
+
+  // ── 3d'. quest sites (chunk 14b-2): what the save's active quest steps need
+  //    here, placed for certain, far from the entry when the step asks.
+  //    Marked from departure like an objective site (HuntEngine
+  //    _objectiveSites). Draws nothing when there are none.
+  if (questSites.length) map.questSites = [];
+  if (!failed) for (const q of questSites) {
+    const tile = (q.far && ctx.pickTile({ minEntryDist: ctx.farDist(), noBlight: true }))
+              || ctx.pickTile({ minEntryDist: 2, noBlight: true }) || ctx.pickTile({ noBlight: true });
+    if (!tile) { fail(`no tile for quest site '${q.step}'`); break; }
+    const occ = { id: `o${nextOcc++}`, kind: 'event', tile, eventId: q.eventId, quest: q.step, concealment: OCCUPANT_CONCEALMENT.event };
+    map.occupants.push(occ); occupied.add(tile);
+    map.questSites.push({ step: q.step, eventId: q.eventId, tile, occId: occ.id });
+  }
 
   // ── 3e. density: the plan's floor, scaled by region and plan ───────────────
   const hostiles = () => map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').length;

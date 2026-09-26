@@ -103,6 +103,10 @@ const PANEL_BOTTOM = 564;
 const LOG_SHOWN = 14;
 
 const OBJECTIVE_NAME = (id) => PRIMARY_OBJECTIVES[id]?.name || BONUS_OBJECTIVES[id]?.name || id;
+/** A marked site's hover line: the plan's objective, or a quest's (14b-2). */
+const siteLine = (s) => s.objective === 'quest'
+  ? `Quest: ${s.name}${s.night && !s.done ? ' (after dark)' : ''}${s.done ? ' (done)' : ''}.`
+  : `Objective: ${OBJECTIVE_NAME(s.objective)} site${s.done ? ' (done)' : ''}.`;
 
 function darken(color, f) {
   const r = ((color >> 16) & 255) * f, g = ((color >> 8) & 255) * f, b = (color & 255) * f;
@@ -410,7 +414,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     for (const s of v.objectiveSites) {
       if (!here(s.tile)) continue;
       const { x, y } = this.center(s.tile);
-      const col = s.done ? 0x7c7c7c : 0xf2d27a;
+      // Quest sites (14b-2) in violet, so they never read as the plan's own.
+      const col = s.done ? 0x7c7c7c : s.objective === 'quest' ? 0xc59bff : 0xf2d27a;
       g.lineStyle(3, col, 1);
       if (s.objective === 'scout') g.strokeCircle(x, y, 22);
       else if (s.objective === 'retrieve') g.strokePoints([{ x, y: y - 22 }, { x: x + 20, y }, { x, y: y + 22 }, { x: x - 20, y }], true);
@@ -703,9 +708,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       for (const f of v.features.filter(ff => ff.tile === id)) {
         lines.push({ waystone: 'A Waystone: the hunt can be left from here.', blight_source: f.destroyed ? 'A destroyed blight source.' : 'A blight source: the blight spreads from here.', scout_site: 'A scouting site.', retrieve_site: 'The Retrieve site.', shrine: 'The shrine.' }[f.kind] || f.kind);
       }
-      for (const s of v.objectiveSites.filter(ss => ss.tile === id)) lines.push(`Objective: ${OBJECTIVE_NAME(s.objective)} site${s.done ? ' (done)' : ''}.`);
+      for (const s of v.objectiveSites.filter(ss => ss.tile === id)) lines.push(siteLine(s));
     }
-    if (!t) for (const s of v.objectiveSites.filter(ss => ss.tile === id)) lines.push(`Objective: ${OBJECTIVE_NAME(s.objective)} site${s.done ? ' (done)' : ''}.`);
+    if (!t) for (const s of v.objectiveSites.filter(ss => ss.tile === id)) lines.push(siteLine(s));
     const occ = v.occupants.find(o => o.tile === id);
     if (occ) lines.push(...this._occupantLines(occ));
     for (const tr of v.trails.filter(x => x.tile === id)) {
@@ -1293,6 +1298,8 @@ export function installDevHook(game) {
       nightFalls() {}, dayBreaks() {},
       awardHuntPoints(n) { console.log(`[bmDevMapHunt] would award ${n} Hunt Points`); },
       awardXP() {}, bankItems(items) { console.log('[bmDevMapHunt] would bank', items); },
+      // Quest sites to place (14b-2): [{ step, eventId, far }], for testing.
+      questSites: () => opts.questSites || [],
     };
     const plan = {
       objective: opts.objective || 'scout', size: opts.size || 'medium',
