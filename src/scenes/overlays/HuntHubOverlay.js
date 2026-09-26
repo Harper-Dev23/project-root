@@ -191,12 +191,14 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const left = x + 40;
 
     this._text(left, y + 64, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia, Gelasio, serif' });
-    this._text(left, y + 92, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
+    const flavor = this._text(left, y + 92, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
     this._button(x + width - 140, y + 64, 'Change Location', () => this._openMap(), 'danger');
-    this._renderOmens(x + width - 290, y + 64, zone);
+    // The region's Omen row (14b-3) gets its own line under the flavour; the
+    // rest moves down only for a region that has one.
+    const omensH = this._renderOmens(left, flavor.y + flavor.height + 8, x + width - 40, zone);
 
     // ── Supplies: the camp's issue plus packed Rations ──────────────────
-    const suppliesY = y + 150;
+    const suppliesY = omensH ? Math.max(y + 150, flavor.y + flavor.height + 8 + omensH + 8) : y + 150;
     this._text(left, suppliesY, 'Supplies', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
     const inBag = this._rationsInBag();
@@ -331,12 +333,12 @@ export default class HuntHubOverlay extends Phaser.Scene {
   /**
    * The region's Omen meter and its bosses (chunk 14b-3; Omens.js): the meter,
    * the tribe's first offer when a questline has just ended, and a claim once
-   * the meter is full. Right-aligned at (right, y), left of Change Location.
-   * Nothing for a region without bosses.
+   * the meter is full. One row from `left` to `right` at `y`. Returns the
+   * row's height, 0 (nothing drawn) for a region without bosses.
    */
-  _renderOmens(right, y, zone) {
+  _renderOmens(left, y, right, zone) {
     const bosses = bossesIn(zone.id, ProgressionManager);
-    if (!bosses.length) return;
+    if (!bosses.length) return 0;
     const meter = omenMeter(zone.id, ProgressionManager);
     const bag = { push: (inst) => InventorySystem.addGlobalItem(inst, { isNew: true }) };
     const done = (res, what) => {
@@ -349,21 +351,30 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const offer = offersReady(ProgressionManager, zone.id)[0];
     const claimable = bosses.filter(b => b.unlocked);
     let label = `Omens ${meter.have} / ${meter.full}`;
-    if (!claimable.length && !offer) label += '  (a boss stirs here, unknown to you)';
-    this._text(right - 200, y - 22, label, { fontSize: '13px', color: meter.ready ? '#c59bff' : '#bbbbbb' }).setOrigin(1, 0);
-    if (offer) {
-      this._button(right - 300, y, "Your tribe's offer", () =>
-        done(takeFirstOffer(ProgressionManager, bag, offer.id, (f) => ProgressionManager.setQuestFlag(f)), 'Your tribe gives you the first'), 'confirm');
-    } else if (meter.ready > 0) {
-      claimable.forEach((b, i) => {
-        this._button(right - 300 - i * 230, y, `Claim: ${b.name}`, () =>
-          done(claimBossPlan(ProgressionManager, bag, b.id), 'The omens are enough'), 'confirm');
-      });
-    }
+    if (offer) label += "   ·   your tribe has something for you";
+    else if (!claimable.length) label += '   ·   a boss stirs here, unknown to you';
+    else label += `   ·   a full meter calls ${claimable.map(b => b.name).join(' or ')}`;
+    this._text(left, y + 4, label, { fontSize: '14px', color: meter.ready || offer ? '#c59bff' : '#bbbbbb' });
     if (this._planNote) {
-      this._text(right - 200, y + 20, this._planNote, { fontSize: '12px', color: '#c59bff' }).setOrigin(1, 0);
+      this._text(left, y + 24, this._planNote, { fontSize: '12px', color: '#c59bff' });
       this._planNote = null;
     }
+    // Buttons right-aligned on the row, right to left.
+    let bx = right;
+    const addButton = (text, cb) => {
+      // Buttons size themselves from their text: place by the real width.
+      const btn = this._button(0, y + 14, text, cb, 'confirm');
+      const w = btn.getBounds().width;
+      btn.x = bx - w / 2;
+      bx -= w + 12;
+    };
+    if (offer) {
+      addButton("Your tribe's offer", () =>
+        done(takeFirstOffer(ProgressionManager, bag, offer.id, (f) => ProgressionManager.setQuestFlag(f)), 'Your tribe gives you the first'));
+    } else if (meter.ready > 0) {
+      for (const b of claimable) addButton(`Claim: ${b.name}`, () => done(claimBossPlan(ProgressionManager, bag, b.id), 'The omens are enough'));
+    }
+    return 40;
   }
 
   /** Hunt Tickets -> Rations, straight into the camp bag. Spent now, not at departure. */

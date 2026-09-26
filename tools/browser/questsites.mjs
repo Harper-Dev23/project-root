@@ -65,6 +65,38 @@ await sleep(200);
 await shot('02-quest-site-selected');
 check('selecting it reads "Quest: The Lament Pools (after dark)."', !!(await B.findText('Quest: The Lament Pools \\(after dark\\)')));
 
+// ---- 3. The hunt board: the Omen row, the tribe's offer, the picker (14b-3) --
+await evaluate(`
+  const g = window.__T.g(); g.scene.stop('HuntFieldOverlay');
+  const PM = (await import('/src/systems/ProgressionManager.js')).default;
+  PM.setQuestFlag('mb_weeping_heard'); PM.setQuestFlag('mb_signs_found'); PM.omens = { reeds_of_gethsemane: 40 };
+  g.scene.getScene('TownScene').scene.launch('HuntHubOverlay');
+  await new Promise(r => setTimeout(r, 500));
+  g.scene.getScene('HuntHubOverlay').setZone('reeds_of_gethsemane');
+  await new Promise(r => setTimeout(r, 300)); return true;`);
+await shot('03-hub-offer');
+check('the hub shows the Reeds meter', !!(await B.findText('^Omens 40 / 100', 'HuntHubOverlay')));
+await B.clickText("Your tribe's offer", 'HuntHubOverlay');
+await sleep(300);
+const after = await evaluate(`
+  const GS = (await import('/src/systems/GameState.js')).default; const PM = (await import('/src/systems/ProgressionManager.js')).default;
+  return { plans: GS.inventory.filter(i => i.id === 'mourners_offering').length, unlocked: PM.hasQuestFlag('mb_offer_taken') };`);
+check("clicking the tribe's offer puts a Mourner's Offering in the bag and unlocks the boss", after.plans === 1 && after.unlocked, JSON.stringify(after));
+check('...and says so', !!(await B.findText("Mourner's Offering is in your bag", 'HuntHubOverlay')));
+await shot('04-hub-after-offer');
+await evaluate(`const PM = (await import('/src/systems/ProgressionManager.js')).default; PM.omens = { reeds_of_gethsemane: 120 };
+  window.__T.g().scene.getScene('HuntHubOverlay')._render(); await new Promise(r => setTimeout(r, 200)); return true;`);
+check('with a full meter the claim button shows', !!(await B.findText('^Claim: The Mourning Beast', 'HuntHubOverlay')));
+await B.clickText('^Claim: The Mourning Beast', 'HuntHubOverlay');
+await sleep(300);
+const claimed = await evaluate(`const GS = (await import('/src/systems/GameState.js')).default; const PM = (await import('/src/systems/ProgressionManager.js')).default;
+  return { plans: GS.inventory.filter(i => i.id === 'mourners_offering').length, meter: PM.omens.reeds_of_gethsemane };`);
+check('claiming spends 100 omens for a second plan', claimed.plans === 2 && claimed.meter === 20, JSON.stringify(claimed));
+await B.clickText('^Choose Hunt Plan', 'HuntHubOverlay');
+await sleep(500);
+await shot('05-picker-boss-plan');
+check('the picker lists the boss plan, dimmed, with why', !!(await B.findText('lair cannot be reached yet', 'HuntPlanPickerOverlay')));
+
 check('no uncaught errors in the page', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 const fails = B.checks.filter(c => !c.ok).length;
 console.log(`\n${mode}: ${B.checks.length - fails} pass, ${fails} fail   shots: ${out}`);
