@@ -36,9 +36,9 @@ export const SORROWFALL = { basePct: 180, perGriefPct: 25, flashing: { stat: 'ST
 export const UNSHRIVEN = { cap: 60 };
 
 /** Rooted (Sunken Nave): a stack per turn ended without moving, up to 3; each
- *  stack +5 Physical Resist and +10 Resilience. Moving, or being moved,
+ *  stack +5 Physical Resist and +15 Resilience. Moving, or being moved,
  *  clears it. While Rooted (1+), Immobilize does not take. */
-export const ROOTED = { maxStacks: 3, perStack: { PhysicalResist: 5, Resilience: 10 } };
+export const ROOTED = { maxStacks: 3, perStack: { PhysicalResist: 5, Resilience: 15 } };
 
 /** Grief stacks on a unit now. */
 export function griefStacks(unit) {

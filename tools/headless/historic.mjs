@@ -308,7 +308,11 @@ console.log('=== Sunken Nave: Rooted ===');
   check('a turn ended without moving: Rooted 1, +5 Physical Resist', rootedStacks(bran) === 1 && getEffectiveDerived(bran).PhysicalResist - pdr0 === ROOTED.perStack.PhysicalResist,
     `stacks ${rootedStacks(bran)}, PDR ${pdr0} -> ${getEffectiveDerived(bran).PhysicalResist}`);
   b.host._rootedTurnEnd(bran); b.host._rootedTurnEnd(bran); b.host._rootedTurnEnd(bran);
-  check(`Rooted caps at ${ROOTED.maxStacks}`, rootedStacks(bran) === ROOTED.maxStacks);
+  const { _sumStatusEffectMods: mods } = await import('../../src/systems/CombatLogic.js');
+  const rm = mods(bran);
+  check(`Rooted caps at ${ROOTED.maxStacks}: +${ROOTED.maxStacks * ROOTED.perStack.PhysicalResist} Physical Resist, +${ROOTED.maxStacks * ROOTED.perStack.Resilience} Resilience from its status`,
+    rootedStacks(bran) === ROOTED.maxStacks && rm.PhysicalResist === ROOTED.maxStacks * ROOTED.perStack.PhysicalResist && rm.Resilience === ROOTED.maxStacks * ROOTED.perStack.Resilience,
+    `stacks ${rootedStacks(bran)}, mods PDR ${rm.PhysicalResist}, Resilience ${rm.Resilience}`);
   b.host._addStatusEffects(bran, [{ id: 'immobilized', turns: 2 }]);
   check('while Rooted, Immobilize does not take', !bran.statusEffects.some(s => s.id === 'immobilized'));
   const empty = b.host.allySlots.find(sl => !sl.char && sl.slotId !== bran._slot?.slotId);

@@ -1328,7 +1328,7 @@ export const Items = {
     bonuses: {},
     historicRolls: {
       stats: { CON: [3, 5], STR: [1, 3] },
-      derived: { PhysicalResist: [8, 12], Evasion: [-10, -10] },
+      derived: { PhysicalResist: [8, 12], Evasion: [-10, -5] },
       misc: { resilience: [15, 25] },
     },
     // Rooted (data/historicEffects.js ROOTED).
