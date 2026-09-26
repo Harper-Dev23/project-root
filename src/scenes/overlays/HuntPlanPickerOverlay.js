@@ -14,6 +14,21 @@ import { getItemComputedData } from '../../systems/ItemFactory.js';
 import { describePlan, makeBasicPlan } from '../../systems/HuntPlans.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
 import GameState from '../../systems/GameState.js';
+import { Items } from '../../../data/items.js';
+import { PRIMARY_OBJECTIVES } from '../../../data/huntMapGen.js';
+
+/**
+ * Whether a plan can be taken to `zoneId` (chunk 14b-3): a boss plan belongs to
+ * one region only, and waits until its objective exists (14b-4). Returns
+ * { show, why } where `why` (a reason it cannot be picked) may be null.
+ */
+export function planFitsZone(inst, zoneId) {
+  const base = Items[inst?.id] || {};
+  if (!base.boss) return { show: true, why: null };
+  if (base.zone && base.zone !== zoneId) return { show: false, why: null };
+  if (!PRIMARY_OBJECTIVES[base.objective]) return { show: true, why: 'Its lair cannot be reached yet (a coming update).' };
+  return { show: true, why: null };
+}
 
 const ROW_H = 92;
 
@@ -36,8 +51,9 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     const { x, y, width } = frame.bounds;
     const left = x + 40;
 
+    const zoneId = this.scene.get('HuntHubOverlay')?.zoneId || null;
     const huntPlans = (GameState.inventory || [])
-      .filter(inst => getItemComputedData(inst)?.type === 'huntPlan');
+      .filter(inst => getItemComputedData(inst)?.type === 'huntPlan' && planFitsZone(inst, zoneId).show);
 
     let rowY = y + 80;
 
@@ -55,7 +71,9 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     huntPlans.forEach(inst => {
       const view = getItemComputedData(inst);
       const color = RARITY_COLORS[inst.rarity] || RARITY_COLORS.common;
-      this._row(left, rowY, width - 80, depth, view.name, color, describePlan(inst).join('   ·   '), () => this._pick(inst));
+      const { why } = planFitsZone(inst, zoneId);
+      const desc = [...(why ? [why] : []), ...describePlan(inst)].join('   ·   ');
+      this._row(left, rowY, width - 80, depth, view.name, color, desc, why ? null : () => this._pick(inst));
       rowY += ROW_H;
     });
   }
@@ -63,8 +81,16 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
   _row(x, y, w, depth, title, titleColor, desc, onPick) {
     const bg = this.add.rectangle(x + w / 2, y + (ROW_H - 8) / 2, w, ROW_H - 8, 0x1c1c1c, 0.6)
       .setStrokeStyle(1, 0x6a7080)
-      .setDepth(depth)
-      .setInteractive({ useHandCursor: true });
+      .setDepth(depth);
+    // A row that cannot be picked (a boss plan whose lair is not in yet) is
+    // shown, dimmed, and takes no click.
+    if (!onPick) {
+      bg.setAlpha(0.5);
+      this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }).setDepth(depth + 1).setAlpha(0.6);
+      this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }).setDepth(depth + 1).setAlpha(0.8);
+      return;
+    }
+    bg.setInteractive({ useHandCursor: true });
 
     this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }).setDepth(depth + 1);
     this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }).setDepth(depth + 1);

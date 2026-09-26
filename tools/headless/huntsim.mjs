@@ -236,11 +236,12 @@ GameState.awardXPTo = function (chars, amount) {
 // The world a sim hunt writes to: records what it pays, stubs the save.
 
 function simWorld(party) {
-  const w = { huntPoints: [], banked: 0 };
+  const w = { huntPoints: [], banked: 0, omenTotal: 0 };
   w.party = () => party;
   w.nightFalls = () => {};
   w.dayBreaks = () => {};
   w.awardHuntPoints = (n) => { w.huntPoints.push(n); };
+  w.omens = (zoneId, n) => { w.omenTotal += n; };   // the region's Omen meter (14b-3), recorded
   w.bankItems = (items) => { w.banked += items.length; };
   w.awardXP = (pool) => GameState.awardXPPool(pool, party);   // as GAME_WORLD.awardXP: completion and event XP
   w.favor = () => {};
@@ -533,6 +534,7 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
   rec.huntPoints = world.huntPoints.reduce((a, b) => a + b, 0);
   rec.exitHuntPoints = st.reward?.huntPoints || 0;
   rec.fightHuntPoints = rec.huntPoints - rec.exitHuntPoints;
+  rec.omens = world.omenTotal;
   return rec;
 }
 
@@ -575,6 +577,7 @@ function summarise(recs) {
     huntPoints: r1(mean(recs.map(r => r.huntPoints))),
     fightHuntPoints: r1(mean(recs.map(r => r.fightHuntPoints))),
     exitHuntPoints: r1(mean(recs.map(r => r.exitHuntPoints))),
+    omens: r1(mean(recs.map(r => r.omens || 0))),
   };
 }
 
@@ -687,7 +690,7 @@ const COLS = [
   ['n', 'n'], ['done%', 'donePct'], ['wipe%', 'wipePct'], ['stuck', 'stuck'], ['perc', 'perception'], ['moves', 'moves'], ['acts', 'actions'], ['days', 'days'],
   ['fights', 'fights'], ['rd/fight', 'roundsPerFight'], ['rounds', 'rounds'], ['ambush%', 'ambushPct'], ['caught%', 'caughtPct'], ['fightWin%', 'fightWinPct'], ['enemy1st%', 'enemyFirstPct'],
   ['supUsed', 'suppliesUsed'], ['ranOut%', 'ranOutPct'], ['camps', 'camps'], ['harvT', 'harvestTime'], ['KOs', 'knockouts'], ['events', 'events'],
-  ['XP/hunter', 'xpPerHunter'], ['HuntPts', 'huntPoints'], ['fightHP', 'fightHuntPoints'], ['exitHP', 'exitHuntPoints'],
+  ['XP/hunter', 'xpPerHunter'], ['HuntPts', 'huntPoints'], ['fightHP', 'fightHuntPoints'], ['exitHP', 'exitHuntPoints'], ['omens', 'omens'],
 ];
 function table(title, rows) {
   realLog('\n' + title);

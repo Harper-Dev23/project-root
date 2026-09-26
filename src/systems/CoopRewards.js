@@ -117,6 +117,8 @@ export function applyTakeHome(entries, ctx, target) {
       case 'favor': case 'falseGod': case 'bond': case 'rivalDevotion':
         w[e.verb](...a); sum.standing++; break;
       case 'questFlag': case 'lore': w[e.verb](...a); break;
+      // Each player's own region meter (14b-3): everyone on the hunt earns it.
+      case 'omens': w.omens?.(...a); break;
       case 'fell': {
         const [rule, refs = []] = a;
         if (rule === 'sheltered') break;

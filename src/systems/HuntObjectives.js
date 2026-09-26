@@ -21,6 +21,7 @@ import { PLAN_TIER_IMPLICITS, planTierFor } from '../../data/planAffixes.js';
 import { Items } from '../../data/items.js';
 import { TROPHY_GRADES } from '../../data/beastParts.js';
 import { clockAt } from './HuntRules.js';
+import { OMEN_SOURCES } from '../../data/bosses.js';
 
 /** The completion reward, in Hunt Points, by map size (chunk 7 decision 11),
  *  before the plan's completionRewardPercent. */
@@ -191,6 +192,21 @@ export function exitReward(s) {
     bonuses,
     huntPoints: completion + bonuses.reduce((t, b) => t + b.huntPoints, 0),
     xpPool: primaryDone ? completionXP(s.plan.size, s.mods?.xpPercent || 0) : 0,
+    omens: omensBooked(s, primaryDone, bonuses.length),
     progress,
   };
+}
+
+/**
+ * What a hunt books toward its region's Omen meter at a clean exit (chunk
+ * 14b-3; data/bosses.js OMEN_SOURCES): objectives, fights won, the apex, and
+ * events seen through.
+ */
+export function omensBooked(s, primaryDone, bonusesDone) {
+  const kills = s.kills || [];
+  return (primaryDone ? OMEN_SOURCES.primary : 0)
+    + bonusesDone * OMEN_SOURCES.bonus
+    + kills.length * OMEN_SOURCES.fight
+    + kills.filter(k => k.apex).length * OMEN_SOURCES.apex
+    + (s.eventsResolved || 0) * OMEN_SOURCES.event;
 }

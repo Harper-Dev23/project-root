@@ -82,6 +82,7 @@ import ProgressionManager from './ProgressionManager.js';
 import GameState from './GameState.js';
 import { createMapHunt, restoreMapHunt } from './HuntEngine.js';
 import { questSitesFor } from './HuntQuests.js';
+import { addOmens } from './Omens.js';
 
 // Tuned so a base-loadout hunt (no extra Hunt Tickets spent on supplies)
 // guarantees at least one full day+night cycle (12 advances) and typically
@@ -199,6 +200,10 @@ export const GAME_WORLD = {
   },
   hasQuestFlag(flag) {
     return ProgressionManager.hasQuestFlag(flag);
+  },
+  // The region's Omen meter (chunk 14b-3; src/systems/Omens.js).
+  omens(zoneId, amount) {
+    addOmens(ProgressionManager, zoneId, amount);
   },
   // The sites this save's active quest steps need in a region (chunk 14b-2).
   questSites(zoneId) {

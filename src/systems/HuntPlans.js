@@ -9,7 +9,7 @@ import { describeModifiers } from './HuntModifiers.js';
 import { Items } from '../../data/items.js';
 import { PENDING_UNTIL } from './HuntObjectives.js';
 
-const OBJECTIVE_NAMES = { scout: 'Scout', apex: 'Apex', cull: 'Cull', retrieve: 'Retrieve', commune: 'Commune' };
+const OBJECTIVE_NAMES = { scout: 'Scout', apex: 'Apex', cull: 'Cull', retrieve: 'Retrieve', commune: 'Commune', boss: 'Boss' };
 const SIZE_NAMES = { small: 'Small map', medium: 'Medium map', large: 'Large map' };
 
 /**
@@ -18,7 +18,7 @@ const SIZE_NAMES = { small: 'Small map', medium: 'Medium map', large: 'Large map
  * generic `hunt_plan` (still readable in saves as Scout / Small, not sold).
  */
 export const PLAN_BASE_IDS = Object.values(Items)
-  .filter(b => b.type === 'huntPlan' && b.objective && b.size && !b.basic && !b.legacy)
+  .filter(b => b.type === 'huntPlan' && b.objective && b.size && !b.basic && !b.legacy && !b.boss)
   .map(b => b.id);
 
 /** The free basic plan. Made on demand; it never sits in a bag. */

@@ -1373,6 +1373,23 @@ export const Items = {
     description: 'Free, and always available. A small map to scout, with no modifiers.',
   },
 
+  // ── Boss hunt plans (chunk 14b-3; data/bosses.js, src/systems/Omens.js) ──
+  // Given by the tribe at the end of a boss's questline, then bought with a
+  // full Omen meter. Never sold, never rolled (ItemFactory skips pools for
+  // `boss`), never used up at departure: only once the boss is fought (14b-4).
+  // `zone`: the only region it can be taken to.
+  mourners_offering: {
+    id: 'mourners_offering',
+    name: "Mourner's Offering",
+    type: 'huntPlan',
+    rarity: 'epic',
+    boss: 'mourning_beast',
+    zone: 'reeds_of_gethsemane',
+    objective: 'boss',
+    size: 'large',
+    description: 'Burial cloth, river stones and a lock of hair, bound with reed. Laid at the Lament Pools, it calls the Mourning Beast from its lair.',
+  },
+
   // ── The plan base types (chunk 8c; owner decision 2, chunk 8) ───────────
   // Base type = primary objective + map size (HUNT_PLANS: "the base is fixed,
   // the affixes vary, and no affix can change what the hunt is"). All 15 roll

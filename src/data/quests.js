@@ -324,10 +324,11 @@ export const QUEST_LINES = [
         isComplete: (pm) => pm.hasQuestFlag('mb_signs_found'),
       },
       {
-        // Completed by the lodge's first Mourner's Offering (14b-3).
+        // Completed by taking the tribe's first Mourner's Offering at the hunt
+        // board (HuntHubOverlay, Omens.takeFirstOffer; 14b-3).
         id:          'wr_offer',
         label:       'The Tribe\'s Offer',
-        description: 'Return to your lodge. Your tribe will know what the signs mean.',
+        description: 'Open the hunt board and choose the Reeds. Your tribe knows what the signs mean, and has something for you.',
         isActive:   (pm) => pm.hasQuestFlag('mb_signs_found'),
         isComplete: (pm) => pm.hasQuestFlag('mb_offer_taken'),
       },

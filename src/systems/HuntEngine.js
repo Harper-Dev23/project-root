@@ -718,6 +718,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const kill = {
         occId: occ.id, kind: occ.kind, family: occ.family || null, mark: occ.mark || null,
         roster: occ.roster.map(m => ({ ...m })), tile: occ.tile, at: s.time,
+        ...(occ.apex ? { apex: true } : {}),
       };
       s.kills.push(kill);
       // Region progress quests read (chunk 14b-2; HuntQuests.js).
@@ -881,10 +882,12 @@ function makeMapHunt(s, rng, worldRng, world) {
       const reward = exitReward(s);
       const pack = this._finish('exit');
       if (reward.primaryDone) world.questFlag?.(regionFlag('hunted', s.zoneId), true);
+      // The region's Omen meter (14b-3): booked at a clean exit only.
+      if (reward.omens > 0) world.omens?.(s.zoneId, reward.omens);
       if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
       // Completion XP (chunk 13c): the world splits it over the party.
       if (reward.xpPool > 0) world.awardXP?.(reward.xpPool);
-      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, xpPool: reward.xpPool };
+      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, xpPool: reward.xpPool, omens: reward.omens };
       this._log({ kind: 'exit', tile: s.pos, huntPoints: reward.huntPoints, xpPool: reward.xpPool, primaryDone: reward.primaryDone, time: s.time });
       return { ok: true, reward, pack };
     },
@@ -1493,6 +1496,8 @@ function makeMapHunt(s, rng, worldRng, world) {
       const lines = applyEffects(effects, this._eventApi(ev));
       this._reveal();
       this._log({ kind: 'event', event: ev.templateId, branch, time: s.time });
+      // Counted apart from the log, which is capped (Omens, 14b-3).
+      s.eventsResolved = (s.eventsResolved || 0) + 1;
       return { ok: true, branch, lines, roll, encounter: this.encounter() };
     },
 

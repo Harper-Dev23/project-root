@@ -224,6 +224,9 @@ const ProgressionManager = {
   // completion can't be inferred without explicit bookkeeping.
   completedQuestSteps: [],
 
+  // The Omen meter per region (chunk 14b-3; src/systems/Omens.js): { zoneId: n }.
+  omens: {},
+
   // Tribe allegiance — SAVE-SLOT WIDE.
   // One tribe per save file; all characters in that slot belong to the same tribe.
   // Valid values: 'styx' | 'zafaar' | 'elseth' | 'lesse' | null (not yet chosen)
@@ -553,6 +556,7 @@ const ProgressionManager = {
       tribeVendorStock:    { ...this.tribeVendorStock },
       planVendorStock:     this.planVendorStock ? JSON.parse(JSON.stringify(this.planVendorStock)) : null,
       completedQuestSteps: [...this.completedQuestSteps],
+      omens:               { ...this.omens },
       tribeRep:            { ...this.tribeRep },
       tribeIntel:          { ...this.tribeIntel },
       nightsElapsed:       this.nightsElapsed,
@@ -581,6 +585,8 @@ const ProgressionManager = {
     this.planVendorStock     = (data.planVendorStock && Array.isArray(data.planVendorStock.slots))
       ? JSON.parse(JSON.stringify(data.planVendorStock)) : null;
     this.completedQuestSteps = Array.isArray(data.completedQuestSteps) ? [...data.completedQuestSteps] : [];
+    // Optional: every save before chunk 14b-3 starts every meter empty.
+    this.omens               = (data.omens && typeof data.omens === 'object') ? { ...data.omens } : {};
     this.tribeRep            = (data.tribeRep && typeof data.tribeRep === 'object')
       ? { ...DEFAULT_TRIBE_REP, ...data.tribeRep } : { ...DEFAULT_TRIBE_REP };
     this.tribeIntel          = (data.tribeIntel && typeof data.tribeIntel === 'object')
@@ -614,6 +620,7 @@ const ProgressionManager = {
     this.tribeVendorStock    = {};
     this.planVendorStock     = null;
     this.completedQuestSteps = [];
+    this.omens               = {};
     this.tribeRep            = { ...DEFAULT_TRIBE_REP };
     this.tribeIntel          = { ...DEFAULT_TRIBE_INTEL };
     this.nightsElapsed       = 0;

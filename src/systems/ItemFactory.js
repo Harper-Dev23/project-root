@@ -1376,7 +1376,7 @@ export function createItemInstance(id, opts = {}) {
     const rolled = rollFixedAffix(base.fixedAffix, rng);
     // Treat it as a suffix so buildInstanceModifiers processes it
     suffixes = [rolled];
-  } else if (pools && !base.historic && (opts.rollAffixes ?? (rarity !== 'common'))) {
+  } else if (pools && !base.historic && !base.boss && (opts.rollAffixes ?? (rarity !== 'common'))) {
     // (Historic bases never roll pool affixes: their lines are their own,
     // rolled from historicRolls below.)
     const { prefixes: nPre, suffixes: nSuf } = rollAffixCounts(rarity, rng);
@@ -1400,7 +1400,7 @@ export function createItemInstance(id, opts = {}) {
       if (implicit) bonusObjectives.push({ id: implicit.objective, from: 'implicit' });
     }
   }
-  const nameBase = (isPlan && !base.basic) ? `${base.name} ${PLAN_TIER_NUMERALS[planTier]}` : base.name;
+  const nameBase = (isPlan && !base.basic && !base.boss) ? `${base.name} ${PLAN_TIER_NUMERALS[planTier]}` : base.name;
 
   const instance = {
     id,
