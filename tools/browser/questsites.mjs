@@ -39,6 +39,14 @@ const inside = Object.values(tabs.tabs).every(t => t.l >= tabs.frame.l && t.r <=
 check('six tabs, Regions among them, all inside the frame', Object.keys(tabs.tabs).length === 6 && !!tabs.tabs.region && inside, JSON.stringify(tabs));
 await evaluate(`window.__T.g().scene.getScene('QuestOverlay')._showTab('region'); await new Promise(r => setTimeout(r, 300)); return true;`);
 await shot('01-regions-tab');
+// Expand the quest by clicking its title, as a player does.
+const title = await evaluate(`
+  const q = window.__T.g().scene.getScene('QuestOverlay'); let hit = null;
+  const walk = (o) => { if (!o || hit) return; if (o.type === 'Text' && /Weeping in the Reeds/.test(o.text)) hit = o.getBounds(); if (o.list) o.list.forEach(walk); };
+  q.children.list.forEach(walk); return hit && { x: hit.centerX, y: hit.centerY };`);
+if (title) await B.click(title.x, title.y);
+await sleep(300);
+await shot('01b-quest-expanded');
 const texts = await evaluate(`
   const q = window.__T.g().scene.getScene('QuestOverlay'); const out = [];
   const walk = (o) => { if (!o) return; if (o.type === 'Text' && o.visible) out.push(o.text); if (o.list) o.list.forEach(walk); };
