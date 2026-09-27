@@ -1348,6 +1348,8 @@ export function installDevHook(game) {
         d.map.occupants = d.map.occupants.filter(o => o.tile !== next);
         for (const o of d.map.occupants) o.noticed = true;
         d.pos = next; d.fog[next] = 'visible';
+        // opts.night: set the clock to the next night (a lair open only at night).
+        if (opts.night) { const { clockAt } = await import('../../systems/HuntRules.js'); let t = d.time; while (!clockAt(t).isNight) t += 1; d.time = t; d.world.time = t; }
         hunt = restoreMapHunt(d, world);
       }
     }

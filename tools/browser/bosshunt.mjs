@@ -62,6 +62,39 @@ check('the board holds the four parts in their slots', board.length === 4 && ['H
 const head = board.find(b => b.name.includes('Head')), body = board.find(b => b.name.includes('Body'));
 check('the Head and Body show one pool', head?.pool && body?.pool && head.hp === body.hp && head.max === body.max, `${head?.hp}/${head?.max} and ${body?.hp}/${body?.max}`);
 
+// ---- The Ghost Party (14b-5): the Drowned Camp at night, six ghosts on the board ----
+// A fresh page: stopping the first fight's CombatScene by hand leaves UIScene
+// half-built (its dialogue bar off-screen), which a real fight never does.
+await B.loadGame();
+await B.bootToTown(`
+  const { makeParty } = await import('/tools/headless/fixtures.js');
+  const GameState = (await import('/src/systems/GameState.js')).default;
+  const party = makeParty(); GameState.characters = party; GameState.party = party;`);
+await evaluate(`window.__hunt = await window.bmDevMapHunt({ zoneId: 'reeds_of_gethsemane', objective: 'boss', size: 'large', boss: 'ghost_party', seed: 8, supplies: 200, besideLair: true, night: true });
+  window.__T.s().hunt._reveal(); window.__T.s()._refresh();
+  await new Promise(r => setTimeout(r, 500)); return true;`);
+const camp = await evaluate(`const s = window.__T.s(); const o = s.v.occupants.find(x => x.kind === 'boss'); return o ? { tile: o.tile, name: o.name, night: s.v.clock.isNight, ...s.center(o.tile) } : null;`);
+check('the Drowned Camp shows on the map at night', !!camp && camp.name === 'The Ghost Party' && camp.night, JSON.stringify(camp));
+await evaluate(`const s = window.__T.s(); s.panel = null; s.selected = ${JSON.stringify(camp?.tile)}; s._refresh(); return true;`);
+await sleep(200);
+await click(camp.x, camp.y);
+await sleep(300);
+await shot('05-camp-warning');
+const bar = await evaluate(`return window.__T.textsOf('UIScene').map(t => t.text).join(' | ');`);
+check('its warning names the Drowned Camp', /Drowned Camp/.test(bar), bar.slice(0, 160));
+const enter2 = await B.findText('Enter', 'UIScene');
+if (enter2) await click(enter2.x, enter2.y);
+await sleep(400);
+await B.clickText('^Fight$', 'HuntFieldOverlay');
+let ok2 = false;
+for (let i = 0; i < 40 && !ok2; i++) { ok2 = await evaluate(`return ${ready};`); if (!ok2) await sleep(250); }
+await sleep(800);
+await shot('06-ghost-board');
+const ghosts = await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
+  return c.enemies.map(e => ({ name: e.name, slot: e._slot?.slotId, weapon: e.equipment?.weaponMain?.id || null, amulet: e.equipment?.amulet?.id || null }));`);
+check('six ghosts on the board, each armed', ok2 && ghosts.length === 6 && ghosts.every(g => g.weapon), JSON.stringify(ghosts.map(g => g.name + '@' + g.slot)));
+check('the Ghost Captain wears The Unconfessed', ghosts.find(g => g.name === 'Ghost Captain')?.amulet === 'the_unconfessed');
+
 check('no uncaught errors in the page', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 const fails = B.checks.filter(c => !c.ok).length;
 console.log(`\n${mode}: ${B.checks.length - fails} pass, ${fails} fail   shots: ${out}`);
