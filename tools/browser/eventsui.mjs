@@ -72,6 +72,10 @@ const place = (templateId, { beside = false, pack = null } = {}) => evaluate(`
   const save = JSON.parse(localStorage.getItem('bmSave_autosave'));
   const d = save.hunt;
   d.event = null; d.encounter = null;
+  // Hold every beast still: since predators hunt (step 13c-5) a pack can reach
+  // the party on the very move that steps onto the site, and a fight rightly
+  // comes before the event. The check is the event panels, not the chase.
+  for (const o of d.map.occupants) if (o.kind === 'beast') { o.state = 'rooted'; o.home = 'rooted'; o.nextStepAt = null; }
   const free = (id) => d.map.tiles[id] && isPassable(d.map.tiles[id]) && id !== d.pos && !d.map.tiles[id].exit && !d.map.occupants.some(o => o.tile === id);
   const tile = [...mapNeighbors(d.map, d.pos)].find(free);
   d.map.occupants.push({ id: 'oui_' + Math.floor(Math.random() * 1e9), kind: 'event', tile, eventId: ${JSON.stringify(templateId)}, concealment: 0 });

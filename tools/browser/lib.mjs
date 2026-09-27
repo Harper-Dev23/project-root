@@ -101,9 +101,22 @@ async function pageDriver(wsUrl, { gameUrl, outDir, prefix }) {
     const m = JSON.parse(ev.data);
     if (m.id && pending.has(m.id)) { const { res, rej } = pending.get(m.id); pending.delete(m.id); m.error ? rej(new Error(m.error.message)) : res(m.result); }
     if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text);
-    if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map(a => a.value ?? a.description).join(' '));
+    if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
+      const top = m.params.stackTrace?.callFrames?.[0];
+      errors.push(m.params.args.map(a => a.value ?? a.description).join(' ') + (top?.url ? `  @ ${top.url.replace(/^https?:\/\/[^/]+/, '')}:${top.lineNumber + 1}` : ''));
+    }
   });
   const send = (method, params = {}) => new Promise((res, rej) => { const id = nextId++; pending.set(id, { res, rej }); ws.send(JSON.stringify({ id, method, params })); });
+  // Without this the page never reports Runtime.exceptionThrown or
+  // Runtime.consoleAPICalled, `errors` stays empty, and every check's "no
+  // uncaught errors" passes whatever the page does (it hid a real crash in
+  // CombatScene until 2026-09-26). Before any navigation, so nothing is missed.
+  await send('Runtime.enable');
+  // A page error often stalls a check, which then dies on a missing text long
+  // before its own "no uncaught errors" line: say what the page threw.
+  process.on('exit', (code) => {
+    if (code && errors.length) console.log(`\npage errors (${prefix}), ${errors.length}:\n` + errors.slice(0, 5).map(e => '  ' + e.split('\n').slice(0, 6).join('\n    ')).join('\n'));
+  });
   // Every page behaves as if focused, so a second page never pauses the first.
   await send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => {});
   const evaluate = async (expr) => {
