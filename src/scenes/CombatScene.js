@@ -481,8 +481,10 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
     // A map-hunt fight's food buff goes on AFTER that reset, or it would be
-    // wiped before the first turn (chunk 9c).
-    this._applyHuntFightStart();
+    // wiped before the first turn (chunk 9c). What it says waits for the log,
+    // built below: on a first fight after a page load there is none yet.
+    const huntStartLines = [];
+    this._applyHuntFightStart(huntStartLines);
 
     // Bars were constructed before this reset ran (see
     // _updateInitiativeBars) — repaint them now that the gauge is
@@ -518,6 +520,7 @@ export default class CombatScene extends Phaser.Scene {
     if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(layout.endTurn.x, layout.endTurn.y - 60);
     this._highlightCurrentTurn();
     this._createCombatLog();
+    for (const line of huntStartLines) this._log(line);
     this._postLocalChatLines(this.localChatScript?.onCombatStart?.(this._buildLocalChatCtx()));
 
     // Systems
@@ -3623,9 +3626,11 @@ export default class CombatScene extends Phaser.Scene {
    * hunt.beginFight() and already used up there, goes on every standing
    * hunter as a status for the whole fight. Its field is a status-mod key
    * _sumStatusEffectMods reads (the food data names one). Called after the
-   * per-combat reset, which would otherwise wipe it.
+   * per-combat reset, which would otherwise wipe it. With `said`, the log
+   * lines are pushed there for the caller to log, instead of logged here.
    */
-  _applyHuntFightStart() {
+  _applyHuntFightStart(said = null) {
+    const say = (line) => (said ? said.push(line) : this._log(line));
     if (this.isCoop) return;   // the server puts it on (chunk 12c); a client only draws
     const standing = this._party().filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
     const buff = this.huntFight?.foodBuff;
@@ -3634,7 +3639,7 @@ export default class CombatScene extends Phaser.Scene {
         c.statusEffects = c.statusEffects || [];
         c.statusEffects.push({ id: 'hunt_food_buff', name: buff.name || 'Well fed', turns: 99, mods: { [buff.field]: buff.amount } });
       }
-      this._log(`🍲 Well fed: ${buff.name || 'a meal'} (+${buff.amount} ${buff.field}) for this fight.`);
+      say(`🍲 Well fed: ${buff.name || 'a meal'} (+${buff.amount} ${buff.field}) for this fight.`);
     }
     // The prophet boon's combat half (chunk 10b; data/boons.js): status mods on
     // every standing hunter and on every enemy for the whole fight, and the
@@ -3663,7 +3668,7 @@ export default class CombatScene extends Phaser.Scene {
       if (boon.capstone?.id === 'the_true_word') {
         for (const c of standing) c.statusEffects.push({ id: 'hunt_true_word', name: 'The Word That Is Always True', turns: 99, mods: { CritChance: 1000 } });
       }
-      this._log(boon.god
+      say(boon.god
         ? `✦ A pact with ${boon.name}, level ${boon.level}, is on the party.`
         : `✦ ${boon.house[0].toUpperCase() + boon.house.slice(1)}'s boon, level ${boon.level}, is with the party.`);
     }
