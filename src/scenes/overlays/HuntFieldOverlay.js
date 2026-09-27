@@ -1413,4 +1413,27 @@ export function installDevHook(game) {
     }
     return Object.fromEntries(Object.values(ZONES).map(z => [z.id, z.deathRule]));
   };
+  /**
+   * window.bmDevGrant({ sinTickets, huntTickets, flags, items, omens }) gives
+   * the REAL save what it names, for the owner's playtest (2026-09-27): skip to
+   * a questline step (its flags), stock up on tickets, hand over items by id
+   * (a boss plan, a potion), or fill a region's Omen meter ({ zoneId: n }).
+   * Saves. Returns what it gave. Example:
+   *   bmDevGrant({ sinTickets: 10, flags: ['hunted:reeds_of_gethsemane', 'apex_slain:reeds_of_gethsemane'] })
+   */
+  window.bmDevGrant = async ({ sinTickets = 0, huntTickets = 0, flags = [], items = [], omens = {} } = {}) => {
+    const PM = (await import('../../systems/ProgressionManager.js')).default;
+    const GS = (await import('../../systems/GameState.js')).default;
+    const { InventorySystem: Inv } = await import('../../systems/InventorySystem.js');
+    const { createItemInstance: make } = await import('../../systems/ItemFactory.js');
+    PM.sinTickets = (PM.sinTickets || 0) + sinTickets;
+    PM.huntTickets = (PM.huntTickets || 0) + huntTickets;
+    for (const f of flags) PM.setQuestFlag(f);
+    PM.omens = PM.omens || {};
+    for (const [z, n] of Object.entries(omens)) PM.omens[z] = (PM.omens[z] || 0) + n;
+    const given = [];
+    for (const id of items) { const inst = make(id, { itemLevel: 1 }); if (inst) { Inv.addGlobalItem(inst, { isNew: true }); given.push(id); } }
+    GS.save('autosave');
+    return { sinTickets: PM.sinTickets, huntTickets: PM.huntTickets, flags, items: given, omens: PM.omens };
+  };
 }
