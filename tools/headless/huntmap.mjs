@@ -71,7 +71,7 @@ const { makeRng } = await import('../../src/systems/seededRng.js');
 const golden = {};
 const ZONE_IDS = ['reeds_of_gethsemane', 'bay_of_solace'];
 const SIZES = Object.keys(MAP_SIZES);
-const PRIMARIES = Object.keys(PRIMARY_OBJECTIVES);
+const PRIMARIES = Object.keys(PRIMARY_OBJECTIVES).filter(k => !PRIMARY_OBJECTIVES[k].bossOnly);   // boss hunts: huntboss.mjs
 const BONUSES = Object.keys(BONUS_OBJECTIVES);
 const PAIRS = [];
 for (let i = 0; i < BONUSES.length; i++) for (let j = i + 1; j < BONUSES.length; j++) PAIRS.push([BONUSES[i], BONUSES[j]]);

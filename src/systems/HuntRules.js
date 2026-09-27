@@ -19,6 +19,7 @@
 // chunk 7 decisions, 2026-09-19).
 
 import { line, parseTileId, distance, tileId } from './HexGrid.js';
+import { BOSSES } from '../../data/bosses.js';
 import { GROUNDS, RELIEF, tileCosts } from '../../data/grounds.js';
 import { DAY_TIME_UNITS, GRADES, COMPOSITIONS } from '../../data/huntMapGen.js';
 import { combineModifiers } from './HuntModifiers.js';
@@ -176,7 +177,7 @@ export function betterBand(a, b) {
  *  stealthiest composition, and was out of a starting party's Detection on
  *  most maps (Apex hunts completed 25-30%, measured by huntsim). */
 export function occupantBand(map, occ, perception) {
-  if (occ.apex) return 'identified';
+  if (occ.apex || occ.lair) return 'identified';   // a boss's lair too (14b-4)
   return detectionBand(perception, occupantConcealment(map, occ));
 }
 
@@ -338,6 +339,8 @@ export function occupantView(occ, band, { exact = false } = {}) {
   if (band === 'sensed') return { id: occ.id, band };
   const v = { id: occ.id, band, kind: occ.kind };
   if (occ.kind === 'event') return { ...v, eventId: occ.eventId };
+  // A boss in its lair (14b-4): its name, never a pack's size or grade.
+  if (occ.kind === 'boss') return { ...v, boss: occ.boss, name: BOSSES[occ.boss]?.fight?.name || occ.boss, size: 'one' };
   const roster = occ.roster || [];
   v.size = sizeWord(roster.length);
   // Which cult an identified band serves (chunk 14a, CULT_BANDS).

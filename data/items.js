@@ -323,6 +323,24 @@ export const Items = {
   // Damage matches the crude_dagger they replace exactly, so this is a
   // presentation fix with no balance change -- but each beast now has its own
   // item, so the dice CAN be dialled per beast without touching the others.
+  // The Mourning Beast's natural weapons (chunk 14b-4c; data/bosses.js
+  // `weapon`): a boss wears no loot, so its parts' dice live here. Dice set
+  // by calibration (tools/headless/bosscal.mjs).
+  mourning_maw: {
+    id: 'mourning_maw', baseTier: 1, natural: true, name: 'Weeping Maw', type: 'weapon', weaponType: 'natural',
+    rarity: 'common', bonuses: {}, hands: 1, damage: { min: 16, max: 20 },
+    description: 'It opens wider than a jaw should, and something inside it is crying.',
+  },
+  mourning_bulk: {
+    id: 'mourning_bulk', baseTier: 1, natural: true, name: 'Shroud-Wrapped Bulk', type: 'weapon', weaponType: 'natural',
+    rarity: 'common', bonuses: {}, hands: 1, damage: { min: 11, max: 14 },
+    description: 'Burial cloth and old grief, heavy as wet earth.',
+  },
+  mourning_claw: {
+    id: 'mourning_claw', baseTier: 1, natural: true, name: 'Grasping Limb', type: 'weapon', weaponType: 'natural',
+    rarity: 'common', bonuses: {}, hands: 1, damage: { min: 10, max: 13 },
+    description: 'It reaches for the living the way the grieving reach for the dead.',
+  },
   natural_fangs: {
     id: 'natural_fangs',
     baseTier: 1,

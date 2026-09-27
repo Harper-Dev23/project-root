@@ -2462,6 +2462,110 @@ const NPC_ONLY_SKILLS = {
     },
     description: "Requires the target to be Lacerated (T1+). Deals 140% weapon damage and consumes their Lacerate buildup."
   },
+  // ==== The Mourning Beast (chunk 14b-4c; data/bosses.js) ====
+  // A boss of four parts. The Head keens (Lament: Grief on the whole party),
+  // the Body feeds on that Grief (Heart of Grief: heals the shared pool by
+  // the Grief the party carries), the Limbs grasp and hold. Grief is the
+  // same status Burden of Dreams lays (data/historicEffects.js GRIEF): the
+  // fight teaches the item. Numbers set by calibration (bosscal.mjs).
+  'mourning_lament': {
+    id: 'mourning_lament',
+    name: 'Lament',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 10,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['ranged', 'attack', 'aoe', 'curse'],
+    aoe: { shape: 'party', scale: 0.6 },
+    buildupHint: { curse: 40 },
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.mourning_lament;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        {
+          ability, tags: ability?.tags, skipGearMultiplier: true,
+          skillConversion: { physToNecroPct: 100 },
+          skillPct: 70, skillLabel: `${ability?.name || 'Skill'} weapon damage (70%)`,
+          isCrit: roll.isCrit, critMult: roll.critMult,
+        }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      const splashAmount = Math.max(1, Math.floor(amount * 0.6));
+      const others = (scene?._getTargetableEnemiesFor?.(user) || []).filter(u => u !== target);
+      // Every hunter it reaches grieves (1 stack each).
+      for (const u of [target, ...others]) scene?._applyGrief?.(u, 1);
+      return {
+        ...roll,
+        physical, elemental, necrotic,
+        amount,
+        buildup: { curse: 40 },
+        splash: others.map(t => ({ target: t, amount: splashAmount, buildup: { curse: 40 }, tags: ability?.tags })),
+      };
+    },
+    description: "A keening across the whole party: 70% weapon damage as necrotic to the target, 60% of that to everyone else, 40 Curse buildup and 1 Grief to all of them."
+  },
+  'mourning_heart_of_grief': {
+    id: 'mourning_heart_of_grief',
+    name: 'Heart of Grief',
+    type: 'enemy',
+    actionCost: 'major',
+    mpCost: 6,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: false,
+    targetRequirement: 'self',
+    tags: ['support', 'heal'],
+    // Nothing to feed on, nothing to cast: the party's Grief is its fuel.
+    canExecute: ({ scene }) => ((scene?._party?.() || []).reduce((t, c) => t + (c?.status === 'incapacitated' ? 0 : griefStacks(c)), 0) > 0
+      ? true : { ok: false, reason: 'no one grieves' }),
+    apply: (user, _target, scene) => {
+      const stacks = (scene?._party?.() || []).reduce((t, c) => t + (c?.status === 'incapacitated' ? 0 : griefStacks(c)), 0);
+      // 3% of its (shared) pool per Grief stack the party carries, 25% at most.
+      const pct = Math.min(25, 3 * stacks);
+      const heal = Math.floor((user.maxHP || 0) * pct / 100);
+      if (heal > 0) {
+        user.currentHP = Math.min(user.maxHP, (user.currentHP || 0) + heal);
+        scene?._showFloatingNumber?.(heal, user, true, false);
+        scene?._updateHealthBars?.();
+      }
+      scene?._log?.(`${user.name} drinks the party's grief (${stacks} Grief): +${heal} HP.`);
+      return { amount: 0 };
+    },
+    description: "Self: heals 3% of its maximum HP for every Grief stack the party carries (25% at most). Cannot be used while no one grieves."
+  },
+  'mourning_grasp': {
+    id: 'mourning_grasp',
+    name: 'Mourning Grasp',
+    type: 'enemy',
+    typedDamage: true,
+    actionCost: 'major',
+    mpCost: 5,
+    cooldown: 3,
+    enemyOnly: true,
+    requiresTarget: true,
+    targetRequirement: 'enemy',
+    tags: ['melee', 'attack'],
+    buildupHint: { lacerate: 60 },
+    apply: (user, target, scene) => {
+      const ability = SKILLS?.mourning_grasp;
+      const roll = calculateDamage(user, target, ability);
+      const { physical, elemental, necrotic } = applyTypedDamageModifiers(
+        { physical: roll.physical, elemental: roll.elemental, necrotic: roll.necrotic },
+        user, target,
+        { ability, tags: ability?.tags, skipGearMultiplier: true, skillPct: 110, skillLabel: `${ability?.name || 'Skill'} weapon damage (110%)`, isCrit: roll.isCrit, critMult: roll.critMult }
+      );
+      const amount = Math.max(1, physical + elemental + necrotic);
+      // Held fast, as Glacial Strike holds (a hit rider: no hold on a miss).
+      return { ...roll, physical, elemental, necrotic, amount, buildup: { lacerate: 60 }, statusEffects: [{ id: 'immobilized', turns: 2, vfx: { kind: 'debuff_shock' } }] };
+    },
+    description: "110% weapon damage and 60 Lacerate buildup, and the target is held (Immobilized, 2 turns)."
+  },
   'oskar_rotting_maw': {
     id: 'oskar_rotting_maw',
     name: 'Rotting Maw',

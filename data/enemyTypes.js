@@ -488,6 +488,53 @@ export const ENEMY_TYPES = {
     tags: ['beast'],
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   },
+  // ── The Mourning Beast (chunk 14b-4; data/bosses.js) ─────────────────────
+  // A boss of four parts: Head and Body (one shared pool, 14b-4b:
+  // their two maxHP together), two Limbs of their own. Kits (14b-4c): the Head keens
+  // (Lament), the Body feeds (Heart of Grief), the Limbs grasp (Mourning
+  // Grasp); the rest are existing beast skills. Numbers set by calibration
+  // (tools/headless/bosscal.mjs: about Gorrek R3 for a prepared level 4-5
+  // party). Portraits: placeholders until the
+  // owner's art (ART_ASSET_LIST).
+  hunt_mourning_head: {
+    name: 'Mourning Beast (Head)',
+    skin: 'portrait_oskar',
+    maxHP: 600,
+    maxMP: 40,
+    baseStats: { STR: 11, DEX: 4, CON: 10, INT: 3, WIS: 6, CHA: 6 },
+    derivedBonus: { PhysicalResist: 15, Resilience: 25 },
+    skills: ['mourning_lament', 'oskar_maw_rip', 'berserker_crushing_blow', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast', 'boss'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_mourning_body: {
+    name: 'Mourning Beast (Body)',
+    skin: 'portrait_oskar',
+    maxHP: 600,
+    maxMP: 20,
+    baseStats: { STR: 9, DEX: 2, CON: 12, INT: 2, WIS: 6, CHA: 4 },
+    derivedBonus: { PhysicalResist: 25, Resilience: 25 },
+    skills: ['mourning_heart_of_grief', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast', 'boss'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+  hunt_mourning_limb: {
+    name: 'Mourning Beast (Limb)',
+    skin: 'portrait_kiro',
+    maxHP: 260,
+    maxMP: 16,
+    baseStats: { STR: 10, DEX: 6, CON: 8, INT: 1, WIS: 3, CHA: 3 },
+    derivedBonus: { PhysicalResist: 10, Resilience: 15 },
+    skills: ['mourning_grasp', 'oskar_rending_bite', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['beast', 'boss'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
   hunt_tide_crab: {
     name: 'Tide Crab',
     skin: 'portrait_kiro',   // was beast_portrait, never loaded (14a)

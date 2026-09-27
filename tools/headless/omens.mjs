@@ -149,7 +149,7 @@ console.log('=== the boss plan item ===');
   check('rolls nothing: no affixes, no bonus objectives', !(inst.prefixes?.length) && !(inst.suffixes?.length) && (inst.bonusObjectives || []).length === 0);
   check('never sold by the plan vendor', !PLAN_BASE_IDS.includes(MB.plan));
   check('shown only for its own region', planFitsZone(inst, REEDS).show && !planFitsZone(inst, 'bay_of_solace').show);
-  check('shown but not pickable until its lair exists (14b-4)', !!planFitsZone(inst, REEDS).why, planFitsZone(inst, REEDS).why);
+  check('pickable for its region since its lair exists (14b-4), with a note on when it is used up', !planFitsZone(inst, REEDS).why && !!planFitsZone(inst, REEDS).note, planFitsZone(inst, REEDS).note);
   const plain = createItemInstance('plan_scout_small', { itemLevel: 1 });
   check('an ordinary plan fits every region, pickable', planFitsZone(plain, REEDS).show && !planFitsZone(plain, REEDS).why);
 }

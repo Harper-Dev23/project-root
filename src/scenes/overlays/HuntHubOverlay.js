@@ -76,6 +76,9 @@ export function takeDeparture({ plan, rationsToPack = 0 }) {
   const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
   const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
   const view = huntPlanView(plan);
+  // A boss plan stays in the bag until its boss is fought (14b-4): the hunt
+  // carries its id and uses it up then (HuntEngine.beginFight).
+  if (view.boss) return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel, bossPlanId: plan.instanceId }, supplies, bring: rations ? [rations] : [] };
   if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
   return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring: rations ? [rations] : [] };
 }

@@ -96,7 +96,8 @@ function judge(s, obj, { atExit }) {
       const have = obj.sites.filter(seen).length;
       return { have, need: obj.sites.length, done: have >= obj.sites.length };
     }
-    case 'apex': {
+    case 'apex':
+    case 'boss': {   // the boss in its lair (14b-4), like the apex
       const done = s.kills.some(k => k.occId === obj.occupant);
       return { have: done ? 1 : 0, need: 1, done };
     }
@@ -163,7 +164,7 @@ function judge(s, obj, { atExit }) {
 }
 
 /** Every objective id judge() can check: the harness fails if one is missing. */
-export const CHECKED_OBJECTIVES = ['scout', 'apex', 'cull', 'retrieve', 'commune', 'pathfinder', 'named_quarry',
+export const CHECKED_OBJECTIVES = ['scout', 'apex', 'boss', 'cull', 'retrieve', 'commune', 'pathfinder', 'named_quarry',
   'provisioner', 'trophy', 'unbroken', 'swift_return', 'cleanse', 'great_quarry', 'unmask'];
 
 /** The hunt's objectives, primary first, with their progress now. */

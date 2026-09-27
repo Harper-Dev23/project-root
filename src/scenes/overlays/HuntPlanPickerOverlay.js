@@ -27,6 +27,7 @@ export function planFitsZone(inst, zoneId) {
   if (!base.boss) return { show: true, why: null };
   if (base.zone && base.zone !== zoneId) return { show: false, why: null };
   if (!PRIMARY_OBJECTIVES[base.objective]) return { show: true, why: 'Its lair cannot be reached yet (a coming update).' };
+  if (base.boss) return { show: true, why: null, note: 'A boss hunt: it is used up once the boss is fought, not when you set out.' };
   return { show: true, why: null };
 }
 
@@ -71,8 +72,8 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     huntPlans.forEach(inst => {
       const view = getItemComputedData(inst);
       const color = RARITY_COLORS[inst.rarity] || RARITY_COLORS.common;
-      const { why } = planFitsZone(inst, zoneId);
-      const desc = [...(why ? [why] : []), ...describePlan(inst)].join('   ·   ');
+      const { why, note } = planFitsZone(inst, zoneId);
+      const desc = [...(why ? [why] : []), ...(note ? [note] : []), ...describePlan(inst)].join('   ·   ');
       this._row(left, rowY, width - 80, depth, view.name, color, desc, why ? null : () => this._pick(inst));
       rowY += ROW_H;
     });

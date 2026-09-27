@@ -46,7 +46,15 @@ export const PRIMARY_OBJECTIVES = {
   commune:  { name: 'Commune',  doneWhen: "Reach and resolve the region's shrine.",
               needs: ['shrine'],
               params: { small: {}, medium: {}, large: {} } },
+  // A boss hunt (chunk 14b-4): only from a boss plan (data/bosses.js), which
+  // names the boss. `bossOnly`: never a launch objective, never rolled or sold.
+  boss:     { name: 'Boss',     doneWhen: "Kill the boss in its lair.",
+              needs: ['boss_lair'], bossOnly: true,
+              params: { small: {}, medium: {}, large: {} } },
 };
+
+/** The objectives a plan can be rolled, sold or simulated with (not boss hunts). */
+export const LAUNCH_OBJECTIVES = Object.keys(PRIMARY_OBJECTIVES).filter(k => !PRIMARY_OBJECTIVES[k].bossOnly);
 
 /**
  * Density (ENCOUNTERS, EVENTS): about one fight per 12-13 tiles (~3 / ~5 / ~7)

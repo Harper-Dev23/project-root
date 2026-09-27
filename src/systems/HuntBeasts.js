@@ -31,6 +31,7 @@
 // this number against the real spawned enemies' computeEffectiveInitiative.
 
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
+import { BOSSES } from '../../data/bosses.js';
 import { Items } from '../../data/items.js';
 import {
   HUNT_BEASTS, HUNT_CULTIST_TYPES, CULT_BANDS, CULTIST_GEAR_SLOT, GRADE_HP_SCALE, partBaseId,
@@ -49,6 +50,8 @@ export function loadoutSeed(huntSeed, occ) {
 
 /** The combat enemy type a roster member fights as. */
 export function memberType(occ, index) {
+  // A boss's members name their enemy types outright (data/bosses.js, 14b-4).
+  if (occ.kind === 'boss') return occ.roster[index].type;
   if (occ.kind === 'cultist') {
     // A band serving a false god fights as its cult (CULT_BANDS, chunk 14a).
     const types = CULT_BANDS[occ.cult]?.types || HUNT_CULTIST_TYPES;
@@ -72,6 +75,7 @@ export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed }) {
   const rng = makeRng(seed);
   return occ.roster.map((m) => {
     const out = {};
+    if (occ.kind === 'boss') return out;   // a boss wears nothing (its loot is its own, 14b-4c)
     if (occ.kind === 'cultist') {
       const id = pickBaseId(armorBases(CULTIST_GEAR_SLOT), itemLevel, { maxBaseTier: 1, rng });
       const rarity = rollHuntDropRarity(itemRarity, rng);
@@ -132,6 +136,33 @@ export function loadoutView(occ) {
 // its grade, wearing its kept loadout. CombatScene reads this through
 // data.huntFight (its _placeEnemies / _spawnEnemy take the scenario as given).
 
+/**
+ * A boss's fight (chunk 14b-4): its members exactly as data/bosses.js lays them
+ * out, in their own slots and names, at full size (no grade).
+ */
+function bossScenario(occ, { itemLevel }) {
+  const def = BOSSES[occ.boss]?.fight;
+  if (!def) throw new Error(`no fight for boss '${occ.boss}'`);
+  const enemies = def.members.map((m) => ({
+    type: m.type, slotId: m.slotId, name: m.name || ENEMY_TYPES[m.type]?.name || m.type,
+    grade: null, hpMult: 1,
+    // Its natural weapon (a boss wears no loot): the dice calculateDamage reads.
+    gear: m.weapon ? { weaponMain: createItemInstance(m.weapon, { itemLevel, rollAffixes: false }) } : {},
+    gearDroppable: {},
+    bossPart: occ.boss,                    // CombatScene: the whole boss collapses together
+    ...(m.pool ? { pool: m.pool } : {}),   // CombatScene._linkSharedPools
+  }));
+  return {
+    id: `hunt_boss_${occ.boss}`,
+    name: def.name,
+    description: BOSSES[occ.boss].lair?.name || def.name,
+    portraitKey: ENEMY_TYPES[enemies[0]?.type]?.skin || null,
+    loot: { itemLevel, maxBaseTier: 1 },
+    boss: occ.boss,
+    enemies,
+  };
+}
+
 /** Board slots filled in order: the front rank's centre first (slot 2), then
  *  the rest of the front, the middle, the back (boardGeometry: column 2 is
  *  the front, the middle row is the centre). */
@@ -155,6 +186,7 @@ export function gradeHpScale(grade) {
  */
 export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
   if (!occ?.loadout) throw new Error(`occupant ${occ?.id} has no loadout yet`);
+  if (occ.kind === 'boss') return bossScenario(occ, { itemLevel });
   const order = occ.roster.map((m, i) => i)
     .sort((a, b) => (GRADE_RANK[occ.roster[b].grade] ?? -1) - (GRADE_RANK[occ.roster[a].grade] ?? -1) || a - b);
   const enemies = order.map((i, k) => {

@@ -146,6 +146,7 @@ export const PLACEMENT_NEEDS = {
   apex_beast:         "the region's apex beast, Great and Rooted, reachable",
   retrieve_site:      'the site holding the item a Retrieve plan asks for, reachable',
   shrine:             "the region's shrine set piece, reachable",
+  boss_lair:          "the plan's boss in its lair, far from the entry, reachable (14b-4)",
 };
 
 /**

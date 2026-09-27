@@ -35,6 +35,7 @@ import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
 import { getZone } from '../../data/zones.js';
 import { CULT_BANDS } from '../../data/beastParts.js';
 import { EVENT_TEMPLATES } from '../../data/events.js';
+import { BOSSES } from '../../data/bosses.js';
 import { staticEligible } from './EventEffects.js';
 import { houseOf } from './Standing.js';
 import { makeRng } from './seededRng.js';
@@ -297,6 +298,34 @@ export const NEED_HANDLERS = {
     },
   },
 
+  // A boss hunt's lair (chunk 14b-4): the plan's boss, Rooted for good, as far
+  // from the entry as the map allows (in the far section of a two-section
+  // map), identified whenever its tile is in sight (HuntRules.occupantBand)
+  // and marked from departure (HuntEngine._objectiveSites).
+  boss_lair: {
+    place(ctx, obj) {
+      const boss = BOSSES[obj.boss];
+      if (!boss?.fight) return ctx.fail(`no boss '${obj.boss}' to place`);
+      const last = Math.max(...ctx.map.sections.map(x => x.index));
+      const far = ctx.freeTiles({ minEntryDist: ctx.farDist(), noBlight: true, hostile: true })
+        .filter(id => parseTileId(id).section === last);
+      const pool = far.length ? far : ctx.freeTiles({ minEntryDist: ctx.farDist(), noBlight: true, hostile: true });
+      if (!pool.length) return ctx.fail('no tile for the lair');
+      // The farthest third of what is left, so the lair is deep in, not merely past halfway.
+      const byDist = [...pool].sort((a, b) => ctx.entryDist.get(b) - ctx.entryDist.get(a) || compareIds(a, b));
+      const deep = byDist.slice(0, Math.max(1, Math.ceil(byDist.length / 3)));
+      const tile = deep[Math.floor(ctx.rng() * deep.length)];
+      const occ = ctx.addBoss(tile, obj.boss, boss.fight.members.map(m => ({ type: m.type })));
+      obj.occupant = occ.id;
+      obj.site = tile;
+      obj.route = [tile];
+    },
+    check(map, obj, reach) {
+      const o = map.occupants.find(x => x.id === obj.occupant);
+      return !!o && o.kind === 'boss' && o.boss === obj.boss && reach.has(o.tile);
+    },
+  },
+
   native_family: {
     place(ctx, obj) {
       // Only a family that runs in packs can be culled (14a: a Cull of
@@ -486,6 +515,7 @@ export function planMapInputs(view) {
     size: view.size,
     bonusObjectives: view.bonusObjectives.map(o => o.id),
     mods: view.mods || {},
+    ...(view.boss ? { boss: view.boss } : {}),
   };
 }
 
@@ -504,13 +534,15 @@ export function planMapInputs(view) {
  *                                   gradeShiftPercent, leanCountryPercent, blightPatches
  * @param {boolean} [o.followed]     your tribe follows the region's house (chunk 11a):
  *                                   read by event templates' `appears.followed`
+ * @param {string} [o.boss]          a boss hunt's boss (data/bosses.js), with
+ *                                   objective 'boss' only; it must live in zoneId
  * @param {object[]} [o.questSites]  sites the save's active quest steps need
  *                                   here (chunk 14b-2; HuntQuests.questSitesFor):
  *                                   [{ step, eventId, far }]. Each is an event
  *                                   occupant placed for certain; none, and the
  *                                   map is exactly what it was without them.
  */
-export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [] }) {
+export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
   if (!zone.palette || !zone.relief || !zone.natives || !zone.apex) throw new Error(`zone '${zoneId}' has no generator data`);
@@ -519,10 +551,12 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   if (!Number.isFinite(seed)) throw new Error('seed must be a number');
   for (const b of bonusObjectives) if (!BONUS_OBJECTIVES[b]) throw new Error(`unknown bonus objective '${b}'`);
   for (const q of questSites) if (!EVENT_TEMPLATES[q?.eventId]?.appears?.setPiece) throw new Error(`quest site '${q?.step}' names '${q?.eventId}', not a set-piece event`);
+  if ((objective === 'boss') !== !!boss) throw new Error(objective === 'boss' ? 'a boss hunt needs its boss' : `only a boss hunt names a boss ('${boss}')`);
+  if (boss && BOSSES[boss]?.zone !== zoneId) throw new Error(`boss '${boss}' does not live in '${zoneId}'`);
 
   const problems = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites });
+    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites, boss });
     if (map.failed) { problems.push(map.failed); continue; }
     const v = validateHuntMap(map);
     if (v.ok) return map;
@@ -531,7 +565,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   throw new Error(`no valid map for ${zoneId}/${objective}/${size} seed ${seed}: ${problems.slice(-3).join(' | ')}`);
 }
 
-function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [] }) {
+function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [], boss = null }) {
   const rng = makeRng(attemptSeed(seed, attempt, zone.id));
   const sizeDef = MAP_SIZES[size];
   const map = {
@@ -714,6 +748,13 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
       map.occupants.push(occ); occupied.add(tile);
       return occ;
     },
+    /** A boss in its lair (14b-4): not a pack. It never moves (HuntWorld moves
+     *  beasts only), is never Restless (quarry), and its lair gives it away. */
+    addBoss(tile, bossId, roster) {
+      const occ = { id: `o${nextOcc++}`, kind: 'boss', boss: bossId, tile, roster, state: 'rooted', quarry: true, lair: true, concealment: 0 };
+      map.occupants.push(occ); occupied.add(tile);
+      return occ;
+    },
     anyBeast: (pred) => map.occupants.some(o => o.kind === 'beast' && reach.has(o.tile) && pred(o)),
     nearestBeast: (pred) => map.occupants.filter(o => o.kind === 'beast' && reach.has(o.tile) && pred(o))
       .sort((a, b) => entryDist.get(a.tile) - entryDist.get(b.tile) || compareIds(a.tile, b.tile))[0]?.tile,
@@ -732,6 +773,7 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   // ── 3d. what the objectives need ───────────────────────────────────────────
   const size_ = size;
   const primary = { id: objective, params: { ...PRIMARY_OBJECTIVES[objective].params[size_] } };
+  if (boss) primary.boss = boss;
   const bonus = bonusObjectives.map(id => ({ id, params: { ...BONUS_OBJECTIVES[id].params } }));
   map.objectives = { primary, bonus };
   const jobs = [primary, ...bonus].flatMap(obj => needsOf(obj.id).map(need => ({ obj, need })));

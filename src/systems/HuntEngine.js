@@ -130,6 +130,7 @@ import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEAN
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
 import { regionFlag } from './HuntQuests.js';
+import { BOSSES, BOSS_HUNT_POINTS, BOSS_XP_MULT } from '../../data/bosses.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
@@ -149,7 +150,7 @@ export const BEAST_FIGHT_HUNT_POINTS = 8;
 export const RESCUE_TIME = 6;
 
 const LOG_LIMIT = 50;
-const HOSTILE = new Set(['beast', 'cultist']);
+const HOSTILE = new Set(['beast', 'cultist', 'boss']);
 /** Mixed into the hunt seed for the world's own stream. */
 const WORLD_STREAM_SALT = 0x9E3779B9;
 
@@ -189,6 +190,8 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
   const map = generateHuntMap({
     zoneId, objective: plan.objective, size: plan.size, seed: mapSeed,
     bonusObjectives: plan.bonusObjectives || [], mods: planMods, followed: boon0.followed,
+    // A boss plan names its boss (chunk 14b-4).
+    ...(plan.boss ? { boss: plan.boss } : {}),
     // What the save's active quest steps need in this region (chunk 14b-2).
     questSites: world.questSites?.(zoneId) || [],
   });
@@ -202,6 +205,9 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
       objective: plan.objective, size: plan.size, bonusObjectives: [...(plan.bonusObjectives || [])],
       itemLevel: Number.isFinite(plan.itemLevel) ? plan.itemLevel : 1,
       completionRewardPercent: completionRewardPercent(planMods, Number.isFinite(plan.itemLevel) ? plan.itemLevel : 1),
+      // A boss plan (14b-4): the boss, and the plan item still in the bag,
+      // used up once the boss is fought (beginFight), never at departure.
+      ...(plan.boss ? { boss: plan.boss, bossPlanId: plan.bossPlanId || null, bossPlanSpent: false } : {}),
     },
     weather,
     mods: huntMods(zone.modifiers, weather.modifiers, planMods),
@@ -392,6 +398,13 @@ function makeMapHunt(s, rng, worldRng, world) {
       const st = this.stats();
       const cost = moveCost(tile, st);
       const occ = s.map.occupants.find(o => o.tile === to && HOSTILE.has(o.kind)) || null;
+      // A boss's lair is entered only through its warning (14b-4): a plain
+      // move there is refused with what the warning says, and costs nothing.
+      if (occ?.kind === 'boss' && !this._enteringLair) {
+        const def = BOSSES[occ.boss];
+        return { ok: false, lair: { tile: to, boss: occ.boss, name: def?.lair?.name || def?.name, text: def?.lair?.text || '' },
+          reason: `that is ${def?.lair?.name || 'a boss lair'}: enter it from its warning` };
+      }
       const knew = occ ? this._bandOf(occ) : null;
       s.supplies = Math.max(0, s.supplies - cost.supply);
       s.from = s.pos;
@@ -412,6 +425,18 @@ function makeMapHunt(s, rng, worldRng, world) {
       const event = s.encounter ? null : this._openEventAt(s.pos);
       return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved,
         event: event?.quiet ? null : event, quiet: event?.quiet || null };
+    },
+
+    /**
+     * Step into a boss's lair (14b-4): the move its warning confirms. The
+     * fight starts at once, as walking onto any occupant does. Refused on any
+     * tile that is not a lair next to the party.
+     */
+    enterLair(to) {
+      const occ = s.map.occupants.find(o => o.tile === to && o.kind === 'boss');
+      if (!occ) return { ok: false, reason: 'there is no lair there' };
+      this._enteringLair = true;
+      try { return this.move(to); } finally { this._enteringLair = false; }
     },
 
     /**
@@ -621,7 +646,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         ok: true, occId: e.occId, kind: e.kind, first: e.first, ambush: e.ambush, knew: e.knew,
         partyInitiative: e.partyInitiative, enemyInitiative: e.enemyInitiative,
         itemLevel, deathRule: s.deathRule,
-        xpPool: Math.round(FIGHT_XP_POOL * (1 + (s.mods.xpPercent || 0) / 100)),
+        xpPool: Math.round(FIGHT_XP_POOL * (occ.kind === 'boss' ? BOSS_XP_MULT : 1) * (1 + (s.mods.xpPercent || 0) / 100)),
         scenario: this._weakened(occ, fightScenario(occ, { itemLevel, zoneName: zone?.name })),
         boon: this._boonForFight(),
       };
@@ -642,6 +667,12 @@ function makeMapHunt(s, rng, worldRng, world) {
         foodBuff = { field: s.foodBuff.field, amount: s.foodBuff.amount, source: s.foodBuff.source,
           name: Items[s.foodBuff.source]?.name || 'a meal' };
         s.foodBuff = null;
+      }
+      // A boss plan is used up once its boss is fought, win or lose (14b-4).
+      const occ = occById().get(spec.occId);
+      if (occ?.kind === 'boss' && s.plan.bossPlanId && !s.plan.bossPlanSpent) {
+        s.plan.bossPlanSpent = true;
+        world.spendBossPlan?.(s.plan.bossPlanId);
       }
       this._log({ kind: 'fight', occupant: spec.occId, food: foodBuff?.source || null, time: s.time });
       return { ...spec, foodBuff };
@@ -719,17 +750,31 @@ function makeMapHunt(s, rng, worldRng, world) {
         occId: occ.id, kind: occ.kind, family: occ.family || null, mark: occ.mark || null,
         roster: occ.roster.map(m => ({ ...m })), tile: occ.tile, at: s.time,
         ...(occ.apex ? { apex: true } : {}),
+        ...(occ.kind === 'boss' ? { boss: occ.boss } : {}),
       };
       s.kills.push(kill);
       // Region progress quests read (chunk 14b-2; HuntQuests.js).
       if (occ.apex) world.questFlag?.(regionFlag('apex_slain', s.zoneId), true);
+      if (occ.kind === 'boss') world.questFlag?.(`boss_slain:${occ.boss}`, true);
       delete s.sightings[occ.id];
       s.encounter = null;
       s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
       const found = loot.filter(isItemInstance);
       for (const inst of found) addToList(s.pack.found, inst);
-      const huntPoints = occ.kind === 'beast'
-        ? Math.round(BEAST_FIGHT_HUNT_POINTS * (1 + (s.mods.huntPointsPercent || 0) / 100)) : 0;
+      const huntPoints = occ.kind === 'beast' || occ.kind === 'boss'
+        ? Math.round((occ.kind === 'boss' ? BOSS_HUNT_POINTS : BEAST_FIGHT_HUNT_POINTS) * (1 + (s.mods.huntPointsPercent || 0) / 100)) : 0;
+      // The lair's chest (14b-4c): its Historic item, guaranteed while it is in
+      // the wild in this save (the host's, on a co-op hunt: each player's own
+      // bank then keeps it only where it is wild too, GAME_WORLD.bankItems).
+      // It rides in the pack like any find: at risk until the exit.
+      const hist = occ.kind === 'boss' ? BOSSES[occ.boss]?.historic : null;
+      let chest = null;
+      if (hist && world.historicInWild?.(hist) !== false) {
+        // Rolled from the hunt's own seed, as a loadout is: a reload rolls the same chest.
+        chest = createItemInstance(hist, { itemLevel: huntItemLevel(getZone(s.zoneId)?.danger), rng: makeRng((loadoutSeed(s.seed, occ) ^ 0xc4e57) >>> 0) });
+        addToList(s.pack.found, chest);
+        this._log({ kind: 'lair_chest', item: hist, time: s.time });
+      }
       // A beast fight leaves its bodies (chunk 9d): every part it wore, as
       // rolled and kept since the scout or contact, and the meat, for harvest().
       // Cultists leave only the armour that already dropped.
@@ -744,7 +789,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere() };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere(), ...(chest ? { chest: chest.id } : {}) };
     },
 
     /**
@@ -1105,6 +1150,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (p.id === 'scout') return p.sites.map(tile => ({ objective: 'scout', tile, done: !!s.fog[tile] }));
       if (p.id === 'retrieve') return [{ objective: 'retrieve', tile: p.site, done: !!s.retrieved }];
       if (p.id === 'commune') return [{ objective: 'commune', tile: p.site, done: !!s.communed }];
+      if (p.id === 'boss') return [{ objective: 'boss', tile: p.site, done: s.kills.some(k => k.occId === p.occupant) }];
       return [];
     },
 

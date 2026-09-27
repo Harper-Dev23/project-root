@@ -201,6 +201,14 @@ export const GAME_WORLD = {
   hasQuestFlag(flag) {
     return ProgressionManager.hasQuestFlag(flag);
   },
+  // Whether a Historic item is in the wild in this save (a lair's chest, 14b-4c).
+  historicInWild(itemId) {
+    return GameState.historicInWild(itemId);
+  },
+  // A boss plan, used up once its boss is fought (chunk 14b-4).
+  spendBossPlan(instanceId) {
+    GameState.removeFromInventory(instanceId);
+  },
   // The region's Omen meter (chunk 14b-3; src/systems/Omens.js).
   omens(zoneId, amount) {
     addOmens(ProgressionManager, zoneId, amount);
@@ -220,7 +228,16 @@ export const GAME_WORLD = {
   bankItems(items, { found }) {
     // Found items are new acquisitions and get the inventory's "new" dot;
     // leftovers of what was brought are coming back, not arriving.
-    for (const inst of items) InventorySystem.addGlobalItem(inst, { isNew: !!found });
+    for (const inst of items) {
+      // A Historic item is one of each in the realm (14b): a copy this save
+      // already holds is not banked again (a co-op guest's take-home from a
+      // host whose realm still had it in the wild).
+      if (Items[inst?.id]?.historic && found && !GameState.historicInWild(inst.id)) {
+        console.warn(`[bank] ${inst.id} is already held in this realm; not banked twice`);
+        continue;
+      }
+      InventorySystem.addGlobalItem(inst, { isNew: !!found });
+    }
   },
   party() {
     return GameState.party || [];

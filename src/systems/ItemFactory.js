@@ -1184,6 +1184,7 @@ export function huntPlanView(inst) {
     tier,
     tierName: `Tier ${PLAN_TIER_NUMERALS[tier]}`,
     basic: !!base.basic,
+    boss: base.boss || null,   // a boss hunt plan's boss (chunk 14b-4)
     objective: base.objective || null,
     size: base.size || null,
     implicitCompletionRewardPercent: PLAN_TIER_IMPLICITS[tier]?.completionRewardPercent || 0,

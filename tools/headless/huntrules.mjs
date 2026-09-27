@@ -1537,7 +1537,7 @@ console.log('=== every objective is completable and pays at the exit ===');
   // Primaries: every zone, size, objective.
   for (const zoneId of ZONES) {
     for (const size of SIZES) {
-      for (const objective of Object.keys(PRIMARY_OBJECTIVES)) {
+      for (const objective of Object.keys(PRIMARY_OBJECTIVES).filter(k => !PRIMARY_OBJECTIVES[k].bossOnly)) {
         const row = { runs: 0, done: 0, days: 0, huntPoints: 0 };
         for (let k = 0; k < 6; k++) {
           const itemLevel = 1 + (k % 10);

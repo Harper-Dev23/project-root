@@ -456,6 +456,13 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         this._label(x, y, '!', 16, '#3a2a10', false).setAlpha(alpha);
         continue;
       }
+      // A boss in its lair (14b-4): bigger, blood red, a gold ring.
+      if (o.kind === 'boss') {
+        g.fillStyle(0x6a0f14, alpha).fillCircle(x, y, 18);
+        g.lineStyle(3, 0xf2d27a, alpha).strokeCircle(x, y, 18);
+        this._label(x, y, 'B', 16, '#f2d27a').setAlpha(alpha);
+        continue;
+      }
       const fill = o.kind === 'cultist' ? 0x4b2d5e : (GRADE_COLOR[o.topGrade] ?? 0xaaaaaa);
       g.fillStyle(fill, alpha).fillCircle(x, y, 14);
       g.lineStyle(3, MARK_RING[o.mark] ?? 0x2a2a2a, alpha).strokeCircle(x, y, 14);
@@ -724,18 +731,18 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // leaving the co-op hunt takes the place of the actions.
     const acts = [];
     if (this.coop && !this.coop.isHost) {
-      if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._act('move', () => this.hunt.move(id))]);
+      if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
       if (own) {
         lines.push('The host forages, camps and chooses; you can move the party.');
         acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
       }
     } else {
-    if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._act('move', () => this.hunt.move(id))]);
+    if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
     if (occ && !occ.exact && v.fog[id] === 'visible') acts.push([`Scout (${SCOUT_TIME} time)`, () => this._act('scout', () => this.hunt.scout(occ.id))]);
     if (own) {
       for (const m of v.moves) {
         if (v.layout.includes(m.tile)) continue;
-        acts.push([`Cross to section ${parseTileId(m.tile).section + 1} (${fmt(m.supply)} supplies, ${fmt(m.time)} time)`, () => this._act('move', () => this.hunt.move(m.tile))]);
+        acts.push([`Cross to section ${parseTileId(m.tile).section + 1} (${fmt(m.supply)} supplies, ${fmt(m.time)} time)`, () => this._move(m.tile)]);
       }
       acts.push([`Forage (${FORAGE_TIME} time)`, () => this._act('forage', () => this.hunt.forage())]);
       acts.push([`Fish (${FISH_TIME} time)`, () => this._act('fish', () => this.hunt.fish())]);
@@ -764,6 +771,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const stale = o.stale ? ' (last seen, may have moved)' : '';
     if (o.band === 'sensed') return [`Something is here, but you cannot make it out${stale}.`];
     if (o.kind === 'event') return ['Something worth a look.'];
+    if (o.kind === 'boss') return [`${o.name}, in its lair.`, 'A boss fight. Camp and ready the party before you go in.'];
     const lines = [];
     if (o.kind === 'cultist') lines.push(`${o.cult ? `${o.cult} cultists` : 'Cultists'}, ${o.size}${stale}.`);
     else lines.push(`${familyName(zoneId, o.family)}, ${o.size}, up to ${o.topGrade}${stale}.`);
@@ -1125,6 +1133,25 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._panelButton(p, p.px + 345, ty + 12, 'Leave it', () => this._act('leave', () => this.hunt.harvest({ take: [], meat: false })));
   }
 
+  /**
+   * Move, through the lair warning when the tile is a boss's lair (14b-4): the
+   * engine refuses a plain move there, at no cost, and says what the warning
+   * shows; confirming enters it (hunt.enterLair) and the fight starts.
+   */
+  _move(id) {
+    const res = this.hunt.move(id);
+    if (res?.lair) return this._confirmLair(res.lair);
+    return this._act('move', () => res);
+  }
+
+  _confirmLair(lair) {
+    const msg = `${lair.name}. ${lair.text} Go in?`;
+    const enter = () => this._act('move', () => this.hunt.enterLair(lair.tile));
+    const ui = this._uiScene();
+    if (ui?.showConfirmationDialogue) ui.showConfirmationDialogue(msg, () => { ui.resetBottomBar(); enter(); });
+    else enter();
+  }
+
   _confirmExit() {
     const prim = this.v.objectives.find(o => o.kind === 'primary');
     const msg = prim?.done || (prim?.id === 'retrieve' && prim.have)
@@ -1241,7 +1268,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (!id) return;
     if (this.panel === 'eat' || this.panel === 'camp') this.panel = null;
     if (id === this.selected && this.v.moves.some(m => m.tile === id)) {
-      this._act('move', () => this.hunt.move(id));
+      this._move(id);
       return;
     }
     SoundManager.play('select');

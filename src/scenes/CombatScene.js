@@ -1898,6 +1898,31 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     scenario.enemies.forEach(config => this._spawnEnemy(config));
+    this._linkSharedPools();
+  }
+
+  /**
+   * Boss parts that share one pool of HP (chunk 14b-4b; data/bosses.js
+   * `pool`): the Mourning Beast's Head and Body. Their currentHP and maxHP
+   * become accessors onto one pool, so every damage, heal and DOT path in the
+   * engine hits the pool without knowing it exists; each part's health bar
+   * shows the pool. The pool starts at the members' combined maxHP (after
+   * CON and scaling have landed). When it is empty the whole boss collapses
+   * (_onUnitKnockedOut).
+   */
+  _linkSharedPools() {
+    const groups = new Map();
+    for (const e of this.enemies) if (e?._poolId) groups.set(e._poolId, [...(groups.get(e._poolId) || []), e]);
+    for (const members of groups.values()) {
+      if (members.length < 2) continue;
+      const pool = { max: members.reduce((t, m) => t + (m.maxHP | 0), 0) };
+      pool.hp = pool.max;
+      for (const m of members) {
+        Object.defineProperty(m, 'currentHP', { get: () => pool.hp, set: (v) => { pool.hp = Number(v) || 0; }, enumerable: true, configurable: true });
+        Object.defineProperty(m, 'maxHP', { get: () => pool.max, set: (v) => { pool.max = Number(v) || 0; }, enumerable: true, configurable: true });
+        m._pool = pool;
+      }
+    }
   }
 
   /**
@@ -2145,6 +2170,11 @@ export default class CombatScene extends Phaser.Scene {
       enemy.maxHP = Math.max(1, Math.round(enemy.maxHP * config.hpMult));
       enemy.currentHP = enemy.maxHP;
     }
+
+    // Boss parts (14b-4b): which boss it belongs to, and the shared pool of HP
+    // it is part of, if any (_linkSharedPools, once every enemy is placed).
+    if (config.bossPart) enemy._bossPart = config.bossPart;
+    if (config.pool) enemy._poolId = config.pool;
 
     // Find target slot
     const slot = this.enemySlots?.find(s => s.slotId === config.slotId);
@@ -6656,6 +6686,9 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _checkVictoryCondition() {
+    // A knockout inside a knockout (a death burst, a boss's collapse) re-enters
+    // here; the fight can only end once.
+    if (this.combatEnded) return;
     // Adds (summoned reinforcements) deliberately do NOT count — otherwise a
     // summoner that keeps spawning could make a fight unwinnable, and the
     // player would be forced to clear pressure rather than choosing to.
@@ -7371,6 +7404,18 @@ export default class CombatScene extends Phaser.Scene {
     this._placeInKOArea(unit);
 
     this._checkVictoryCondition();
+
+    // A boss whose shared pool is empty collapses whole (14b-4b): every other
+    // part of it goes down with it, each through this same path.
+    if (unit._pool && unit._pool.hp <= 0 && unit._bossPart) {
+      for (const other of this.enemies) {
+        if (other === unit || other._bossPart !== unit._bossPart || other.status === 'incapacitated') continue;
+        if (!other._pool) other.currentHP = 0;
+        other.status = 'incapacitated';
+        this._log(`${other.name} collapses.`);
+        this._onUnitKnockedOut(other);
+      }
+    }
 
     // Resync the action menu to whoever the bookkeeping above just made
     // "current" — a real _advanceTurn() (with its cooldown/DOT/status-

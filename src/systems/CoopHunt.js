@@ -46,8 +46,8 @@ export const COOP_SNAPSHOT_VERSION = 1;
  * host's: its region, its plan, its house's boons (chunk 12 decision set).
  */
 export const LEDGER_VERBS = ['nightFalls', 'dayBreaks', 'awardHuntPoints', 'awardXP', 'favor', 'falseGod',
-  'bond', 'rivalDevotion', 'tribeRep', 'questFlag', 'lore', 'bankItems', 'omens'];
-const READS = ['followedHouse', 'houseHolder', 'ownTribe', 'tribeName', 'hasQuestFlag', 'questSites'];
+  'bond', 'rivalDevotion', 'tribeRep', 'questFlag', 'lore', 'bankItems', 'omens', 'spendBossPlan'];
+const READS = ['followedHouse', 'houseHolder', 'ownTribe', 'tribeName', 'hasQuestFlag', 'questSites', 'historicInWild'];
 
 const plain = (v) => JSON.parse(JSON.stringify(v ?? null));
 const refOf = (c) => c?.instanceId || c?.id;
