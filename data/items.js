@@ -1513,6 +1513,32 @@ export const Items = {
   // Historic gear. Free (cost: 0) at the Whispering Cloth vendor.
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // ── Potions (owner, 2026-09-27; vault CONTENT_INBOX "The cult economy") ──
+  // Combat only, a bonus action, on a hunter (combatUse kind 'restore',
+  // CombatScene._useCombatItem). Plain draughts at the Draughtwell for Hunt
+  // Tickets; the cults' tinctures at their black markets for Sin Tickets:
+  // stronger, and they cost the other resource to drink. Percentages of the
+  // drinker's max. Starting numbers, to tune.
+  healing_draught: {
+    id: 'healing_draught', name: 'Healing Draught', type: 'consumable', rarity: 'common',
+    combatUse: { kind: 'restore', target: 'ally', hpPct: 30 },
+    description: 'Combat only, bonus action, on a hunter. Restores 30% of their max HP.',
+  },
+  mana_draught: {
+    id: 'mana_draught', name: 'Mana Draught', type: 'consumable', rarity: 'common',
+    combatUse: { kind: 'restore', target: 'ally', mpPct: 30 },
+    description: 'Combat only, bonus action, on a hunter. Restores 30% of their max MP.',
+  },
+  tincture_red_breath: {
+    id: 'tincture_red_breath', name: 'Tincture of Red Breath', type: 'consumable', rarity: 'uncommon',
+    combatUse: { kind: 'restore', target: 'ally', hpPct: 50, costMpPct: 15 },
+    description: 'A cult tincture. Combat only, bonus action, on a hunter. Restores 50% of their max HP, and takes 15% of their max MP.',
+  },
+  tincture_deep_well: {
+    id: 'tincture_deep_well', name: 'Tincture of the Deep Well', type: 'consumable', rarity: 'uncommon',
+    combatUse: { kind: 'restore', target: 'ally', mpPct: 50, costHpPct: 15 },
+    description: 'A cult tincture. Combat only, bonus action, on a hunter. Restores 50% of their max MP, and takes 15% of their max HP (never below 1).',
+  },
   identify_weapon_tonic: {
     id: 'identify_weapon_tonic',
     name: 'Weapon-Reading Tonic',

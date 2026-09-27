@@ -305,7 +305,8 @@ function combatItemAbility(itemId, count = 1) {
     actionCost: 'bonus',
     mechanic: 'item',
     requiresTarget: true,
-    targetRequirement: 'enemy',
+    // A potion is drunk by a hunter; a chant is aimed at an enemy.
+    targetRequirement: base.combatUse.target === 'ally' ? 'ally' : 'enemy',
     tags: ['item'],
   };
 }
@@ -5237,6 +5238,36 @@ export default class CombatScene extends Phaser.Scene {
       this._spendBonusActionAndItem(user, inst);
       for (const slot of eligible) target.equipment[slot]._identified = true;
       this._log(`${user.name} uses ${itemName} — reveals ${target.name}'s ${cfg.category}!`);
+      return;
+    }
+
+    // A potion (owner, 2026-09-27): restores HP and/or MP on the hunter who
+    // drinks it, and a cult tincture takes some of the other. Fizzles, at no
+    // cost, on a hunter who is down or has nothing to restore.
+    if (cfg.kind === 'restore') {
+      if (target.isEnemy || target.status === 'incapacitated' || (target.currentHP | 0) <= 0) {
+        this._log(`${itemName} fizzles — ${target.name} cannot drink it.`);
+        return;
+      }
+      const maxHP = target.maxHP || 0, maxMP = target.maxMP || 0;
+      const hp = Math.floor(maxHP * (cfg.hpPct || 0) / 100);
+      const mp = Math.floor(maxMP * (cfg.mpPct || 0) / 100);
+      const needs = (hp > 0 && target.currentHP < maxHP) || (mp > 0 && (target.currentMP || 0) < maxMP);
+      if (!needs) {
+        this._log(`${itemName} fizzles — ${target.name} has nothing to restore.`);
+        return;
+      }
+      this._spendBonusActionAndItem(user, inst);
+      const hp0 = target.currentHP, mp0 = target.currentMP || 0;
+      if (hp > 0) target.currentHP = Math.min(maxHP, target.currentHP + hp);
+      if (mp > 0) target.currentMP = Math.min(maxMP, (target.currentMP || 0) + mp);
+      if (cfg.costMpPct) target.currentMP = Math.max(0, (target.currentMP || 0) - Math.floor(maxMP * cfg.costMpPct / 100));
+      if (cfg.costHpPct) target.currentHP = Math.max(1, target.currentHP - Math.floor(maxHP * cfg.costHpPct / 100));
+      const dHP = target.currentHP - hp0, dMP = (target.currentMP || 0) - mp0;
+      if (dHP > 0) this._showFloatingNumber?.(dHP, target, true, false);
+      this._updateHealthBars?.(); this._updateHPMPBars?.();
+      const part = (n, w) => (n ? `${n > 0 ? '+' : ''}${n} ${w}` : null);
+      this._log(`${user.name} uses ${itemName} on ${target.name}: ${[part(dHP, 'HP'), part(dMP, 'MP')].filter(Boolean).join(', ')}.`);
       return;
     }
 

@@ -2195,7 +2195,10 @@ export default class TownScene extends Phaser.Scene {
         bubbling. 'Drink it and see,' the apothecary offers. 'Most of them 
         wear off.'"`,
         inventory: [
-          { id: "tonic_of_reflection", cost: 0 }
+          { id: "tonic_of_reflection", cost: 0 },
+          // Potions (owner, 2026-09-27): the plain draughts, for Hunt Tickets.
+          { id: "healing_draught", cost: 1, currency: "huntTickets" },
+          { id: "mana_draught", cost: 1, currency: "huntTickets" }
         ]
       },
 

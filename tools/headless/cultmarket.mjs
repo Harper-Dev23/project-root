@@ -90,5 +90,60 @@ console.log('=== Sin Tickets ===');
   ProgressionManager.reset();
 }
 
+// =============================================================================
+console.log('=== potions, in the real CombatScene ===');
+{
+  const { makeParty, slotMapFor } = await import('./fixtures.js');
+  const { createCombatHost } = await import('./combatHost.js');
+  const { startCombat, setActor, cast } = await import('./fight.js');
+  const CSM = await import('../../src/scenes/CombatScene.js');
+  const CombatScene = CSM.default || Object.values(CSM).find(v => typeof v === 'function');
+  const board = (items) => {
+    const party = makeParty();
+    const host = createCombatHost(CombatScene);
+    host.__begin({ party, partySlots: slotMapFor(party), scenarioId: 'training_encounter_1' });
+    startCombat(host);
+    GameState.inventory = items.map(id => F.createItemInstance(id));
+    return { host, party };
+  };
+  const drink = (b, itemId, target) => {
+    const actor = b.party[0];
+    setActor(b.host, actor);
+    actor.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
+    const ab = b.host._getCombatUsableItemAbilities(actor).find(a => a.id === itemId);
+    const r = cast(b.host, actor, ab, target);
+    return { r, ab, actor };
+  };
+  const held = (id) => GameState.inventory.filter(i => i.id === id).length;
+
+  let b = board(['healing_draught', 'healing_draught']);
+  const t = b.party[1];
+  t.currentHP = 10;
+  const d = drink(b, 'healing_draught', t);
+  check('a Healing Draught is listed as an item for a hunter (targets a hunter, a bonus action)', d.ab?.targetRequirement === 'ally' && d.ab.actionCost === 'bonus');
+  check('...restores 30% of max HP, spends the bonus action and one draught', t.currentHP === Math.min(t.maxHP, 10 + Math.floor(t.maxHP * 0.3)) && d.actor.actionsLeft.bonus === 0 && held('healing_draught') === 1,
+    `${10} -> ${t.currentHP} of ${t.maxHP}`);
+  b = board(['healing_draught']);
+  const full = b.party[2];
+  const f = drink(b, 'healing_draught', full);
+  check('on a hunter at full HP it fizzles: nothing spent', full.currentHP === full.maxHP && held('healing_draught') === 1 && f.actor.actionsLeft.bonus === 1);
+
+  b = board(['mana_draught']);
+  const m = b.party[1]; m.currentMP = 0;
+  drink(b, 'mana_draught', m);
+  check('a Mana Draught restores 30% of max MP', m.currentMP === Math.floor(m.maxMP * 0.3), `${m.currentMP}/${m.maxMP}`);
+
+  b = board(['tincture_red_breath']);
+  const rb = b.party[1]; rb.currentHP = 5; rb.currentMP = rb.maxMP;
+  drink(b, 'tincture_red_breath', rb);
+  check('Tincture of Red Breath: 50% of max HP, and 15% of max MP taken', rb.currentHP === Math.min(rb.maxHP, 5 + Math.floor(rb.maxHP * 0.5)) && rb.currentMP === rb.maxMP - Math.floor(rb.maxMP * 0.15),
+    `HP ${rb.currentHP}/${rb.maxHP}, MP ${rb.currentMP}/${rb.maxMP}`);
+  b = board(['tincture_deep_well']);
+  const dw = b.party[1]; dw.currentMP = 0; dw.currentHP = 2;
+  drink(b, 'tincture_deep_well', dw);
+  check('Tincture of the Deep Well: 50% of max MP, and 15% of max HP taken, never below 1', dw.currentMP === Math.floor(dw.maxMP * 0.5) && dw.currentHP === 1, `HP ${dw.currentHP}, MP ${dw.currentMP}/${dw.maxMP}`);
+  GameState.inventory = [];
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);
