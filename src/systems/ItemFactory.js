@@ -1453,6 +1453,7 @@ export function createItemInstance(id, opts = {}) {
     applyRenownOrigin(instance, originToApply, {
       droppedFrom: opts.droppedFrom || null,
       droppedScenario: opts.droppedScenario || null,
+      rng,   // an origin that rolls (Corrupted's malus) rolls on the item's own stream
     });
   }
 
@@ -1750,6 +1751,9 @@ export function getItemComputedData(itemRef) {
 //
 // The origin matters because the renown tree keys off it: each origin unlocks
 // its own arm of the shared web, and those arms are one-way.
+/** The six core stats (a Corrupted malus may take any the base does not give). */
+const CORE_STATS_ALL = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
 export const RENOWN_ORIGINS = {
   bone: {
     id: 'bone',
@@ -1781,6 +1785,44 @@ export const RENOWN_ORIGINS = {
   // Every base name in the game is "<descriptor> <type noun(s)>", so dropping
   // the first word leaves exactly the type. Single-word names (Bloodthirster)
   // get it prepended instead.
+  // Corrupted (owner, 2026-09-27; vault CONTENT_INBOX "The cult economy"):
+  // ARMOUR only, from a cult black market's gamble (1 in 100). Stronger than
+  // its base, with one trade-off skewed in favour of the gain: `budget.gain`
+  // stat points split evenly over the stats the base already has, and
+  // `budget.malus` taken from one core stat it does not have (CHA included),
+  // rolled once and kept. Written into instanceMods.stats, so the tooltip, the
+  // character sheet and combat read it as they read any rolled stat; kept on
+  // `instance.corruption` for the tooltip's line. Every armour base carries +1
+  // to each of its 1-3 stats (tier 2 only adds a stat), so the budget, not a
+  // multiplier, is what scales: set per base tier.
+  corrupted: {
+    id: 'corrupted',
+    label: 'Corrupted',
+    armorOnly: true,
+    budget: { 1: { gain: 4, malus: 2 }, 2: { gain: 6, malus: 3 }, 3: { gain: 8, malus: 4 } },
+    renameBase: (baseName) => {
+      const parts = String(baseName || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return 'Corrupted';
+      return parts.length > 1 ? ['Corrupted', ...parts.slice(1)].join(' ') : `Corrupted ${parts[0]}`;
+    },
+    applyStats(instance, base, rng = Math.random) {
+      const tier = base?.baseTier || 1;
+      const b = this.budget[tier] || this.budget[1];
+      const own = Object.keys(base?.bonuses || {});
+      if (!own.length) return;
+      const gain = {};
+      const each = Math.floor(b.gain / own.length);
+      let left = b.gain - each * own.length;
+      for (const k of own) { gain[k] = each + (left > 0 ? 1 : 0); if (left > 0) left--; }
+      const off = CORE_STATS_ALL.filter(k => !own.includes(k));
+      const malusStat = off[Math.floor(rng() * off.length)];
+      instance.instanceMods = instance.instanceMods || {};
+      const stats = instance.instanceMods.stats = instance.instanceMods.stats || {};
+      for (const [k, v] of Object.entries(gain)) stats[k] = (stats[k] || 0) + v;
+      stats[malusStat] = (stats[malusStat] || 0) - b.malus;
+      instance.corruption = { gain, malus: { [malusStat]: -b.malus } };
+    },
+  },
   severed: {
     id: 'severed',
     label: 'Severed',
@@ -1815,7 +1857,11 @@ export function applyRenownOrigin(instance, originId, opts = {}) {
     console.warn(`[ItemFactory] unknown renown origin '${originId}'`);
     return instance;
   }
+  // An armour-only origin never lands on anything else.
+  if (RENOWN_ORIGINS[originId].armorOnly && Items[instance.id]?.type !== 'armor') return instance;
   instance.renownOrigin = originId;
+  // An origin that changes stats (Corrupted) does so once, here.
+  RENOWN_ORIGINS[originId].applyStats?.(instance, Items[instance.id], opts.rng || Math.random);
 
   // Rebrand the base-name portion in place, leaving rolled affixes alone:
   // "Swift Light Cap of the Lion" -> "Swift Severed Cap of the Lion".

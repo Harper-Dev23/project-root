@@ -204,7 +204,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     this.add.text(
       frame.bounds.x + frame.bounds.width - 16,
       frame.bounds.y + 14,
-      `🎟 Hunt Tickets: ${ProgressionManager.huntTickets}   🏷 Tribe Tickets: ${ProgressionManager.tribeTickets}   ✵ Reckoning Marks: ${ProgressionManager.reckoningMarks}`,
+      `🎟 Hunt Tickets: ${ProgressionManager.huntTickets}   🏷 Tribe Tickets: ${ProgressionManager.tribeTickets}   ✵ Reckoning Marks: ${ProgressionManager.reckoningMarks}   ⛧ Sin Tickets: ${ProgressionManager.sinTickets}`,
       { fontSize: '13px', color: '#ffddaa' }
     ).setOrigin(1, 0).setDepth(contentDepth + 1);
 

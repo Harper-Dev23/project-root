@@ -1107,7 +1107,7 @@ export default class TownScene extends Phaser.Scene {
 
   /** Returns a formatted currency string for vendor panel headers. */
   _currencyLine() {
-    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Marks: ${ProgressionManager.reckoningMarks}`;
+    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Marks: ${ProgressionManager.reckoningMarks}  |  Sin Tickets: ${ProgressionManager.sinTickets}`;
   }
 
   /** Updates any live vendor currency text objects. */
@@ -2044,7 +2044,7 @@ export default class TownScene extends Phaser.Scene {
         // which case the row shows that currency and is charged against it.
         // Gold rows still do not deduct anything -- that is pre-existing
         // behaviour and deliberately left alone here.
-        const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Mark', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket' };
+        const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Mark', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket', sinTickets: 'Sin Ticket' };
         const cur = entry.currency;
         // A row may shorten its currency name (plan rows carry rarity AND item
         // level, and overflowed the panel with the full name).

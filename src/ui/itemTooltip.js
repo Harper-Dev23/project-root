@@ -116,6 +116,11 @@ export function buildItemTooltipLines(itemRef, opts = {}) {
   if (base.baseTier >= 1) {
     lines.push({ text: `Base Tier: ${base.baseTier}`, color: BASE_TIER_COLORS[base.baseTier] || '#9aa0b5' });
   }
+  // Corrupted (renown origin): what the corruption gave and what it took.
+  if (instance?.corruption) {
+    const fmt = (o) => Object.entries(o).map(([k, v]) => `${v > 0 ? '+' : '−'}${Math.abs(v)} ${k}`).join(', ');
+    lines.push({ text: `Corrupted: ${fmt(instance.corruption.gain)}; ${fmt(instance.corruption.malus)}`, color: '#b06ad9' });
+  }
   if (base.type === 'weapon') {
     if (base.weaponType) lines.push(`Weapon Type: ${capitalize(base.weaponType)}`);
     if (typeof base.hands === 'number') lines.push(`Hands: ${base.hands}`);

@@ -207,6 +207,8 @@ const ProgressionManager = {
   // Reckoning-tier currency. See MARK_REWARDS above.
   reckoningMarks: 0,
   tribeTickets: 0,
+  // The cults' black-market currency (chunk 14c+, owner 2026-09-27).
+  sinTickets: 0,
   huntPoints:   0,          // player-wide score from the Hunt loop — tracked via the Waystone
   tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
   // The camp plan vendor's stock: { day, slots: [{ rarity, itemLevel, cost, sold }] }.
@@ -550,6 +552,7 @@ const ProgressionManager = {
       huntTickets:         this.huntTickets,
       reckoningMarks:      this.reckoningMarks,
       tribeTickets:        this.tribeTickets,
+      sinTickets:          this.sinTickets,
       huntPoints:          this.huntPoints,
       questFlags:          [...this.questFlags],
       tribe:               this.tribe,
@@ -576,6 +579,7 @@ const ProgressionManager = {
     this.huntTickets         = typeof data.huntTickets  === 'number'    ? data.huntTickets              : 0;
     this.reckoningMarks      = typeof data.reckoningMarks === 'number'  ? data.reckoningMarks           : 0;
     this.tribeTickets        = typeof data.tribeTickets === 'number'    ? data.tribeTickets             : 0;
+    this.sinTickets          = typeof data.sinTickets === 'number'      ? data.sinTickets               : 0;
     this.huntPoints          = typeof data.huntPoints   === 'number'    ? data.huntPoints               : 0;
     this.questFlags          = Array.isArray(data.questFlags)           ? [...data.questFlags]          : [];
     this.tribe               = data.tribe || null;
@@ -614,6 +618,7 @@ const ProgressionManager = {
     this.huntTickets         = 0;
     this.reckoningMarks      = 0;
     this.tribeTickets        = 0;
+    this.sinTickets          = 0;
     this.huntPoints          = 0;
     this.questFlags          = [];
     this.tribe               = null;
