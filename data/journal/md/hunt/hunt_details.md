@@ -1,48 +1,46 @@
 ---
 id: hunt/hunt_details
 title: "The Sacred Hunt"
-slug: "sacred-hunt"
+slug: "the-sacred-hunt"
 category: "hunt"
-subtab: "Rules"
+subtab: "Overview"
 order: 20
-tags: ["hunt", "rules"]
+tags: ["hunt", "details"]
 status: "approved"
 teaser: false
 requires: []
 sort: 20
-version: 2
-updatedAt: 2026-09-19
+version: 3
+updatedAt: 2026-09-26
 ---
 # The Sacred Hunt
 
 ## Loadout
 
-The camp issues **60 supplies** free for every hunt. On top of that you can pack **Rations**, bought on the Hunt screen at **10 for one Hunt Ticket**, up to **100** packed -- a maximum of 160 supplies carried out of camp. The camp issue is eaten first, and packed Rations you don't eat come home when you leave.
+The camp issues **60 supplies** free for every hunt. On top of that you can pack **Rations**, bought on the Hunt screen at **10 for one Hunt Ticket**. Packed Rations you don't eat come home when you leave.
 
-Every hunt goes out on a **Hunt Plan** -- the free Basic Hunt Plan if you choose nothing else. A bought plan is used up on departure and applies its rolled modifiers to the whole trip; see [[Hunt Plans]].
+Every hunt goes out on a **Hunt Plan** -- the free Basic Hunt Plan if you choose nothing else. The plan sets the map's **size** (small, medium, large), its **primary objective**, and any **bonus objectives** and modifiers it rolled. A bought plan is used up when you depart; see [[Hunt Plans]].
 
-## Travelling
+## The map
 
-Each **Advance** costs **2 supplies**. Supply efficiency from a Hunt Plan or zone can reduce that, but never below **1** -- travel is never free. A base loadout therefore buys roughly **30 advances**.
+A region is a hex map of different grounds. Grass, heath and shingle cost **1 supply** a step; woodland and thicket **2**; marsh, dunes and scree **3**; bog **4**. Water and cliffs cannot be crossed. Time passes with every step too, and a full day and night is **12 units** of time.
 
-Day and night flip every **6 advances**, so a full day-and-night cycle is 12. A base loadout runs about two and a half cycles.
+You see the tiles near you. Anything further off may be **sensed** -- something is there -- or **identified**, depending on the party's Perception and how well the ground hides it. **Scout** spends time to make out something you only sensed.
 
-## What finds you
+## What lives there
 
-Most advances pass quietly. Each one rolls against an encounter chance that starts at **15%** and climbs by **1% per depth**, capped at **60%** -- so the further in you push, the less often you are left alone. Zone and Hunt Plan modifiers shift this too.
+Every pack stands on a tile. Walking onto one starts the fight, and whoever has the better Initiative acts first -- unless you walked in blind, in which case they ambush you. Some packs wander; **predators** notice a party that comes close and hunt it. You can **Flee** a fight, at the cost of a free round for the enemy, but a pack you fled from will follow.
 
-When something does happen, it is close to an even split between a **fight** and an **Event**. Fights are beasts or cultists, weighted toward beasts by your modifiers. Events are a choice, a stat check, or a riddle.
+**Events** sit on their own tiles: a choice, a stat check, a riddle. Some only stir at night. A quest you are on may put its own event on the map, marked in violet from the start.
 
-## No backing out
+## Staying alive
 
-Once you engage a fight you cannot flee mid-combat. Once an Event opens there is no closing it early either -- you are locked in until it resolves.
+**Camp** to recover, at the cost of time (and the risk of being found). **Eat** from the pack to stay fed; a hungry party is slower and a starving one weakens. **Forage** and **fish** where the ground allows. After a beast fight, **harvest** its parts: rare and better parts come home as specimens, the rest as materials, and the bodies give meat.
 
 ## Rewards
 
-Winning a beast fight is worth **8 Hunt Points** before modifiers; Events pay out according to how they resolve, and some also grant experience or cost health.
+A beast fight pays **8 Hunt Points** before modifiers and every fight shares an XP pool among the party. A **clean exit** with the primary objective done pays the completion reward -- **20 / 35 / 50 Hunt Points** by map size, and an XP pool of **240 / 440 / 640** -- plus each bonus objective you finished. What you found rides in the **pack** until you leave: on the starting coasts a wipe costs nothing in it.
 
-## End of the trip
+Everything you do in a region also fills its **Omen meter**; see [[Bosses and Historic Items]].
 
-The Hunt ends when supplies reach zero. Returning to Camp restores your party to full and banks whatever Hunt Points you earned.
-
-The **[[The Waystone]] Shard** tracks those Hunt Points, and -- still in development -- your standing with the island's prophets.
+The **[[The Waystone]] Shard** tracks your Hunt Points and your standing with the island's prophets.

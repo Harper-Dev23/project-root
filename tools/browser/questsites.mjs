@@ -95,7 +95,18 @@ check('claiming spends 100 omens for a second plan', claimed.plans === 2 && clai
 await B.clickText('^Choose Hunt Plan', 'HuntHubOverlay');
 await sleep(500);
 await shot('05-picker-boss-plan');
-check('the picker lists the boss plan, dimmed, with why', !!(await B.findText('lair cannot be reached yet', 'HuntPlanPickerOverlay')));
+check('the picker lists the boss plan, pickable, saying when it is used up', !!(await B.findText('used up once the boss is fought', 'HuntPlanPickerOverlay')));
+
+// ---- 4. The journal's hunt entries (14f): the new one loads, the rewrites too --
+await evaluate(`const g = window.__T.g(); g.scene.stop('HuntPlanPickerOverlay'); g.scene.stop('HuntHubOverlay');
+  g.scene.getScene('UIScene').openOverlay('JournalOverlay'); await new Promise(r => setTimeout(r, 1500)); return true;`);
+const jr = await evaluate(`const j = window.__T.g().scene.getScene('JournalOverlay')?.overlay; await j?._bootPromise; const es = j?._entries || [];
+  const e = (id) => es.find(x => x.id === id);
+  return { active: window.__T.active(), n: es.length, boss: !!e('hunt/bosses_and_historic')?.content, bossTitle: e('hunt/bosses_and_historic')?.title || null,
+    synopsis: /hex map/.test(e('hunt/hunt_synopsis')?.content || ''), details: /Omen meter/.test(e('hunt/hunt_details')?.content || ''),
+    resolves: !!j?._resolveEntryRef?.('Bosses and Historic Items') };`);
+check('the journal loads "Bosses and Historic Items", and the hunt entries are the hex-map rewrites', jr.boss && jr.bossTitle === 'Bosses and Historic Items' && jr.synopsis && jr.details && jr.resolves, JSON.stringify(jr));
+await shot('07-journal');
 
 check('no uncaught errors in the page', B.errors.length === 0, B.errors.slice(0, 3).join(' | '));
 const fails = B.checks.filter(c => !c.ok).length;

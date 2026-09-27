@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 50
-version: 1
-updatedAt: 2025-10-04
+version: 2
+updatedAt: 2026-09-26
 ---
 # The Reeds of Gethsemane
 
@@ -20,3 +20,9 @@ On the south-central shore, west of the Bay of Solace, the Reeds of Gethsemane a
 Floating prayer stones, etched with vows long forgotten, drift among the reeds, and lament pools are said to echo the cries of those who died unheard. At low tide, the skeletal remains of a submerged cathedral's roots break the waterline like fingers reaching up. Wandering spirits replay their final prayers here, mourning beasts howl under the moon, and echo-prophets are said to speak only in regret.
 
 The grief of the prophet Jeremiah is said to saturate this land, amplifying unspoken sorrow and offering catharsis — but always at a cost. Local legend holds that one unstained reed remains somewhere in the marsh, and that finding it grants absolution to whoever confesses to it — though no two stories agree on what exactly must be confessed.
+
+## Hunting the Reeds
+
+A starting coast: a party that falls here loses nothing it carried. Crocodiles and marsh vipers hunt anything that comes close; bog frogs, swamp crabs, nutria and marsh bats go in packs; the snapping turtle keeps to itself and the scarlet ibis is harder than it looks. The Temple of the Gill, cultists of the false god Dagon, works these waters. Its apex is **the Vowback Crocodile**, an old crocodile grown over with prayer stones, which keeps a brood of three.
+
+Deeper in the grief, two things wait, each at the end of its own questline: something that weeps beneath the Lament Pools, and a hunting party that drowned without confession and still sits at its camp after dark. Each keeps a Historic item. A third lies in the Cathedral Roots, when the tide goes out far enough -- and only then. See [[Bosses and Historic Items]].
