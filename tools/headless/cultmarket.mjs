@@ -288,5 +288,23 @@ console.log('=== parley and the Hymn Beneath the Water ===');
     JSON.stringify(walk) === JSON.stringify([['choir_singing'], ['choir_cantor'], ['choir_unfinished_hymn'], ['choir_tithe_offer'], ['tithe_boat']]) && getQuestState(q, pmq) === 'completed', JSON.stringify(walk));
 }
 
+// =============================================================================
+console.log('=== The Offered Breath (the Temple of the Gill) ===');
+{
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { QUEST_LINES, getQuestState } = await import('../../src/data/quests.js');
+  const REEDS = 'reeds_of_gethsemane';
+  const q = QUEST_LINES.find(x => x.id === 'offered_breath');
+  const flags = new Set(['hunted:' + REEDS]);
+  const pmq = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (f) => flags.has(f) };
+  const sites = () => questSitesFor(REEDS, pmq).filter(s => s.step.startsWith('ob_') || s.step === 'market:dagon').map(s => s.eventId);
+  const walk = [sites()];
+  for (const f of ['gill_offerings_read', 'gill_baptised', 'gill_channel', 'gill_market_open']) { flags.add(f); walk.push(sites()); }
+  check('Offerings -> Baptism -> the Smugglers -> the Deep Priest -> then the Gill Market',
+    JSON.stringify(walk) === JSON.stringify([['gill_offerings'], ['gill_baptism'], ['gill_smugglers'], ['gill_deep_priest'], ['gill_market']]) && getQuestState(q, pmq) === 'completed', JSON.stringify(walk));
+  const { CULT_PARLEY } = await import('../../data/cultMarkets.js');
+  check("the first step's flag is the one that opens Temple parley", CULT_PARLEY.dagon.flag === 'gill_offerings_read');
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

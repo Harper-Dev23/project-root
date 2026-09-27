@@ -219,6 +219,44 @@
    "You burn the hymnal page in front of them. They only watch. The boat will still take your tickets: the Choir are patient.",
    "Jeremiah looks on you more kindly (+3 standing)."
   ],
+  "gill_offerings {\"roll\":20}": [
+   "success",
+   "The knots are the Temple of the Gill's. They feed Dagon here, and they will know you have seen it. Their camps will talk to you now.",
+   "+8 XP for the party."
+  ],
+  "gill_offerings {\"roll\":1}": [
+   "failure",
+   "You cannot read the knots, but a gill-priest watching from the reeds has seen you look. The Temple's camps will talk to you now."
+  ],
+  "gill_baptism {\"accept\":true}": [
+   "accept",
+   "Halvard lost 5 HP.",
+   "You come up gasping, every one of you, and the priest is smiling. The Temple will let you further in.",
+   "+1 Sin Ticket."
+  ],
+  "gill_baptism {\"accept\":false}": [
+   "refuse",
+   "The priest only nods, and points you up the river toward the smugglers. Some hands stay dry."
+  ],
+  "gill_smugglers {\"accept\":true}": [
+   "accept",
+   "They take the meat, and tell you where the Deep Priest waits.",
+   "+1 Sin Ticket."
+  ],
+  "gill_smugglers {\"accept\":false}": [
+   "refuse",
+   "They shrug and pole away. The channel stays open; bring meat next time."
+  ],
+  "gill_deep_priest {\"accept\":true}": [
+   "accept",
+   "You kneel. The water rises to your chin and stops. The Temple will trade with you now, at the Gill Market, in Sin Tickets.",
+   "+3 Sin Tickets."
+  ],
+  "gill_deep_priest {\"accept\":false}": [
+   "refuse",
+   "You stay standing. The priest looks at you a long time, then laughs: the Temple trades with anyone who pays. The Gill Market is open to you.",
+   "Jeremiah looks on you more kindly (+3 standing)."
+  ],
   "dagon_whisper {\"accept\":true}": [
    "accept",
    "The water leans toward you. Dagon is pleased.",

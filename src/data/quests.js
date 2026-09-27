@@ -415,6 +415,50 @@ export const QUEST_LINES = [
     ],
   },
 
+  {
+    // The Temple of the Gill's questline (owner, 2026-09-27). Its first step
+    // opens parley with Temple camps; its last opens the Gill Market.
+    id:          'offered_breath',
+    category:    'region',
+    title:       'The Offered Breath',
+    description: 'The Temple of the Gill feed Dagon from the Reeds\' still pools. Get close enough, and they trade.',
+    isAvailable: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+    steps: [
+      {
+        id:          'ob_offerings',
+        label:       'Drowned Offerings',
+        description: 'Someone sinks offerings at a reed shrine. Your next Reeds hunt will mark it. Once the Temple know you, their camps will talk instead of fight.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_offerings', far: false },
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('gill_offerings_read'),
+      },
+      {
+        id:          'ob_baptism',
+        label:       'Baptism in the Gill',
+        description: 'A gill-priest waits in the water. Your next Reeds hunt will mark where.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_baptism', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('gill_offerings_read'),
+        isComplete: (pm) => pm.hasQuestFlag('gill_baptised'),
+      },
+      {
+        id:          'ob_channel',
+        label:       "The Smugglers' Channel",
+        description: 'The Temple\'s smugglers will take you to their Deep Priest for meat (2 lean game). Your next Reeds hunt will mark them.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_smugglers', far: false },
+        isActive:   (pm) => pm.hasQuestFlag('gill_baptised'),
+        isComplete: (pm) => pm.hasQuestFlag('gill_channel'),
+      },
+      {
+        id:          'ob_priest',
+        label:       'The Deep Priest',
+        description: 'The Temple\'s eldest waits in a church of reeds. Your next Reeds hunt will mark it.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_deep_priest', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('gill_channel'),
+        isComplete: (pm) => pm.hasQuestFlag('gill_market_open'),
+      },
+    ],
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  DIVINE
   // ═══════════════════════════════════════════════════════════════════════════

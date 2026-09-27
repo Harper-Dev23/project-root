@@ -215,6 +215,47 @@ export const EVENT_TEMPLATES = {
     refuse: [{ text: 'You burn the hymnal page in front of them. They only watch. The boat will still take your tickets: the Choir are patient.' }, { questFlag: 'choir_market_open' }, { standing: 3 }],
   },
 
+  // ── The Offered Breath: the Temple of the Gill's questline (owner,
+  // 2026-09-27; src/data/quests.js offered_breath). Quest sites. ────────────
+  gill_offerings: {
+    name: 'Drowned Offerings',
+    shape: 'check',
+    text: 'Bundles sunk in a still pool at a reed shrine: bread, teeth, a child\'s shoe, each tied to a stone. Someone left these for the river.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    check: { stat: 'WIS', dc: '{danger}+11' },
+    success: [{ text: 'The knots are the Temple of the Gill\'s. They feed Dagon here, and they will know you have seen it. Their camps will talk to you now.' }, { questFlag: 'gill_offerings_read' }, { xp: '{danger}*8' }],
+    failure: [{ text: 'You cannot read the knots, but a gill-priest watching from the reeds has seen you look. The Temple\'s camps will talk to you now.' }, { questFlag: 'gill_offerings_read' }],
+  },
+  gill_baptism: {
+    name: 'Baptism in the Gill',
+    shape: 'offer',
+    text: 'A gill-priest waits waist-deep in the water and offers to baptise the party in Dagon\'s river. The water does not look like it wants to let anyone go.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    offer: 'Be baptised',
+    price: [{ hp: '-{danger}*5' }],
+    reward: [{ text: 'You come up gasping, every one of you, and the priest is smiling. The Temple will let you further in.' }, { questFlag: 'gill_baptised' }, { falseGod: { god: 'dagon', amount: 3 } }, { sinTickets: 1 }],
+    refuse: [{ text: 'The priest only nods, and points you up the river toward the smugglers. Some hands stay dry.' }, { questFlag: 'gill_baptised' }],
+  },
+  gill_smugglers: {
+    name: "The Smugglers' Channel",
+    shape: 'trade',
+    text: 'Temple smugglers pole a flat boat through a channel you had not seen. They want meat for the river, and will take you to the Deep Priest for it.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    give: [{ id: 'lean_game', qty: 2 }],
+    receive: [{ text: 'They take the meat, and tell you where the Deep Priest waits.' }, { questFlag: 'gill_channel' }, { sinTickets: 1 }],
+    refuse: [{ text: 'They shrug and pole away. The channel stays open; bring meat next time.' }],
+  },
+  gill_deep_priest: {
+    name: 'The Deep Priest',
+    shape: 'offer',
+    text: 'In a church of woven reed stands the Temple\'s eldest priest, gills open at his throat. He asks you to kneel to the river.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    offer: 'Kneel',
+    price: [],
+    reward: [{ text: 'You kneel. The water rises to your chin and stops. The Temple will trade with you now, at the Gill Market, in Sin Tickets.' }, { questFlag: 'gill_market_open' }, { falseGod: { god: 'dagon', amount: 5 } }, { sinTickets: 3 }],
+    refuse: [{ text: 'You stay standing. The priest looks at you a long time, then laughs: the Temple trades with anyone who pays. The Gill Market is open to you.' }, { questFlag: 'gill_market_open' }, { standing: 3 }],
+  },
+
   // ── The cults' black markets (owner, 2026-09-27; data/cultMarkets.js) ──────
   // Placed by HuntQuests.questSitesFor on a share of a region's hunts once the
   // cult's questline opens them. Browsed, never resolved: the site stays for
