@@ -1420,6 +1420,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         noteSupplies: () => hunt._noteSupplies(),
         earnFavor: (n, src) => hunt._earnFavor(n, src),
         spendTime: (n) => hunt._spendTime(n),
+        historicInWild: (id) => world.historicInWild?.(id),
+        addOmens: (n) => world.omens?.(s.zoneId, n),
         addItem(id, qty) {
           if (Items[id]?.stackable) addToList(s.pack.found, makeStack(id, qty));
           else for (let i = 0; i < qty; i++) { const inst = createItemInstance(id); if (inst) addToList(s.pack.found, inst); }

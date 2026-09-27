@@ -1317,9 +1317,9 @@
   ]
  ],
  "walkHashes": {
-  "reeds_of_gethsemane/small": "f320dec63a9f21cf",
-  "reeds_of_gethsemane/medium": "6c89978760ad0747",
-  "reeds_of_gethsemane/large": "675664936184cb14",
+  "reeds_of_gethsemane/small": "d8b6eacf93be9632",
+  "reeds_of_gethsemane/medium": "4d6d3fcfe4a3684b",
+  "reeds_of_gethsemane/large": "8b6e0e1856196ac1",
   "bay_of_solace/small": "4fd096afddf53375",
   "bay_of_solace/medium": "1b8c65012e51ea08",
   "bay_of_solace/large": "4d64d5e5a3a1d0ee"
@@ -1331,11 +1331,11 @@
    "daysAtEnd": 12.24,
    "mapRevealed": 0.9859,
    "timePerMove": 2.3398,
-   "supplyPerMove": 2.0659,
+   "supplyPerMove": 2.0679,
    "contactsBy": {
     "identified": 13,
     "sensed": 59,
-    "nothing": 44
+    "nothing": 43
    }
   },
   "reeds_of_gethsemane/medium": {
@@ -1347,8 +1347,8 @@
    "supplyPerMove": 1.9709,
    "contactsBy": {
     "identified": 16,
-    "sensed": 76,
-    "nothing": 32
+    "sensed": 75,
+    "nothing": 33
    }
   },
   "reeds_of_gethsemane/large": {
@@ -1357,10 +1357,10 @@
    "daysAtEnd": 11.84,
    "mapRevealed": 0.8026,
    "timePerMove": 2.2769,
-   "supplyPerMove": 1.9662,
+   "supplyPerMove": 1.9555,
    "contactsBy": {
-    "identified": 19,
-    "sensed": 97,
+    "identified": 20,
+    "sensed": 98,
     "nothing": 50
    }
   },
@@ -1405,9 +1405,9 @@
   }
  },
  "firstSightBands": {
-  "identified": 1226,
-  "sensed": 788,
-  "nothing": 183
+  "identified": 1232,
+  "sensed": 789,
+  "nothing": 181
  },
  "testPartyStats": {
   "perception": 60,
@@ -2288,7 +2288,7 @@
  "mixedHashes": {
   "reeds_of_gethsemane/small": "b225ad5eb58b024d",
   "reeds_of_gethsemane/medium": "875d5dafd9bd1c85",
-  "reeds_of_gethsemane/large": "04d1d76a7ba3b9e7",
+  "reeds_of_gethsemane/large": "cd5551d93fcdf924",
   "bay_of_solace/small": "388c98ee2d717664",
   "bay_of_solace/medium": "444bf4bc42cd8814",
   "bay_of_solace/large": "763d38a0d68f495f"
@@ -2323,18 +2323,18 @@
    "gathered": 158
   },
   "reeds_of_gethsemane/large": {
-   "move": 661,
-   "forage": 156,
-   "fish": 13,
-   "eat": 88,
-   "camp": 72,
-   "refused": 210,
+   "move": 656,
+   "forage": 157,
+   "fish": 15,
+   "eat": 85,
+   "camp": 73,
+   "refused": 214,
    "dishes": {
     "plain": 0,
-    "hearty": 15,
+    "hearty": 17,
     "fine": 0
    },
-   "gathered": 169
+   "gathered": 172
   },
   "bay_of_solace/small": {
    "move": 667,
@@ -3008,9 +3008,9 @@
   },
   "fast": {
    "caught": 37,
-   "lost": 54,
-   "cornered": 17,
-   "caughtAtOnce": 9
+   "lost": 55,
+   "caughtAtOnce": 9,
+   "cornered": 16
   }
  },
  "blightExample": {
@@ -3122,7 +3122,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 130,
-   "avgDay": 3
+   "avgDay": 3.1667
   },
   "apex reeds_of_gethsemane/small": {
    "runs": 6,

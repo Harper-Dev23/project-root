@@ -7,6 +7,8 @@
   "supplies",
   "hunger",
   "item",
+  "historic",
+  "omens",
   "boon",
   "standing",
   "tribeRep",
@@ -38,6 +40,7 @@
   "crossing_tracks": 575,
   "eel_catcher_return": 267,
   "dagon_hunger": 291,
+  "reeds_cathedral_roots": 44,
   "bay_lore_test": 306,
   "bay_wrecked_hull": 331,
   "bay_lantern_glow": 312,
@@ -136,6 +139,18 @@
   "reeds_unmarked_graves {\"roll\":1}": [
    "failure",
    "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones."
+  ],
+  "reeds_cathedral_roots {\"roll\":20}": [
+   "success",
+   "You find the way down into the flooded nave, to a pew that has turned to stone.",
+   "Under it lie a pair of greaves grown through with coral and river-roots, heavier than they look, and warm. Found Sunken Nave.",
+   "+10 XP for the party."
+  ],
+  "reeds_cathedral_roots {\"roll\":1}": [
+   "failure",
+   "The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.",
+   "Halvard lost 3 HP.",
+   "+4 XP for the party."
   ],
   "dagon_whisper {\"accept\":true}": [
    "accept",

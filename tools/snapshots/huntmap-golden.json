@@ -19,7 +19,7 @@
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 6,
    "cultistPct": 23.7,
-   "eventSitesPerMap": 5,
+   "eventSitesPerMap": 5.03,
    "forageSpotsPerMap": 31.08,
    "barrenPerMap": 0,
    "marksPct": {
@@ -66,7 +66,7 @@
    "unreachablePocketPct": 0,
    "hostilesPerMap": 7,
    "cultistPct": 24.1,
-   "eventSitesPerMap": 4.99,
+   "eventSitesPerMap": 5.04,
    "forageSpotsPerMap": 15.22,
    "barrenPerMap": 7.82,
    "marksPct": {
@@ -113,7 +113,7 @@
    "unreachablePocketPct": 0.1,
    "hostilesPerMap": 9,
    "cultistPct": 23.6,
-   "eventSitesPerMap": 8,
+   "eventSitesPerMap": 8.03,
    "forageSpotsPerMap": 51.7,
    "barrenPerMap": 0,
    "marksPct": {
@@ -160,7 +160,7 @@
    "unreachablePocketPct": 0,
    "hostilesPerMap": 11,
    "cultistPct": 25.2,
-   "eventSitesPerMap": 8,
+   "eventSitesPerMap": 8.05,
    "forageSpotsPerMap": 32.64,
    "barrenPerMap": 16.55,
    "marksPct": {
@@ -207,7 +207,7 @@
    "unreachablePocketPct": 0.2,
    "hostilesPerMap": 14,
    "cultistPct": 24.5,
-   "eventSitesPerMap": 11,
+   "eventSitesPerMap": 11.03,
    "forageSpotsPerMap": 76.6,
    "barrenPerMap": 0,
    "marksPct": {
@@ -254,7 +254,7 @@
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 16,
    "cultistPct": 23.9,
-   "eventSitesPerMap": 11,
+   "eventSitesPerMap": 11.06,
    "forageSpotsPerMap": 56.55,
    "barrenPerMap": 28.53,
    "marksPct": {
@@ -571,7 +571,7 @@
    "retriedPct": 3.2
   }
  },
- "mapsHash": "6e11fc2fbb2825c1f88b0306b86f358ab4d3627701aac27f9ebda5b4fac5040f",
+ "mapsHash": "03e9ffa484d99adedc7b584614d0789c81fc9999696fa1b42122d24b9b86bba4",
  "prefixEffects": {
   "teeming": [
    8.5,

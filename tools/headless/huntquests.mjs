@@ -229,5 +229,58 @@ console.log('=== co-op ===');
   check('...and the hunt already sees it', w.hasQuestFlag('mb_weeping_heard'));
 }
 
+// =============================================================================
+console.log('=== 14b-6: the Cathedral Roots, a chance find ===');
+{
+  const { getZone } = await import('../../data/zones.js');
+  const reeds = getZone(REEDS);
+  const N = 1000;
+  let withSite = 0, same = 0, sameOf = 0;
+  const keep = reeds.chanceSites;
+  for (let k = 0; k < N; k++) {
+    const inp = { zoneId: REEDS, objective: ['scout', 'apex', 'cull', 'retrieve', 'commune'][k % 5], size: ['small', 'medium', 'large'][k % 3], seed: 60000 + k };
+    const m = generateHuntMap(inp);
+    const site = m.occupants.find(o => o.chance && o.eventId === 'reeds_cathedral_roots');
+    if (site) { withSite++; continue; }
+    if (k % 10) continue;   // every tenth map without one: identical to a map made with no chance sites at all
+    reeds.chanceSites = [];
+    const bare = generateHuntMap(inp);
+    reeds.chanceSites = keep;
+    sameOf++; if (JSON.stringify(bare) === JSON.stringify(m)) same++;
+  }
+  check(`about 5% of Reeds hunts hold the Cathedral Roots (${withSite} of ${N})`, withSite >= 30 && withSite <= 75, `${(100 * withSite / N).toFixed(1)}%`);
+  check('a map without one is exactly the map it was before chance sites existed', same === sameOf, `${same}/${sameOf}`);
+  let bay = 0;
+  for (let k = 0; k < 200; k++) if (generateHuntMap({ zoneId: 'bay_of_solace', objective: 'scout', size: 'medium', seed: 61000 + k }).occupants.some(o => o.chance)) bay++;
+  check('never in another region', bay === 0);
+
+  // The event itself, on a real hunt: the site next to the party.
+  function atRoots(inWild) {
+    const party = makeParty();
+    const w = recordingWorld(party);
+    w.historicInWild = () => inWild;
+    const omensPaid = []; w.omens = (z, n) => omensPaid.push([z, n]);
+    const h0 = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 71 }, w);
+    const d = h0.serialize();
+    const tile = h0.view().moves[0].tile;
+    d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
+    d.map.occupants.push({ id: 'oroots', kind: 'event', tile, eventId: 'reeds_cathedral_roots', chance: true, concealment: 0 });
+    for (const o of d.map.occupants) o.noticed = true;
+    const h = restoreMapHunt(d, w);
+    h.move(tile);
+    return { h, omensPaid };
+  }
+  const wild = atRoots(true);
+  const rw = wild.h.resolveEvent({ roll: 20 });
+  check('found (a good roll), while it is in the wild: Sunken Nave, into the pack', rw.ok && wild.h.getState().pack.found.some(i => i.id === 'sunken_nave'), (rw.lines || []).join(' '));
+  const held = atRoots(false);
+  const rh = held.h.resolveEvent({ roll: 20 });
+  check('...while it is held: none, and the substitute instead (+30 Reeds omens and Hunt Points)', rh.ok && !held.h.getState().pack.found.some(i => i.id === 'sunken_nave')
+    && JSON.stringify(held.omensPaid) === JSON.stringify([[REEDS, 30]]), (rh.lines || []).join(' '));
+  const miss = atRoots(true);
+  const rm = miss.h.resolveEvent({ roll: 1 });
+  check('a bad roll finds nothing, even while it is in the wild (a chance find is never guaranteed)', rm.ok && !miss.h.getState().pack.found.some(i => i.id === 'sunken_nave'));
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

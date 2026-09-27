@@ -224,7 +224,9 @@ console.log('=== the maps place only what may appear ===');
       per[o.eventId] = (per[o.eventId] || 0) + 1;
       seen[o.eventId] = (seen[o.eventId] || 0) + 1;
       if (!t) { bad.push(`${o.eventId}: not a template`); continue; }
-      if (t.appears?.setPiece) bad.push(`${o.eventId}: a set piece drawn at random`);
+      // A zone's chance site (14b-6) is a set piece placed on purpose, as is a quest site.
+      const placed = o.chance ? (ZONES[zoneId]?.chanceSites || []).some(c => c.eventId === o.eventId) : !!o.quest;
+      if (t.appears?.setPiece && !placed) bad.push(`${o.eventId}: a set piece drawn at random`);
       if (!E.staticEligible(t, { zoneId, house: houseOf(z.divineAlignment), followed: false, danger: z.danger || 1, ground: m.tiles[o.tile].ground })) bad.push(`${o.eventId} on ${m.tiles[o.tile].ground} in ${zoneId}`);
     }
     for (const [id, n] of Object.entries(per)) if (n > (EVENT_TEMPLATES[id]?.appears?.maxPerMap ?? 1)) bad.push(`${id} ${n} times on one map`);

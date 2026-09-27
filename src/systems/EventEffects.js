@@ -177,6 +177,29 @@ export const VERBS = {
       return `Found ${qty > 1 ? `${qty} × ` : ''}${Items[v.id].name}.`;
     },
   },
+  historic: {
+    // A Historic item (chunk 14b-6): into the pack while it is in the wild in
+    // this save (the GameState ledger), with its own `text`; otherwise its `else` effects instead.
+    reader: "world.historicInWild -> the hunt pack's found list (at risk until the exit), else its own effects",
+    validate: (v) => (!v?.id || !Items[v.id]?.historic ? `historic: '${v?.id}' is not a Historic item`
+      : (!Array.isArray(v.else) ? 'historic.else is a list of effects' : null)),
+    apply: (v, api) => {
+      if (api.historicInWild?.(v.id) !== false) {
+        api.addItem(v.id, 1);
+        return `${v.text ? v.text + ' ' : ''}Found ${Items[v.id].name}.`;
+      }
+      return applyEffects(v.else, api).filter(Boolean).join(' ') || null;
+    },
+  },
+  omens: {
+    reader: "world.omens: the region's Omen meter (chunk 14b-3; Omens.js)",
+    validate: numErr,
+    apply: (v, api) => {
+      const n = Math.max(0, Math.round(evalNumber(v, api.roles)));
+      if (n > 0) api.addOmens?.(n);
+      return n > 0 ? `The region's omens stir (+${n}).` : null;
+    },
+  },
   boon: {
     reader: 'the hunt\'s boon (HuntEngine._earnFavor): favor with the region\'s house',
     validate: numErr,

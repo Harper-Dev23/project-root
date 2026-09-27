@@ -850,6 +850,23 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   // ── 3h. exits last: a deadline is checked against the finished route ──────
   if (!failed) for (const { obj, need } of jobs.filter(j => j.need === 'exit')) NEED_HANDLERS.exit.place(ctx, obj);
 
+  // ── 3i. chance sites (chunk 14b-6; zones' chanceSites): a rare set piece,
+  //    rolled and placed on its OWN stream, after everything else, so a map
+  //    that does not get one is exactly the map it was, and one that does
+  //    differs only by that site.
+  if (!failed) {
+    const crng = makeRng((attemptSeed(seed, attempt, zone.id) ^ 0x5eed5) >>> 0);
+    for (const c of zone.chanceSites || []) {
+      if (crng() * 100 >= (c.pct || 0)) continue;
+      const free = [...reach.keys()].filter(id => !occupied.has(id) && id !== map.entry && !map.tiles[id].exit
+        && map.tiles[id].ground !== 'blight' && entryDist.get(id) >= 2).sort(compareIds);
+      if (!free.length) continue;
+      const tile = free[Math.floor(crng() * free.length)];
+      map.occupants.push({ id: `o${nextOcc++}`, kind: 'event', tile, eventId: c.eventId, chance: true, concealment: OCCUPANT_CONCEALMENT.event });
+      occupied.add(tile);
+    }
+  }
+
   if (failed) return { failed };
   return map;
 }

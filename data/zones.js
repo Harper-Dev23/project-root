@@ -54,6 +54,9 @@ export const ZONES = {
     cultistShare: 0.25,   // share of hostile occupants that are cultist bands
     // The shrine a Commune plan sends you to: an event template (data/events.js).
     setPieces: { shrine: 'reeds_sunken_shrine' },
+    // Rare set pieces a hunt here may hold (chunk 14b-6; HuntMapGen 3i), each
+    // rolled once per map on its own stream: `pct` of hunts. Never guaranteed.
+    chanceSites: [{ eventId: 'reeds_cathedral_roots', pct: 5 }],
     encounterTable: {
       beasts: [
         { id: 'reeds_marsh_stalker',   label: 'A marsh stalker slips through the reeds.' },

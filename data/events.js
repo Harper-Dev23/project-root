@@ -133,6 +133,24 @@ export const EVENT_TEMPLATES = {
     failure: [{ text: "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones." }, { questFlag: 'gp_names_known' }],
   },
 
+  // ── A chance find (chunk 14b-6): the zone's chanceSites, ~5% of Reeds hunts ─
+  reeds_cathedral_roots: {
+    name: 'The Cathedral Roots',
+    shape: 'check',
+    text: 'The tide has drawn back further than it should. Where the water was, the roof of a drowned cathedral breaks the mud, its roots and arches black with weed. A way down lies open, for now.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    check: { stat: 'perception', dc: '{danger}+13' },
+    success: [
+      { text: 'You find the way down into the flooded nave, to a pew that has turned to stone.' },
+      { historic: { id: 'sunken_nave', text: 'Under it lie a pair of greaves grown through with coral and river-roots, heavier than they look, and warm.', else: [
+        { text: 'Under the stone pew there is only the shape of something that lay there a long time, and was taken.' },
+        { omens: 30 }, { huntPoints: '{danger}*10' },
+      ] } },
+      { xp: '{danger}*10' },
+    ],
+    failure: [{ text: 'The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.' }, { hp: '-{danger}*3' }, { xp: '{danger}*4' }],
+  },
+
   // ── False gods' temptations (chunk 11c) ─────────────────────────────────────
   // Accepting starts the region's false god's pact at level 3, or deepens it.
   // The price (hidden standing, Bond standing, the curse) is the engine's.
