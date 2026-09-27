@@ -93,6 +93,9 @@ function atTemptation(templateId, { zoneId = REEDS, pact = null, seed: sd = 81 }
   d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
   d.map.occupants.push({ id: 'otempt', kind: 'event', tile, eventId: templateId, concealment: 0 });
   let t = d.time; while (!clockAt(t).isNight) t += 1; d.time = t; d.world.time = t;
+  // The hunt's stirring god is the temptation's (14c): a placed-by-hand site
+  // skips the map's own check that the two match.
+  d.stirring = EVENT_TEMPLATES[templateId]?.appears?.god || d.stirring;
   if (pact) d.boon.pact = pact;
   const h = restoreMapHunt(d, w);
   const r = h.move(tile);
@@ -297,6 +300,66 @@ if (diffAt >= 0) {
   const keys = new Set([...Object.keys(old), ...Object.keys(golden)]);
   const changed = [...keys].filter(k => !same(old[k], golden[k]));
   check('false-god tables identical to the golden', changed.length === 0, changed.length ? `changed: ${changed.join(', ')}` : `${keys.size} tables`);
+}
+
+// =============================================================================
+console.log('=== 14c: the stirring god and the native cults ===');
+{
+  const { rollStirring, huntGod } = await import('../../src/systems/HuntEngine.js');
+  const { generateHuntMap } = await import('../../src/systems/HuntMapGen.js');
+  const tally = (zoneId, n) => { const t = {}; for (let k = 0; k < n; k++) { const g = rollStirring(ZONES[zoneId], 9000 + k); t[g] = (t[g] || 0) + 1; } return t; };
+  const reeds = tally(REEDS, 2000), bay = tally(BAY, 2000);
+  check(`the Reeds' pool, 1:1 by weight (2000 hunts: Dagon ${reeds.dagon}, Yar'galeth ${reeds.yargaleth})`, reeds.dagon > 900 && reeds.yargaleth > 900 && Object.keys(reeds).length === 2);
+  check(`the Bay's, 2:1 for Yar'galeth (Yar'galeth ${bay.yargaleth}, Dagon ${bay.dagon})`, bay.yargaleth > 1233 && bay.yargaleth < 1433);
+  check('the same seed stirs the same god', rollStirring(ZONES[REEDS], 1234) === rollStirring(ZONES[REEDS], 1234));
+  check('a hunt saved before 14c (no stirring god) keeps its region\'s', huntGod({ zoneId: REEDS }) === 'dagon' && huntGod({ zoneId: REEDS, stirring: 'yargaleth' }) === 'yargaleth');
+
+  // The god's followers are ADDED: the rest of the map is the map without them.
+  let same = 0, bandsOk = 0; const N = 60;
+  const camps = {};
+  for (let k = 0; k < N; k++) {
+    const inp = { zoneId: REEDS, objective: 'scout', size: ['small', 'medium', 'large'][k % 3], seed: 7100 + k };
+    const bare = generateHuntMap(inp);
+    const god = k % 2 ? 'dagon' : 'yargaleth';
+    const m = generateHuntMap({ ...inp, stirring: god });
+    const bands = m.occupants.filter(o => o.stirring);
+    if (bands.length === (inp.size === 'large' ? 2 : 1) && bands.every(b => b.kind === 'cultist' && b.cult === god && b.roams && b.state === 'roaming')) bandsOk++;
+    // The god also brings its temptations to the event draw, so event sites
+    // may differ; the ground, the packs and the camps may not.
+    const strip = (x) => JSON.stringify({ tiles: x.tiles, features: x.features, occupants: x.occupants.filter(o => !o.stirring && o.kind !== 'event') });
+    if (strip(m) === strip(bare)) same++;
+    for (const o of bare.occupants.filter(o => o.kind === 'cultist')) camps[o.cult] = (camps[o.cult] || 0) + 1;
+  }
+  check(`the stirring god adds its roaming band (two on a large map), its own cult (${bandsOk}/${N})`, bandsOk === N);
+  check(`...and the ground, the packs and the cult camps are unchanged (${same}/${N} maps; only its band and its temptations differ)`, same === N);
+  check(`the Reeds' native camps serve both of its cults (${JSON.stringify(camps)})`, camps.dagon > 0 && camps.yargaleth > 0 && Object.keys(camps).length === 2);
+
+  // Its followers roam: time passing moves the band.
+  const party = makeParty();
+  const w = recordingWorld(party);
+  const h = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'large' }, supplies: 400, seed: 7201 }, w);
+  const start = h.getState().map.occupants.filter(o => o.stirring).map(o => o.id + '@' + o.tile).join();
+  for (let i = 0; i < 6 && !h.encounter(); i++) h.camp?.();
+  const later = h.getState().map.occupants.filter(o => o.stirring).map(o => o.id + '@' + o.tile).join();
+  check('the followers roam the map (time passing moves them)', start !== later, `${start} -> ${later}`);
+  check("the hunt's god is hidden from the player's view", !JSON.stringify(h.view()).includes(h.getState().stirring || '@@'));
+
+  // Temptations are the stirring god's, wherever it stirs.
+  const onMaps = (god) => {
+    const seen = new Set();
+    for (let k = 0; k < 150; k++) {
+      const m = generateHuntMap({ zoneId: REEDS, objective: 'scout', size: 'large', seed: 7300 + k, stirring: god });
+      for (const o of m.occupants) if (o.kind === 'event' && EVENT_TEMPLATES[o.eventId]?.appears?.god) seen.add(o.eventId);
+    }
+    return [...seen].sort();
+  };
+  const yg = onMaps('yargaleth'), dg = onMaps('dagon');
+  check("with Yar'galeth stirring in the Reeds, only his temptations appear there", yg.length > 0 && yg.every(id => EVENT_TEMPLATES[id].appears.god === 'yargaleth'), yg.join(','));
+  check('...with Dagon, only Dagon\'s', dg.length > 0 && dg.every(id => EVENT_TEMPLATES[id].appears.god === 'dagon'), dg.join(','));
+  const t = atTemptation('yargaleth_bubbles', { zoneId: REEDS });
+  const acc = t.h.resolveEvent({ accept: true });
+  check("his temptation in the Reeds names him and his pact is the hunt's", t.h.view().event === null && acc.ok && t.h.getState().boon?.pact?.god === 'yargaleth'
+    && t.w.calls.some(c => c[0] === 'falseGod' && c[1] === 'yargaleth'), JSON.stringify(t.h.getState().boon?.pact));
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');

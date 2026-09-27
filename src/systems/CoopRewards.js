@@ -122,10 +122,10 @@ export function applyTakeHome(entries, ctx, target) {
       // The host's boss plan (14b-4); on anyone else's save it finds nothing.
       case 'spendBossPlan': w.spendBossPlan?.(...a); break;
       case 'fell': {
-        const [rule, refs = []] = a;
+        const [rule, refs = [], god = null] = a;
         if (rule === 'sheltered') break;
         const zone = getZone(zoneId);
-        const fell = fellRecord({ zoneId, prophet: zone?.divineAlignment ?? null, rule, day: target.day(), god: zone?.falseGod ?? null });
+        const fell = fellRecord({ zoneId, prophet: zone?.divineAlignment ?? null, rule, day: target.day(), god: god || zone?.falseGod || null });
         for (const ref of refs) {
           if (!myRefs.includes(ref)) continue;
           const c = target.hunter(ref);

@@ -6911,8 +6911,10 @@ export default class CombatScene extends Phaser.Scene {
 
   /** Where this hunt fight is, and its house (for the fell record and the offer). */
   _huntWhere() {
-    const zoneId = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState())?.zoneId ?? null;
-    return { zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null, god: getZone(zoneId)?.falseGod ?? null };
+    const st = (this.huntFight ? this.huntFight.hunt.getState() : HuntManager.getState()) || null;
+    const zoneId = st?.zoneId ?? null;
+    // The hunt's false god: the one stirring (chunk 14c), else the region's.
+    return { zoneId, prophet: getZone(zoneId)?.divineAlignment ?? null, god: st?.stirring || getZone(zoneId)?.falseGod || null };
   }
 
   /** The prophet's offer at this wipe (Revival.spotOffer), or null. Map-hunt fights only. */

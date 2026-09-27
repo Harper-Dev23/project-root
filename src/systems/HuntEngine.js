@@ -177,6 +177,26 @@ function mainLandGround(zone) {
  * @param {number} [opts.seed]
  * @param {object} world  see GAME_WORLD (HuntManager.js)
  */
+/**
+ * The false god stirring on a hunt (chunk 14c): the region's `falseGods` pool,
+ * by weight, from a stream of the hunt's seed that nothing else draws on.
+ * A region with no pool has its own `falseGod`, or none.
+ */
+export function rollStirring(zone, seed) {
+  const pool = Object.entries(zone?.falseGods || {}).filter(([g, w]) => w > 0 && FALSE_GODS[g]);
+  if (!pool.length) return zone?.falseGod || null;
+  const rng = makeRng(((seed >>> 0) ^ 0x57177) >>> 0);
+  const total = pool.reduce((t, [, w]) => t + w, 0);
+  let x = rng() * total;
+  for (const [g, w] of pool) { x -= w; if (x < 0) return g; }
+  return pool[pool.length - 1][0];
+}
+
+/** This hunt's false god: the one stirring, or (a hunt saved before 14c) the region's. */
+export function huntGod(s) {
+  return s?.stirring || getZone(s?.zoneId)?.falseGod || null;
+}
+
 export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed = randomSeed() } = {}, world = GAME_WORLD) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
@@ -188,11 +208,16 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
   const weather = rollWeather(rng, planMods.foulWeatherPercent || 0);
   const mapSeed = Math.floor(rng() * 0x100000000) >>> 0;
   const boon0 = newBoon(zone, world);
+  // The false god stirring on this hunt (chunk 14c), drawn on its own stream so
+  // the weather and the map's seed are what they were. Hidden: the player
+  // learns it when it tempts them (roles.falsegod) or meets its followers.
+  const stirring = rollStirring(zone, seed);
   const map = generateHuntMap({
     zoneId, objective: plan.objective, size: plan.size, seed: mapSeed,
     bonusObjectives: plan.bonusObjectives || [], mods: planMods, followed: boon0.followed,
     // A boss plan names its boss (chunk 14b-4).
     ...(plan.boss ? { boss: plan.boss } : {}),
+    ...(stirring ? { stirring } : {}),
     // What the save's active quest steps need in this region (chunk 14b-2).
     questSites: world.questSites?.(zoneId) || [],
   });
@@ -202,6 +227,7 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     v: MAP_HUNT_STATE_VERSION,
     seed,
     zoneId,
+    ...(stirring ? { stirring } : {}),
     plan: {
       objective: plan.objective, size: plan.size, bonusObjectives: [...(plan.bonusObjectives || [])],
       itemLevel: Number.isFinite(plan.itemLevel) ? plan.itemLevel : 1,
@@ -813,7 +839,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      */
     _unmarkedKill(occ) {
       if (occ.kind !== 'beast' || occ.mark !== 'unmarked') return null;
-      const god = getZone(s.zoneId)?.falseGod || null;
+      const god = huntGod(s);
       if (god) world.falseGod?.(god, UNMARKED_KILL_FALSE_GOD);
       const mercy = s.map.tiles[occ.tile]?.ground === 'blight';
       const cost = s.vigil && !mercy ? VIGIL_KILL_COST : 0;
@@ -1315,9 +1341,9 @@ function makeMapHunt(s, rng, worldRng, world) {
           ground: GROUNDS[s.map.tiles[tile]?.ground]?.name || s.map.tiles[tile]?.ground || null,
           rival: rivalId ? (world.tribeName?.(rivalId) || cap(rivalId)) : null,
           beast,
-          falsegod: FALSE_GODS[zone?.falseGod]?.name || null,
+          falsegod: FALSE_GODS[huntGod(s)]?.name || null,
         },
-        houseId, rivalId, godId: FALSE_GODS[zone?.falseGod] ? zone.falseGod : null,
+        houseId, rivalId, godId: FALSE_GODS[huntGod(s)] ? huntGod(s) : null,
       };
     },
 
@@ -1396,7 +1422,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         const need = this._supplyCost(tpl.price, r);
         out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need };
         if ((tpl.reward || []).some(e => e.falseGod?.pact)) {
-          const god = FALSE_GODS[getZone(s.zoneId)?.falseGod];
+          const god = FALSE_GODS[huntGod(s)];
           const next = s.boon?.pact ? Math.min(PACT_MAX, s.boon.pact.level + 1) : PACT_START;
           out.offer.pact = { god: god?.name, level: next, bondCost: PACT_PRICE.bondPerLevel * next, house: r.house,
             gift: god?.levels[next]?.text || null, curse: god?.curse.text, endsProphet: !s.boon?.pact };
@@ -1625,7 +1651,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      * part of pactEffects. Returns the line for the player.
      */
     _pactStep() {
-      const god = getZone(s.zoneId)?.falseGod;
+      const god = huntGod(s);
       const def = FALSE_GODS[god];
       if (!def) return null;
       const b = s.boon;

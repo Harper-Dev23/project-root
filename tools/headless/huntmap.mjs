@@ -389,12 +389,12 @@ console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a
 {
   const { CULT_BANDS } = await import('../../data/beastParts.js');
   const reeds = ZONES.reeds_of_gethsemane;
-  let turtles = 0, turtleBad = [], cullBad = [], apexOk = 0, apexN = 0, bands = 0, bandBad = [];
+  let turtles = 0, turtleBad = [], cullBad = [], apexOk = 0, apexN = 0, bands = 0, bandBad = [], bandCults = new Set();
   for (let k = 0; k < 60; k++) for (const objective of ['cull', 'apex', 'scout']) {
     const m = Gen.generateHuntMap({ zoneId: 'reeds_of_gethsemane', objective, size: ['small', 'medium', 'large'][k % 3], seed: 32000 + k });
     for (const o of m.occupants) {
       if (o.family === 'snapping_turtle') { turtles++; if (!(reeds.natives.snapping_turtle.compositions || []).includes(o.composition)) turtleBad.push(`${o.composition}`); }
-      if (o.kind === 'cultist') { bands++; if (o.cult !== reeds.falseGod || !CULT_BANDS[o.cult]) bandBad.push(String(o.cult)); }
+      if (o.kind === 'cultist') { bands++; if (!(o.cult in (reeds.cults || {})) || !CULT_BANDS[o.cult]) bandBad.push(String(o.cult)); else bandCults.add(o.cult); }
     }
     if (objective === 'cull' && m.objectives.primary.family === 'snapping_turtle') cullBad.push(32000 + k);
     if (objective === 'apex') {
@@ -408,7 +408,7 @@ console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a
   check('Snapping Turtles only alone or with young, never a Cull quarry (natives compositions)', turtles > 0 && !turtleBad.length && !cullBad.length,
     `${turtles} turtle occupants${turtleBad.length ? '; bad: ' + turtleBad.slice(0, 3) : ''}${cullBad.length ? '; culls: ' + cullBad.slice(0, 3) : ''}`);
   check('the Vowback Crocodile is always Great, with its brood of Grown Crocodiles (apex escort)', apexOk === apexN, `${apexOk}/${apexN}`);
-  check("every Reeds cult band serves the region's false god and has a cult (CULT_BANDS)", bands > 0 && !bandBad.length, `${bands} bands`);
+  check("every Reeds cult camp serves one of the region's own cults (14c: zones' cults), and has a band (CULT_BANDS)", bands > 0 && !bandBad.length && bandCults.size === Object.keys(reeds.cults).length, `${bands} bands: ${[...bandCults].join(', ')}`);
 }
 
 console.log('=== the demand prefixes move the map (paired seeds, real generator) ===');

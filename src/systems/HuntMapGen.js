@@ -534,6 +534,9 @@ export function planMapInputs(view) {
  *                                   gradeShiftPercent, leanCountryPercent, blightPatches
  * @param {boolean} [o.followed]     your tribe follows the region's house (chunk 11a):
  *                                   read by event templates' `appears.followed`
+ * @param {string} [o.stirring]      the false god stirring on this hunt (chunk 14c;
+ *                                   HuntEngine rolls it): its roaming band(s)
+ *                                   and its temptations
  * @param {string} [o.boss]          a boss hunt's boss (data/bosses.js), with
  *                                   objective 'boss' only; it must live in zoneId
  * @param {object[]} [o.questSites]  sites the save's active quest steps need
@@ -542,7 +545,7 @@ export function planMapInputs(view) {
  *                                   occupant placed for certain; none, and the
  *                                   map is exactly what it was without them.
  */
-export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null }) {
+export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null, stirring = null }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
   if (!zone.palette || !zone.relief || !zone.natives || !zone.apex) throw new Error(`zone '${zoneId}' has no generator data`);
@@ -556,7 +559,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
 
   const problems = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites, boss });
+    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites, boss, stirring });
     if (map.failed) { problems.push(map.failed); continue; }
     const v = validateHuntMap(map);
     if (v.ok) return map;
@@ -565,7 +568,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   throw new Error(`no valid map for ${zoneId}/${objective}/${size} seed ${seed}: ${problems.slice(-3).join(' | ')}`);
 }
 
-function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [], boss = null }) {
+function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [], boss = null, stirring = null }) {
   const rng = makeRng(attemptSeed(seed, attempt, zone.id));
   const sizeDef = MAP_SIZES[size];
   const map = {
@@ -677,7 +680,9 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   const occupied = new Set([...reserved, ...map.features.map(f => f.tile)]);
   // Event templates this region may hold (data/events.js, chunk 11a): the
   // conditions known now, less the site's ground, which is checked per tile.
-  const eventCtx = { zoneId: zone.id, house: houseOf(zone.divineAlignment), followed: !!followed, danger: zone.danger || 1 };
+  const eventCtx = { zoneId: zone.id, house: houseOf(zone.divineAlignment), followed: !!followed, danger: zone.danger || 1, god: stirring || null };
+  // Chunk 14c: which cult each camp serves, on its own stream (see addCultists).
+  const cultRng = makeRng((attemptSeed(seed, attempt, zone.id) ^ 0xc0117) >>> 0);
   const eventDefs = new Map(Object.entries(EVENT_TEMPLATES)
     .filter(([, t]) => staticEligible(t, { ...eventCtx, ground: null }))
     .map(([id, t]) => [id, { id, ...t }]));
@@ -741,10 +746,11 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
         concealment: ambush ? OCCUPANT_CONCEALMENT.cultAmbusher : OCCUPANT_CONCEALMENT.cultist,
       };
       if (ambush) occ.ambush = true;
-      // Chunk 14a: the band serves the region's false god (CULT_BANDS), which
-      // sets its members' types. No draw, so the map is unchanged. 14c makes
-      // this the god the hunt rolled at departure.
-      if (CULT_BANDS[zone.falseGod]) occ.cult = zone.falseGod;
+      // Chunk 14c: the camp serves one of the region's own cults, by weight
+      // (zones' `cults`; CULT_BANDS sets its members' types). Drawn on its own
+      // stream, so the map is otherwise unchanged.
+      const cult = zone.cults ? pickWeighted(cultRng, Object.entries(zone.cults)) : zone.falseGod;
+      if (CULT_BANDS[cult]) occ.cult = cult;
       map.occupants.push(occ); occupied.add(tile);
       return occ;
     },
@@ -863,6 +869,26 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
       if (!free.length) continue;
       const tile = free[Math.floor(crng() * free.length)];
       map.occupants.push({ id: `o${nextOcc++}`, kind: 'event', tile, eventId: c.eventId, chance: true, concealment: OCCUPANT_CONCEALMENT.event });
+      occupied.add(tile);
+    }
+  }
+
+  // ── 3j. the stirring god's followers (chunk 14c): its cult band(s), which
+  //    roam (HuntWorld moves them), on their own stream after everything
+  //    else. One band, two on a large map.
+  if (!failed && stirring && CULT_BANDS[stirring]) {
+    const srng = makeRng((attemptSeed(seed, attempt, zone.id) ^ 0x5717) >>> 0);
+    const bands = size === 'large' ? 2 : 1;
+    for (let b = 0; b < bands; b++) {
+      const free = [...reach.keys()].filter(id => !occupied.has(id) && id !== map.entry && !map.tiles[id].exit
+        && map.tiles[id].ground !== 'blight' && entryDist.get(id) >= DENSITY.entryClearance + 2).sort(compareIds);
+      if (!free.length) break;
+      const tile = free[Math.floor(srng() * free.length)];
+      map.occupants.push({
+        id: `o${nextOcc++}`, kind: 'cultist', tile, variant: null, cult: stirring, roams: true, stirring: true,
+        roster: Array.from({ length: CULTIST_BAND.min + Math.floor(srng() * (CULTIST_BAND.max - CULTIST_BAND.min + 1)) }, () => ({ type: 'cultist', grade: null })),
+        state: 'roaming', concealment: OCCUPANT_CONCEALMENT.cultist,
+      });
       occupied.add(tile);
     }
   }

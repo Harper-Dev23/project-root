@@ -59,7 +59,7 @@ const { ZONES } = await import('../../data/zones.js');
 const { GROUNDS } = await import('../../data/grounds.js');
 const { Items } = await import('../../data/items.js');
 const { HOUSES } = await import('../../data/standing.js');
-const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+const { createMapHunt, restoreMapHunt, rollStirring } = await import('../../src/systems/HuntEngine.js');
 const { clockAt } = await import('../../src/systems/HuntRules.js');
 const { countInList, makeStack } = await import('../../src/systems/ItemStacks.js');
 const { GRADE_HP_SCALE } = await import('../../data/beastParts.js');
@@ -216,7 +216,9 @@ console.log('=== the maps place only what may appear ===');
   const seen = {};
   for (const zoneId of Object.keys(ZONES)) for (const size of ['small', 'medium', 'large']) for (let seed = 1; seed <= 200; seed++) {
     const z = ZONES[zoneId];
-    const m = generateHuntMap({ zoneId, objective: 'cull', size, seed });
+    // As a real hunt does: the god stirring on it (chunk 14c) decides its temptations.
+    const god = rollStirring(ZONES[zoneId], seed);
+    const m = generateHuntMap({ zoneId, objective: 'cull', size, seed, stirring: god });
     const per = {};
     for (const o of m.occupants.filter(x => x.kind === 'event')) {
       sites++;
@@ -227,7 +229,7 @@ console.log('=== the maps place only what may appear ===');
       // A zone's chance site (14b-6) is a set piece placed on purpose, as is a quest site.
       const placed = o.chance ? (ZONES[zoneId]?.chanceSites || []).some(c => c.eventId === o.eventId) : !!o.quest;
       if (t.appears?.setPiece && !placed) bad.push(`${o.eventId}: a set piece drawn at random`);
-      if (!E.staticEligible(t, { zoneId, house: houseOf(z.divineAlignment), followed: false, danger: z.danger || 1, ground: m.tiles[o.tile].ground })) bad.push(`${o.eventId} on ${m.tiles[o.tile].ground} in ${zoneId}`);
+      if (!E.staticEligible(t, { zoneId, house: houseOf(z.divineAlignment), followed: false, danger: z.danger || 1, ground: m.tiles[o.tile].ground, god })) bad.push(`${o.eventId} on ${m.tiles[o.tile].ground} in ${zoneId}`);
     }
     for (const [id, n] of Object.entries(per)) if (n > (EVENT_TEMPLATES[id]?.appears?.maxPerMap ?? 1)) bad.push(`${id} ${n} times on one map`);
   }
@@ -298,6 +300,8 @@ function withSite(templateId, { zoneId = 'reeds_of_gethsemane', seed = 71, night
   const tile = h0.view().moves[0].tile;
   d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
   d.map.occupants.push({ id: 'otest', kind: 'event', tile, eventId: templateId, concealment: 0 });
+  // A temptation placed by hand: its god is the one stirring (14c), as the map would have it.
+  if (EVENT_TEMPLATES[templateId]?.appears?.god) d.stirring = EVENT_TEMPLATES[templateId].appears.god;
   // A quiet world for event tests (13c): no predator takes up a chase and
   // interrupts the steps these checks script.
   for (const o of d.map.occupants) o.noticed = true;
@@ -396,7 +400,7 @@ console.log('=== every branch of every real template resolves ===');
         // within 2 steps, a hungry party, the goods a trade asks for, the flag.
         const a = t.appears || {};
         const moment = (d, site) => {
-          if (a.pact === true) d.boon.pact = { god: ZONES[zoneId].falseGod, level: 3 };
+          if (a.pact === true) d.boon.pact = { god: a.god || ZONES[zoneId].falseGod, level: 3 };   // its own god's pact (14c)
           if (a.nearby) {
             const b = d.map.occupants.find(o => o.kind === 'beast');
             const S = parseTileId(site);

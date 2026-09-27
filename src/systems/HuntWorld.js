@@ -103,7 +103,9 @@ export function trailView(trail, ground, perception, now) {
 
 // ── Setting the world up ─────────────────────────────────────────────────────
 
-const moves = (occ) => occ.kind === 'beast';
+// Beasts move; so does a cult band marked `roams` (a stirring god's
+// followers, chunk 14c). Every other cult camp stays where it is.
+const moves = (occ) => occ.kind === 'beast' || occ.roams === true;
 
 /**
  * At departure: every beast remembers the state it rests in (`home`), Restless

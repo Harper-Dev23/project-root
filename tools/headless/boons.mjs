@@ -253,9 +253,10 @@ console.log('=== the vigil and unmarked kills (11d) ===');
   /** A world that also records the false god's attention. */
   const watch = (m) => { m.w.godLog = []; m.w.falseGod = (g, n) => m.w.godLog.push([g, n]); return m; };
   const plain = watch(meet(o => o.kind === 'beast' && o.mark === 'unmarked', { from: 400 }));
-  const god = { reeds_of_gethsemane: 'dagon', bay_of_solace: 'yargaleth' }[plain.zoneId];
+  // The hunt's own false god notices: the one stirring (chunk 14c), else the region's.
+  const god = plain.h.getState().stirring || { reeds_of_gethsemane: 'dagon', bay_of_solace: 'yargaleth' }[plain.zoneId];
   const rp = plain.h.winEncounter({});
-  check(`an unmarked kill with no vigil: the region's false god notices (+${SD.UNMARKED_KILL_FALSE_GOD} hidden), and no standing is lost`,
+  check(`an unmarked kill with no vigil: the hunt's false god (the one stirring) notices (+${SD.UNMARKED_KILL_FALSE_GOD} hidden), and no standing is lost`,
     same(plain.w.godLog, [[god, SD.UNMARKED_KILL_FALSE_GOD]]) && plain.w.favorLog.length === 0 && rp.unmarked?.cost === 0);
 
   const kept = watch(meet(o => o.kind === 'beast' && o.mark === 'unmarked', { from: 500 }));

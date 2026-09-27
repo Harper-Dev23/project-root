@@ -343,7 +343,9 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
         ch.hunt.flee({ knockedOut: o.knockedOut || 0 });
       } else if (o.result === 'wipe') {
         const fallen = party.filter(c => c.status === 'dead').map(refOf);
-        ledger.push({ verb: 'fell', args: [o.deathRule || null, fallen] });
+        // The hunt's false god rides along (chunk 14c): it is the one a fallen
+        // hunter's price is owed to, not always the region's.
+        ledger.push({ verb: 'fell', args: [o.deathRule || null, fallen, ch.hunt.getState().stirring || null] });
         ch.hunt.wipe();
       }
       publish();

@@ -1036,9 +1036,11 @@ function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null
     if (new Set(tiles).size !== tiles.length) problems.push(`step ${i}: two hostile occupants on one tile`);
     for (const o of s2.map.occupants) {
       const hm = home[o.id];
-      if (o.kind !== 'beast' && o.tile !== hm.tile) problems.push(`step ${i}: ${o.kind} ${o.id} moved`);
-      if (o.kind === 'beast' && !o.alerted && hm.state === 'rooted' && o.tile !== hm.tile) problems.push(`step ${i}: rooted ${o.id} moved`);
-      if (o.kind === 'beast' && !o.alerted && secOf(o.tile) !== hm.sec) problems.push(`step ${i}: roaming ${o.id} left its section`);
+      // Beasts move, and so does a stirring god's band (`roams`, chunk 14c); nothing else.
+      const mover = o.kind === 'beast' || o.roams === true;
+      if (!mover && o.tile !== hm.tile) problems.push(`step ${i}: ${o.kind} ${o.id} moved`);
+      if (mover && !o.alerted && hm.state === 'rooted' && o.tile !== hm.tile) problems.push(`step ${i}: rooted ${o.id} moved`);
+      if (mover && !o.alerted && secOf(o.tile) !== hm.sec) problems.push(`step ${i}: roaming ${o.id} left its section`);
       if (!isPassable(s2.map.tiles[o.tile])) problems.push(`step ${i}: ${o.id} on impassable ground`);
       if (o.mark === 'corrupted' && o.concealment !== HMG.OCCUPANT_CONCEALMENT.corrupted) problems.push(`step ${i}: corrupted ${o.id} kept its old concealment`);
     }

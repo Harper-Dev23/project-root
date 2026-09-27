@@ -22,10 +22,11 @@
   "time"
  ],
  "drawn": {
-  "dagon_whisper": 244,
+  "yargaleth_bubbles": 325,
   "reeds_distant_weeping": 229,
   "bitter_roots": 547,
   "eel_catcher_request": 218,
+  "dagon_whisper": 229,
   "shrine_of_house": 574,
   "reeds_lore_test": 239,
   "riddle_stones": 533,
@@ -39,14 +40,13 @@
   "rival_camp": 588,
   "crossing_tracks": 575,
   "eel_catcher_return": 267,
-  "dagon_hunger": 291,
+  "yargaleth_undertow": 435,
+  "dagon_hunger": 275,
   "reeds_cathedral_roots": 44,
   "bay_lore_test": 306,
   "bay_wrecked_hull": 331,
   "bay_lantern_glow": 312,
-  "bay_rising_tide": 321,
-  "yargaleth_undertow": 419,
-  "yargaleth_bubbles": 310
+  "bay_rising_tide": 321
  },
  "lines": {
   "reeds_sinking_mud {\"roll\":20}": [
@@ -154,7 +154,7 @@
   ],
   "dagon_whisper {\"accept\":true}": [
    "accept",
-   "The reeds lean toward you. Dagon is pleased.",
+   "The water leans toward you. Dagon is pleased.",
    "A pact with Dagon, level 3: The Offered Breath. The River Never Sated grows."
   ],
   "dagon_whisper {\"accept\":false}": [
@@ -179,7 +179,7 @@
   "yargaleth_bubbles {\"accept\":false}": [
    "refuse",
    "You stop your ears. Somewhere, a prophet notices.",
-   "Ezekiel looks on you more kindly (+1 standing)."
+   "Jeremiah looks on you more kindly (+1 standing)."
   ],
   "yargaleth_undertow {\"accept\":true}": [
    "accept",

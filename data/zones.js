@@ -20,7 +20,15 @@ export const ZONES = {
     deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'wetland',
     divineAlignment: 'jeremiah',
-    falseGod: 'dagon',  // the false god that tempts here (chunk 11c; data/falseGods.js)
+    falseGod: 'dagon',  // the region's own false god: the default where no hunt says otherwise (chunk 11c)
+    // Chunk 14c (owner, 2026-09-26). The cults that live here, by weight: each
+    // cultist camp serves one (CULT_BANDS). Regional flavour, fixed.
+    cults: { dagon: 1, yargaleth: 1 },
+    // The false god that may STIR on a hunt here, by weight (rolled at
+    // departure, hidden until it tempts you): its roaming band(s) join the
+    // map, and its temptations and pact are the hunt's. A god needs pact
+    // boons (data/falseGods.js) and a cult band to be in a pool.
+    falseGods: { dagon: 1, yargaleth: 1 },
     flavor: 'Chilling wetlands wreathed in sorrowful mist, where grief seems to seep up from the mud itself.',
     // Thick reeds and standing water make for slow, beast-rich going.
     modifiers: { encounterChancePercent: 6, supplyEfficiencyPercent: -5 },
@@ -76,7 +84,9 @@ export const ZONES = {
     deathRule: 'sheltered', // a starting coast: a wipe risks nothing in the pack (zoneDeathRule, HuntManager.js)
     terrain: 'coastal',
     divineAlignment: 'ezekiel', // STANDING (owner, 2026-09-18): Bay of Solace = Ezekiel
-    falseGod: 'yargaleth',  // the false god that tempts here (chunk 11c; data/falseGods.js)
+    falseGod: 'yargaleth',  // the region's own false god: the default where no hunt says otherwise (chunk 11c)
+    cults: { yargaleth: 1 },                  // chunk 14c: see the Reeds
+    falseGods: { yargaleth: 2, dagon: 1 },
     flavor: 'Calm tidal shallows and wind-worn dunes, quiet enough that danger here always feels like a surprise.',
     // Open, flat coastline — easy travel, but little cover means fewer encounters too.
     modifiers: { encounterChancePercent: -4, supplyEfficiencyPercent: 8 },

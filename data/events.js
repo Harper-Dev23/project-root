@@ -151,24 +151,26 @@ export const EVENT_TEMPLATES = {
     failure: [{ text: 'The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.' }, { hp: '-{danger}*3' }, { xp: '{danger}*4' }],
   },
 
-  // ── False gods' temptations (chunk 11c) ─────────────────────────────────────
-  // Accepting starts the region's false god's pact at level 3, or deepens it.
+  // ── False gods' temptations (chunk 11c). Chunk 14c: each is its GOD's, and
+  // appears wherever that god is stirring on the hunt (appears.god), not in
+  // one region. ─────────────────────────────────────────────────────────────
+  // Accepting starts the stirring false god's pact at level 3, or deepens it.
   // The price (hidden standing, Bond standing, the curse) is the engine's.
   dagon_whisper: {
-    name: 'A Voice in the Reeds',
+    name: 'A Voice in the Water',
     shape: 'offer',
-    text: 'Something in the reeds knows your name. It offers a gift and says it asks nothing. The water has gone very still.',
-    appears: { zones: ['reeds_of_gethsemane'], night: true, pact: false, needs: ['falsegod'] },
+    text: 'Something in the water knows your name. It offers a gift and says it asks nothing. The water has gone very still.',
+    appears: { god: 'dagon', night: true, pact: false, needs: ['falsegod'] },
     offer: 'Accept the gift',
     price: [],
-    reward: [{ text: 'The reeds lean toward you. {falsegod} is pleased.' }, { falseGod: { pact: true } }],
+    reward: [{ text: 'The water leans toward you. {falsegod} is pleased.' }, { falseGod: { pact: true } }],
     refuse: [{ text: 'You turn from the water. Somewhere, a prophet notices.' }, { standing: 1 }],
   },
   dagon_hunger: {
     name: 'The River Asks Again',
     shape: 'offer',
     text: 'Bloated fish drift belly-up at your feet. The voice returns, hungrier: the river asks for your breath.',
-    appears: { zones: ['reeds_of_gethsemane'], pact: true, maxPerMap: 2, needs: ['falsegod'] },
+    appears: { god: 'dagon', pact: true, maxPerMap: 2, needs: ['falsegod'] },
     offer: 'Give it',
     price: [],
     reward: [{ text: '{falsegod} takes, and gives more.' }, { falseGod: { pact: true } }],
@@ -178,7 +180,7 @@ export const EVENT_TEMPLATES = {
     name: 'Bubbles in Still Water',
     shape: 'offer',
     text: 'Bubbles rise where the water should be still. A voice beneath them answers a question you never asked.',
-    appears: { zones: ['bay_of_solace'], pact: false, needs: ['falsegod'] },
+    appears: { god: 'yargaleth', pact: false, needs: ['falsegod'] },
     offer: 'Listen',
     price: [],
     reward: [{ text: 'Truths pour into you, too many to hold. {falsegod} is pleased.' }, { falseGod: { pact: true } }],
@@ -188,7 +190,7 @@ export const EVENT_TEMPLATES = {
     name: 'The Throat That Never Closes',
     shape: 'offer',
     text: 'Salt forms runes on your skin. The voice offers the rest of the answer, if you will only keep listening.',
-    appears: { zones: ['bay_of_solace'], pact: true, maxPerMap: 2, needs: ['falsegod'] },
+    appears: { god: 'yargaleth', pact: true, maxPerMap: 2, needs: ['falsegod'] },
     offer: 'Keep listening',
     price: [],
     reward: [{ text: '{falsegod} shows you more than you can bear.' }, { falseGod: { pact: true } }],

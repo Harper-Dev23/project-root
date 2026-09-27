@@ -339,7 +339,7 @@ export function applyEffects(list, api) {
 
 // ── Where an event may appear (data/events.js `appears`) ──────────────────────
 
-export const APPEARS_KEYS = ['zones', 'houses', 'followed', 'danger', 'grounds', 'setPiece', 'weight', 'maxPerMap',
+export const APPEARS_KEYS = ['zones', 'houses', 'followed', 'danger', 'grounds', 'god', 'setPiece', 'weight', 'maxPerMap',
   'night', 'hunger', 'questFlag', 'notQuestFlag', 'needs', 'pact', 'nearby'];
 
 /** Beast marks a template's `appears.nearby` may ask for (a beast of it within the fight verb's reach). */
@@ -347,12 +347,14 @@ export const MARKS = ['marked', 'unmarked', 'corrupted'];
 
 /**
  * Conditions known when the map is made: region, its house, whether your
- * tribe follows it, danger, the site's ground. `ctx` is
- * { zoneId, house, followed, danger, ground }.
+ * tribe follows it, danger, the site's ground, and the false god stirring on
+ * this hunt (chunk 14c: a temptation is its god's, wherever that god stirs).
+ * `ctx` is { zoneId, house, followed, danger, ground, god }.
  */
 export function staticEligible(tpl, ctx) {
   const a = tpl.appears || {};
   if (a.zones && !a.zones.includes(ctx.zoneId)) return false;
+  if (a.god && a.god !== ctx.god) return false;
   if (a.houses === 'any' && !ctx.house) return false;
   if (a.houses === 'none' && ctx.house) return false;
   if (Array.isArray(a.houses) && !a.houses.includes(ctx.house)) return false;
