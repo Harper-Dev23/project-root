@@ -145,5 +145,87 @@ console.log('=== potions, in the real CombatScene ===');
   GameState.inventory = [];
 }
 
+// =============================================================================
+console.log('=== the black markets ===');
+{
+  const M = await import('../../src/systems/Market.js');
+  const { CULT_MARKETS } = await import('../../data/cultMarkets.js');
+  const REEDS = 'reeds_of_gethsemane';
+  const choir = M.marketView('yargaleth', { sinTickets: 5 });
+  const gill = M.marketView('dagon', { sinTickets: 5 });
+  check('the Tithe-Boat: the shared Gamble and Tinctures', choir.name === 'The Tithe-Boat' && choir.stalls.map(s => s.id).join() === 'gamble,tinctures');
+  check('the Gill Market: the same two, and its own Smuggled Parts', gill.stalls.map(s => s.id).join() === 'gamble,tinctures,parts');
+
+  const pm = { sinTickets: 0 };
+  const bag = [];
+  const poor = M.buy('yargaleth', 'gamble', { pm, bag, rng: makeRng(1) });
+  check('without the tickets, refused, nothing spent or given', !poor.ok && /Sin Ticket/.test(poor.reason) && bag.length === 0 && pm.sinTickets === 0, poor.reason);
+  pm.sinTickets = 3;
+  const t = M.buy('yargaleth', 'tinctures', { pm, bag, rng: makeRng(2), goodsId: 'tincture_red_breath' });
+  check('a tincture: 2 Sin Tickets, into the bag', t.ok && pm.sinTickets === 1 && bag[0]?.id === 'tincture_red_breath');
+  check('a stall that does not sell it refuses', !M.buy('yargaleth', 'tinctures', { pm, bag, goodsId: 'healing_draught' }).ok && !M.buy('yargaleth', 'parts', { pm, bag }).ok);
+
+  // The gamble over many rolls: the cult's lean, the rarity odds, Corrupted 1 in 100 armour.
+  const roll = (cult, n, seed) => {
+    const out = { armour: 0, weapon: 0, corrupted: 0, corruptWeapon: 0, rarity: {} };
+    const rng = makeRng(seed);
+    const p = { sinTickets: n }, b = [];
+    for (let i = 0; i < n; i++) M.buy(cult, 'gamble', { pm: p, bag: b, rng, itemLevel: 3 });
+    for (const it of b) {
+      const base = Items[it.id];
+      if (base.type === 'armor') out.armour++; else out.weapon++;
+      if (it.renownOrigin === 'corrupted') { out.corrupted++; if (base.type !== 'armor') out.corruptWeapon++; }
+      out.rarity[it.rarity] = (out.rarity[it.rarity] || 0) + 1;
+    }
+    return out;
+  };
+  const c = roll('yargaleth', 6000, 11), d = roll('dagon', 6000, 12);
+  check(`the Choir's gamble leans to armour (${c.armour}/6000), the Temple's to weapons (${d.weapon}/6000)`, c.armour > 4300 && c.armour < 4700 && d.weapon > 4300 && d.weapon < 4700);
+  const r = c.rarity;
+  check(`uncommon 30 / rare 45 / epic 25 (${r.uncommon} / ${r.rare} / ${r.epic} of 6000)`, r.uncommon > 1650 && r.uncommon < 1950 && r.rare > 2550 && r.rare < 2850 && r.epic > 1350 && r.epic < 1650);
+  const armourN = c.armour + d.armour, corrN = c.corrupted + d.corrupted;
+  check(`about 1 armour piece in 100 comes up Corrupted (${corrN} of ${armourN})`, corrN / armourN > 0.005 && corrN / armourN < 0.016);
+  const w3 = roll('dagon', 3000, 13);
+  check(`weapons never do (${c.weapon + d.weapon + w3.weapon} weapons rolled, none Corrupted)`, c.corruptWeapon + d.corruptWeapon + w3.corruptWeapon === 0 && w3.weapon > 0);
+  const pb = [], pp = { sinTickets: 300 };
+  const prng = makeRng(14);
+  for (let i = 0; i < 100; i++) M.buy('dagon', 'parts', { pm: pp, bag: pb, rng: prng, zoneId: REEDS, itemLevel: 3 });
+  const natives = Object.keys((await import('../../data/zones.js')).getZone(REEDS).natives);
+  check('Smuggled Parts: 3 each, a Reeds native\'s part, never below rare', pp.sinTickets === 0 && pb.length === 100
+    && pb.every(p => ['rare', 'epic'].includes(p.rarity) && natives.includes(Items[p.id]?.part?.family)), [...new Set(pb.map(p => Items[p.id]?.part?.family))].join(','));
+
+  // Its site: only once its questline opens it, on about 40% of hunts.
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { generateHuntMap } = await import('../../src/systems/HuntMapGen.js');
+  const pmOf = (flags) => ({ tribe: 'styx', completedScenarios: [], hasQuestFlag: (f) => flags.includes(f) });
+  check('no market site before its questline opens it', !questSitesFor(REEDS, pmOf([])).some(q => q.step.startsWith('market:')));
+  const sites = questSitesFor(REEDS, pmOf([CULT_MARKETS.yargaleth.unlockFlag]));
+  check('...then the Tithe-Boat is a site for Reeds hunts', sites.some(q => q.eventId === 'tithe_boat' && q.pct === 40));
+  let on = 0;
+  for (let k = 0; k < 500; k++) {
+    const m = generateHuntMap({ zoneId: REEDS, objective: 'scout', size: ['small', 'medium', 'large'][k % 3], seed: 8800 + k, questSites: sites });
+    if (m.occupants.some(o => o.kind === 'event' && o.eventId === 'tithe_boat')) on++;
+  }
+  check(`...on about 40% of them (${on} of 500)`, on > 170 && on < 230);
+
+  // On a real hunt: it opens, it cannot be resolved, walking away leaves it.
+  const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+  const { makeParty } = await import('./fixtures.js');
+  const party = makeParty();
+  const w = { party: () => party, nightFalls() {}, dayBreaks() {}, questSites: () => [], hasQuestFlag: () => false };
+  const h0 = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 200, seed: 71 }, w);
+  const dd = h0.serialize();
+  const tile = h0.view().moves[0].tile;
+  dd.map.occupants = dd.map.occupants.filter(o => o.tile !== tile);
+  dd.map.occupants.push({ id: 'omarket', kind: 'event', tile, eventId: 'tithe_boat', concealment: 0 });
+  for (const o of dd.map.occupants) o.noticed = true;
+  const h = restoreMapHunt(dd, w);
+  const mv = h.move(tile);
+  check('stepping onto it opens the market', mv.event?.shape === 'market' && mv.event.market === 'yargaleth');
+  check('...it is browsed, not resolved', !h.resolveEvent({}).ok);
+  h.leaveEvent();
+  check('...and walking away leaves it there for later', h.getState().map.occupants.some(o => o.id === 'omarket') && !h.view().event);
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

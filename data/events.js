@@ -151,6 +151,25 @@ export const EVENT_TEMPLATES = {
     failure: [{ text: 'The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.' }, { hp: '-{danger}*3' }, { xp: '{danger}*4' }],
   },
 
+  // ── The cults' black markets (owner, 2026-09-27; data/cultMarkets.js) ──────
+  // Placed by HuntQuests.questSitesFor on a share of a region's hunts once the
+  // cult's questline opens them. Browsed, never resolved: the site stays for
+  // the rest of the hunt.
+  tithe_boat: {
+    name: 'The Tithe-Boat',
+    shape: 'market',
+    market: 'yargaleth',
+    text: 'A flat barge moored among the reeds, hung with lanterns that light nothing. The Drowned Choir sell here, and take only Sin Tickets.',
+    appears: { zones: ['reeds_of_gethsemane', 'bay_of_solace'], setPiece: true },
+  },
+  gill_market: {
+    name: 'The Gill Market',
+    shape: 'market',
+    market: 'dagon',
+    text: 'Crates stacked under a reed awning, dripping. The Temple of the Gill trades in what the river brings up, for Sin Tickets.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+  },
+
   // ── False gods' temptations (chunk 11c). Chunk 14c: each is its GOD's, and
   // appears wherever that god is stirring on the hunt (appears.god), not in
   // one region. ─────────────────────────────────────────────────────────────

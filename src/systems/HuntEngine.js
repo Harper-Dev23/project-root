@@ -1196,7 +1196,8 @@ function makeMapHunt(s, rng, worldRng, world) {
     /** Quest sites (chunk 14b-2), marked from departure: done once resolved. */
     _questSites() {
       return (s.map.questSites || []).map(q => ({
-        objective: 'quest', tile: q.tile, step: q.step, name: EVENT_TEMPLATES[q.eventId]?.name || q.eventId,
+        // A black market (a "market:<cult>" site) is marked as one, not as a quest.
+        objective: String(q.step).startsWith('market:') ? 'market' : 'quest', tile: q.tile, step: q.step, name: EVENT_TEMPLATES[q.eventId]?.name || q.eventId,
         night: EVENT_TEMPLATES[q.eventId]?.appears?.night === true,
         done: !s.map.occupants.some(o => o.id === q.occId),
       }));
@@ -1418,6 +1419,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (tpl.shape === 'choice') out.options = tpl.options.map((o, i) => ({ index: i, label: fillText(o.label, r) }));
       if (tpl.shape === 'check') out.check = { ...this._checkStat(tpl.check.stat), dc: Math.round(evalNumber(tpl.check.dc, r)) };
       if (tpl.shape === 'puzzle') { out.prompt = fillText(tpl.prompt, r); out.answers = tpl.answers.map(a => fillText(a, r)); }
+      // A black market (owner, 2026-09-27): the screen reads its stalls from
+      // Market.marketView against the player's own save.
+      if (tpl.shape === 'market') out.market = tpl.market;
       if (tpl.shape === 'offer') {
         const need = this._supplyCost(tpl.price, r);
         out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need };
@@ -1526,6 +1530,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const ev = s.event;
       if (!ev) return { ok: false, reason: 'no event is open' };
       const tpl = EVENT_TEMPLATES[ev.templateId];
+      if (tpl.shape === 'market') return { ok: false, reason: 'a market is browsed, not resolved: walk away when you are done' };
       const r = ev.roles;
       let effects, branch, roll = null;
       if (tpl.shape === 'choice') {

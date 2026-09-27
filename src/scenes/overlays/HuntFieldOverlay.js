@@ -52,6 +52,10 @@
 // this on the same CoopHunt. Nothing here saves: the host's hunt is not in the
 // save yet, and what the hunt earns is in its ledger (applied in 12d).
 
+import { marketView, buy as marketBuy } from '../../systems/Market.js';
+import ProgressionManager from '../../systems/ProgressionManager.js';
+import { InventorySystem } from '../../systems/InventorySystem.js';
+import { huntItemLevel } from '../../systems/HuntScaling.js';
 import { wakeTown } from '../../ui/townInput.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { createButton } from '../../ui/Button.js';
@@ -104,7 +108,8 @@ const LOG_SHOWN = 14;
 
 const OBJECTIVE_NAME = (id) => PRIMARY_OBJECTIVES[id]?.name || BONUS_OBJECTIVES[id]?.name || id;
 /** A marked site's hover line: the plan's objective, or a quest's (14b-2). */
-const siteLine = (s) => s.objective === 'quest'
+const siteLine = (s) => s.objective === 'market' ? `Black market: ${s.name}.`
+  : s.objective === 'quest'
   ? `Quest: ${s.name}${s.night && !s.done ? ' (after dark)' : ''}${s.done ? ' (done)' : ''}.`
   : `Objective: ${OBJECTIVE_NAME(s.objective)} site${s.done ? ' (done)' : ''}.`;
 
@@ -415,7 +420,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       if (!here(s.tile)) continue;
       const { x, y } = this.center(s.tile);
       // Quest sites (14b-2) in violet, so they never read as the plan's own.
-      const col = s.done ? 0x7c7c7c : s.objective === 'quest' ? 0xc59bff : 0xf2d27a;
+      const col = s.done ? 0x7c7c7c : s.objective === 'quest' ? 0xc59bff : s.objective === 'market' ? 0xd06a8a : 0xf2d27a;
       g.lineStyle(3, col, 1);
       if (s.objective === 'scout') g.strokeCircle(x, y, 22);
       else if (s.objective === 'retrieve') g.strokePoints([{ x, y: y - 22 }, { x: x + 20, y }, { x, y: y + 22 }, { x: x - 20, y }], true);
@@ -954,6 +959,16 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       buttons = [[ev.offer.label, ev.offer.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), ev.offer.canAccept ? 'primary' : 'danger'],
         ['Refuse', act({ accept: false }), 'primary']];
     }
+    // A cult's black market (owner, 2026-09-27): its stalls, bought from the
+    // player's own save (Sin Tickets out, goods into the camp bag).
+    if (ev.shape === 'market') {
+      const mv = marketView(ev.market, ProgressionManager);
+      lines.push(`${mv.cultName}. You carry ${mv.sinTickets} Sin Ticket${mv.sinTickets === 1 ? '' : 's'}.`);
+      for (const st of mv.stalls) {
+        if (st.kind === 'goods') for (const g of st.goods) buttons.push([`${g.name} (${g.cost})`, () => this._buy(ev.market, st.id, g.id), 'primary']);
+        else { lines.push(`${st.name}: ${st.text}`); buttons.push([`${st.kind === 'gamble' ? 'Gamble' : st.name} (${st.cost})`, () => this._buy(ev.market, st.id), 'primary']); }
+      }
+    }
     if (ev.shape === 'trade') {
       lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (you carry ${g.have})`).join(', ')}.`);
       buttons = [['Trade', ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), ev.trade.canAccept ? 'primary' : 'danger'],
@@ -975,6 +990,20 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this._panelButton(p, p.px + width / 2, ty + 16, label, cb, style);
       ty += 38;
     }
+  }
+
+  /** Buy from a black market's stall, on this player's own save. */
+  _buy(cult, stallId, goodsId = null) {
+    const zoneId = this.v.zoneId;
+    const res = marketBuy(cult, stallId, {
+      pm: ProgressionManager, goodsId, zoneId, itemLevel: huntItemLevel(getZone(zoneId)?.danger),
+      bag: { push: (inst) => InventorySystem.addGlobalItem(inst, { isNew: true }) },
+    });
+    if (!res.ok) { SoundManager.play('handsClick'); this._say(`Cannot: ${res.reason}.`); return; }
+    GameState.save('autosave');
+    SoundManager.play('reward');
+    this._say(`${res.name} goes to your camp bag (${res.spent} Sin Ticket${res.spent === 1 ? '' : 's'}).`);
+    this._refresh();
   }
 
   /** Resolve the open event through the engine, then show what happened. */

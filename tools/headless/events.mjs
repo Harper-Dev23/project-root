@@ -53,6 +53,7 @@ const { installPhaserStub } = await import('./phaserStub.js');
 installPhaserStub(11);
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const CULT_MARKETS_SRC = fs.readFileSync(path.join(REPO, 'data', 'cultMarkets.js'), 'utf8');
 const { EVENT_TEMPLATES } = await import('../../data/events.js');
 const E = await import('../../src/systems/EventEffects.js');
 const { ZONES } = await import('../../data/zones.js');
@@ -84,6 +85,7 @@ function validateTemplate(id, t) {
   const bad = [];
   const say = (m) => bad.push(`${id}: ${m}`);
   if (!E.SHAPES.includes(t.shape)) say(`unknown shape '${t.shape}'`);
+  if (t.shape === 'market' && !CULT_MARKETS_SRC.includes(`${t.market}:`)) say(`market '${t.market}' is not a cult market`);
   if (!t.name || !t.text) say('needs a name and a text');
   const a = t.appears || {};
   for (const k of Object.keys(a)) if (!E.APPEARS_KEYS.includes(k)) say(`unknown appears key '${k}'`);
@@ -388,6 +390,7 @@ console.log('=== every branch of every real template resolves ===');
   const problems = [];
   for (const [id, t] of Object.entries(EVENT_TEMPLATES)) {
     if (id.startsWith('test_')) continue;
+    if (t.shape === 'market') continue;   // browsed, never resolved (cultmarket.mjs)
     const zoneId = t.appears?.zones?.[0] || 'reeds_of_gethsemane';
     const picks = t.shape === 'choice' ? t.options.map((_, i) => ({ option: i }))
       : t.shape === 'check' ? [{ roll: 20 }, { roll: 1 }]

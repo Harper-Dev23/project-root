@@ -36,7 +36,9 @@
 
 import { Items } from '../../data/items.js';
 
-export const SHAPES = ['choice', 'check', 'puzzle', 'offer', 'trade'];
+// 'market' (owner, 2026-09-27): a cult's black market, browsed not resolved;
+// its stalls are data/cultMarkets.js (src/systems/Market.js).
+export const SHAPES = ['choice', 'check', 'puzzle', 'offer', 'trade', 'market'];
 export const ROLES = ['danger', 'region', 'house', 'prophet', 'followed', 'ground', 'rival', 'beast', 'falsegod'];
 export const NULLABLE_ROLES = ['house', 'prophet', 'rival', 'beast', 'falsegod'];
 export const CORE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];

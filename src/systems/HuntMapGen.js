@@ -792,7 +792,11 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   //    Marked from departure like an objective site (HuntEngine
   //    _objectiveSites). Draws nothing when there are none.
   if (questSites.length) map.questSites = [];
+  const qrng = makeRng((attemptSeed(seed, attempt, zone.id) ^ 0x3a7e7) >>> 0);
   if (!failed) for (const q of questSites) {
+    // A site with a `pct` (a black market) is on only that share of hunts,
+    // rolled on its own stream.
+    if (q.pct != null && qrng() * 100 >= q.pct) continue;
     const tile = (q.far && ctx.pickTile({ minEntryDist: ctx.farDist(), noBlight: true }))
               || ctx.pickTile({ minEntryDist: 2, noBlight: true }) || ctx.pickTile({ noBlight: true });
     if (!tile) { fail(`no tile for quest site '${q.step}'`); break; }

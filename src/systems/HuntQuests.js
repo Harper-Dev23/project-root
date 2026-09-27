@@ -14,6 +14,7 @@
 // Quests read them like any other flag.
 
 import { QUEST_LINES, getStepState } from '../data/quests.js';
+import { CULT_MARKETS } from '../../data/cultMarkets.js';
 
 /** The flag the engine sets for `kind` ('hunted' | 'apex_slain') in a region. */
 export function regionFlag(kind, zoneId) {
@@ -34,6 +35,12 @@ export function questSitesFor(zoneId, pm) {
       if (getStepState(step, pm) !== 'active') continue;
       out.push({ step: step.id, eventId: site.eventId, far: !!site.far });
     }
+  }
+  // A cult's black market, once its questline opens it: on `pct` of the
+  // region's hunts (rolled per map by the generator), anywhere on the map.
+  for (const [cult, m] of Object.entries(CULT_MARKETS)) {
+    if (!m.zones.includes(zoneId) || !pm?.hasQuestFlag?.(m.unlockFlag)) continue;
+    out.push({ step: `market:${cult}`, eventId: m.eventId, far: false, pct: m.pct });
   }
   return out;
 }
