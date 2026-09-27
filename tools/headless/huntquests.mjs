@@ -222,7 +222,7 @@ console.log('=== co-op ===');
   const ledger = [];
   const w = hostWorld(makeParty(), reads, ledger);
   const h = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 515 }, w);
-  check("the host's save decides the sites", (h.getState().map.questSites || []).map(q => q.eventId).sort().join() === 'reeds_drowned_camp,reeds_lament_pools');
+  check("the host's save decides the sites", (h.getState().map.questSites || []).map(q => q.eventId).sort().join() === 'choir_singing,reeds_drowned_camp,reeds_lament_pools');
   w.questFlag('mb_weeping_heard', true);
   check('a flag set on the hunt goes to the ledger (each player applies it to their own save), not to the host directly',
     ledger.some(e => e.verb === 'questFlag' && e.args[0] === 'mb_weeping_heard') && !hostPM.hasQuestFlag('mb_weeping_heard'));

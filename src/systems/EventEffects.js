@@ -193,6 +193,16 @@ export const VERBS = {
       return applyEffects(v.else, api).filter(Boolean).join(' ') || null;
     },
   },
+  sinTickets: {
+    // The cults' currency (owner, 2026-09-27): a parley's or a cult quest's pay.
+    reader: 'world.sinTickets -> ProgressionManager.sinTickets (a co-op ledger verb)',
+    validate: numErr,
+    apply: (v, api) => {
+      const n = Math.max(0, Math.round(evalNumber(v, api.roles)));
+      if (n > 0) api.world.sinTickets?.(n);
+      return n > 0 ? `+${n} Sin Ticket${n === 1 ? '' : 's'}.` : null;
+    },
+  },
   omens: {
     reader: "world.omens: the region's Omen meter (chunk 14b-3; Omens.js)",
     validate: numErr,
@@ -295,8 +305,13 @@ export const VERBS = {
     // level (HuntEngine._pactStep pays the price). A number: hidden standing
     // with that god alone.
     reader: 'HuntEngine._pactStep (the pact, its price) or GAME_WORLD.falseGod (hidden standing)',
-    validate: (v) => (v && typeof v === 'object' ? (v.pact === true ? null : 'falseGod is a number or { pact: true }') : numErr(v)),
+    // { god, amount } (owner, 2026-09-27): hidden standing with a NAMED god,
+    // for a cult's own events, whichever god is stirring on the hunt.
+    validate: (v) => (v && typeof v === 'object'
+      ? (v.pact === true ? null : (typeof v.god === 'string' ? numErr(v.amount) : 'falseGod is a number, { pact: true } or { god, amount }'))
+      : numErr(v)),
     apply: (v, api) => {
+      if (typeof v === 'object' && typeof v.god === 'string') { const n = evalNumber(v.amount, api.roles); if (n) api.world.falseGod?.(v.god, n); return null; }
       if (typeof v === 'object') return api.pactStep();
       const n = evalNumber(v, api.roles);
       if (api.godId && n) api.world.falseGod?.(api.godId, n);

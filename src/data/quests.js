@@ -370,6 +370,51 @@ export const QUEST_LINES = [
     ],
   },
 
+  {
+    // The Drowned Choir's questline (owner, 2026-09-27; vault CONTENT_INBOX).
+    // Its first step opens parley with Choir camps (data/cultMarkets.js
+    // CULT_PARLEY); its last opens the Tithe-Boat, their black market.
+    id:          'hymn_beneath_the_water',
+    category:    'region',
+    title:       'The Hymn Beneath the Water',
+    description: 'The Drowned Choir sing to Yar\'galeth under the reeds. They could be talked to, and traded with, by someone they know.',
+    isAvailable: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+    steps: [
+      {
+        id:          'hb_singing',
+        label:       'Singing Under the Water',
+        description: 'Something sings under the reeds at night. Your next Reeds hunt will mark where. Once the Choir know you, their camps will talk instead of fight.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_singing', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('choir_heard'),
+      },
+      {
+        id:          'hb_cantor',
+        label:       "The Cantor's Price",
+        description: 'A Choir cantor has a page of their hymn. Trade fish for it on your next Reeds hunt, or take it from any Drowned Choir band.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_cantor', far: false },
+        isActive:   (pm) => pm.hasQuestFlag('choir_heard'),
+        isComplete: (pm) => pm.hasQuestFlag('choir_page') || pm.hasQuestFlag('cult_slain:yargaleth'),
+      },
+      {
+        id:          'hb_hymn',
+        label:       'The Unfinished Hymn',
+        description: 'The page stops mid-verse. Your next Reeds hunt will mark where to read it aloud.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_unfinished_hymn', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('choir_page') || pm.hasQuestFlag('cult_slain:yargaleth'),
+        isComplete: (pm) => pm.hasQuestFlag('choir_hymn'),
+      },
+      {
+        id:          'hb_boat',
+        label:       'The Tithe-Boat',
+        description: 'The Choir want to meet you on their boat. Your next Reeds hunt will mark it.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_tithe_offer', far: false },
+        isActive:   (pm) => pm.hasQuestFlag('choir_hymn'),
+        isComplete: (pm) => pm.hasQuestFlag('choir_market_open'),
+      },
+    ],
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  DIVINE
   // ═══════════════════════════════════════════════════════════════════════════

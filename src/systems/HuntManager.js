@@ -209,6 +209,10 @@ export const GAME_WORLD = {
   spendBossPlan(instanceId) {
     GameState.removeFromInventory(instanceId);
   },
+  // The cults' currency (owner, 2026-09-27).
+  sinTickets(n) {
+    ProgressionManager.sinTickets = (ProgressionManager.sinTickets || 0) + (Number(n) || 0);
+  },
   // The region's Omen meter (chunk 14b-3; src/systems/Omens.js).
   omens(zoneId, amount) {
     addOmens(ProgressionManager, zoneId, amount);

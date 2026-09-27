@@ -39,6 +39,17 @@ export const SHARED_STALLS = {
   },
 };
 
+/**
+ * Parley (owner, 2026-09-27): a cult's camp can be approached instead of
+ * fought once its questline's first step is done (`flag`): the encounter
+ * becomes that cult's trade (`eventId`, data/events.js), and the camp melts
+ * back into the reeds. Read by HuntEngine.parley and its view.
+ */
+export const CULT_PARLEY = {
+  yargaleth: { flag: 'choir_heard', eventId: 'choir_parley' },
+  dagon: { flag: 'gill_offerings_read', eventId: 'gill_parley' },
+};
+
 export const CULT_MARKETS = {
   // The Drowned Choir (Yar'galeth): knowledge and vestments. Its gamble leans
   // to armour.

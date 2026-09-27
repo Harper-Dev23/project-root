@@ -227,5 +227,66 @@ console.log('=== the black markets ===');
   check('...and walking away leaves it there for later', h.getState().map.occupants.some(o => o.id === 'omarket') && !h.view().event);
 }
 
+// =============================================================================
+console.log('=== parley and the Hymn Beneath the Water ===');
+{
+  const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+  const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+  const { isPassable } = await import('../../data/grounds.js');
+  const { makeParty } = await import('./fixtures.js');
+  const { makeStack } = await import('../../src/systems/ItemStacks.js');
+  const REEDS = 'reeds_of_gethsemane';
+  /** A hunt standing next to a cult camp of `cult`, with the save's flags. */
+  function besideCamp(cult, flags, { fish = 0 } = {}) {
+    const party = makeParty();
+    const set = new Set(flags);
+    const w = { calls: [], party: () => party, nightFalls() {}, dayBreaks() {}, questSites: () => [], hasQuestFlag: (f) => set.has(f),
+      questFlag: (f, on) => { w.calls.push(['questFlag', f, on]); if (on) set.add(f); },
+      sinTickets: (n) => w.calls.push(['sinTickets', n]), falseGod: (g, n) => w.calls.push(['falseGod', g, n]),
+      awardHuntPoints() {}, awardXP() {}, favor() {}, bankItems() {} };
+    const h0 = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 200, seed: 73 }, w);
+    const d = h0.serialize();
+    const tile = h0.view().moves[0].tile;
+    d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
+    d.map.occupants.push({ id: 'ocamp', kind: 'cultist', tile, cult, roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }], state: 'rooted', concealment: 0 });
+    for (const o of d.map.occupants) o.noticed = true;
+    if (fish) d.pack.found.push(makeStack('raw_fish', fish));
+    const h = restoreMapHunt(d, w);
+    h.move(tile);
+    return { h, w, set };
+  }
+  const stranger = besideCamp('yargaleth', []);
+  check('a Choir camp the party has not met: an ordinary fight, no parley', stranger.h.encounter()?.kind === 'cultist' && stranger.h.view().parley === false && !stranger.h.parley().ok);
+  const known = besideCamp('yargaleth', ['choir_heard'], { fish: 3 });
+  check('once the Choir know you (choir_heard), their camp offers parley', known.h.view().parley === true);
+  const pr = known.h.parley();
+  check('parley: the fight ends, the camp leaves the map (not a kill), and the Choir\'s trade opens', pr.ok && !known.h.encounter() && known.h.view().event?.templateId === 'choir_parley'
+    && !known.h.getState().map.occupants.some(o => o.id === 'ocamp') && !known.h.getState().kills.length);
+  const tr = known.h.resolveEvent({ accept: true });
+  check('...3 fish for 2 Sin Tickets (and a little hidden standing with Yar\'galeth)', tr.ok && known.w.calls.some(c => c[0] === 'sinTickets' && c[1] === 2) && known.w.calls.some(c => c[0] === 'falseGod' && c[1] === 'yargaleth' && c[2] === 1), (tr.lines || []).join(' '));
+  const gill = besideCamp('dagon', ['choir_heard']);
+  check('a Temple camp does not talk because the Choir know you', gill.h.view().parley === false);
+
+  // A Choir band defeated: the cantor's step can be done that way.
+  const fightThem = besideCamp('yargaleth', []);
+  fightThem.h.winEncounter({});
+  check('defeating a cult band records cult_slain:<its god>', fightThem.w.calls.some(c => c[0] === 'questFlag' && c[1] === 'cult_slain:yargaleth'));
+
+  // The questline, step by step, and what each step places.
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { QUEST_LINES, getQuestState } = await import('../../src/data/quests.js');
+  const q = QUEST_LINES.find(x => x.id === 'hymn_beneath_the_water');
+  const flags = new Set(['hunted:' + REEDS]);
+  const pmq = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (f) => flags.has(f) };
+  const choirSites = () => questSitesFor(REEDS, pmq).filter(s => s.step.startsWith('hb_') || s.step.startsWith('market:')).map(s => s.eventId);
+  const walk = [choirSites()];
+  flags.add('choir_heard'); walk.push(choirSites());
+  flags.add('cult_slain:yargaleth'); walk.push(choirSites());
+  flags.add('choir_hymn'); walk.push(choirSites());
+  flags.add('choir_market_open'); walk.push(choirSites());
+  check('Singing -> the Cantor (or any Choir band) -> the Hymn -> the Boat -> then the Tithe-Boat as a market',
+    JSON.stringify(walk) === JSON.stringify([['choir_singing'], ['choir_cantor'], ['choir_unfinished_hymn'], ['choir_tithe_offer'], ['tithe_boat']]) && getQuestState(q, pmq) === 'completed', JSON.stringify(walk));
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

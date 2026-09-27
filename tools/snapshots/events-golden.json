@@ -8,6 +8,7 @@
   "hunger",
   "item",
   "historic",
+  "sinTickets",
   "omens",
   "boon",
   "standing",
@@ -151,6 +152,72 @@
    "The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.",
    "Halvard lost 3 HP.",
    "+4 XP for the party."
+  ],
+  "choir_parley {\"accept\":true}": [
+   "accept",
+   "The cantor counts the fish twice, then presses tickets into your hand, each stamped with a mouth.",
+   "+2 Sin Tickets."
+  ],
+  "choir_parley {\"accept\":false}": [
+   "refuse",
+   "They let you go. The singing starts again before you are out of earshot."
+  ],
+  "gill_parley {\"accept\":true}": [
+   "accept",
+   "They drop the meat into the water one piece at a time, and pay you as each one sinks.",
+   "+2 Sin Tickets."
+  ],
+  "gill_parley {\"accept\":false}": [
+   "refuse",
+   "They watch you go, and say nothing."
+  ],
+  "choir_singing {\"option\":0}": [
+   "option:0",
+   "The words are almost yours. You understand that the Drowned Choir know you now, and would talk."
+  ],
+  "choir_singing {\"option\":1}": [
+   "option:1",
+   "You sing over it, badly, until it stops. Somewhere under the water, someone laughs. The Choir know you now."
+  ],
+  "choir_cantor {\"accept\":true}": [
+   "accept",
+   "The page is wet and will not dry. The verse on it stops halfway through a line.",
+   "+1 Sin Ticket."
+  ],
+  "choir_cantor {\"accept\":false}": [
+   "refuse",
+   "The cantor shrugs. A Choir band will carry the same hymn."
+  ],
+  "choir_unfinished_hymn {\"answer\":0}": [
+   "failure",
+   "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Halvard lost 3 HP."
+  ],
+  "choir_unfinished_hymn {\"answer\":1}": [
+   "success",
+   "The water goes still, and then it sings the rest of the hymn back to you. The Choir will want to meet you.",
+   "The region's omens stir (+20).",
+   "+10 XP for the party."
+  ],
+  "choir_unfinished_hymn {\"answer\":2}": [
+   "failure",
+   "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Halvard lost 3 HP."
+  ],
+  "choir_unfinished_hymn {\"answer\":3}": [
+   "failure",
+   "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Halvard lost 3 HP."
+  ],
+  "choir_tithe_offer {\"accept\":true}": [
+   "accept",
+   "You sing. It is easier than it should be. The Choir will trade with you now, on their boat, in Sin Tickets.",
+   "+3 Sin Tickets."
+  ],
+  "choir_tithe_offer {\"accept\":false}": [
+   "refuse",
+   "You burn the hymnal page in front of them. They only watch. The boat will still take your tickets: the Choir are patient.",
+   "Jeremiah looks on you more kindly (+3 standing)."
   ],
   "dagon_whisper {\"accept\":true}": [
    "accept",

@@ -151,6 +151,70 @@ export const EVENT_TEMPLATES = {
     failure: [{ text: 'The water comes back before you find the way down. You climb out soaked, with nothing but the certainty that something is down there.' }, { hp: '-{danger}*3' }, { xp: '{danger}*4' }],
   },
 
+  // ── Parley (owner, 2026-09-27; data/cultMarkets.js CULT_PARLEY) ────────────
+  // Opened by HuntEngine.parley from a cult camp's encounter, never placed.
+  choir_parley: {
+    name: 'The Drowned Choir',
+    shape: 'trade',
+    text: 'The Choir lower their hands. A cantor steps forward: the river owes them fish, and they will pay for what the river will not give.',
+    appears: { setPiece: true },
+    give: [{ id: 'raw_fish', qty: 3 }],
+    receive: [{ text: 'The cantor counts the fish twice, then presses tickets into your hand, each stamped with a mouth.' }, { sinTickets: 2 }, { falseGod: { god: 'yargaleth', amount: 1 } }],
+    refuse: [{ text: 'They let you go. The singing starts again before you are out of earshot.' }],
+  },
+  gill_parley: {
+    name: 'The Temple of the Gill',
+    shape: 'trade',
+    text: 'The gill-priests do not raise their weapons. They want meat for the river, and they pay in tickets.',
+    appears: { setPiece: true },
+    give: [{ id: 'lean_game', qty: 2 }],
+    receive: [{ text: 'They drop the meat into the water one piece at a time, and pay you as each one sinks.' }, { sinTickets: 2 }, { falseGod: { god: 'dagon', amount: 1 } }],
+    refuse: [{ text: 'They watch you go, and say nothing.' }],
+  },
+
+  // ── The Hymn Beneath the Water: the Drowned Choir's questline (owner,
+  // 2026-09-27; src/data/quests.js hymn_beneath_the_water). Quest sites. ─────
+  choir_singing: {
+    name: 'Singing Under the Water',
+    shape: 'choice',
+    text: 'A hymn rises from under the reeds, many voices, none of them breathing. The water shivers with it.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
+    options: [
+      { label: 'Listen', effects: [{ text: 'The words are almost yours. You understand that the Drowned Choir know you now, and would talk.' }, { questFlag: 'choir_heard' }, { falseGod: { god: 'yargaleth', amount: 1 } }] },
+      { label: 'Drown it out', effects: [{ text: 'You sing over it, badly, until it stops. Somewhere under the water, someone laughs. The Choir know you now.' }, { questFlag: 'choir_heard' }] },
+    ],
+  },
+  choir_cantor: {
+    name: "The Cantor's Price",
+    shape: 'trade',
+    text: 'A Choir cantor waits on a stone, holding a page of a hymnal. It will trade the page for fish. Or you could take it from a Choir band.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    give: [{ id: 'raw_fish', qty: 2 }],
+    receive: [{ text: 'The page is wet and will not dry. The verse on it stops halfway through a line.' }, { questFlag: 'choir_page' }, { sinTickets: 1 }],
+    refuse: [{ text: 'The cantor shrugs. A Choir band will carry the same hymn.' }],
+  },
+  choir_unfinished_hymn: {
+    name: 'The Unfinished Hymn',
+    shape: 'puzzle',
+    text: 'The page, read aloud where the Choir first sang, calls the water to listen. The verse breaks off. It wants its last word.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    prompt: '"What drowns and is not drowned, and answers what was never asked?"',
+    answers: ['The river', 'The truth', 'A stone', 'The moon'],
+    correct: 1,
+    success: [{ text: 'The water goes still, and then it sings the rest of the hymn back to you. The Choir will want to meet you.' }, { questFlag: 'choir_hymn' }, { omens: 20 }, { xp: '{danger}*10' }],
+    failure: [{ text: 'The water answers with a cold that goes to the bone. Still, the Choir heard you try.' }, { questFlag: 'choir_hymn' }, { hp: '-{danger}*3' }],
+  },
+  choir_tithe_offer: {
+    name: 'The Tithe-Boat',
+    shape: 'offer',
+    text: 'A flat barge hung with dark lanterns. The Choir offer you a place in the hymn, and a place at their market.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    offer: 'Sing with them',
+    price: [],
+    reward: [{ text: 'You sing. It is easier than it should be. The Choir will trade with you now, on their boat, in Sin Tickets.' }, { questFlag: 'choir_market_open' }, { falseGod: { god: 'yargaleth', amount: 5 } }, { sinTickets: 3 }],
+    refuse: [{ text: 'You burn the hymnal page in front of them. They only watch. The boat will still take your tickets: the Choir are patient.' }, { questFlag: 'choir_market_open' }, { standing: 3 }],
+  },
+
   // ── The cults' black markets (owner, 2026-09-27; data/cultMarkets.js) ──────
   // Placed by HuntQuests.questSitesFor on a share of a region's hunts once the
   // cult's questline opens them. Browsed, never resolved: the site stays for

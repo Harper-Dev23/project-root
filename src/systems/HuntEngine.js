@@ -132,6 +132,7 @@ import { huntItemLevel } from './HuntScaling.js';
 import { regionFlag } from './HuntQuests.js';
 import { BOSSES, BOSS_HUNT_POINTS, BOSS_XP_MULT } from '../../data/bosses.js';
 import { rollBossLoot } from './BossLoot.js';
+import { CULT_PARLEY } from '../../data/cultMarkets.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
@@ -456,6 +457,35 @@ function makeMapHunt(s, rng, worldRng, world) {
       const event = s.encounter ? null : this._openEventAt(s.pos);
       return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved,
         event: event?.quiet ? null : event, quiet: event?.quiet || null };
+    },
+
+    /** The pending encounter's cult parley, or null: a cult camp whose cult the party has met (CULT_PARLEY). */
+    _parleyFor() {
+      const e = s.encounter;
+      if (!e || e.kind !== 'cultist') return null;
+      const occ = occById().get(e.occId);
+      const p = occ?.cult ? CULT_PARLEY[occ.cult] : null;
+      return p && world.hasQuestFlag?.(p.flag) ? { occ, ...p } : null;
+    },
+    _canParley() { return !!this._parleyFor(); },
+
+    /**
+     * Parley (owner, 2026-09-27): talk to the cult camp instead of fighting
+     * it. The encounter ends, the camp melts back into the reeds (it leaves
+     * the map; not a kill), and the cult's trade opens where the party stands.
+     */
+    parley() {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      const p = this._parleyFor();
+      if (!p) return { ok: false, reason: 'they will not talk to you' };
+      s.encounter = null;
+      const i = s.map.occupants.findIndex(o => o.id === p.occ.id);
+      if (i >= 0) s.map.occupants.splice(i, 1);
+      delete s.sightings[p.occ.id];
+      const { roles, houseId, rivalId, godId } = this._eventRoles(s.pos);
+      s.event = { templateId: p.eventId, site: { occId: null, tile: s.pos, feature: null }, roles, houseId, rivalId, godId };
+      this._log({ kind: 'parley', occupant: p.occ.id, cult: p.occ.cult, time: s.time });
+      return { ok: true, event: this.event() };
     },
 
     /**
@@ -787,6 +817,8 @@ function makeMapHunt(s, rng, worldRng, world) {
       // Region progress quests read (chunk 14b-2; HuntQuests.js).
       if (occ.apex) world.questFlag?.(regionFlag('apex_slain', s.zoneId), true);
       if (occ.kind === 'boss') world.questFlag?.(`boss_slain:${occ.boss}`, true);
+      // A cult band defeated (owner, 2026-09-27): cult questlines can read it.
+      if (occ.kind === 'cultist' && occ.cult) world.questFlag?.(`cult_slain:${occ.cult}`, true);
       delete s.sightings[occ.id];
       s.encounter = null;
       s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
@@ -1059,6 +1091,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         occupants,
         trails,
         encounter: this.encounter(),
+        // Whether the pending encounter's cult will talk (owner, 2026-09-27).
+        parley: this._canParley(),
         // After a clean exit, judged as the exit judged them: a carried-home
         // objective (Retrieve, Provisioner, Trophy) is done only at the exit,
         // so the end panel said "Retrieve not done" on a hunt that paid for it.
