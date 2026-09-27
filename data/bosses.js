@@ -57,6 +57,16 @@ export const BOSS_XP_MULT = 5;
  * `natural`, so it never drops or rolls), which its damage dice come from, as
  * a beast's come from its weaponMain part. `historic`: the Historic item in its lair's chest,
  * guaranteed while it is in the wild (owner, 2026-09-25); none while held.
+ *
+ * `loot` (owner, 2026-09-26: every kill, the first too, is worth it beyond
+ * the Historic item; when the Historic item is held, something takes its
+ * place). Read by src/systems/BossLoot.js:
+ *   family       a HUNT_BEASTS family (data/beastParts.js) whose parts drop
+ *   parts        the slots that drop, as harvestable spoils (like a beast's)
+ *   rarityFloor  no part rolls below this (Great-grade odds, then the floor)
+ *   bodies       bodies of meat to butcher (Great grade)
+ *   substitute   in the chest instead of the Historic item while it is held:
+ *                that part again at that rarity, a specimen for the pack
  */
 export const BOSSES = {
   mourning_beast: {
@@ -66,6 +76,13 @@ export const BOSSES = {
     unlockFlag: 'mb_offer_taken',
     offerAfter: 'mb_signs_found',
     historic: 'burden_of_dreams',
+    loot: {
+      family: 'mourning_beast',
+      parts: ['weaponMain', 'head', 'chest', 'gloves', 'ring', 'amulet'],
+      rarityFloor: 'rare',
+      bodies: 2,
+      substitute: { slot: 'amulet', rarity: 'epic' },   // a second Grief-Heart, epic
+    },
     lair: {
       name: "The Mourning Beast's Lair",
       text: 'A hollow beneath the Lament Pools, walled in burial cloth. The weeping comes from inside. This is a boss fight: camp and ready the party first if you need to.',

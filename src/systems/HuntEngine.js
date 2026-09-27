@@ -131,6 +131,7 @@ import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeas
 import { huntItemLevel } from './HuntScaling.js';
 import { regionFlag } from './HuntQuests.js';
 import { BOSSES, BOSS_HUNT_POINTS, BOSS_XP_MULT } from '../../data/bosses.js';
+import { rollBossLoot } from './BossLoot.js';
 
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
@@ -763,22 +764,28 @@ function makeMapHunt(s, rng, worldRng, world) {
       for (const inst of found) addToList(s.pack.found, inst);
       const huntPoints = occ.kind === 'beast' || occ.kind === 'boss'
         ? Math.round((occ.kind === 'boss' ? BOSS_HUNT_POINTS : BEAST_FIGHT_HUNT_POINTS) * (1 + (s.mods.huntPointsPercent || 0) / 100)) : 0;
-      // The lair's chest (14b-4c): its Historic item, guaranteed while it is in
-      // the wild in this save (the host's, on a co-op hunt: each player's own
-      // bank then keeps it only where it is wild too, GAME_WORLD.bankItems).
-      // It rides in the pack like any find: at risk until the exit.
-      const hist = occ.kind === 'boss' ? BOSSES[occ.boss]?.historic : null;
-      let chest = null;
-      if (hist && world.historicInWild?.(hist) !== false) {
-        // Rolled from the hunt's own seed, as a loadout is: a reload rolls the same chest.
-        chest = createItemInstance(hist, { itemLevel: huntItemLevel(getZone(s.zoneId)?.danger), rng: makeRng((loadoutSeed(s.seed, occ) ^ 0xc4e57) >>> 0) });
-        addToList(s.pack.found, chest);
-        this._log({ kind: 'lair_chest', item: hist, time: s.time });
+      // A boss's loot (14b; BossLoot.js, data/bosses.js `loot`): its parts as
+      // spoils to harvest, like a beast's, and the lair's chest straight into
+      // the pack: the Historic item while it is in the wild in this save (the
+      // host's, on a co-op hunt: each player's own bank then keeps it only
+      // where it is wild too, GAME_WORLD.bankItems), otherwise the boss's
+      // substitute. Seeded from the hunt, as a loadout is: a reload rolls the same.
+      let chest = null, bossSpoils = null;
+      if (occ.kind === 'boss') {
+        const bl = rollBossLoot(occ.boss, {
+          itemLevel: huntItemLevel(getZone(s.zoneId)?.danger), itemRarity: this.stats().itemRarity,
+          rng: makeRng((loadoutSeed(s.seed, occ) ^ 0xc4e57) >>> 0),
+          historicInWild: (id) => world.historicInWild?.(id),
+        });
+        for (const inst of bl.chest) addToList(s.pack.found, inst);
+        chest = bl.chest.length ? bl.chest[0] : null;
+        bossSpoils = bl.spoils;
+        this._log({ kind: 'lair_chest', item: chest?.id || null, historic: bl.historic, time: s.time });
       }
       // A beast fight leaves its bodies (chunk 9d): every part it wore, as
       // rolled and kept since the scout or contact, and the meat, for harvest().
       // Cultists leave only the armour that already dropped.
-      s.spoils = occ.kind === 'beast' ? {
+      s.spoils = bossSpoils ? { ...bossSpoils, at: s.time } : occ.kind === 'beast' ? {
         family: occ.family || null,
         parts: (occ.loadout || []).flatMap(g => Object.values(g)).map(p => clone(p)),
         bodies: occ.roster.map(m => m.grade),

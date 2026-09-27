@@ -170,7 +170,7 @@ console.log('=== the fight in the real CombatScene ===');
     && !st.map.occupants.some(o => o.id === lair.id) && st.kills.some(k => k.occId === lair.id && k.boss === 'mourning_beast'));
   check('the Boss objective is done', h.objectives()[0].done === true);
   check('the save learns the boss was slain (boss_slain:mourning_beast)', w.flags.includes('boss_slain:mourning_beast'));
-  check('a boss leaves no beast spoils to harvest', !st.spoils);
+  check('a boss leaves its own parts to harvest (not a beast pack)', st.spoils?.family === MB.loot.family && st.spoils.parts.length === MB.loot.parts.length);
 }
 
 // =============================================================================
@@ -271,7 +271,32 @@ console.log("=== 14b-4c: the kit, the lair's chest ===");
   check("the lair's chest: Burden of Dreams while it is in the wild, into the pack (at risk until the exit)", !!burden && wild.r.chest === MB.historic);
   check('...rolled within its ranges (a Historic copy, not a plain base)', !!burden?.historicRolls);
   const held = win(false, 530);
-  check('...and nothing while it is held', !held.h.getState().pack.found.some(i => i.id === MB.historic) && !held.r.chest);
+  const heldFound = held.h.getState().pack.found;
+  const sub = heldFound.find(i => i.id === 'part_' + MB.loot.family + '_' + MB.loot.substitute.slot);
+  check('...and while it is held, the substitute in its place (an epic Grief-Heart)', !heldFound.some(i => i.id === MB.historic)
+    && sub?.rarity === MB.loot.substitute.rarity && held.r.chest === sub.id, held.r.chest);
+
+  // The first kill is worth more than the Historic item (owner, 2026-09-26):
+  // the boss's parts, every one of them at least rare, and its bodies.
+  const sp = wild.h.getState().spoils;
+  const RANK = ['common', 'uncommon', 'rare', 'epic'];
+  check(`every kill, the first too, leaves the boss's ${MB.loot.parts.length} parts to harvest, none below ${MB.loot.rarityFloor}, and ${MB.loot.bodies} bodies`,
+    sp?.parts.length === MB.loot.parts.length && sp.parts.every(p => RANK.indexOf(p.rarity) >= RANK.indexOf(MB.loot.rarityFloor))
+    && sp.bodies.length === MB.loot.bodies && MB.loot.parts.every(sl => sp.parts.some(p => p.id === 'part_' + MB.loot.family + '_' + sl)),
+    sp?.parts.map(p => p.rarity).join(','));
+  const packBefore = wild.h.getState().pack.found.length;
+  const hv = wild.h.harvest({ take: sp.parts.map(p => p.instanceId), meat: true });
+  const packAfter = wild.h.getState().pack.found;
+  check('...harvested the way a beast is: the parts (rare and up stay specimens) and the meat go in the pack',
+    hv.ok && hv.specimens === MB.loot.parts.length && packAfter.length > packBefore && !wild.h.getState().spoils, JSON.stringify({ specimens: hv.specimens, meat: hv.meat }));
+  // Over many kills: epic parts turn up, and the loot varies with the seed.
+  let epics = 0, n = 0; const seen = new Set();
+  for (let k = 0; k < 12; k++) {
+    const r = win(false, 600 + k);
+    for (const p of r.h.getState().spoils.parts) { n++; if (p.rarity === 'epic') epics++; }
+    seen.add(r.h.getState().spoils.parts.map(p => p.rarity).join(','));
+  }
+  check(`over 12 kills, some parts roll epic (${epics}/${n}) and the rolls vary (${seen.size} different spreads)`, epics > 0 && epics < n && seen.size > 1);
   check(`a boss kill pays ${BOSS_HUNT_POINTS} Hunt Points and a fight XP pool x${BOSS_XP_MULT}`, JSON.stringify(held.paid) === JSON.stringify([BOSS_HUNT_POINTS]) && held.spec.xpPool === FIGHT_XP_POOL * BOSS_XP_MULT);
   const again = win(true, 530);
   check('the chest is rolled from the hunt seed: the same hunt, the same copy', JSON.stringify(again.h.getState().pack.found.find(i => i.id === MB.historic)?.historicRolls) === JSON.stringify(burden?.historicRolls));

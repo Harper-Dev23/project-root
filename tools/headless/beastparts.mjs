@@ -105,7 +105,10 @@ console.log('=== content: families, types, skills, AI ===');
   }
   check('every family a starter zone can place has a HUNT_BEASTS entry', [...placed].every(f => BP.HUNT_BEASTS[f]),
     [...placed].filter(f => !BP.HUNT_BEASTS[f]).join(', '));
-  check('every HUNT_BEASTS family is placed somewhere (no dead family)', FAMILIES.every(f => placed.has(f)));
+  // A boss's family (14b) is never placed: its parts are the boss's loot (data/bosses.js loot.family).
+  const { BOSSES } = await import('../../data/bosses.js');
+  for (const b of Object.values(BOSSES)) if (b.loot?.family) placed.add(b.loot.family);
+  check('every HUNT_BEASTS family is placed somewhere, or is a boss loot family (no dead family)', FAMILIES.every(f => placed.has(f)), FAMILIES.filter(f => !placed.has(f)).join(', '));
   const aiNames = new Set(Object.keys(AI_PROFILES));
   const types = [...FAMILIES.map(f => BP.HUNT_BEASTS[f].type), ...BP.HUNT_CULTIST_TYPES, ...Object.values(BP.CULT_BANDS).flatMap(b => b.types)];
   const bad = [];

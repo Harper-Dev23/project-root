@@ -140,6 +140,16 @@ export const HUNT_BEASTS = {
     parts: { weaponMain: 'Jaws', weaponOff: 'Tail', head: 'Skull', chest: 'Vow-Stone Hide', legs: 'Haunches',
              gloves: 'Forelimbs', boots: 'Hind Feet', ring: 'Eyes', amulet: 'Swallowed Vow' },
   },
+  // ── Bosses (chunk 14b; data/bosses.js `loot.family`). Not natives: no
+  // region places them. Their parts are the boss's harvestable spoils,
+  // rolled by BossLoot.js with a rarity floor, never worn in its fight (a
+  // boss fights with its own natural weapons, data/items.js).
+  mourning_beast: {
+    name: 'Mourning Beast', type: 'hunt_mourning_head', signature: 'curse', boss: true,
+    weaponDamage: { min: 16, max: 20 },
+    parts: { weaponMain: 'Weeping Maw', head: 'Weeping Skull', chest: 'Shroud Hide', gloves: 'Grasping Limbs',
+             ring: 'Tear-Stones', amulet: 'Grief-Heart' },
+  },
   // ── The Bay of Solace (its own pass is 14e).
   tide_crab: {
     name: 'Tide Crab', type: 'hunt_tide_crab', signature: 'expose',

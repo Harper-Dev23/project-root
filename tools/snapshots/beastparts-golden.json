@@ -200,6 +200,30 @@
    "aiProfile": "hunt_beast",
    "initiative": 5
   },
+  "hunt_mourning_head": {
+   "maxHP": 600,
+   "maxMP": 40,
+   "baseStats": {
+    "STR": 11,
+    "DEX": 4,
+    "CON": 10,
+    "INT": 3,
+    "WIS": 6,
+    "CHA": 6
+   },
+   "derivedBonus": {
+    "PhysicalResist": 15,
+    "Resilience": 25
+   },
+   "skills": [
+    "mourning_lament",
+    "oskar_maw_rip",
+    "berserker_crushing_blow",
+    "basic_attack"
+   ],
+   "aiProfile": "hunt_beast",
+   "initiative": 6
+  },
   "hunt_tide_crab": {
    "maxHP": 56,
    "maxMP": 8,
@@ -453,6 +477,14 @@
    "boots:Hind Feet",
    "ring:Eyes",
    "amulet:Swallowed Vow"
+  ],
+  "mourning_beast": [
+   "weaponMain:Weeping Maw",
+   "head:Weeping Skull",
+   "chest:Shroud Hide",
+   "gloves:Grasping Limbs",
+   "ring:Tear-Stones",
+   "amulet:Grief-Heart"
   ],
   "tide_crab": [
    "weaponMain:Great Pincer",
@@ -1230,6 +1262,44 @@
     "Initiative": 7.75,
     "dice": 12.55,
     "buildupPct": 21.25
+   }
+  },
+  "mourning_beast": {
+   "yearling": {
+    "maxHP": 465.75,
+    "PDR": 20.65,
+    "Evasion": 1.47,
+    "Accuracy": 6.47,
+    "Initiative": 6.45,
+    "dice": 18.82,
+    "buildupPct": 5.73
+   },
+   "grown": {
+    "maxHP": 621.3,
+    "PDR": 21.13,
+    "Evasion": 2.15,
+    "Accuracy": 7.58,
+    "Initiative": 6.63,
+    "dice": 19.41,
+    "buildupPct": 11.25
+   },
+   "prime": {
+    "maxHP": 808.98,
+    "PDR": 21.42,
+    "Evasion": 2.85,
+    "Accuracy": 10.3,
+    "Initiative": 7.1,
+    "dice": 20.27,
+    "buildupPct": 16.5
+   },
+   "great": {
+    "maxHP": 1058.53,
+    "PDR": 22.02,
+    "Evasion": 3.92,
+    "Accuracy": 11.85,
+    "Initiative": 7.6,
+    "dice": 20.97,
+    "buildupPct": 21.42
    }
   },
   "tide_crab": {
