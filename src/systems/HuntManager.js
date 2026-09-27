@@ -235,8 +235,10 @@ export const GAME_WORLD = {
     for (const inst of items) {
       // A Historic item is one of each in the realm (14b): a copy this save
       // already holds is not banked again (a co-op guest's take-home from a
-      // host whose realm still had it in the wild).
-      if (Items[inst?.id]?.historic && found && !GameState.historicInWild(inst.id)) {
+      // host whose realm still had it in the wild). The hunt's own pack is
+      // left out: it is what is being banked, and counting it threw every
+      // Historic item away at the exit (owner's playtest, 2026-09-27).
+      if (Items[inst?.id]?.historic && found && GameState.ownsItem(inst.id, { hunt: false })) {
         console.warn(`[bank] ${inst.id} is already held in this realm; not banked twice`);
         continue;
       }

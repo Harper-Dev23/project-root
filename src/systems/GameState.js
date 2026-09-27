@@ -658,8 +658,10 @@ const GameState = {
   // hunt's pack. What is recorded is only what cannot be derived: returns to
   // the world (flags.historicLedger), and later a rival tribe's claim.
 
-  /** Every item instance this save holds anywhere. */
-  _allHeldItems() {
+  /** Every item instance this save holds anywhere. `hunt: false` leaves out
+   *  the hunt's pack (banking at a hunt's end: that pack is what is being
+   *  banked, so its copy must not count as one already held). */
+  _allHeldItems({ hunt: withHunt = true } = {}) {
     const out = [];
     const take = (x) => { if (x && typeof x === 'object' && x.id) out.push(x); };
     for (const c of [...(this.characters || []), ...(this.slain || [])]) {
@@ -668,14 +670,14 @@ const GameState = {
     }
     (this.inventory || []).forEach(take);
     Object.values(this.tribeStash || {}).forEach(list => (list || []).forEach(take));
-    const hunt = this._huntHooks ? this._huntHooks.serialize() : this._rawHunt;
+    const hunt = !withHunt ? null : this._huntHooks ? this._huntHooks.serialize() : this._rawHunt;
     for (const list of [hunt?.pack?.brought, hunt?.pack?.found]) (list || []).forEach(take);
     return out;
   },
 
   /** Does this save hold a copy of the item anywhere? */
-  ownsItem(itemId) {
-    return this._allHeldItems().some(i => i.id === itemId);
+  ownsItem(itemId, opts) {
+    return this._allHeldItems(opts).some(i => i.id === itemId);
   },
 
   /**

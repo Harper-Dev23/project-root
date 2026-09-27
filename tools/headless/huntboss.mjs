@@ -310,6 +310,16 @@ console.log("=== 14b-4c: the kit, the lair's chest ===");
   GAME_WORLD.bankItems([createItemInstance(MB.historic, {})], { found: true });
   GAME_WORLD.bankItems([createItemInstance(MB.historic, {})], { found: true });
   check('banking: the first copy lands, a second is refused (one of each in the realm)', GameState.inventory.filter(i => i.id === MB.historic).length === 1);
+  // The exit banks the pack while the hunt still holds it (owner's playtest,
+  // 2026-09-27: the copy in the pack counted as "already held" and every
+  // Historic item was thrown away at the exit).
+  GameState.inventory = [];
+  const inPack = createItemInstance(MB.historic, {});
+  const savedHooks = GameState._huntHooks, savedRaw = GameState._rawHunt;
+  GameState._huntHooks = null; GameState._rawHunt = { pack: { brought: [], found: [inPack] } };
+  GAME_WORLD.bankItems([inPack], { found: true });
+  GameState._huntHooks = savedHooks; GameState._rawHunt = savedRaw;
+  check('banking at the exit: the Historic item in the hunt\'s own pack lands in the camp bag', GameState.inventory.includes(inPack));
 }
 
 // =============================================================================
