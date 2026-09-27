@@ -954,3 +954,40 @@ export const ENEMY_TYPES = {
     actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
   }
 };
+
+// ── The Ghost Party (chunk 14b-5; data/bosses.js) ─────────────────────────────
+// A hunting party that drowned in the Reeds unconfessed, one ghost per current
+// weapon. Five kits are encounter 3's (the Animated Six), whose AIs already
+// play them well; the axe Reaver fights with Gorrek's berserker skills. Their
+// gear is rolled per fight (HuntBeasts.rollLoadout, boss branch): mostly
+// soulbound, one droppable piece each, and the Captain wears The Unconfessed
+// while it is in the wild. HP set by calibration (tools/headless/bosscal.mjs).
+// Portraits are placeholders until the owner's art (ART_ASSET_LIST).
+const ghostOf = (from, over) => ({
+  ...ENEMY_TYPES[from],
+  skills: [...ENEMY_TYPES[from].skills],
+  ...over,
+  isEnemy: true,
+  tags: [...(ENEMY_TYPES[from].tags || []), 'ghost', 'boss'],
+  actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+});
+Object.assign(ENEMY_TYPES, {
+  hunt_ghost_captain:   ghostOf('animated_fighter_dummy', { name: 'Ghost Captain', maxHP: 240 }),
+  hunt_ghost_chaplain:  ghostOf('animated_healer_dummy',  { name: 'Ghost Chaplain', maxHP: 180 }),
+  hunt_ghost_cutthroat: ghostOf('animated_rogue_dummy',   { name: 'Ghost Cutthroat', maxHP: 180 }),
+  hunt_ghost_tracker:   ghostOf('animated_ranger_dummy',  { name: 'Ghost Tracker', maxHP: 190 }),
+  hunt_ghost_magus:     ghostOf('animated_wizard_dummy',  { name: 'Ghost Magus', maxHP: 170 }),
+  hunt_ghost_reaver: {
+    name: 'Ghost Reaver',
+    skin: 'dummy_portrait_equipped_fighter',
+    maxHP: 220,
+    maxMP: 50,
+    baseStats: { STR: 12, DEX: 5, CON: 10, INT: 3, WIS: 4, CHA: 5 },
+    derivedBonus: { PhysicalResist: 10 },
+    skills: ['berserker_crushing_blow', 'berserker_guarded_fury', 'berserker_bleeding_sweep', 'basic_attack'],
+    aiProfile: 'hunt_beast',
+    isEnemy: true,
+    tags: ['ghost', 'boss'],
+    actionsLeft: { major: 1, bonus: 1, class: 1, reaction: 1 },
+  },
+});

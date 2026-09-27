@@ -102,7 +102,9 @@ console.log('=== The Weeping in the Reeds, step by step ===');
   const quest = QUEST_LINES.find(q => q.id === 'weeping_in_the_reeds');
   const pm = fakePM();
   const active = () => quest.steps.filter(s => getStepState(s, pm) === 'active').map(s => s.id);
-  const sites = () => questSitesFor(REEDS, pm).map(s => s.eventId);
+  // This questline's own sites (The Unconfessed Dead runs alongside it from the apex on).
+  const WR = new Set(quest.steps.map(s => s.id));
+  const sites = () => questSitesFor(REEDS, pm).filter(s => WR.has(s.step)).map(s => s.eventId);
   const trail = [];
   trail.push([active(), sites()]);
   pm.add(regionFlag('hunted', REEDS)); trail.push([active(), sites()]);
@@ -138,7 +140,7 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
     const w = recordingWorld(party, pm);
     const h0 = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 515 }, w);
     const d = h0.serialize();
-    const q = d.map.questSites[0];
+    const q = d.map.questSites.find(x => x.step === 'wr_pools');
     const next = mapNeighbors(d.map, q.tile).find(id => isPassable(d.map.tiles[id]) && !d.map.occupants.some(o => o.tile === id));
     d.map.occupants = d.map.occupants.filter(o => o.kind === 'event' ? true : o.tile !== next);
     for (const o of d.map.occupants) o.noticed = true;
@@ -147,7 +149,7 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
     return { h: restoreMapHunt(d, w), w, pm, site: q.tile, h0 };
   }
   const day = atPools({ night: false });
-  const marks = day.h0.view().objectiveSites.filter(s => s.objective === 'quest');
+  const marks = day.h0.view().objectiveSites.filter(s => s.objective === 'quest' && s.step === 'wr_pools');
   check('the site is marked from departure, named, and says after dark', marks.length === 1 && marks[0].name === 'The Lament Pools' && marks[0].night && !marks[0].done,
     JSON.stringify(marks));
   const rd = day.h.move(day.site);
@@ -160,7 +162,7 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
   const res = night.h.resolveEvent({ option: 0 });
   check('...either choice sets the step\'s flag, and the step is done', res.ok && night.pm.hasQuestFlag('mb_weeping_heard')
     && night.h.view().objectiveSites.find(s => s.objective === 'quest')?.done === true, JSON.stringify(night.w.calls));
-  check('...and the next step\'s site is what the next hunt holds', questSitesFor(REEDS, night.pm).map(s => s.eventId).join() === 'reeds_mourner_signs');
+  check('...and the next step\'s site is what the next hunt holds', questSitesFor(REEDS, night.pm).filter(s => s.step.startsWith('wr_')).map(s => s.eventId).join() === 'reeds_mourner_signs');
 
   const saved = restoreMapHunt(JSON.parse(JSON.stringify(day.h.serialize())), recordingWorld(makeParty()));
   check('a hunt saved on the map keeps its quest site through a reload', saved.view().objectiveSites.some(s => s.objective === 'quest' && s.tile === day.site && !s.done));
@@ -220,7 +222,7 @@ console.log('=== co-op ===');
   const ledger = [];
   const w = hostWorld(makeParty(), reads, ledger);
   const h = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 515 }, w);
-  check("the host's save decides the sites", (h.getState().map.questSites || []).map(q => q.eventId).join() === 'reeds_lament_pools');
+  check("the host's save decides the sites", (h.getState().map.questSites || []).map(q => q.eventId).sort().join() === 'reeds_drowned_camp,reeds_lament_pools');
   w.questFlag('mb_weeping_heard', true);
   check('a flag set on the hunt goes to the ledger (each player applies it to their own save), not to the host directly',
     ledger.some(e => e.verb === 'questFlag' && e.args[0] === 'mb_weeping_heard') && !hostPM.hasQuestFlag('mb_weeping_heard'));

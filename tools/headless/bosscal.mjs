@@ -37,6 +37,7 @@ const { BOSSES } = await import('../../data/bosses.js');
 const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
 const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
 const { isPassable } = await import('../../data/grounds.js');
+const { clockAt } = await import('../../src/systems/HuntRules.js');
 const { makeParty, slotMapFor } = await import('./fixtures.js');
 const { createCombatHost } = await import('./combatHost.js');
 const { runFight } = await import('./fight.js');
@@ -67,7 +68,9 @@ if (!def) throw new Error(`no boss '${BOSS}'`);
 function bossSpec(party, s) {
   const w = { party: () => party, nightFalls() {}, dayBreaks() {}, bankItems() {}, awardHuntPoints() {}, awardXP() {}, favor() {},
     rivalDevotion() {}, tribeRep() {}, lore() {}, omens() {}, questFlag() {}, hasQuestFlag: () => false, followedHouse: () => null,
-    houseHolder: () => null, ownTribe: () => null, tribeName: (t) => t, historicInWild: () => false };
+    houseHolder: () => null, ownTribe: () => null, tribeName: (t) => t,
+    // A first kill: the Historic item in the wild (the Captain wears The Unconfessed).
+    historicInWild: () => true };
   const h0 = createMapHunt(def.zone, { plan: { objective: 'boss', size: 'large', boss: BOSS, itemLevel: 1 }, supplies: 300, seed: 9100 + s }, w);
   const d = h0.serialize();
   const lair = d.map.occupants.find(o => o.kind === 'boss');
@@ -75,8 +78,11 @@ function bossSpec(party, s) {
   d.map.occupants = d.map.occupants.filter(o => o.tile !== next);
   for (const o of d.map.occupants) o.noticed = true;
   d.pos = next; d.fog[next] = 'visible';
+  // A lair open only at night (the Drowned Camp): go in after dark.
+  if (def.lair?.night) { let t = d.time; while (!clockAt(t).isNight) t += 1; d.time = t; d.world.time = t; }
   const h = restoreMapHunt(d, w);
-  h.enterLair(lair.tile);
+  const ent = h.enterLair(lair.tile);
+  if (!ent.ok) throw new Error('bosscal: could not enter the lair: ' + ent.reason);
   return { ...h.beginFight(), hunt: h };
 }
 
@@ -92,7 +98,7 @@ function play(level, s, which) {
   return {
     won, ended: res.ended,
     // How often each boss skill landed in the log (its name in a 'uses X' line).
-    casts: which === 'boss' ? Object.fromEntries(['Lament', 'Heart of Grief', 'Mourning Grasp'].map(n => [n, host.__logLines().filter(l => l.includes('uses ' + n)).length])) : null,
+    casts: which === 'boss' ? Object.fromEntries((BOSS === 'mourning_beast' ? ['Lament', 'Heart of Grief', 'Mourning Grasp'] : []).map(n => [n, host.__logLines().filter(l => l.includes('uses ' + n)).length])) : null,
     rounds: host.combatRound - (host._combatStartRound ?? 1) + 1,
     hpLeft: party.reduce((t, c) => t + Math.max(0, c.currentHP), 0) / party.reduce((t, c) => t + c.maxHP, 0),
     // From the log: a victory stands the party back up before anyone could count them.

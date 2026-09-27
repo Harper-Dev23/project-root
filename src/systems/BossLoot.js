@@ -38,6 +38,9 @@ export function rollBossLoot(bossId, { itemLevel = 1, itemRarity = 0, rng, histo
       .filter(Boolean);
     out.spoils = { family: loot.family, parts, bodies: Array.from({ length: loot.bodies || 0 }, () => 'great') };
   }
+  // A boss that WEARS its Historic item (the Ghost Party's Captain, 14b-5)
+  // drops it, or its substitute, off its body in the fight, never from a chest.
+  if (boss?.historicWorn) return out;
   if (boss?.historic && historicInWild(boss.historic) !== false) {
     const inst = createItemInstance(boss.historic, { itemLevel, rng });
     if (inst) { out.chest.push(inst); out.historic = boss.historic; }

@@ -112,6 +112,27 @@ export const EVENT_TEMPLATES = {
     failure: [{ text: 'The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on.' }, { questFlag: 'mb_signs_found' }],
   },
 
+  // ── The Unconfessed Dead (chunk 14b-5): quest sites ────────────────────────
+  reeds_drowned_camp: {
+    name: 'The Drowned Camp',
+    shape: 'choice',
+    text: 'Black tents half-sunk in the water, and a cold fire that gives no heat. A soul stands at its edge, tied to the camp by a cord of reed and hair. It is waiting to be asked something.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
+    options: [
+      { label: 'Ask it who it was', effects: [{ text: 'It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.' }, { questFlag: 'gp_soul_found' }, { xp: '{danger}*8' }] },
+      { label: 'Cut the cord', effects: [{ text: 'The soul does not leave. It only looks at you, and at the tents, and you understand it will be here tomorrow night as well. You keep the cut knot.' }, { questFlag: 'gp_soul_found' }, { huntPoints: '{danger}*4' }] },
+    ],
+  },
+  reeds_unmarked_graves: {
+    name: 'Unmarked Graves',
+    shape: 'check',
+    text: 'Six mounds in a row on the only dry ground for a mile, with no stones. Someone buried a hunting party here and did not know what to write.',
+    appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
+    check: { stat: 'WIS', dc: '{danger}+12' },
+    success: [{ text: 'Scratched into a buried spear shaft, six names, and under them: none confessed. You know who waits at the Drowned Camp now.' }, { questFlag: 'gp_names_known' }, { xp: '{danger}*10' }],
+    failure: [{ text: "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones." }, { questFlag: 'gp_names_known' }],
+  },
+
   // ── False gods' temptations (chunk 11c) ─────────────────────────────────────
   // Accepting starts the region's false god's pact at level 3, or deepens it.
   // The price (hidden standing, Bond standing, the curse) is the engine's.

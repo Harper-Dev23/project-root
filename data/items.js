@@ -1319,7 +1319,7 @@ export const Items = {
   the_unconfessed: {
     id: 'the_unconfessed',
     // Its natural place: the lodge ritual returns it here (GameState.returnHistoric).
-    home: { zone: 'reeds_of_gethsemane', place: "the Lament Pools" },
+    home: { zone: 'reeds_of_gethsemane', place: "the Drowned Camp" },
     name: 'The Unconfessed',
     type: 'armor',
     slot: 'amulet',
@@ -1406,6 +1406,18 @@ export const Items = {
     objective: 'boss',
     size: 'large',
     description: 'Burial cloth, river stones and a lock of hair, bound with reed. Laid at the Lament Pools, it calls the Mourning Beast from its lair.',
+  },
+
+  tethered_soul: {
+    id: 'tethered_soul',
+    name: 'Tethered Soul',
+    type: 'huntPlan',
+    rarity: 'epic',
+    boss: 'ghost_party',
+    zone: 'reeds_of_gethsemane',
+    objective: 'boss',
+    size: 'large',
+    description: 'The name of a drowned hunter, bound to a knot of reed and hair. Carried to the Drowned Camp by night, it calls the Ghost Party to account.',
   },
 
   // ── The plan base types (chunk 8c; owner decision 2, chunk 8) ───────────

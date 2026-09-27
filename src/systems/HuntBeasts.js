@@ -71,11 +71,13 @@ function armorBases(slot) {
  * Roll an occupant's loadout: one { slot: item instance } per roster member.
  * `itemLevel` is the region's (huntItemLevel), `itemRarity` the party's now.
  */
-export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed }) {
+export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed, historicInWild = () => true }) {
   const rng = makeRng(seed);
-  return occ.roster.map((m) => {
+  return occ.roster.map((m, i) => {
     const out = {};
-    if (occ.kind === 'boss') return out;   // a boss wears nothing (its loot is its own, 14b-4c)
+    // A boss (14b): only members that fight in real gear roll it (the Ghost
+    // Party); the rest keep their natural weapons (fightScenario).
+    if (occ.kind === 'boss') return rollBossKit(occ, i, { itemLevel, itemRarity, rng, historicInWild });
     if (occ.kind === 'cultist') {
       const id = pickBaseId(armorBases(CULTIST_GEAR_SLOT), itemLevel, { maxBaseTier: 1, rng });
       const rarity = rollHuntDropRarity(itemRarity, rng);
@@ -96,6 +98,57 @@ export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed }) {
     }
     return out;
   });
+}
+
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic'];
+const atLeast = (rarity, floor) => (RARITY_ORDER.indexOf(rarity) < RARITY_ORDER.indexOf(floor) ? floor : rarity);
+/** Weapon bases of one type a boss member can carry (never natural, Historic or unique). */
+function weaponBases(weaponType) {
+  return Object.entries(Items).filter(([, it]) => it?.type === 'weapon' && it.weaponType === weaponType && !it.natural && !it.historic && !it.unique).map(([id]) => id);
+}
+
+/**
+ * A boss member's kit (data/bosses.js: weaponType, armor, dropSlot,
+ * historicSlot, substituteSlot, and the boss's `kit` rarities). Soulbound
+ * pieces roll kit.soulboundRarity; the drop slot rolls the party's drop odds,
+ * never below kit.dropFloor. The Historic item goes on its wearer while it is
+ * in the wild; while it is held, the substitute slot rolls kit.substitute.
+ * Which pieces drop is decided the same way in bossScenario (bossDrops).
+ */
+function rollBossKit(occ, i, { itemLevel, itemRarity, rng, historicInWild }) {
+  const boss = BOSSES[occ.boss];
+  const mem = boss?.fight?.members?.[i];
+  const out = {};
+  if (!mem?.weaponType) return out;
+  const kit = boss.kit || {};
+  const worn = !!(mem.historicSlot && boss.historic && historicInWild(boss.historic) !== false);
+  const slots = ['weaponMain', ...(mem.armor || [])];
+  if (mem.substituteSlot && !worn && !slots.includes(mem.substituteSlot)) slots.push(mem.substituteSlot);
+  for (const slot of slots) {
+    const ids = slot === 'weaponMain' ? weaponBases(mem.weaponType) : armorBases(slot);
+    const id = pickBaseId(ids, itemLevel, { maxBaseTier: 1, rng });
+    if (!id) continue;
+    const rarity = (mem.substituteSlot === slot && !worn) ? (kit.substitute || 'epic')
+      : slot === mem.dropSlot ? atLeast(rollHuntDropRarity(itemRarity, rng), kit.dropFloor || 'common')
+      : (kit.soulboundRarity || 'common');
+    const inst = createItemInstance(id, { rarity, itemLevel, rng });
+    if (inst) out[slot] = inst;
+  }
+  if (worn) {
+    const inst = createItemInstance(boss.historic, { itemLevel, rng });
+    if (inst) out[mem.historicSlot] = inst;
+  }
+  return out;
+}
+
+/** Which of a boss member's pieces drop (not soulbound): its drop slot, and the
+ *  Historic item it wears, or while that is held, its substitute. */
+function bossDrops(boss, mem, gear) {
+  const out = {};
+  if (mem.dropSlot && gear[mem.dropSlot]) out[mem.dropSlot] = true;
+  if (mem.historicSlot && gear[mem.historicSlot]?.id === boss.historic) out[mem.historicSlot] = true;
+  else if (mem.substituteSlot && gear[mem.substituteSlot]) out[mem.substituteSlot] = true;
+  return out;
 }
 
 /** One member's Initiative from its type and what it wears (see the header). */
@@ -143,15 +196,22 @@ export function loadoutView(occ) {
 function bossScenario(occ, { itemLevel }) {
   const def = BOSSES[occ.boss]?.fight;
   if (!def) throw new Error(`no fight for boss '${occ.boss}'`);
-  const enemies = def.members.map((m) => ({
+  const enemies = def.members.map((m, i) => {
+    // A member in real gear wears its rolled kit (rollBossKit); one with a
+    // natural weapon fights with that (a beast of a boss wears no loot).
+    const kitGear = m.weaponType ? JSON.parse(JSON.stringify(occ.loadout?.[i] || {})) : null;
+    const gear = kitGear || (m.weapon ? { weaponMain: createItemInstance(m.weapon, { itemLevel, rollAffixes: false }) } : {});
+    return {
     type: m.type, slotId: m.slotId, name: m.name || ENEMY_TYPES[m.type]?.name || m.type,
     grade: null, hpMult: 1,
-    // Its natural weapon (a boss wears no loot): the dice calculateDamage reads.
-    gear: m.weapon ? { weaponMain: createItemInstance(m.weapon, { itemLevel, rollAffixes: false }) } : {},
-    gearDroppable: {},
+    gear,
+    gearDroppable: kitGear ? bossDrops(BOSSES[occ.boss], m, kitGear) : {},
     bossPart: occ.boss,                    // CombatScene: the whole boss collapses together
     ...(m.pool ? { pool: m.pool } : {}),   // CombatScene._linkSharedPools
-  }));
+    // The fight's damage dial (CombatScene: damageMultiplierPct, as encounter 4 tunes by).
+    ...(Number.isFinite(def.damagePct) ? { damageMultiplierPct: def.damagePct } : {}),
+    };
+  });
   return {
     id: `hunt_boss_${occ.boss}`,
     name: def.name,

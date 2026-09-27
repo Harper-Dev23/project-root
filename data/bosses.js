@@ -67,8 +67,48 @@ export const BOSS_XP_MULT = 5;
  *   bodies       bodies of meat to butcher (Great grade)
  *   substitute   in the chest instead of the Historic item while it is held:
  *                that part again at that rarity, a specimen for the pack
+ *
+ * A boss whose members wear real gear (the Ghost Party) says so per member:
+ *   weaponType   rolls a weapon of that type (a current type), soulbound
+ *   armor        the slots that roll armour, soulbound
+ *   dropSlot     the ONE slot that drops (not soulbound), rolled at least
+ *                `kit.dropFloor`
+ *   historicSlot this member wears the boss's Historic item there while it
+ *                is in the wild (droppable, and it works on him: gear effects)
+ *   substituteSlot  while it is held, this slot instead rolls `kit.substitute`
+ *                and drops
+ * and `historicWorn: true`: the Historic item comes off its wearer, never
+ * out of a chest. `lair.night`: the lair can only be entered at night.
  */
 export const BOSSES = {
+  ghost_party: {
+    name: 'The Ghost Party',
+    zone: 'reeds_of_gethsemane',
+    plan: 'tethered_soul',
+    unlockFlag: 'gp_offer_taken',
+    offerAfter: 'gp_names_known',
+    historic: 'the_unconfessed',
+    historicWorn: true,
+    lair: {
+      name: 'The Drowned Camp',
+      night: true,
+      text: 'Tents gone black with water, a fire that burns without heat, and six hunters sitting round it who have not moved in years. They turn their heads toward you all at once. This is a boss fight: camp and ready the party first if you need to.',
+    },
+    kit: { soulboundRarity: 'uncommon', dropFloor: 'rare', substitute: 'epic' },
+    fight: {
+      name: 'The Ghost Party',
+      // Every member's damage, as the scenario dial encounter 4 uses (bosscal).
+      damagePct: -27,
+      members: [
+        { type: 'hunt_ghost_captain',   slotId: 2, name: 'Ghost Captain',   weaponType: 'sword_1h', armor: ['head', 'chest', 'legs', 'gloves', 'boots'], dropSlot: 'chest', historicSlot: 'amulet', substituteSlot: 'gloves' },
+        { type: 'hunt_ghost_reaver',    slotId: 1, name: 'Ghost Reaver',    weaponType: 'axe_2h',   armor: ['head', 'chest', 'legs', 'boots'], dropSlot: 'weaponMain' },
+        { type: 'hunt_ghost_cutthroat', slotId: 3, name: 'Ghost Cutthroat', weaponType: 'dagger',   armor: ['head', 'chest', 'gloves', 'boots'], dropSlot: 'boots' },
+        { type: 'hunt_ghost_chaplain',  slotId: 5, name: 'Ghost Chaplain',  weaponType: 'mace_2h',  armor: ['head', 'chest', 'legs'], dropSlot: 'head' },
+        { type: 'hunt_ghost_tracker',   slotId: 7, name: 'Ghost Tracker',   weaponType: 'bow',      armor: ['head', 'chest', 'legs', 'boots'], dropSlot: 'legs' },
+        { type: 'hunt_ghost_magus',     slotId: 8, name: 'Ghost Magus',     weaponType: 'staff',    armor: ['head', 'chest', 'gloves'], dropSlot: 'gloves' },
+      ],
+    },
+  },
   mourning_beast: {
     name: 'The Mourning Beast',
     zone: 'reeds_of_gethsemane',

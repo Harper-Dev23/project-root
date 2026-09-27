@@ -106,7 +106,7 @@ console.log('=== the meter ===');
 {
   const pm = fakePM();
   check('a region without bosses has none to show', O.bossesIn('bay_of_solace', pm).length === 0);
-  check('the Reeds: the Mourning Beast, locked', O.bossesIn(REEDS, pm).map(b => `${b.id}:${b.unlocked}`).join() === 'mourning_beast:false');
+  check('the Reeds: the Mourning Beast and the Ghost Party, both locked', O.bossesIn(REEDS, pm).map(b => `${b.id}:${b.unlocked}`).sort().join() === 'ghost_party:false,mourning_beast:false');
   O.addOmens(pm, REEDS, 70); O.addOmens(pm, REEDS, 70);
   const m0 = O.omenMeter(REEDS, pm);
   check(`before any boss is known the meter stops at one full (${OMEN_FULL}), and nothing is ready to claim`, m0.have === OMEN_FULL && m0.ready === 0, JSON.stringify(m0));
@@ -136,7 +136,7 @@ console.log("=== the tribe's first offer ends the questline ===");
   check('...the questline is on its last step', getQuestState(quest, pm) === 'active');
   const t = O.takeFirstOffer(pm, bag, 'mourning_beast', pm.setQuestFlag);
   check('taking it: a free plan, the boss unlocked, the questline complete', t.ok && bag.length === 1 && bag[0].id === MB.plan
-    && pm.hasQuestFlag(MB.unlockFlag) && getQuestState(quest, pm) === 'completed' && O.bossesIn(REEDS, pm)[0].unlocked);
+    && pm.hasQuestFlag(MB.unlockFlag) && getQuestState(quest, pm) === 'completed' && O.bossesIn(REEDS, pm).find(b => b.id === 'mourning_beast').unlocked);
   check('...once only', !O.takeFirstOffer(pm, bag, 'mourning_beast', pm.setQuestFlag).ok && bag.length === 1 && O.offersReady(pm).length === 0);
 }
 

@@ -33,6 +33,7 @@ const { takeDeparture } = await import('../../src/scenes/overlays/HuntHubOverlay
 const { planFitsZone } = await import('../../src/scenes/overlays/HuntPlanPickerOverlay.js');
 const { isPassable } = await import('../../data/grounds.js');
 const { parseTileId } = await import('../../src/systems/HexGrid.js');
+const { clockAt } = await import('../../src/systems/HuntRules.js');
 const GameState = (await import('../../src/systems/GameState.js')).default;
 const { makeParty, slotMapFor } = await import('./fixtures.js');
 const { createCombatHost } = await import('./combatHost.js');
@@ -105,10 +106,11 @@ console.log('=== the boss plan: kept at departure ===');
 
 // =============================================================================
 console.log('=== the lair: its warning, then the fight ===');
-function atLair(s = 515) {
+function atLair(s = 515, { boss = 'mourning_beast', night = null, inWild = true } = {}) {
   const party = makeParty();
   const w = world(party);
-  const inst = createItemInstance(MB.plan, { itemLevel: 1 });
+  w.historicInWild = () => inWild;
+  const inst = createItemInstance(BOSSES[boss].plan, { itemLevel: 1 });
   const h0 = createMapHunt(REEDS, { plan: { ...planMapInputs(huntPlanView(inst)), itemLevel: 1, bossPlanId: inst.instanceId }, supplies: 300, seed: s }, w);
   const d = h0.serialize();
   const lair = d.map.occupants.find(o => o.kind === 'boss');
@@ -117,6 +119,7 @@ function atLair(s = 515) {
   d.map.occupants = d.map.occupants.filter(o => o.tile !== next);
   for (const o of d.map.occupants) o.noticed = true;
   d.pos = next; d.fog[next] = 'visible';
+  if (night !== null) { let t = d.time; while (clockAt(t).isNight !== night) t += 1; d.time = t; d.world.time = t; }
   return { h: restoreMapHunt(d, w), w, party, lair, inst, h0 };
 }
 {
@@ -307,6 +310,81 @@ console.log("=== 14b-4c: the kit, the lair's chest ===");
   GAME_WORLD.bankItems([createItemInstance(MB.historic, {})], { found: true });
   GAME_WORLD.bankItems([createItemInstance(MB.historic, {})], { found: true });
   check('banking: the first copy lands, a second is refused (one of each in the realm)', GameState.inventory.filter(i => i.id === MB.historic).length === 1);
+}
+
+// =============================================================================
+console.log('=== 14b-5: the Ghost Party ===');
+{
+  const GP = BOSSES.ghost_party;
+  const { Items } = await import('../../data/items.js');
+  const { ENEMY_TYPES } = await import('../../data/enemyTypes.js');
+  const { SKILLS } = await import('../../data/skills.js');
+  const CURRENT = ['sword_1h', 'dagger', 'staff', 'mace_2h', 'bow', 'axe_2h'];
+  check('six ghosts, one per current weapon, every kit skill real', GP.fight.members.length === 6
+    && CURRENT.every(w => GP.fight.members.some(m => m.weaponType === w))
+    && GP.fight.members.every(m => ENEMY_TYPES[m.type]?.skills.every(id => SKILLS[id])));
+
+  const day = atLair(540, { boss: 'ghost_party', night: false });
+  const rd = day.h.move(day.lair.tile);
+  check('the Drowned Camp is empty by day: refused, at no cost, no warning', !rd.ok && !rd.lair && /by day/.test(rd.reason) && !day.h.encounter(), rd.reason);
+  const nt = atLair(540, { boss: 'ghost_party', night: true });
+  const rn = nt.h.move(nt.lair.tile);
+  check('...at night its warning shows, and going in starts the fight', !rn.ok && rn.lair?.name === GP.lair.name && nt.h.enterLair(nt.lair.tile).ok && nt.h.encounter()?.kind === 'boss');
+
+  const spec = nt.h.fightSpec();
+  const en = spec.scenario.enemies;
+  const byName = (n) => en.find(e => e.name === n);
+  check('the board: six ghosts in their slots', JSON.stringify(en.map(e => [e.type, e.slotId])) === JSON.stringify(GP.fight.members.map(m => [m.type, m.slotId])));
+  check('each carries a weapon of its type', GP.fight.members.every(m => Items[byName(m.name).gear.weaponMain?.id]?.weaponType === m.weaponType),
+    en.map(e => e.gear.weaponMain?.id).join(','));
+  const RANK = ['common', 'uncommon', 'rare', 'epic'];
+  const drops = GP.fight.members.map(m => {
+    const e = byName(m.name);
+    return { name: m.name, droppable: Object.keys(e.gearDroppable).filter(k => e.gearDroppable[k]), worn: Object.keys(e.gear) };
+  });
+  check('each ghost has exactly one droppable piece (the Captain two, with The Unconfessed); the rest soulbound',
+    drops.every(d => (d.name === 'Ghost Captain' ? d.droppable.length === 2 : d.droppable.length === 1) && d.worn.length > d.droppable.length), JSON.stringify(drops.map(d => d.droppable)));
+  check(`...every droppable piece at least ${GP.kit.dropFloor}`, GP.fight.members.every(m => RANK.indexOf(byName(m.name).gear[m.dropSlot]?.rarity) >= RANK.indexOf(GP.kit.dropFloor)));
+  const cap = byName('Ghost Captain');
+  check('while it is in the wild, the Captain wears The Unconfessed, and it drops', cap.gear.amulet?.id === GP.historic && cap.gearDroppable.amulet === true);
+
+  const held = atLair(541, { boss: 'ghost_party', night: true, inWild: false });
+  held.h.enterLair(held.lair.tile);
+  const hcap = held.h.fightSpec().scenario.enemies.find(e => e.name === 'Ghost Captain');
+  check('while it is held, he wears none, and an epic substitute piece drops instead', !hcap.gear.amulet && hcap.gear.gloves?.rarity === GP.kit.substitute && hcap.gearDroppable.gloves === true);
+
+  // In the real CombatScene: the amulet works on him (gear effects), and a win
+  // drops only what is droppable, The Unconfessed with it.
+  nt.h.beginFight();
+  const host = createCombatHost(CombatScene);
+  host.__begin({ party: nt.party, partySlots: slotMapFor(nt.party), huntFight: { ...nt.h.fightSpec(), hunt: nt.h } });
+  const capU = host.enemies.find(e => e.name === 'Ghost Captain');
+  check('on the board the Captain carries Curse of the Unshriven (his amulet works on him)', !!capU?.gearEffects?.historic?.unshrivenPct);
+  // The ghosts at 1 HP: this is about what drops, not the balance (a 99999-HP
+  // party dies to Hemorrhage, which takes 8% of MAX HP a tick).
+  for (const e of host.enemies) e.currentHP = 1;
+  seed(91);
+  const basic = (hh, actor) => { const atk = (actor.skills || []).find(x => x.id === 'basic_attack'); const t = hh.enemies.find(e => e.currentHP > 0 && e.status !== 'incapacitated'); return atk && t ? [{ ability: atk, target: t }] : []; };
+  const pack0 = nt.h.getState().pack.found.length;
+  runFight(host, basic, { maxTurns: 4000 });
+  const found = nt.h.getState().pack.found.slice(pack0);
+  const droppableIds = en.flatMap(e => Object.keys(e.gearDroppable).filter(k => e.gearDroppable[k]).map(k => e.gear[k].id));
+  check('won: the drops reach the pack (The Unconfessed among them), and nothing soulbound', host.combatEnded && found.some(i => i.id === GP.historic)
+    && found.every(i => droppableIds.includes(i.id)) && found.length === droppableIds.length, `${found.length} found of ${droppableIds.length} droppable`);
+  check('...and no chest or spoils: the Ghost Party drops off its bodies', !nt.h.getState().spoils);
+
+  // The questline and the offer.
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { offersReady, takeFirstOffer } = await import('../../src/systems/Omens.js');
+  const flags = new Set(['apex_slain:' + REEDS]);
+  const pm = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (x) => flags.has(x) };
+  const sites = () => questSitesFor(REEDS, pm).map(q => q.eventId).filter(e => e !== 'reeds_lament_pools');
+  const walk = [sites()]; flags.add('gp_soul_found'); walk.push(sites()); flags.add('gp_names_known'); walk.push(sites());
+  check('The Unconfessed Dead: the Drowned Camp, then the graves, then the offer', JSON.stringify(walk) === JSON.stringify([['reeds_drowned_camp'], ['reeds_unmarked_graves'], []])
+    && offersReady(pm, REEDS).some(b => b.id === 'ghost_party'), JSON.stringify(walk));
+  const bag = [];
+  const tk = takeFirstOffer(pm, bag, 'ghost_party', (x) => flags.add(x));
+  check('...taking it: a Tethered Soul plan, the Ghost Party unlocked', tk.ok && bag[0]?.id === 'tethered_soul' && flags.has(GP.unlockFlag));
 }
 
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

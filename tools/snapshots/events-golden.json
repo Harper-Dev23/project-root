@@ -118,6 +118,25 @@
    "failure",
    "The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on."
   ],
+  "reeds_drowned_camp {\"option\":0}": [
+   "option:0",
+   "It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.",
+   "+8 XP for the party."
+  ],
+  "reeds_drowned_camp {\"option\":1}": [
+   "option:1",
+   "The soul does not leave. It only looks at you, and at the tents, and you understand it will be here tomorrow night as well. You keep the cut knot.",
+   "+4 Hunt Points."
+  ],
+  "reeds_unmarked_graves {\"roll\":20}": [
+   "success",
+   "Scratched into a buried spear shaft, six names, and under them: none confessed. You know who waits at the Drowned Camp now.",
+   "+10 XP for the party."
+  ],
+  "reeds_unmarked_graves {\"roll\":1}": [
+   "failure",
+   "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones."
+  ],
   "dagon_whisper {\"accept\":true}": [
    "accept",
    "The reeds lean toward you. Dagon is pleased.",

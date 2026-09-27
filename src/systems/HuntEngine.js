@@ -401,6 +401,10 @@ function makeMapHunt(s, rng, worldRng, world) {
       const occ = s.map.occupants.find(o => o.tile === to && HOSTILE.has(o.kind)) || null;
       // A boss's lair is entered only through its warning (14b-4): a plain
       // move there is refused with what the warning says, and costs nothing.
+      // A lair only open at night (the Drowned Camp, 14b-5): refused by day, at no cost.
+      if (occ?.kind === 'boss' && BOSSES[occ.boss]?.lair?.night && !this.clock().isNight) {
+        return { ok: false, reason: `${BOSSES[occ.boss].lair.name} is empty by day: come back after dark` };
+      }
       if (occ?.kind === 'boss' && !this._enteringLair) {
         const def = BOSSES[occ.boss];
         return { ok: false, lair: { tile: to, boss: occ.boss, name: def?.lair?.name || def?.name, text: def?.lair?.text || '' },
@@ -1099,6 +1103,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         itemLevel: huntItemLevel(getZone(s.zoneId)?.danger),
         itemRarity: this.stats().itemRarity,
         seed: loadoutSeed(s.seed, occ),
+        // A boss wearing its Historic item wears it only while it is in the wild (14b-5).
+        historicInWild: (id) => world.historicInWild?.(id),
       });
     },
 

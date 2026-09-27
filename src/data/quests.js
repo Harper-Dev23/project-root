@@ -335,6 +335,41 @@ export const QUEST_LINES = [
     ],
   },
 
+  {
+    id:          'unconfessed_dead',
+    category:    'region',
+    title:       'The Unconfessed Dead',
+    description: 'A hunting party drowned in the Reeds and never made its confession. It is still out there, after dark.',
+    isAvailable: (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+    steps: [
+      {
+        id:          'ud_camp',
+        label:       'The Drowned Camp',
+        description: 'Something waits at a drowned camp in the Reeds. Your next Reeds hunt will mark it on its map. It only shows itself at night.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_drowned_camp', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('gp_soul_found'),
+      },
+      {
+        id:          'ud_graves',
+        label:       'Unmarked Graves',
+        description: 'Find where the drowned party was buried. Your next Reeds hunt will mark the graves.',
+        huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_unmarked_graves', far: true },
+        isActive:   (pm) => pm.hasQuestFlag('gp_soul_found'),
+        isComplete: (pm) => pm.hasQuestFlag('gp_names_known'),
+      },
+      {
+        // Completed by taking the tribe's first Tethered Soul at the hunt
+        // board (HuntHubOverlay, Omens.takeFirstOffer).
+        id:          'ud_offer',
+        label:       "The Tribe's Offer",
+        description: 'Open the hunt board and choose the Reeds. Your tribe knows how to call the dead to account.',
+        isActive:   (pm) => pm.hasQuestFlag('gp_names_known'),
+        isComplete: (pm) => pm.hasQuestFlag('gp_offer_taken'),
+      },
+    ],
+  },
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  DIVINE
   // ═══════════════════════════════════════════════════════════════════════════
