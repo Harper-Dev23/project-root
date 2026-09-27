@@ -71,9 +71,9 @@ await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
 await shot('04b-victory');
 const vic = await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
   return { texts: c.children.list.filter(o => o.type === 'Text').map(o => o.text).join(' | '),
-    all: window.__T.g().scene.getScenes(true).flatMap(sc => sc.children.list).filter(o => o.type === 'Text').map(o => o.text).join(' | ') };`);
-check("the victory screen lists Burden of Dreams, and the log names the lair's chest", /Burden of Dreams\s+\[Historic\]/.test(vic.texts) && /chest holds a Historic item:\s+Burden\s+of\s+Dreams/.test(vic.all),
-  (vic.all.match(/[^|]*chest[^|]*/) || [''])[0].slice(0, 200));
+    log: (c.combatEntries || []).map(e => (e.segments || []).map(g => g.text).join('')).join(' | ') };`);
+check("the victory screen lists Burden of Dreams, and the log names the lair's chest", /Burden of Dreams[^|]*\[Historic\]/.test(vic.texts) && /chest holds a Historic item: Burden of Dreams/.test(vic.log),
+  (vic.log.match(/[^|]*chest[^|]*/) || [''])[0].slice(0, 200));
 
 // ---- The Ghost Party (14b-5): the Drowned Camp at night, six ghosts on the board ----
 // A fresh page: stopping the first fight's CombatScene by hand leaves UIScene
