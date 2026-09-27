@@ -304,9 +304,11 @@ function combatItemAbility(itemId, count = 1) {
     itemUse: base.combatUse,
     actionCost: 'bonus',
     mechanic: 'item',
-    requiresTarget: true,
-    // A potion is drunk by a hunter; a chant is aimed at an enemy.
-    targetRequirement: base.combatUse.target === 'ally' ? 'ally' : 'enemy',
+    // A potion is drunk by whoever uses it (owner's playtest, 2026-09-27: no
+    // handing one to a teammate mid-fight), so it takes no target; a chant is
+    // aimed at an enemy.
+    requiresTarget: base.combatUse.target !== 'self',
+    targetRequirement: base.combatUse.target === 'self' ? 'self' : base.combatUse.target === 'ally' ? 'ally' : 'enemy',
     tags: ['item'],
   };
 }
@@ -6198,10 +6200,13 @@ export default class CombatScene extends Phaser.Scene {
       // pure lookup against gear both sides now roll from one seed — no dice, so
       // nothing can diverge. The server still rules on the board, which is what
       // makes the loot authoritative.
-      if (ability.itemUse && target) {
+      // An untargeted item (a potion) is drunk by the actor, as the server
+      // resolves it (the untargeted branch below).
+      const itemTarget = target || (ability.itemUse && !ability.requiresTarget ? actor : null);
+      if (ability.itemUse && itemTarget) {
         this._pendingItemUse = (GameState.inventory || [])
           .find(it => isItemInstance(it) && it.id === ability.id) || null;
-        this._useCombatItem(actor, target, ability);
+        this._useCombatItem(actor, itemTarget, ability);
       }
 
       this._exitTargetingMode?.();
@@ -6819,7 +6824,7 @@ export default class CombatScene extends Phaser.Scene {
     if (uiScene?.refreshUI) uiScene.refreshUI();
 
     // Collect droppable items from all defeated enemies → global inventory
-    const loot = [];
+    let loot = [];
     (this.enemies || []).forEach(enemy => {
       const equip = enemy.equipment || {};
       for (const inst of Object.values(equip)) {
@@ -6852,6 +6857,15 @@ export default class CombatScene extends Phaser.Scene {
       const won = this.huntFight.hunt.winEncounter({ loot, knockedOut: huntKnockedOut });
       if (won?.huntPoints > 0) this._log(`+${won.huntPoints} Hunt Points.`);
       if (won?.spoils) this._log('The bodies are yours: harvest what you want on the map.');
+      // The lair's chest goes straight into the pack (owner's playtest,
+      // 2026-09-27: it arrived unannounced), so say so, and show it with the loot.
+      if (won?.chestItem) {
+        const name = getItemComputedData(won.chestItem)?.name || won.chest;
+        this._log(won.historic
+          ? `The lair's chest holds a Historic item: ${name}. It goes into the hunt pack; walk out with it to keep it.`
+          : `The lair's chest: ${name} goes into the hunt pack.`);
+        loot = [...loot, won.chestItem];
+      }
     } else if (this.isHunt) {
       // Hunt fights aren't training-progression scenarios — award Hunt Points
       // (Beast only; Cultist's reward is the loot just collected above) and

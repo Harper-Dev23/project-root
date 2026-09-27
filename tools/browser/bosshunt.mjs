@@ -62,6 +62,19 @@ check('the board holds the four parts in their slots', board.length === 4 && ['H
 const head = board.find(b => b.name.includes('Head')), body = board.find(b => b.name.includes('Body'));
 check('the Head and Body show one pool', head?.pool && body?.pool && head.hp === body.hp && head.max === body.max, `${head?.hp}/${head?.max} and ${body?.hp}/${body?.max}`);
 
+// The win (owner's playtest, 2026-09-27: the chest's Historic item arrived
+// unannounced): every part down, the victory screen shows Burden of Dreams,
+// and the log says it came from the chest.
+await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
+  for (const e of c.enemies) { e.currentHP = 0; e.status = 'incapacitated'; }
+  c._checkVictoryCondition(); await new Promise(r => setTimeout(r, 1800)); return true;`);
+await shot('04b-victory');
+const vic = await evaluate(`const c = window.__T.g().scene.getScene('CombatScene');
+  return { texts: c.children.list.filter(o => o.type === 'Text').map(o => o.text).join(' | '),
+    all: window.__T.g().scene.getScenes(true).flatMap(sc => sc.children.list).filter(o => o.type === 'Text').map(o => o.text).join(' | ') };`);
+check("the victory screen lists Burden of Dreams, and the log names the lair's chest", /Burden of Dreams\s+\[Historic\]/.test(vic.texts) && /chest holds a Historic item:\s+Burden\s+of\s+Dreams/.test(vic.all),
+  (vic.all.match(/[^|]*chest[^|]*/) || [''])[0].slice(0, 200));
+
 // ---- The Ghost Party (14b-5): the Drowned Camp at night, six ghosts on the board ----
 // A fresh page: stopping the first fight's CombatScene by hand leaves UIScene
 // half-built (its dialogue bar off-screen), which a real fight never does.

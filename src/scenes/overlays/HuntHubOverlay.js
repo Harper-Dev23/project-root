@@ -46,7 +46,7 @@ import { rationPackCap, huntMods } from '../../systems/HuntRules.js';
 import { partyStats } from '../../systems/PartyStats.js';
 import { planMapInputs } from '../../systems/HuntMapGen.js';
 import { launchMapHunt } from './HuntFieldOverlay.js';
-import { bossesIn, omenMeter, offersReady, claimBossPlan, takeFirstOffer } from '../../systems/Omens.js';
+import { bossesIn, omenMeter, offersReady, claimBossPlan } from '../../systems/Omens.js';
 
 // The camp's free issue (CAMP_ISSUE, 60) comes on top of what is packed. The
 // packing cap is rationPackCap (HuntRules.js): 60 since the hunt moved onto
@@ -354,8 +354,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const offer = offersReady(ProgressionManager, zone.id)[0];
     const claimable = bosses.filter(b => b.unlocked);
     let label = `Omens ${meter.have} / ${meter.full}`;
-    if (offer) label += "   ·   your tribe has something for you";
-    else if (!claimable.length) label += '   ·   a boss stirs here, unknown to you';
+    if (offer) label += "   ·   your tribe has something for you: visit your lodge (Tribe HQ)";
+    else if (!claimable.length) label += "   ·   a boss stirs here; omens gather once a region's questline names it";
     else label += `   ·   a full meter calls ${claimable.map(b => b.name).join(' or ')}`;
     this._text(left, y + 4, label, { fontSize: '14px', color: meter.ready || offer ? '#c59bff' : '#bbbbbb' });
     if (this._planNote) {
@@ -371,10 +371,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
       btn.x = bx - w / 2;
       bx -= w + 12;
     };
-    if (offer) {
-      addButton("Your tribe's offer", () =>
-        done(takeFirstOffer(ProgressionManager, bag, offer.id, (f) => ProgressionManager.setQuestFlag(f)), 'Your tribe gives you the first'));
-    } else if (meter.ready > 0) {
+    // The tribe's first offer is taken at the lodge (TribeHQOverlay), not here.
+    if (meter.ready > 0) {
       for (const b of claimable) addButton(`Claim: ${b.name}`, () => done(claimBossPlan(ProgressionManager, bag, b.id), 'The omens are enough'));
     }
     return 40;

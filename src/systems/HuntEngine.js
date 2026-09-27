@@ -832,7 +832,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       // host's, on a co-op hunt: each player's own bank then keeps it only
       // where it is wild too, GAME_WORLD.bankItems), otherwise the boss's
       // substitute. Seeded from the hunt, as a loadout is: a reload rolls the same.
-      let chest = null, bossSpoils = null;
+      let chest = null, bossSpoils = null, bl_historic = null;
       if (occ.kind === 'boss') {
         const bl = rollBossLoot(occ.boss, {
           itemLevel: huntItemLevel(getZone(s.zoneId)?.danger), itemRarity: this.stats().itemRarity,
@@ -842,6 +842,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         for (const inst of bl.chest) addToList(s.pack.found, inst);
         chest = bl.chest.length ? bl.chest[0] : null;
         bossSpoils = bl.spoils;
+        bl_historic = bl.historic;
         this._log({ kind: 'lair_chest', item: chest?.id || null, historic: bl.historic, time: s.time });
       }
       // A beast fight leaves its bodies (chunk 9d): every part it wore, as
@@ -858,7 +859,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere(), ...(chest ? { chest: chest.id } : {}) };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere(), ...(chest ? { chest: chest.id, chestItem: chest, historic: bl_historic } : {}) };
     },
 
     /**
@@ -1414,7 +1415,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         nearby: (mark) => this._nearbyMark(mark),
       });
       if (quiet) {
-        this._log({ kind: 'event_quiet', event: site.templateId, tile, time: s.time });
+        this._log({ kind: 'event_quiet', event: site.templateId, tile, quiet, time: s.time });
         return { quiet };
       }
       s.event = { templateId: site.templateId, site: { occId: site.occId || null, tile, feature: site.feature || null }, roles, houseId, rivalId, godId };

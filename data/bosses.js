@@ -24,7 +24,7 @@
 export const OMEN_FULL = 100;
 
 /** Full meters a region may bank once a boss there is unlocked (before one
- *  is, the meter stops at one full). Claimed plans are items and uncapped. */
+ *  is, no omens gather at all). Claimed plans are items and uncapped. */
 export const OMEN_BANK = 3;
 
 /** What a hunt books toward its region's meter. Objectives pay more than

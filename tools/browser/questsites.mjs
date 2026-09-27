@@ -75,14 +75,24 @@ await evaluate(`
   g.scene.getScene('HuntHubOverlay').setZone('reeds_of_gethsemane');
   await new Promise(r => setTimeout(r, 300)); return true;`);
 await shot('03-hub-offer');
-check('the hub shows the Reeds meter', !!(await B.findText('^Omens 40 / 100', 'HuntHubOverlay')));
-await B.clickText("Your tribe's offer", 'HuntHubOverlay');
+check('the hub shows the Reeds meter, and sends you to the lodge for the offer', !!(await B.findText('^Omens 40 / 100', 'HuntHubOverlay'))
+  && !!(await B.findText('visit your lodge \\(Tribe HQ\\)','HuntHubOverlay')) && !(await B.findText("^Your tribe's offer", 'HuntHubOverlay')));
+// The offer is taken at the lodge (owner's playtest, 2026-09-27).
+await evaluate(`const g = window.__T.g(); g.scene.stop('HuntHubOverlay');
+  g.scene.getScene('TownScene').scene.launch('TribeHQOverlay'); await new Promise(r => setTimeout(r, 500)); return true;`);
+await shot('03b-lodge-offer');
+await B.clickText("^Your tribe's offer: Mourner's Offering", 'TribeHQOverlay');
 await sleep(300);
 const after = await evaluate(`
   const GS = (await import('/src/systems/GameState.js')).default; const PM = (await import('/src/systems/ProgressionManager.js')).default;
   return { plans: GS.inventory.filter(i => i.id === 'mourners_offering').length, unlocked: PM.hasQuestFlag('mb_offer_taken') };`);
-check("clicking the tribe's offer puts a Mourner's Offering in the bag and unlocks the boss", after.plans === 1 && after.unlocked, JSON.stringify(after));
-check('...and says so', !!(await B.findText("Mourner's Offering is in your bag", 'HuntHubOverlay')));
+check("clicking the tribe's offer in Tribe HQ puts a Mourner's Offering in the bag and unlocks the boss", after.plans === 1 && after.unlocked, JSON.stringify(after));
+check('...and says so, and the button is gone', !!(await B.findText("Mourner's Offering is in your camp bag", 'TribeHQOverlay')) && !(await B.findText("^Your tribe's offer", 'TribeHQOverlay')));
+await evaluate(`const g = window.__T.g(); g.scene.stop('TribeHQOverlay');
+  g.scene.getScene('TownScene').scene.launch('HuntHubOverlay');
+  await new Promise(r => setTimeout(r, 500));
+  g.scene.getScene('HuntHubOverlay').setZone('reeds_of_gethsemane');
+  await new Promise(r => setTimeout(r, 300)); return true;`);
 await shot('04-hub-after-offer');
 await evaluate(`const PM = (await import('/src/systems/ProgressionManager.js')).default; PM.omens = { reeds_of_gethsemane: 120 };
   window.__T.g().scene.getScene('HuntHubOverlay')._render(); await new Promise(r => setTimeout(r, 200)); return true;`);
@@ -96,6 +106,20 @@ await B.clickText('^Choose Hunt Plan', 'HuntHubOverlay');
 await sleep(500);
 await shot('05-picker-boss-plan');
 check('the picker lists the boss plan, pickable, saying when it is used up', !!(await B.findText('used up once the boss is fought', 'HuntPlanPickerOverlay')));
+// The picker scrolls (owner's playtest, 2026-09-27): with many plans the last
+// one is out of view, and the wheel brings it in to be picked.
+await evaluate(`const g = window.__T.g(); g.scene.stop('HuntPlanPickerOverlay');
+  const GS = (await import('/src/systems/GameState.js')).default; const F = await import('/src/systems/ItemFactory.js');
+  for (let i = 0; i < 9; i++) GS.inventory.push(F.createItemInstance('tethered_soul'));
+  g.scene.getScene('HuntHubOverlay').scene.pause(); g.scene.getScene('HuntHubOverlay').scene.launch('HuntPlanPickerOverlay');
+  await new Promise(r => setTimeout(r, 500)); return true;`);
+const sc = await evaluate(`const p = window.__T.g().scene.getScene('HuntPlanPickerOverlay');
+  const before = p._scroll, max = p._max; p._setScroll(99999); await new Promise(r => setTimeout(r, 100));
+  const last = p._list.list.filter(o => o.type === 'Rectangle').pop();
+  const lastY = last.y + p._list.y;
+  return { before, max, after: p._scroll, lastVisible: lastY < p._view.bottom && lastY > p._view.top };`);
+await shot('05b-picker-scrolled');
+check('the picker scrolls: the list is longer than the view, and scrolling brings the last plan into view', sc.max > 0 && sc.before === 0 && sc.after === sc.max && sc.lastVisible, JSON.stringify(sc));
 
 // ---- 4. The journal's hunt entries (14f): the new one loads, the rewrites too --
 await evaluate(`const g = window.__T.g(); g.scene.stop('HuntPlanPickerOverlay'); g.scene.stop('HuntHubOverlay');

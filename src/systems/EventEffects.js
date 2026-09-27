@@ -420,18 +420,29 @@ export function staticEligible(tpl, ctx) {
  * may open, or the reason it stays quiet.
  */
 export function dynamicBlock(tpl, ctx) {
+  // Each reason says what the site is waiting for, or that it cannot open on
+  // this hunt at all (owner's playtest, 2026-09-27: one "nothing here for you
+  // now" for every case left the player guessing whether to wait).
   const a = tpl.appears || {};
+  const god = ctx.roles?.falsegod || 'the false god';
   if (a.night === true && !ctx.isNight) return 'it only stirs after dark';
-  if (a.night === false && ctx.isNight) return 'nothing stirs here at night';
-  if (a.hunger && !a.hunger.includes(ctx.hunger)) return 'nothing here for you now';
-  if (a.questFlag && !ctx.hasQuestFlag?.(a.questFlag)) return 'nothing here for you now';
-  if (a.notQuestFlag && ctx.hasQuestFlag?.(a.notQuestFlag)) return 'nothing here for you now';
+  if (a.night === false && ctx.isNight) return 'nothing stirs here at night; come back by day';
+  if (a.hunger && !a.hunger.includes(ctx.hunger)) return `it only draws a party that is ${a.hunger.join(' or ')}`;
+  if (a.questFlag && !ctx.hasQuestFlag?.(a.questFlag)) return 'it waits on a quest step you have not reached';
+  if (a.notQuestFlag && ctx.hasQuestFlag?.(a.notQuestFlag)) return 'you have already done what it asks';
   // A false god's temptations (11c): the first only outside a pact, deeper
   // ones only within one.
-  if (a.pact === true && !ctx.pact) return 'nothing here for you now';
-  if (a.pact === false && ctx.pact) return 'nothing here for you now';
-  for (const r of a.needs || []) if (ctx.roles?.[r] == null) return 'nothing here for you now';
+  if (a.pact === true && !ctx.pact) return `it speaks only to those in a pact with ${god}`;
+  if (a.pact === false && ctx.pact) return `you are already in ${god}'s pact; it has nothing more for you`;
+  for (const r of a.needs || []) if (ctx.roles?.[r] == null) return NEEDS_REASON[r] || 'it cannot open on this hunt';
   // A beast of this mark within 2 steps (11d), the `fight` verb's reach.
-  if (a.nearby && !ctx.nearby?.(a.nearby)) return 'nothing here for you now';
+  if (a.nearby && !ctx.nearby?.(a.nearby)) return `it needs an ${a.nearby} beast close by`;
   return null;
 }
+
+/** Why a site whose role is missing stays quiet: none of these change mid-hunt. */
+const NEEDS_REASON = {
+  prophet: 'no prophet watches this region, so it cannot open on this hunt',
+  falsegod: 'no false god stirs on this hunt, so it cannot open',
+  rival: "no rival tribe holds your house's favour, so it cannot open on this hunt",
+};

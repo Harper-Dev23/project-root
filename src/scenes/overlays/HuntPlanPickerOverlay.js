@@ -13,6 +13,8 @@ import { SoundManager } from '../../systems/SoundManager.js';
 import { getItemComputedData } from '../../systems/ItemFactory.js';
 import { describePlan, makeBasicPlan } from '../../systems/HuntPlans.js';
 import { RARITY_COLORS } from '../../ui/styles.js';
+import { createRectMask } from '../../ui/masks.js';
+import { createScrollbar } from '../../ui/Scrollbar.js';
 import GameState from '../../systems/GameState.js';
 import { Items } from '../../../data/items.js';
 import { PRIMARY_OBJECTIVES } from '../../../data/huntMapGen.js';
@@ -49,14 +51,23 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     });
 
     const depth = frame.depth;
-    const { x, y, width } = frame.bounds;
+    const { x, y, width, bottom } = frame.bounds;
     const left = x + 40;
+
+    // The rows scroll (owner's playtest, 2026-09-27: plans past the bottom of
+    // the frame could not be reached). A Graphics mask, never a Rectangle one
+    // (src/ui/masks.js); rows outside the view take no click.
+    const viewTop = y + 80, viewH = Math.max(ROW_H, bottom - 30 - viewTop);
+    this._view = new Phaser.Geom.Rectangle(left, viewTop, width - 80, viewH);
+    this._list = this.add.container(0, 0).setDepth(depth);
+    this._list.setMask(createRectMask(this, left, viewTop, width - 80, viewH).mask);
+    this._scroll = 0;
 
     const zoneId = this.scene.get('HuntHubOverlay')?.zoneId || null;
     const huntPlans = (GameState.inventory || [])
       .filter(inst => getItemComputedData(inst)?.type === 'huntPlan' && planFitsZone(inst, zoneId).show);
 
-    let rowY = y + 80;
+    let rowY = viewTop;
 
     const basic = makeBasicPlan();
     this._row(left, rowY, width - 80, depth, getItemComputedData(basic).name, '#ffdd88',
@@ -64,9 +75,9 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
     rowY += ROW_H;
 
     if (huntPlans.length === 0) {
-      this.add.text(left, rowY, 'Better plans are sold at the Greenhollow Satchel, for Hunt Tickets.', {
+      this._list.add(this.add.text(left, rowY, 'Better plans are sold at the Greenhollow Satchel, for Hunt Tickets.', {
         fontSize: '14px', color: '#999999',
-      }).setDepth(depth);
+      }));
     }
 
     huntPlans.forEach(inst => {
@@ -77,28 +88,46 @@ export default class HuntPlanPickerOverlay extends Phaser.Scene {
       this._row(left, rowY, width - 80, depth, view.name, color, desc, why ? null : () => this._pick(inst));
       rowY += ROW_H;
     });
+
+    this._max = Math.max(0, rowY - viewTop - viewH);
+    this._bar = createScrollbar(this, {
+      x: left + width - 80 + 6, y: viewTop, height: viewH, depth: depth + 2,
+      getScroll: () => this._scroll, getMax: () => this._max,
+      setScroll: (v) => this._setScroll(v),
+      viewRatio: () => viewH / Math.max(viewH, rowY - viewTop),
+    });
+    this._bar.refresh();
+    this.input.on('wheel', (_p, _go, _dx, dy) => this._setScroll(this._scroll + dy * 0.5));
+  }
+
+  _setScroll(v) {
+    this._scroll = Phaser.Math.Clamp(v, 0, this._max || 0);
+    this._list.y = -this._scroll;
+    this._bar?.refresh();
   }
 
   _row(x, y, w, depth, title, titleColor, desc, onPick) {
     const bg = this.add.rectangle(x + w / 2, y + (ROW_H - 8) / 2, w, ROW_H - 8, 0x1c1c1c, 0.6)
-      .setStrokeStyle(1, 0x6a7080)
-      .setDepth(depth);
+      .setStrokeStyle(1, 0x6a7080);
+    this._list.add(bg);
     // A row that cannot be picked (a boss plan whose lair is not in yet) is
     // shown, dimmed, and takes no click.
     if (!onPick) {
       bg.setAlpha(0.5);
-      this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }).setDepth(depth + 1).setAlpha(0.6);
-      this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }).setDepth(depth + 1).setAlpha(0.8);
+      this._list.add(this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }).setAlpha(0.6));
+      this._list.add(this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }).setAlpha(0.8));
       return;
     }
     bg.setInteractive({ useHandCursor: true });
 
-    this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }).setDepth(depth + 1);
-    this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }).setDepth(depth + 1);
+    this._list.add(this.add.text(x + 16, y + 8, title, { fontSize: '15px', color: titleColor }));
+    this._list.add(this.add.text(x + 16, y + 30, desc, { fontSize: '12px', color: '#aaaaaa', wordWrap: { width: w - 32 } }));
 
     bg.on('pointerover', () => bg.setFillStyle(0x2a2a2a, 0.8));
     bg.on('pointerout', () => bg.setFillStyle(0x1c1c1c, 0.6));
-    bg.on('pointerdown', () => {
+    bg.on('pointerdown', (pointer) => {
+      // A row scrolled out of the view is hidden by the mask but still hit.
+      if (this._view && !this._view.contains(pointer.x, pointer.y)) return;
       SoundManager.play('select');
       onPick();
     });

@@ -555,5 +555,13 @@ if (diffAt >= 0) {
   check('event tables identical to the golden', changed.length === 0, changed.length ? `changed: ${changed.join(', ')}` : `${keys.size} tables`);
 }
 
+// A quiet site says what it waits for (owner's playtest, 2026-09-27): every
+// gate in use gives its own reason, never the old catch-all.
+{
+  const ctx = { isNight: false, hunger: 'fed', hasQuestFlag: () => false, roles: {}, pact: false, nearby: () => false };
+  const reasons = Object.values(EVENT_TEMPLATES).map(t => E.dynamicBlock(t, ctx)).filter(Boolean);
+  check(`quiet sites give a specific reason (${new Set(reasons).size} kinds over ${reasons.length} templates)`, reasons.length > 0 && reasons.every(r => r !== 'nothing here for you now'), [...new Set(reasons)].join(' | '));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

@@ -19,9 +19,11 @@ export function bossesIn(zoneId, pm) {
     .map(([id, b]) => ({ id, ...b, unlocked: !!pm?.hasQuestFlag?.(b.unlockFlag) }));
 }
 
-/** The most a region's meter can hold now. */
+/** The most a region's meter can hold now. Nothing before a boss there is
+ *  unlocked (owner's playtest, 2026-09-27: the questline's free plan and a
+ *  meter filled on the way were a double dip), then OMEN_BANK full meters. */
 export function omenCap(zoneId, pm) {
-  return bossesIn(zoneId, pm).some(b => b.unlocked) ? OMEN_FULL * OMEN_BANK : OMEN_FULL;
+  return bossesIn(zoneId, pm).some(b => b.unlocked) ? OMEN_FULL * OMEN_BANK : 0;
 }
 
 /** The meter now: { have, full, cap, ready } (ready = full meters to claim). */

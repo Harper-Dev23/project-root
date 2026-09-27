@@ -106,12 +106,13 @@ console.log('=== potions, in the real CombatScene ===');
     GameState.inventory = items.map(id => F.createItemInstance(id));
     return { host, party };
   };
-  const drink = (b, itemId, target) => {
-    const actor = b.party[0];
+  // A potion is drunk by the hunter who uses it (owner's playtest, 2026-09-27):
+  // `actor` drinks; `aimAt` is a target the harness offers anyway, ignored.
+  const drink = (b, itemId, actor, aimAt = null) => {
     setActor(b.host, actor);
     actor.actionsLeft = { major: 1, bonus: 1, class: 1, reaction: 1 };
     const ab = b.host._getCombatUsableItemAbilities(actor).find(a => a.id === itemId);
-    const r = cast(b.host, actor, ab, target);
+    const r = cast(b.host, actor, ab, aimAt);
     return { r, ab, actor };
   };
   const held = (id) => GameState.inventory.filter(i => i.id === id).length;
@@ -120,13 +121,19 @@ console.log('=== potions, in the real CombatScene ===');
   const t = b.party[1];
   t.currentHP = 10;
   const d = drink(b, 'healing_draught', t);
-  check('a Healing Draught is listed as an item for a hunter (targets a hunter, a bonus action)', d.ab?.targetRequirement === 'ally' && d.ab.actionCost === 'bonus');
+  check('a Healing Draught is listed as an item the user drinks (no target, a bonus action)', d.ab?.targetRequirement === 'self' && d.ab.requiresTarget === false && d.ab.actionCost === 'bonus');
   check('...restores 30% of max HP, spends the bonus action and one draught', t.currentHP === Math.min(t.maxHP, 10 + Math.floor(t.maxHP * 0.3)) && d.actor.actionsLeft.bonus === 0 && held('healing_draught') === 1,
     `${10} -> ${t.currentHP} of ${t.maxHP}`);
   b = board(['healing_draught']);
   const full = b.party[2];
   const f = drink(b, 'healing_draught', full);
   check('on a hunter at full HP it fizzles: nothing spent', full.currentHP === full.maxHP && held('healing_draught') === 1 && f.actor.actionsLeft.bonus === 1);
+
+  b = board(['healing_draught']);
+  const giver = b.party[0], hurt = b.party[1];
+  giver.currentHP = 10; hurt.currentHP = 10;
+  drink(b, 'healing_draught', giver, hurt);
+  check('aimed at a teammate, it is still the user who drinks it', giver.currentHP > 10 && hurt.currentHP === 10, `user ${giver.currentHP}, teammate ${hurt.currentHP}`);
 
   b = board(['mana_draught']);
   const m = b.party[1]; m.currentMP = 0;

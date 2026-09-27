@@ -278,6 +278,8 @@ console.log("=== 14b-4c: the kit, the lair's chest ===");
   const sub = heldFound.find(i => i.id === 'part_' + MB.loot.family + '_' + MB.loot.substitute.slot);
   check('...and while it is held, the substitute in its place (an epic Grief-Heart)', !heldFound.some(i => i.id === MB.historic)
     && sub?.rarity === MB.loot.substitute.rarity && held.r.chest === sub.id, held.r.chest);
+  check('the win hands back the chest item for the victory screen, flagged Historic only when it is', wild.r.chestItem?.id === MB.historic && wild.r.historic === MB.historic
+    && held.r.chestItem?.id === sub?.id && !held.r.historic, JSON.stringify({ w: wild.r.chestItem?.id, wh: wild.r.historic, h: held.r.chestItem?.id, hh: held.r.historic }));
 
   // The first kill is worth more than the Historic item (owner, 2026-09-26):
   // the boss's parts, every one of them at least rare, and its bodies.

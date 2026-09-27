@@ -885,7 +885,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'retrieved': return `${day(e.time)} Took the item from the Retrieve site.`;
       case 'communed': return `${day(e.time)} Reached the shrine.`;
       case 'event_open': return null;
-      case 'event_quiet': return `${day(e.time)} Something is here, but ${EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs'}.`;
+      case 'event_quiet': return `${day(e.time)} Something is here, but ${e.quiet || (EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs')}.`;
       case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
       case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
       case 'rescued': return `${day(e.time)} Spoken for: you woke near a way out.`;

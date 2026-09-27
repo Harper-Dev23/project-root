@@ -324,11 +324,11 @@ export const QUEST_LINES = [
         isComplete: (pm) => pm.hasQuestFlag('mb_signs_found'),
       },
       {
-        // Completed by taking the tribe's first Mourner's Offering at the hunt
-        // board (HuntHubOverlay, Omens.takeFirstOffer; 14b-3).
+        // Completed by taking the tribe's first Mourner's Offering at the
+        // lodge (TribeHQOverlay, Omens.takeFirstOffer; 14b-3).
         id:          'wr_offer',
         label:       'The Tribe\'s Offer',
-        description: 'Open the hunt board and choose the Reeds. Your tribe knows what the signs mean, and has something for you.',
+        description: "Visit your tribe's lodge and open Tribe HQ. Your tribe knows what the signs mean, and has something for you.",
         isActive:   (pm) => pm.hasQuestFlag('mb_signs_found'),
         isComplete: (pm) => pm.hasQuestFlag('mb_offer_taken'),
       },
@@ -359,11 +359,11 @@ export const QUEST_LINES = [
         isComplete: (pm) => pm.hasQuestFlag('gp_names_known'),
       },
       {
-        // Completed by taking the tribe's first Tethered Soul at the hunt
-        // board (HuntHubOverlay, Omens.takeFirstOffer).
+        // Completed by taking the tribe's first Tethered Soul at the lodge
+        // (TribeHQOverlay, Omens.takeFirstOffer).
         id:          'ud_offer',
         label:       "The Tribe's Offer",
-        description: 'Open the hunt board and choose the Reeds. Your tribe knows how to call the dead to account.',
+        description: "Visit your tribe's lodge and open Tribe HQ. Your tribe knows how to call the dead to account.",
         isActive:   (pm) => pm.hasQuestFlag('gp_names_known'),
         isComplete: (pm) => pm.hasQuestFlag('gp_offer_taken'),
       },
