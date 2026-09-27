@@ -182,7 +182,7 @@ function bossBoard(s = 517) {
   const host = createCombatHost(CombatScene);
   host.__begin({ party, partySlots: slotMapFor(party), huntFight: { ...spec, hunt: h } });
   startCombat(host);
-  const by = (n) => host.enemies.find(e => e.name.includes(n));
+  const by = (n) => host.enemies.find(e => e.name === n || e.name.includes(n));
   return { host, h, w, party, by, head: by('Head'), body: by('Body'), left: by('Left'), right: by('Right') };
 }
 const hit = (b, target) => {

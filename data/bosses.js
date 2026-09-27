@@ -76,10 +76,10 @@ export const BOSSES = {
     fight: {
       name: 'The Mourning Beast',
       members: [
-        { type: 'hunt_mourning_head', slotId: 2, name: 'Mourning Beast (Head)', pool: 'core', weapon: 'mourning_maw' },
-        { type: 'hunt_mourning_limb', slotId: 1, name: 'Mourning Beast (Left Limb)', weapon: 'mourning_claw' },
-        { type: 'hunt_mourning_limb', slotId: 3, name: 'Mourning Beast (Right Limb)', weapon: 'mourning_claw' },
-        { type: 'hunt_mourning_body', slotId: 5, name: 'Mourning Beast (Body)', pool: 'core', weapon: 'mourning_bulk' },
+        { type: 'hunt_mourning_head', slotId: 2, name: 'Head', pool: 'core', weapon: 'mourning_maw' },
+        { type: 'hunt_mourning_limb', slotId: 1, name: 'Left Limb', weapon: 'mourning_claw' },
+        { type: 'hunt_mourning_limb', slotId: 3, name: 'Right Limb', weapon: 'mourning_claw' },
+        { type: 'hunt_mourning_body', slotId: 5, name: 'Body', pool: 'core', weapon: 'mourning_bulk' },
       ],
     },
   },

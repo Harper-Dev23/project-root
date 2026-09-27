@@ -1331,9 +1331,26 @@ export function installDevHook(game) {
     const plan = {
       objective: opts.objective || 'scout', size: opts.size || 'medium',
       bonusObjectives: opts.bonusObjectives || [], mods: opts.mods || {}, itemLevel: opts.itemLevel || 1,
+      ...(opts.boss ? { boss: opts.boss } : {}),   // a boss hunt (14b-4), for testing
     };
-    const hunt = createMapHunt(opts.zoneId || 'reeds_of_gethsemane',
+    let hunt = createMapHunt(opts.zoneId || 'reeds_of_gethsemane',
       { plan, supplies: opts.supplies ?? 60, seed: opts.seed ?? 12345 }, world);
+    // opts.besideLair (14b-4, for testing): start next to the boss's lair,
+    // that neighbour cleared, so the warning and the fight are one click away.
+    if (opts.besideLair) {
+      const { restoreMapHunt } = await import('../../systems/HuntEngine.js');
+      const { mapNeighbors } = await import('../../systems/HuntMapGen.js');
+      const { isPassable } = await import('../../../data/grounds.js');
+      const d = hunt.serialize();
+      const lair = d.map.occupants.find(o => o.kind === 'boss');
+      const next = lair && mapNeighbors(d.map, lair.tile).find(id => isPassable(d.map.tiles[id]));
+      if (next) {
+        d.map.occupants = d.map.occupants.filter(o => o.tile !== next);
+        for (const o of d.map.occupants) o.noticed = true;
+        d.pos = next; d.fog[next] = 'visible';
+        hunt = restoreMapHunt(d, world);
+      }
+    }
     const sm = game.scene;
     if (sm.isActive('HuntFieldOverlay') || sm.isPaused('HuntFieldOverlay')) sm.stop('HuntFieldOverlay');
     sm.start('HuntFieldOverlay', { hunt });
