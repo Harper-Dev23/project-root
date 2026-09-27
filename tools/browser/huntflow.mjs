@@ -30,6 +30,13 @@
 //   - chunk 9c: Flee is offered inside the fight on a hunter's turn (not on the
 //     map panel); clicking it plays the enemy's free round and ends the fight
 //     as fled, and Back to the Hunt returns to a map where the pack hunts you
+// Every run follows the same path: the plan is rolled from PLAN_SEED and the
+// hunt Depart starts is seeded with HUNT_SEED (the walks are shortest routes
+// on that one map, so they are fixed too). Checks that need something of the
+// world set it up in the save and reload instead of hoping a walk finds it:
+// no pack already hunting the party before the flee, and an event site that
+// always opens beside the party. (2026-09-26: two unseeded runs failed on
+// those two, one each, after a pass earlier the same day.)
 // Test setup may drive the engine directly (walking to a fight or an exit),
 // but through the scene's own _act, so autosave runs as it does for a click.
 // A fight's OUTCOME is forced from the page (every enemy, or every hunter,
@@ -48,20 +55,24 @@ const port = Number(process.argv[4] || 9343);
 const B = await startBrowser({ mode, port, outDir: out });
 const { evaluate, shot, click, check, sleep, clickText, findText, key } = B;
 const HUB = 'HuntHubOverlay';
+const PLAN_SEED = 2609;
+const HUNT_SEED = 26092026;
 
 const fixture = fs.readFileSync(path.join(REPO, 'tools/snapshots/save-v6-fixture.json'), 'utf8');
 const saved = () => evaluate(`const r = localStorage.getItem('bmSave_autosave'); return r ? JSON.parse(r) : null;`);
 const bagRations = () => evaluate(`const GS = (await import('/src/systems/GameState.js')).default; return GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`);
 
-// Walk the map hunt toward a goal through the scene's own action path.
-const walkTo = (goal) => evaluate(`
+// Walk the map hunt toward a goal through the scene's own action path, by the
+// shortest route. With `fight`, stop at the first encounter (of `kind`, if
+// given; any other on the way is won and the walk goes on).
+const walkTo = (goal, { fight = false, kind = null } = {}) => evaluate(`
   const s = window.__T.s(); const h = s.hunt; (await import('/tools/headless/walkAway.js')).walkAway(h);
   const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
   const { isPassable } = await import('/data/grounds.js');
   const goalOf = (st) => ${goal};
   for (let i = 0; i < 400; i++) {
     const st = h.getState();
-    if (h.encounter()) { if (${JSON.stringify(goal)}.includes('FIGHT')) return 'fight'; s._act('win', () => h.winEncounter()); continue; }
+    if (h.encounter()) { if (${fight} && (${JSON.stringify(kind)} === null || h.encounter().kind === ${JSON.stringify(kind)})) return 'fight'; s._act('win', () => h.winEncounter()); continue; }
     const want = goalOf(st);
     if (want.has(st.pos)) return 'there';
     const prev = new Map([[st.pos, null]]); const q = [st.pos]; let g = null;
@@ -73,6 +84,17 @@ const walkTo = (goal) => evaluate(`
   }
   return 'gave up';
 `);
+
+// Edit the saved hunt (`h`, the autosave's hunt state), then reload the page
+// onto it: test set-up of the world, through the game's own load path.
+const setUpHunt = async (edit) => {
+  await evaluate(`const raw = JSON.parse(localStorage.getItem('bmSave_autosave')); const h = raw.hunt;
+    ${edit}
+    localStorage.setItem('bmSave_autosave', JSON.stringify(raw)); return 1;`);
+  await B.loadGame();
+  await B.bootToTown(`const GS = (await import('/src/systems/GameState.js')).default; GS.load('autosave');`);
+  await sleep(600);
+};
 
 const waitFor = (expr, ms = 15000) => evaluate(`for (let i = 0; i < ${Math.ceil(ms / 200)}; i++) { if (${expr}) return true; await new Promise(r => setTimeout(r, 200)); } return false;`);
 const combatReady = "window.__T.g().scene.isActive('CombatScene') && (window.__T.g().scene.getScene('CombatScene').enemies || []).length > 0 && (window.__T.g().scene.getScene('CombatScene').turnOrder || []).length > 0";
@@ -86,7 +108,8 @@ await B.bootToTown(`
   const { createItemInstance } = await import('/src/systems/ItemFactory.js');
   const party = makeParty(); GS.characters = party; GS.party = party;
   InventorySystem.addGlobalItem(makeStack('rations', 100));
-  window.__plan = createItemInstance('plan_retrieve_small', { rarity: 'rare', itemLevel: 3 });
+  const { makeRng } = await import('/src/systems/seededRng.js');
+  window.__plan = createItemInstance('plan_retrieve_small', { rarity: 'rare', itemLevel: 3, rng: makeRng(${PLAN_SEED}) });
   InventorySystem.addGlobalItem(window.__plan);
 `);
 check(`renderer is ${mode === 'canvas' ? 'CANVAS' : 'WEBGL'}`, (await evaluate('return window.__T.g().renderer.type;')) === (mode === 'canvas' ? 1 : 2));
@@ -117,6 +140,10 @@ check('...with the numbers partyStats gives (Perception)', statTexts.includes(`P
 
 // ---- 2. Depart ---------------------------------------------------------------
 const bagBefore = await bagRations();
+// Depart (clicked) starts the hunt; the game leaves the seed out, this run
+// hands it one.
+await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.js');
+  const start = HuntManager.startMap; HuntManager.startMap = (zoneId, opts) => start.call(HuntManager, zoneId, { ...opts, seed: ${HUNT_SEED} }); return 1;`);
 await clickText('^Depart$', HUB);
 await sleep(900);
 const dep = await evaluate(`
@@ -125,7 +152,8 @@ const dep = await evaluate(`
   const G = window.__T.g(); const v = HuntManager.current()?.view();
   return { mode: HuntManager.mode(), field: G.scene.isActive('HuntFieldOverlay'), hub: G.scene.isActive('HuntHubOverlay'),
     objective: v?.plan.objective, size: v?.plan.size, level: v?.plan.itemLevel, layout: v?.layout.length,
-    planInBag: GS.inventory.some(i => i.instanceId === window.__plan.instanceId), supplies: v?.supplies };`);
+    planInBag: GS.inventory.some(i => i.instanceId === window.__plan.instanceId), supplies: v?.supplies, seed: HuntManager.current()?.getState().seed };`);
+if (dep.seed !== HUNT_SEED) throw new Error(`the hunt was not seeded: ${JSON.stringify(dep)}`);
 check('Depart starts a hunt on the hex map and opens the map scene (the Hunt screen closes)', dep.mode === 'map' && dep.field && !dep.hub, JSON.stringify(dep));
 check('...with the plan\'s objective, size and item level (Retrieve, Small, 3)', dep.objective === 'retrieve' && dep.size === 'small' && dep.level === 3 && dep.layout === 37);
 check('...the plan used up, 60 Rations packed', !dep.planInBag && bagBefore - (await bagRations()) === 60 && dep.supplies >= 120, `supplies ${dep.supplies}`);
@@ -161,7 +189,7 @@ check('a page reload lands back on the map scene, where the party stood', back.m
 await shot('03-after-reload');
 
 // ---- 5. Reload with a fight pending -------------------------------------------------
-const fight = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+const fight = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile))", { fight: true });
 check('walked into a fight', fight === 'fight', fight);
 await shot('04-fight-pending');
 check('...and it is saved with the fight pending', !!(await saved())?.hunt?.encounter);
@@ -174,7 +202,7 @@ check('a reload with a fight pending comes back fled (logged as a reload), on th
 await shot('05-reloaded-fled');
 
 // ---- 5b. A real fight from the map (chunk 9b) ----------------------------------------
-const fight2 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+const fight2 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile))", { fight: true });
 check('walked into another fight', fight2 === 'fight', fight2);
 const pre = await evaluate(`const h = window.__T.s().hunt; const e = h.encounter(); const occ = h.getState().map.occupants.find(o => o.id === e.occId);
   return { occId: e.occId, first: e.first, n: occ.roster.length, kills: h.getState().kills.length };`);
@@ -253,8 +281,15 @@ if (kind5 === 'beast') {
 }
 
 // ---- 5c. Flee from inside a fight (chunk 9c) ---------------------------------------------
-const fight4 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
-check('walked into a fight to flee from', fight4 === 'fight', fight4);
+// Set up: no pack is already hunting the party (the reload in step 5 alerted
+// one), so a pack arriving after the flee cannot open a new fight, and the
+// fight fled from is a beast pack's, so "it hunts the party" is checked.
+await setUpHunt(`const { loseTrail } = await import('/src/systems/HuntWorld.js');
+  for (const o of h.map.occupants) if (o.state === 'hunting') loseTrail(o, h.time);`);
+check('set-up: back on the map with no pack hunting the party',
+  await evaluate(`return window.__T.g().scene.isActive('HuntFieldOverlay') && !window.__T.s().hunt.getState().map.occupants.some(o => o.state === 'hunting');`));
+const fight4 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast').map(o => o.tile))", { fight: true, kind: 'beast' });
+check('walked into a beast pack\'s fight to flee from', fight4 === 'fight' && await evaluate(`return window.__T.s().hunt.encounter()?.kind === 'beast';`), fight4);
 check('the encounter panel has no Flee button (it lives in the fight now)', !(await findText('^Flee$', 'HuntFieldOverlay')));
 const pre4 = await evaluate(`const h = window.__T.s().hunt; const st = h.getState(); return { occId: h.encounter().occId, kind: h.encounter().kind, flees: st.flees, pos: st.pos };`);
 await clickText('^Fight$', 'HuntFieldOverlay');
@@ -272,34 +307,31 @@ await sleep(600);
 const after4 = await evaluate(`const h = window.__T.s().hunt; const st = h.getState(); const occ = st.map.occupants.find(o => o.id === ${JSON.stringify(pre4.occId)});
   return { enc: !!h.encounter(), flees: st.flees, hunting: occ?.state, fled: st.log.some(l => l.kind === 'flee' && l.reason === 'fled') };`);
 const sv4 = await saved();
-// A beast pack fled from hunts the party (7c: only beasts are alerted; a
-// cultist camp stays where it is).
-check('...the party fell back, a fled beast pack hunts it, and the flee is saved',
-  !after4.enc && after4.flees === pre4.flees + 1 && (pre4.kind === 'beast' ? after4.hunting === 'hunting' : true) && after4.fled && sv4?.hunt?.flees === pre4.flees + 1,
+// A beast pack fled from hunts the party (7c: only beasts are alerted).
+check('...the party fell back, the fled beast pack hunts it, and the flee is saved',
+  !after4.enc && after4.flees === pre4.flees + 1 && pre4.kind === 'beast' && after4.hunting === 'hunting' && after4.fled && sv4?.hunt?.flees === pre4.flees + 1,
   JSON.stringify({ kind: pre4.kind, ...after4 }));
 await shot('05g-after-flee');
 
 // ---- 5h. An event site (chunk 11a): it opens, and walking away leaves it ------------
+// Set up: an event site beside the party, of a template with no conditions on
+// when it opens (the Riddle Stones: not night-only, no hunger, no quest flag),
+// so stepping on it opens it whatever the hour. The map's own sites may be
+// night-only or out of reach.
 {
+  await setUpHunt(`const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
+    const { isPassable } = await import('/data/grounds.js'); const { OCCUPANT_CONCEALMENT } = await import('/data/huntMapGen.js');
+    const m = h.map; const taken = new Set([...m.occupants.map(o => o.tile), ...m.features.map(f => f.tile), m.objectives.primary.site]);
+    const tile = mapNeighbors(m, h.pos).find(n => isPassable(m.tiles[n]) && !m.tiles[n].exit && !taken.has(n));
+    if (tile) m.occupants.push({ id: 'o_test_event', kind: 'event', tile, eventId: 'riddle_stones', concealment: OCCUPANT_CONCEALMENT.event });`);
   const opened = await evaluate(`
     const s = window.__T.s(); const h = s.hunt;
-    const { mapNeighbors } = await import('/src/systems/HuntMapGen.js');
-    const { isPassable } = await import('/data/grounds.js');
-    if (h.encounter()) h.flee();
-    for (let i = 0; i < 400; i++) {
-      const st = h.getState();
-      if (h.encounter()) { s._act('flee', () => h.flee()); continue; }
-      const sites = new Set(st.map.occupants.filter(o => o.kind === 'event').map(o => o.tile));
-      const prev = new Map([[st.pos, null]]); const q = [st.pos]; let g = null;
-      for (let k = 0; k < q.length && !g; k++) for (const n of mapNeighbors(st.map, q[k])) {
-        if (prev.has(n) || !isPassable(st.map.tiles[n])) continue; prev.set(n, q[k]); q.push(n); if (sites.has(n)) { g = n; break; } }
-      if (!g) return { found: false };
-      let t = g; while (prev.get(t) !== st.pos) t = prev.get(t);
-      // The last step opens the site for real (the walker's own moves walk away).
-      if (t === g) { s._act('move', () => (h.__rawMove || h.move)(t)); if (h.view().event) return { found: true, tile: g, id: h.view().event.templateId }; continue; }
-      s._act('move', () => h.move(t));
-    }
-    return { found: false };`);
+    const g = h.getState().map.occupants.find(o => o.id === 'o_test_event')?.tile;
+    if (!g) return { found: false, placed: false };
+    // A real step onto it (the walker's own moves walk away from events).
+    s._act('move', () => (h.__rawMove ? h.__rawMove(g) : h.move(g)));
+    const ev = h.view().event;
+    return { found: !!ev && ev.templateId === 'riddle_stones' && h.view().pos === g, tile: g, id: ev?.templateId };`);
   check('walked onto an event site, and it opened', opened.found, JSON.stringify(opened));
   if (opened.found) {
     await sleep(400);
@@ -362,9 +394,8 @@ check('...and it says the objective is done, judged as the exit judged it (13c)'
 check('...unspent Rations come home to the bag', (await bagRations()) >= home0, `${home0} -> ${await bagRations()}`);
 // What leaving pays is exactly what the engine reports: the completion reward
 // if (and only if) the primary is done, plus each done bonus objective (7d).
-// The plan is rolled unseeded and the walk is random, so the Retrieve site may
-// or may not have been crossed on the way (a run on 2026-09-24 did: 21 + 15);
-// the rule, not one outcome, is what is checked.
+// The run is seeded, so this is one fixed outcome every time; the rule, not
+// that outcome, is still what is checked, so a new seed cannot make it lie.
 check('...leaving pays the completion reward only if the primary is done, plus the done bonus objectives',
   (after.primaryDone ? after.completion > 0 : after.completion === 0) && after.pts - pts0 === after.completion + after.bonusPts,
   `${pts0} -> ${after.pts}: primary ${after.primaryDone ? 'done' : 'not done'} ${after.completion}, bonuses ${JSON.stringify(after.bonuses)} = ${after.bonusPts}; paid: ${JSON.stringify(await evaluate('return window.__hpCalls;'))}`);
@@ -413,7 +444,7 @@ await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.j
   const { launchMapHunt } = await import('/src/scenes/overlays/HuntFieldOverlay.js');
   HuntManager.startMap('reeds_of_gethsemane', { plan: { objective: 'cull', size: 'small', bonusObjectives: [], mods: {}, itemLevel: 1 }, supplies: 60, seed: 4040 });
   launchMapHunt(window.__T.g().scene.getScene('TownScene')); await new Promise(r => setTimeout(r, 900)); return 1;`);
-const fight3 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile)) /* FIGHT */");
+const fight3 = await walkTo("new Set(st.map.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist').map(o => o.tile))", { fight: true });
 check('a new hunt (Sheltered) walked into a fight', fight3 === 'fight', fight3);
 await clickText('^Fight$', 'HuntFieldOverlay');
 check('...Fight starts CombatScene', await waitFor(combatReady));
