@@ -255,7 +255,8 @@ export const VERBS = {
     apply: (v, api) => {
       if (typeof v === 'string') api.world.questFlag?.(v, true);
       else api.world.questFlag?.(v.clear, false);
-      return null;
+      // Say so (owner, 2026-09-27: an event should be clear about what it did).
+      return typeof v === 'string' ? 'Your quest log is updated.' : null;
     },
   },
   vigil: {
@@ -343,6 +344,36 @@ export function verbOf(effect) {
 }
 
 /** Apply an outcome (a list of effects) in order. Returns the lines for the player. */
+/**
+ * What an outcome gives, in short, for the player BEFORE they choose it (owner,
+ * 2026-09-27: trades and offers must say what they do). Only concrete gains and
+ * costs are named; hidden standing with false gods stays hidden, and text is
+ * left out. Returns a list of phrases, e.g. ['2 Sin Tickets', 'advances a quest'].
+ */
+export function previewEffects(list, roles = {}) {
+  const out = [];
+  // A value may be a number, an expression, or { amount, ... }; a preview is
+  // never allowed to break an event, so anything unreadable is simply skipped.
+  const n = (v) => Math.round(evalNumber(v && typeof v === 'object' ? v.amount : v, roles));
+  for (const e of list || []) {
+    try {
+    const { verb, value } = verbOf(e);
+    if (!verb) continue;
+    if (verb === 'sinTickets') out.push(`${n(value)} Sin Ticket${n(value) === 1 ? '' : 's'}`);
+    else if (verb === 'huntPoints') out.push(`${n(value)} Hunt Points`);
+    else if (verb === 'xp') out.push(`${n(value)} XP`);
+    else if (verb === 'omens') out.push(`${n(value)} omens`);
+    else if (verb === 'item') out.push(`${value.qty > 1 ? `${value.qty} × ` : ''}${Items[value.id]?.name || value.id}`);
+    else if (verb === 'hp') { const x = n(value); out.push(x < 0 ? `costs ${-x} HP each` : `${x} HP each`); }
+    else if (verb === 'supplies') { const x = n(value); out.push(x < 0 ? `costs ${-x} supplies` : `${x} supplies`); }
+    else if (verb === 'standing') out.push('prophet standing');
+    else if (verb === 'questFlag' && typeof value === 'string') out.push('advances a quest');
+    else if (verb === 'historic') out.push('perhaps something rare');
+    } catch { /* unreadable: left out of the preview */ }
+  }
+  return [...new Set(out)];
+}
+
 export function applyEffects(list, api) {
   const lines = [];
   for (const e of list || []) {
@@ -390,7 +421,7 @@ export function staticEligible(tpl, ctx) {
  */
 export function dynamicBlock(tpl, ctx) {
   const a = tpl.appears || {};
-  if (a.night === true && !ctx.isNight) return 'by day nothing stirs here';
+  if (a.night === true && !ctx.isNight) return 'it only stirs after dark';
   if (a.night === false && ctx.isNight) return 'nothing stirs here at night';
   if (a.hunger && !a.hunger.includes(ctx.hunger)) return 'nothing here for you now';
   if (a.questFlag && !ctx.hasQuestFlag?.(a.questFlag)) return 'nothing here for you now';

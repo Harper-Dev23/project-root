@@ -108,7 +108,7 @@ import { HARVEST_TIME, MEAT_TIME_PER_BODY, MEAT_BY_GRADE, SPECIMEN_RARITIES } fr
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { parseTileId, distance } from './HexGrid.js';
 import { EVENT_TEMPLATES } from '../../data/events.js';
-import { applyEffects, fillText, dynamicBlock, evalNumber, rollD20, statModifier, ratingModifier,
+import { applyEffects, previewEffects, fillText, dynamicBlock, evalNumber, rollD20, statModifier, ratingModifier,
   CORE_STATS } from './EventEffects.js';
 import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
@@ -129,7 +129,7 @@ import {
 import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
-import { regionFlag } from './HuntQuests.js';
+import { regionFlag, questTitleForStep } from './HuntQuests.js';
 import { BOSSES, BOSS_HUNT_POINTS, BOSS_XP_MULT } from '../../data/bosses.js';
 import { rollBossLoot } from './BossLoot.js';
 import { CULT_PARLEY } from '../../data/cultMarkets.js';
@@ -1456,9 +1456,14 @@ function makeMapHunt(s, rng, worldRng, world) {
       // A black market (owner, 2026-09-27): the screen reads its stalls from
       // Market.marketView against the player's own save.
       if (tpl.shape === 'market') out.market = tpl.market;
+      // A quest's site says whose (owner, 2026-09-27: clear, not half-added).
+      const site = ev.site.occId ? s.map.occupants.find(o => o.id === ev.site.occId) : null;
+      if (site?.quest) out.quest = questTitleForStep(site.quest);
       if (tpl.shape === 'offer') {
         const need = this._supplyCost(tpl.price, r);
-        out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need };
+        out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need,
+          // What each answer gives, named before the choice (previewEffects).
+          gives: previewEffects([...(tpl.price || []), ...(tpl.reward || [])], r), refuseGives: previewEffects(tpl.refuse, r) };
         if ((tpl.reward || []).some(e => e.falseGod?.pact)) {
           const god = FALSE_GODS[huntGod(s)];
           const next = s.boon?.pact ? Math.min(PACT_MAX, s.boon.pact.level + 1) : PACT_START;
@@ -1468,7 +1473,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       }
       if (tpl.shape === 'trade') {
         const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
-        out.trade = { give, canAccept: give.every(g => g.have >= g.qty) };
+        out.trade = { give, canAccept: give.every(g => g.have >= g.qty), pays: previewEffects(tpl.receive, r) };
       }
       return out;
     },

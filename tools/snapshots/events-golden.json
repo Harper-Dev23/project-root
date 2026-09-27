@@ -106,40 +106,48 @@
   "reeds_lament_pools {\"option\":0}": [
    "option:0",
    "The weeping takes words, then names: the names of the drowned. Something vast turns over beneath the water, and is gone.",
+   "Your quest log is updated.",
    "+8 XP for the party."
   ],
   "reeds_lament_pools {\"option\":1}": [
    "option:1",
    "You grieve for no one you knew. The pools grow quiet, as if they heard. Far off, something answers with a howl.",
+   "Your quest log is updated.",
    "+4 Hunt Points."
   ],
   "reeds_mourner_signs {\"roll\":20}": [
    "success",
    "You read the trail back to where it goes to ground: a hollow beneath the Lament Pools. The Mourner sleeps there, and it does not sleep alone.",
+   "Your quest log is updated.",
    "+10 XP for the party."
   ],
   "reeds_mourner_signs {\"roll\":1}": [
    "failure",
-   "The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on."
+   "The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on.",
+   "Your quest log is updated."
   ],
   "reeds_drowned_camp {\"option\":0}": [
    "option:0",
    "It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.",
+   "Your quest log is updated.",
    "+8 XP for the party."
   ],
   "reeds_drowned_camp {\"option\":1}": [
    "option:1",
    "The soul does not leave. It only looks at you, and at the tents, and you understand it will be here tomorrow night as well. You keep the cut knot.",
+   "Your quest log is updated.",
    "+4 Hunt Points."
   ],
   "reeds_unmarked_graves {\"roll\":20}": [
    "success",
    "Scratched into a buried spear shaft, six names, and under them: none confessed. You know who waits at the Drowned Camp now.",
+   "Your quest log is updated.",
    "+10 XP for the party."
   ],
   "reeds_unmarked_graves {\"roll\":1}": [
    "failure",
-   "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones."
+   "You dig until you find a hunter's tally-stick with six marks and a knot like the soul's. It is enough: they are the ones.",
+   "Your quest log is updated."
   ],
   "reeds_cathedral_roots {\"roll\":20}": [
    "success",
@@ -173,15 +181,18 @@
   ],
   "choir_singing {\"option\":0}": [
    "option:0",
-   "The words are almost yours. You understand that the Drowned Choir know you now, and would talk."
+   "The words are almost yours. You understand that the Drowned Choir know you now, and would talk.",
+   "Your quest log is updated."
   ],
   "choir_singing {\"option\":1}": [
    "option:1",
-   "You sing over it, badly, until it stops. Somewhere under the water, someone laughs. The Choir know you now."
+   "You sing over it, badly, until it stops. Somewhere under the water, someone laughs. The Choir know you now.",
+   "Your quest log is updated."
   ],
   "choir_cantor {\"accept\":true}": [
    "accept",
    "The page is wet and will not dry. The verse on it stops halfway through a line.",
+   "Your quest log is updated.",
    "+1 Sin Ticket."
   ],
   "choir_cantor {\"accept\":false}": [
@@ -191,56 +202,67 @@
   "choir_unfinished_hymn {\"answer\":0}": [
    "failure",
    "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Your quest log is updated.",
    "Halvard lost 3 HP."
   ],
   "choir_unfinished_hymn {\"answer\":1}": [
    "success",
    "The water goes still, and then it sings the rest of the hymn back to you. The Choir will want to meet you.",
+   "Your quest log is updated.",
    "The region's omens stir (+20).",
    "+10 XP for the party."
   ],
   "choir_unfinished_hymn {\"answer\":2}": [
    "failure",
    "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Your quest log is updated.",
    "Halvard lost 3 HP."
   ],
   "choir_unfinished_hymn {\"answer\":3}": [
    "failure",
    "The water answers with a cold that goes to the bone. Still, the Choir heard you try.",
+   "Your quest log is updated.",
    "Halvard lost 3 HP."
   ],
   "choir_tithe_offer {\"accept\":true}": [
    "accept",
    "You sing. It is easier than it should be. The Choir will trade with you now, on their boat, in Sin Tickets.",
+   "Your quest log is updated.",
    "+3 Sin Tickets."
   ],
   "choir_tithe_offer {\"accept\":false}": [
    "refuse",
    "You burn the hymnal page in front of them. They only watch. The boat will still take your tickets: the Choir are patient.",
+   "Your quest log is updated.",
    "Jeremiah looks on you more kindly (+3 standing)."
   ],
   "gill_offerings {\"roll\":20}": [
    "success",
    "The knots are the Temple of the Gill's. They feed Dagon here, and they will know you have seen it. Their camps will talk to you now.",
+   "Your quest log is updated.",
    "+8 XP for the party."
   ],
   "gill_offerings {\"roll\":1}": [
    "failure",
-   "You cannot read the knots, but a gill-priest watching from the reeds has seen you look. The Temple's camps will talk to you now."
+   "You cannot read the knots, but a gill-priest watching from the reeds has seen you look. The Temple's camps will talk to you now.",
+   "Your quest log is updated."
   ],
   "gill_baptism {\"accept\":true}": [
    "accept",
    "Halvard lost 5 HP.",
    "You come up gasping, every one of you, and the priest is smiling. The Temple will let you further in.",
+   "Your quest log is updated.",
    "+1 Sin Ticket."
   ],
   "gill_baptism {\"accept\":false}": [
    "refuse",
-   "The priest only nods, and points you up the river toward the smugglers. Some hands stay dry."
+   "The priest only nods, and points you up the river toward the smugglers. Some hands stay dry.",
+   "Your quest log is updated."
   ],
   "gill_smugglers {\"accept\":true}": [
    "accept",
    "They take the meat, and tell you where the Deep Priest waits.",
+   "Your quest log is updated.",
    "+1 Sin Ticket."
   ],
   "gill_smugglers {\"accept\":false}": [
@@ -250,11 +272,13 @@
   "gill_deep_priest {\"accept\":true}": [
    "accept",
    "You kneel. The water rises to your chin and stops. The Temple will trade with you now, at the Gill Market, in Sin Tickets.",
+   "Your quest log is updated.",
    "+3 Sin Tickets."
   ],
   "gill_deep_priest {\"accept\":false}": [
    "refuse",
    "You stay standing. The priest looks at you a long time, then laughs: the Temple trades with anyone who pays. The Gill Market is open to you.",
+   "Your quest log is updated.",
    "Jeremiah looks on you more kindly (+3 standing)."
   ],
   "dagon_whisper {\"accept\":true}": [
@@ -504,7 +528,8 @@
   "eel_catcher_request {\"accept\":true}": [
    "accept",
    "\"The big one sleeps where the water goes quiet.\" They point, and you see it. \"Come back. I will owe you.\"",
-   "You see further across the land (31 tiles)."
+   "You see further across the land (31 tiles).",
+   "Your quest log is updated."
   ],
   "eel_catcher_request {\"accept\":false}": [
    "refuse",
@@ -513,6 +538,7 @@
   "eel_catcher_return {\"option\":0}": [
    "option:0",
    "A pouch of river-pearls, and a few words on where the eels run.",
+   "Your quest log is updated.",
    "+5 Hunt Points.",
    "+8 XP for the party."
   ],

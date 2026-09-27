@@ -153,7 +153,7 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
   check('the site is marked from departure, named, and says after dark', marks.length === 1 && marks[0].name === 'The Lament Pools' && marks[0].night && !marks[0].done,
     JSON.stringify(marks));
   const rd = day.h.move(day.site);
-  check('by day the Pools stay quiet, and the site is not spent', rd.ok && !rd.event && /by day/.test(rd.quiet || '')
+  check('by day the Pools stay quiet, and the site is not spent', rd.ok && !rd.event && /after dark/.test(rd.quiet || '')
     && day.h.getState().map.occupants.some(o => o.quest === 'wr_pools'), rd.quiet);
 
   const night = atPools({ night: true });

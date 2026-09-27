@@ -16,6 +16,12 @@
 import { QUEST_LINES, getStepState } from '../data/quests.js';
 import { CULT_MARKETS } from '../../data/cultMarkets.js';
 
+/** The title of the quest line a step belongs to, or null (a quest site's panel names it). */
+export function questTitleForStep(stepId) {
+  for (const quest of QUEST_LINES) if ((quest.steps || []).some(st => st.id === stepId)) return quest.title;
+  return null;
+}
+
 /** The flag the engine sets for `kind` ('hunted' | 'apex_slain') in a region. */
 export function regionFlag(kind, zoneId) {
   return `${kind}:${zoneId}`;

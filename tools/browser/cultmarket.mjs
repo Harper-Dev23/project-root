@@ -46,6 +46,16 @@ const g = await evaluate(`const PM = (await import('/src/systems/ProgressionMana
 check('a gamble: 1 more Sin Ticket, one more item', g.tickets === 2 && g.bag === bag0 + 2, JSON.stringify(g));
 await shot('02-after-buying');
 
+// ---- 1b. A quest trade says whose quest it is and what it pays (clarity pass) ----
+await evaluate(`window.__hunt = await window.bmDevMapHunt({ zoneId: 'reeds_of_gethsemane', objective: 'scout', size: 'medium', seed: 22,
+    questSites: [{ step: 'hb_cantor', eventId: 'choir_cantor', far: false }] });
+  await new Promise(r => setTimeout(r, 400));
+  const s = window.__T.s(); const site = s.v.objectiveSites.find(o => o.objective === 'quest');
+  s.hunt._openEventAt(site.tile); s._refresh(); await new Promise(r => setTimeout(r, 300)); return true;`);
+await shot('01b-cantor-trade');
+check('a quest trade names its quest line and what it pays', !!(await B.findText('^Quest: The Hymn Beneath the Water$', 'HuntFieldOverlay'))
+  && !!(await B.findText('^They give: advances a quest, 1 Sin Ticket\\.$', 'HuntFieldOverlay')));
+
 // ---- 2. The Draughtwell sells the draughts (its stock, as the vendor row reads it) ----
 const dw = await evaluate(`const town = window.__T.g().scene.getScene('TownScene');
   return (town.getVendorDefinitions().greenhollow?.inventory || []).map(e => [e.id, e.cost, e.currency || null]);`);

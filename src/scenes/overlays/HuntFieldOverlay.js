@@ -941,6 +941,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const ev = this.v.event;
     const width = 380;
     const lines = [ev.text];
+    if (ev.quest) lines.unshift(`Quest: ${ev.quest}`);
     let buttons = [];
     const act = (pick) => () => this._resolveEvent(pick);
     if (ev.shape === 'choice') buttons = ev.options.map(o => [o.label, act({ option: o.index }), 'primary']);
@@ -961,6 +962,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         lines.push(`A pact with ${pc.god}, level ${pc.level}: ${pc.gift || ''}`);
         lines.push(`The price: ${pc.bondCost} standing with ${pc.house || 'the house'}, and a curse for the rest of the hunt (${pc.curse})${pc.endsProphet ? ' The prophet will turn away.' : ''}`);
       }
+      if (!pc && ev.offer.gives?.length) lines.push(`${ev.offer.label}: ${ev.offer.gives.join(', ')}.`);
+      if (!pc && ev.offer.refuseGives?.length) lines.push(`Refuse: ${ev.offer.refuseGives.join(', ')}.`);
       buttons = [[ev.offer.label, ev.offer.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), ev.offer.canAccept ? 'primary' : 'danger'],
         ['Refuse', act({ accept: false }), 'primary']];
     }
@@ -976,6 +979,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
     if (ev.shape === 'trade') {
       lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (you carry ${g.have})`).join(', ')}.`);
+      if (ev.trade.pays?.length) lines.push(`They give: ${ev.trade.pays.join(', ')}.`);
       buttons = [['Trade', ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), ev.trade.canAccept ? 'primary' : 'danger'],
         ['Refuse', act({ accept: false }), 'primary']];
     }

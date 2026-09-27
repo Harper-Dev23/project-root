@@ -306,5 +306,38 @@ console.log('=== The Offered Breath (the Temple of the Gill) ===');
   check("the first step's flag is the one that opens Temple parley", CULT_PARLEY.dagon.flag === 'gill_offerings_read');
 }
 
+// =============================================================================
+console.log('=== events say what they do (clarity pass) ===');
+{
+  const E = await import('../../src/systems/EventEffects.js');
+  const { EVENT_TEMPLATES } = await import('../../data/events.js');
+  const parleyPays = E.previewEffects(EVENT_TEMPLATES.choir_parley.receive);
+  check('a parley trade names what it pays, and not the hidden standing', JSON.stringify(parleyPays) === JSON.stringify(['2 Sin Tickets']), JSON.stringify(parleyPays));
+  const boat = EVENT_TEMPLATES.choir_tithe_offer;
+  const sing = E.previewEffects(boat.reward), burn = E.previewEffects(boat.refuse);
+  check('an offer names each answer: sing (3 Sin Tickets, advances a quest), burn (advances a quest, prophet standing)',
+    sing.includes('3 Sin Tickets') && sing.includes('advances a quest') && burn.includes('prophet standing') && !sing.some(x => /Yar|hidden/.test(x)), `${sing} | ${burn}`);
+  const bap = E.previewEffects([...(EVENT_TEMPLATES.gill_baptism.price || []), ...EVENT_TEMPLATES.gill_baptism.reward], { danger: 1 });
+  check('a price is named as one (the baptism costs HP)', bap.some(x => /costs 5 HP each/.test(x)), JSON.stringify(bap));
+  check('an effect it cannot read is left out, never thrown', Array.isArray(E.previewEffects([{ hp: { amount: 'nonsense(' } }])));
+  const lines = E.applyEffects([{ questFlag: 'mb_weeping_heard' }], { world: { questFlag() {} }, roles: {} });
+  check('advancing a quest says so in the result', lines.includes('Your quest log is updated.'));
+
+  // A quest site's panel names its quest line.
+  const { createMapHunt, restoreMapHunt } = await import('../../src/systems/HuntEngine.js');
+  const { makeParty } = await import('./fixtures.js');
+  const party = makeParty();
+  const w = { party: () => party, nightFalls() {}, dayBreaks() {}, questSites: () => [], hasQuestFlag: () => false };
+  const h0 = createMapHunt('reeds_of_gethsemane', { plan: { objective: 'scout', size: 'medium' }, supplies: 200, seed: 71 }, w);
+  const d = h0.serialize();
+  const tile = h0.view().moves[0].tile;
+  d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
+  d.map.occupants.push({ id: 'oq', kind: 'event', tile, eventId: 'choir_cantor', quest: 'hb_cantor', concealment: 0 });
+  for (const o of d.map.occupants) o.noticed = true;
+  const h = restoreMapHunt(d, w);
+  const ev = h.move(tile).event;
+  check("a quest site's event names its quest line, and its trade names what it pays", ev?.quest === 'The Hymn Beneath the Water' && ev.trade?.pays?.includes('1 Sin Ticket'), JSON.stringify({ q: ev?.quest, pays: ev?.trade?.pays }));
+}
+
 console.log(failures ? `\n${failures} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);
