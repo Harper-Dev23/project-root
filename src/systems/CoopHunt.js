@@ -264,6 +264,9 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
 
   if (ch.isHost) {
     const world = hostWorld(party, reads, ledger);
+    // The host's world, for tests and diagnostics that must restore the host's
+    // hunt in place (server/coopboss_test.mjs). Never set on a guest.
+    ch.hostWorld = world;
 
     /** Depart: the host's plan and region, everyone's hunters. */
     ch.begin = ({ zoneId, plan, supplies, bring = [], seed } = {}) => {
