@@ -192,7 +192,10 @@ console.log('=== a fight from the host\'s real spec ===');
   const over = A.host.last('over');
   check('won: everyone is told, with huntOutcome "won" and every hunter\'s vitals', over?.hunt && over.huntOutcome?.result === 'won' && !!A.guest.last('over')
     && Object.keys(over.vitals || {}).length === 6, JSON.stringify(over?.huntOutcome)?.slice(0, 80));
-  check('...rewards carry the XP pool, not a scenario XP', over?.rewards?.hunt === true && over.rewards.xpPool === spec.xpPool);
+  // The pool follows the fight's difficulty (HuntObjectives.huntFightXP, 2026-09-27).
+  const { huntFightXP } = await import('../src/systems/HuntObjectives.js');
+  const wantXP = huntFightXP(spec, s.host.enemies);
+  check('...rewards carry the XP pool scaled by difficulty, not a scenario XP', over?.rewards?.hunt === true && over.rewards.xpPool === wantXP, `${over?.rewards?.xpPool} vs ${wantXP} (base ${spec.xpPool})`);
   const won = hh.h.winEncounter({ loot: over.rewards.loot, knockedOut: over.huntOutcome.knockedOut });
   check('applied to the host\'s real hunt, the kill is recorded', won.ok && hh.h.getState().kills.some(k => k.occId === occId));
   check('the lobby is still open, with no fight on', A.hub.lobbies.has('HUNT') && !A.lobby.session && !A.lobby.finished);

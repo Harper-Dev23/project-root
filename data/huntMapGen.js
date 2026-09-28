@@ -69,10 +69,13 @@ export const DENSITY = {
   entryClearance: 1,
 };
 
-/** In-game time units in one day + night: 12 advances today (HuntManager's
- *  DAY_NIGHT_ADVANCES x 2). Read for Swift Return's route check; the clock
- *  itself is HuntRules.clockAt (PHASE_UNITS is half of this). */
-export const DAY_TIME_UNITS = 12;
+/** In-game time units in one day + night. 12 until the owner's first Reeds
+ *  playtest (2026-09-27: hunts ran 14-19 days); 24 halves the day count and
+ *  the blight's daily spread, and changes nothing else (huntsim: fights,
+ *  wipes, supplies and XP identical). About 10 average moves a day. Read for
+ *  Swift Return's route check and the world's daily tick; the clock itself is
+ *  HuntRules.clockAt (PHASE_UNITS is half of this). */
+export const DAY_TIME_UNITS = 24;
 
 /** Grades, weakest first (ENCOUNTERS, locked 2026-09-17). */
 export const GRADES = ['yearling', 'grown', 'prime', 'great'];

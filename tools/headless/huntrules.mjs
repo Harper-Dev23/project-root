@@ -151,8 +151,9 @@ console.log('=== rules on hand-built inputs ===');
     MIN_MOVE_COST_SHARE: R.MIN_MOVE_COST_SHARE, PHASE_UNITS: R.PHASE_UNITS, SCOUT_TIME: R.SCOUT_TIME,
   };
 
-  const clocks = [0, 5.999, 6, 11.9, 12, 18, 24].map(t => ({ t, ...R.clockAt(t) }));
-  check('clock: day 1 until 6, night 6-12, day 2 at 12, night at 18, day 3 at 24',
+  // 24-unit days since the owner's first Reeds playtest (2026-09-27).
+  const clocks = [0, 11.999, 12, 23.9, 24, 36, 48].map(t => ({ t, ...R.clockAt(t) }));
+  check('clock: day 1 until 12, night 12-24, day 2 at 24, night at 36, day 3 at 48',
     same(clocks.map(c => [c.day, c.isNight]), [[1, false], [1, false], [1, true], [1, true], [2, false], [2, true], [3, false]]));
   golden.clock = clocks;
 

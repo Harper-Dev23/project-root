@@ -39,11 +39,11 @@
     "prime": 17.7,
     "great": 3.6
    },
-   "waystonesPer100": 13.6,
+   "waystonesPer100": 10,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 9
+    "min": 3,
+    "median": 3,
+    "max": 5
    },
    "retriedPct": 2
   },
@@ -86,11 +86,11 @@
     "prime": 26.7,
     "great": 9.2
    },
-   "waystonesPer100": 8.4,
+   "waystonesPer100": 3.6,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 6
+    "min": 3,
+    "median": 3,
+    "max": 4
    },
    "retriedPct": 7.2
   },
@@ -133,11 +133,11 @@
     "prime": 17.5,
     "great": 3.5
    },
-   "waystonesPer100": 18,
+   "waystonesPer100": 12.8,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 5,
-    "max": 10
+    "min": 3,
+    "median": 3,
+    "max": 6
    },
    "retriedPct": 1.2
   },
@@ -180,11 +180,11 @@
     "prime": 27.9,
     "great": 9.1
    },
-   "waystonesPer100": 16.8,
+   "waystonesPer100": 12.4,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 9
+    "min": 3,
+    "median": 3,
+    "max": 5
    },
    "retriedPct": 0.8
   },
@@ -227,11 +227,11 @@
     "prime": 18.5,
     "great": 2.5
    },
-   "waystonesPer100": 20.4,
+   "waystonesPer100": 18,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 6,
-    "max": 12
+    "min": 3,
+    "median": 4,
+    "max": 7
    },
    "retriedPct": 2.8
   },
@@ -274,11 +274,11 @@
     "prime": 28,
     "great": 8.6
    },
-   "waystonesPer100": 18.4,
+   "waystonesPer100": 17.6,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 5,
-    "max": 13
+    "min": 3,
+    "median": 3,
+    "max": 7
    },
    "retriedPct": 3.6
   },
@@ -322,11 +322,11 @@
     "prime": 17.7,
     "great": 4.4
    },
-   "waystonesPer100": 2.8,
+   "waystonesPer100": 0.4,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 4
+    "min": 3,
+    "median": 3,
+    "max": 3
    },
    "retriedPct": 1.6
   },
@@ -370,11 +370,11 @@
     "prime": 28.1,
     "great": 11.6
    },
-   "waystonesPer100": 5.6,
+   "waystonesPer100": 0.8,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 5
+    "min": 3,
+    "median": 3,
+    "max": 3
    },
    "retriedPct": 4.8
   },
@@ -418,11 +418,11 @@
     "prime": 18.1,
     "great": 3.2
    },
-   "waystonesPer100": 8.8,
+   "waystonesPer100": 4,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 9
+    "min": 3,
+    "median": 3,
+    "max": 5
    },
    "retriedPct": 0.8
   },
@@ -466,11 +466,11 @@
     "prime": 28.6,
     "great": 9.2
    },
-   "waystonesPer100": 8.4,
+   "waystonesPer100": 5.2,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 7
+    "min": 3,
+    "median": 3,
+    "max": 4
    },
    "retriedPct": 1.6
   },
@@ -514,11 +514,11 @@
     "prime": 18.1,
     "great": 2.8
    },
-   "waystonesPer100": 15.6,
+   "waystonesPer100": 11.2,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 10
+    "min": 3,
+    "median": 3,
+    "max": 6
    },
    "retriedPct": 4
   },
@@ -562,16 +562,16 @@
     "prime": 29.1,
     "great": 8.8
    },
-   "waystonesPer100": 14,
+   "waystonesPer100": 11.2,
    "swiftDeadlineDay": {
-    "min": 4,
-    "median": 4,
-    "max": 10
+    "min": 3,
+    "median": 3,
+    "max": 6
    },
    "retriedPct": 3.2
   }
  },
- "mapsHash": "85a2226fed926daaa60e04a71be034bfb2ee91767cfe0a6ca9d492677ece8cd7",
+ "mapsHash": "45ffb3d855db24ec38307bac1157f692e5563ad0879f31eacde620eaa3348ca1",
  "prefixEffects": {
   "teeming": [
    8.5,

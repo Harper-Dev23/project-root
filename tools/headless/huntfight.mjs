@@ -240,6 +240,19 @@ function winIt(m, planLabel) {
   check('beast: no part reached the camp bag or the pack (harvest is 9d)', GameState.inventory.length === r.bagBefore && r.s1.pack.found.length === r.s0.pack.found.length);
   check(`beast: the XP pool (${FIGHT_XP_POOL}) reached the hunters`, r.xpGain > 0, `+${r.xpGain} XP across the party`);
 
+  // XP follows difficulty (owner, 2026-09-27): the pool scales by the enemy
+  // side's total max HP against the Reeds' average fight, clamped; bosses keep theirs.
+  const { huntFightXP, FIGHT_XP_REF_ENEMY_HP: REF, FIGHT_XP_SCALE: SC } = await import('../../src/systems/HuntObjectives.js');
+  const enemyHP = r.host.enemies.reduce((t, e) => t + e.maxHP, 0);
+  const want = Math.round(r.spec.xpPool * Math.min(SC.max, Math.max(SC.min, enemyHP / REF)));
+  check(`beast: this fight pays ${want} XP (pool ${r.spec.xpPool} x enemy HP ${enemyHP} / ${REF}), the rule CombatScene and the co-op server share`,
+    r.host._calculateXPReward() === want && huntFightXP(r.spec, r.host.enemies) === want);
+  const one = (hp) => [{ maxHP: hp }];
+  check('...an average fight pays the pool, a lone weakling the floor, a huge one the ceiling, a boss its own, a summoned add nothing extra',
+    huntFightXP({ xpPool: 16 }, one(REF)) === 16 && huntFightXP({ xpPool: 16 }, one(10)) === Math.round(16 * SC.min)
+    && huntFightXP({ xpPool: 16 }, one(REF * 10)) === Math.round(16 * SC.max) && huntFightXP({ xpPool: 80, kind: 'boss' }, one(5000)) === 80
+    && huntFightXP({ xpPool: 16 }, [...one(REF), { maxHP: 999, isAdd: true }]) === 16);
+
   const c = winIt(cultMeet);
   const armour = c.spec.scenario.enemies.flatMap(e => Object.values(e.gear));
   const packIds = c.s1.pack.found.map(i => i.id + '/' + i.rarity);

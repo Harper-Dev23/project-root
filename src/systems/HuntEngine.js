@@ -137,13 +137,14 @@ import { CULT_PARLEY } from '../../data/cultMarkets.js';
 /** Shape version of a serialized map hunt. Not yet in any save (chunk 8). */
 export const MAP_HUNT_STATE_VERSION = 1;
 
-/** A won fight's XP pool, split over the party (GameState.awardXPPool), before
- *  the plan's xpPercent. Was the Advance loop's 20 (chunk 9 decision 9);
- *  60 in chunk 13c-4, then 32 in 13c-5 once hunts held 3-4x the fights
- *  (32, not 30: a party of 4-6 takes 25% of the pool, a whole 8 each),
- *  beside the completion pool paid at the exit
- *  (HuntObjectives.COMPLETION_XP_POOL), tuned with huntsim. */
-export const FIGHT_XP_POOL = 32;
+/** A won fight's XP pool at average difficulty, split over the party
+ *  (GameState.awardXPPool), before the plan's xpPercent. Was the Advance
+ *  loop's 20 (chunk 9 decision 9); 60 in chunk 13c-4, 32 in 13c-5; halved to
+ *  16 after the owner's first Reeds playtest (2026-09-27: a full clear of the
+ *  starter zone should take a level-1 party to about level 4-5, and took it
+ *  to 6). HuntObjectives.huntFightXP scales it by the fight's difficulty. */
+export const FIGHT_XP_POOL = 16;
+
 /** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
  *  The Advance loop's number; cultists pay none (their reward is gear). */
 export const BEAST_FIGHT_HUNT_POINTS = 8;

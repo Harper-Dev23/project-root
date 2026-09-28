@@ -30,6 +30,7 @@ import { getZone } from '../../data/zones.js';
 import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
+import { huntFightXP } from '../systems/HuntObjectives.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase, mergeHistoricEffects } from '../systems/ItemFactory.js';
 import { makeRng, isSeed } from '../systems/seededRng.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -6889,7 +6890,8 @@ export default class CombatScene extends Phaser.Scene {
     // Temporary — can be scenario-based later
     // A map-hunt fight's pool comes from the hunt (HuntEngine.fightSpec:
     // FIGHT_XP_POOL scaled by the plan's xpPercent).
-    if (this.huntFight) return this.huntFight.xpPool || 0;
+    // Scaled by the fight's difficulty (HuntEngine.huntFightXP).
+    if (this.huntFight) return huntFightXP(this.huntFight, this.enemies);
     if (this.isHunt) {
       const xpPercent = HuntManager.getState()?.combinedModifiers?.xpPercent || 0;
       return Math.round(20 * (1 + xpPercent / 100));

@@ -46,7 +46,7 @@ export const SENSED_MARGIN = 30;
  *  however much efficiency the party has: travel is never free (decision 3). */
 export const MIN_MOVE_COST_SHARE = 0.25;
 
-/** Day and night each last half of DAY_TIME_UNITS (12): 6 units each. */
+/** Day and night each last half of DAY_TIME_UNITS (24): 12 units each. */
 export const PHASE_UNITS = DAY_TIME_UNITS / 2;
 
 /** The scout action's time: about one average move (ENCOUNTERS; grounds

@@ -300,7 +300,10 @@ function fight(h, party, slots, fightSeed, rec) {
   rec.fights.push({ outcome, cause, rounds, hunterTurns, ambush: !!spec.ambush, first: spec.first, enemies: spec.scenario.enemies.length, kind: spec.kind,
     family: h.getState().kills.at(-1)?.family ?? spec.scenario.enemies[0]?.type ?? null, grades, hpIn,
     partyInitiative: spec.partyInitiative, enemyInitiative: spec.enemyInitiative,
-    hpOut: Math.round(100 * livingHPShare(party)), kos: party.filter(c => c.currentHP <= 1).length });
+    hpOut: Math.round(100 * livingHPShare(party)), kos: party.filter(c => c.currentHP <= 1).length,
+    // The enemy side's total max HP (grades, pack size and family all in it),
+    // and the fight's XP pool: batch 2's XP-by-difficulty measure.
+    enemyHP: host.enemies.filter(e => !e.isAdd).reduce((t, e) => t + (e.maxHP || 0), 0), xpPool: spec.xpPool });
   return outcome;
 }
 

@@ -47,11 +47,36 @@ export function completionRewardPercent(planMods = {}, itemLevel = 1) {
  * The completion XP pool by map size (chunk 13c, owner OK'd XP at the exit),
  * paid at a clean exit with the primary objective done, split over the party
  * like a fight's pool (GameState.awardXPPool, through the world's awardXP),
- * before the plan's xpPercent. Tuned with huntsim against SCALING's target
- * of level 10 in ~40 small / ~23 medium / ~16 large hunts: fights alone paid
- * about 2 XP a hunter a hunt, ~25x too slow.
+ * before the plan's xpPercent. First tuned with huntsim against SCALING's
+ * target of level 10 in ~40 small / ~23 medium / ~16 large hunts (240/440/640);
+ * halved after the owner's first Reeds playtest (2026-09-27): zones now come
+ * in bands, and a full clear of a starter zone should take a level-1 party to
+ * about level 4-5. Later zones get their own scaling (the scaling pass).
  */
-export const COMPLETION_XP_POOL = { small: 240, medium: 440, large: 640 };
+export const COMPLETION_XP_POOL = { small: 120, medium: 220, large: 320 };
+
+/** Difficulty for XP (owner, 2026-09-27): the enemy side's total max HP, which
+ *  carries grade, pack size and family, against the Reeds' average fight
+ *  (huntsim fight log: mean 185 over 1,528 won fights, levels 1 and 6), so the
+ *  average fight still pays FIGHT_XP_POOL. Clamped so a lone yearling still
+ *  pays something and no fight pays more than a boss's share. */
+export const FIGHT_XP_REF_ENEMY_HP = 185;
+export const FIGHT_XP_SCALE = { min: 0.4, max: 2.5 };
+
+/**
+ * A won hunt fight's XP pool: fightSpec's xpPool (the plan's xpPercent and a
+ * boss's multiple already in it) scaled by the enemies' total max HP. Bosses
+ * keep their pool. One rule for single player (CombatScene) and co-op
+ * (server/session.js). Summoned adds do not count.
+ */
+export function huntFightXP(spec, enemies = []) {
+  const pool = spec?.xpPool || 0;
+  if (!pool || spec.kind === 'boss') return pool;
+  const hp = (enemies || []).filter(e => e && !e.isAdd).reduce((t, e) => t + (e.maxHP || 0), 0);
+  if (!hp) return pool;
+  const k = Math.min(FIGHT_XP_SCALE.max, Math.max(FIGHT_XP_SCALE.min, hp / FIGHT_XP_REF_ENEMY_HP));
+  return Math.max(1, Math.round(pool * k));
+}
 
 /** The completion XP pool for a size and the plan's xpPercent, whole points. */
 export function completionXP(size, xpPercent = 0) {

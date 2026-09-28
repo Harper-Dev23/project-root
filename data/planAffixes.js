@@ -176,9 +176,10 @@ export const BONUS_OBJECTIVES = {
   // generator measures the route through the objectives and out, allows
   // routeSlack for fights and actions, and never sets it before beforeDay.
   // A fixed day 4 was impossible on bigger maps (measured in chunk 5: the
-  // longest Small route takes 5.4 days, the longest Large one 10.8).
-  swift_return:  { name: 'Swift Return',  unlockItemLevel: 5, params: { beforeDay: 4, routeSlack: 1.5 },
-    doneWhen: 'Leave the hunt before the deadline the map sets (day 4 at the earliest).',
+  // longest Small route takes 5.4 days, the longest Large one 10.8, in the
+  // 12-unit days of the time; the floor went 4 -> 3 with 24-unit days).
+  swift_return:  { name: 'Swift Return',  unlockItemLevel: 5, params: { beforeDay: 3, routeSlack: 1.5 },
+    doneWhen: 'Leave the hunt before the deadline the map sets (day 3 at the earliest).',
     placement: { needs: ['exit'] } },
   cleanse:       { name: 'Cleanse',       unlockItemLevel: 5, params: {},
     doneWhen: 'Cleanse a blight tile.',

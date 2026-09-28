@@ -28,6 +28,7 @@ import { fromWireCharacter } from '../src/systems/CoopWire.js';
 import { GameplaySettings } from '../src/systems/GameplaySettings.js';
 import { isItemInstance } from '../src/systems/ItemFactory.js';
 import { COMBAT_SCENARIOS } from '../data/combatScenarios.js';
+import { huntFightXP } from '../src/systems/HuntObjectives.js';
 
 /** The shared party cap. Already the game's own limit in five places. */
 export const PARTY_LIMIT = 6;
@@ -406,7 +407,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         // A map-hunt fight pays an XP POOL, split over the whole party (each
         // client pays its own hunters' share), and its drops go into the
         // hunt's pack through the host's winEncounter, not into anyone's bag.
-        return { scenarioId, hunt: true, xpPool: hunt.spec.xpPool ?? 0, loot };
+        return { scenarioId, hunt: true, xpPool: huntFightXP(hunt.spec, host.enemies), loot };
       }
       return {
         scenarioId,

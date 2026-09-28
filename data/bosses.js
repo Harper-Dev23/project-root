@@ -19,9 +19,10 @@
 //                          HuntBeasts.fightScenario (`fight`), HuntEngine
 //                          (the warning before the lair: `lair`)
 
-/** Omens a boss hunt costs. Tuned by the hunt simulator (huntsim --omens):
- *  about two to three full hunts. */
-export const OMEN_FULL = 100;
+/** Omens a boss hunt costs. 100 at first; 200 after the owner's first Reeds
+ *  playtest (2026-09-27: a full clear filled a meter in one hunt). About 2.5
+ *  hunts clearing everything on a large map, 3 on a small one. */
+export const OMEN_FULL = 200;
 
 /** Full meters a region may bank once a boss there is unlocked (before one
  *  is, no omens gather at all). Claimed plans are items and uncapped. */
@@ -33,8 +34,8 @@ export const OMEN_SOURCES = {
   primary: 30,   // the plan's primary objective done (clean exit)
   bonus: 10,     // each bonus objective done
   apex: 15,      // the region's apex killed (on top of its fight)
-  fight: 3,      // each fight won (beasts and cult bands)
-  event: 3,      // each event seen through (not walked away from)
+  fight: 1,      // each fight won (beasts and cult bands); 3 until 2026-09-27
+  event: 1,      // each event seen through (not walked away from); 3 until 2026-09-27
 };
 
 /** A boss kill's Hunt Points, and its XP pool as a multiple of an ordinary
