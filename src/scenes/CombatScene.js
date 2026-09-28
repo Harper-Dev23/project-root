@@ -1857,7 +1857,7 @@ export default class CombatScene extends Phaser.Scene {
   _assignCharToSlot(char, slot) {
     // Sprite is purely visual — the slot CONTAINER handles all clicks.
     const sprite = this.add.image(0, 0, char.skin).setDisplaySize(64, 64);
-    const classColor = CLASS_COLORS?.[char.baseClass] || '#ffffff';
+    const classColor = char.nameColor || CLASS_COLORS?.[char.baseClass] || '#ffffff';
     const nameText = this.add.text(0, 32, char.name, { fontSize: '14px', color: classColor }).setOrigin(0.5, 0);
 
     const bars = this._makeStatusBars(char, 0, 0);
@@ -1981,6 +1981,8 @@ export default class CombatScene extends Phaser.Scene {
       uid: 'e' + (this._nextEnemyUid = (this._nextEnemyUid || 0) + 1),
       type: config.type,
       name: config.name || template.name || config.type,
+      // A hunt beast's mark colour (HuntBeasts MARK_COLOR); drawn on its label.
+      ...(config.nameColor ? { nameColor: config.nameColor } : {}),
       currentHP: Number.isFinite(config.hp) ? config.hp : maxHP,
       maxHP,
       currentMP: maxMP,
@@ -3667,6 +3669,8 @@ export default class CombatScene extends Phaser.Scene {
     const say = (line) => (said ? said.push(line) : this._log(line));
     if (this.isCoop) return;   // the server puts it on (chunk 12c); a client only draws
     const standing = this._party().filter(c => c && c.status !== 'incapacitated' && (c.currentHP ?? 1) > 0);
+    // What the beasts' mark means here (owner's playtest, 2026-09-27; fightSpec).
+    if (this.huntFight?.markLine) say(this.huntFight.markLine);
     const buff = this.huntFight?.foodBuff;
     if (buff?.field && Number.isFinite(buff.amount)) {
       for (const c of standing) {
@@ -13087,7 +13091,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // ✅ Update the current turn name display
     if (this.turnNameText) {
-      const classColor = CLASS_COLORS?.[currentChar.baseClass] || '#ffffff';
+      const classColor = currentChar.nameColor || CLASS_COLORS?.[currentChar.baseClass] || '#ffffff';
       this.turnNameText.setText(`${currentChar.name}`);
       this.turnNameText.setColor(classColor);
     }
@@ -14248,8 +14252,8 @@ export default class CombatScene extends Phaser.Scene {
     slot.removeAllListeners();
     this._wireSlotInfoClick(slot, char);
 
-    // Name label
-    const classColor = CLASS_COLORS?.[char.baseClass] || '#ffffff';
+    // Name label (a hunt beast's in its mark colour, HuntBeasts MARK_COLOR)
+    const classColor = char.nameColor || CLASS_COLORS?.[char.baseClass] || '#ffffff';
     const nameTxt = this.add.text(0, 32, char.name, {
       fontSize: '14px',
       color: classColor

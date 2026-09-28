@@ -461,6 +461,21 @@ function makeMapHunt(s, rng, worldRng, world) {
     },
 
     /**
+     * The line a beast fight opens with (owner's playtest, 2026-09-27): the
+     * pack's mark, and under a vigil what killing it costs. Null for others.
+     */
+    _markLine(occ) {
+      if (occ?.kind !== 'beast' || !occ.mark) return null;
+      const onBlight = s.map.tiles[occ.tile]?.ground === 'blight';
+      if (occ.mark === 'marked') return 'These beasts are Marked by a prophet (gold).';
+      if (occ.mark === 'corrupted') return 'These beasts are Corrupted (purple).';
+      if (!s.vigil) return 'These beasts are Unmarked (silver).';
+      const house = s.vigil.charAt(0).toUpperCase() + s.vigil.slice(1);
+      return onBlight ? `These beasts are Unmarked (silver), but on blight: ${house}'s vigil forgives the kill.`
+        : `These beasts are Unmarked (silver). Under ${house}'s vigil, killing them costs ${VIGIL_KILL_COST} standing.`;
+    },
+
+    /**
      * The pending encounter's cult parley, or null (CULT_PARLEY). A cult that
      * knows the party will talk, but only when the party found THEM (owner's
      * playtest, 2026-09-27: "if you spot them or move to their tile"): the
@@ -770,6 +785,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         itemLevel, deathRule: s.deathRule,
         xpPool: Math.round(FIGHT_XP_POOL * (occ.kind === 'boss' ? BOSS_XP_MULT : 1) * (1 + (s.mods.xpPercent || 0) / 100)),
         scenario: this._weakened(occ, fightScenario(occ, { itemLevel, zoneName: zone?.name })),
+        markLine: this._markLine(occ),
         boon: this._boonForFight(),
       };
     },

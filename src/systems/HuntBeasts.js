@@ -244,6 +244,10 @@ export function gradeHpScale(grade) {
  * Advance loop's cultist drop); a beast's parts never drop, they are
  * harvested (9d).
  */
+/** A beast's name label colour in a fight, by its mark: the map's ring
+ *  colours (HuntFieldOverlay MARK_RING). */
+export const MARK_COLOR = { marked: '#f2d27a', unmarked: '#c3ccd6', corrupted: '#c48ae8' };
+
 export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
   if (!occ?.loadout) throw new Error(`occupant ${occ?.id} has no loadout yet`);
   if (occ.kind === 'boss') return bossScenario(occ, { itemLevel });
@@ -260,6 +264,9 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
       type,
       slotId: FIGHT_SLOT_ORDER[k],
       name: occ.name && k === 0 ? `${occ.name[0].toUpperCase()}${occ.name.slice(1)}` : m.grade ? `${m.grade[0].toUpperCase()}${m.grade.slice(1)} ${base}` : base,
+      // A beast's prophet mark shows in the fight too (owner's playtest,
+      // 2026-09-27): its name label in the mark's colour, as its map ring.
+      ...(occ.kind === 'beast' && MARK_COLOR[occ.mark] ? { nameColor: MARK_COLOR[occ.mark] } : {}),
       grade: m.grade || null,
       hpMult: gradeHpScale(m.grade) * (boost?.hpMult || 1),
       ...(Number.isFinite(boost?.damagePct) ? { damageMultiplierPct: boost.damagePct } : {}),

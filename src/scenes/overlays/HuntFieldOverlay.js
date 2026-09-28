@@ -98,7 +98,11 @@ const FOG_FILL = 0x23252d, FOG_LINE = 0x33363f;
 const REMEMBERED_DIM = 0.5;                    // remembered tiles: ground at half brightness
 const HUNGER_COLOR = { sated: '#9fe09f', fed: '#e0e0e0', hungry: '#f0c060', starving: '#ff6b6b' };
 const GRADE_COLOR = { yearling: 0x9aa7b0, grown: 0xc9a25a, prime: 0xe07b39, great: 0xd8403a };
-const MARK_RING = { marked: 0xf2d27a, corrupted: 0xa45bd6, unmarked: 0x2a2a2a };
+// Owner's playtest, 2026-09-27: unmarked was near-black, hard to tell from
+// nothing. Silver now; under a vigil an unmarked beast off blight (a kill that
+// costs standing) is rung red (VIGIL_RING).
+const MARK_RING = { marked: 0xf2d27a, corrupted: 0xa45bd6, unmarked: 0xc3ccd6 };
+const VIGIL_RING = 0xe0503f;
 const DIALOGUE_MS = 3200;
 /** UIScene's dialogue bar covers y 570-720 and draws above this scene, so no
  *  panel may reach below this line (the sweep's screenshots caught a camp
@@ -469,7 +473,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       }
       const fill = o.kind === 'cultist' ? 0x4b2d5e : (GRADE_COLOR[o.topGrade] ?? 0xaaaaaa);
       g.fillStyle(fill, alpha).fillCircle(x, y, 14);
-      g.lineStyle(3, MARK_RING[o.mark] ?? 0x2a2a2a, alpha).strokeCircle(x, y, 14);
+      g.lineStyle(3, this._vigilCost(o) ? VIGIL_RING : (MARK_RING[o.mark] ?? 0x2a2a2a), alpha).strokeCircle(x, y, 14);
       const n = o.exact ? String(o.count) : ({ one: '1', 'a few': '2-3', several: '4-6', many: '7+' }[o.size] || '?');
       this._label(x, y, n, n.length > 1 ? 11 : 14, '#ffffff').setAlpha(alpha);
     }
@@ -776,6 +780,14 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
   }
 
+  /** Standing a kill of this occupant would cost under a vigil (11d): an
+   *  unmarked beast off blight. 0 when none. */
+  _vigilCost(o) {
+    const b = this.v?.boon;
+    if (!b?.vigil || o?.kind !== 'beast' || o.mark !== 'unmarked') return 0;
+    return this.v.tiles[o.tile]?.ground === 'blight' ? 0 : (b.vigilCost || 0);
+  }
+
   _occupantLines(o) {
     const zoneId = this.v.zoneId;
     const stale = o.stale ? ' (last seen, may have moved)' : '';
@@ -786,7 +798,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (o.kind === 'cultist') lines.push(`${o.cult ? `${o.cult} cultists` : 'Cultists'}, ${o.size}${stale}.`);
     else if (o.name) lines.push(`${o.name[0].toUpperCase()}${o.name.slice(1)}${o.apex ? ' (the apex)' : ''}: ${o.size}, up to ${o.topGrade}${stale}.`);
     else lines.push(`${familyName(zoneId, o.family)}, ${o.size}, up to ${o.topGrade}${stale}.`);
-    if (o.mark && o.mark !== 'unmarked') lines.push(o.mark === 'marked' ? 'Marked by a prophet.' : 'Corrupted.');
+    if (o.mark === 'unmarked') {
+      const cost = this._vigilCost(o);
+      const onBlight = this.v.tiles[o.tile]?.ground === 'blight';
+      lines.push(cost ? `Unmarked. Under ${houseName(this.v.boon.vigil)}'s vigil, killing it here costs ${cost} standing.`
+        : this.v.boon?.vigil && onBlight ? 'Unmarked, but on blight: the vigil forgives this kill.' : 'Unmarked.');
+    } else if (o.mark) lines.push(o.mark === 'marked' ? 'Marked by a prophet.' : 'Corrupted.');
     if (o.exact) lines.push(`Exactly: ${o.roster.map(m => m.grade || m.type).join(', ')}${o.composition ? ` (${o.composition})` : ''}.`);
     return lines;
   }

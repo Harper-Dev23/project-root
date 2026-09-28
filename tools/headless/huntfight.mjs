@@ -240,6 +240,14 @@ function winIt(m, planLabel) {
   check('beast: no part reached the camp bag or the pack (harvest is 9d)', GameState.inventory.length === r.bagBefore && r.s1.pack.found.length === r.s0.pack.found.length);
   check(`beast: the XP pool (${FIGHT_XP_POOL}) reached the hunters`, r.xpGain > 0, `+${r.xpGain} XP across the party`);
 
+  // A beast's prophet mark shows in the fight (owner's playtest, 2026-09-27).
+  const killed = r.s1.kills.find(k => k.occId === r.occId);
+  const { MARK_COLOR } = await import('../../src/systems/HuntBeasts.js');
+  check(`beast: every enemy's name label takes the pack's mark colour (${killed?.mark}), and the fight opens saying so`,
+    !!MARK_COLOR[killed?.mark] && r.host.enemies.every(e => e.nameColor === MARK_COLOR[killed.mark])
+    && typeof r.spec.markLine === 'string' && r.spec.markLine.toLowerCase().includes(killed.mark) && r.host.__logLines().some(l => l.includes(r.spec.markLine)),
+    `${r.spec.markLine}`);
+
   // XP follows difficulty (owner, 2026-09-27): the pool scales by the enemy
   // side's total max HP against the Reeds' average fight, clamped; bosses keep theirs.
   const { huntFightXP, FIGHT_XP_REF_ENEMY_HP: REF, FIGHT_XP_SCALE: SC } = await import('../../src/systems/HuntObjectives.js');
