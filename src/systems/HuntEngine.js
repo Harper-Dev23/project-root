@@ -460,25 +460,45 @@ function makeMapHunt(s, rng, worldRng, world) {
         event: event?.quiet ? null : event, quiet: event?.quiet || null };
     },
 
-    /** The pending encounter's cult parley, or null: a cult camp whose cult the party has met (CULT_PARLEY). */
+    /**
+     * The pending encounter's cult parley, or null (CULT_PARLEY). A cult that
+     * knows the party will talk, but only when the party found THEM (owner's
+     * playtest, 2026-09-27: "if you spot them or move to their tile"): the
+     * party walked onto them, or knew they were there. Never when they came
+     * for an unaware party (an ambush by a pack or on a camp). `price` is the trade's
+     * give, `canPay` whether the pack holds it; a party that cannot pay must
+     * fight or flee.
+     */
     _parleyFor() {
       const e = s.encounter;
-      if (!e || e.kind !== 'cultist') return null;
+      if (!e || e.kind !== 'cultist' || (e.ambush && e.cause !== 'party')) return null;
       const occ = occById().get(e.occId);
       const p = occ?.cult ? CULT_PARLEY[occ.cult] : null;
-      return p && world.hasQuestFlag?.(p.flag) ? { occ, ...p } : null;
+      if (!p || !world.hasQuestFlag?.(p.flag)) return null;
+      const tpl = EVENT_TEMPLATES[p.eventId];
+      const price = (tpl?.give || []).map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
+      return { occ, ...p, price, canPay: price.every(g => g.have >= g.qty) };
     },
-    _canParley() { return !!this._parleyFor(); },
+    _canParley() { return !!this._parleyFor()?.canPay; },
+    /** What the encounter panel shows of a parley: its price, what it pays, and whether it can be paid. */
+    _parleyView() {
+      const p = this._parleyFor();
+      if (!p) return null;
+      const { roles } = this._eventRoles(s.pos);
+      return { canPay: p.canPay, price: p.price, gives: previewEffects(EVENT_TEMPLATES[p.eventId]?.receive || [], roles) };
+    },
 
     /**
-     * Parley (owner, 2026-09-27): talk to the cult camp instead of fighting
-     * it. The encounter ends, the camp melts back into the reeds (it leaves
-     * the map; not a kill), and the cult's trade opens where the party stands.
+     * Parley (owner, 2026-09-27): pay the cult's price instead of fighting.
+     * The trade is made on the spot (the cult's trade event, accepted), and
+     * the camp melts back into the reeds (it leaves the map; not a kill).
+     * Refused after an ambush, or when the pack does not hold the price.
      */
     parley() {
       if (s.finished) return { ok: false, reason: 'the hunt is over' };
       const p = this._parleyFor();
       if (!p) return { ok: false, reason: 'they will not talk to you' };
+      if (!p.canPay) return { ok: false, reason: 'you do not carry what they ask' };
       s.encounter = null;
       const i = s.map.occupants.findIndex(o => o.id === p.occ.id);
       if (i >= 0) s.map.occupants.splice(i, 1);
@@ -486,7 +506,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       const { roles, houseId, rivalId, godId } = this._eventRoles(s.pos);
       s.event = { templateId: p.eventId, site: { occId: null, tile: s.pos, feature: null }, roles, houseId, rivalId, godId };
       this._log({ kind: 'parley', occupant: p.occ.id, cult: p.occ.cult, time: s.time });
-      return { ok: true, event: this.event() };
+      const event = this.event();
+      const res = this.resolveEvent({ accept: true });
+      return res.ok ? { ...res, event } : res;
     },
 
     /**
@@ -1096,7 +1118,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         trails,
         encounter: this.encounter(),
         // Whether the pending encounter's cult will talk (owner, 2026-09-27).
-        parley: this._canParley(),
+        parley: this._parleyView(),
         // After a clean exit, judged as the exit judged them: a carried-home
         // objective (Retrieve, Provisioner, Trophy) is done only at the exit,
         // so the end panel said "Retrieve not done" on a hunt that paid for it.

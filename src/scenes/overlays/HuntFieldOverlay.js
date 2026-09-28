@@ -908,7 +908,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     else lines.push(e.kind === 'cultist' ? 'Cultists.' : 'Beasts.');
     lines.push(`Initiative: party ${fmt(e.partyInitiative)}, them ${fmt(e.enemyInitiative)}.`);
     lines.push(e.first === 'party' ? 'Your side acts first.' : 'Their side acts first.');
-    if (v.parley) lines.push('This cult knows you. You could talk instead of fight.');
+    // Parley (owner, 2026-09-27): only when you found them, and at a price.
+    const priceText = v.parley ? v.parley.price.map(g => `${g.qty} ${g.name}`).join(', ') : '';
+    if (v.parley?.canPay) lines.push(`This cult knows you and will talk. Parley: pay ${priceText}; they give ${v.parley.gives.join(', ') || 'nothing'}, and leave.`);
+    else if (v.parley) lines.push(`This cult knows you, but wants ${priceText}, which you do not carry. Fight, or flee from the fight.`);
     const width = 360, height = 50 + this._linesHeight(lines, 360) + 60;
     const p = this._sidePanel(e.tile && v.layout.includes(e.tile) ? e.tile : v.pos, width, height);
     this._panelText(p, p.px + 10, p.py + 8, e.ambush ? 'Ambush' : 'Encounter', 17, '#ff9a8a');
@@ -919,10 +922,13 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // enemy's free round is played: the panel only starts it. In a co-op hunt
     // the host starts it for everyone.
     if (this.coop && !this.coop.isHost) this._panelText(p, p.px + 10, ty + 4, 'Waiting for the host to fight.', 14, '#e8c66a');
-    else if (v.parley) {
-      // A cult that knows the party (owner, 2026-09-27): talk, or fight.
+    else if (v.parley?.canPay) {
+      // A cult that knows the party (owner, 2026-09-27): pay and talk, or fight.
       this._panelButton(p, p.px + width / 2 - 80, ty + 12, 'Fight', () => this._fight(), 'danger');
-      this._panelButton(p, p.px + width / 2 + 80, ty + 12, 'Parley', () => this._act('event', () => this.hunt.parley()), 'primary');
+      this._panelButton(p, p.px + width / 2 + 80, ty + 12, 'Parley', () => {
+        const res = this._act('event', () => this.hunt.parley());
+        if (res?.ok) this._showEventResult(res.event, res);
+      }, 'primary');
     } else this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
   }
 

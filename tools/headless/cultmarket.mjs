@@ -263,16 +263,26 @@ console.log('=== parley and the Hymn Beneath the Water ===');
     return { h, w, set };
   }
   const stranger = besideCamp('yargaleth', []);
-  check('a Choir camp the party has not met: an ordinary fight, no parley', stranger.h.encounter()?.kind === 'cultist' && stranger.h.view().parley === false && !stranger.h.parley().ok);
+  check('a Choir camp the party has not met: an ordinary fight, no parley', stranger.h.encounter()?.kind === 'cultist' && stranger.h.view().parley === null && !stranger.h.parley().ok);
+  // Parley (owner's playtest, 2026-09-27): only when you found them, and at a price.
   const known = besideCamp('yargaleth', ['choir_heard'], { fish: 3 });
-  check('once the Choir know you (choir_heard), their camp offers parley', known.h.view().parley === true);
+  const pv = known.h.view().parley;
+  check('once the Choir know you, their camp offers parley, naming its price and what it pays', !!pv && pv.canPay && pv.price[0]?.id === 'raw_fish' && pv.price[0].qty === 3
+    && JSON.stringify(pv.gives) === JSON.stringify(['2 Sin Tickets']), JSON.stringify(pv));
   const pr = known.h.parley();
-  check('parley: the fight ends, the camp leaves the map (not a kill), and the Choir\'s trade opens', pr.ok && !known.h.encounter() && known.h.view().event?.templateId === 'choir_parley'
-    && !known.h.getState().map.occupants.some(o => o.id === 'ocamp') && !known.h.getState().kills.length);
-  const tr = known.h.resolveEvent({ accept: true });
-  check('...3 fish for 2 Sin Tickets (and a little hidden standing with Yar\'galeth)', tr.ok && known.w.calls.some(c => c[0] === 'sinTickets' && c[1] === 2) && known.w.calls.some(c => c[0] === 'falseGod' && c[1] === 'yargaleth' && c[2] === 1), (tr.lines || []).join(' '));
+  check('parley: the price is paid on the spot, 2 Sin Tickets (and a little hidden standing), the camp leaves the map (not a kill)', pr.ok && !known.h.encounter() && !known.h.view().event
+    && known.w.calls.some(c => c[0] === 'sinTickets' && c[1] === 2) && known.w.calls.some(c => c[0] === 'falseGod' && c[1] === 'yargaleth' && c[2] === 1)
+    && !known.h.getState().pack.found.some(i => i.id === 'raw_fish')
+    && !known.h.getState().map.occupants.some(o => o.id === 'ocamp') && !known.h.getState().kills.length, (pr.lines || [pr.reason]).join(' '));
+  const broke = besideCamp('yargaleth', ['choir_heard'], { fish: 1 });
+  const bv = broke.h.view().parley;
+  check('...without the price, parley is shown as unpaid and refused: fight or flee', !!bv && !bv.canPay && !broke.h.parley().ok && broke.h.encounter()?.kind === 'cultist');
+  const amb = besideCamp('yargaleth', ['choir_heard'], { fish: 3 });
+  const da = amb.h.serialize(); da.encounter.ambush = true; da.encounter.cause = 'pack';
+  const ha = restoreMapHunt(da, amb.w);
+  check('...and never when they came for an unaware party (an ambush)', ha.view().parley === null && !ha.parley().ok);
   const gill = besideCamp('dagon', ['choir_heard']);
-  check('a Temple camp does not talk because the Choir know you', gill.h.view().parley === false);
+  check('a Temple camp does not talk because the Choir know you', gill.h.view().parley === null);
 
   // A Choir band defeated: the cantor's step can be done that way.
   const fightThem = besideCamp('yargaleth', []);
