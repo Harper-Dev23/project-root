@@ -491,7 +491,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const p = occ?.cult ? CULT_PARLEY[occ.cult] : null;
       if (!p || !world.hasQuestFlag?.(p.flag)) return null;
       const tpl = EVENT_TEMPLATES[p.eventId];
-      const price = (tpl?.give || []).map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
+      const price = (tpl?.give || []).map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._giveHave(g.id), ...this._supplyNote(g) }));
       return { occ, ...p, price, canPay: price.every(g => g.have >= g.qty) };
     },
     _canParley() { return !!this._parleyFor()?.canPay; },
@@ -1522,6 +1522,35 @@ function makeMapHunt(s, rng, worldRng, world) {
       return (list || []).reduce((t, e) => (e.supplies != null ? t - Math.min(0, evalNumber(e.supplies, roles)) : t), 0);
     },
 
+    /**
+     * What the party can pay of a trade's `give` (owner's playtest,
+     * 2026-09-27: the Hermit asked for Rations a party that left with only
+     * the camp's issue never carries). A supply item (Rations) can be paid
+     * from the supply pool at its supply value, after any packed ones.
+     */
+    _giveHave(id) {
+      const per = Items[id]?.type === 'supply' ? (Items[id].supply || 1) : 0;
+      return this._packCount(id) + (per ? Math.floor(s.supplies / per + 1e-9) : 0);
+    },
+    /** Pay one give: packed copies first, then (a supply item) the supply pool. */
+    _payGive(g) {
+      let need = g.qty;
+      for (const list of [s.pack.found, s.pack.brought]) {
+        const take = Math.min(need, countInList(list, g.id));
+        if (take > 0) { takeFromList(list, g.id, take); need -= take; }
+      }
+      if (need > 0 && Items[g.id]?.type === 'supply') {
+        s.supplies = Math.max(0, s.supplies - need * (Items[g.id].supply || 1));
+        this._noteSupplies();
+      }
+    },
+    /** For the panel: a supply item's price says it comes out of supplies when the pack runs short. */
+    _supplyNote(g) {
+      if (Items[g.id]?.type !== 'supply') return {};
+      const short = Math.max(0, g.qty - this._packCount(g.id));
+      return short ? { fromSupplies: short * (Items[g.id].supply || 1) } : {};
+    },
+
     _packCount(id) {
       return countInList(s.pack.found, id) + countInList(s.pack.brought, id);
     },
@@ -1555,7 +1584,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         }
       }
       if (tpl.shape === 'trade') {
-        const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._packCount(g.id) }));
+        const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._giveHave(g.id), ...this._supplyNote(g) }));
         out.trade = { give, canAccept: give.every(g => g.have >= g.qty), pays: previewEffects(tpl.receive, r) };
       }
       return out;
@@ -1677,14 +1706,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         } else { effects = tpl.refuse || []; branch = 'refuse'; }
       } else if (tpl.shape === 'trade') {
         if (pick.accept) {
-          if (!tpl.give.every(g => this._packCount(g.id) >= g.qty)) return { ok: false, reason: 'you do not carry what they ask' };
-          for (const g of tpl.give) {
-            let need = g.qty;
-            for (const list of [s.pack.found, s.pack.brought]) {
-              const take = Math.min(need, countInList(list, g.id));
-              if (take > 0) { takeFromList(list, g.id, take); need -= take; }
-            }
-          }
+          if (!tpl.give.every(g => this._giveHave(g.id) >= g.qty)) return { ok: false, reason: 'you do not carry what they ask' };
+          for (const g of tpl.give) this._payGive(g);
           effects = tpl.receive || []; branch = 'accept';
         } else { effects = tpl.refuse || []; branch = 'refuse'; }
       } else {

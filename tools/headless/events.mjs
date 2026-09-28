@@ -486,9 +486,11 @@ console.log('=== every verb moves its reader ===');
   const tr = withSite('test_trade', { night: null, extra: (d) => { d.pack.found.push(makeStack('rations', 3)); } });
   tr.h.move(tr.tile);
   const had = countInList(tr.h.getState().pack.brought, 'rations') + countInList(tr.h.getState().pack.found, 'rations');
-  const noItems = withSite('test_trade', { night: null, extra: (d) => { d.pack.brought = []; d.pack.found = []; } });
+  // Rations can come out of supplies (2026-09-27), so "without the goods" is
+  // no Rations packed AND too few supplies.
+  const noItems = withSite('test_trade', { night: null, extra: (d) => { d.pack.brought = []; d.pack.found = []; d.supplies = 1; } });
   noItems.h.move(noItems.tile);
-  check('a Trade without the goods cannot be accepted', !noItems.h.view().event.trade.canAccept && !noItems.h.resolveEvent({ accept: true }).ok);
+  check('a Trade without the goods (no Rations packed, 1 supply for 2) cannot be accepted', !noItems.h.view().event.trade.canAccept && !noItems.h.resolveEvent({ accept: true }).ok);
   if (had >= 2) {
     const rt = tr.h.resolveEvent({ accept: true });
     const left = countInList(tr.h.getState().pack.brought, 'rations') + countInList(tr.h.getState().pack.found, 'rations');
@@ -553,6 +555,25 @@ if (diffAt >= 0) {
   const keys = new Set([...Object.keys(old), ...Object.keys(golden)]);
   const changed = [...keys].filter(k => !same(old[k], golden[k]));
   check('event tables identical to the golden', changed.length === 0, changed.length ? `changed: ${changed.join(', ')}` : `${keys.size} tables`);
+}
+
+// The Hermit takes Rations from the supply pool when none are packed (owner's
+// playtest, 2026-09-27: a party that left with only the camp's issue could not pay).
+{
+  const { makeStack } = await import('../../src/systems/ItemStacks.js');
+  const noRations = withSite('hermit', { extra: (d) => { d.pack.found = d.pack.found.filter(i => i.id !== 'rations'); d.pack.brought = d.pack.brought.filter(i => i.id !== 'rations'); } });
+  noRations.h.move(noRations.tile);
+  const give = noRations.h.view().event?.trade?.give?.[0];
+  const sup0 = noRations.h.getState().supplies;
+  const r = noRations.h.resolveEvent({ accept: true });
+  check('the Hermit with no Rations packed: the price shows as from your supplies, and accepting takes 1 supply',
+    give?.fromSupplies === 1 && give.have >= 1 && r.ok && Math.abs(sup0 - noRations.h.getState().supplies - 1) < 1e-9, JSON.stringify({ give, ok: r.ok, reason: r.reason }));
+  const packed = withSite('hermit', { extra: (d) => { d.pack.brought.push(makeStack('rations', 2)); } });
+  packed.h.move(packed.tile);
+  const sup1 = packed.h.getState().supplies;
+  const r2 = packed.h.resolveEvent({ accept: true });
+  const left = packed.h.getState().pack.brought.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);
+  check('...with Rations packed, a packed one is paid and supplies are untouched', r2.ok && left === 1 && packed.h.getState().supplies === sup1 && !packed.h.view().event?.trade?.give?.[0]?.fromSupplies);
 }
 
 // A quiet site says what it waits for (owner's playtest, 2026-09-27): every

@@ -1008,7 +1008,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       }
     }
     if (ev.shape === 'trade') {
-      lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (you carry ${g.have})`).join(', ')}.`);
+      // A supply item (Rations) short in the pack comes out of supplies (2026-09-27).
+      lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (${g.fromSupplies ? `${g.fromSupplies} from your supplies` : `you carry ${g.have}`})`).join(', ')}.`);
       if (ev.trade.pays?.length) lines.push(`They give: ${ev.trade.pays.join(', ')}.`);
       buttons = [['Trade', ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), ev.trade.canAccept ? 'primary' : 'danger'],
         ['Refuse', act({ accept: false }), 'primary']];
