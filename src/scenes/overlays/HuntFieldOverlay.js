@@ -752,6 +752,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       acts.push([`Fish (${FISH_TIME} time)`, () => this._act('fish', () => this.hunt.fish())]);
       acts.push(['Eat…', () => { this.panel = 'eat'; this._refresh(); }]);
       acts.push([`Camp… (${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
+      // Wait without moving (owner's playtest, 2026-09-27): a short wait, or to
+      // the next dark or dawn. Packs can find you, as they find a camp.
+      for (const [until, label] of [['short', 'Wait'], ['dark', 'Wait until dark'], ['dawn', 'Wait until dawn']]) {
+        const c = this.hunt.waitCost(until);
+        if (c) acts.push([`${label} (${fmt(c.units)} time, ${fmt(c.supply)} supplies)`, () => this._act('wait', () => this.hunt.wait({ until }))]);
+      }
       if (t?.ground === 'blight') acts.push([`Cleanse (${CLEANSE_TIME} time)`, () => this._act('cleanse', () => this.hunt.cleanse())]);
       if (t?.exit) acts.push(['Leave the hunt', () => this._confirmExit(), 'danger']);
     }
@@ -874,6 +880,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'forage': return `${day(e.time)} Foraged ${e.qty} ${item(e.item)}.`;
       case 'fish': return `${day(e.time)} Caught ${e.qty} ${item(e.item)}.`;
       case 'eat': return `${day(e.time)} Ate ${e.qty} ${item(e.item)} (+${fmt(e.supply)}).`;
+      case 'wait': return `${day(e.time)} Waited${e.until === 'dark' ? ' for dark' : e.until === 'dawn' ? ' for dawn' : ''}${e.found ? '; something found you' : ''}.`;
       case 'camp': return `${day(e.time)} Camped${e.night ? ' at night' : ''}${e.dishes?.length ? `, cooked ${e.dishes.join(', ')}` : ''}${e.found ? '; a pack found the camp' : ''}.`;
       case 'cleanse': return `${day(e.time)} Cleansed the blight${e.source ? ' and destroyed its source' : ''}.`;
       case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : ''}.`;
@@ -1270,6 +1277,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (kind === 'camp') out.push(`Camped: recovered ${Math.round(res.recoveryPercent)}% HP and MP${res.found ? ', then a pack found the camp' : ''}.`);
     if (kind === 'cleanse') out.push(res.sourceDestroyed ? 'The blight source is destroyed.' : 'The blight here is cleansed.');
     if (kind === 'flee') out.push('You fell back. They will be hunting you.');
+    if (kind === 'wait') out.push(res.encounter ? 'You waited, and something found you.' : `You waited ${fmt(res.spent)} time.`);
     if (kind === 'harvest') out.push(`Harvested ${res.specimens + res.materials} part${res.specimens + res.materials === 1 ? '' : 's'}${Object.keys(res.meat || {}).length ? ' and meat' : ''} into the pack.`);
     if (res.starved?.length) out.push(`Starving: ${res.starved.map(s => s.name).join(', ')} lost HP.`);
     if (kind === 'scout' && res.view?.exact) out.push('Scouted: you know exactly what is there.');

@@ -121,7 +121,7 @@ import * as Boons from './Boons.js';
 import { FALSE_GODS, PACT_START, PACT_MAX, PACT_PRICE } from '../../data/falseGods.js';
 import {
   huntMods, moveCost, clockAt, sightRange, visibleTiles, occupantBand,
-  occupantView, SCOUT_TIME, BANDS,
+  occupantView, SCOUT_TIME, PHASE_UNITS, BANDS,
   hungerStage, momentMods, starvedHP, forageCandidates, gatherQty, FORAGE_TIME, FISH_TIME,
   FORAGE_YIELD, FISH_YIELD, FISH_ITEM, CAMP_TIME, CAMP_SUPPLY, SATED_TIME, campRecoveryPercent,
   recovered, cookDish,
@@ -633,6 +633,44 @@ function makeMapHunt(s, rng, worldRng, world) {
      * SATED_TIME after the camp; the last Fine meal's buff replaces any other.
      * Refuses the whole camp, before anything happens, if a meal is not cookable.
      */
+    /**
+     * What waiting costs (owner's playtest, 2026-09-27: pass time without
+     * moving): `until` 'short' is one scout's time (about one move); 'dark'
+     * and 'dawn' run to the next night or day. Supplies go at the camp's rate
+     * (CAMP_SUPPLY over CAMP_TIME). Null when there is nothing to wait for
+     * (dark already, or dawn by day). Pure.
+     */
+    waitCost(until = 'short') {
+      const c = clockAt(s.time);
+      let units;
+      if (until === 'short') units = SCOUT_TIME;
+      else if (until === 'dark' || until === 'dawn') {
+        if ((until === 'dark') === c.isNight) return null;
+        units = (c.phase + 1) * PHASE_UNITS - s.time;
+      } else return null;
+      units = Math.max(0.01, Math.round(units * 100) / 100);
+      return { until, units, supply: Math.round(units * CAMP_SUPPLY / CAMP_TIME * 100) / 100 };
+    },
+
+    /**
+     * Wait on the party's tile (owner's playtest, 2026-09-27). Time passes as
+     * in a camp: the world moves, and a pack that reaches the party must find
+     * it first (the camp's Detection), breaking the wait off as an ambush if
+     * it does. No rest: nothing is recovered. Supplies at the camp's rate.
+     */
+    wait({ until = 'short' } = {}) {
+      const no = frozen(); if (no) return no;
+      const cost = this.waitCost(until);
+      if (!cost) return { ok: false, reason: until === 'dark' ? 'it is already dark' : until === 'dawn' ? 'it is already day' : `cannot wait for '${until}'` };
+      s.supplies = Math.max(0, s.supplies - cost.supply);
+      this._noteSupplies();
+      const spent = this._spendTime(cost.units, { camping: true });
+      this._noteSupplies();
+      this._reveal();
+      this._log({ kind: 'wait', until, units: spent.spent, found: !!spent.encounter, time: s.time });
+      return { ok: true, until, spent: spent.spent, supply: cost.supply, flips: spent.flips, encounter: this.encounter(), event: this._openEventHere() };
+    },
+
     camp({ meals = [] } = {}) {
       const no = frozen(); if (no) return no;
       const need = {};

@@ -1330,6 +1330,33 @@ console.log('=== blight, cleansing and corruption ===');
   check('corruption: a marked beast in blight never turns', m.mark === 'marked');
 }
 
+console.log('=== waiting (owner\'s playtest, 2026-09-27) ===');
+{
+  const h = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'medium' }, supplies: 200, seed: 9700 }, recordingWorld(makeParty()));
+  const s0 = h.getState(), sup0 = s0.supplies, t0 = s0.time;
+  const pos0 = s0.pos;
+  const short = h.waitCost('short'), dark = h.waitCost('dark');
+  check('by day: a short wait is one scout\'s time, "until dark" runs to nightfall, "until dawn" is not offered',
+    short.units === R.SCOUT_TIME && Math.abs(t0 + dark.units - R.PHASE_UNITS) < 1e-6 && h.waitCost('dawn') === null, JSON.stringify({ short, dark }));
+  const w1 = h.wait();
+  const s1 = h.getState();
+  check('a short wait: time passes, the party stays put, supplies go at the camp\'s rate', w1.ok && Math.abs(s1.time - t0 - R.SCOUT_TIME) < 1e-6 && s1.pos === pos0
+    && Math.abs(sup0 - s1.supplies - R.SCOUT_TIME * R.CAMP_SUPPLY / R.CAMP_TIME) < 1e-6, JSON.stringify({ t: s1.time, sup: s1.supplies }));
+  let hn = h;
+  if (hn.encounter()) hn.winEncounter();
+  const wd = hn.wait({ until: 'dark' });
+  check('waiting until dark ends at nightfall (or when something finds the party)', wd.ok && (R.clockAt(hn.getState().time).isNight || !!wd.encounter));
+  check('...and at night, "until dark" is refused', !!wd.encounter || (hn.waitCost('dark') === null && !hn.wait({ until: 'dark' }).ok && !!hn.waitCost('dawn')));
+  // Over many long waits, packs find waiting parties as they find camps.
+  let found = 0;
+  for (let k = 0; k < 20; k++) {
+    const hk = createMapHunt(ZONES[k % 2], { plan: { objective: 'scout', size: 'medium', mods: { restlessPercent: 50 } }, supplies: 300, seed: 9710 + k }, recordingWorld(makeParty()));
+    for (let i = 0; i < 6 && !hk.encounter(); i++) hk.wait({ until: R.clockAt(hk.getState().time).isNight ? 'dawn' : 'dark' });
+    if (hk.encounter()) found++;
+  }
+  check(`waiting is not safe: packs found some waiting parties (${found} of 20 over 3 days)`, found > 0);
+}
+
 console.log('=== trails and Restless ===');
 {
   let seenTrails = 0, fadedOk = true, bandOk = true;
