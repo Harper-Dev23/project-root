@@ -26,7 +26,7 @@ await B.bootToTown(`
   const party = makeParty(); GameState.characters = party; GameState.party = party;
   PM.tribe = PM.tribe || 'styx';
   PM.setQuestFlag('hunted:reeds_of_gethsemane');
-  PM.setQuestFlag('apex_slain:reeds_of_gethsemane');`);
+  PM.setQuestFlag('apex_slain:reeds_of_gethsemane'); PM.setQuestFlag('vowback_slain');`);
 
 // ---- 1. The Quest Log's Regions tab ------------------------------------------
 await evaluate(`window.__T.g().scene.getScene('UIScene').openOverlay('QuestOverlay'); await new Promise(r => setTimeout(r, 500)); return true;`);

@@ -100,8 +100,10 @@ console.log('=== content: families, types, skills, AI ===');
   for (const id of HUNT_ZONES) {
     const z = Z.getZone(id);
     Object.keys(z.natives || {}).forEach(f => placed.add(f));
-    if (z.apex?.family) placed.add(z.apex.family);
-    for (const e of z.apex?.escort || []) placed.add(e.family);
+    for (const a of [...(Array.isArray(z.apex) ? z.apex : z.apex ? [z.apex] : []), ...(z.rareBeasts || []).map(r => r.beast)]) {
+      placed.add(a.family);
+      for (const e of a.escort || []) placed.add(e.family);
+    }
   }
   check('every family a starter zone can place has a HUNT_BEASTS entry', [...placed].every(f => BP.HUNT_BEASTS[f]),
     [...placed].filter(f => !BP.HUNT_BEASTS[f]).join(', '));

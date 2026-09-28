@@ -350,6 +350,9 @@ export function occupantView(occ, band, { exact = false } = {}) {
     v.mark = occ.mark;
     const top = roster.reduce((m, x) => Math.max(m, GRADES.indexOf(x.grade)), -1);
     v.topGrade = top >= 0 ? GRADES[top] : null;
+    // A named beast (an apex, a quest beast): its name once identified.
+    if (occ.name) v.name = occ.name;
+    if (occ.apex) v.apex = true;
   }
   if (exact) {
     v.exact = true;

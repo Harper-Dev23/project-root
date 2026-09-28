@@ -58,11 +58,11 @@ const Hex = await import('../../src/systems/HexGrid.js');
 const { GROUNDS, RELIEF, FORD, isPassable, tileCosts } = await import('../../data/grounds.js');
 const { MAP_SIZES, PRIMARY_OBJECTIVES, GRADES, COMPOSITIONS, UNMASK_MAX_CONCEALMENT } = await import('../../data/huntMapGen.js');
 const { PLACEMENT_NEEDS, BONUS_OBJECTIVES } = await import('../../data/planAffixes.js');
-const { ZONES } = await import('../../data/zones.js');
+const { ZONES, VOWBACK_CROCODILE } = await import('../../data/zones.js');
 const { HUNT_BEASTS } = await import('../../data/beastParts.js');
 const { EVENT_TEMPLATES } = await import('../../data/events.js');
 const Gen = await import('../../src/systems/HuntMapGen.js');
-const { generateHuntMap, validateHuntMap, unhandledNeeds, NEED_HANDLERS, occupantConcealment,
+const { generateHuntMap, apexPool, validateHuntMap, unhandledNeeds, NEED_HANDLERS, occupantConcealment,
         revealableShare, yieldingSpots, objectiveRouteTime, swiftDeadline, planMapInputs, shiftGrades } = Gen;
 const { createItemInstance, huntPlanView } = await import('../../src/systems/ItemFactory.js');
 const { makeBasicPlan } = await import('../../src/systems/HuntPlans.js');
@@ -145,8 +145,8 @@ console.log('=== grounds, relief, regions ===');
     check(`${zone.name}: palette of real grounds, no blight; relief of real relief; apex (and its escort) real hunt families; shrine is a real event; house ${zone.divineAlignment}`,
       Object.keys(zone.palette).every(g => GROUNDS[g] && g !== 'blight') && Object.values(zone.palette).some(w => w > 0)
       && Object.keys(zone.relief).every(r => RELIEF[r])
-      // 14a: the apex may be apex-only (the Reeds' Vowback Crocodile), not a native.
-      && !!HUNT_BEASTS[zone.apex.family] && (zone.apex.escort || []).every(e => !!HUNT_BEASTS[e.family])
+      // The apex is a pool (2026-09-27): every entry and its escort real families.
+      && apexPool(zone).length > 0 && apexPool(zone).every(a => !!HUNT_BEASTS[a.family] && (a.escort || []).every(e => !!HUNT_BEASTS[e.family]))
       && !!EVENT_TEMPLATES[zone.setPieces.shrine]?.appears?.setPiece && !!zone.divineAlignment);
   }
 }
@@ -203,7 +203,7 @@ function objectiveProblems(map) {
       }
       case 'apex': {
         const a = occ(o.occupant);
-        if (!a || !a.apex || a.family !== zone.apex.family || !reach.has(a.tile) || a.roster[0].grade !== 'great' || a.state !== 'rooted') bad('apex missing or wrong');
+        if (!a || !a.apex || !apexPool(zone).some(p => p.family === a.family) || !reach.has(a.tile) || a.roster[0].grade !== 'great' || a.state !== 'rooted') bad('apex missing or wrong');
         break;
       }
       case 'cull': case 'named_quarry':
@@ -389,7 +389,7 @@ console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a
 {
   const { CULT_BANDS } = await import('../../data/beastParts.js');
   const reeds = ZONES.reeds_of_gethsemane;
-  let turtles = 0, turtleBad = [], cullBad = [], apexOk = 0, apexN = 0, bands = 0, bandBad = [], bandCults = new Set();
+  let turtles = 0, turtleBad = [], cullBad = [], apexOk = 0, apexN = 0, apexSeen = new Set(), bands = 0, bandBad = [], bandCults = new Set();
   for (let k = 0; k < 60; k++) for (const objective of ['cull', 'apex', 'scout']) {
     const m = Gen.generateHuntMap({ zoneId: 'reeds_of_gethsemane', objective, size: ['small', 'medium', 'large'][k % 3], seed: 32000 + k });
     for (const o of m.occupants) {
@@ -400,14 +400,25 @@ console.log('=== the Reeds roster: shapes, the apex brood, cult bands (chunk 14a
     if (objective === 'apex') {
       apexN++;
       const ap = m.occupants.find(o => o.apex);
-      const esc = reeds.apex.escort[0];
-      if (ap && ap.family === reeds.apex.family && ap.roster[0].grade === 'great' && ap.roster[0].type === reeds.apex.family
-        && ap.roster.length === 1 + esc.count && ap.roster.slice(1).every(r => r.type === esc.family && r.grade === esc.grade)) apexOk++;
+      const def = ap && apexPool(reeds).find(p => p.family === ap.family);
+      const esc = def?.escort?.[0];
+      if (def && esc && ap.name === def.name && ap.roster[0].grade === 'great' && ap.roster[0].type === def.family
+        && ap.roster.length === 1 + esc.count && ap.roster.slice(1).every(r => r.type === esc.family && r.grade === esc.grade)) { apexOk++; apexSeen.add(def.family); }
     }
   }
   check('Snapping Turtles only alone or with young, never a Cull quarry (natives compositions)', turtles > 0 && !turtleBad.length && !cullBad.length,
     `${turtles} turtle occupants${turtleBad.length ? '; bad: ' + turtleBad.slice(0, 3) : ''}${cullBad.length ? '; culls: ' + cullBad.slice(0, 3) : ''}`);
-  check('the Vowback Crocodile is always Great, with its brood of Grown Crocodiles (apex escort)', apexOk === apexN, `${apexOk}/${apexN}`);
+  check(`the Reeds apex comes from its pool, Great with its own escort and name, and every one turns up (${[...apexSeen].join(', ')})`,
+    apexOk === apexN && apexSeen.size === apexPool(reeds).length, `${apexOk}/${apexN}`);
+  // The Vowback Crocodile is a quest beast now (owner 2026-09-27): placed for
+  // certain by its quest site, Great with its brood, carrying its kill flag.
+  const qm = generateHuntMap({ zoneId: 'reeds_of_gethsemane', objective: 'scout', size: 'medium', seed: 4242,
+    questSites: [{ step: 'wr_apex', beast: { ...VOWBACK_CROCODILE, flag: 'vowback_slain' }, far: true }] });
+  const vb = qm.occupants.find(o => o.quest === 'wr_apex');
+  check('the Vowback Crocodile quest site: a Great Vowback with 3 Grown Crocodiles, named, flagged, not the apex, listed as a quest site',
+    !!vb && vb.kind === 'beast' && vb.roster[0].type === 'vowback_crocodile' && vb.roster[0].grade === 'great' && vb.roster.length === 4
+    && vb.name === 'the Vowback Crocodile' && vb.questFlag === 'vowback_slain' && !vb.apex && qm.questSites.some(q => q.occId === vb.id && q.beast === 'vowback_crocodile'),
+    JSON.stringify(vb && { t: vb.roster.map(r => r.type + ':' + r.grade), f: vb.questFlag }));
   check("every Reeds cult camp serves one of the region's own cults (14c: zones' cults), and has a band (CULT_BANDS)", bands > 0 && !bandBad.length && bandCults.size === Object.keys(reeds.cults).length, `${bands} bands: ${[...bandCults].join(', ')}`);
 }
 

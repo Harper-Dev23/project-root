@@ -15,6 +15,7 @@
 
 import { QUEST_LINES, getStepState } from '../data/quests.js';
 import { CULT_MARKETS } from '../../data/cultMarkets.js';
+import { getZone } from '../../data/zones.js';
 
 /** The title of the quest line a step belongs to, or null (a quest site's panel names it). */
 export function questTitleForStep(stepId) {
@@ -29,7 +30,7 @@ export function regionFlag(kind, zoneId) {
 
 /**
  * The sites the active quest steps need in `zoneId`, for the map generator:
- * [{ step, eventId, far }]. `pm` is the save's ProgressionManager (anything
+ * [{ step, eventId or beast, far, pct? }]. `pm` is the save's ProgressionManager (anything
  * with hasQuestFlag and the fields quest steps read).
  */
 export function questSitesFor(zoneId, pm) {
@@ -39,7 +40,8 @@ export function questSitesFor(zoneId, pm) {
       const site = step.huntSite;
       if (!site || site.zone !== zoneId) continue;
       if (getStepState(step, pm) !== 'active') continue;
-      out.push({ step: step.id, eventId: site.eventId, far: !!site.far });
+      // A site is an event, or a quest beast (`beast`: HuntMapGen places it).
+      out.push(site.beast ? { step: step.id, beast: site.beast, far: !!site.far } : { step: step.id, eventId: site.eventId, far: !!site.far });
     }
   }
   // A cult's black market, once its questline opens it: on `pct` of the
@@ -47,6 +49,12 @@ export function questSitesFor(zoneId, pm) {
   for (const [cult, m] of Object.entries(CULT_MARKETS)) {
     if (!m.zones.includes(zoneId) || !pm?.hasQuestFlag?.(m.unlockFlag)) continue;
     out.push({ step: `market:${cult}`, eventId: m.eventId, far: false, pct: m.pct });
+  }
+  // A rare beast (zones rareBeasts, owner 2026-09-27), once its flag is set:
+  // on `pct` of hunts, not marked as a quest ("rare:<id>" sites are not).
+  for (const r of getZone(zoneId)?.rareBeasts || []) {
+    if (r.afterFlag && !pm?.hasQuestFlag?.(r.afterFlag)) continue;
+    out.push({ step: `rare:${r.id}`, beast: r.beast, far: true, pct: r.pct });
   }
   return out;
 }

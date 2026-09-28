@@ -818,6 +818,8 @@ function makeMapHunt(s, rng, worldRng, world) {
       // Region progress quests read (chunk 14b-2; HuntQuests.js).
       if (occ.apex) world.questFlag?.(regionFlag('apex_slain', s.zoneId), true);
       if (occ.kind === 'boss') world.questFlag?.(`boss_slain:${occ.boss}`, true);
+      // A quest beast's kill (14b; zones VOWBACK_CROCODILE): its flag.
+      if (occ.questFlag) world.questFlag?.(occ.questFlag, true);
       // A cult band defeated (owner, 2026-09-27): cult questlines can read it.
       if (occ.kind === 'cultist' && occ.cult) world.questFlag?.(`cult_slain:${occ.cult}`, true);
       delete s.sightings[occ.id];
@@ -1231,10 +1233,13 @@ function makeMapHunt(s, rng, worldRng, world) {
 
     /** Quest sites (chunk 14b-2), marked from departure: done once resolved. */
     _questSites() {
-      return (s.map.questSites || []).map(q => ({
+      // A rare beast ("rare:<id>") is not marked: it is just there to be found.
+      return (s.map.questSites || []).filter(q => !String(q.step).startsWith('rare:')).map(q => ({
         // A black market (a "market:<cult>" site) is marked as one, not as a quest.
-        objective: String(q.step).startsWith('market:') ? 'market' : 'quest', tile: q.tile, step: q.step, name: EVENT_TEMPLATES[q.eventId]?.name || q.eventId,
-        night: EVENT_TEMPLATES[q.eventId]?.appears?.night === true,
+        objective: String(q.step).startsWith('market:') ? 'market' : 'quest', tile: q.tile, step: q.step,
+        name: q.beast ? (q.name || q.beast) : (EVENT_TEMPLATES[q.eventId]?.name || q.eventId),
+        ...(q.beast ? { beast: q.beast } : {}),
+        night: !q.beast && EVENT_TEMPLATES[q.eventId]?.appears?.night === true,
         done: !s.map.occupants.some(o => o.id === q.occId),
       }));
     },

@@ -34,9 +34,9 @@
     "pack": 39.5
    },
    "gradesPct": {
-    "yearling": 36.4,
-    "grown": 42.3,
-    "prime": 17.7,
+    "yearling": 36.2,
+    "grown": 42.6,
+    "prime": 17.6,
     "great": 3.6
    },
    "waystonesPer100": 10,
@@ -81,9 +81,9 @@
     "pack": 41.5
    },
    "gradesPct": {
-    "yearling": 33,
-    "grown": 31.1,
-    "prime": 26.7,
+    "yearling": 32.9,
+    "grown": 31.3,
+    "prime": 26.6,
     "great": 9.2
    },
    "waystonesPer100": 3.6,
@@ -128,8 +128,8 @@
     "pack": 43.5
    },
    "gradesPct": {
-    "yearling": 37,
-    "grown": 42,
+    "yearling": 36.9,
+    "grown": 42.1,
     "prime": 17.5,
     "great": 3.5
    },
@@ -176,8 +176,8 @@
    },
    "gradesPct": {
     "yearling": 32.4,
-    "grown": 30.6,
-    "prime": 27.9,
+    "grown": 30.8,
+    "prime": 27.8,
     "great": 9.1
    },
    "waystonesPer100": 12.4,
@@ -222,8 +222,8 @@
     "pack": 41.5
    },
    "gradesPct": {
-    "yearling": 37,
-    "grown": 42.1,
+    "yearling": 36.9,
+    "grown": 42.2,
     "prime": 18.5,
     "great": 2.5
    },
@@ -253,25 +253,25 @@
    "blightPct": 28.4,
    "unreachablePocketPct": 0.3,
    "hostilesPerMap": 16,
-   "cultistPct": 23.9,
+   "cultistPct": 23.8,
    "eventSitesPerMap": 11.06,
    "forageSpotsPerMap": 56.55,
    "barrenPerMap": 28.53,
    "marksPct": {
     "corrupted": 33.8,
-    "marked": 35.9,
+    "marked": 35.8,
     "unmarked": 30.3
    },
    "compositionsPct": {
     "alpha": 13.8,
     "lone": 21.5,
     "matriarch": 22.8,
-    "pack": 42
+    "pack": 41.9
    },
    "gradesPct": {
-    "yearling": 32.6,
-    "grown": 30.7,
-    "prime": 28,
+    "yearling": 32.5,
+    "grown": 31,
+    "prime": 27.9,
     "great": 8.6
    },
    "waystonesPer100": 17.6,
@@ -571,7 +571,7 @@
    "retriedPct": 3.2
   }
  },
- "mapsHash": "45ffb3d855db24ec38307bac1157f692e5563ad0879f31eacde620eaa3348ca1",
+ "mapsHash": "04798cc2bab103945ea68bb5e506bbe85c03515286e48eceb194f5cd64468576",
  "prefixEffects": {
   "teeming": [
    8.5,

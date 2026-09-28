@@ -95,7 +95,7 @@ const CombatScene = CombatSceneMod.default || Object.values(CombatSceneMod).find
 const GameState = (await import('../../src/systems/GameState.js')).default;
 const { createMapHunt } = await import('../../src/systems/HuntEngine.js');
 const { CAMP_ISSUE } = await import('../../src/systems/HuntManager.js');
-const { mapNeighbors } = await import('../../src/systems/HuntMapGen.js');
+const { mapNeighbors, apexPool } = await import('../../src/systems/HuntMapGen.js');
 const { parseTileId } = await import('../../src/systems/HexGrid.js');
 const { isPassable, GROUNDS } = await import('../../data/grounds.js');
 const { Items } = await import('../../data/items.js');
@@ -439,7 +439,7 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
           break;
         }
         case 'apex': {
-          const ap = sighted.filter(o => o.family === zone.apex.family && o.topGrade === 'great');
+          const ap = sighted.filter(o => (o.apex || apexPool(zone).some(a => a.family === o.family)) && o.topGrade === 'great');
           if (ap.length) { const t = new Set(ap.map(o => o.tile)); goal = (id) => t.has(id); }
           break;
         }

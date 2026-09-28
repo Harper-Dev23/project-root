@@ -189,7 +189,7 @@ function walkOut(S) {
 // =============================================================================
 console.log('=== quest sites and omens on a co-op hunt ===');
 {
-  const flags = new Set([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS)]);
+  const flags = new Set([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS), 'vowback_slain']);
   const S = await setup('QST', hostReads(flags));
   S.host.begin({ zoneId: REEDS, plan: { objective: 'scout', size: 'small', mods: {}, bonusObjectives: [] }, supplies: 200, bring: [], seed: 4401 });
   await until(() => S.guest.version === S.host.version, 'the guest caught up');

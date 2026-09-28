@@ -12,6 +12,16 @@
 // Advance loop's events were retired with it (owner, 2026-09-24). `setPieces`
 // names event templates the generator places on purpose (a Commune shrine).
 
+/** The Vowback Crocodile (owner 2026-09-27): an ancient crocodile grown over
+ *  with prayer stones, and its brood. The Weeping in the Reeds' quest fight
+ *  (src/data/quests.js wr_apex: a quest site, `flag` set on the kill), and
+ *  after that a rare sight in the Reeds (rareBeasts). Placed by HuntMapGen as
+ *  a rooted Great beast with its escort (addGreatBeast). */
+export const VOWBACK_CROCODILE = {
+  family: 'vowback_crocodile', name: 'the Vowback Crocodile',
+  escort: [{ family: 'crocodile', grade: 'grown', count: 3 }],
+};
+
 export const ZONES = {
   reeds_of_gethsemane: {
     id: 'reeds_of_gethsemane',
@@ -56,14 +66,30 @@ export const ZONES = {
       snapping_turtle: { name: 'Snapping Turtle', compositions: ['lone', 'matriarch'] },
       scarlet_ibis:    { name: 'Scarlet Ibis' },
     },
-    // The Vowback Crocodile: an ancient crocodile grown over with prayer stones.
-    // Its brood lies with it (escort, read by HuntMapGen apex_beast).
-    apex: { family: 'vowback_crocodile', name: 'the Vowback Crocodile', escort: [{ family: 'crocodile', grade: 'grown', count: 3 }] },
+    // The apex, drawn per hunt from this pool by weight (HuntMapGen apexPool;
+    // owner 2026-09-27: not the same beast every time). Each is a Great beast
+    // of a native family with its escort. The Vowback Crocodile left the pool:
+    // it is The Weeping in the Reeds' quest fight (src/data/quests.js wr_apex,
+    // VOWBACK_CROCODILE above), then a rare sight (rareBeasts).
+    // `boost` makes the Great lead an apex, not a plain Great of its family
+    // (HuntBeasts.fightScenario: HP x hpMult, damage +damagePct). Tuned with
+    // huntsim (apex hunts, party of 6, 30 seeds) to the Vowback's old fight:
+    // at level 1 the party loses 40-45% of its HP (Vowback 48%), at level 6
+    // 11-12% (Vowback 10%).
+    apex: [
+      { family: 'crocodile', name: 'the Crocodile Matriarch', escort: [{ family: 'crocodile', grade: 'grown', count: 3 }], boost: { hpMult: 3.5, damagePct: 100 }, weight: 1 },
+      { family: 'marsh_viper', name: 'the Viper Queen', escort: [{ family: 'marsh_viper', grade: 'grown', count: 4 }], boost: { hpMult: 3, damagePct: 65 }, weight: 1 },
+      { family: 'swamp_crab', name: 'the Carapace Tyrant', escort: [{ family: 'swamp_crab', grade: 'grown', count: 3 }], boost: { hpMult: 3.5, damagePct: 280 }, weight: 1 },
+    ],
     cultistShare: 0.25,   // share of hostile occupants that are cultist bands
     // The shrine a Commune plan sends you to: an event template (data/events.js).
     setPieces: { shrine: 'reeds_sunken_shrine' },
     // Rare set pieces a hunt here may hold (chunk 14b-6; HuntMapGen 3i), each
     // rolled once per map on its own stream: `pct` of hunts. Never guaranteed.
+    // Rare beasts (owner 2026-09-27): once `afterFlag` is set, on `pct` of
+    // hunts here, rolled per map like a black market (HuntQuests.questSitesFor).
+    // Not marked as a quest; just there to be found.
+    rareBeasts: [{ id: 'vowback', afterFlag: 'vowback_slain', pct: 10, beast: VOWBACK_CROCODILE }],
     chanceSites: [{ eventId: 'reeds_cathedral_roots', pct: 5 }],
     encounterTable: {
       beasts: [

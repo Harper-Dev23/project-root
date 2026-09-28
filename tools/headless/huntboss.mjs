@@ -390,7 +390,7 @@ console.log('=== 14b-5: the Ghost Party ===');
   const { offersReady, takeFirstOffer } = await import('../../src/systems/Omens.js');
   const flags = new Set(['apex_slain:' + REEDS]);
   const pm = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (x) => flags.has(x) };
-  const sites = () => questSitesFor(REEDS, pm).map(q => q.eventId).filter(e => e !== 'reeds_lament_pools');
+  const sites = () => questSitesFor(REEDS, pm).map(q => q.eventId).filter(e => e && e !== 'reeds_lament_pools');
   const walk = [sites()]; flags.add('gp_soul_found'); walk.push(sites()); flags.add('gp_names_known'); walk.push(sites());
   check('The Unconfessed Dead: the Drowned Camp, then the graves, then the offer', JSON.stringify(walk) === JSON.stringify([['reeds_drowned_camp'], ['reeds_unmarked_graves'], []])
     && offersReady(pm, REEDS).some(b => b.id === 'ghost_party'), JSON.stringify(walk));

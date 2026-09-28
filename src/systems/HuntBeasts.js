@@ -254,12 +254,15 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
     const type = memberType(occ, i);
     const gear = JSON.parse(JSON.stringify(occ.loadout[i] || {}));
     const base = ENEMY_TYPES[type]?.name || type;
+    // The lead of a boosted beast (an apex, zones `boost`) is stronger.
+    const boost = k === 0 && occ.boost ? occ.boost : null;
     return {
       type,
       slotId: FIGHT_SLOT_ORDER[k],
-      name: m.grade ? `${m.grade[0].toUpperCase()}${m.grade.slice(1)} ${base}` : base,
+      name: occ.name && k === 0 ? `${occ.name[0].toUpperCase()}${occ.name.slice(1)}` : m.grade ? `${m.grade[0].toUpperCase()}${m.grade.slice(1)} ${base}` : base,
       grade: m.grade || null,
-      hpMult: gradeHpScale(m.grade),
+      hpMult: gradeHpScale(m.grade) * (boost?.hpMult || 1),
+      ...(Number.isFinite(boost?.damagePct) ? { damageMultiplierPct: boost.damagePct } : {}),
       gear,
       gearDroppable: occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, true])) : {},
     };

@@ -125,7 +125,6 @@ function fmt(n) {
 function familyName(zoneId, family) {
   const z = getZone(zoneId);
   return z?.natives?.[family]?.name
-    || (z?.apex?.family === family ? (z.apex.name || null) : null)
     || String(family || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
@@ -779,6 +778,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (o.kind === 'boss') return [`${o.name}, in its lair.`, 'A boss fight. Camp and ready the party before you go in.'];
     const lines = [];
     if (o.kind === 'cultist') lines.push(`${o.cult ? `${o.cult} cultists` : 'Cultists'}, ${o.size}${stale}.`);
+    else if (o.name) lines.push(`${o.name[0].toUpperCase()}${o.name.slice(1)}${o.apex ? ' (the apex)' : ''}: ${o.size}, up to ${o.topGrade}${stale}.`);
     else lines.push(`${familyName(zoneId, o.family)}, ${o.size}, up to ${o.topGrade}${stale}.`);
     if (o.mark && o.mark !== 'unmarked') lines.push(o.mark === 'marked' ? 'Marked by a prophet.' : 'Corrupted.');
     if (o.exact) lines.push(`Exactly: ${o.roster.map(m => m.grade || m.type).join(', ')}${o.composition ? ` (${o.composition})` : ''}.`);

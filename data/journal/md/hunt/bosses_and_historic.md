@@ -21,7 +21,7 @@ A region's bosses are not found by wandering. Each one has its own **questline**
 
 ## Omens
 
-Everything you do in a region fills its **Omen meter**: objectives most of all, then fights, the apex, and events seen through. The meter shows on the Hunt screen when you choose the region. Once you know a boss, a full meter buys another of its boss hunt plans -- you choose which boss. Plans can be saved up.
+Everything you do in a region fills its **Omen meter**: objectives most of all, then fights, the apex, and events seen through. The meter shows on the Hunt screen when you choose the region. Omens only gather once the region's first boss is known. A full meter buys another of its boss hunt plans -- you choose which boss. Plans can be saved up.
 
 A boss plan is **not** used up when you depart. It is used up once you fight the boss, win or lose.
 

@@ -104,17 +104,18 @@ console.log('=== The Weeping in the Reeds, step by step ===');
   const active = () => quest.steps.filter(s => getStepState(s, pm) === 'active').map(s => s.id);
   // This questline's own sites (The Unconfessed Dead runs alongside it from the apex on).
   const WR = new Set(quest.steps.map(s => s.id));
-  const sites = () => questSitesFor(REEDS, pm).filter(s => WR.has(s.step)).map(s => s.eventId);
+  const sites = () => questSitesFor(REEDS, pm).filter(s => WR.has(s.step)).map(s => s.eventId || `beast:${s.beast?.family}`);
   const trail = [];
   trail.push([active(), sites()]);
   pm.add(regionFlag('hunted', REEDS)); trail.push([active(), sites()]);
-  pm.add(regionFlag('apex_slain', REEDS)); trail.push([active(), sites()]);
+  // The Vowback Crocodile is a quest beast (owner 2026-09-27), not the apex.
+  pm.add('vowback_slain'); trail.push([active(), sites()]);
   pm.add('mb_weeping_heard'); trail.push([active(), sites()]);
   pm.add('mb_signs_found'); trail.push([active(), sites()]);
   pm.add('mb_offer_taken'); trail.push([active(), sites()]);
   const want = [
     [['wr_hunt'], []],
-    [['wr_apex'], []],
+    [['wr_apex'], ['beast:vowback_crocodile']],
     [['wr_pools'], ['reeds_lament_pools']],
     [['wr_signs'], ['reeds_mourner_signs']],
     [['wr_offer'], []],
@@ -125,8 +126,17 @@ console.log('=== The Weeping in the Reeds, step by step ===');
   check('no tribe yet: nothing is active and no site is placed', questSitesFor(REEDS, fakePM([], null)).length === 0
     && quest.steps.every(s => getStepState(s, fakePM([], null)) !== 'active'));
   const early = fakePM([regionFlag('apex_slain', REEDS)]);
-  check('killing the apex first completes "Hunt the Reeds" too (no dead step)', getStepState(quest.steps[0], early) === 'completed'
-    && quest.steps.filter(s => getStepState(s, early) === 'active').map(s => s.id).join() === 'wr_pools');
+  check('killing an apex first completes "Hunt the Reeds" too (no dead step); the Vowback Crocodile is next, as its own quest site', getStepState(quest.steps[0], early) === 'completed'
+    && quest.steps.filter(s => getStepState(s, early) === 'active').map(s => s.id).join() === 'wr_apex'
+    && questSitesFor(REEDS, early).some(q => q.step === 'wr_apex' && q.beast?.family === 'vowback_crocodile' && q.beast.flag === 'vowback_slain'));
+  // A save from before (the Lament Pools reached through an apex kill) keeps its place.
+  const older = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS), 'mb_weeping_heard']);
+  check('an older save past the Lament Pools does not go back to the Vowback', getStepState(quest.steps[1], older) === 'completed'
+    && quest.steps.filter(s => getStepState(s, older) === 'active').map(s => s.id).join() === 'wr_signs');
+  // After its kill, the Vowback is a rare sight (zones rareBeasts): 10% of Reeds hunts, never marked as a quest.
+  const rare = questSitesFor(REEDS, fakePM([regionFlag('hunted', REEDS), 'vowback_slain'])).find(q => q.step === 'rare:vowback');
+  check('once slain, the Vowback turns up on 10% of Reeds hunts as a rare beast', !!rare && rare.pct === 10 && rare.beast.family === 'vowback_crocodile' && !rare.beast.flag
+    && !questSitesFor(REEDS, fakePM([regionFlag('hunted', REEDS)])).some(q => q.step === 'rare:vowback'));
   check('a site is placed in its own region only', questSitesFor('bay_of_solace', fakePM([regionFlag('apex_slain', REEDS)])).length === 0);
 }
 
@@ -136,7 +146,7 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
   /** A hunt from a world whose save is at the Lament Pools step, standing next to the site. */
   function atPools({ night }) {
     const party = makeParty();
-    const pm = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS)]);
+    const pm = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS), 'vowback_slain']);
     const w = recordingWorld(party, pm);
     const h0 = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 515 }, w);
     const d = h0.serialize();
@@ -191,6 +201,25 @@ console.log('=== the engine sets region flags ===');
   const ex = h3.exit();
   check('a clean exit with the primary done sets hunted:<region>', ex.ok && ex.reward.primaryDone && w.pm.hasQuestFlag('hunted:' + REEDS));
 
+  // The Vowback Crocodile (owner 2026-09-27): a quest beast on the map while
+  // its step is active, marked as a quest site; its kill sets vowback_slain.
+  {
+    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS)]));
+    const hv = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 91 }, wv);
+    const dv = hv.serialize();
+    const vb = dv.map.occupants.find(o => o.quest === 'wr_apex');
+    const marked = hv.view().objectiveSites.find(o => o.step === 'wr_apex');
+    const nx = vb && mapNeighbors(dv.map, vb.tile).find(id => isPassable(dv.map.tiles[id]) && !dv.map.occupants.some(o => o.tile === id));
+    for (const o of dv.map.occupants) o.noticed = true;
+    if (nx) { dv.pos = nx; dv.fog[nx] = 'visible'; }
+    const hv2 = restoreMapHunt(dv, wv);
+    const metV = vb && hv2.move(vb.tile);
+    const wonV = vb && hv2.encounter()?.occId === vb.id ? hv2.winEncounter({}) : { ok: false, metV };
+    check('the Vowback Crocodile is on the map as a marked quest site, and killing it sets vowback_slain (not apex_slain)',
+      !!vb && marked?.objective === 'quest' && marked.name === 'the Vowback Crocodile' && wonV.ok
+      && wv.pm.hasQuestFlag('vowback_slain') && !wv.pm.hasQuestFlag('apex_slain:' + REEDS), JSON.stringify({ vb: !!vb, marked, won: wonV.ok }));
+  }
+
   const w2 = recordingWorld(makeParty());
   const h4 = createMapHunt(REEDS, { plan: { objective: 'apex', size: 'small' }, supplies: 300, seed: 78 }, w2);
   const ex2 = h4.exit();
@@ -204,6 +233,7 @@ console.log('=== the real save ===');
   ProgressionManager.tribe = 'styx';
   ProgressionManager.setQuestFlag(regionFlag('hunted', REEDS));
   ProgressionManager.setQuestFlag(regionFlag('apex_slain', REEDS));
+  ProgressionManager.setQuestFlag('vowback_slain');
   const before = questSitesFor(REEDS, ProgressionManager);
   const blob = JSON.parse(JSON.stringify(ProgressionManager.serialize()));
   ProgressionManager.questFlags = [];
@@ -217,7 +247,7 @@ console.log('=== the real save ===');
 // =============================================================================
 console.log('=== co-op ===');
 {
-  const hostPM = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS)]);
+  const hostPM = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS), 'vowback_slain']);
   const reads = recordingWorld(makeParty(), hostPM);
   const ledger = [];
   const w = hostWorld(makeParty(), reads, ledger);

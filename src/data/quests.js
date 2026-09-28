@@ -18,6 +18,8 @@
  *   'placeholder'→ future content stub (shown with "Coming Soon" note)
  */
 
+import { VOWBACK_CROCODILE } from '../../data/zones.js';
+
 // ── Shorthand helpers used inside step functions ──────────────────────────────
 
 const sc = (pm, id) => pm.completedScenarios.includes(id);
@@ -303,16 +305,20 @@ export const QUEST_LINES = [
       {
         id:          'wr_apex',
         label:       'The Vowback Crocodile',
-        description: 'The mourners speak of an old crocodile grown over with prayer stones, the Reeds\' apex. Kill it: an Apex plan sends you after it.',
-        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
-        isComplete: (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        description: 'The mourners speak of an old crocodile grown over with prayer stones. Your next Reeds hunt will mark where it lies with its brood. Kill it.',
+        // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
+        // A save that reached the Lament Pools before this counts as done.
+        huntSite:    { zone: 'reeds_of_gethsemane', beast: { ...VOWBACK_CROCODILE, flag: 'vowback_slain' }, far: true },
+        // Either way "Hunt the Reeds" completes, so neither leaves a dead step.
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('mb_weeping_heard'),
       },
       {
         id:          'wr_pools',
         label:       'The Lament Pools',
         description: 'Something weeps in the Reeds at night. Your next Reeds hunt will mark the Lament Pools on its map. Be there after dark.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_lament_pools', far: true },
-        isActive:   (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isActive:   (pm) => pm.hasQuestFlag('vowback_slain'),
         isComplete: (pm) => pm.hasQuestFlag('mb_weeping_heard'),
       },
       {

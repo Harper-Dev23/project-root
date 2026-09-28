@@ -33,7 +33,7 @@ import { MAP_SIZES, PRIMARY_OBJECTIVES, DENSITY, DAY_TIME_UNITS, GRADES, GRADE_W
          UNMASK_MAX_CONCEALMENT } from '../../data/huntMapGen.js';
 import { PLACEMENT_NEEDS, BONUS_OBJECTIVES } from '../../data/planAffixes.js';
 import { getZone } from '../../data/zones.js';
-import { CULT_BANDS } from '../../data/beastParts.js';
+import { CULT_BANDS, HUNT_BEASTS } from '../../data/beastParts.js';
 import { EVENT_TEMPLATES } from '../../data/events.js';
 import { BOSSES } from '../../data/bosses.js';
 import { staticEligible } from './EventEffects.js';
@@ -284,9 +284,9 @@ export const NEED_HANDLERS = {
       if (!tile) return ctx.fail('no tile for the apex');
       // An apex may come with an escort (zones apex.escort, 14a): one Great
       // beast acting once a round could not be the elite fight it should be.
-      const escort = (ctx.zone.apex.escort || []).flatMap(e => Array.from({ length: e.count || 1 }, () => ({ type: e.family, grade: e.grade || 'grown' })));
-      const occ = ctx.addBeast(tile, { family: ctx.zone.apex.family, composition: escort.length ? 'alpha' : 'lone',
-        roster: [{ type: ctx.zone.apex.family, grade: 'great' }, ...escort], state: 'rooted', quarry: true });
+      // A zone's apex is drawn from its pool (apexPool, ctx.apex; owner
+      // 2026-09-27: not the same beast every hunt).
+      const occ = ctx.addGreatBeast(tile, ctx.apex);
       occ.apex = true;
       obj.occupant = occ.id;
       obj.family = occ.family;
@@ -545,6 +545,12 @@ export function planMapInputs(view) {
  *                                   occupant placed for certain; none, and the
  *                                   map is exactly what it was without them.
  */
+/** A zone's apex pool: `apex` is one entry or a weighted list of them
+ *  ({ family, name, escort, weight }). */
+export function apexPool(zone) {
+  return Array.isArray(zone?.apex) ? zone.apex : zone?.apex ? [zone.apex] : [];
+}
+
 export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null, stirring = null }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
@@ -553,7 +559,10 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   if (!MAP_SIZES[size]) throw new Error(`unknown size '${size}'`);
   if (!Number.isFinite(seed)) throw new Error('seed must be a number');
   for (const b of bonusObjectives) if (!BONUS_OBJECTIVES[b]) throw new Error(`unknown bonus objective '${b}'`);
-  for (const q of questSites) if (!EVENT_TEMPLATES[q?.eventId]?.appears?.setPiece) throw new Error(`quest site '${q?.step}' names '${q?.eventId}', not a set-piece event`);
+  for (const q of questSites) {
+    if (q?.beast) { if (!HUNT_BEASTS[q.beast.family]) throw new Error(`quest site '${q.step}' names beast '${q.beast.family}', not a hunt beast`); continue; }
+    if (!EVENT_TEMPLATES[q?.eventId]?.appears?.setPiece) throw new Error(`quest site '${q?.step}' names '${q?.eventId}', not a set-piece event`);
+  }
   if ((objective === 'boss') !== !!boss) throw new Error(objective === 'boss' ? 'a boss hunt needs its boss' : `only a boss hunt names a boss ('${boss}')`);
   if (boss && BOSSES[boss]?.zone !== zoneId) throw new Error(`boss '${boss}' does not live in '${zoneId}'`);
 
@@ -694,8 +703,14 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
   const gradeWeights = shiftGrades(baseGrades, map.mods.gradeShiftPercent);
   const packSize = PACK_SIZE_BY_DANGER.find(b => danger <= b.maxDanger) || PACK_SIZE_BY_DANGER.at(-1);
 
+  // The apex, from the zone's pool, on its own stream: a zone with one apex
+  // draws nothing, so its maps are exactly what they were.
+  const pool = apexPool(zone);
+  const apex = pool.length > 1
+    ? pickWeighted(makeRng((attemptSeed(seed, attempt, zone.id) ^ 0xa9e71) >>> 0), pool.map(a => [a, a.weight ?? 1]))
+    : pool[0];
   const ctx = {
-    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0, packSize,
+    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0, packSize, apex,
     stepDist: (a, b) => {
       const A = parseTileId(a), B = parseTileId(b);
       return A.section === B.section ? distance(A, B) : (entryDist.get(a) ?? 0) + (entryDist.get(b) ?? 0);
@@ -724,6 +739,18 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     },
     rollGrade: () => pickWeighted(rng, GRADES.map(g => [g, gradeWeights[g]])),
     addFeature(f) { map.features.push(f); occupied.add(f.tile); return f; },
+    /** One Great beast with its escort, rooted: an apex, or a quest beast
+     *  (`def`: { family, name, escort }). The name is shown on the map. */
+    addGreatBeast(tile, def) {
+      const escort = (def.escort || []).flatMap(e => Array.from({ length: e.count || 1 }, () => ({ type: e.family, grade: e.grade || 'grown' })));
+      const occ = this.addBeast(tile, { family: def.family, composition: escort.length ? 'alpha' : 'lone',
+        roster: [{ type: def.family, grade: 'great' }, ...escort], state: 'rooted', quarry: true });
+      if (def.name) occ.name = def.name;
+      // An apex's lead is stronger than a plain Great of its family (zones
+      // apex `boost`: { hpMult, damagePct }, read by HuntBeasts.fightScenario).
+      if (def.boost) occ.boost = { ...def.boost };
+      return occ;
+    },
     addBeast(tile, { family, composition, roster, state, quarry = false }) {
       const comp = COMPOSITIONS[composition];
       const corrupted = !!GROUNDS[map.tiles[tile].ground].corrupts;
@@ -800,6 +827,16 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     const tile = (q.far && ctx.pickTile({ minEntryDist: ctx.farDist(), noBlight: true }))
               || ctx.pickTile({ minEntryDist: 2, noBlight: true }) || ctx.pickTile({ noBlight: true });
     if (!tile) { fail(`no tile for quest site '${q.step}'`); break; }
+    // A quest BEAST (owner 2026-09-27: the Vowback Crocodile is a quest
+    // fight, not the apex): a rooted Great beast with its escort; killing it
+    // sets its flag (HuntEngine.winEncounter).
+    if (q.beast) {
+      const occ = ctx.addGreatBeast(tile, q.beast);
+      occ.quest = q.step;
+      if (q.beast.flag) occ.questFlag = q.beast.flag;
+      map.questSites.push({ step: q.step, beast: q.beast.family, name: q.beast.name || null, tile, occId: occ.id });
+      continue;
+    }
     const occ = { id: `o${nextOcc++}`, kind: 'event', tile, eventId: q.eventId, quest: q.step, concealment: OCCUPANT_CONCEALMENT.event };
     map.occupants.push(occ); occupied.add(tile);
     map.questSites.push({ step: q.step, eventId: q.eventId, tile, occId: occ.id });
