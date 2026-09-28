@@ -757,7 +757,8 @@ function makeMapHunt(s, rng, worldRng, world) {
       delete tile.blightedFrom;
       s.cleansed.push(s.pos);
       const src = s.map.features.find(f => f.kind === 'blight_source' && f.tile === s.pos && !f.destroyed) || null;
-      if (src) src.destroyed = true;
+      // Its blight recedes from here, a ring a day (HuntWorld.recedeBlight).
+      if (src) { src.destroyed = true; src.destroyedDay = s.world.day; }
       const spent = this._spendTime(CLEANSE_TIME);
       this._reveal();
       this._log({ kind: 'cleanse', tile: s.pos, source: !!src, time: s.time });

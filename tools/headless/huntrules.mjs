@@ -1306,9 +1306,16 @@ console.log('=== blight, cleansing and corruption ===');
     const k = h2.cleanse();
     const n1 = countBlight(h2.getState());
     for (let day = h2.getState().world.day, i = 0; h2.getState().world.day < day + 3 && i < 50; i++) { if (h2.encounter()) h2.winEncounter(); h2.camp(); }
-    check('cleansing the source\'s tile destroys it; after three more days the blight has not grown',
-      k.ok && k.sourceDestroyed && countBlight(h2.getState()) <= n1, `${n1} -> ${countBlight(h2.getState())}`);
-    golden.blightExample = { ring1, before: n0, nextDay: countBlight(a1), afterSourceKilled: countBlight(h2.getState()) };
+    const n3 = countBlight(h2.getState());
+    // It recedes a ring a day (owner's playtest, 2026-09-27), from the reach it
+    // had when it fell, and is gone once that reach has run out.
+    check('cleansing the source\'s tile destroys it; three days later its blight has receded',
+      k.ok && k.sourceDestroyed && n3 < n1, `${n1} -> ${n3}`);
+    const fell = h2.getState().map.features.find(f => f.kind === 'blight_source').destroyedDay;
+    for (let i = 0; i < 200 && h2.getState().world.day <= fell + W.BLIGHT_START_RADIUS + fell + 1; i++) { if (h2.encounter()) h2.winEncounter(); h2.camp(); }
+    const gone = countBlight(h2.getState());
+    check('...and once its reach has run out, none of its blight is left', gone === 0, `${gone} tiles on day ${h2.getState().world.day} (fell day ${fell})`);
+    golden.blightExample = { ring1, before: n0, nextDay: countBlight(a1), afterSourceKilled: n3, gone };
   }
 
   // Corruption: an unmarked beast standing in blight turns; a marked one never.

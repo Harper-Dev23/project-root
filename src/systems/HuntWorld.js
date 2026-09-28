@@ -208,6 +208,7 @@ export function worldTick(s, to, ctx) {
     if (dayAt <= now + EPS) {
       w.day += 1;
       spreadBlight(s);
+      recedeBlight(s);
     }
     resolveCorruption(s, now);
     ctx.onEvent?.();
@@ -323,6 +324,32 @@ export function spreadBlight(s) {
       if (t.ford || !GROUNDS[t.ground]?.passable || t.ground === 'blight') continue;
       t.blightedFrom = t.ground;
       t.ground = 'blight';
+    }
+  }
+}
+
+/**
+ * A destroyed source's blight recedes (owner's playtest, 2026-09-27: so a
+ * cleared source frees its ground without cleansing every patch). Its reach
+ * shrinks a ring a day from what it was when destroyed (BLIGHT_START_RADIUS +
+ * the day it fell), and each blighted tile of its section past that reach
+ * goes back to its ground, unless a living source's reach still holds it.
+ */
+export function recedeBlight(s) {
+  const livingR = BLIGHT_START_RADIUS + s.world.day;
+  const living = s.map.features.filter(f => f.kind === 'blight_source' && !f.destroyed).map(f => parseTileId(f.tile));
+  for (const f of s.map.features) {
+    if (f.kind !== 'blight_source' || !f.destroyed) continue;
+    const fell = f.destroyedDay ?? s.world.day;
+    const reach = BLIGHT_START_RADIUS + fell - (s.world.day - fell);
+    const src = parseTileId(f.tile);
+    for (const [id, t] of Object.entries(s.map.tiles)) {
+      if (t.ground !== 'blight') continue;
+      const p = parseTileId(id);
+      if (p.section !== src.section || distance(p, src) <= reach) continue;
+      if (living.some(l => l.section === p.section && distance(p, l) <= livingR)) continue;
+      t.ground = t.blightedFrom || s.landGround;
+      delete t.blightedFrom;
     }
   }
 }
