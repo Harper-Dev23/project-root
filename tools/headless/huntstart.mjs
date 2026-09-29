@@ -110,6 +110,24 @@ PM.clearQuestFlag('elder_bonepile');
 check('a hunt after Trial 2 does not raise it', PM.offerBonepileAfterHunt() === false);
 
 console.log('');
+console.log('=== The Unconfessed Dead opens on the Vowback ===');
+{
+  const { getQuestState } = await import('../../src/data/quests.js');
+  const ud = QUEST_LINES.find(q => q.id === 'unconfessed_dead');
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.setQuestFlag(REEDS_DONE);
+  check('scout hunts alone: not open', getQuestState(ud, PM) === 'locked', getQuestState(ud, PM));
+  PM.setQuestFlag('vowback_slain');
+  check('the Vowback slain, no apex kill: open, the Drowned Camp to find',
+    getQuestState(ud, PM) !== 'locked' && getStepState(step('ud_camp'), PM) === 'active');
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.setQuestFlag('apex_slain:reeds_of_gethsemane');
+  check('a save opened by the apex (before batch 4) stays open', getStepState(step('ud_camp'), PM) === 'active');
+}
+
+console.log('');
 console.log('=== the Hunt Gate marker ===');
 PM.reset();
 clear(['training_encounter_1']);

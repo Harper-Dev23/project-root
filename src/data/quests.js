@@ -24,6 +24,11 @@ import { VOWBACK_CROCODILE } from '../../data/zones.js';
 
 const sc = (pm, id) => pm.completedScenarios.includes(id);
 
+/** The Unconfessed Dead is open: the Vowback slain, or (a save that opened
+ *  it before batch 4) the Reeds' apex. */
+const ghostPartyOpen = (pm) =>
+  pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane');
+
 const anyLodgeFlag = (pm) =>
   pm.hasQuestFlag('lodge_styx') || pm.hasQuestFlag('lodge_zafaar') ||
   pm.hasQuestFlag('lodge_elseth') || pm.hasQuestFlag('lodge_lesse');
@@ -365,7 +370,10 @@ export const QUEST_LINES = [
     category:    'region',
     title:       'The Unconfessed Dead',
     description: 'A hunting party drowned in the Reeds and never made its confession. It is still out there, after dark.',
-    isAvailable: (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+    // Opens on the Vowback's kill (owner's playtest 2026-09-29: it opened on
+    // the Reeds' apex, and since batch 3 the Vowback is a quest beast, not the
+    // apex, so a run of scout hunts never opened it).
+    isAvailable: (pm) => ghostPartyOpen(pm),
     steps: [
       {
         id:          'ud_camp',
@@ -373,7 +381,7 @@ export const QUEST_LINES = [
         reward:      { huntTickets: 5, text: 'A drowned camp, still waiting for its dead. I will enter it in the tally.' },
         description: 'Something waits at a drowned camp in the Reeds. Your next Reeds hunt will mark it on its map. It only shows itself at night.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_drowned_camp', far: true },
-        isActive:   (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isActive:   (pm) => ghostPartyOpen(pm),
         isComplete: (pm) => pm.hasQuestFlag('gp_soul_found'),
       },
       {
