@@ -171,10 +171,18 @@ const SCENARIO_FLAGS = {
   'training_encounter_6': 'zafaar_leader_challenge',
 };
 
-// Feature gates: which scenario must be completed to unlock a feature.
+// Feature gates: a feature opens by its Combat Pit trial OR, with
+// `orFirstHunt`, by the first hunt (owner 2026-09-29: a run led by hunts
+// after Trial 1 must not wait on the pit for these).
 const FEATURE_UNLOCKS = {
-  bonepile: 'training_encounter_2',
+  bonepile: { scenario: 'training_encounter_2', orFirstHunt: true },
 };
+
+// Samuel Mourne's introduction and the waystone chain it starts. Any of these
+// on the save means the player has already been sent to him (waystone_attuned
+// and waystone_shard_collected are never cleared, so a finished chain still
+// counts). Samuel comes after Trial 4 or the first hunt, whichever is first.
+const SAMUEL_CHAIN_FLAGS = ['samuel_mourne', 'waystone_visit', 'waystone_attuned', 'samuel_waystone_return', 'waystone_shard_collected'];
 
 // localStorage key for the dev bypass — outside any save slot.
 const DEV_BYPASS_KEY = 'dev_progressionBypass';
@@ -452,7 +460,32 @@ const ProgressionManager = {
     if (this.isBypassEnabled()) return true;
     const req = FEATURE_UNLOCKS[featureId];
     if (!req) return false;
-    return this.completedScenarios.includes(req);
+    return this.completedScenarios.includes(req.scenario) || (!!req.orFirstHunt && this.hasCompletedHunt());
+  },
+
+  /**
+   * True once any hunt has ended in a clean exit with its main objective done:
+   * the engine's `hunted:<zone>` flag (src/systems/HuntQuests.js), which is
+   * never cleared.
+   */
+  hasCompletedHunt() {
+    return this.questFlags.some(f => f.startsWith('hunted:'));
+  },
+
+  /** True once Samuel has been introduced, by either route. See SAMUEL_CHAIN_FLAGS. */
+  hasSamuelBeenIntroduced() {
+    return SAMUEL_CHAIN_FLAGS.some(f => this.hasQuestFlag(f));
+  },
+
+  /**
+   * The hunt route to Samuel: after the first hunt, raise his marker if
+   * neither route has yet. Returns true if it did (the caller saves).
+   * Trial 4 raises the same flag through SCENARIO_FLAGS.
+   */
+  offerSamuelAfterHunt() {
+    if (!this.hasCompletedHunt() || this.hasSamuelBeenIntroduced()) return false;
+    this.setQuestFlag('samuel_mourne');
+    return true;
   },
 
   // ----- Scenario unlock queries -------------------------------------------
@@ -519,12 +552,12 @@ const ProgressionManager = {
       this.completedScenarios.push(scenarioId);
 
       // Auto-set any quest flag(s) tied to this scenario's first completion.
-      const flagDef = SCENARIO_FLAGS[scenarioId];
-      if (Array.isArray(flagDef)) {
-        flagDef.forEach(f => this.setQuestFlag(f));
-      } else if (flagDef) {
-        this.setQuestFlag(flagDef);
-      }
+      // Samuel is skipped if a hunt already introduced him, or clearing Trial 4
+      // would send the player to meet him a second time.
+      const samuelMet = this.hasSamuelBeenIntroduced();
+      [].concat(SCENARIO_FLAGS[scenarioId] || [])
+        .filter(f => !(f === 'samuel_mourne' && samuelMet))
+        .forEach(f => this.setQuestFlag(f));
     }
 
     const ticketsEarned = alreadyDone ? 0 : (TICKET_REWARDS[scenarioId] ?? 0);

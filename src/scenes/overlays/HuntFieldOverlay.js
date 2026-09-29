@@ -1371,6 +1371,10 @@ export function launchMapHunt(scene) {
     hunt: HuntManager.current(),
     onAction: () => GameState.save('autosave'),
     onFinished: () => { HuntManager.clearFinished(); GameState.save('autosave'); },
+    // Town is not put to sleep under the map, so it never "wakes" from a hunt:
+    // refresh it here, or what the hunt set (Samuel's marker, quest rewards,
+    // region quest markers) waits for the next scene change.
+    onDone: () => sm.get('TownScene')?._refreshQuestFlags?.(),
   });
   sm.bringToTop('UIScene');
   return true;

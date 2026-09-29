@@ -173,7 +173,10 @@ export const QUEST_LINES = [
         flags:          ['samuel_mourne'],
         label:       'Meet Samuel Mourne',
         description: 'A solitary figure lingers at the edge of camp. Seek them out.',
-        isActive:   (pm) => pm.hasQuestFlag('samuel_mourne'),
+        // Samuel can also come after the first hunt (ProgressionManager
+        // offerSamuelAfterHunt); before Trial 4 his marker belongs to The
+        // Prophet's Fragment, not to this line, which would show it out of order.
+        isActive:   (pm) => sc(pm, 'training_encounter_4') && pm.hasQuestFlag('samuel_mourne'),
         isComplete: (pm) => sc(pm, 'training_encounter_4') && !pm.hasQuestFlag('samuel_mourne'),
       },
       {
@@ -287,6 +290,11 @@ export const QUEST_LINES = [
   // A step with `huntSite` makes every hunt in that region hold the site while
   // the step is active (src/systems/HuntQuests.js). `hunted:<zone>` and
   // `apex_slain:<zone>` are set by the hunt engine.
+  //
+  // A step with `reward: { huntTickets, text }` pays once, the first time the
+  // town sees it complete (src/systems/QuestRewards.js): Elder Varek paying
+  // for word from the field, `text` in his voice. The hunt-side source of
+  // Hunt Tickets beside the Combat Pit's (owner 2026-09-29).
 
   {
     id:          'weeping_in_the_reeds',
@@ -298,6 +306,7 @@ export const QUEST_LINES = [
       {
         id:          'wr_hunt',
         label:       'Hunt the Reeds',
+        reward:      { huntTickets: 4, text: 'You came back from the Reeds with the work done. The camp pays for that.' },
         description: 'Take a hunt plan into the Reeds of Gethsemane and see its main objective done.',
         isActive:   (pm) => pm.tribe !== null,
         isComplete: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
@@ -305,6 +314,7 @@ export const QUEST_LINES = [
       {
         id:          'wr_apex',
         label:       'The Vowback Crocodile',
+        reward:      { huntTickets: 8, text: 'The Vowback is dead? Then the mourners can walk the reeds again. Take these.' },
         description: 'The mourners speak of an old crocodile grown over with prayer stones. Your next Reeds hunt will mark where it lies with its brood. Kill it.',
         // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
         // A save that reached the Lament Pools before this counts as done.
@@ -316,6 +326,7 @@ export const QUEST_LINES = [
       {
         id:          'wr_pools',
         label:       'The Lament Pools',
+        reward:      { huntTickets: 4, text: 'You heard the weeping and held your ground. Few do.' },
         description: 'Something weeps in the Reeds at night. Your next Reeds hunt will mark the Lament Pools on its map. Be there after dark.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_lament_pools', far: true },
         isActive:   (pm) => pm.hasQuestFlag('vowback_slain'),
@@ -324,6 +335,7 @@ export const QUEST_LINES = [
       {
         id:          'wr_signs',
         label:       'Signs of the Mourner',
+        reward:      { huntTickets: 4, text: 'You tracked the mourner to ground. Tell your tribe what you saw.' },
         description: 'Follow the weeping to where it goes to ground. Your next Reeds hunt will mark the trail.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_mourner_signs', far: true },
         isActive:   (pm) => pm.hasQuestFlag('mb_weeping_heard'),
@@ -351,6 +363,7 @@ export const QUEST_LINES = [
       {
         id:          'ud_camp',
         label:       'The Drowned Camp',
+        reward:      { huntTickets: 5, text: 'A drowned camp, still waiting for its dead. I will enter it in the tally.' },
         description: 'Something waits at a drowned camp in the Reeds. Your next Reeds hunt will mark it on its map. It only shows itself at night.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_drowned_camp', far: true },
         isActive:   (pm) => pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
@@ -359,6 +372,7 @@ export const QUEST_LINES = [
       {
         id:          'ud_graves',
         label:       'Unmarked Graves',
+        reward:      { huntTickets: 5, text: 'Their names are known again. That is worth more than tickets, but tickets are what I have.' },
         description: 'Find where the drowned party was buried. Your next Reeds hunt will mark the graves.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_unmarked_graves', far: true },
         isActive:   (pm) => pm.hasQuestFlag('gp_soul_found'),
@@ -389,6 +403,7 @@ export const QUEST_LINES = [
       {
         id:          'hb_singing',
         label:       'Singing Under the Water',
+        reward:      { huntTickets: 3, text: 'So the Choir sing under the water. Better to know it than to wonder.' },
         description: 'Something sings under the reeds at night. Your next Reeds hunt will mark where. Once the Choir know you, their camps will talk instead of fight.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_singing', far: true },
         isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
@@ -397,6 +412,7 @@ export const QUEST_LINES = [
       {
         id:          'hb_cantor',
         label:       "The Cantor's Price",
+        reward:      { huntTickets: 3, text: 'A page of their hymn. Guard it.' },
         description: 'A Choir cantor has a page of their hymn. Trade fish for it on your next Reeds hunt, or take it from any Drowned Choir band.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_cantor', far: false },
         isActive:   (pm) => pm.hasQuestFlag('choir_heard'),
@@ -405,6 +421,7 @@ export const QUEST_LINES = [
       {
         id:          'hb_hymn',
         label:       'The Unfinished Hymn',
+        reward:      { huntTickets: 4, text: 'You read it aloud and lived. Remarkable.' },
         description: 'The page stops mid-verse. Your next Reeds hunt will mark where to read it aloud.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_unfinished_hymn', far: true },
         isActive:   (pm) => pm.hasQuestFlag('choir_page') || pm.hasQuestFlag('cult_slain:yargaleth'),
@@ -413,6 +430,7 @@ export const QUEST_LINES = [
       {
         id:          'hb_boat',
         label:       'The Tithe-Boat',
+        reward:      { huntTickets: 5, text: 'Trade with the Choir if you must. Keep your wits about you on that boat.' },
         description: 'The Choir want to meet you on their boat. Your next Reeds hunt will mark it.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_tithe_offer', far: false },
         isActive:   (pm) => pm.hasQuestFlag('choir_hymn'),
@@ -433,6 +451,7 @@ export const QUEST_LINES = [
       {
         id:          'ob_offerings',
         label:       'Drowned Offerings',
+        reward:      { huntTickets: 3, text: 'Offerings to Dagon, in our own reeds. I would rather know than not.' },
         description: 'Someone sinks offerings at a reed shrine. Your next Reeds hunt will mark it. Once the Temple know you, their camps will talk instead of fight.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_offerings', far: false },
         isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
@@ -441,6 +460,7 @@ export const QUEST_LINES = [
       {
         id:          'ob_baptism',
         label:       'Baptism in the Gill',
+        reward:      { huntTickets: 4, text: 'You let a gill-priest put you under, and you came back up. That is something.' },
         description: 'A gill-priest waits in the water. Your next Reeds hunt will mark where.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_baptism', far: true },
         isActive:   (pm) => pm.hasQuestFlag('gill_offerings_read'),
@@ -449,6 +469,7 @@ export const QUEST_LINES = [
       {
         id:          'ob_channel',
         label:       "The Smugglers' Channel",
+        reward:      { huntTickets: 3, text: 'The smugglers\' channel. Useful, and dangerous, like every useful thing.' },
         description: 'The Temple\'s smugglers will take you to their Deep Priest for meat (2 lean game). Your next Reeds hunt will mark them.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_smugglers', far: false },
         isActive:   (pm) => pm.hasQuestFlag('gill_baptised'),
@@ -457,6 +478,7 @@ export const QUEST_LINES = [
       {
         id:          'ob_priest',
         label:       'The Deep Priest',
+        reward:      { huntTickets: 5, text: 'You stood before the Deep Priest and walked away. The Temple will remember you.' },
         description: 'The Temple\'s eldest waits in a church of reeds. Your next Reeds hunt will mark it.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_deep_priest', far: true },
         isActive:   (pm) => pm.hasQuestFlag('gill_channel'),

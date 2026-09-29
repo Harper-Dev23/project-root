@@ -17,6 +17,7 @@ import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
+import { claimQuestRewards, questRewardMessage } from '../systems/QuestRewards.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { launchMapHunt } from './overlays/HuntFieldOverlay.js';
 
@@ -1046,6 +1047,21 @@ export default class TownScene extends Phaser.Scene {
       questFlagsChanged = true;
     }
 
+    // Samuel comes after the first hunt if Trial 4 has not brought him yet.
+    if (ProgressionManager.offerSamuelAfterHunt()) questFlagsChanged = true;
+
+    // Quest-step rewards (src/systems/QuestRewards.js): paid once, announced
+    // once. Deferred a tick so UIScene exists when this runs from create().
+    const paid = claimQuestRewards(ProgressionManager);
+    if (paid.length) {
+      questFlagsChanged = true;
+      this.time.delayedCall(0, () => {
+        const ui = this.scene.get('UIScene');
+        ui?.refreshUI?.();
+        ui?.showDialogue?.(questRewardMessage(paid));
+      });
+    }
+
     if (questFlagsChanged) GameState.save('autosave');
 
     // Check if the combat pit marker should now appear based on cleared flags
@@ -1213,8 +1229,11 @@ export default class TownScene extends Phaser.Scene {
     }
 
     if (hasIntroFlag) {
-      // Phase 1 — First meeting after S4.
+      // Phase 1 — First meeting, after S4 or the first hunt (whichever came first).
       // Samuel introduces the spiritual dimension of the hunt and sends the player to the waystone.
+      const watchedFrom = ProgressionManager.isScenarioCompleted('training_encounter_4')
+        ? 'I have watched your progress through the training grounds.\n\n'
+        : 'I watched your party come back from the hunt. Few return from their first\nwith that look about them.\n\n';
       ProgressionManager.clearQuestFlag('samuel_mourne');
       ProgressionManager.setQuestFlag('waystone_visit');
       GameState.save('autosave');
@@ -1228,7 +1247,7 @@ export default class TownScene extends Phaser.Scene {
 
       const introText = this.add.text(640, 255,
         '"You have done well to reach this point.\n\n' +
-        'I am Samuel Mourne. I have watched your progress through the training grounds.\n\n' +
+        'I am Samuel Mourne. ' + watchedFrom +
         'There are things about this island that the tribes do not speak of openly.\n' +
         'The Sacred Hunt is more than sport. Each prophet is a divine being that takes\n' +
         'the form of a great beast — ancient, aware, and not what the tribes call them.\n' +
