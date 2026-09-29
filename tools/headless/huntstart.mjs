@@ -128,6 +128,27 @@ console.log('=== The Unconfessed Dead opens on the Vowback ===');
 }
 
 console.log('');
+console.log('=== home is a full heal ===');
+{
+  const GameState = (await import('../../src/systems/GameState.js')).default;
+  const { applyTakeHome } = await import('../../src/systems/CoopRewards.js');
+  const hurt = { id: 'a', name: 'A', status: 'alive', currentHP: 5, maxHP: 100, currentMP: 0, maxMP: 40 };
+  const down = { id: 'b', name: 'B', status: 'incapacitated', currentHP: 0, maxHP: 80, currentMP: 3, maxMP: 20 };
+  const slain = { id: 'c', name: 'C', status: 'dead', currentHP: 0, maxHP: 90, currentMP: 0, maxMP: 20 };
+  const oldParty = GameState.party;
+  GameState.party = [hurt, down, slain];
+  GameState.restorePartyToFull();
+  check('solo: the living come home full', hurt.currentHP === 100 && hurt.currentMP === 40 && down.status === 'alive' && down.currentHP === 80);
+  check('...the Slain do not', slain.status === 'dead' && slain.currentHP === 0);
+  GameState.party = oldParty;
+  const h2 = { id: 'd', status: 'alive', currentHP: 7, maxHP: 60, currentMP: 1, maxMP: 30 };
+  const world = { nightFalls() {}, dayBreaks() {} };
+  applyTakeHome([], { me: 'p', hostId: 'p', myRefs: ['d'], vitals: { d: { hp: 7, mp: 1, status: 'alive' } } },
+    { world, hunter: (r) => (r === 'd' ? h2 : null), awardXPTo() {}, moveToSlain() {}, day: () => 1 });
+  check('co-op: the take-home heals too', h2.currentHP === 60 && h2.currentMP === 30);
+}
+
+console.log('');
 console.log('=== the Hunt Gate marker ===');
 PM.reset();
 clear(['training_encounter_1']);

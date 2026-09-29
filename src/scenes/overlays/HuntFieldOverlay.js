@@ -1370,7 +1370,9 @@ export function launchMapHunt(scene) {
   sm.launch('HuntFieldOverlay', {
     hunt: HuntManager.current(),
     onAction: () => GameState.save('autosave'),
-    onFinished: () => { HuntManager.clearFinished(); GameState.save('autosave'); },
+    // Home is a full heal for whoever came back (owner's playtest 2026-09-29,
+    // as the old one-button hunt did). The Slain are already off the party.
+    onFinished: () => { HuntManager.clearFinished(); GameState.restorePartyToFull(); GameState.save('autosave'); },
     // Town is not put to sleep under the map, so it never "wakes" from a hunt:
     // refresh it here, or what the hunt set (Samuel's marker, quest rewards,
     // region quest markers) waits for the next scene change.

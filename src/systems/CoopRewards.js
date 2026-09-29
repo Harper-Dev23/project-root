@@ -141,15 +141,15 @@ export function applyTakeHome(entries, ctx, target) {
       default: break;   // unknown verbs are skipped, never guessed at
     }
   }
-  // The hunters come home as the hunt left them (the dead went to the Slain
-  // above; nobody else is down after a hunt).
+  // The hunters come home, and home is a full heal (owner's playtest
+  // 2026-09-29, as a solo hunt's return does: GameState.restorePartyToFull).
+  // The dead went to the Slain above. `vitals` still says who came back.
   if (ctx.vitals) {
     for (const ref of myRefs) {
       const c = target.hunter(ref);
-      const v = ctx.vitals[ref];
-      if (!c || !v || c.status === 'dead') continue;
-      if (Number.isFinite(v.hp)) c.currentHP = Math.max(1, Math.min(c.maxHP ?? v.hp, v.hp));
-      if (Number.isFinite(v.mp)) c.currentMP = Math.max(0, Math.min(c.maxMP ?? v.mp, v.mp));
+      if (!c || !ctx.vitals[ref] || c.status === 'dead') continue;
+      if (Number.isFinite(c.maxHP)) c.currentHP = c.maxHP;
+      if (Number.isFinite(c.maxMP)) c.currentMP = c.maxMP;
       c.status = 'alive';
     }
   }
