@@ -18,6 +18,7 @@ import OptionsOverlay from './scenes/overlays/OptionsOverlay.js';
 import JournalOverlay from './scenes/overlays/JournalOverlay.js';
 import QuestOverlay from './scenes/overlays/QuestOverlay.js';
 import StashOverlay from './scenes/overlays/StashOverlay.js';
+import PartsBuyerOverlay from './scenes/overlays/PartsBuyerOverlay.js';
 import LevelUpOverlay from './scenes/overlays/LevelUpOverlay.js';
 import TribeRelationsOverlay from './scenes/overlays/TribeRelationsOverlay.js';
 import WaystoneShardOverlay from './scenes/overlays/WaystoneShardOverlay.js';
@@ -28,6 +29,7 @@ import RenownTreeOverlay from './scenes/overlays/RenownTreeOverlay.js';
 import HuntEncounterOverlay from './scenes/overlays/HuntEncounterOverlay.js';
 import TribeHQOverlay from './scenes/overlays/TribeHQOverlay.js';
 import LodgeShrineOverlay from './scenes/overlays/LodgeShrineOverlay.js';
+import LodgeRegionsOverlay from './scenes/overlays/LodgeRegionsOverlay.js';
 import HuntPlanPickerOverlay from './scenes/overlays/HuntPlanPickerOverlay.js';
 import HuntFieldOverlay, { installDevHook as installHuntFieldDevHook } from './scenes/overlays/HuntFieldOverlay.js';
 
@@ -53,6 +55,7 @@ const config = {
     JournalOverlay,
     QuestOverlay,
     StashOverlay,
+    PartsBuyerOverlay,
     LevelUpOverlay,
     TribeRelationsOverlay,
     WaystoneShardOverlay,
@@ -63,6 +66,7 @@ const config = {
     HuntEncounterOverlay,
     TribeHQOverlay,
     LodgeShrineOverlay,
+    LodgeRegionsOverlay,
     HuntPlanPickerOverlay,
     HuntFieldOverlay,
   ],

@@ -1780,7 +1780,7 @@ export default class TownScene extends Phaser.Scene {
       this.vendorInventoryContainer.y = 0;
 
       const PANEL_BOTTOM = 595;
-      const BONEPILE_LOG_START_Y = 345; // <-- adjust this single number (4 buttons above it)
+      const BONEPILE_LOG_START_Y = 385; // <-- adjust this single number (5 buttons above it: 4 gambles, Sell beast parts)
       const LOG_X = 590;
       const LOG_LINE_H = 24;
       // The inventory mask spans x 550..1050 (see _setInventoryMaskTop), and the
@@ -2029,6 +2029,23 @@ export default class TownScene extends Phaser.Scene {
 
       // The Jewelry gamble button was removed on request — the bone pile now
       // offers Weapons and Armor only.
+
+      // The keeper buys beast parts (batch 4b chunk 6): its own overlay,
+      // PartsBuyerOverlay, over the camp bag. Cleared with the gamble buttons.
+      const sellBtn = this.add.text(620, 345, '[ Sell beast parts ]', { fontSize: '20px', color: '#e0c890' })
+        .setDepth(13)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', function () { this.setColor('#ffffff'); })
+        .on('pointerout', function () { this.setColor('#e0c890'); })
+        .on('pointerdown', () => {
+          SoundManager.play('handsClick');
+          if (!this.scene.isActive('PartsBuyerOverlay')) {
+            this.scene.launch('PartsBuyerOverlay');
+            this.scene.bringToTop('PartsBuyerOverlay');
+          }
+        });
+      this.gambleButtons.push(sellBtn);
+      if (this.vendorRowGroup) this.vendorRowGroup.add(sellBtn);
 
       return;
     }

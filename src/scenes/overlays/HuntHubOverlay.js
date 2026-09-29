@@ -46,7 +46,7 @@ import { rationPackCap, huntMods } from '../../systems/HuntRules.js';
 import { partyStats } from '../../systems/PartyStats.js';
 import { planMapInputs } from '../../systems/HuntMapGen.js';
 import { launchMapHunt } from './HuntFieldOverlay.js';
-import { bossesIn, omenMeter, offersReady, claimBossPlan } from '../../systems/Omens.js';
+import { bossesIn, omenMeter, offersReady } from '../../systems/Omens.js';
 
 // The camp's free issue (CAMP_ISSUE, 60) comes on top of what is packed. The
 // packing cap is rationPackCap (HuntRules.js): 60 since the hunt moved onto
@@ -340,42 +340,17 @@ export default class HuntHubOverlay extends Phaser.Scene {
    * row's height, 0 (nothing drawn) for a region without bosses.
    */
   _renderOmens(left, y, right, zone) {
+    // The meter, the tribe's offer and boss claims live at the lodge now
+    // (Tribe HQ > Regions, LodgeRegionsOverlay; owner 2026-09-29, batch 4b
+    // chunk 6). Here, one line says so, and whether something waits there.
     const bosses = bossesIn(zone.id, ProgressionManager);
     if (!bosses.length) return 0;
-    const meter = omenMeter(zone.id, ProgressionManager);
-    const bag = { push: (inst) => InventorySystem.addGlobalItem(inst, { isNew: true }) };
-    const done = (res, what) => {
-      if (!res.ok) return;
-      GameState.save('autosave');
-      SoundManager.play('select');
-      this._planNote = `${what}: ${getItemComputedData(res.plan).name} is in your bag.`;
-      this._render();
-    };
-    const offer = offersReady(ProgressionManager, zone.id)[0];
-    const claimable = bosses.filter(b => b.unlocked);
-    let label = `Omens ${meter.have} / ${meter.full}`;
-    if (offer) label += "   ·   your tribe has something for you: visit your lodge (Tribe HQ)";
-    else if (!claimable.length) label += "   ·   a boss stirs here; omens gather once a region's questline names it";
-    else label += `   ·   a full meter calls ${claimable.map(b => b.name).join(' or ')}`;
-    this._text(left, y + 4, label, { fontSize: '14px', color: meter.ready || offer ? '#c59bff' : '#bbbbbb' });
-    if (this._planNote) {
-      this._text(left, y + 24, this._planNote, { fontSize: '12px', color: '#c59bff' });
-      this._planNote = null;
-    }
-    // Buttons right-aligned on the row, right to left.
-    let bx = right;
-    const addButton = (text, cb) => {
-      // Buttons size themselves from their text: place by the real width.
-      const btn = this._button(0, y + 14, text, cb, 'confirm');
-      const w = btn.getBounds().width;
-      btn.x = bx - w / 2;
-      bx -= w + 12;
-    };
-    // The tribe's first offer is taken at the lodge (TribeHQOverlay), not here.
-    if (meter.ready > 0) {
-      for (const b of claimable) addButton(`Claim: ${b.name}`, () => done(claimBossPlan(ProgressionManager, bag, b.id), 'The omens are enough'));
-    }
-    return 40;
+    const waiting = offersReady(ProgressionManager, zone.id).length > 0 || omenMeter(zone.id, ProgressionManager).ready > 0;
+    this._text(left, y + 4, waiting
+      ? 'Something waits for you at your lodge: Tribe HQ > Regions.'
+      : 'This region\'s omens and bosses: Tribe HQ > Regions, at your lodge.',
+      { fontSize: '14px', color: waiting ? '#c59bff' : '#999999' });
+    return 26;
   }
 
   /** Hunt Tickets -> Rations, straight into the camp bag. Spent now, not at departure. */

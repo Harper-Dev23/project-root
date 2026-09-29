@@ -361,5 +361,27 @@ console.log('=== consumables stack (owner\'s playtest 2026-09-29) ===');
   check('...and the stash too', GameState.tribeStash.styx.length === 1 && units(GameState.tribeStash.styx, 'identify_armor_tonic') === 2);
 }
 
+console.log('=== the Bone Pile buys beast parts (batch 4b chunk 6) ===');
+{
+  const { partOffer, sellPart, sellAllParts } = await import('../../src/systems/PartsBuyer.js');
+  const part = (id, rarity, n, grade = 'grown') => S.partMaterial({ id, rarity, grade }, n);
+  const pm = { huntTickets: 0 };
+  const commons = part('part_crocodile_weaponMain', 'common', 23);
+  const o = partOffer(commons);
+  check('23 Common parts: 20 sell for 2 tickets, in bundles of 10', o.bundle === 10 && o.sellable === 20 && o.tickets === 2, JSON.stringify(o));
+  const bag = [commons];
+  check('...selling pays 2 and leaves 3 in the bag', sellPart(bag, commons, pm) === 2 && pm.huntTickets === 2 && bag.length === 1 && S.stackQty(commons) === 3);
+  check('...3 left are worth nothing yet, and stay', partOffer(commons).tickets === 0 && sellPart(bag, commons, pm) === 0 && bag.length === 1);
+  check('5 Uncommon: 4 sell for 1 ticket', partOffer(part('part_crocodile_head', 'uncommon', 5)).tickets === 1);
+  check('2 Rare: 2 tickets', partOffer(part('part_crocodile_head', 'rare', 2)).tickets === 2);
+  check('1 Epic from an apex-grade beast: 6 tickets (3, doubled)', partOffer(part('part_crocodile_head', 'epic', 1, 'great')).tickets === 6);
+  check("1 Rare Mourning Beast part: 3 tickets (a boss's, tripled)", partOffer(part('part_mourning_beast_head', 'rare', 1, 'great')).tickets === 3);
+  const bag2 = [part('part_crocodile_head', 'rare', 2), part('part_crocodile_weaponMain', 'common', 12), createItemInstance('sever_head')];
+  const pm2 = { huntTickets: 5 };
+  const all = sellAllParts(bag2, pm2);
+  check('Sell all: every part that pays, nothing else', all.tickets === 3 && pm2.huntTickets === 8 && bag2.length === 2
+    && bag2.some(i => i.id === 'sever_head') && S.stackQty(bag2.find(i => i.id === 'part_crocodile_weaponMain')) === 2, JSON.stringify(all));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

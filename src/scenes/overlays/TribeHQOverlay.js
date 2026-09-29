@@ -14,9 +14,8 @@ import ProgressionManager from '../../systems/ProgressionManager.js';
 import GameState from '../../systems/GameState.js';
 import { Items } from '../../../data/items.js';
 import { getRarityColor, MENU_THEME } from '../../ui/styles.js';
-import { offersReady, takeFirstOffer } from '../../systems/Omens.js';
-import { InventorySystem } from '../../systems/InventorySystem.js';
-import { getItemComputedData } from '../../systems/ItemFactory.js';
+import { offersReady, omenMeter } from '../../systems/Omens.js';
+import { lodgeRegions } from './LodgeRegionsOverlay.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import {
   SLOT_LABELS, PARTY_STASH_CAP,
@@ -122,33 +121,28 @@ export default class TribeHQOverlay extends Phaser.Scene {
   }
 
   /**
-   * A boss questline's last step (14b-3; Omens.takeFirstOffer): the tribe's
-   * first, free boss plan is taken here, at the lodge (owner's playtest,
-   * 2026-09-27: it used to be on the hunt board). One offer at a time, mid
-   * header; the note says where the plan went.
+   * The lodge header's way to the Regions screen, where a boss questline's
+   * first free plan is taken (it was this header's own button, 14b-3; the
+   * hunt board's before that). Starred when something waits there.
    */
   _buildBossOffer() {
+    // The offer, the Omen meters and boss claims live on the Regions screen
+    // (LodgeRegionsOverlay; batch 4b chunk 6). The header opens it, and says
+    // when something waits there.
     const { _bounds: b, _depth: d } = this;
     (this._offerObjs || []).forEach(o => o?.destroy?.());
     this._offerObjs = [];
-    const offer = offersReady(ProgressionManager)[0];
-    if (this._offerNote) {
-      this._offerObjs.push(this.add.text(b.right - 40, b.y + 88, this._offerNote, { fontSize: '13px', color: '#c59bff' }).setOrigin(1, 0).setDepth(d));
-    }
-    if (!offer) return;
-    const plan = Items[offer.plan]?.name || offer.plan;
-    const btn = createButton(this, 0, b.y + 104, `Your tribe's offer: ${plan}`, () => {
-      const bag = { push: (inst) => InventorySystem.addGlobalItem(inst, { isNew: true }) };
-      const res = takeFirstOffer(ProgressionManager, bag, offer.id, (f) => ProgressionManager.setQuestFlag(f));
-      if (!res.ok) return;
-      GameState.save('autosave');
-      SoundManager.play('select');
-      this._offerNote = `${getItemComputedData(res.plan)?.name || plan} is in your camp bag. Take it to the ${offer.zone === 'reeds_of_gethsemane' ? 'Reeds' : 'region'} as a hunt plan.`;
-      this._buildBossOffer();
-    }, 'confirm', { fontSize: '15px' }).setDepth(d);
-    // Centred on the header, clear of the Shrine button on the right.
-    btn.x = b.x + b.width / 2 + 40;
+    const waiting = offersReady(ProgressionManager).length > 0
+      || lodgeRegions(ProgressionManager).some(z => omenMeter(z, ProgressionManager).ready > 0);
+    const btn = createButton(this, b.right - 240, b.y + 104, waiting ? 'Regions ★' : 'Regions', () => {
+      this.scene.stop();
+      this.scene.launch('LodgeRegionsOverlay');
+      this.scene.bringToTop('LodgeRegionsOverlay');
+    }, waiting ? 'confirm' : 'primary', { fontSize: '16px' }).setDepth(d);
     this._offerObjs.push(btn);
+    if (waiting) {
+      this._offerObjs.push(this.add.text(b.right - 40, b.y + 84, 'Your tribe has something for you: open Regions.', { fontSize: '13px', color: '#c59bff' }).setOrigin(1, 0).setDepth(d));
+    }
   }
 
   _buildFooter() {

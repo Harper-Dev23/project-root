@@ -13,6 +13,7 @@ import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
 import { buildItemTooltipLines, installAffixDetailKeys } from '../../ui/itemTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { historicMechanicLines } from '../../../data/historicEffects.js';
+import { isStackable, stackQty, splitStack } from '../../systems/ItemStacks.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -824,6 +825,48 @@ export default class InventoryOverlay extends Phaser.Scene {
               this.scene.restart();
             });
           listContainer.add(dBtn);
+        }
+      }
+
+      // [Split] a stack (owner 2026-09-29): take N off into an entry of its
+      // own, e.g. to stash part of it. Armed per row like [Discard]: the
+      // row shows [-] N [+] [Split off] [x]. Stacks never show [Transfer],
+      // so x=270 is free on these rows.
+      if (isStackable(item) && stackQty(item) > 1) {
+        const have = stackQty(item);
+        const armed = this._splitRow?.item === item ? this._splitRow : null;
+        const btn = (x, label, color, onClick) => {
+          const t = this.add.text(x, y, label, { fontSize: '13px', color })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => t.setStyle({ color: '#ffffff' }))
+            .on('pointerout', () => t.setStyle({ color }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              onClick();
+            });
+          listContainer.add(t);
+          return t;
+        };
+        if (!armed) {
+          btn(270, '[Split]', '#b8c8e8', () => { this._splitRow = { item, n: Math.floor(have / 2) }; this.scene.restart(); });
+        } else {
+          const step = (d) => { armed.n = Math.max(1, Math.min(have - 1, armed.n + d)); this.scene.restart(); };
+          btn(270, '[−]', '#b8c8e8', () => step(-1));
+          listContainer.add(this.add.text(300, y, String(armed.n), { fontSize: '13px', color: '#ffff88' }));
+          btn(328, '[+]', '#b8c8e8', () => step(+1));
+          btn(360, '[Split off]', '#88ff88', () => {
+            const part = splitStack(item, armed.n);
+            // Pushed, not added: addGlobalItem would merge it straight back.
+            if (part) {
+              const list = GameState.inventory || [];
+              list.splice(list.indexOf(item) + 1, 0, part);
+            }
+            this._splitRow = null;
+            GameState.save('autosave');
+            this.scene.restart();
+          });
+          btn(450, '[×]', '#aaaaaa', () => { this._splitRow = null; this.scene.restart(); });
         }
       }
 
