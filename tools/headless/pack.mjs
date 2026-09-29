@@ -332,5 +332,34 @@ console.log('=== the game\'s own path: bag -> pack -> bag ===');
   check('...and a reload resumes the hunt with its pack', HuntManager.isActive() && HuntManager.getState().pack.brought[0]?.qty === 40);
 }
 
+console.log('=== consumables stack (owner\'s playtest 2026-09-29) ===');
+{
+  freshGame();
+  const combatItems = Object.values(Items).filter(it => it.combatUse);
+  check('every combat item (chants, tonics, draughts) is stackable', combatItems.length > 0 && combatItems.every(it => it.stackable),
+    combatItems.filter(it => !it.stackable).map(it => it.id).join());
+  for (let i = 0; i < 3; i++) InventorySystem.addGlobalItem('sever_head');
+  InventorySystem.addGlobalItem('sever_chest');
+  const heads = GameState.inventory.filter(it => it.id === 'sever_head');
+  check('three Severing Chants: Head are one entry of 3', heads.length === 1 && S.stackQty(heads[0]) === 3);
+  InventorySystem.spendOneGlobal(heads[0]);
+  check('using one in combat leaves 2 in the stack', units(GameState.inventory, 'sever_head') === 2
+    && GameState.inventory.filter(it => it.id === 'sever_head').length === 1);
+  const chest = GameState.inventory.find(it => it.id === 'sever_chest');
+  InventorySystem.spendOneGlobal(chest);
+  check('using the last one removes the entry', !GameState.inventory.some(it => it.id === 'sever_chest'));
+
+  // A save from before: one entry per chant, as the old game kept them.
+  freshGame();
+  for (let i = 0; i < 4; i++) { const inst = createItemInstance('sever_ring'); GameState.inventory.push(inst); }
+  GameState.inventory.push(createItemInstance('healing_draught'), createItemInstance('healing_draught'));
+  GameState.tribeStash = { styx: [createItemInstance('identify_armor_tonic'), createItemInstance('identify_armor_tonic')] };
+  GameState.save('stacks');
+  GameState.load('stacks');
+  check('loading an old save folds loose chants into one stack', GameState.inventory.filter(it => it.id === 'sever_ring').length === 1
+    && units(GameState.inventory, 'sever_ring') === 4 && units(GameState.inventory, 'healing_draught') === 2);
+  check('...and the stash too', GameState.tribeStash.styx.length === 1 && units(GameState.tribeStash.styx, 'identify_armor_tonic') === 2);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

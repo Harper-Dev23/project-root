@@ -1520,29 +1520,29 @@ export const Items = {
   // stronger, and they cost the other resource to drink. Percentages of the
   // drinker's max. Starting numbers, to tune.
   healing_draught: {
-    id: 'healing_draught', name: 'Healing Draught', type: 'consumable', rarity: 'common',
+    id: 'healing_draught', name: 'Healing Draught', type: 'consumable', stackable: true, rarity: 'common',
     combatUse: { kind: 'restore', target: 'self', hpPct: 30 },
     description: 'Combat only, bonus action; the hunter who uses it drinks it. Restores 30% of their max HP.',
   },
   mana_draught: {
-    id: 'mana_draught', name: 'Mana Draught', type: 'consumable', rarity: 'common',
+    id: 'mana_draught', name: 'Mana Draught', type: 'consumable', stackable: true, rarity: 'common',
     combatUse: { kind: 'restore', target: 'self', mpPct: 30 },
     description: 'Combat only, bonus action; the hunter who uses it drinks it. Restores 30% of their max MP.',
   },
   tincture_red_breath: {
-    id: 'tincture_red_breath', name: 'Tincture of Red Breath', type: 'consumable', rarity: 'uncommon',
+    id: 'tincture_red_breath', name: 'Tincture of Red Breath', type: 'consumable', stackable: true, rarity: 'uncommon',
     combatUse: { kind: 'restore', target: 'self', hpPct: 50, costMpPct: 15 },
     description: 'A cult tincture. Combat only, bonus action; the hunter who uses it drinks it. Restores 50% of their max HP, and takes 15% of their max MP.',
   },
   tincture_deep_well: {
-    id: 'tincture_deep_well', name: 'Tincture of the Deep Well', type: 'consumable', rarity: 'uncommon',
+    id: 'tincture_deep_well', name: 'Tincture of the Deep Well', type: 'consumable', stackable: true, rarity: 'uncommon',
     combatUse: { kind: 'restore', target: 'self', mpPct: 50, costHpPct: 15 },
     description: 'A cult tincture. Combat only, bonus action; the hunter who uses it drinks it. Restores 50% of their max MP, and takes 15% of their max HP (never below 1).',
   },
   identify_weapon_tonic: {
     id: 'identify_weapon_tonic',
     name: 'Weapon-Reading Tonic',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'identify', category: 'weapon', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s weapon (up to Epic) for the rest of the fight. Does not unbind it.',
@@ -1550,7 +1550,7 @@ export const Items = {
   identify_armor_tonic: {
     id: 'identify_armor_tonic',
     name: 'Armor-Reading Tonic',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'identify', category: 'armor', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s armor pieces (up to Epic) for the rest of the fight. Does not unbind them.',
@@ -1558,7 +1558,7 @@ export const Items = {
   identify_jewelry_tonic: {
     id: 'identify_jewelry_tonic',
     name: 'Jewelry-Reading Tonic',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'identify', category: 'jewelry', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Reveals the true identity of an enemy\'s ring and amulet (up to Epic) for the rest of the fight. Does not unbind them.',
@@ -1567,7 +1567,7 @@ export const Items = {
   sever_weaponMain: {
     id: 'sever_weaponMain',
     name: 'Severing Chant: Main Hand',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'weaponMain', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s main-hand weapon (up to Epic), turning it into normal loot.',
@@ -1575,7 +1575,7 @@ export const Items = {
   sever_weaponOff: {
     id: 'sever_weaponOff',
     name: 'Severing Chant: Off Hand',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'weaponOff', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s off-hand item (up to Epic), turning it into normal loot.',
@@ -1583,7 +1583,7 @@ export const Items = {
   sever_head: {
     id: 'sever_head',
     name: 'Severing Chant: Head',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'head', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s head slot (up to Epic), turning it into normal loot.',
@@ -1591,7 +1591,7 @@ export const Items = {
   sever_chest: {
     id: 'sever_chest',
     name: 'Severing Chant: Chest',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'chest', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s chest slot (up to Epic), turning it into normal loot.',
@@ -1599,7 +1599,7 @@ export const Items = {
   sever_legs: {
     id: 'sever_legs',
     name: 'Severing Chant: Legs',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'legs', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s leg slot (up to Epic), turning it into normal loot.',
@@ -1607,7 +1607,7 @@ export const Items = {
   sever_gloves: {
     id: 'sever_gloves',
     name: 'Severing Chant: Gloves',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'gloves', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s glove slot (up to Epic), turning it into normal loot.',
@@ -1615,7 +1615,7 @@ export const Items = {
   sever_boots: {
     id: 'sever_boots',
     name: 'Severing Chant: Boots',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'boots', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s boot slot (up to Epic), turning it into normal loot.',
@@ -1623,7 +1623,7 @@ export const Items = {
   sever_ring: {
     id: 'sever_ring',
     name: 'Severing Chant: Ring',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'ring', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s ring slot (up to Epic), turning it into normal loot.',
@@ -1631,7 +1631,7 @@ export const Items = {
   sever_amulet: {
     id: 'sever_amulet',
     name: 'Severing Chant: Amulet',
-    type: 'consumable',
+    type: 'consumable', stackable: true,
     rarity: 'common',
     combatUse: { kind: 'sever', slot: 'amulet', maxRarity: 'epic' },
     description: 'Combat only, bonus action, no target restriction. Severs the soul-bond on an enemy\'s amulet slot (up to Epic), turning it into normal loot.',

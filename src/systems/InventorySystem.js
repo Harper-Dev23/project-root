@@ -5,7 +5,7 @@ import { equipItem } from './CharacterBuilder.js';
 import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { rebuildCharacterStats } from './CharacterBuilder.js';
 import { getItemComputedData } from './ItemFactory.js';
-import { addToList } from './ItemStacks.js';
+import { addToList, stackQty } from './ItemStacks.js';
 
 /**
  * Flags an instance as not-yet-seen so the inventory can mark it.
@@ -52,6 +52,18 @@ export const InventorySystem = {
     } else if (typeof item === 'string') {
       GameState.inventory = (GameState.inventory || []).filter(k => k !== item);
     }
+  },
+
+  /**
+   * Spend one unit of an entry in the global inventory: a stack loses one
+   * (the last one removes it), anything else is removed. For what is used up
+   * one at a time (a combat item: CombatScene._spendBonusActionAndItem).
+   */
+  spendOneGlobal(item) {
+    if (!isItemInstance(item)) { this.removeGlobalItem(item); return; }
+    const inList = (GameState.inventory || []).find(it => isItemInstance(it) && it.instanceId === item.instanceId);
+    if (inList && stackQty(inList) > 1) { inList.qty = stackQty(inList) - 1; return; }
+    this.removeGlobalItem(item);
   },
 
   hasGlobalItem(item) {

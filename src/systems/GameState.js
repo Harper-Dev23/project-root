@@ -61,6 +61,11 @@ function deserializeItem(entry) {
 function serializeInventory(arr) { return Array.isArray(arr) ? arr.map(serializeItem).filter(Boolean) : []; }
 function deserializeInventory(arr) { return Array.isArray(arr) ? arr.map(deserializeItem).filter(Boolean) : []; }
 
+/** Loose entries of one stackable merged into stacks (addToList), in order:
+ *  a save from before consumables stacked (owner's playtest 2026-09-29) holds
+ *  one entry per Severing Chant, and loading folds them together. */
+function mergeStacks(list) { return list.reduce((acc, it) => addToList(acc, it), []); }
+
 function serializeEquipment(eq) {
   const out = { ...defaultEquipment }, src = eq || {};
   for (const k in out) out[k] = serializeItem(src[k]);
@@ -846,13 +851,13 @@ const GameState = {
     this.party = (data.partyIds || []).map(id => idToChar.get(id)).filter(Boolean);
 
     // Global bag / passthrough
-    this.inventory = deserializeInventory(data.inventory);
+    this.inventory = mergeStacks(deserializeInventory(data.inventory));
 
     // Tribe stash
     this.tribeStash = {};
     if (data.tribeStash && typeof data.tribeStash === 'object') {
       for (const [k, v] of Object.entries(data.tribeStash)) {
-        this.tribeStash[k] = deserializeInventory(v);
+        this.tribeStash[k] = mergeStacks(deserializeInventory(v));
       }
     }
     this.currentScene = data.currentScene || this.currentScene;

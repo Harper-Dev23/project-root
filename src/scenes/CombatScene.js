@@ -32,6 +32,7 @@ import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { huntFightXP } from '../systems/HuntObjectives.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase, mergeHistoricEffects } from '../systems/ItemFactory.js';
+import { stackQty } from '../systems/ItemStacks.js';
 import { makeRng, isSeed } from '../systems/seededRng.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
 import { AI_PROFILES } from '../systems/AIProfiles.js';
@@ -5189,7 +5190,9 @@ export default class CombatScene extends Phaser.Scene {
       // owns an item and cannot see it reads that as having lost it. Every
       // owned combat item is always listed; _useCombatItem's own fizzle guard
       // makes a pointless use a free no-op, so nothing is ever spent.
-      counts.set(inst.id, (counts.get(inst.id) || 0) + 1);
+      // A stack counts every unit (ItemStacks; consumables stack since the
+      // owner's playtest 2026-09-29).
+      counts.set(inst.id, (counts.get(inst.id) || 0) + stackQty(inst));
     }
     return Array.from(counts.entries())
       .map(([id, count]) => combatItemAbility(id, count))
@@ -5301,7 +5304,8 @@ export default class CombatScene extends Phaser.Scene {
     user.actionsLeft.bonus = Math.max(0, (user.actionsLeft.bonus || 0) - 1);
     // No instance on a co-op server, which owns the action economy but nobody's
     // bag. The action is still spent; the item is spent by the acting client.
-    if (inst) InventorySystem.removeGlobalItem(inst);
+    // One unit: a stack of chants or draughts loses one, not the whole stack.
+    if (inst) InventorySystem.spendOneGlobal(inst);
   }
 
 
