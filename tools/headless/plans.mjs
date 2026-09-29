@@ -408,7 +408,8 @@ console.log('=== a real v4 save holding a plan migrates to v6 ===');
   const { itemLevel: _il, ...oldRest } = oldPlan;
   check('...everything else about it unchanged (affixes, name, mods, id)', same(rest, oldRest));
   check('...and reads as Tier I', huntPlanView(plan).tier === 1 && describePlan(plan)[0] === 'Item Level 1, Tier I');
-  const charPlan = GameState.characters[0].inventory.find(i => i.instanceId === 'itm_charplan');
+  // Personal inventories fold into the camp bag on load (batch 4b chunk 7).
+  const charPlan = GameState.inventory.find(i => i.instanceId === 'itm_charplan');
   const stashPlan = GameState.tribeStash.lesse?.find(i => i.instanceId === 'itm_stashplan');
   check('a plan in a character\'s bag migrated too', charPlan?.itemLevel === 1 && same(charPlan.bonusObjectives, []));
   check('a plan in a tribe stash migrated too', stashPlan?.itemLevel === 1 && same(stashPlan.bonusObjectives, []));

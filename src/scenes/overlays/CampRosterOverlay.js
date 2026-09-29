@@ -346,8 +346,8 @@ export default class CampRosterOverlay extends Phaser.Scene {
 
     // ── Equipment ──
     if (character.equipment) {
-      const itemCount = (character.inventory || []).length;
-      const eqLines = [`Items in bag: ${itemCount}`];
+      // No personal bag any more (batch 4b chunk 7): just what they wear.
+      const eqLines = [];
       Object.entries(character.equipment).forEach(([slot, item]) => {
         if (!item) { eqLines.push(`${this._fmtSlot(slot)}: —`); return; }
         const base = isItemInstance(item) ? (Items[item.id] || {}) : (Items[item] || {});

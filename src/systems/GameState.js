@@ -753,6 +753,11 @@ const GameState = {
     hooks.restore(this._rawHunt);
   },
 
+  /** The live map hunt whose pack is the party's bag, or null in camp (InventorySystem's active bag). */
+  packHunt() {
+    return this._huntHooks?.packHunt?.() || null;
+  },
+
   /* --------------------- Save / Load ---------------------- */
   save(slot) {
     if (!slot) return console.warn('Save slot required');
@@ -852,6 +857,12 @@ const GameState = {
 
     // Global bag / passthrough
     this.inventory = mergeStacks(deserializeInventory(data.inventory));
+    // Personal inventories are retired (owner 2026-09-29, batch 4b chunk 7):
+    // anything a hunter still held moves to the camp bag, once, on load.
+    for (const c of [...(this.characters || []), ...(this.slain || [])]) {
+      for (const it of c.inventory || []) if (isItemInstance(it)) addToList(this.inventory, it);
+      c.inventory = [];
+    }
 
     // Tribe stash
     this.tribeStash = {};

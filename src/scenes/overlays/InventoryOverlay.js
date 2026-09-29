@@ -182,7 +182,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     if (this._onWheel) this.input.off('wheel', this._onWheel, this);
 
     const frame = createOverlayFrame(this, {
-      title: 'Inventory',
+      title: InventorySystem.isHuntingBag() ? 'Inventory: Hunt Pack' : 'Inventory',
       fullscreen: true,
       onClose: () => this._handleClose(),
     });
@@ -365,7 +365,7 @@ export default class InventoryOverlay extends Phaser.Scene {
           .setInteractive({ useHandCursor: true })
           .on('pointerdown', () => {
             SoundManager.play('dullClick');
-            const updatedChar = InventorySystem.unequipItemFromSlot(char, slot);
+            const updatedChar = InventorySystem.unequipToBag(char, slot);
             this._commitChar(updatedChar);
             this.scene.restart();
           })
@@ -381,186 +381,17 @@ export default class InventoryOverlay extends Phaser.Scene {
     equipBoxGfx.lineStyle(2, 0xa08060, 0.9);
     equipBoxGfx.strokeRect(190, 134, 218, equipY - 128);
 
-    // --- PERSONAL INVENTORY HEADER ---
-    equipY += 10;
-    this.add.text(200, equipY, 'Personal Inventory:', { fontSize: '16px', color: '#ffffff' }).setDepth(contentDepth);
-    equipY += 20;
+    // Personal inventories are retired (owner 2026-09-29, batch 4b chunk 7):
+    // gear moves straight between the bag and the hunter. The bag is the camp
+    // bag in camp and the hunt pack on a hunt (InventorySystem's active bag).
+    // pList / pArea stay null, so the personal scroll handlers below are inert.
+    equipY += 14;
+    this.add.text(200, equipY, InventorySystem.isHuntingBag()
+      ? 'On a hunt: the list is your\nhunt pack. The camp bag\nwaits in camp.'
+      : 'Equip straight from the\ncamp bag. On a hunt, the\nlist is your hunt pack.', {
+      fontSize: '12px', color: '#9aa4b4', lineSpacing: 2,
+    }).setDepth(contentDepth);
 
-    // Personal category toggle
-    const personalCats = [
-      { key: 'weapon', label: 'Wp.' },
-      { key: 'armor', label: 'Ar.' },
-      { key: 'item', label: 'It.' },
-      { key: 'all', label: 'All' }
-    ];
-    personalCats.forEach((cat, i) => {
-      const x = 200 + i * 50;
-      this.add.text(x, equipY, cat.label, {
-        fontSize: '12px',
-        color: (this.currentPersonalCategory === cat.key) ? '#ffff88' : '#cccccc'
-      }).setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => { this.currentPersonalCategory = cat.key; this.scene.restart(); })
-        .setDepth(contentDepth);
-    });
-    equipY += 20;
-
-    // --- PERSONAL DATA ---
-    let personalItems = [...(char.inventory || [])];
-    personalItems = this._filterByCategory(personalItems, this.currentPersonalCategory);
-
-    // --- PERSONAL MASK + LIST (OFF-DISPLAY GEO, NO DISPLAY-LIST GRAPHICS) ---
-
-    const pMaskX = 192;
-    pMaskY = equipY;
-    const pMaskWidth = globalListLeft - pMaskX - 15;
-    pMaskHeight = Math.max(150, (safeHeight - 60) - pMaskY);
-
-    // geometry for mask (not added to display list)
-    const pMaskGfx = this.make.graphics({ x: pMaskX, y: pMaskY, add: false });
-    pMaskGfx.fillStyle(0xffffff, 1);
-    pMaskGfx.fillRect(0, 0, pMaskWidth, pMaskHeight);
-    const pMaskShape = new Phaser.Display.Masks.GeometryMask(this, pMaskGfx);
-
-    // list container, positioned exactly at mask origin
-    pList = this.add.container(pMaskX, pMaskY).setDepth(contentDepth).setMask(pMaskShape);
-
-    // --- PERSONAL ROWS ---
-    const PERSONAL_TEXT_WIDTH = 140;
-    const BUTTON_START_X = Math.max(0, pMaskWidth - 80);
-    const BUTTON_SPACING = 28;
-    let personalCursorY = 0;
-    personalItems.forEach((item) => {
-      const baseItem = Items[item.id] || {};
-      const y = personalCursorY;
-
-      const dispP = this._formatItemDisplay(item);
-
-      const rowP = this.add.text(0, y, `• ${dispP.name}`, {
-        fontSize: '12px',
-        color: dispP.color,
-        wordWrap: { width: PERSONAL_TEXT_WIDTH, useAdvancedWrap: true }
-      })
-        .setInteractive({ useHandCursor: true })
-        .on('pointerover', (p) => {
-          if (!this._isPointerWithinArea(p, pArea)) return;
-          this.tooltip.show(p.worldX, p.worldY, {
-            title: dispP.title || dispP.name,
-            titleColor: dispP.titleColor || dispP.color,
-            lines: dispP.lines
-          });
-          this._hoveredCompareItem = { baseItem, item };
-          this._hoveredPrimaryItem = item;
-          this._updateCompareTooltip(baseItem, item);
-        })
-        .on('pointerout', () => {
-          this.tooltip.hide();
-          this._hoveredCompareItem = null;
-            this._hoveredPrimaryItem = null;
-          this.compareTooltip?.hide();
-        })
-        .on('pointermove', (p) => {
-          if (!this._isPointerWithinArea(p, pArea)) {
-            this.tooltip.hide();
-            this._hoveredCompareItem = null;
-            this._hoveredPrimaryItem = null;
-            this.compareTooltip?.hide();
-            return;
-          }
-          this.tooltip.show(p.worldX, p.worldY, {
-            title: dispP.title || dispP.name,
-            titleColor: dispP.titleColor || dispP.color,
-            lines: dispP.lines
-          });
-          this._hoveredCompareItem = { baseItem, item };
-          this._hoveredPrimaryItem = item;
-          this._updateCompareTooltip(baseItem, item);
-        });
-
-      const rowBgHeight = rowP.height + 6;
-      const rowBg = this.add.rectangle(0, y - 3, pMaskWidth, rowBgHeight, 0x000000, 0.35)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, 0xffffff, 0.18);
-
-      pList.add(rowBg);
-      pList.add(rowP);
-
-      const tBtn = this.add.text(BUTTON_START_X, y, '[T]', { fontSize: '12px', color: '#88ccff' })
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', (p) => {
-          if (!this._isPointerWithinArea(p, pArea)) return;
-          SoundManager.play('dullClick');
-          const updatedChar = InventorySystem.removeItemFromCharacter(char, item);
-          // Not a new acquisition — it was already the player's, just held by
-          // a character. Marking it would make the unseen dot meaningless.
-          InventorySystem.addGlobalItem(item, { isNew: false });
-          this._commitChar(updatedChar);
-          this.scene.restart();
-        });
-
-      if (baseItem.type === 'weapon' && !baseItem.natural) {
-        const mBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[M]', { fontSize: '12px', color: '#88ff88' })
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', (p) => {
-            if (!this._isPointerWithinArea(p, pArea)) return;
-            SoundManager.play('dullClick');
-            const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponMain');
-            this._commitChar(updatedChar);
-            this.scene.restart();
-          });
-
-        const offColor = (baseItem.hands === 2 || mainHandIsTwoHand) ? '#555555' : '#88ff88';
-        const oBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING * 2, y, '[O]', { fontSize: '12px', color: offColor });
-        if (!(baseItem.hands === 2 || mainHandIsTwoHand)) {
-          oBtn.setInteractive({ useHandCursor: true })
-            .on('pointerdown', (p) => {
-              if (!this._isPointerWithinArea(p, pArea)) return;
-              SoundManager.play('dullClick');
-              const updatedChar = InventorySystem.equipItemFromInventory(char, item, 'weaponOff');
-              this._commitChar(updatedChar);
-              this.scene.restart();
-            });
-        }
-        pList.add([tBtn, mBtn, oBtn]);
-      } else if (!baseItem.natural && ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
-        const eqBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[Eq]', { fontSize: '12px', color: '#88ff88' })
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', (p) => {
-            if (!this._isPointerWithinArea(p, pArea)) return;
-            SoundManager.play('dullClick');
-            const updatedChar = InventorySystem.equipItemFromInventory(char, item, baseItem.slot);
-            this._commitChar(updatedChar);
-            this.scene.restart();
-          });
-        pList.add([tBtn, eqBtn]);
-      } else {
-        const useBtn = this.add.text(BUTTON_START_X + BUTTON_SPACING, y, '[Use]', { fontSize: '12px', color: '#888888' });
-        pList.add([tBtn, useBtn]);
-      }
-
-      personalCursorY += rowP.height + 6;
-    });
-
-    // fallback when empty so you can see *something*
-    if (personalItems.length === 0) {
-      const empty = this.add.text(0, 0, '(Empty)', { fontSize: '12px', color: '#777777' });
-      pList.add(empty);
-      personalCursorY = empty.height;
-    }
-
-    pContentHeight = Math.max(personalCursorY, 0);
-    pVisibleHeight = pMaskHeight;
-    // anchor the list to the mask origin (don't move it to 0)
-    pList.setPosition(pMaskX, pMaskY);
-    // Same remembered-offset restore as the global list above.
-    if (pContentHeight > pVisibleHeight) {
-      const maxScrollP = pContentHeight - pVisibleHeight;
-      pList.y = Phaser.Math.Clamp(
-        pMaskY - Phaser.Math.Clamp(this._personalScrollY, 0, maxScrollP),
-        pMaskY - maxScrollP, pMaskY);
-    }
-
-    // define personal area rect for scrolling (no Graphics object needed)
-    pArea = { x: pMaskX, y: pMaskY, w: pMaskWidth, h: pVisibleHeight };
 
     } // end party.length > 0 guard
 
@@ -657,7 +488,7 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     const listStartY = gToggleY + 44;
 
-    let inventoryItems = [...(GameState.inventory || [])];
+    let inventoryItems = InventorySystem.bagItems();
     inventoryItems = this._applyGlobalFilters(inventoryItems);
     inventoryItems = this._applyGlobalSort(inventoryItems);
 
@@ -794,7 +625,7 @@ export default class InventoryOverlay extends Phaser.Scene {
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, gArea)) return;
               SoundManager.play('dullClick');
-              InventorySystem.removeGlobalItem(item);
+              InventorySystem.takeFromBag(item);
               this._armedDiscard = null;
               GameState.save('autosave');
               this.scene.restart();
@@ -832,7 +663,7 @@ export default class InventoryOverlay extends Phaser.Scene {
       // own, e.g. to stash part of it. Armed per row like [Discard]: the
       // row shows [-] N [+] [Split off] [x]. Stacks never show [Transfer],
       // so x=270 is free on these rows.
-      if (isStackable(item) && stackQty(item) > 1) {
+      if (isStackable(item) && stackQty(item) > 1 && !InventorySystem.isHuntingBag()) {
         const have = stackQty(item);
         const armed = this._splitRow?.item === item ? this._splitRow : null;
         const btn = (x, label, color, onClick) => {
@@ -910,18 +741,8 @@ export default class InventoryOverlay extends Phaser.Scene {
           listContainer.add(lockLabel);
         }
       } else if (char && !baseItem.stackable) {
-        // Stackables (Rations) stay in the camp bag: that is where the Hunt
-        // screen packs them from, and a hunter's own pack does not stack.
-        const transferBtn = this.add.text(270, y, '[Transfer]', { fontSize: '14px', color: '#88ccff' })
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', (p) => {
-            if (!this._isPointerWithinArea(p, gArea)) return;
-            SoundManager.play('dullClick');
-            InventorySystem.removeGlobalItem(item);
-            const updatedChar = InventorySystem.addItemToCharacter(char, item);
-            this._commitChar(updatedChar);
-            this.scene.restart();
-          });
+        // Equip straight from the active bag (batch 4b chunk 7: no personal
+        // inventory, and on a hunt the bag is the hunt pack).
 
         if (baseItem.type === 'weapon' && !baseItem.natural) {
           const mBtn = this.add.text(420, y, '[Main]', { fontSize: '14px', color: '#88ff88' })
@@ -929,9 +750,7 @@ export default class InventoryOverlay extends Phaser.Scene {
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, gArea)) return;
               SoundManager.play('dullClick');
-              InventorySystem.removeGlobalItem(item);
-              let updatedChar = InventorySystem.addItemToCharacter(char, item);
-              updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponMain');
+              const updatedChar = InventorySystem.equipFromBag(char, item, 'weaponMain');
               this._commitChar(updatedChar);
               this.scene.restart();
             });
@@ -943,28 +762,24 @@ export default class InventoryOverlay extends Phaser.Scene {
               .on('pointerdown', (p) => {
                 if (!this._isPointerWithinArea(p, gArea)) return;
                 SoundManager.play('dullClick');
-                InventorySystem.removeGlobalItem(item);
-                let updatedChar = InventorySystem.addItemToCharacter(char, item);
-                updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, 'weaponOff');
+                const updatedChar = InventorySystem.equipFromBag(char, item, 'weaponOff');
                 this._commitChar(updatedChar);
                 this.scene.restart();
               });
           }
-          listContainer.add([transferBtn, mBtn, oBtn]);
+          listContainer.add([mBtn, oBtn]);
         } else if (!baseItem.natural && ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(baseItem.slot)) {
           const eqBtn = this.add.text(420, y, '[Eq]', { fontSize: '14px', color: '#88ff88' })
             .setInteractive({ useHandCursor: true })
             .on('pointerdown', (p) => {
               if (!this._isPointerWithinArea(p, gArea)) return;
               SoundManager.play('dullClick');
-              InventorySystem.removeGlobalItem(item);
-              let updatedChar = InventorySystem.addItemToCharacter(char, item);
-              updatedChar = InventorySystem.equipItemFromInventory(updatedChar, item, baseItem.slot);
+              const updatedChar = InventorySystem.equipFromBag(char, item, baseItem.slot);
               this._commitChar(updatedChar);
               this.scene.restart();
             });
 
-          listContainer.add([transferBtn, eqBtn]);
+          listContainer.add([eqBtn]);
         } else if (baseItem.onUse === 'grant_proficiency') {
           // Proficiency token: permanent +1 to one stat's Proficiency for this
           // character. Writes to char.proficiencyBonus, which getProficiency
@@ -978,7 +793,7 @@ export default class InventoryOverlay extends Phaser.Scene {
               SoundManager.play('select');
               this._grantProficiency(char, item, baseItem);
             });
-          listContainer.add([transferBtn, useBtn]);
+          listContainer.add([useBtn]);
         } else if (baseItem.onUse === 'respec_stats') {
           // TESTING ITEM (Tonic of Reflection). This whole branch and the item
           // definition are the only support it needs - remove both and nothing
@@ -992,10 +807,10 @@ export default class InventoryOverlay extends Phaser.Scene {
               SoundManager.play('select');
               this._respecCharacter(char, item);
             });
-          listContainer.add([transferBtn, useBtn]);
+          listContainer.add([useBtn]);
         } else {
           const useBtn = this.add.text(420, y, '[Use]', { fontSize: '14px', color: '#888888' });
-          listContainer.add([transferBtn, useBtn]);
+          listContainer.add([useBtn]);
         }
       }
 
@@ -1264,8 +1079,8 @@ export default class InventoryOverlay extends Phaser.Scene {
     }
 
     // Live result count — the fastest way to tell a typo from an empty result.
-    const total = (GameState.inventory || []).length;
-    const shown = this._applyGlobalFilters([...(GameState.inventory || [])]).length;
+    const total = InventorySystem.bagItems().length;
+    const shown = this._applyGlobalFilters(InventorySystem.bagItems()).length;
     if (this.searchQuery) {
       this.add.text(x + width + 10, y + 3, `${shown} / ${total}`, {
         fontSize: '11px', color: shown ? '#88cc88' : '#cc7777'
@@ -1332,7 +1147,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     const amount = Math.max(1, baseItem.proficiencyAmount | 0);
     char.proficiencyBonus = char.proficiencyBonus || {};
     char.proficiencyBonus[stat] = (char.proficiencyBonus[stat] | 0) + amount;
-    InventorySystem.removeGlobalItem(item);
+    InventorySystem.takeFromBag(item);
     this._commitChar(char);
     GameState.save('autosave');
     this.scene.restart();
@@ -1350,7 +1165,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     rebuildCharacterStats(char);
     char.currentHP = Math.min(char.currentHP, char.maxHP);
     char.currentMP = Math.min(char.currentMP, char.maxMP);
-    InventorySystem.removeGlobalItem(item);
+    InventorySystem.takeFromBag(item);
     this._commitChar(char);
     GameState.save('autosave');
     this.scene.restart();

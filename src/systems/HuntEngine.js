@@ -103,7 +103,7 @@ import { rollWeather } from '../../data/weather.js';
 import { getZone } from '../../data/zones.js';
 import { isPassable, GROUNDS } from '../../data/grounds.js';
 import { Items } from '../../data/items.js';
-import { addToList, makeStack, takeFromList, countInList, partMaterial } from './ItemStacks.js';
+import { addToList, makeStack, takeFromList, countInList, partMaterial, stackQty } from './ItemStacks.js';
 import { HARVEST_TIME, MEAT_TIME_PER_BODY, MEAT_BY_GRADE, SPECIMEN_RARITIES } from '../../data/beastParts.js';
 import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { parseTileId, distance } from './HexGrid.js';
@@ -1770,6 +1770,41 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (!label) return { ok: false };
       this._log({ kind: 'quest_done', label: String(label), time: s.time });
       return { ok: true };
+    },
+
+    // ── The pack as the party's bag while hunting (owner 2026-09-29, batch 4b
+    // chunk 7: the camp bag stays in camp). The inventory screen and combat
+    // items reach it through InventorySystem's active bag. Live instances:
+    // what is changed here is the hunt's, and is saved with it.
+
+    /** Everything in the pack, brought and found, as one list (a new array of the live entries). */
+    packItems() {
+      return [...s.pack.brought, ...s.pack.found];
+    },
+
+    /** Take one entry out of the pack (to equip it). Returns it, or null. */
+    takeFromPack(instanceId) {
+      for (const list of [s.pack.brought, s.pack.found]) {
+        const i = list.findIndex(it => it?.instanceId === instanceId);
+        if (i >= 0) return list.splice(i, 1)[0];
+      }
+      return null;
+    },
+
+    /** Put an entry in the pack (gear taken off mid-hunt): at risk like the rest. */
+    putInPack(inst) {
+      if (!isItemInstance(inst)) return false;
+      addToList(s.pack.found, inst);
+      return true;
+    },
+
+    /** Use up one unit of an entry (a combat item): a stack loses one, the last removes it. */
+    spendOneFromPack(instanceId) {
+      const it = this.packItems().find(x => x?.instanceId === instanceId);
+      if (!it) return false;
+      if (stackQty(it) > 1) it.qty = stackQty(it) - 1;
+      else this.takeFromPack(instanceId);
+      return true;
     },
 
     /** Walk away from the open event (decision 3): nothing is lost, the site stays. */

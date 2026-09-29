@@ -5175,12 +5175,13 @@ export default class CombatScene extends Phaser.Scene {
   // see data/items.js) rendered as skill-shaped buttons so the existing
   // submenu/targeting UI (_openSubmenu, _useAbility, _enterTargetingMode)
   // can display and dispatch them without any changes of its own. Reads the
-  // GLOBAL inventory (GameState.inventory), same as every other consumable —
-  // there's no per-character inventory concept for these.
+  // party's ACTIVE bag (InventorySystem.bagItems): the hunt pack in a hunt
+  // fight, the camp bag otherwise (batch 4b chunk 7: what you did not pack
+  // stays in camp).
   _getCombatUsableItemAbilities(char) {
     if (char?.isEnemy) return [];
     const counts = new Map();
-    for (const inst of (GameState.inventory || [])) {
+    for (const inst of InventorySystem.bagItems()) {
       if (!isItemInstance(inst)) continue;
       const base = Items[inst.id];
       if (!base?.combatUse) continue;
@@ -5216,7 +5217,7 @@ export default class CombatScene extends Phaser.Scene {
     // empty module singleton — so requiring a copy there refused every chant in
     // co-op with "doesn't have it anymore". The server rules on the board; the
     // acting client is what spends the item.
-    const inst = (GameState.inventory || []).find(it => isItemInstance(it) && it.id === ability.id);
+    const inst = InventorySystem.bagItems().find(it => isItemInstance(it) && it.id === ability.id);
     if (!inst && !this.isAuthoritativeHost) {
       this._log(`${user.name} doesn't have ${ability.name} anymore.`);
       return;
@@ -5305,7 +5306,7 @@ export default class CombatScene extends Phaser.Scene {
     // No instance on a co-op server, which owns the action economy but nobody's
     // bag. The action is still spent; the item is spent by the acting client.
     // One unit: a stack of chants or draughts loses one, not the whole stack.
-    if (inst) InventorySystem.spendOneGlobal(inst);
+    if (inst) InventorySystem.spendOneFromBag(inst);
   }
 
 
@@ -5570,8 +5571,11 @@ export default class CombatScene extends Phaser.Scene {
       // it goes back in the bag rather than being lost to a mis-click.
       const inst = this._pendingItemUse;
       this._pendingItemUse = null;
-      if (inst && !(GameState.inventory || []).includes(inst)) {
-        (GameState.inventory = GameState.inventory || []).push(inst);
+      // A stack was spent one unit, not removed: give that unit back.
+      if (inst) {
+        const bag = (GameState.inventory = GameState.inventory || []);
+        if (bag.includes(inst)) inst.qty = stackQty(inst) + 1;
+        else bag.push(inst);
         this._log(`${Items[inst.id]?.name || 'The item'} was not used and is still yours.`);
       }
     }));
@@ -6213,7 +6217,7 @@ export default class CombatScene extends Phaser.Scene {
       // resolves it (the untargeted branch below).
       const itemTarget = target || (ability.itemUse && !ability.requiresTarget ? actor : null);
       if (ability.itemUse && itemTarget) {
-        this._pendingItemUse = (GameState.inventory || [])
+        this._pendingItemUse = InventorySystem.bagItems()
           .find(it => isItemInstance(it) && it.id === ability.id) || null;
         this._useCombatItem(actor, itemTarget, ability);
       }

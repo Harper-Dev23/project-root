@@ -66,6 +66,74 @@ export const InventorySystem = {
     this.removeGlobalItem(item);
   },
 
+  // ===== The active bag (owner 2026-09-29, batch 4b chunk 7) =====
+  // What the party can reach now: the hunt pack while a map hunt is on (the
+  // camp bag stays in camp), the camp bag otherwise. The inventory screen,
+  // equipping and combat items all go through these.
+
+  /** True while the active bag is a hunt pack. */
+  isHuntingBag() {
+    return !!GameState.packHunt();
+  },
+
+  /** The active bag's entries (a new array of the live instances). */
+  bagItems() {
+    const h = GameState.packHunt();
+    return h ? h.packItems() : [...(GameState.inventory || [])];
+  },
+
+  /** Take an entry out of the active bag. Returns it, or null. */
+  takeFromBag(item) {
+    const h = GameState.packHunt();
+    if (h) return h.takeFromPack(item?.instanceId);
+    if (!this.hasGlobalItem(item)) return null;
+    this.removeGlobalItem(item);
+    return item;
+  },
+
+  /** Put an entry in the active bag (merging stacks). Not a new find. */
+  putInBag(item) {
+    const h = GameState.packHunt();
+    if (h) return h.putInPack(item);
+    this.addGlobalItem(item, { isNew: false });
+    return true;
+  },
+
+  /** Use up one unit of an entry in the active bag (a combat item). */
+  spendOneFromBag(item) {
+    const h = GameState.packHunt();
+    if (h) return h.spendOneFromPack(item?.instanceId);
+    this.spendOneGlobal(item);
+    return true;
+  },
+
+  /**
+   * Equip an entry of the active bag on a hunter (no personal inventory in
+   * between, batch 4b chunk 7). Whatever it displaces goes back into the
+   * active bag. A refused equip (a two-hander in the off hand) leaves the
+   * entry in the bag. Returns the rebuilt character.
+   */
+  equipFromBag(character, item, slot) {
+    if (!character || !item) return character;
+    const inst = this.takeFromBag(item);
+    if (!inst) return character;
+    const updated = equipItem({ ...character, inventory: [] }, inst, slot);
+    const landed = Object.values(updated?.equipment || {}).some(e => e?.instanceId === inst.instanceId);
+    if (!landed) { this.putInBag(inst); return character; }
+    for (const displaced of updated.inventory || []) this.putInBag(displaced);
+    updated.inventory = [];
+    return rebuildCharacterStats(updated) || updated;
+  },
+
+  /** Take a hunter's gear off, into the active bag. Returns the rebuilt character. */
+  unequipToBag(character, slot) {
+    const item = character?.equipment?.[slot];
+    if (!item) return character;
+    const updated = { ...character, equipment: { ...(character.equipment || {}), [slot]: null } };
+    this.putInBag(item);
+    return rebuildCharacterStats(updated) || updated;
+  },
+
   hasGlobalItem(item) {
     if (isItemInstance(item)) {
       return (GameState.inventory || []).some(it => it.instanceId === item.instanceId);

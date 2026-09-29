@@ -361,6 +361,45 @@ console.log('=== consumables stack (owner\'s playtest 2026-09-29) ===');
   check('...and the stash too', GameState.tribeStash.styx.length === 1 && units(GameState.tribeStash.styx, 'identify_armor_tonic') === 2);
 }
 
+console.log('=== the hunt pack is the bag while hunting (batch 4b chunk 7) ===');
+{
+  freshGame();
+  InventorySystem.addGlobalItem('sever_head');
+  const hero = GameState.party[0];
+  check('in camp, the active bag is the camp bag', !InventorySystem.isHuntingBag() && InventorySystem.bagItems().some(i => i.id === 'sever_head'));
+  const draughts = S.makeStack('healing_draught', 2);
+  HuntManager.startMap('reeds_of_gethsemane', { plan: { objective: 'scout', size: 'small' }, supplies: 60, bring: [draughts], seed: 4242 });
+  const ids = () => InventorySystem.bagItems().map(i => i.id);
+  check('on a hunt, the bag is the pack: what was packed, not the camp bag', InventorySystem.isHuntingBag()
+    && ids().includes('healing_draught') && !ids().includes('sever_head'), ids().join());
+  const helm = createItemInstance('simple_helm_str', { rollAffixes: false });
+  InventorySystem.putInBag(helm);
+  const oldHead = hero.equipment?.head || null;
+  const worn = InventorySystem.equipFromBag(hero, helm, 'head');
+  check('a helm found on the hunt is equipped from the pack, and leaves it', worn.equipment.head?.instanceId === helm.instanceId
+    && !InventorySystem.bagItems().some(i => i.instanceId === helm.instanceId));
+  check('...what it replaced goes into the pack, at risk', !oldHead || InventorySystem.bagItems().some(i => i.instanceId === oldHead.instanceId));
+  check('...and no personal inventory is involved', (worn.inventory || []).length === 0);
+  const off = InventorySystem.unequipToBag(worn, 'head');
+  check('taking it off puts it in the pack', !off.equipment.head && InventorySystem.bagItems().some(i => i.instanceId === helm.instanceId));
+  const d = InventorySystem.bagItems().find(i => i.id === 'healing_draught');
+  InventorySystem.spendOneFromBag(d);
+  check('a draught drunk in a hunt fight comes out of the pack', S.stackQty(InventorySystem.bagItems().find(i => i.id === 'healing_draught')) === 1
+    && S.countInList(GameState.inventory, 'healing_draught') === 0);
+  HuntManager.current().exit?.();
+}
+{
+  // A save with personal inventories: they fold into the camp bag on load.
+  freshGame();
+  const hero = GameState.characters[0];
+  hero.inventory = [createItemInstance('simple_helm_str', { rollAffixes: false }), S.makeStack('sever_ring', 2)];
+  GameState.save('personal');
+  GameState.load('personal');
+  const back = GameState.characters[0];
+  check("loading folds a hunter's personal items into the camp bag", (back.inventory || []).length === 0
+    && GameState.inventory.some(i => i.id === 'simple_helm_str') && S.countInList(GameState.inventory, 'sever_ring') === 2);
+}
+
 console.log('=== the Bone Pile buys beast parts (batch 4b chunk 6) ===');
 {
   const { partOffer, sellPart, sellAllParts } = await import('../../src/systems/PartsBuyer.js');

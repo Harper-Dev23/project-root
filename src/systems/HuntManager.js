@@ -732,6 +732,9 @@ GameState.attachHunt({
   // A map hunt is saved with `mode: 'map'` beside HuntEngine's own shape; an
   // Advance hunt is saved as it always was, with no mode (SAVE_VERSION 7).
   serialize: () => (!_current ? null : _mode === 'map' ? { mode: 'map', ..._current.serialize() } : _current.serialize()),
+  // The map hunt whose pack is the party's bag while hunting (batch 4b chunk
+  // 7; InventorySystem's active bag), or null in camp.
+  packHunt: () => (_mode === 'map' && _current && !_current.view().finished ? _current : null),
   restore: (data) => {
     _current = null;
     _mode = null;
