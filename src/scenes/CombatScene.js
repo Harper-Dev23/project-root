@@ -18,7 +18,7 @@ import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { ENEMY_TYPES } from '../../data/enemyTypes.js';
 import { Items, RARITY_ORDER } from '../../data/items.js';
 import { SKILLS, getWeaponSkillsFor, getClassSkillsFor, getReactionSkillsFor, applyRhythmStack, dislodgeLodges } from '../../data/skills.js';
-import { GRIEF, ROOTED, rootedStacks } from '../../data/historicEffects.js';
+import { GRIEF, ROOTED, rootedStacks, historicMechanicLines } from '../../data/historicEffects.js';
 
 // Character / Items / AI systems
 import ProgressionManager from '../systems/ProgressionManager.js';
@@ -31,6 +31,7 @@ import { rollHuntDropRarity } from '../systems/PartyStats.js';
 import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { huntFightXP } from '../systems/HuntObjectives.js';
+import { createCombatStats } from '../systems/CombatStats.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase, mergeHistoricEffects } from '../systems/ItemFactory.js';
 import { stackQty } from '../systems/ItemStacks.js';
 import { makeRng, isSeed } from '../systems/seededRng.js';
@@ -351,6 +352,10 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   init(data) {
+    // A new fight, a new battle report (the scene instance is reused).
+    this._combatStats = null;
+    this._battleReport = undefined;
+    this._battleReportFor = undefined;
     this.partyData = data.party || [];
     this.combatType = data.mode || 'normal';
     this.isTraining = (this.combatType === 'pit');
@@ -6251,6 +6256,8 @@ export default class CombatScene extends Phaser.Scene {
 
     const ability = this._findSkillFor(actor, intent.skill);
     if (!ability) return refuse('no such skill');
+    // The battle report (batch 4b chunk 8): the skill names the biggest hit.
+    this._statsFor(actor)?.noteSkill(actor, ability.name || ability.id);
 
     // --- the gates _useAbility applies before targeting ---------------------
     const type = ability.actionCost || 'major';
@@ -13353,6 +13360,28 @@ export default class CombatScene extends Phaser.Scene {
     tryAct();
   }
 
+  /**
+   * The fight's battle report tracker (src/systems/CombatStats.js; batch 4b
+   * chunk 8), made on first use with its first window open on `actor`.
+   * Solo only for now: a co-op board is the server's (null there).
+   */
+  _statsFor(actor) {
+    if (this.isCoop || this.isAuthoritativeHost) return null;
+    if (!this._combatStats) {
+      const party = this._party().filter(Boolean);
+      this._combatStats = createCombatStats(party, {
+        isEnemyOf: (u) => !!(u?.isEnemy || this.enemies?.includes(u)) && !party.includes(u),
+      });
+      this._combatStats.begin(actor || this._currentChar?.(), this._allBoardUnits());
+    }
+    return this._combatStats;
+  }
+
+  /** Everyone on the board, both sides, for the battle report's HP snapshots. */
+  _allBoardUnits() {
+    return [...(this._party() || []), ...(this.enemies || [])].filter(Boolean);
+  }
+
   _advanceTurn(opts = {}) {
     if (this.combatEnded) return;
 
@@ -13427,6 +13456,9 @@ export default class CombatScene extends Phaser.Scene {
 
     // 2) Advance to next actor
     this._inEndOfTurnTicks = false;
+    // The battle report: the turn that just ended (its end-of-turn ticks
+    // included) is credited now; the next actor's window opens below.
+    this._combatStats?.end();
 
     if (!this.turnOrder?.length) return;                  // avoid modulo 0
     if (previousCharDied || actorDiedMidTurn) {
@@ -13445,6 +13477,8 @@ export default class CombatScene extends Phaser.Scene {
 
     const char = this._currentChar?.();
     if (!char) return;
+    if (this._combatStats) this._combatStats.begin(char, this._allBoardUnits());
+    else this._statsFor(char);
     // Belt and braces: a new actor is now established, so ANY value still
     // sitting in the mid-turn-death flag is stale by definition — this call
     // already consumed the one it was given. Clearing it here means End Turn
@@ -14065,74 +14099,82 @@ export default class CombatScene extends Phaser.Scene {
   }
 
   _renderVictoryScreen(title, xpSummary, progressReward, loot, leveledUpNames) {
+    // Rebuilt for the owner's playtest (2026-09-29, batch 4b chunk 8): three
+    // boxes (rewards, loot, the battle report) instead of one centred column.
     this._dimBattlefieldForPostCombat();
     const { width, height } = this.sys.game.canvas;
+    const D = 2001;
+    const FONT = 'Georgia, Gelasio, serif';
+    const report = this._finishBattleReport();
 
-    // Victory title
-    this.add.text(width / 2, height / 2 - 130, title, {
-      fontSize: '48px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5).setDepth(2001);
+    this.add.text(width / 2, 56, title, { fontSize: '44px', color: '#ffffff', fontStyle: 'bold', fontFamily: FONT }).setOrigin(0.5).setDepth(D);
 
-    let cursorY = height / 2 - 65;
+    const box = (x, y, w, h, heading) => {
+      const g = this.add.graphics().setDepth(D - 1);
+      g.fillStyle(0x121218, 1).fillRoundedRect(x, y, w, h, 8);
+      g.lineStyle(1, 0x7a6448, 1).strokeRoundedRect(x, y, w, h, 8);
+      this.add.text(x + 14, y + 10, heading, { fontSize: '16px', color: '#e0c890', fontStyle: 'bold', fontFamily: FONT }).setDepth(D);
+      return { x, y, w, h };
+    };
+    const margin = 90, gap = 24, topY = 96, topH = 250;
+    const colW = (width - margin * 2 - gap) / 2;
 
-    // XP summary list
-    xpSummary.forEach(line => {
-      this.add.text(width / 2, cursorY, line, {
-        fontSize: '18px', color: '#ffff66'
-      }).setOrigin(0.5).setDepth(2001);
-      cursorY += 24;
+    // ── Rewards ──
+    const rw = box(margin, topY, colW, topH, 'Rewards');
+    let ry = rw.y + 40;
+    const line = (text, color, size = 15) => {
+      const t = this.add.text(rw.x + 16, ry, text, { fontSize: `${size}px`, color, fontFamily: FONT, wordWrap: { width: rw.w - 32 } }).setDepth(D);
+      ry += t.height + 5;
+    };
+    xpSummary.forEach(l => line(l, '#ffff66'));
+    if (!xpSummary.length) line('No experience from this fight.', '#888888');
+    if (leveledUpNames?.length) line(`Level up: ${leveledUpNames.join(', ')}`, '#88ff88');
+    if (progressReward?.firstCompletion && progressReward.huntTicketsEarned > 0) {
+      line(`+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, '#ffe066');
+    }
+    // Reckoning Marks are NOT gated on firstCompletion: re-running a tier pays.
+    if (progressReward?.marksEarned > 0) {
+      line(`+${progressReward.marksEarned} Reckoning Mark${progressReward.marksEarned > 1 ? 's' : ''}  (Total: ${progressReward.marksTotal})`, '#c8a0ff');
+    }
+
+    // ── Loot ── hover for the tooltip (Alt: affix detail), Inspect on Historic items.
+    const lw = box(margin + colW + gap, topY, colW, topH, this.huntFight ? 'Loot (into your hunt pack)' : 'Loot');
+    let ly = lw.y + 40;
+    if (!loot.length) this.add.text(lw.x + 16, ly, 'Nothing dropped.', { fontSize: '15px', color: '#888888', fontFamily: FONT }).setDepth(D);
+    loot.forEach(inst => {
+      if (ly > lw.y + lw.h - 26) return;
+      const rarity = inst.rarity || 'common';
+      const color = RARITY_COLORS[rarity] || '#cccccc';
+      const base = Items[inst.id];
+      const name = inst.displayName || base?.name || inst.id;
+      const row = this.add.text(lw.x + 16, ly, `${name}  [${rarity.charAt(0).toUpperCase() + rarity.slice(1)}]`, {
+        fontSize: '15px', color, fontFamily: FONT, wordWrap: { width: lw.w - 120 },
+      }).setDepth(D).setInteractive({ useHandCursor: true });
+      const show = (p) => {
+        const data = this._buildItemTooltipData(inst, false);
+        this._hoveredEquipTip = { inst, isEnemy: false, x: p.worldX, y: p.worldY };
+        this.tooltip?.container?.setDepth(3500);
+        if (data) this.tooltip?.show(p.worldX, p.worldY, data);
+      };
+      row.on('pointerover', show).on('pointermove', show)
+        .on('pointerout', () => { this._hoveredEquipTip = null; this.tooltip?.hide(); });
+      if (inst.historic || base?.historic) {
+        const ins = this.add.text(lw.x + lw.w - 16, ly, '[✦ Inspect]', { fontSize: '14px', color: '#d4a017', fontFamily: FONT })
+          .setOrigin(1, 0).setDepth(D).setInteractive({ useHandCursor: true })
+          .on('pointerdown', () => this._showLootInspect(inst));
+        ins.on('pointerover', () => ins.setColor('#ffe066')).on('pointerout', () => ins.setColor('#d4a017'));
+      }
+      ly += row.height + 6;
     });
 
-    // Hunt Ticket reward (first completion only)
-    if (progressReward?.firstCompletion && progressReward.huntTicketsEarned > 0) {
-      cursorY += 6;
-      this.add.text(width / 2, cursorY,
-        `+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, {
-          fontSize: '18px', color: '#ffe066', fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(2001);
-      cursorY += 28;
-    }
+    // ── Battle report ──
+    // Beside the combat log, which stays live after a fight (co-op chat too).
+    const bottomBtnY = height - 44;
+    const reportX = this._postCombatReportX(margin);
+    this._renderBattleReport(report, reportX, topY + topH + gap, width - margin - reportX, bottomBtnY - 36 - (topY + topH + gap), D);
 
-    // Reckoning Marks — NOT gated on firstCompletion, unlike Hunt Tickets
-    // above: re-running a Reckoning tier is supposed to pay, and this line is
-    // the only feedback that it did.
-    if (progressReward?.marksEarned > 0) {
-      cursorY += 6;
-      this.add.text(width / 2, cursorY,
-        `+${progressReward.marksEarned} Reckoning Mark${progressReward.marksEarned > 1 ? 's' : ''}  (Total: ${progressReward.marksTotal})`, {
-          fontSize: '18px', color: '#c8a0ff', fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(2001);
-      cursorY += 28;
-    }
-
-    // Loot section — only shown if there are droppable items
-    if (loot.length > 0) {
-      cursorY += 10;
-      this.add.text(width / 2, cursorY, '— Loot —', {
-        fontSize: '16px', color: '#aaaaaa', fontStyle: 'italic'
-      }).setOrigin(0.5).setDepth(2001);
-      cursorY += 22;
-
-      loot.forEach(inst => {
-        const rarity = inst.rarity || 'common';
-        const color = RARITY_COLORS[rarity] || '#cccccc';
-        const rarityLabel = rarity.charAt(0).toUpperCase() + rarity.slice(1);
-        // Show item type/slot + rarity; full name revealed now that it's in your inventory
-        const base = Items[inst.id];
-        const slotLabel = base?.slot ? `(${base.slot})` : '';
-        const displayName = inst.displayName || base?.name || inst.id;
-        this.add.text(width / 2, cursorY, `${displayName} ${slotLabel}  [${rarityLabel}]`, {
-          fontSize: '16px', color
-        }).setOrigin(0.5).setDepth(2001);
-        cursorY += 22;
-      });
-    }
-
-    // Return button — anchored below all content with some breathing room
-    const btnY = Math.max(cursorY + 30, height / 2 + 120);
-    createButton(this, width / 2, btnY, this.huntFight ? 'Back to the Hunt' : 'Return to Camp', () => {
+    // Return button, at the foot of the screen.
+    createButton(this, width / 2, bottomBtnY, this.huntFight ? 'Back to the Hunt' : 'Return to Camp', () => {
       this._reviveKnockedOutParty();
       this.scene.stop('CombatScene');
       this.scene.wake('TownScene');
@@ -14155,6 +14197,111 @@ export default class CombatScene extends Phaser.Scene {
         this.scene.bringToTop('UIScene'); // keep the persistent banners/panel above the Hub
       }
     }, 'primary', { fontSize: '24px' }).setDepth(2001);
+  }
+
+  /**
+   * Close the battle report (batch 4b chunk 8) and credit it, once, to the
+   * record of every Historic or renown item a hunter wears (kills, damage
+   * dealt, battles carried: the Inspect window's numbers, never filled
+   * before). Null in co-op, where the fight is the server's.
+   */
+  _finishBattleReport() {
+    if (this._battleReport !== undefined && this._battleReportFor === this._combatStats) return this._battleReport;
+    const stats = this._combatStats;
+    this._battleReportFor = stats;
+    if (!stats) { this._battleReport = null; return null; }
+    stats.end();
+    const report = stats.report();
+    for (const hunter of this._party() || []) {
+      const r = stats.rowFor(hunter);
+      for (const inst of Object.values(hunter?.equipment || {})) {
+        if (!isItemInstance(inst) || !inst.history) continue;
+        inst.history.kills = (inst.history.kills || 0) + (r?.kills || 0);
+        inst.history.damageDealt = (inst.history.damageDealt || 0) + (r?.damage || 0);
+        inst.history.battlesCarried = (inst.history.battlesCarried || 0) + 1;
+      }
+    }
+    this._battleReport = report;
+    return report;
+  }
+
+  /** Where the battle report box starts: just right of the combat log, which stays live after a fight. */
+  _postCombatReportX(fallback) {
+    const c = this.combatLogConfig;
+    return c ? c.x + c.width + 20 : fallback;
+  }
+
+  /** The battle report box: a row per hunter, the party total, the highlight. */
+  _renderBattleReport(report, x, y, w, h, D) {
+    const FONT = 'Georgia, Gelasio, serif';
+    const g = this.add.graphics().setDepth(D - 1);
+    g.fillStyle(0x121218, 1).fillRoundedRect(x, y, w, h, 8);
+    g.lineStyle(1, 0x7a6448, 1).strokeRoundedRect(x, y, w, h, 8);
+    this.add.text(x + 14, y + 10, 'Battle Report', { fontSize: '16px', color: '#e0c890', fontStyle: 'bold', fontFamily: FONT }).setDepth(D);
+    if (!report) {
+      this.add.text(x + 16, y + 40, 'Not recorded for this fight.', { fontSize: '14px', color: '#888888', fontFamily: FONT }).setDepth(D);
+      return;
+    }
+    if (report.highlight) {
+      const hl = report.highlight;
+      this.add.text(x + w - 16, y + 12, `Biggest hit: ${hl.name}'s ${hl.skill || 'attack'}, ${hl.amount}`, {
+        fontSize: '14px', color: '#ffe066', fontFamily: FONT,
+      }).setOrigin(1, 0).setDepth(D);
+    }
+    const cols = [
+      ['Hunter', 0.00], ['Damage', 0.26], ['Biggest hit', 0.40], ['Healing', 0.64], ['Taken', 0.76], ['Kills', 0.88],
+    ];
+    const cx = (f) => x + 16 + (w - 32) * f;
+    let ry = y + 40;
+    cols.forEach(([label, f]) => this.add.text(cx(f), ry, label, { fontSize: '13px', color: '#9aa4b4', fontFamily: FONT }).setDepth(D));
+    ry += 22;
+    const rowH = Math.max(18, Math.min(22, Math.floor((h - 90) / Math.max(1, report.rows.length + 1))));
+    const cell = (f, text, color = '#dddddd') => this.add.text(cx(f), ry, String(text), { fontSize: '14px', color, fontFamily: FONT }).setDepth(D);
+    for (const r of report.rows) {
+      cell(0.00, r.name, '#ffffff');
+      cell(0.26, r.damage);
+      cell(0.40, r.biggest ? `${r.biggest}${r.biggestSkill ? ` (${r.biggestSkill})` : ''}` : '—');
+      cell(0.64, r.healing, r.healing ? '#88ff88' : '#dddddd');
+      cell(0.76, r.taken, r.taken ? '#ff9d9d' : '#dddddd');
+      cell(0.88, r.kills);
+      ry += rowH;
+    }
+    const t = report.total;
+    cell(0.00, 'Party', '#e0c890');
+    cell(0.26, report.effects ? `${t.damage} (${report.effects} from effects)` : t.damage, '#e0c890');
+    cell(0.64, t.healing, '#e0c890');
+    cell(0.76, t.taken, '#e0c890');
+    cell(0.88, t.kills, '#e0c890');
+  }
+
+  /** Inspect a Historic item from the loot box: the same rule as the inventory's Inspect. */
+  _showLootInspect(inst) {
+    if (this._lootInspect) { this._lootInspect.destroy(true); this._lootInspect = null; }
+    const { width, height } = this.sys.game.canvas;
+    const FONT = 'Georgia, Gelasio, serif';
+    const base = Items[inst.id] || {};
+    const c = this.add.container(0, 0).setDepth(3200);
+    this._lootInspect = c;
+    const pw = 480, ph = 330, px = (width - pw) / 2, py = (height - ph) / 2;
+    const dim = this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0).setInteractive();
+    const g = this.add.graphics();
+    g.fillStyle(0x0d0d0d, 0.97).fillRoundedRect(px, py, pw, ph, 8);
+    g.lineStyle(2, 0xd4a017, 1).strokeRoundedRect(px, py, pw, ph, 8);
+    const lines = [];
+    if (ProgressionManager.historicExplained()) {
+      if (base.description) lines.push(base.description, '');
+      lines.push(...historicMechanicLines(getItemComputedData(inst)?.effects || base.effects || {}, base.grantsSkills || []));
+    } else {
+      ProgressionManager.requestHistoricTalk(inst.id);
+      lines.push('Something in it resists your understanding.', '', 'Perhaps the Elders could shed light on what it holds.', '', '— Visit the Elders\' Tower —');
+    }
+    const title = this.add.text(width / 2, py + 16, `✦ ${base.name || inst.id}`, { fontSize: '17px', color: '#d4a017', fontStyle: 'bold', fontFamily: FONT }).setOrigin(0.5, 0);
+    const body = this.add.text(px + 20, py + 52, lines.join('\n'), { fontSize: '13px', color: '#dddddd', fontFamily: FONT, wordWrap: { width: pw - 40 }, lineSpacing: 3 });
+    const close = this.add.text(width / 2, py + ph - 34, '[ Close ]', { fontSize: '14px', color: '#aaaaaa', fontFamily: FONT }).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+    const shut = () => { c.destroy(true); this._lootInspect = null; };
+    close.on('pointerdown', shut);
+    dim.on('pointerdown', shut);
+    c.add([dim, g, title, body, close]);
   }
 
   _showDefeatScreen(title = 'Defeat', subtitle = '', opts = {}) {
@@ -14182,6 +14329,10 @@ export default class CombatScene extends Phaser.Scene {
         color: '#ffffff'
       }).setOrigin(0.5).setDepth(3001);
     }
+
+    // The battle report (batch 4b chunk 8): what happened matters most after a loss.
+    const report = this._finishBattleReport();
+    if (report) { const rx = this._postCombatReportX(90); this._renderBattleReport(report, rx, height / 2 + 124, width - 90 - rx, height / 2 - 140, 3001); }
 
     // Button builder
     const makeBtn = (label, x, onClick) => {
