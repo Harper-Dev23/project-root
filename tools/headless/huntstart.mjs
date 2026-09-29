@@ -84,6 +84,16 @@ PM.setQuestFlag(REEDS_DONE);
 check('a hunt afterwards does not offer him twice', PM.offerSamuelAfterHunt() === false);
 
 console.log('');
+console.log('=== the Hunt Gate marker ===');
+PM.reset();
+clear(['training_encounter_1']);
+check('before the tribe choice: no marker', getStepForFlag('hunt_gate', PM) === null);
+PM.tribe = 'styx';
+check('after it: the marker stands for Hunt the Reeds', getStepForFlag('hunt_gate', PM)?.step.id === 'wr_hunt');
+PM.setQuestFlag(REEDS_DONE);
+check('the first hunt done: gone', getStepForFlag('hunt_gate', PM) === null);
+
+console.log('');
 console.log('=== region quest rewards ===');
 const rewarded = QUEST_LINES.flatMap(q => q.steps).filter(s => s.reward);
 check('every reward pays tickets and says something',

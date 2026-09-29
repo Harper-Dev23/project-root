@@ -69,7 +69,7 @@ export const QUEST_LINES = [
         id:          'prologue_equip',
         flags:          ['vendor_row'],
         label:       'Equip Yourself',
-        description: 'Visit the vendor row and prepare your party for the trials ahead.',
+        description: "Visit the vendor row and prepare your party for the trials ahead: weapons at the Ironbinder's Stand, armour at the Watershade Armory. Both are free.",
         isActive:   (pm) => pm.hasQuestFlag('vendor_row'),
         // `vendor_row` is only ever set BY visiting the Elder, so a player who
         // walks straight past him to the Combat Pit could never satisfy either
@@ -132,7 +132,9 @@ export const QUEST_LINES = [
         id:          'lr_s2',
         flags:          ['combat_pit'],
         label:       'Complete the Second Trial',
-        description: 'Return to the Combat Pit. Your tribe is watching.',
+        // Either route opens the Bone Pile (FEATURE_UNLOCKS orFirstHunt), so
+        // say so, or a hunt-led player reads this as the only way on.
+        description: 'Return to the Combat Pit for the second trial, or take your first hunt from the Hunt Gate. Either opens the Bone Pile.',
         isActive:   (pm) => pm.tribe !== null && !sc(pm, 'training_encounter_2'),
         isComplete: (pm) => sc(pm, 'training_encounter_2'),
       },
@@ -305,9 +307,12 @@ export const QUEST_LINES = [
     steps: [
       {
         id:          'wr_hunt',
+        // A marker over the Hunt Gate while this is the step to do (TownScene
+        // DERIVED_MARKERS: no save flag, the step's own state decides).
+        flags:       ['hunt_gate'],
         label:       'Hunt the Reeds',
         reward:      { huntTickets: 4, text: 'You came back from the Reeds with the work done. The camp pays for that.' },
-        description: 'Take a hunt plan into the Reeds of Gethsemane and see its main objective done.',
+        description: 'Leave by the Hunt Gate with a hunt plan for the Reeds of Gethsemane, and see its main objective done.',
         isActive:   (pm) => pm.tribe !== null,
         isComplete: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
       },

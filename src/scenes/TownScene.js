@@ -66,6 +66,13 @@ const QUEST_FLAG_POSITIONS = {
   zafaar_leader_handin:     { x: 928,  y: 76  },
 };
 
+// Markers with no save flag behind them: shown while a quest step that lists
+// the id in its `flags` is active (getStepForFlag), so the step's own state
+// decides and nothing has to set or clear anything.
+const DERIVED_MARKERS = {
+  hunt_gate: { x: 506, y: 104 },   // The Weeping in the Reeds' "Hunt the Reeds"
+};
+
 // Flag IDs for the four lodge "explore before choosing" prompts.
 const LODGE_FLAGS = ['lodge_styx', 'lodge_zafaar', 'lodge_elseth', 'lodge_lesse'];
 
@@ -1086,6 +1093,12 @@ export default class TownScene extends Phaser.Scene {
     const byTile = new Map();
     for (const [flagId, cfg] of Object.entries(QUEST_FLAG_POSITIONS)) {
       if (!ProgressionManager.hasQuestFlag(flagId)) continue;
+      const key = cfg.x + ',' + cfg.y;
+      if (!byTile.has(key)) byTile.set(key, { x: cfg.x, y: cfg.y, flags: [] });
+      byTile.get(key).flags.push(flagId);
+    }
+    for (const [flagId, cfg] of Object.entries(DERIVED_MARKERS)) {
+      if (!getStepForFlag(flagId, ProgressionManager)) continue;
       const key = cfg.x + ',' + cfg.y;
       if (!byTile.has(key)) byTile.set(key, { x: cfg.x, y: cfg.y, flags: [] });
       byTile.get(key).flags.push(flagId);
