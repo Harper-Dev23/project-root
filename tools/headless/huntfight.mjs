@@ -274,7 +274,12 @@ function winIt(m, planLabel) {
   const spec = bonus.h.fightSpec();
   check('of Learning: xpPercent 100 doubles the fight\'s XP pool', spec.xpPool === FIGHT_XP_POOL * 2);
   const rb = winIt(bonus);
-  check('...and that doubled pool is what the hunters are paid (twice the plain fight\'s XP)', rb.xpGain === 2 * r.xpGain, `+${rb.xpGain} vs +${r.xpGain}`);
+  // Compared on the SAME fight: the two meets roll slightly different enemies,
+  // so their payouts are not exactly 2x apart (with a pool of 16 they happened to be).
+  const doubled = rb.host._calculateXPReward(), plain = huntFightXP({ ...spec, xpPool: FIGHT_XP_POOL }, rb.host.enemies);
+  check('...and that doubled pool is what this fight pays (twice its plain XP), and it reached the hunters',
+    doubled === huntFightXP(spec, rb.host.enemies) && Math.abs(doubled - 2 * plain) <= 1 && rb.xpGain > r.xpGain,
+    `${doubled} vs 2 x ${plain}; party +${rb.xpGain} vs +${r.xpGain}`);
   check('of the Hunt: huntPointsPercent 50 pays 1.5x the beast fight\'s Hunt Points', same(bonus.world.paid, [Math.round(BEAST_FIGHT_HUNT_POINTS * 1.5)]), JSON.stringify(bonus.world.paid));
   check('of Plenty: lootQualityPercent reaches the loadout roll through Item Rarity', bonus.h.stats().itemRarity > beastMeet.h.stats().itemRarity);
 }

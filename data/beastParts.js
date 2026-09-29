@@ -216,10 +216,12 @@ export const PART_RARITY_BY_GRADE = {
 /** In-game time units to take one part: core parts are the careful work,
  *  peripheral ones quicker. Foraging's harvest-time curve cuts it
  *  (partyStats().harvestTimePercent). */
-export const HARVEST_TIME = { core: 1, peripheral: 0.5 };
+// Halved (owner 2026-09-29, batch 4b chunk 5): a whole Vowback took about 20
+// of a 24-unit day.
+export const HARVEST_TIME = { core: 0.5, peripheral: 0.25 };
 
 /** Butchering for meat: time per body, before the same curve. */
-export const MEAT_TIME_PER_BODY = 0.25;
+export const MEAT_TIME_PER_BODY = 0.125;
 
 /** Meat per body by grade, before Foraging's yield curve and "of the Harvest"
  *  (partyStats().forageYieldPercent). Cultists give none. */

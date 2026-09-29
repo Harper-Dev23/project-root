@@ -143,7 +143,10 @@ export const MAP_HUNT_STATE_VERSION = 1;
  *  16 after the owner's first Reeds playtest (2026-09-27: a full clear of the
  *  starter zone should take a level-1 party to about level 4-5, and took it
  *  to 6). HuntObjectives.huntFightXP scales it by the fight's difficulty. */
-export const FIGHT_XP_POOL = 16;
+// 28 after the owner's level 1 playtest (2026-09-29, batch 4b chunk 5): a hard
+// fight like the Vowback paid almost nothing beside the completion pool,
+// which went down a fifth to keep a hunt's total about the same.
+export const FIGHT_XP_POOL = 28;
 
 /** Hunt Points for a won beast fight, before the plan's huntPointsPercent.
  *  The Advance loop's number; cultists pay none (their reward is gear). */

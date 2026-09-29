@@ -176,12 +176,26 @@ const RARITY_COLORS = {
 
 
 // Bias the gamble towards testing higher rarity tiers but still mostly uncommon/rare
+// Owner 2026-09-29 (batch 4b chunk 5): 71% Uncommon / 23% Rare / 6% Epic
+// (was 60 / 30 / 10), and a Hunt Ticket gamble costs TICKET_GAMBLE_COST.
 function randomRarityForGamble() {
+  const r = Math.random();
+  if (r < 0.71) return 'uncommon';
+  if (r < 0.94) return 'rare';
+  return 'epic';
+}
+
+// The Greenhollow Satchel's plan rarities: the gamble's old odds, kept apart
+// when the gamble's changed (60 / 30 / 10).
+function randomRarityForPlanStock() {
   const r = Math.random();
   if (r < 0.60) return 'uncommon';
   if (r < 0.90) return 'rare';
   return 'epic';
 }
+
+/** Hunt Tickets per Bone Pile gamble (was 1). Marked gambles cost 1 Mark, unchanged. */
+const TICKET_GAMBLE_COST = 2;
 
 // Reckoning Marks buy a better roll than a Hunt Ticket does, on both axes:
 // this rarity table (which decides affix COUNT) and a higher item level plus
@@ -1934,7 +1948,7 @@ export default class TownScene extends Phaser.Scene {
       createGambleButton({
         label: 'Weapons',
         y: 220,
-        cost: 1,
+        cost: TICKET_GAMBLE_COST,
         maxBaseTier: TICKET_MAX_BASE_TIER,
         poolGetter: () => getWeaponIdPool(),
         // 1-in-100: the pile gives up something that remembers being alive.
@@ -1951,7 +1965,7 @@ export default class TownScene extends Phaser.Scene {
       createGambleButton({
         label: 'Armor',
         y: 250,
-        cost: 1,
+        cost: TICKET_GAMBLE_COST,
         maxBaseTier: TICKET_MAX_BASE_TIER,
         poolGetter: () => getArmorIdPool(),
         emptyMessage: 'No armor IDs found in Items.js.'
@@ -2173,7 +2187,7 @@ export default class TownScene extends Phaser.Scene {
    *  the Hunt screen, so none is sold here. */
   _huntPlanStock() {
     const partyLevel = Math.max(1, ...(GameState.party || []).map(c => c?.level || 1));
-    const stock = currentPlanStock(ProgressionManager, { partyLevel, rollRarity: randomRarityForGamble });
+    const stock = currentPlanStock(ProgressionManager, { partyLevel, rollRarity: randomRarityForPlanStock });
     return stock.slots
       .map((s, planSlot) => ({ ...s, planSlot }))
       .filter(s => !s.sold)
@@ -2949,7 +2963,7 @@ export default class TownScene extends Phaser.Scene {
         body:
           '"The hunters who return from the Sacred Hunt bring more than trophies.\n' +
           'They bring currency — Hunt Tickets, earned through trial and combat.\n\n' +
-          'The Bonepile keeper accepts these tickets. One ticket, one gamble.\n' +
+          'The Bonepile keeper accepts these tickets. Two tickets, one gamble.\n' +
           'The rewards are unpredictable, but rarely worthless.\n\n' +
           'You will find the Bonepile in the vendor row. Spend wisely — or not at all.\n' +
           'Luck has its own wisdom."',

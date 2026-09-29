@@ -53,7 +53,9 @@ export function completionRewardPercent(planMods = {}, itemLevel = 1) {
  * in bands, and a full clear of a starter zone should take a level-1 party to
  * about level 4-5. Later zones get their own scaling (the scaling pass).
  */
-export const COMPLETION_XP_POOL = { small: 120, medium: 220, large: 320 };
+// Down a fifth, as fights went 16 -> 28 (owner 2026-09-29, batch 4b chunk 5):
+// fights carry more of a hunt's XP, and a typical hunt pays about the same.
+export const COMPLETION_XP_POOL = { small: 96, medium: 176, large: 256 };
 
 /** Difficulty for XP (owner, 2026-09-27): the enemy side's total max HP, which
  *  carries grade, pack size and family, against the Reeds' average fight
