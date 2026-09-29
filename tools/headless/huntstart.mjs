@@ -222,9 +222,11 @@ check('a save round trip does not pay it again', claimQuestRewards(PM).length ==
 PM.setQuestFlag('vowback_slain');
 PM.setQuestFlag('choir_heard');
 paid = claimQuestRewards(PM);
-check('two steps finished on one hunt: both paid, in quest order',
-  paid.map(p => p.stepId).join() === 'wr_apex,hb_singing'
-    && PM.huntTickets === before + step('wr_apex').reward.huntTickets + step('hb_singing').reward.huntTickets,
+// A Vowback kill carries the Cull and Apex steps with it (a save past them, chunk 2).
+const chain = ['wr_cull', 'wr_apexpool', 'wr_apex', 'hb_singing'];
+check('steps finished on one hunt: all paid, in quest order',
+  paid.map(p => p.stepId).join() === chain.join()
+    && PM.huntTickets === before + chain.reduce((n, id) => n + step(id).reward.huntTickets, 0),
   paid.map(p => p.stepId).join());
 check('the Combat Pit still pays its own tickets', PM.onScenarioComplete('training_encounter_1').huntTicketsEarned === 12);
 
@@ -243,21 +245,36 @@ console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
   check('...and the rest of its line waits on the report', getStepState(step('wr_apex'), PM) === 'upcoming');
   check("...so the next hunt holds no Vowback site yet", !questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
   check('a first step of another line is not held back (Singing Under the Water)', getStepState(step('hb_singing'), PM) === 'active');
+  const bag = [];
+  const firstPaid = claimQuestRewards(PM, { addItem: (i) => bag.push(i), itemLevel: 2 });
+  check('reported: paid, done, and Thin the Reeds is the step', getStepState(step('wr_hunt'), PM) === 'completed'
+    && PM.huntTickets === step('wr_hunt').reward.huntTickets && getStepState(step('wr_cull'), PM) === 'active'
+    && getStepState(step('wr_apex'), PM) === 'upcoming');
+  check('...the Elder hands over a Common Small Cull plan, and says so', bag.length === 1 && bag[0].id === 'plan_cull_small'
+    && bag[0].rarity === 'common' && bag[0].itemLevel === 2 && questRewardMessage(firstPaid).includes('Small Cull Warrant'),
+    JSON.stringify(bag.map(i => [i.id, i.rarity, i.itemLevel])));
+  PM.setQuestFlag('hunted_cull:reeds_of_gethsemane');
+  claimQuestRewards(PM, { addItem: (i) => bag.push(i) });
+  check("a Cull hunt reported: an Uncommon Small Apex plan, and The Reeds' Apex is the step",
+    bag[1]?.id === 'plan_apex_small' && bag[1]?.rarity === 'uncommon' && getStepState(step('wr_apexpool'), PM) === 'active'
+    && !questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
+  PM.setQuestFlag('apex_slain:reeds_of_gethsemane');
+  check('an apex killed on another plan does not count: it takes an Apex plan', getStepState(step('wr_apexpool'), PM) === 'active');
+  PM.setQuestFlag('hunted_apex:reeds_of_gethsemane');
   claimQuestRewards(PM);
-  check('reported: paid, done, and the Vowback is the step', getStepState(step('wr_hunt'), PM) === 'completed'
-    && PM.huntTickets === step('wr_hunt').reward.huntTickets && getStepState(step('wr_apex'), PM) === 'active'
+  check('an Apex hunt reported: the Vowback is the step, and the next hunt marks it', getStepState(step('wr_apex'), PM) === 'active'
     && questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
   // Several done before a visit (a save from before reports): all in one visit, in order.
   PM.reset();
   PM.tribe = 'styx';
   ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard'].forEach(f => PM.setQuestFlag(f));
   const all = claimQuestRewards(PM).map(p => p.stepId).join();
-  check('three steps done before the visit are reported together, in order', all === 'wr_hunt,wr_apex,wr_pools', all);
+  check('steps done before the visit are reported together, in order', all === 'wr_hunt,wr_cull,wr_apexpool,wr_apex,wr_pools', all);
   // The lodge's first offer waits on the report too.
   PM.reset();
   PM.tribe = 'styx';
   ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard', 'mb_signs_found'].forEach(f => PM.setQuestFlag(f));
-  PM.completedQuestSteps = ['wr_hunt', 'wr_apex', 'wr_pools'];
+  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_apex', 'wr_pools'];
   check("Signs of the Mourner not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs'));
   claimQuestRewards(PM);
   check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs')

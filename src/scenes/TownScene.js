@@ -2754,7 +2754,12 @@ export default class TownScene extends Phaser.Scene {
           // reported is paid here, and its questline moves on. Other lore he
           // has waiting (leveling, the Bone Pile) keeps its marker for the
           // next visit.
-          const paid = claimQuestRewards(ProgressionManager);
+          // A plan he hands over (chunk 2) goes in the camp bag at the party's level.
+          const partyLevel = Math.max(1, ...(GameState.party || []).map(c => c?.level || 1));
+          const paid = claimQuestRewards(ProgressionManager, {
+            addItem: (inst) => InventorySystem.addGlobalItem(inst),
+            itemLevel: partyLevel,
+          });
           GameState.save('autosave');
           this._buildQuestFlags();
           this.scene.get('UIScene')?.refreshUI?.();

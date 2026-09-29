@@ -108,6 +108,9 @@ console.log('=== The Weeping in the Reeds, step by step ===');
   const trail = [];
   trail.push([active(), sites()]);
   pm.add(regionFlag('hunted', REEDS)); trail.push([active(), sites()]);
+  // A Cull hunt, then an Apex hunt (batch 4b chunk 2), before the Vowback.
+  pm.add(regionFlag('hunted_cull', REEDS)); trail.push([active(), sites()]);
+  pm.add(regionFlag('hunted_apex', REEDS)); trail.push([active(), sites()]);
   // The Vowback Crocodile is a quest beast (owner 2026-09-27), not the apex.
   pm.add('vowback_slain'); trail.push([active(), sites()]);
   pm.add('mb_weeping_heard'); trail.push([active(), sites()]);
@@ -115,6 +118,8 @@ console.log('=== The Weeping in the Reeds, step by step ===');
   pm.add('mb_offer_taken'); trail.push([active(), sites()]);
   const want = [
     [['wr_hunt'], []],
+    [['wr_cull'], []],
+    [['wr_apexpool'], []],
     [['wr_apex'], ['beast:vowback_crocodile']],
     [['wr_pools'], ['reeds_lament_pools']],
     [['wr_signs'], ['reeds_mourner_signs']],
@@ -244,11 +249,13 @@ console.log('=== the engine sets region flags ===');
   const h3 = restoreMapHunt(d2, w);
   const ex = h3.exit();
   check('a clean exit with the primary done sets hunted:<region>', ex.ok && ex.reward.primaryDone && w.pm.hasQuestFlag('hunted:' + REEDS));
+  check('...and hunted_<objective>:<region> for its plan type (an Apex plan here)',
+    w.pm.hasQuestFlag('hunted_apex:' + REEDS) && !w.pm.hasQuestFlag('hunted_cull:' + REEDS));
 
   // The Vowback Crocodile (owner 2026-09-27): a quest beast on the map while
   // its step is active, marked as a quest site; its kill sets vowback_slain.
   {
-    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS)]));
+    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS), regionFlag('hunted_cull', REEDS), regionFlag('hunted_apex', REEDS)]));
     const hv = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 91 }, wv);
     const dv = hv.serialize();
     const vb = dv.map.occupants.find(o => o.quest === 'wr_apex');

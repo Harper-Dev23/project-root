@@ -1076,7 +1076,11 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (!s.map.tiles[s.pos].exit) return { ok: false, reason: 'you can only leave from the entry or a Waystone' };
       const reward = exitReward(s);
       const pack = this._finish('exit');
-      if (reward.primaryDone) world.questFlag?.(regionFlag('hunted', s.zoneId), true);
+      if (reward.primaryDone) {
+        world.questFlag?.(regionFlag('hunted', s.zoneId), true);
+        // And by plan type (batch 4b chunk 2: the Reeds' Cull and Apex steps).
+        if (s.plan?.objective) world.questFlag?.(regionFlag(`hunted_${s.plan.objective}`, s.zoneId), true);
+      }
       // The region's Omen meter (14b-3): booked at a clean exit only.
       if (reward.omens > 0) world.omens?.(s.zoneId, reward.omens);
       if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);

@@ -10,6 +10,8 @@
 // (through world.questFlag, so a co-op hunt's ledger carries them to every
 // player's own save):
 //   hunted:<zone>      a clean exit with the primary objective done
+//   hunted_<objective>:<zone>  the same, by the plan's objective (scout,
+//                      cull, apex, ...; batch 4b chunk 2)
 //   apex_slain:<zone>  the region's apex killed
 // Quests read them like any other flag.
 

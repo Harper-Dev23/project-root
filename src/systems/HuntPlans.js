@@ -62,6 +62,20 @@ export function describePlanHeader(inst) {
 // Sells plans up to party level; the Hunt Ticket price rises with item level
 // (HUNT_PLANS, owner 2026-09-17). Numbers are placeholders until chunk 13.
 
+/**
+ * The map sizes the vendor sells (owner 2026-09-29, batch 4b chunk 2): Small
+ * from the start, Medium once the Vowback is reported to the Elder (quests.js
+ * wr_apex), Large after the first boss (the engine's boss_slain:<id>). A
+ * stand-in save with no report record (a harness's) sells every size.
+ */
+export function planSizesOpen(pm) {
+  if (typeof pm?.isStepDone !== 'function') return ['small', 'medium', 'large'];
+  const sizes = ['small'];
+  if (pm.isStepDone('wr_apex')) sizes.push('medium');
+  if ((pm.questFlags || []).some(f => f.startsWith('boss_slain:'))) sizes.push('large');
+  return sizes;
+}
+
 /** Hunt Tickets for a plan: one per item level. */
 export function planPrice(itemLevel) {
   return Math.max(1, Math.floor(itemLevel));
@@ -79,10 +93,12 @@ export function currentPlanStock(pm, { partyLevel, rollRarity, rng = Math.random
   const s = pm.planVendorStock;
   // A stock saved before chunk 8c has no base per slot: roll it again, once.
   if (s && s.day === day && Array.isArray(s.slots) && s.slots.every(sl => PLAN_BASE_IDS.includes(sl.base))) return s;
+  const sizes = planSizesOpen(pm);
+  const bases = PLAN_BASE_IDS.filter(id => sizes.includes(Items[id].size));
   pm.planVendorStock = {
     day,
     slots: planStockLevels(partyLevel, 3, rng).map(itemLevel => ({
-      base: PLAN_BASE_IDS[Math.floor(rng() * PLAN_BASE_IDS.length)],
+      base: bases[Math.floor(rng() * bases.length)],
       rarity: rollRarity(), itemLevel, cost: planPrice(itemLevel), sold: false,
     })),
   };

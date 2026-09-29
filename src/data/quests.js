@@ -33,6 +33,9 @@ const historicTalkPending = (pm) => !historicExplained(pm)
   && (pm.hasQuestFlag('historic_elder_visit') || pm.hasQuestFlag('bloodthirster_elder_visit'));
 const firstHistoricFlag = (pm) => (pm.questFlags || []).find(f => f.startsWith('historic_first:')) || null;
 
+/** The Vowback is dead (or, a save from before it was a quest beast, the Lament Pools were reached). */
+const pastTheVowback = (pm) => pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('mb_weeping_heard');
+
 /** The Unconfessed Dead is open: the Vowback slain, or (a save that opened
  *  it before batch 4) the Reeds' apex. */
 const ghostPartyOpen = (pm) =>
@@ -328,10 +331,32 @@ export const QUEST_LINES = [
         // DERIVED_MARKERS: no save flag, the step's own state decides).
         flags:       ['hunt_gate'],
         label:       'Hunt the Reeds',
-        reward:      { huntTickets: 4, text: 'You came back from the Reeds with the work done. The camp pays for that.' },
+        reward:      { huntTickets: 4, item: { base: 'plan_cull_small', rarity: 'common' },
+                       text: 'You came back from the Reeds with the work done. The camp pays for that. Now thin the herds: take this plan.' },
         description: 'Leave by the Hunt Gate with a hunt plan for the Reeds of Gethsemane, and see its main objective done.',
         isActive:   (pm) => pm.tribe !== null,
         isComplete: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+      },
+      // The Reeds' opening (owner 2026-09-29, batch 4b chunk 2): the Elder hands
+      // out a Cull plan, then an Apex plan, so the first named fight comes
+      // after two plan types and guaranteed fights. A save past the Vowback
+      // counts both as done (they pay on its next visit to the tower).
+      {
+        id:          'wr_cull',
+        label:       'Thin the Reeds',
+        reward:      { huntTickets: 4, item: { base: 'plan_apex_small', rarity: 'uncommon' },
+                       text: 'The herds are thinner, and the reeds quieter for it. Something larger rules them. Find it.' },
+        description: 'Take a Cull plan into the Reeds of Gethsemane and see its main objective done. Elder Varek gave you one; the Greenhollow Satchel sells them too.',
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('hunted_cull:reeds_of_gethsemane') || pastTheVowback(pm),
+      },
+      {
+        id:          'wr_apexpool',
+        label:       "The Reeds' Apex",
+        reward:      { huntTickets: 6, text: 'So that is what rules the reeds. The mourners speak of something older still.' },
+        description: 'Take an Apex plan into the Reeds of Gethsemane and kill the beast that rules them. Elder Varek gave you one.',
+        isActive:   (pm) => pm.hasQuestFlag('hunted_cull:reeds_of_gethsemane'),
+        isComplete: (pm) => pm.hasQuestFlag('hunted_apex:reeds_of_gethsemane') || pastTheVowback(pm),
       },
       {
         id:          'wr_apex',
@@ -341,9 +366,10 @@ export const QUEST_LINES = [
         // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
         // A save that reached the Lament Pools before this counts as done.
         huntSite:    { zone: 'reeds_of_gethsemane', beast: { ...VOWBACK_CROCODILE, flag: 'vowback_slain' }, far: true },
-        // Either way "Hunt the Reeds" completes, so neither leaves a dead step.
-        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
-        isComplete: (pm) => pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('mb_weeping_heard'),
+        // After The Reeds' Apex (chunk 2). An apex kill made before that step
+        // existed still counts; the report of the step before it gates it anyway.
+        isActive:   (pm) => pm.hasQuestFlag('hunted_apex:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isComplete: (pm) => pastTheVowback(pm),
       },
       {
         id:          'wr_pools',

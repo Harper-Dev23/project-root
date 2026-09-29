@@ -312,10 +312,28 @@ console.log('=== the vendor: up to party level, price rising with item level ===
   const baseTally = {};
   for (let d = 0; d < 400; d++) {
     PM.reset();
+    // Every size open (batch 4b chunk 2): the Vowback reported, a boss slain.
+    PM.markStepDone('wr_apex');
+    PM.setQuestFlag('boss_slain:mourning_beast');
     for (const sl of currentPlanStock(PM, { partyLevel: 5, rollRarity, rng: makeRng(7000 + d) }).slots) baseTally[sl.base] = (baseTally[sl.base] || 0) + 1;
   }
   check('over 400 days of stock, every slot has a base and all 15 are sold', Object.keys(baseTally).length === 15
     && Object.keys(baseTally).every(b => PLAN_BASE_IDS.includes(b)), `min ${Math.min(...Object.values(baseTally))} / max ${Math.max(...Object.values(baseTally))} of 1200 slots`);
+  // Sizes open with progress (batch 4b chunk 2).
+  const sizesSold = () => {
+    const seen = new Set();
+    for (let d = 0; d < 60; d++) {
+      PM.planVendorStock = null;
+      for (const sl of currentPlanStock(PM, { partyLevel: 5, rollRarity, rng: makeRng(9100 + d) }).slots) seen.add(Items[sl.base].size);
+    }
+    return [...seen].sort().join();
+  };
+  PM.reset();
+  check('a new save: the Satchel sells Small plans only', sizesSold() === 'small', sizesSold());
+  PM.markStepDone('wr_apex');
+  check('the Vowback reported: Medium too', sizesSold() === 'medium,small', sizesSold());
+  PM.setQuestFlag('boss_slain:ghost_party');
+  check('a first boss slain: Large too', sizesSold() === 'large,medium,small', sizesSold());
   PM.reset();
   const today = currentPlanStock(PM, { partyLevel: 4, rollRarity, rng: makeRng(11) });
   PM.planVendorStock = { day: today.day, slots: today.slots.map(({ base, ...rest }) => ({ ...rest })) };
