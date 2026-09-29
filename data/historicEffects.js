@@ -21,6 +21,7 @@
 //                  necrotic counts: the Le'sse lesson)
 //   ROOTED         CombatScene._rootedTurnEnd / _moveUnitToSlot /
 //                  _addStatusEffects (Immobilize immunity)
+//   historicMechanicLines  the Inspect window (InventoryOverlay._openInspectModal)
 
 /** Grief: -8% damage dealt per stack, 3 stacks at most, 3 of its own turns. */
 export const GRIEF = { perStackPct: -8, maxStacks: 3, turns: 3 };
@@ -48,4 +49,43 @@ export function griefStacks(unit) {
 /** Rooted stacks on a unit now. */
 export function rootedStacks(unit) {
   return (unit?.statusEffects || []).find(se => se?.id === 'rooted')?.stacks || 0;
+}
+
+/**
+ * What a Historic item's own mechanics do, in lines short enough for the
+ * Inspect window (InventoryOverlay._openInspectModal; owner's playtest
+ * 2026-09-29: the Unconfessed never said what its curse did). `effects` is
+ * the item's merged view (getItemComputedData: the base's fixed effects with
+ * this copy's rolls over them); the numbers are the ones above, so the text
+ * cannot drift from what combat does. A line starting "✦" heads a mechanic.
+ */
+export function historicMechanicLines(effects = {}, grantsSkills = []) {
+  const out = [];
+  if (effects.onHitGrief) {
+    out.push(`✦ Heavy Heart: each hit lays ${effects.onHitGrief} Grief.`,
+      `   Grief: ${GRIEF.perStackPct}% damage dealt a stack, up to ${GRIEF.maxStacks},`,
+      `   for ${GRIEF.turns} of the target's turns.`);
+  }
+  if ((grantsSkills || []).includes('sorrowfall')) {
+    out.push(`✦ Grants Sorrowfall: ${SORROWFALL.basePct}% weapon damage,`,
+      `   +${SORROWFALL.perGriefPct}% for each Grief stack on the target.`,
+      `   ${SORROWFALL.flashing.stat} Proficiency ${SORROWFALL.flashing.value}: lays ${GRIEF.maxStacks} Grief first.`);
+  }
+  if (effects.curseOnHitTarget || effects.curseOnHitSelf) {
+    out.push(`✦ On hit: ${effects.curseOnHitTarget || 0} Curse on the target,`,
+      `   and ${effects.curseOnHitSelf || 0} on its wearer.`);
+  }
+  if (effects.unshrivenPct) {
+    out.push(`✦ Curse of the Unshriven: while its wearer is Cursed,`,
+      `   +${effects.unshrivenPct}% necrotic damage dealt AND taken,`,
+      `   growing with the curse meter, to ${UNSHRIVEN.cap}% at most.`);
+  }
+  if (effects.rooted) {
+    const p = ROOTED.perStack;
+    out.push(`✦ Rooted: a stack for each turn ended in place,`,
+      `   up to ${ROOTED.maxStacks}: +${p.PhysicalResist} Physical Resist, +${p.Resilience} Resilience each.`,
+      `   Moving, or being moved, clears it.`,
+      `   While Rooted, Immobilize does not take.`);
+  }
+  return out;
 }

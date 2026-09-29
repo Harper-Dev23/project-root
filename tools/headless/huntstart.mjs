@@ -128,6 +128,46 @@ console.log('=== The Unconfessed Dead opens on the Vowback ===');
 }
 
 console.log('');
+console.log("=== the Elder's Historic talk is about the first one found ===");
+{
+  const { getQuestState } = await import('../../src/data/quests.js');
+  const quest = (id) => QUEST_LINES.find(q => q.id === id);
+  PM.reset();
+  check('a first inspect of Burden of Dreams asks for the talk', PM.requestHistoricTalk('burden_of_dreams') === true
+    && PM.historicTalkPending() && PM.firstHistoricId() === 'burden_of_dreams');
+  check("...its marker is the Historic Items line's, not the Bloodthirster's",
+    getStepForFlag('historic_elder_visit', PM)?.step.id === 'hi_elder' && !quest('bloodthirster_intro').isAvailable(PM),
+    getStepForFlag('historic_elder_visit', PM)?.step.id);
+  check('...asked once', PM.requestHistoricTalk('the_unconfessed') === false && PM.firstHistoricId() === 'burden_of_dreams');
+  PM.giveHistoricTalk();
+  check('the talk given: explained, and the next inspect is the step', PM.historicExplained() && !PM.historicTalkPending()
+    && getStepState(step('hi_reinspect'), PM) === 'active');
+  check('...no second talk for the next item', PM.requestHistoricTalk('bloodthirster') === false);
+  PM.setQuestFlag('bloodthirster_quest');
+  check('the Bloodthirster later: its introduction starts at the re-inspect',
+    getStepState(step('bt_intro_elder'), PM) === 'completed' && getStepState(step('bt_intro_reinspect'), PM) === 'active');
+
+  PM.reset();
+  PM.questFlags = ['bloodthirster_quest', 'bloodthirster_elder_visit'];
+  check('a save from before: its Bloodthirster talk is still waiting', PM.historicTalkPending()
+    && PM.firstHistoricId() === 'bloodthirster' && getStepForFlag('bloodthirster_elder_visit', PM)?.step.id === 'bt_intro_elder');
+  PM.giveHistoricTalk();
+  check('...and given, it reads explained', PM.historicExplained() && !PM.hasQuestFlag('bloodthirster_elder_visit'));
+  PM.reset();
+  PM.questFlags = ['bloodthirster_quest', 'bloodthirster_elder_explained'];
+  check('a save that heard it before: explained, nothing pending', PM.historicExplained() && !PM.historicTalkPending()
+    && PM.requestHistoricTalk('burden_of_dreams') === false);
+
+  const { Items } = await import('../../data/items.js');
+  const { historicMechanicLines } = await import('../../data/historicEffects.js');
+  for (const id of ['burden_of_dreams', 'the_unconfessed', 'sunken_nave']) {
+    const lines = historicMechanicLines(Items[id].effects, Items[id].grantsSkills);
+    check(`${Items[id].name}'s Inspect says what it does, in lines that fit`,
+      lines.length > 0 && lines.every(l => l.length <= 56), lines.join(' | '));
+  }
+}
+
+console.log('');
 console.log('=== home is a full heal ===');
 {
   const GameState = (await import('../../src/systems/GameState.js')).default;

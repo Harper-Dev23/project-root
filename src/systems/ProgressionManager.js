@@ -488,6 +488,45 @@ const ProgressionManager = {
     return true;
   },
 
+  // ----- The Elder's talk about Historic items (owner's playtest
+  // 2026-09-29: it was written for the Bloodthirster alone, and fired, as
+  // the Bloodthirster, for Burden of Dreams). It is about whichever Historic
+  // item the party inspects first. A save from before keeps its
+  // bloodthirster_elder_* flags, and they count the same.
+
+  /** True once the Elder has explained Historic items. */
+  historicExplained() {
+    return this.hasQuestFlag('historic_elder_explained') || this.hasQuestFlag('bloodthirster_elder_explained');
+  },
+
+  /** True while the Elder's talk is waiting at the tower. */
+  historicTalkPending() {
+    return !this.historicExplained()
+      && (this.hasQuestFlag('historic_elder_visit') || this.hasQuestFlag('bloodthirster_elder_visit'));
+  },
+
+  /** The item id the talk is about (the first one inspected), or null. */
+  firstHistoricId() {
+    const f = this.questFlags.find(q => q.startsWith('historic_first:'));
+    if (f) return f.slice('historic_first:'.length);
+    return this.hasQuestFlag('bloodthirster_elder_visit') || this.hasQuestFlag('bloodthirster_elder_explained') ? 'bloodthirster' : null;
+  },
+
+  /** The first inspect of a Historic item before the talk: send the party to the Elder. Returns true if it did. */
+  requestHistoricTalk(itemId) {
+    if (this.historicExplained() || this.historicTalkPending()) return false;
+    this.setQuestFlag('historic_elder_visit');
+    this.setQuestFlag(`historic_first:${itemId}`);
+    return true;
+  },
+
+  /** The Elder gives the talk. */
+  giveHistoricTalk() {
+    this.clearQuestFlag('historic_elder_visit');
+    this.clearQuestFlag('bloodthirster_elder_visit');
+    this.setQuestFlag('historic_elder_explained');
+  },
+
   /**
    * The hunt route to the Elder's Bone Pile talk (owner's playtest
    * 2026-09-29: it came only by Trial 2, though a hunt opens the Bone Pile

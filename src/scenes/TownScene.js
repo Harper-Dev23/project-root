@@ -48,7 +48,8 @@ const QUEST_FLAG_POSITIONS = {
   samuel_waystone_return:   { x: 837, y: 493 },
   samuel_awakening:         { x: 837, y: 493 },
   seers_awakening:          { x: 1036, y: 419 },
-  bloodthirster_elder_visit: { x: 857, y: 342 },  // ! at Elder Tower after first inspect
+  bloodthirster_elder_visit: { x: 857, y: 342 },  // a save from before the Historic talk was general
+  historic_elder_visit:      { x: 857, y: 342 },  // ! at Elder Tower after a first Historic inspect
   // Brief markers — orange !, set before the encounter so the player visits for a briefing
   elseth_leader_brief:      { x: 1059, y: 310 },
   styx_leader_brief:        { x: 305,  y: 298 },
@@ -1008,7 +1009,7 @@ export default class TownScene extends Phaser.Scene {
     }
 
     // Elder Tower F2 must rebuild when the bloodthirster historic explanation is pending.
-    if (ProgressionManager.hasQuestFlag('bloodthirster_elder_visit') && this.eldersTowerGroups?.[2]) {
+    if (ProgressionManager.historicTalkPending() && this.eldersTowerGroups?.[2]) {
       this.eldersTowerGroups[2].destroy(true);
       this.eldersTowerGroups[2] = null;
     }
@@ -2776,36 +2777,36 @@ export default class TownScene extends Phaser.Scene {
 
       // ── Floor 2 content ────────────────────────────────────────────────────
       if (floor === 2) {
-        const hasElderVisit = ProgressionManager.hasQuestFlag('bloodthirster_elder_visit');
-        const alreadyExplained = ProgressionManager.hasQuestFlag('bloodthirster_elder_explained');
+        // The talk is about the first Historic item the party inspected
+        // (owner's playtest 2026-09-29: it was the Bloodthirster's alone).
+        const firstId = ProgressionManager.firstHistoricId();
+        const firstName = Items[firstId]?.name || 'it';
 
-        if (hasElderVisit && !alreadyExplained) {
-          // First visit with the Bloodthirster — explain the historic/renown system.
-          ProgressionManager.clearQuestFlag('bloodthirster_elder_visit');
-          ProgressionManager.setQuestFlag('bloodthirster_elder_explained');
+        if (ProgressionManager.historicTalkPending()) {
+          // First visit with a Historic item: explain the historic/renown system.
+          ProgressionManager.giveHistoricTalk();
           GameState.save('autosave');
           this._buildQuestFlags();
 
           const { container: historicBox } = createTextBanner(this, {
             x: 640, y: 220, width: 700,
-            title: 'Elder Varek speaks of the Bloodthirster',
+            title: `Elder Varek speaks of ${firstName}`,
             body:
-              '"Ah. You carry it.\n\n' +
-              'That blade is not simply a weapon. It is a record. Every cut it has made,\n' +
-              'every hand that has held it — all of it is written in the metal, in a language\n' +
-              'older than the tribes themselves. We call items like this Historic.\n\n' +
-              'Historic weapons are alive with memory. They grow with the hunter who carries\n' +
-              'them — not in the way of experience, but in the way of a bond. Use it. Let it\n' +
-              'witness your hunts. In time it will reveal what it truly is, and what it can become.\n\n' +
-              'Inspect it again. You will be able to read it now."',
+              `"Ah. You carry ${firstName}.\n\n` +
+              'That is not simply gear. It is a record. Every hunt it has seen, every hand\n' +
+              'that has held it — all of it is written into it, in a language older than the\n' +
+              'tribes themselves. We call such things Historic. There is only ever one of each.\n\n' +
+              'Historic things are alive with memory, and each carries something of its own\n' +
+              'that no smith could put there. Use it. Let it witness your hunts.\n\n' +
+              'Inspect it again. You will be able to read it now. Any other you find, too."',
             fontSize: '14px', color: '#ddccaa', fontStyle: 'italic',
           });
           layout.add(historicBox);
 
-        } else if (alreadyExplained) {
+        } else if (ProgressionManager.historicExplained()) {
           const { container: reminderBox } = createTextBanner(this, {
             x: 640, y: 300, width: 600,
-            body: '"The Bloodthirster grows with use. Keep hunting. Keep reading it."',
+            body: '"Historic things grow with the hunters who carry them. Keep hunting. Keep reading them."',
             fontSize: '15px', color: '#aabbaa', fontStyle: 'italic',
           });
           layout.add(reminderBox);

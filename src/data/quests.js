@@ -24,6 +24,15 @@ import { VOWBACK_CROCODILE } from '../../data/zones.js';
 
 const sc = (pm, id) => pm.completedScenarios.includes(id);
 
+// The Elder's Historic talk (ProgressionManager.requestHistoricTalk and
+// friends), read from flags alone so a bare flag-reader works here too. The
+// bloodthirster_elder_* flags are a save's from before the talk was general.
+const historicExplained = (pm) =>
+  pm.hasQuestFlag('historic_elder_explained') || pm.hasQuestFlag('bloodthirster_elder_explained');
+const historicTalkPending = (pm) => !historicExplained(pm)
+  && (pm.hasQuestFlag('historic_elder_visit') || pm.hasQuestFlag('bloodthirster_elder_visit'));
+const firstHistoricFlag = (pm) => (pm.questFlags || []).find(f => f.startsWith('historic_first:')) || null;
+
 /** The Unconfessed Dead is open: the Vowback slain, or (a save that opened
  *  it before batch 4) the Reeds' apex. */
 const ghostPartyOpen = (pm) =>
@@ -623,6 +632,34 @@ export const QUEST_LINES = [
   // ═══════════════════════════════════════════════════════════════════════════
 
   {
+    // The Elder's talk, for whichever Historic item was inspected first
+    // (owner's playtest 2026-09-29). Shown when that was not the Bloodthirster,
+    // whose own introduction below walks the same steps.
+    id:          'historic_intro',
+    category:    'weapon',
+    title:       'Historic Items',
+    description: 'Something you carry is older than it looks, and will not yet say what it is.',
+    isAvailable: (pm) => !!firstHistoricFlag(pm) && firstHistoricFlag(pm) !== 'historic_first:bloodthirster',
+    steps: [
+      {
+        id:          'hi_elder',
+        flags:       ['historic_elder_visit'],
+        label:       "Visit the Elders' Tower — Floor 2",
+        description: 'The Elders study relics of power. Bring what you found to the second floor and see what they make of it.',
+        isActive:   (pm) => historicTalkPending(pm),
+        isComplete: (pm) => historicExplained(pm),
+      },
+      {
+        id:          'hi_reinspect',
+        label:       'Inspect It Again',
+        description: 'Now that the Elders have explained what you hold, press [✦ Inspect] on it again. Read what it carries.',
+        isActive:   (pm) => historicExplained(pm) && !pm.hasQuestFlag('historic_inspect_2'),
+        isComplete: (pm) => pm.hasQuestFlag('historic_inspect_2'),
+      },
+    ],
+  },
+
+  {
     id:          'bloodthirster_intro',
     category:    'weapon',
     title:       'Bloodthirster — Introduction',
@@ -633,27 +670,26 @@ export const QUEST_LINES = [
         id:          'bt_intro_inspect',
         label:       'Inspect the Bloodthirster',
         description: 'Open your inventory and press [✦ Inspect] on the Bloodthirster. You cannot yet read what it holds.',
+        // The Elder's talk is shared by every Historic item: if another one
+        // brought it first, these steps are already behind the player.
         isActive:   (pm) =>
-          pm.hasQuestFlag('bloodthirster_quest') &&
-          !pm.hasQuestFlag('bloodthirster_elder_visit') &&
-          !pm.hasQuestFlag('bloodthirster_elder_explained'),
-        isComplete: (pm) =>
-          pm.hasQuestFlag('bloodthirster_elder_visit') || pm.hasQuestFlag('bloodthirster_elder_explained'),
+          pm.hasQuestFlag('bloodthirster_quest') && !historicTalkPending(pm) && !historicExplained(pm),
+        isComplete: (pm) => historicTalkPending(pm) || historicExplained(pm),
       },
       {
         id:          'bt_intro_elder',
-        flags:          ['bloodthirster_elder_visit'],
+        flags:          ['historic_elder_visit', 'bloodthirster_elder_visit'],
         label:       "Visit the Elders' Tower — Floor 2",
         description: 'The Elders study relics of power. Bring the blade to the second floor and see what they make of it.',
-        isActive:   (pm) => pm.hasQuestFlag('bloodthirster_elder_visit'),
-        isComplete: (pm) => pm.hasQuestFlag('bloodthirster_elder_explained'),
+        isActive:   (pm) => historicTalkPending(pm),
+        isComplete: (pm) => historicExplained(pm),
       },
       {
         id:          'bt_intro_reinspect',
         label:       'Re-inspect the Bloodthirster',
         description: 'Now that the Elders have explained what you hold — inspect the blade again. Read its history.',
         isActive:   (pm) =>
-          pm.hasQuestFlag('bloodthirster_elder_explained') &&
+          historicExplained(pm) &&
           !pm.hasQuestFlag('bloodthirster_inspect_2'),
         isComplete: (pm) => pm.hasQuestFlag('bloodthirster_inspect_2'),
       },

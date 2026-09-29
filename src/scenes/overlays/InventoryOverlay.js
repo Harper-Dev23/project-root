@@ -12,6 +12,7 @@ import { SoundManager } from '../../systems/SoundManager.js';
 import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
 import { buildItemTooltipLines, installAffixDetailKeys } from '../../ui/itemTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
+import { historicMechanicLines } from '../../../data/historicEffects.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -1424,7 +1425,10 @@ export default class InventoryOverlay extends Phaser.Scene {
     const base = Items[item.id] || {};
     const isHistoric = item.historic || base.historic;
     const isGaining = item.renownState === 'gaining';
-    const explained = ProgressionManager.hasQuestFlag('bloodthirster_elder_explained');
+    // The Elder's talk is about Historic items in general, given for the
+    // first one inspected (ProgressionManager.requestHistoricTalk).
+    const explained = ProgressionManager.historicExplained();
+    const isBloodthirster = item.id === 'bloodthirster';
 
     const titleColor = isHistoric ? '#d4a017' : '#ccaa44';
     const title = this.add.text(px + pw / 2, py + 18, `✦ ${base.name || item.id}`, {
@@ -1443,24 +1447,46 @@ export default class InventoryOverlay extends Phaser.Scene {
     if (isHistoric && !explained) {
       // Pre-explanation: blurred flavor text
       bodyLines = [
-        'You hold the blade steady, but something resists',
+        'You hold it steady, but something resists',
         'your understanding of it.',
         '',
-        'There is a weight in the metal that goes beyond',
+        'There is a weight in it that goes beyond',
         'its size — a memory it will not yet share.',
         '',
         'Perhaps someone who studies such things',
-        'could shed light on what this weapon holds.',
+        'could shed light on what it holds.',
         '',
         '— Visit the Elders\' Tower —',
       ];
 
-      // Set the elder visit flag and trigger quest flag rebuild
-      if (!ProgressionManager.hasQuestFlag('bloodthirster_elder_visit')) {
-        ProgressionManager.setQuestFlag('bloodthirster_elder_visit');
+      // Send the party to the Elder, about this item, and rebuild the markers.
+      if (ProgressionManager.requestHistoricTalk(item.id)) {
+        GameState.save('autosave');
         const town = this.scene.get('TownScene');
         town?._buildQuestFlags?.();
         this.scene.get('UIScene')?.refreshUI?.();
+      }
+
+    } else if (isHistoric && explained && !isBloodthirster) {
+      // Any other Historic item: its home, what it has done with you, and
+      // its own mechanics (data/historicEffects.js, so the text is the
+      // numbers combat reads).
+      const view = getItemComputedData(item) || {};
+      const kills = item.history?.kills ?? 0;
+      const dmg = item.history?.damageDealt ?? 0;
+      const battles = item.history?.battlesCarried ?? 0;
+      bodyLines = [
+        base.home?.place ? `Its home:     ${base.home.place}` : null,
+        `Kills:        ${kills}`,
+        `Damage Dealt: ${dmg.toLocaleString()}`,
+        `Battles:      ${battles}`,
+        '',
+        ...historicMechanicLines(view.effects || base.effects || {}, base.grantsSkills || []),
+      ].filter(l => l !== null);
+      if (!ProgressionManager.hasQuestFlag('historic_inspect_2')) {
+        ProgressionManager.setQuestFlag('historic_inspect_2');
+        GameState.save('autosave');
+        this.scene.get('TownScene')?._buildQuestFlags?.();
       }
 
     } else if (isHistoric && explained) {
