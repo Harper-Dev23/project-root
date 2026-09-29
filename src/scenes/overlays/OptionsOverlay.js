@@ -373,6 +373,7 @@ export default class OptionsOverlay extends Phaser.Scene {
     makeToggle('Buildup ×5', DevFlags.isBuildupEnabled(), () => DevFlags.toggleBuildup());
     makeToggle('Super Saiyan (×10 damage)', DevFlags.isSuperSaiyanEnabled(), () => DevFlags.toggleSuperSaiyan());
     makeToggle('All Tribes (bypass vendor tribe lock)', DevFlags.isAllTribesEnabled(), () => DevFlags.toggleAllTribes());
+    makeToggle('Show development weapons (Ironbinder)', DevFlags.isDevWeaponsEnabled(), () => DevFlags.toggleDevWeapons());
 
     cy += 10;
     addT(left, cy, 'Persist across sessions (stored locally) — never touch save-slot data.', noteStyle);

@@ -12,6 +12,7 @@
 //  devBuildup       — player skills deal 5× buildup
 //  devAllTribes     — bypass tribe restriction at all tribe vendors (testing)
 //  devSuperSaiyan   — player units deal 10× damage
+//  devWeapons       — the Ironbinder's Stand lists unfinished weapon types
 
 const KEY_BREAKTHROUGH  = 'dev_breakthrough';
 const KEY_BUILDUP       = 'dev_buildup';
@@ -23,6 +24,8 @@ const KEY_NO_RANGE      = 'dev_no_range';
 // Opt IN, unlike every other flag here, which turn a restriction OFF.
 // Melee reach is a large enough balance change that it ships dormant.
 const KEY_MELEE_REACH   = 'dev_melee_reach';
+// Opt IN: show unfinished weapon types at the Ironbinder's Stand.
+const KEY_DEV_WEAPONS   = 'dev_weapons';
 
 export const DevFlags = {
   isBreakthroughEnabled() {
@@ -105,6 +108,20 @@ export const DevFlags = {
   toggleNoRange() {
     const next = !this.isNoRangeEnabled();
     localStorage.setItem(KEY_NO_RANGE, String(next));
+    return next;
+  },
+
+  /**
+   * The Ironbinder's Stand also lists the weapon types whose skills are not
+   * yet on the current standard (owner 2026-09-29: hidden from players until
+   * they are). Opt in, like melee reach.
+   */
+  isDevWeaponsEnabled() {
+    return localStorage.getItem(KEY_DEV_WEAPONS) === 'true';
+  },
+  toggleDevWeapons() {
+    const next = !this.isDevWeaponsEnabled();
+    localStorage.setItem(KEY_DEV_WEAPONS, String(next));
     return next;
   },
 };

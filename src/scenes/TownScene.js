@@ -2205,7 +2205,10 @@ export default class TownScene extends Phaser.Scene {
           { id: "crude_wand", cost: 0 },
           { id: "crude_mace_2h", cost: 0 },
           { id: "crude_axe_2h", cost: 0 }
-        ]
+        // Only the weapon types on the current skill standard (the Bone Pile's
+        // GAMBLE_WEAPON_TYPES), unless the dev toggle shows the rest (owner
+        // 2026-09-29: no shield either, for now).
+        ].filter(e => DevFlags.isDevWeaponsEnabled() || GAMBLE_WEAPON_TYPES.includes(Items[e.id]?.weaponType)),
       },
       watershade: {
         displayName: "Watershade Armory",
