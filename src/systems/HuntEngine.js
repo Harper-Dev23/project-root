@@ -558,7 +558,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const spent = this._spendTime(SCOUT_TIME);
       this._reveal();
       this._log({ kind: 'scout', occupant: occId, time: s.time });
-      return { ok: true, time: SCOUT_TIME, flips: spent.flips, view: this.occupantViewOf(occId), encounter: this.encounter() };
+      return { ok: true, time: SCOUT_TIME, flips: spent.flips, view: this.occupantViewOf(occId), encounter: this.encounter(), event: this._eventAfterWaiting() };
     },
 
     /**
@@ -585,7 +585,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const spent = this._spendTime(FORAGE_TIME);
       this._reveal();
       this._log({ kind: 'forage', tile: s.pos, item: id, qty, time: s.time });
-      return { ok: true, item: id, qty, time: FORAGE_TIME, flips: spent.flips, encounter: this.encounter() };
+      return { ok: true, item: id, qty, time: FORAGE_TIME, flips: spent.flips, encounter: this.encounter(), event: this._eventAfterWaiting() };
     },
 
     /** Fish from a tile beside water: FISH_TIME, once per tile (forage OR
@@ -603,7 +603,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const spent = this._spendTime(FISH_TIME);
       this._reveal();
       this._log({ kind: 'fish', tile: s.pos, item: FISH_ITEM, qty, time: s.time });
-      return { ok: true, item: FISH_ITEM, qty, time: FISH_TIME, flips: spent.flips, encounter: this.encounter() };
+      return { ok: true, item: FISH_ITEM, qty, time: FISH_TIME, flips: spent.flips, encounter: this.encounter(), event: this._eventAfterWaiting() };
     },
 
     /** Food in the pack a party could eat or cook with, by id (Rations are
@@ -738,7 +738,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       this._log({ kind: 'camp', tile: s.pos, night, pct, dishes: dishes.map(d => d.quality), found: !!spent.encounter, time: s.time });
       return {
         ok: true, night, recoveryPercent: pct, dishes, supplyGained: gained, healed, flips: spent.flips,
-        time: spent.spent, found: !!spent.encounter, encounter: this.encounter(),
+        time: spent.spent, found: !!spent.encounter, encounter: this.encounter(), event: this._eventAfterWaiting(),
       };
     },
 
@@ -762,7 +762,7 @@ function makeMapHunt(s, rng, worldRng, world) {
       const spent = this._spendTime(CLEANSE_TIME);
       this._reveal();
       this._log({ kind: 'cleanse', tile: s.pos, source: !!src, time: s.time });
-      return { ok: true, ground: tile.ground, sourceDestroyed: !!src, time: CLEANSE_TIME, flips: spent.flips, encounter: this.encounter() };
+      return { ok: true, ground: tile.ground, sourceDestroyed: !!src, time: CLEANSE_TIME, flips: spent.flips, encounter: this.encounter(), event: this._eventAfterWaiting() };
     },
 
     /**
@@ -1480,13 +1480,28 @@ function makeMapHunt(s, rng, worldRng, world) {
      * after the spoils are harvested or walked away from. Null otherwise, and
      * for a quiet site.
      */
-    _openEventHere() {
+    _openEventHere({ logQuiet = true } = {}) {
       if (s.finished || s.encounter || s.spoils || s.event) return null;
-      const ev = this._openEventAt(s.pos);
+      const ev = this._openEventAt(s.pos, { logQuiet });
       return ev?.quiet ? null : ev;
     },
 
-    _openEventAt(tile) {
+    /**
+     * After time passed without moving (camp, forage, fish, cleanse, scout):
+     * an event here that was quiet may have woken, night having fallen
+     * (owner's playtest 2026-09-29: only Wait looked again, so camping until
+     * dark on the Lament Pools needed a step off and back on). Only when the
+     * last word on an event was that this tile was quiet: never one the party
+     * walked away from, and a tile still quiet is not logged again.
+     */
+    _eventAfterWaiting() {
+      const EVENT_KINDS = ['event_quiet', 'event_open', 'event_left', 'event'];
+      const last = [...s.log].reverse().find(l => EVENT_KINDS.includes(l.kind));
+      if (last?.kind !== 'event_quiet' || last.tile !== s.pos) return null;
+      return this._openEventHere({ logQuiet: false });
+    },
+
+    _openEventAt(tile, { logQuiet = true } = {}) {
       const site = this._eventSiteAt(tile);
       if (!site) return null;
       const tpl = EVENT_TEMPLATES[site.templateId];
@@ -1498,7 +1513,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         nearby: (mark) => this._nearbyMark(mark),
       });
       if (quiet) {
-        this._log({ kind: 'event_quiet', event: site.templateId, tile, quiet, time: s.time });
+        if (logQuiet) this._log({ kind: 'event_quiet', event: site.templateId, tile, quiet, time: s.time });
         return { quiet };
       }
       s.event = { templateId: site.templateId, site: { occId: site.occId || null, tile, feature: site.feature || null }, roles, houseId, rivalId, godId };

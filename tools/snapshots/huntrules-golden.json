@@ -2876,28 +2876,28 @@
   ]
  ],
  "worldHashes": {
-  "reeds_of_gethsemane/small": "37b881d5fedbb13c",
+  "reeds_of_gethsemane/small": "da950e24c86a54f4",
   "reeds_of_gethsemane/medium": "6f5054b2cd7a5fb7",
   "reeds_of_gethsemane/large": "d9c5d64f26aacddf",
   "bay_of_solace/small": "3ae36d83f7c82fab",
-  "bay_of_solace/medium": "6c2619d2abeee7cd",
-  "bay_of_solace/large": "32b5f5b159ca75e9"
+  "bay_of_solace/medium": "899bfc898cea06ae",
+  "bay_of_solace/large": "0888aa88a9341b9f"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {
-   "steps": 2066,
-   "encounters": 81,
-   "ambush": 39,
+   "steps": 2065,
+   "encounters": 87,
+   "ambush": 42,
    "byCause": {
-    "party": 58,
-    "pack": 13,
-    "camp": 10
+    "party": 67,
+    "pack": 11,
+    "camp": 9
    },
-   "flees": 42,
-   "wins": 39,
-   "caughtAgain": 11,
+   "flees": 47,
+   "wins": 40,
+   "caughtAgain": 9,
    "cleansed": 163,
-   "trailsSeen": 1557,
+   "trailsSeen": 1450,
    "days": 306,
    "blightTiles": 37,
    "corrupted": 0,
@@ -2961,41 +2961,41 @@
    "stillHunting": 0
   },
   "bay_of_solace/medium": {
-   "steps": 2553,
-   "encounters": 96,
+   "steps": 2556,
+   "encounters": 97,
    "ambush": 35,
    "byCause": {
-    "party": 57,
+    "party": 58,
     "pack": 16,
     "camp": 23
    },
    "flees": 46,
-   "wins": 50,
+   "wins": 51,
    "caughtAgain": 11,
-   "cleansed": 205,
-   "trailsSeen": 2108,
+   "cleansed": 202,
+   "trailsSeen": 2047,
    "days": 306,
    "blightTiles": 0,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/large": {
-   "steps": 2599,
-   "encounters": 120,
+   "steps": 2590,
+   "encounters": 117,
    "ambush": 51,
    "byCause": {
-    "party": 75,
+    "party": 71,
     "pack": 5,
-    "camp": 40
+    "camp": 41
    },
    "flees": 59,
-   "wins": 61,
+   "wins": 58,
    "caughtAgain": 5,
-   "cleansed": 176,
-   "trailsSeen": 3514,
+   "cleansed": 174,
+   "trailsSeen": 3420,
    "days": 306,
    "blightTiles": 155,
-   "corrupted": 5,
+   "corrupted": 6,
    "stillHunting": 0
   }
  },

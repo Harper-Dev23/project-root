@@ -178,6 +178,37 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
   check('a hunt saved on the map keeps its quest site through a reload', saved.view().objectiveSites.some(s => s.objective === 'quest' && s.tile === day.site && !s.done));
   const old = day.h.serialize(); delete old.map.questSites;
   check('a hunt saved before quest sites existed still loads, with none marked', restoreMapHunt(old, recordingWorld(makeParty())).view().objectiveSites.every(s => s.objective !== 'quest'));
+
+  // Time passing on the tile wakes it (owner's playtest 2026-09-29: only Wait
+  // looked again; camping until dark needed a step off and back on).
+  /** Standing on the quiet Pools by day, `before` time short of nightfall. */
+  function quietAtDusk(before) {
+    const at = atPools({ night: false });
+    at.h.move(at.site);
+    const d = at.h.serialize();
+    let t = d.time; while (!clockAt(t + before).isNight) t += 0.25; d.time = t; d.world.time = t;
+    return { ...at, h: restoreMapHunt(d, at.w) };
+  }
+  for (const [kind, act] of [['camp', (h) => h.camp({ meals: [] })], ['forage', (h) => h.forage()], ['fish', (h) => h.fish()]]) {
+    const q = quietAtDusk(0.1);
+    const r = act(q.h);
+    check(`${kind} into the night on the quiet Pools opens them`, r.ok && (r.encounter || r.event?.templateId === 'reeds_lament_pools'),
+      JSON.stringify({ ok: r.ok, reason: r.reason, event: r.event?.templateId, enc: !!r.encounter }));
+  }
+  {
+    const q = quietAtDusk(50);
+    const quietLines = () => q.h.view().log.filter(l => l.kind === 'event_quiet').length;
+    const n = quietLines();
+    const r = q.h.forage();
+    check('...still day: nothing opens, and the log does not say so twice', r.ok && !r.event && quietLines() === n);
+  }
+  {
+    const night = atPools({ night: true });
+    night.h.move(night.site);
+    night.h.leaveEvent();
+    const r = night.h.forage();
+    check('an event walked away from does not open again by itself', r.ok && !r.event && !night.h.view().event);
+  }
 }
 
 // =============================================================================
