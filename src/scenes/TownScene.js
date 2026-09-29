@@ -16,7 +16,7 @@ import { setupSceneCursor } from '../ui/cursor.js';
 import { buildItemTooltipLines } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
-import { getStepForFlag, resolveStepDescription } from '../data/quests.js';
+import { getStepForFlag, resolveStepDescription, pendingReports } from '../data/quests.js';
 import { claimQuestRewards, questRewardMessage } from '../systems/QuestRewards.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { launchMapHunt } from './overlays/HuntFieldOverlay.js';
@@ -72,6 +72,10 @@ const QUEST_FLAG_POSITIONS = {
 // decides and nothing has to set or clear anything.
 const DERIVED_MARKERS = {
   hunt_gate: { x: 506, y: 104 },   // The Weeping in the Reeds' "Hunt the Reeds"
+  // A ★ at the Elders' Tower while a quest step waits to be reported
+  // (pendingReports; batch 4b chunk 1). Named *_handin so a tower with
+  // nothing else waiting shows the gold hand-in star.
+  elder_report_handin: { x: 857, y: 342, active: (pm) => pendingReports(pm).length > 0 },
 };
 
 // Flag IDs for the four lodge "explore before choosing" prompts.
@@ -486,18 +490,24 @@ export default class TownScene extends Phaser.Scene {
     const flags = Array.isArray(flagIdOrList) ? flagIdOrList : [flagIdOrList];
     const found = [];
     const seen = new Set();
+    const REPORT_DESC = 'Done in the field. Report to Elder Varek at the Elders\' Tower.';
     for (const f of flags) {
-      const hit = getStepForFlag(f, ProgressionManager);
-      if (!hit || seen.has(hit.step.id)) continue;   // two flags can share a step
-      seen.add(hit.step.id);
-      found.push(hit);
+      // The report star stands for every step waiting to be reported.
+      const hits = f === 'elder_report_handin'
+        ? pendingReports(ProgressionManager).map(h => ({ ...h, desc: REPORT_DESC }))
+        : [getStepForFlag(f, ProgressionManager)];
+      for (const hit of hits) {
+        if (!hit || seen.has(hit.step.id)) continue;   // two flags can share a step
+        seen.add(hit.step.id);
+        found.push(hit);
+      }
     }
     if (!found.length) return null;
 
     const lines = [];
     if (found.length === 1) {
       const { quest, step } = found[0];
-      const desc = resolveStepDescription(step, ProgressionManager);
+      const desc = found[0].desc ?? resolveStepDescription(step, ProgressionManager);
       if (desc) lines.push({ text: desc, color: '#dddddd' });
       lines.push({ text: '', color: '#dddddd' });
       lines.push({ text: quest.title, color: '#8899aa' });
@@ -505,10 +515,10 @@ export default class TownScene extends Phaser.Scene {
       return { title: found[0].step.label, titleColor: '#ffdd88', lines };
     }
 
-    found.forEach(({ quest, step }, i) => {
+    found.forEach(({ quest, step, desc: override }, i) => {
       if (i) lines.push({ text: '', color: '#dddddd' });
       lines.push({ text: step.label, color: '#ffdd88' });
-      const desc = resolveStepDescription(step, ProgressionManager);
+      const desc = override ?? resolveStepDescription(step, ProgressionManager);
       if (desc) lines.push({ text: desc, color: '#dddddd' });
       lines.push({ text: quest.title, color: '#8899aa' });
     });
@@ -996,7 +1006,8 @@ export default class TownScene extends Phaser.Scene {
     // a pending elder lore flag means its content has changed since last visit.
     const hasElderFlag = ProgressionManager.hasQuestFlag('orientation_elder') ||
                          ProgressionManager.hasQuestFlag('elder_bonepile') ||
-                         ProgressionManager.hasQuestFlag('elder_leveling');
+                         ProgressionManager.hasQuestFlag('elder_leveling') ||
+                         pendingReports(ProgressionManager).length > 0;
     if (!currentTribe || hasElderFlag) {
       if (this.eldersTowerGroups?.[1]) {
         this.eldersTowerGroups[1].destroy(true);
@@ -1064,17 +1075,8 @@ export default class TownScene extends Phaser.Scene {
     if (ProgressionManager.offerSamuelAfterHunt()) questFlagsChanged = true;
     if (ProgressionManager.offerBonepileAfterHunt()) questFlagsChanged = true;
 
-    // Quest-step rewards (src/systems/QuestRewards.js): paid once, announced
-    // once. Deferred a tick so UIScene exists when this runs from create().
-    const paid = claimQuestRewards(ProgressionManager);
-    if (paid.length) {
-      questFlagsChanged = true;
-      this.time.delayedCall(0, () => {
-        const ui = this.scene.get('UIScene');
-        ui?.refreshUI?.();
-        ui?.showDialogue?.(questRewardMessage(paid));
-      });
-    }
+    // Quest-step rewards are no longer paid here: they are reported to Elder
+    // Varek at the tower (floor 1; QuestRewards, batch 4b chunk 1).
 
     if (questFlagsChanged) GameState.save('autosave');
 
@@ -1105,7 +1107,8 @@ export default class TownScene extends Phaser.Scene {
       byTile.get(key).flags.push(flagId);
     }
     for (const [flagId, cfg] of Object.entries(DERIVED_MARKERS)) {
-      if (!getStepForFlag(flagId, ProgressionManager)) continue;
+      const on = cfg.active ? cfg.active(ProgressionManager) : !!getStepForFlag(flagId, ProgressionManager);
+      if (!on) continue;
       const key = cfg.x + ',' + cfg.y;
       if (!byTile.has(key)) byTile.set(key, { x: cfg.x, y: cfg.y, flags: [] });
       byTile.get(key).flags.push(flagId);
@@ -2681,6 +2684,12 @@ export default class TownScene extends Phaser.Scene {
 
     if (!this.eldersTowerGroups) this.eldersTowerGroups = {};
 
+    // A report is read once: the floor it was shown on is rebuilt next visit.
+    if (this.eldersTowerGroups[floor]?._reportShown) {
+      this.eldersTowerGroups[floor].destroy(true);
+      this.eldersTowerGroups[floor] = null;
+    }
+
     if (!this.eldersTowerGroups[floor]) {
       const colors = { 1: 0x30241c, 2: 0x263028, 3: 0x20202f };
       const titles = { 1: "Elders' Tower — F1", 2: "Elders' Tower — F2", 3: "Elders' Tower — F3 (Restricted)" };
@@ -2740,6 +2749,24 @@ export default class TownScene extends Phaser.Scene {
         } else if (!tribe && ProgressionManager.isScenarioCompleted('training_encounter_1')) {
           // Subsequent visits before choosing (S1 done, tribe choice is available).
           this._addTribeChoiceToLayout(layout, false);
+        } else if (pendingReports(ProgressionManager).length) {
+          // Word from the field (batch 4b chunk 1): every step waiting to be
+          // reported is paid here, and its questline moves on. Other lore he
+          // has waiting (leveling, the Bone Pile) keeps its marker for the
+          // next visit.
+          const paid = claimQuestRewards(ProgressionManager);
+          GameState.save('autosave');
+          this._buildQuestFlags();
+          this.scene.get('UIScene')?.refreshUI?.();
+          SoundManager.play('reward');
+          const { container: reportBox } = createTextBanner(this, {
+            x: 640, y: 250, width: 760,
+            title: 'Word from the field',
+            body: questRewardMessage(paid),
+            fontSize: '14px', color: '#ddccaa',
+          });
+          layout.add(reportBox);
+          layout._reportShown = true;
         } else if (hasLevelingFlag) {
           // Scenario 3 cleared — explain stats, progression, growth.
           // Also clear bonepile flag if it was skipped; the leveling lesson supersedes it

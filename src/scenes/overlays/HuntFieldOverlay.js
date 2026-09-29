@@ -74,6 +74,7 @@ import GameState from '../../systems/GameState.js';
 import DiceToken from '../../ui/DiceToken.js';
 import { levelDef as boonLevelDef } from '../../systems/Boons.js';
 import { EVENT_TEMPLATES } from '../../../data/events.js';
+import { pendingReports } from '../../data/quests.js';
 
 // The boon level each hunt has already announced (chunk 10b), kept per hunt
 // instance so a level earned in a fight is announced when the map reopens,
@@ -104,6 +105,8 @@ const GRADE_COLOR = { yearling: 0x9aa7b0, grown: 0xc9a25a, prime: 0xe07b39, grea
 const MARK_RING = { marked: 0xf2d27a, corrupted: 0xa45bd6, unmarked: 0xc3ccd6 };
 const VIGIL_RING = 0xe0503f;
 const DIALOGUE_MS = 3200;
+/** Quest steps already announced as done this session (_reportNews). */
+let announcedReports = null;
 /** UIScene's dialogue bar covers y 570-720 and draws above this scene, so no
  *  panel may reach below this line (the sweep's screenshots caught a camp
  *  panel's buttons under the bar). */
@@ -206,6 +209,23 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.selected = this.hunt.view().pos;
     this._refresh();
+    // A fight relaunches this scene: what it finished is said on the way back.
+    const reported = this._reportNews();
+    if (reported) this._say(reported);
+  }
+
+  /**
+   * Quest steps newly done in the field (batch 4b chunk 1): one line each, in
+   * the dialogue bar and the hunt's log, and never twice in a session. The
+   * first look of a session only takes note, so loading a save does not
+   * repeat old news. The reward waits for Elder Varek (QuestRewards).
+   */
+  _reportNews() {
+    const now = pendingReports(ProgressionManager).map(h => h.step);
+    if (!announcedReports) { announcedReports = new Set(now.map(st => st.id)); return ''; }
+    const fresh = now.filter(st => !announcedReports.has(st.id));
+    for (const st of fresh) { announcedReports.add(st.id); this.hunt.noteQuestDone?.(st.label); }
+    return fresh.map(st => `${st.label}: done. Report to Elder Varek.`).join(' ');
   }
 
   /** Listen to the co-op hunt: every change redraws; a fight takes everyone
@@ -912,6 +932,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'event_quiet': return `${day(e.time)} Something is here, but ${e.quiet || (EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs')}.`;
       case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
       case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
+      case 'quest_done': return `${day(e.time)} ${e.label}: done. Report to Elder Varek.`;
       case 'rescued': return `${day(e.time)} Spoken for: you woke near a way out.`;
       case 'scent': return `${day(e.time)} ${e.family ? `The ${familyName(this.v?.zoneId, e.family)} pack` : 'Something'} caught your scent and is coming for you.`;
       case 'boon': return `${day(e.time)} ✦ ${houseName(e.house)}'s boon, level ${e.level}${e.name ? `: ${e.name}` : ''}.`;
@@ -1275,7 +1296,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // Save after every accepted action; a refusal changed nothing.
     if (this.hunt.view().finished) this.onFinished?.(this.hunt);
     else this.onAction?.(this.hunt);
-    const news = this._news(kind, res);
+    const news = [this._news(kind, res), this._reportNews()].filter(Boolean).join(' ');
     if (news) this._say(news);
     this._refresh();
     return res;

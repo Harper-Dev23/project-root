@@ -309,10 +309,11 @@ export const QUEST_LINES = [
   // the step is active (src/systems/HuntQuests.js). `hunted:<zone>` and
   // `apex_slain:<zone>` are set by the hunt engine.
   //
-  // A step with `reward: { huntTickets, text }` pays once, the first time the
-  // town sees it complete (src/systems/QuestRewards.js): Elder Varek paying
-  // for word from the field, `text` in his voice. The hunt-side source of
-  // Hunt Tickets beside the Combat Pit's (owner 2026-09-29).
+  // A step with `reward: { huntTickets, text }` is reported to Elder Varek at
+  // the Elders' Tower, who pays it once (src/systems/QuestRewards.js), `text`
+  // in his voice; the rest of its line waits on the report (getStepState,
+  // below). The hunt-side source of Hunt Tickets beside the Combat Pit's
+  // (owner 2026-09-29).
 
   {
     id:          'weeping_in_the_reeds',
@@ -733,10 +734,51 @@ export const QUEST_CATEGORIES = [
 
 // ── State derivation helpers (used by QuestOverlay) ───────────────────────────
 
+// ── Reporting to Elder Varek (owner 2026-09-29, playtest batch 4b chunk 1) ───
+// A step with `reward` is reported: once its condition is met in the field it
+// reads 'report' until the party visits the Elders' Tower, which pays it and
+// records it (QuestRewards.claimQuestRewards, pm.markStepDone). Every later
+// step of its questline waits on that report, so the log (and the next hunt's
+// sites) move on only then. A save that was paid before this counts as
+// reported: payment and report are the same record.
+
+/** stepId -> the nearest earlier rewarded step in its questline. */
+const PREV_REPORT = new Map();
+for (const quest of QUEST_LINES) {
+  let prev = null;
+  for (const step of quest.steps || []) {
+    if (prev) PREV_REPORT.set(step.id, prev);
+    if (step.reward) prev = step.id;
+  }
+}
+
+/** True once a rewarded step was reported. A bare flag-reader with no
+ *  report record (a test's stand-in save) counts every step as reported. */
+function isReported(pm, stepId) {
+  return typeof pm?.isStepDone === 'function' ? pm.isStepDone(stepId) : true;
+}
+
+/**
+ * 'completed' | 'report' (done in the field, not yet reported to the Elder)
+ * | 'active' | 'upcoming'.
+ */
 export function getStepState(step, pm) {
-  if (step.isComplete(pm)) return 'completed';
+  const prev = PREV_REPORT.get(step.id);
+  if (prev && !isReported(pm, prev)) return 'upcoming';
+  if (step.isComplete(pm)) return step.reward && !isReported(pm, step.id) ? 'report' : 'completed';
   if (step.isActive(pm))   return 'active';
   return 'upcoming';
+}
+
+/** Steps waiting to be reported to Elder Varek, in quest order: [{ quest, step }]. */
+export function pendingReports(pm) {
+  const out = [];
+  for (const quest of QUEST_LINES) {
+    for (const step of quest.steps || []) {
+      if (step.reward && getStepState(step, pm) === 'report') out.push({ quest, step });
+    }
+  }
+  return out;
 }
 
 export function getQuestState(quest, pm) {
@@ -754,7 +796,7 @@ export function getQuestState(quest, pm) {
   // completed-if-any, puts that gap in the Completed section instead —
   // nothing left to do currently reads the same as fully done, and a
   // genuinely-in-progress quest (an actual active step) is unaffected.
-  if (states.some(s => s === 'active'))    return 'active';
+  if (states.some(s => s === 'active' || s === 'report')) return 'active';
   if (states.some(s => s === 'completed')) return 'completed';
   if (quest.isAvailable(pm))               return 'available';
   return 'locked';

@@ -47,7 +47,8 @@ export const BOSS_XP_MULT = 5;
  * `plan` is the boss hunt plan item (data/items.js, `boss: <id>`); `unlockFlag`
  * is the quest flag that unlocks it (its questline's last step); `offerAfter`
  * is the flag that makes the tribe's first, free offer available (the step
- * before it).
+ * before it); `offerAfterStep` is that step's id, which must also have been
+ * reported to Elder Varek (batch 4b chunk 1: Omens.offerOpen).
  *
  * `lair` is what the map and the warning say. `fight` is the enemy side of the
  * board, member by member: an enemy type (data/enemyTypes.js), the board slot
@@ -88,6 +89,7 @@ export const BOSSES = {
     plan: 'tethered_soul',
     unlockFlag: 'gp_offer_taken',
     offerAfter: 'gp_names_known',
+    offerAfterStep: 'ud_graves',
     historic: 'the_unconfessed',
     historicWorn: true,
     lair: {
@@ -116,6 +118,7 @@ export const BOSSES = {
     plan: 'mourners_offering',
     unlockFlag: 'mb_offer_taken',
     offerAfter: 'mb_signs_found',
+    offerAfterStep: 'wr_signs',
     historic: 'burden_of_dreams',
     loot: {
       family: 'mourning_beast',

@@ -229,5 +229,41 @@ check('two steps finished on one hunt: both paid, in quest order',
 check('the Combat Pit still pays its own tickets', PM.onScenarioComplete('training_encounter_1').huntTicketsEarned === 12);
 
 console.log('');
+console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
+{
+  const { pendingReports } = await import('../../src/data/quests.js');
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { offersReady } = await import('../../src/systems/Omens.js');
+  const REEDS = 'reeds_of_gethsemane';
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.setQuestFlag(REEDS_DONE);
+  check('done in the field: Hunt the Reeds waits to be reported, not paid', getStepState(step('wr_hunt'), PM) === 'report'
+    && pendingReports(PM).some(h => h.step.id === 'wr_hunt') && PM.huntTickets === 0);
+  check('...and the rest of its line waits on the report', getStepState(step('wr_apex'), PM) === 'upcoming');
+  check("...so the next hunt holds no Vowback site yet", !questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
+  check('a first step of another line is not held back (Singing Under the Water)', getStepState(step('hb_singing'), PM) === 'active');
+  claimQuestRewards(PM);
+  check('reported: paid, done, and the Vowback is the step', getStepState(step('wr_hunt'), PM) === 'completed'
+    && PM.huntTickets === step('wr_hunt').reward.huntTickets && getStepState(step('wr_apex'), PM) === 'active'
+    && questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
+  // Several done before a visit (a save from before reports): all in one visit, in order.
+  PM.reset();
+  PM.tribe = 'styx';
+  ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard'].forEach(f => PM.setQuestFlag(f));
+  const all = claimQuestRewards(PM).map(p => p.stepId).join();
+  check('three steps done before the visit are reported together, in order', all === 'wr_hunt,wr_apex,wr_pools', all);
+  // The lodge's first offer waits on the report too.
+  PM.reset();
+  PM.tribe = 'styx';
+  ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard', 'mb_signs_found'].forEach(f => PM.setQuestFlag(f));
+  PM.completedQuestSteps = ['wr_hunt', 'wr_apex', 'wr_pools'];
+  check("Signs of the Mourner not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs'));
+  claimQuestRewards(PM);
+  check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs')
+    && getStepState(step('wr_offer'), PM) === 'active');
+}
+
+console.log('');
 if (failures) { console.log(`huntstart: ${failures} FAILED`); process.exit(1); }
 console.log('huntstart: all passed');

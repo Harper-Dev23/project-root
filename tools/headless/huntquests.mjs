@@ -278,6 +278,8 @@ console.log('=== the real save ===');
   ProgressionManager.setQuestFlag(regionFlag('hunted', REEDS));
   ProgressionManager.setQuestFlag(regionFlag('apex_slain', REEDS));
   ProgressionManager.setQuestFlag('vowback_slain');
+  // At the Lament Pools: the two steps before it reported to the Elder (batch 4b chunk 1).
+  ProgressionManager.completedQuestSteps = ['wr_hunt', 'wr_apex'];
   const before = questSitesFor(REEDS, ProgressionManager);
   const blob = JSON.parse(JSON.stringify(ProgressionManager.serialize()));
   ProgressionManager.questFlags = [];

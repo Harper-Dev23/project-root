@@ -1757,6 +1757,14 @@ function makeMapHunt(s, rng, worldRng, world) {
       return { ok: true, branch, lines, roll, encounter: this.encounter() };
     },
 
+    /** A quest step was done in the field (the map scene says so, batch 4b
+     *  chunk 1): a line in the hunt's log. Nothing else changes. */
+    noteQuestDone(label) {
+      if (!label) return { ok: false };
+      this._log({ kind: 'quest_done', label: String(label), time: s.time });
+      return { ok: true };
+    },
+
     /** Walk away from the open event (decision 3): nothing is lost, the site stays. */
     leaveEvent() {
       if (!s.event) return { ok: false, reason: 'no event is open' };

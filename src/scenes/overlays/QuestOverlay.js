@@ -44,7 +44,7 @@ const _seenQuestIds = new Set();
 
 /** Returns the unique state key for a quest in its current state. */
 function _questStateKey(q, pm) {
-  const activeStep = q.steps.find(s => getStepState(s, pm) === 'active');
+  const activeStep = q.steps.find(s => ['active', 'report'].includes(getStepState(s, pm)));
   return activeStep ? `${q.id}:${activeStep.id}` : q.id;
 }
 
@@ -326,8 +326,9 @@ export default class QuestOverlay extends Phaser.Scene {
     const state = getStepState(step, pm);
     const depth = this._depth;
 
-    const prefix = state === 'completed' ? '✓' : '►';
-    const color  = state === 'completed' ? C.stepCompleted : C.stepActive;
+    // 'report': done in the field, waiting for Elder Varek (batch 4b chunk 1).
+    const prefix = state === 'completed' ? '✓' : state === 'report' ? '★' : '►';
+    const color  = state === 'completed' ? C.stepCompleted : state === 'report' ? '#ffdd44' : C.stepActive;
 
     const stepTxt = this.add.text(46, relY, `${prefix}  ${step.label}`, {
       fontSize: '13px', color,
@@ -336,8 +337,10 @@ export default class QuestOverlay extends Phaser.Scene {
     relY += 20;
 
     // Show description only for the active step (gives the player direction)
-    if (state === 'active') {
-      const desc = typeof step.description === 'function' ? step.description(pm) : step.description;
+    if (state === 'active' || state === 'report') {
+      const desc = state === 'report'
+        ? "Done in the field. Report to Elder Varek at the Elders' Tower."
+        : typeof step.description === 'function' ? step.description(pm) : step.description;
       const descTxt = this.add.text(60, relY, desc, {
         fontSize: '12px', color: '#777777', wordWrap: { width: wrapW - 30 },
       }).setDepth(depth);

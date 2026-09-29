@@ -59,10 +59,19 @@ export function claimBossPlan(pm, bag, bossId) {
   return { ok: true, plan };
 }
 
+/** The step before a boss's first offer is done, and reported to Elder Varek
+ *  (`offerAfterStep`, batch 4b chunk 1). A save with no report record counts
+ *  as reported, as in quests.js. */
+function offerOpen(pm, boss) {
+  if (!pm?.hasQuestFlag?.(boss.offerAfter)) return false;
+  if (!boss.offerAfterStep || typeof pm.isStepDone !== 'function') return true;
+  return pm.isStepDone(boss.offerAfterStep);
+}
+
 /** Bosses whose first, free offer is waiting: the step before it done, not yet taken. */
 export function offersReady(pm, zoneId = null) {
   return Object.entries(BOSSES)
-    .filter(([, b]) => (!zoneId || b.zone === zoneId) && pm?.hasQuestFlag?.(b.offerAfter) && !pm.hasQuestFlag(b.unlockFlag))
+    .filter(([, b]) => (!zoneId || b.zone === zoneId) && offerOpen(pm, b) && !pm.hasQuestFlag(b.unlockFlag))
     .map(([id, b]) => ({ id, ...b }));
 }
 
@@ -74,7 +83,7 @@ export function takeFirstOffer(pm, bag, bossId, questFlag) {
   const boss = BOSSES[bossId];
   if (!boss) return { ok: false, reason: 'no such boss' };
   if (pm.hasQuestFlag(boss.unlockFlag)) return { ok: false, reason: 'already given' };
-  if (!pm.hasQuestFlag(boss.offerAfter)) return { ok: false, reason: 'your tribe has nothing to offer yet' };
+  if (!offerOpen(pm, boss)) return { ok: false, reason: 'your tribe has nothing to offer yet' };
   const plan = createItemInstance(boss.plan, { itemLevel: 1 });
   bag.push(plan);
   questFlag(boss.unlockFlag);
