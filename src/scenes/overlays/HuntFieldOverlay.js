@@ -1335,6 +1335,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (res.starved?.length) out.push(`Starving: ${res.starved.map(s => s.name).join(', ')} lost HP.`);
     if (kind === 'scout' && res.view?.exact) out.push('Scouted: you know exactly what is there.');
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points${res.reward?.xpPool > 0 ? `, ${res.reward.xpPool} XP for the party` : ''}.`);
+    if (kind === 'exit' && res.pack?.spoiled?.length) out.push('The fresh food you carried spoiled on the way home.');
     if (kind === 'move' && res.quiet) out.push(`Something is here, but ${res.quiet}.`);
     if (kind === 'leave') out.push('You walk on. It will still be there.');
     return out.join(' ');

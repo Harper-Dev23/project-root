@@ -182,7 +182,7 @@ export default class InventoryOverlay extends Phaser.Scene {
     if (this._onWheel) this.input.off('wheel', this._onWheel, this);
 
     const frame = createOverlayFrame(this, {
-      title: InventorySystem.isHuntingBag() ? 'Inventory: Hunt Pack' : 'Inventory',
+      title: 'Inventory',
       fullscreen: true,
       onClose: () => this._handleClose(),
     });

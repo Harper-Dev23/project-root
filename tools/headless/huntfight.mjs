@@ -903,14 +903,18 @@ console.log('=== a whole small hunt: move, fight, harvest, cook, exit ===');
     let t = goal; while (prev.get(t) !== st.pos) t = prev.get(t);
     h.move(t);
   }
-  const foundBefore = h.getState().pack.found.length;
+  const foundList = h.getState().pack.found;
+  const foundBefore = foundList.length;
+  // Fresh food spoils on the way home (batch 4b chunk 7): only the rest is banked.
+  const freshBefore = foundList.filter(i => Items[i.id]?.food).length;
   const paidBefore = world.paid.reduce((a, b) => a + b, 0);
   const x = h.exit();
   const paidAtExit = world.paid.reduce((a, b) => a + b, 0) - paidBefore;
   check('the party leaves through an exit and the completion reward is paid', x.ok && x.reward.primaryDone && x.reward.completion > 0 && paidAtExit === x.reward.huntPoints,
     x.ok ? `${x.reward.huntPoints} Hunt Points at the exit; ${world.paid.length - 1} fights paid before` : x.reason);
-  check('the pack comes home: the harvested parts and what is left of the food are banked',
-    world.banked.some(b => b.found && b.n === foundBefore) && foundBefore > 0, `${foundBefore} found entries banked`);
+  check('the pack comes home: the harvested parts are banked, and the fresh food has spoiled',
+    world.banked.some(b => b.found && b.n === foundBefore - freshBefore) && foundBefore - freshBefore > 0 && x.pack?.spoiled?.length === freshBefore,
+    `${foundBefore - freshBefore} of ${foundBefore} found entries banked, ${freshBefore} spoiled`);
   golden9d = { tally, days: Math.ceil(h.clock().time / 12), exitPoints: x.reward?.huntPoints };
 }
 console.log(`  (the small hunt: ${JSON.stringify(golden9d)})`);

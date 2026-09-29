@@ -389,6 +389,31 @@ console.log('=== the hunt pack is the bag while hunting (batch 4b chunk 7) ===')
   HuntManager.current().exit?.();
 }
 {
+  // Packing (PackingOverlay's choice, spent by takeDeparture).
+  freshGame();
+  const { takeDeparture } = await import('../../src/scenes/overlays/HuntHubOverlay.js');
+  const { makeBasicPlan } = await import('../../src/systems/HuntPlans.js');
+  InventorySystem.addGlobalItem('sever_head'); InventorySystem.addGlobalItem('sever_head');
+  const chant = GameState.inventory.find(i => i.id === 'sever_head');
+  const helm = createItemInstance('simple_helm_str', { rollAffixes: false });
+  InventorySystem.addGlobalItem(helm);
+  InventorySystem.addGlobalItem(S.makeStack('rations', 20));
+  const dep = takeDeparture({ plan: makeBasicPlan(), rationsToPack: 10, packIds: [chant.instanceId] });
+  check('Depart packs the chosen entries and the Rations, and nothing else',
+    dep.bring.some(b => b.id === 'sever_head' && S.stackQty(b) === 2) && dep.bring.some(b => b.id === 'rations' && S.stackQty(b) === 10)
+    && dep.bring.length === 2 && !GameState.inventory.some(i => i.id === 'sever_head') && GameState.inventory.some(i => i.instanceId === helm.instanceId),
+    JSON.stringify(dep.bring.map(b => [b.id, S.stackQty(b)])));
+}
+{
+  // Fresh food spoils on the way home (batch 4b chunk 7).
+  const { settlePack } = await import('../../src/systems/HuntManager.js');
+  const pack = { brought: [S.makeStack('rations', 5)], found: [S.makeStack('raw_fish', 3), S.makeStack('lean_game', 2), createItemInstance('simple_helm_str', { rollAffixes: false })] };
+  const out = settlePack({ pack, supplies: 500, deathRule: 'watched', ending: 'exit' });
+  check('a clean exit: fish and meat spoil, Rations and gear come home',
+    out.spoiled.map(i => i.id).sort().join() === 'lean_game,raw_fish' && out.home.found.map(i => i.id).join() === 'simple_helm_str'
+    && out.home.brought.some(i => i.id === 'rations'), JSON.stringify({ spoiled: out.spoiled.map(i => i.id), home: out.home.found.map(i => i.id) }));
+}
+{
   // A save with personal inventories: they fold into the camp bag on load.
   freshGame();
   const hero = GameState.characters[0];

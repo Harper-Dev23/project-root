@@ -19,6 +19,7 @@ import JournalOverlay from './scenes/overlays/JournalOverlay.js';
 import QuestOverlay from './scenes/overlays/QuestOverlay.js';
 import StashOverlay from './scenes/overlays/StashOverlay.js';
 import PartsBuyerOverlay from './scenes/overlays/PartsBuyerOverlay.js';
+import PackingOverlay from './scenes/overlays/PackingOverlay.js';
 import LevelUpOverlay from './scenes/overlays/LevelUpOverlay.js';
 import TribeRelationsOverlay from './scenes/overlays/TribeRelationsOverlay.js';
 import WaystoneShardOverlay from './scenes/overlays/WaystoneShardOverlay.js';
@@ -56,6 +57,7 @@ const config = {
     QuestOverlay,
     StashOverlay,
     PartsBuyerOverlay,
+    PackingOverlay,
     LevelUpOverlay,
     TribeRelationsOverlay,
     WaystoneShardOverlay,

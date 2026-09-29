@@ -47,6 +47,7 @@ import { partyStats } from '../../systems/PartyStats.js';
 import { planMapInputs } from '../../systems/HuntMapGen.js';
 import { launchMapHunt } from './HuntFieldOverlay.js';
 import { bossesIn, omenMeter, offersReady } from '../../systems/Omens.js';
+import { packable } from './PackingOverlay.js';
 
 // The camp's free issue (CAMP_ISSUE, 60) comes on top of what is packed. The
 // packing cap is rationPackCap (HuntRules.js): 60 since the hunt moved onto
@@ -71,16 +72,26 @@ const DEATH_RULE_TEXT = {
  * Depart and the co-op host's start (CoopLobbyScene), so they cannot drift.
  * The caller saves.
  */
-export function takeDeparture({ plan, rationsToPack = 0 }) {
+export function takeDeparture({ plan, rationsToPack = 0, packIds = [] }) {
   const packed = Math.max(0, Math.min(rationsToPack, countInList(GameState.inventory, 'rations'), rationPackCap(GameState.party)));
   const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
   const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
+  // What else was packed (batch 4b chunk 7, PackingOverlay): whole entries out
+  // of the camp bag and into the pack, at risk from here. Never the plan.
+  const others = [];
+  for (const id of packIds) {
+    const inst = (GameState.inventory || []).find(it => it?.instanceId === id);
+    if (!inst || inst.instanceId === plan?.instanceId || inst.id === 'rations') continue;
+    GameState.removeFromInventory(id);
+    others.push(inst);
+  }
+  const bring = [...(rations ? [rations] : []), ...others];
   const view = huntPlanView(plan);
   // A boss plan stays in the bag until its boss is fought (14b-4): the hunt
   // carries its id and uses it up then (HuntEngine.beginFight).
-  if (view.boss) return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel, bossPlanId: plan.instanceId }, supplies, bring: rations ? [rations] : [] };
+  if (view.boss) return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel, bossPlanId: plan.instanceId }, supplies, bring };
   if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
-  return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring: rations ? [rations] : [] };
+  return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring };
 }
 
 export default class HuntHubOverlay extends Phaser.Scene {
@@ -92,6 +103,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this.zoneId = null;
     this.rationsToPack = 0;
     this.huntPlanInstance = null;
+    // Camp bag entries chosen to go with the party (PackingOverlay; batch 4b chunk 7).
+    this.packIds = [];
   }
 
   create() {
@@ -215,7 +228,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
       { fontSize: '13px', color: '#999999' }
     );
     this._text(left, suppliesY + 78,
-      `Packed Rations are at risk. What you don't eat comes home when you leave. ${DEATH_RULE_TEXT[zoneDeathRule(zone)]}`,
+      `Everything you pack is at risk. Rations you don't eat come home; fresh food spoils. ${DEATH_RULE_TEXT[zoneDeathRule(zone)]}`,
       { fontSize: '12px', color: '#c9a36a', wordWrap: { width: width - 80 } }
     );
 
@@ -225,8 +238,17 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const buy = this._button(x + width - 130, suppliesY + 32, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
     if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
 
+    // ── What else goes with you (batch 4b chunk 7): the camp bag stays in camp.
+    this.packIds = this.packIds.filter(id => packable().some(it => it.instanceId === id));
+    const packedNames = packable().filter(it => this.packIds.includes(it.instanceId)).map(it => getItemComputedData(it)?.name || it.id);
+    this._text(left, suppliesY + 114,
+      packedNames.length ? `Also packed: ${packedNames.slice(0, 4).join(', ')}${packedNames.length > 4 ? ` and ${packedNames.length - 4} more` : ''}`
+        : 'Nothing else packed. Draughts, chants and spare gear you leave behind stay safe in camp, out of reach.',
+      { fontSize: '13px', color: packedNames.length ? '#d0d0d0' : '#999999', wordWrap: { width: width - 260 } });
+    this._button(x + width - 130, suppliesY + 118, 'Pack…', () => this._openPacking(), 'primary');
+
     // ── Hunt Plan ────────────────────────────────────────────────────────
-    const planY = suppliesY + 124;
+    const planY = suppliesY + 156;
     this._text(left, planY, 'Hunt Plan', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
 
     // Never empty: with nothing chosen, the hunt goes on the free basic plan.
@@ -275,6 +297,7 @@ export default class HuntHubOverlay extends Phaser.Scene {
       zoneId: this.zoneId,
       plan,
       rationsToPack: this.rationsToPack,
+      packIds: [...this.packIds],
       label: `${zone?.name || this.zoneId}: ${getItemComputedData(plan).name}`,
     };
     this.scene.stop();
@@ -367,9 +390,10 @@ export default class HuntHubOverlay extends Phaser.Scene {
     SoundManager.play('select');
     // Every new hunt is a hunt on the hex map (chunk 8c). The Advance loop
     // only lives on in old saves.
-    const { plan, supplies, bring } = takeDeparture({ plan: this._plan(), rationsToPack: this.rationsToPack });
+    const { plan, supplies, bring } = takeDeparture({ plan: this._plan(), rationsToPack: this.rationsToPack, packIds: this.packIds });
     HuntManager.startMap(this.zoneId, { plan, supplies, bring });
     this.rationsToPack = 0;
+    this.packIds = [];
     this.huntPlanInstance = null;
 
     // One write for the rations, the plan and the new hunt, so a reload can
@@ -485,6 +509,17 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this.scene.pause();
     this.scene.launch('HuntMapOverlay');
     this.scene.bringToTop('HuntMapOverlay');
+  }
+
+  /** Choose what else goes with the party (PackingOverlay); the choice comes back here. */
+  _openPacking() {
+    SoundManager.play('select');
+    this.scene.pause();
+    this.scene.launch('PackingOverlay', {
+      packIds: this.packIds,
+      onDone: (ids) => { this.packIds = ids; this.scene.resume(); this._render(); },
+    });
+    this.scene.bringToTop('PackingOverlay');
   }
 
   _openHuntPlanPicker() {

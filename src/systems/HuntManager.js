@@ -51,8 +51,13 @@
 //   brought       leftovers home    leftovers home    lost
 //   found         into the bag      into the bag      lost
 //
-// The camp bag (GameState.inventory) is never at risk. Equipped gear is not in
-// the pack; its loss waits for soulbound (DEATH_AND_REVIVAL).
+// Fresh food (fish, meat, forage) never comes home: it spoils on the way back
+// (batch 4b chunk 7). Rations keep.
+//
+// The camp bag (GameState.inventory) is never at risk, and stays in camp: on
+// a map hunt the pack is the party's bag (InventorySystem's active bag, batch
+// 4b chunk 7). Equipped gear is not in the pack; its loss waits for
+// soulbound (DEATH_AND_REVIVAL).
 //
 // Supplies are Rations, a stackable item. The camp issues CAMP_ISSUE supplies
 // free on every departure, and the rations a player packs sit on top; the
@@ -394,6 +399,14 @@ export function settlePack({ pack, supplies, deathRule, ending }) {
   }
   const found = clone(pack.found);
 
+  // Fresh food spoils on the way home (owner 2026-09-29, batch 4b chunk 7):
+  // fish, meat and forage (anything with `food`) never come back; Rations,
+  // which keep, have no `food`. Fresh food is found and eaten on the hunt.
+  const fresh = (it) => !!Items[it?.id]?.food;
+  const spoiled = [...brought.filter(fresh), ...found.filter(fresh)];
+  const keepBrought = brought.filter(it => !fresh(it));
+  const keepFound = found.filter(it => !fresh(it));
+
   const keeps = ending === 'exit' || deathRule === 'sheltered';
   const none = { brought: [], found: [] };
   return {
@@ -402,7 +415,8 @@ export function settlePack({ pack, supplies, deathRule, ending }) {
     keeps,
     rationsPacked,
     rationsLeft,
-    home: keeps ? { brought, found } : none,
+    spoiled: keeps ? spoiled : [],
+    home: keeps ? { brought: keepBrought, found: keepFound } : none,
     lost: keeps ? none : { brought, found },
   };
 }
