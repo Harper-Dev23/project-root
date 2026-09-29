@@ -129,7 +129,7 @@ import {
 import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
-import { regionFlag, questTitleForStep } from './HuntQuests.js';
+import { regionFlag, questTitleForStep, questStepDone } from './HuntQuests.js';
 import { BOSSES, BOSS_HUNT_POINTS, BOSS_XP_MULT } from '../../data/bosses.js';
 import { rollBossLoot } from './BossLoot.js';
 import { CULT_PARLEY } from '../../data/cultMarkets.js';
@@ -1317,7 +1317,10 @@ function makeMapHunt(s, rng, worldRng, world) {
         name: q.beast ? (q.name || q.beast) : (EVENT_TEMPLATES[q.eventId]?.name || q.eventId),
         ...(q.beast ? { beast: q.beast } : {}),
         night: !q.beast && EVENT_TEMPLATES[q.eventId]?.appears?.night === true,
-        done: !s.map.occupants.some(o => o.id === q.occId),
+        // Done when its site is used, or when its step finished another way
+        // (the Cantor's page taken from a Choir band): quest sites only.
+        done: !s.map.occupants.some(o => o.id === q.occId)
+          || (!String(q.step).startsWith('market:') && questStepDone(q.step, world.hasQuestFlag)),
       }));
     },
 

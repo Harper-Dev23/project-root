@@ -179,6 +179,19 @@ console.log('=== a real hunt: marked, quiet by day, open at night ===');
   const old = day.h.serialize(); delete old.map.questSites;
   check('a hunt saved before quest sites existed still loads, with none marked', restoreMapHunt(old, recordingWorld(makeParty())).view().objectiveSites.every(s => s.objective !== 'quest'));
 
+  // A site whose step finishes another way is done (owner's playtest
+  // 2026-09-29: the Cantor's fish trade stayed marked after a Choir band
+  // gave up the page).
+  {
+    const pm = fakePM([regionFlag('hunted', REEDS), 'choir_heard']);
+    const w = recordingWorld(makeParty(), pm);
+    const h = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'small' }, supplies: 300, seed: 515 }, w);
+    const cantor = () => h.view().objectiveSites.find(s => s.step === 'hb_cantor');
+    check("the Cantor's Price marks its trade", !!cantor() && !cantor().done);
+    pm.add('cult_slain:yargaleth');
+    check('...and it reads done once a Choir band gives up the page', cantor()?.done === true);
+  }
+
   // Time passing on the tile wakes it (owner's playtest 2026-09-29: only Wait
   // looked again; camping until dark needed a step off and back on).
   /** Standing on the quiet Pools by day, `before` time short of nightfall. */

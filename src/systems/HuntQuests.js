@@ -23,6 +23,24 @@ export function questTitleForStep(stepId) {
   return null;
 }
 
+/**
+ * True once a quest step is complete by the save's flags, read mid-hunt
+ * through `hasQuestFlag` (the world's). Region steps read nothing else. A
+ * site whose step finished another way is done (owner's playtest
+ * 2026-09-29: the Cantor's fish-trade site stayed marked after a Choir
+ * band gave up the page). False for an unknown step.
+ */
+export function questStepDone(stepId, hasQuestFlag) {
+  for (const quest of QUEST_LINES) {
+    const step = (quest.steps || []).find(st => st.id === stepId);
+    if (!step) continue;
+    try {
+      return !!step.isComplete({ hasQuestFlag: (f) => !!hasQuestFlag?.(f), tribe: null, completedScenarios: [] });
+    } catch { return false; }
+  }
+  return false;
+}
+
 /** The flag the engine sets for `kind` ('hunted' | 'apex_slain') in a region. */
 export function regionFlag(kind, zoneId) {
   return `${kind}:${zoneId}`;
