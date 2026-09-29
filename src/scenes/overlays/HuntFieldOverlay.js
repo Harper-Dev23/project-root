@@ -74,7 +74,7 @@ import GameState from '../../systems/GameState.js';
 import DiceToken from '../../ui/DiceToken.js';
 import { levelDef as boonLevelDef } from '../../systems/Boons.js';
 import { EVENT_TEMPLATES } from '../../../data/events.js';
-import { pendingReports } from '../../data/quests.js';
+import { pendingReports, QUEST_LINES, getQuestState } from '../../data/quests.js';
 
 // The boon level each hunt has already announced (chunk 10b), kept per hunt
 // instance so a level earned in a fight is announced when the map reopens,
@@ -221,11 +221,25 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * repeat old news. The reward waits for Elder Varek (QuestRewards).
    */
   _reportNews() {
-    const now = pendingReports(ProgressionManager).map(h => h.step);
-    if (!announcedReports) { announcedReports = new Set(now.map(st => st.id)); return ''; }
-    const fresh = now.filter(st => !announcedReports.has(st.id));
-    for (const st of fresh) { announcedReports.add(st.id); this.hunt.noteQuestDone?.(st.label); }
-    return fresh.map(st => `${st.label}: done. Report to Elder Varek.`).join(' ');
+    // Steps done, and region questlines that opened in the field (a cult's
+    // line on fighting its band, chunk 3), keyed apart in one set.
+    const done = pendingReports(ProgressionManager).map(h => h.step);
+    const opened = QUEST_LINES.filter(q => q.category === 'region' && getQuestState(q, ProgressionManager) !== 'locked');
+    const keys = [...done.map(st => `step:${st.id}`), ...opened.map(q => `line:${q.id}`)];
+    if (!announcedReports) { announcedReports = new Set(keys); return ''; }
+    const out = [];
+    for (const q of opened) {
+      if (announcedReports.has(`line:${q.id}`)) continue;
+      announcedReports.add(`line:${q.id}`);
+      out.push(`New quest: ${q.title}.`);
+    }
+    for (const st of done) {
+      if (announcedReports.has(`step:${st.id}`)) continue;
+      announcedReports.add(`step:${st.id}`);
+      this.hunt.noteQuestDone?.(st.label);
+      out.push(`${st.label}: done. Report to Elder Varek.`);
+    }
+    return out.join(' ');
   }
 
   /** Listen to the co-op hunt: every change redraws; a fight takes everyone

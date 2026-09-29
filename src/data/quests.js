@@ -36,6 +36,17 @@ const firstHistoricFlag = (pm) => (pm.questFlags || []).find(f => f.startsWith('
 /** The Vowback is dead (or, a save from before it was a quest beast, the Lament Pools were reached). */
 const pastTheVowback = (pm) => pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('mb_weeping_heard');
 
+/**
+ * A cult's questline opens (owner 2026-09-29, batch 4b chunk 3): when the
+ * Vowback is reported to the Elder, or earlier, the first time the party
+ * fights a band of that cult (the engine's cult_slain:<god>), so each can
+ * start on its own. Both lines run side by side. A line already started
+ * stays open.
+ */
+const cultLineOpen = (pm, god, startedFlag) =>
+  (pastTheVowback(pm) && isReported(pm, 'wr_apex'))
+  || pm.hasQuestFlag(`cult_slain:${god}`) || pm.hasQuestFlag(startedFlag);
+
 /** The Unconfessed Dead is open: the Vowback slain, or (a save that opened
  *  it before batch 4) the Reeds' apex. */
 const ghostPartyOpen = (pm) =>
@@ -361,7 +372,8 @@ export const QUEST_LINES = [
       {
         id:          'wr_apex',
         label:       'The Vowback Crocodile',
-        reward:      { huntTickets: 8, text: 'The Vowback is dead? Then the mourners can walk the reeds again. Take these.' },
+        // Reporting it opens both cult lines (cultLineOpen, chunk 3): his line says why.
+        reward:      { huntTickets: 8, text: 'The Vowback is dead? Then the mourners can walk the reeds again. They tell me of other things now: singing under the water at night, and offerings sunk in the still pools. Look into both.' },
         description: 'The mourners speak of an old crocodile grown over with prayer stones. Your next Reeds hunt will mark where it lies with its brood. Kill it.',
         // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
         // A save that reached the Lament Pools before this counts as done.
@@ -449,7 +461,7 @@ export const QUEST_LINES = [
     category:    'region',
     title:       'The Hymn Beneath the Water',
     description: 'The Drowned Choir sing to Yar\'galeth under the reeds. They could be talked to, and traded with, by someone they know.',
-    isAvailable: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+    isAvailable: (pm) => cultLineOpen(pm, 'yargaleth', 'choir_heard'),
     steps: [
       {
         id:          'hb_singing',
@@ -457,7 +469,7 @@ export const QUEST_LINES = [
         reward:      { huntTickets: 3, text: 'So the Choir sing under the water. Better to know it than to wonder.' },
         description: 'Something sings under the reeds at night. Your next Reeds hunt will mark where. Once the Choir know you, their camps will talk instead of fight.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'choir_singing', far: true },
-        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isActive:   (pm) => cultLineOpen(pm, 'yargaleth', 'choir_heard'),
         isComplete: (pm) => pm.hasQuestFlag('choir_heard'),
       },
       {
@@ -497,7 +509,7 @@ export const QUEST_LINES = [
     category:    'region',
     title:       'The Offered Breath',
     description: 'The Temple of the Gill feed Dagon from the Reeds\' still pools. Get close enough, and they trade.',
-    isAvailable: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+    isAvailable: (pm) => cultLineOpen(pm, 'dagon', 'gill_offerings_read'),
     steps: [
       {
         id:          'ob_offerings',
@@ -505,7 +517,7 @@ export const QUEST_LINES = [
         reward:      { huntTickets: 3, text: 'Offerings to Dagon, in our own reeds. I would rather know than not.' },
         description: 'Someone sinks offerings at a reed shrine. Your next Reeds hunt will mark it. Once the Temple know you, their camps will talk instead of fight.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'gill_offerings', far: false },
-        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+        isActive:   (pm) => cultLineOpen(pm, 'dagon', 'gill_offerings_read'),
         isComplete: (pm) => pm.hasQuestFlag('gill_offerings_read'),
       },
       {

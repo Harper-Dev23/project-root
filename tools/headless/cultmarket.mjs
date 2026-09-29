@@ -293,7 +293,8 @@ console.log('=== parley and the Hymn Beneath the Water ===');
   const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
   const { QUEST_LINES, getQuestState } = await import('../../src/data/quests.js');
   const q = QUEST_LINES.find(x => x.id === 'hymn_beneath_the_water');
-  const flags = new Set(['hunted:' + REEDS]);
+  // The cult lines open once the Vowback is reported (batch 4b chunk 3; a flag-only save counts it reported).
+  const flags = new Set(['hunted:' + REEDS, 'vowback_slain']);
   const pmq = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (f) => flags.has(f) };
   const choirSites = () => questSitesFor(REEDS, pmq).filter(s => s.step.startsWith('hb_') || s.step.startsWith('market:')).map(s => s.eventId);
   const walk = [choirSites()];
@@ -312,7 +313,7 @@ console.log('=== The Offered Breath (the Temple of the Gill) ===');
   const { QUEST_LINES, getQuestState } = await import('../../src/data/quests.js');
   const REEDS = 'reeds_of_gethsemane';
   const q = QUEST_LINES.find(x => x.id === 'offered_breath');
-  const flags = new Set(['hunted:' + REEDS]);
+  const flags = new Set(['hunted:' + REEDS, 'vowback_slain']);
   const pmq = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (f) => flags.has(f) };
   const sites = () => questSitesFor(REEDS, pmq).filter(s => s.step.startsWith('ob_') || s.step === 'market:dagon').map(s => s.eventId);
   const walk = [sites()];

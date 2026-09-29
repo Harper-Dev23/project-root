@@ -84,6 +84,31 @@ PM.setQuestFlag(REEDS_DONE);
 check('a hunt afterwards does not offer him twice', PM.offerSamuelAfterHunt() === false);
 
 console.log('');
+console.log('=== when the cults are introduced (batch 4b chunk 3) ===');
+{
+  const { getQuestState } = await import('../../src/data/quests.js');
+  const choir = QUEST_LINES.find(q => q.id === 'hymn_beneath_the_water');
+  const temple = QUEST_LINES.find(q => q.id === 'offered_breath');
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.setQuestFlag(REEDS_DONE);
+  check('a first hunt: neither cult line', getQuestState(choir, PM) === 'locked' && getQuestState(temple, PM) === 'locked');
+  PM.setQuestFlag('cult_slain:yargaleth');
+  check('a Drowned Choir band fought: the Choir line alone opens', getStepState(step('hb_singing'), PM) === 'active'
+    && getQuestState(temple, PM) === 'locked');
+  PM.setQuestFlag('vowback_slain');
+  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool'];
+  check('the Vowback slain but not reported: the Temple still waits', getQuestState(temple, PM) === 'locked');
+  claimQuestRewards(PM);
+  check('the Vowback reported: both lines, side by side', getStepState(step('ob_offerings'), PM) === 'active'
+    && getStepState(step('hb_singing'), PM) === 'active');
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.questFlags = [REEDS_DONE, 'gill_offerings_read'];
+  check('a save already in a line keeps it', getQuestState(temple, PM) !== 'locked' && getStepState(step('ob_offerings'), PM) === 'report');
+}
+
+console.log('');
 console.log("=== the Elder's Bone Pile talk: Trial 2 or the first hunt ===");
 PM.reset();
 clear(['training_encounter_1']);
@@ -244,7 +269,8 @@ console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
     && pendingReports(PM).some(h => h.step.id === 'wr_hunt') && PM.huntTickets === 0);
   check('...and the rest of its line waits on the report', getStepState(step('wr_apex'), PM) === 'upcoming');
   check("...so the next hunt holds no Vowback site yet", !questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
-  check('a first step of another line is not held back (Singing Under the Water)', getStepState(step('hb_singing'), PM) === 'active');
+  check('the cult lines are not open after a first hunt (chunk 3)', getStepState(step('hb_singing'), PM) === 'upcoming'
+    && getStepState(step('ob_offerings'), PM) === 'upcoming');
   const bag = [];
   const firstPaid = claimQuestRewards(PM, { addItem: (i) => bag.push(i), itemLevel: 2 });
   check('reported: paid, done, and Thin the Reeds is the step', getStepState(step('wr_hunt'), PM) === 'completed'
