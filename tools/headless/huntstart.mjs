@@ -84,6 +84,32 @@ PM.setQuestFlag(REEDS_DONE);
 check('a hunt afterwards does not offer him twice', PM.offerSamuelAfterHunt() === false);
 
 console.log('');
+console.log("=== the Elder's Bone Pile talk: Trial 2 or the first hunt ===");
+PM.reset();
+clear(['training_encounter_1']);
+PM.tribe = 'styx';
+check('no hunt yet: not raised', PM.offerBonepileAfterHunt() === false && !PM.hasQuestFlag('elder_bonepile'));
+PM.setQuestFlag(REEDS_DONE);
+check('the first hunt: raised', PM.offerBonepileAfterHunt() === true && PM.hasQuestFlag('elder_bonepile'));
+check('...its marker is The Long Road\'s step', getStepForFlag('elder_bonepile', PM)?.step.id === 'lr_elder_bonepile');
+check('...once', PM.offerBonepileAfterHunt() === false);
+// The tower, as TownScene does it.
+PM.clearQuestFlag('elder_bonepile');
+PM.setQuestFlag('bonepile_explained');
+check('after he speaks: not raised again', PM.offerBonepileAfterHunt() === false);
+check('...and the step reads done', getStepState(step('lr_elder_bonepile'), PM) === 'completed');
+clear(['training_encounter_2']);
+check('Trial 2 afterwards: no second talk', !PM.hasQuestFlag('elder_bonepile'));
+check('...but the rest of Trial 2 still lands', PM.hasQuestFlag('elseth_leader_brief'));
+PM.reset();
+clear(['training_encounter_1', 'training_encounter_2']);
+PM.tribe = 'styx';
+check('by the pit (unchanged): Trial 2 raises it', PM.hasQuestFlag('elder_bonepile'));
+PM.setQuestFlag(REEDS_DONE);
+PM.clearQuestFlag('elder_bonepile');
+check('a hunt after Trial 2 does not raise it', PM.offerBonepileAfterHunt() === false);
+
+console.log('');
 console.log('=== the Hunt Gate marker ===');
 PM.reset();
 clear(['training_encounter_1']);

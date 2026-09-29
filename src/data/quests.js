@@ -143,8 +143,10 @@ export const QUEST_LINES = [
         flags:          ['elder_bonepile'],
         label:       'Return to the Elder',
         description: 'The elder has knowledge to share about the Bone Pile and its risks.',
+        // Raised by Trial 2 or by the first hunt (ProgressionManager
+        // offerBonepileAfterHunt); `bonepile_explained` is set when he speaks.
         isActive:   (pm) => pm.hasQuestFlag('elder_bonepile'),
-        isComplete: (pm) => sc(pm, 'training_encounter_2') && !pm.hasQuestFlag('elder_bonepile'),
+        isComplete: (pm) => (sc(pm, 'training_encounter_2') || pm.hasQuestFlag('bonepile_explained')) && !pm.hasQuestFlag('elder_bonepile'),
       },
       {
         id:          'lr_s3',

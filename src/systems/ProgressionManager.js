@@ -488,6 +488,21 @@ const ProgressionManager = {
     return true;
   },
 
+  /**
+   * The hunt route to the Elder's Bone Pile talk (owner's playtest
+   * 2026-09-29: it came only by Trial 2, though a hunt opens the Bone Pile
+   * too). After the first hunt and before Trial 2, raise `elder_bonepile`
+   * once; the tower sets `bonepile_explained` when he gives it, and Trial 2
+   * then does not raise it again. Returns true if it raised it (the caller saves).
+   */
+  offerBonepileAfterHunt() {
+    if (!this.hasCompletedHunt() || this.tribe === null) return false;
+    if (this.completedScenarios.includes('training_encounter_2')) return false;
+    if (this.hasQuestFlag('elder_bonepile') || this.hasQuestFlag('bonepile_explained')) return false;
+    this.setQuestFlag('elder_bonepile');
+    return true;
+  },
+
   // ----- Scenario unlock queries -------------------------------------------
 
   isScenarioUnlocked(scenarioId) {
@@ -553,10 +568,13 @@ const ProgressionManager = {
 
       // Auto-set any quest flag(s) tied to this scenario's first completion.
       // Samuel is skipped if a hunt already introduced him, or clearing Trial 4
-      // would send the player to meet him a second time.
+      // would send the player to meet him a second time; the Bone Pile talk
+      // likewise if a hunt already brought it (offerBonepileAfterHunt).
       const samuelMet = this.hasSamuelBeenIntroduced();
+      const bonepileTold = this.hasQuestFlag('bonepile_explained');
       [].concat(SCENARIO_FLAGS[scenarioId] || [])
         .filter(f => !(f === 'samuel_mourne' && samuelMet))
+        .filter(f => !(f === 'elder_bonepile' && bonepileTold))
         .forEach(f => this.setQuestFlag(f));
     }
 

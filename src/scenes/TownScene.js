@@ -970,6 +970,12 @@ export default class TownScene extends Phaser.Scene {
    * that need to reflect the new tribe (Elder's Tower F1 and lodges).
    */
   _refreshQuestFlags() {
+    // First: _buildQuestFlags is where flags a hunt earns are raised
+    // (Samuel, the Bone Pile talk), and the checks below decide which cached
+    // interiors to rebuild from those flags. Run after them, a flag raised on
+    // the way back from a hunt left its interior stale until the next refresh.
+    this._buildQuestFlags();
+
     const currentTribe = ProgressionManager.getTribe();
 
     // If tribe state changed, invalidate post-choice interiors.
@@ -1013,8 +1019,6 @@ export default class TownScene extends Phaser.Scene {
       this.samuelInteriorGroup = null;
     }
 
-    this._buildQuestFlags();
-
     // Keep UIScene currency display in sync after returning from combat.
     this.scene.get('UIScene')?.refreshUI?.();
   }
@@ -1054,8 +1058,10 @@ export default class TownScene extends Phaser.Scene {
       questFlagsChanged = true;
     }
 
-    // Samuel comes after the first hunt if Trial 4 has not brought him yet.
+    // Samuel comes after the first hunt if Trial 4 has not brought him yet,
+    // and the Elder's Bone Pile talk if Trial 2 has not.
     if (ProgressionManager.offerSamuelAfterHunt()) questFlagsChanged = true;
+    if (ProgressionManager.offerBonepileAfterHunt()) questFlagsChanged = true;
 
     // Quest-step rewards (src/systems/QuestRewards.js): paid once, announced
     // once. Deferred a tick so UIScene exists when this runs from create().
@@ -2740,14 +2746,18 @@ export default class TownScene extends Phaser.Scene {
           ProgressionManager.clearQuestFlag('elder_leveling');
           if (hasBonepileFlag) {
             ProgressionManager.clearQuestFlag('elder_bonepile');
+            ProgressionManager.setQuestFlag('bonepile_explained');
             ProgressionManager.setQuestFlag('vendor_row');
           }
           GameState.save('autosave');
           this._buildQuestFlags();
           this._addElderLoreToLayout(layout, 'leveling');
         } else if (hasBonepileFlag) {
-          // Scenario 2 cleared — explain Bone Pile and gambling, then unlock vendor_row flag.
+          // Trial 2 or the first hunt — explain Bone Pile and gambling, then
+          // unlock vendor_row flag. bonepile_explained keeps the other route
+          // from raising it a second time.
           ProgressionManager.clearQuestFlag('elder_bonepile');
+          ProgressionManager.setQuestFlag('bonepile_explained');
           ProgressionManager.setQuestFlag('vendor_row');
           GameState.save('autosave');
           this._buildQuestFlags();
