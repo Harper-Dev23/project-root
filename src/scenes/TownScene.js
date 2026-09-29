@@ -194,8 +194,8 @@ function randomRarityForPlanStock() {
   return 'epic';
 }
 
-/** Hunt Tickets per Bone Pile gamble (was 1). Marked gambles cost 1 Mark, unchanged. */
-const TICKET_GAMBLE_COST = 2;
+/** Hunt Tickets per Bone Pile gamble (was 1; 3 from the owner's 2026-09-29 call). Marked gambles cost 1 Mark, unchanged. */
+const TICKET_GAMBLE_COST = 3;
 
 // Reckoning Marks buy a better roll than a Hunt Ticket does, on both axes:
 // this rarity table (which decides affix COUNT) and a higher item level plus
@@ -2963,7 +2963,7 @@ export default class TownScene extends Phaser.Scene {
         body:
           '"The hunters who return from the Sacred Hunt bring more than trophies.\n' +
           'They bring currency — Hunt Tickets, earned through trial and combat.\n\n' +
-          'The Bonepile keeper accepts these tickets. Two tickets, one gamble.\n' +
+          'The Bonepile keeper accepts these tickets. Three tickets, one gamble.\n' +
           'The rewards are unpredictable, but rarely worthless.\n\n' +
           'You will find the Bonepile in the vendor row. Spend wisely — or not at all.\n' +
           'Luck has its own wisdom."',
