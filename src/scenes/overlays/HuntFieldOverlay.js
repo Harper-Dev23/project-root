@@ -971,7 +971,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const priceText = v.parley ? v.parley.price.map(g => `${g.qty} ${g.name}`).join(', ') : '';
     if (v.parley?.canPay) lines.push(`This cult knows you and will talk. Parley: pay ${priceText}; they give ${v.parley.gives.join(', ') || 'nothing'}, and leave.`);
     else if (v.parley) lines.push(`This cult knows you, but wants ${priceText}, which you do not carry. Fight, or flee from the fight.`);
-    const width = 360, height = 50 + this._linesHeight(lines, 360) + 60;
+    const guest = this.coop && !this.coop.isHost;
+    const width = 360, height = 50 + this._linesHeight(lines, 360) + 60 + (guest ? 40 : 0);
     const p = this._sidePanel(e.tile && v.layout.includes(e.tile) ? e.tile : v.pos, width, height);
     this._panelText(p, p.px + 10, p.py + 8, e.ambush ? 'Ambush' : 'Encounter', 17, '#ff9a8a');
     let ty = p.py + 36;
@@ -979,8 +980,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     ty += 10;
     // Fleeing is done from inside the fight (chunk 9c, decision 8), where the
     // enemy's free round is played: the panel only starts it. In a co-op hunt
-    // the host starts it for everyone.
-    if (this.coop && !this.coop.isHost) this._panelText(p, p.px + 10, ty + 4, 'Waiting for the host to fight.', 14, '#e8c66a');
+    // the host starts it for everyone. A guest can still leave the hunt here,
+    // as on every other panel a guest waits on (an event, the spoils).
+    if (guest) {
+      this._panelText(p, p.px + 10, ty + 4, 'Waiting for the host to fight.', 14, '#e8c66a');
+      this._panelButton(p, p.px + width / 2, ty + 48, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+    }
     else if (v.parley?.canPay) {
       // A cult that knows the party (owner, 2026-09-27): pay and talk, or fight.
       this._panelButton(p, p.px + width / 2 - 80, ty + 12, 'Fight', () => this._fight(), 'danger');

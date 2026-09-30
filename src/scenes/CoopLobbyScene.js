@@ -242,9 +242,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // group rather than spilling over the border.
     const rowY2 = 186;
     this.browseBtn = createButton(this, 1055, rowY2, 'Browse open hunts', () => this._browse());
-    this.publicToggle = this.add.text(60, rowY2, '', { ...FONTS.body, fontSize: '15px' })
-      .setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    this.publicToggle.on('pointerdown', () => this._togglePublic());
+    // Public or private, as a real button beside Browse (owner's notes,
+    // 2026-09-29: the old "[ ] List publicly" line was easy to miss). Two
+    // buttons, one shown: the button's label cannot change in place.
+    this.publicOff = createButton(this, 790, rowY2, 'List this lobby publicly', () => this._togglePublic());
+    this.publicOn = createButton(this, 790, rowY2, 'Listed publicly ✓', () => this._togglePublic(), 'confirm');
 
     // One-click switching between the two servers.
     //
@@ -513,7 +515,15 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
   _cycleScenario(dir) {
     if (this.client && !this.client.isHost) return this._say('Only the host chooses the fight.');
+    // Step from the fight the lobby holds (what everyone sees), not a stale
+    // local pick.
+    const current = this.scenarioIds.indexOf(this.client?.lobby?.scenarioId);
+    if (current >= 0) this.scenarioIndex = current;
     this.scenarioIndex = (this.scenarioIndex + dir + this.scenarioIds.length) % this.scenarioIds.length;
+    // Once the lobby exists, the server holds the fight: tell it, and every
+    // screen (this one too) updates from its broadcast. It used to change only
+    // this screen, and Start ran the fight chosen at Host.
+    if (this.client?.playerId && this.client.isHost) this.client.setScenario(this.scenarioId);
     this._refresh();
   }
 
@@ -784,9 +794,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
     // Public/private is the host's call, shown wherever they are in the flow.
     const canSetPublic = !inLobby || this.client.isHost;
-    this.publicToggle.setVisible(canSetPublic);
-    this.publicToggle.setText((this.wantPublic ? '[x]' : '[ ]') + '  List publicly');
-    this.publicToggle.setColor(this.wantPublic ? MENU_THEME.accentHover : '#8a8f98');
+    this.publicOff.setVisible(canSetPublic && !this.wantPublic);
+    this.publicOn.setVisible(canSetPublic && this.wantPublic);
 
     // One panel, two lists: open hunts before you are seated, teammates after.
     const showBrowse = !inLobby && this.browsing;

@@ -176,6 +176,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     say(text) { return client.send({ t: 'say', text }); },
     browse() { return client.send({ t: 'browse' }); },
     setPublic(isPublic) { return client.send({ t: 'setPublic', isPublic }); },
+    /** The fight a pit lobby will start (host, before Start). */
+    setScenario(scenarioId) { return client.send({ t: 'setScenario', scenarioId }); },
 
     /**
      * Send one action. Refusals come back as an 'error' event rather than a

@@ -17,6 +17,7 @@ if (!globalThis.Phaser) {
 }
 
 import { createSession, PARTY_LIMIT } from './session.js';
+import { COMBAT_SCENARIOS } from '../data/combatScenarios.js';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  // no I/O/0/1
 
@@ -638,6 +639,25 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     },
 
     /** { t:'setPublic', isPublic } - host only. */
+    /**
+     * { t:'setScenario', scenarioId } - host only, before the fight starts:
+     * the fight the lobby will start. The host's picker used to change only
+     * the host's own screen once the lobby existed, and Start then ran the
+     * fight chosen at Host (owner's notes, 2026-09-29). Everyone un-readies:
+     * they agreed to a different fight.
+     */
+    setScenario(conn, msg, lobby, player) {
+      if (player.id !== lobby.hostId) return fail(conn, 'only the host chooses the fight');
+      if (lobby.mode === 'hunt') return fail(conn, 'a hunt lobby has no fight to choose');
+      if (started(lobby)) return fail(conn, 'the fight has started');
+      const id = String(msg.scenarioId || '');
+      if (!COMBAT_SCENARIOS[id]) return fail(conn, `no such fight: ${id}`);
+      if (lobby.scenarioId === id) return;
+      lobby.scenarioId = id;
+      for (const p of lobby.players) p.ready = false;
+      broadcast(lobby, lobbyView(lobby));
+    },
+
     setPublic(conn, msg, lobby, player) {
       if (player.id !== lobby.hostId) return fail(conn, 'only the host can do that');
       if (started(lobby)) return fail(conn, 'the hunt has started');

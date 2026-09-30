@@ -242,6 +242,24 @@ try {
     await until(() => client.state.version > v, 'the turn to pass');
   }
 
+  console.log('=== while another player acts, your own skills can be read ===');
+  {
+    // The menu itself is drawn (a display method the headless host skips); the
+    // wiring is what is checked here: not your turn, the waiting menu is
+    // built and shown instead of hiding the menu.
+    const waitingScene = alice.isMyTurn ? scenes.p2 : scenes.p1;
+    let built = 0;
+    const real = waitingScene._buildWaitingMenu;
+    waitingScene._buildWaitingMenu = () => { built++; return true; };
+    let shown = null;
+    const realMenu = waitingScene.actionMenu;
+    waitingScene.actionMenu = { setVisible(v) { shown = v; return this; } };
+    waitingScene._afterCoopState();
+    check('the waiting player gets the read-only menu of their own hunter, shown, not a blank one', built === 1 && shown === true, `built ${built}, shown ${shown}`);
+    waitingScene._buildWaitingMenu = real;
+    waitingScene.actionMenu = realMenu;
+  }
+
   console.log('=== a whole fight, played through the scene ===');
   let over = null;
   alice.on('over', m => { over = m; });

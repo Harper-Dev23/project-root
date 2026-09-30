@@ -3180,6 +3180,12 @@ export default class CombatScene extends Phaser.Scene {
 
 
   _showCharacterInfo(char) {
+    // Co-op, not your turn: clicking one of your hunters shows their skills
+    // in the waiting menu (_buildWaitingMenu).
+    this._lastInspected = char;
+    if (this.isCoop && char?.isLocal && !this.coopClient?.isMyTurn) {
+      try { this._buildWaitingMenu(); this.actionMenu?.setVisible(true); } catch { /* the menu is optional here */ }
+    }
     if (!this.characterInfoPanel) return;
 
     this.characterInfoPanel.removeAll(true);
@@ -5852,8 +5858,56 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     this.endTurnButton?.setVisible(mine);
-    this.actionMenu?.setVisible(mine);
+    // Not your turn: your own hunter's skills, to read while you wait (owner's
+    // notes, 2026-09-29: the menu was blank). Nothing in it can be used.
+    let waiting = false;
+    if (!mine) {
+      try { waiting = this._buildWaitingMenu(); } catch (err) { console.error('[coop] waiting menu failed', err); }
+    }
+    this.actionMenu?.setVisible(mine || waiting);
     this._updateActionLights?.();
+  }
+
+  /**
+   * The action menu while another player acts: one of THIS player's hunters
+   * (the one last clicked, else the first standing), their weapon and class
+   * skills with tooltips and cooldowns, none of them usable. Clicking another
+   * of your hunters switches to theirs (_showCharacterInfo). Returns whether
+   * it built anything.
+   */
+  _buildWaitingMenu() {
+    const own = (this.coopParty || []).filter(c => c.isLocal && c.status !== 'incapacitated' && c.status !== 'dead');
+    if (!own.length) return false;
+    const who = own.includes(this._lastInspected) ? this._lastInspected : own[0];
+    this._clearActionMenuContent();
+    this._hideSkillFilterPills?.();
+    this._setActionMenuBackCallback?.(null);
+    this._setActionMenuInteractive(true);   // hover for tooltips; the buttons do nothing
+    this.menuLevel = 'waiting';
+    const baseX = this.actionMenuContentX ?? 0;
+    const acting = this._currentChar?.();
+    const header = this.add.text(baseX, 0,
+      `${acting?.name || 'Someone'} is acting.\nViewing ${who.name}'s skills.`,
+      { fontSize: '13px', color: '#9aa4b4', wordWrap: { width: 180 } }).setOrigin(0, 0);
+    this._actionMenuAdd(header);
+    // The buttons draw centred on their y: clear the header by half a button.
+    let y = header.height + 30;
+    const skills = [
+      ...getWeaponSkillsFor(who).filter(a => (a?.mechanic || '') !== 'reaction'),
+      ...getClassSkillsFor(who),
+    ];
+    for (const a of skills) {
+      const full = { ...(SKILLS?.[a.id] || a), id: a.id };
+      const cd = who.cooldowns?.[a.id] ?? 0;
+      const name = this._displayNameForSkill ? this._displayNameForSkill(who, full) : (full.name || full.id);
+      const btn = new UIButton(this, baseX, y, cd > 0 ? `${name}  (${cd} turn${cd === 1 ? '' : 's'})` : name, () => {});
+      btn.setAlpha?.(cd > 0 ? 0.45 : 0.75);
+      this._wireAbilityTooltip?.(btn, full, who);
+      this._actionMenuAdd(btn);
+      y += 50;
+    }
+    this._finalizeActionMenuLayout();
+    return true;
   }
 
   /**

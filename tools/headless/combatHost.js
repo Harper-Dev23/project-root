@@ -226,7 +226,7 @@ const VISUAL_METHODS = [
   '_resetSlotStroke', '_paintSlotFrame', '_highlightCurrentTurn',
   // menus, panels, screens
   '_renderCharacterInfoBody', '_buildActionMenuRoot', '_rebuildActionMenu',
-  '_exitTargetingMode', '_exitPositionTargeting', '_enterPositionTargeting',
+  '_exitTargetingMode', '_exitPositionTargeting', '_enterPositionTargeting', '_buildWaitingMenu',
   '_showVictoryScreen', '_showDefeatScreen', '_updateTurnOrderUI', '_showIntercessionChoice',
   // log rendering (the log CONTENT is real; only drawing it is skipped)
   '_renderCombatLog', '_scrollCombatLogToBottom',

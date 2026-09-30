@@ -469,5 +469,23 @@ console.log('=== malformed input ===');
     /unknown message/.test(alice.errors().slice(-1)[0] || ''), alice.errors().slice(-1)[0]);
 }
 
+console.log('');
+console.log('=== the host changes the fight after hosting (owner\'s notes, 2026-09-29) ===');
+{
+  const hub2 = createHub({ CombatScene, codeFactory: () => 'PICK' });
+  const h = conn('host'), g = conn('guest');
+  hub2.handle(h, { t: 'create', name: 'Host', scenarioId: 'training_encounter_1', hunters: clone(3, 0), seed: 7 });
+  hub2.handle(g, { t: 'join', code: 'PICK', name: 'Guest', hunters: clone(3, 3) });
+  hub2.handle(g, { t: 'ready', ready: true });
+  hub2.handle(g, { t: 'setScenario', scenarioId: 'training_encounter_2' });
+  check('a guest cannot choose the fight', /only the host/.test(g.errors().slice(-1)[0] || ''));
+  hub2.handle(h, { t: 'setScenario', scenarioId: 'not_a_fight' });
+  check('an unknown fight is refused', /no such fight/.test(h.errors().slice(-1)[0] || ''));
+  hub2.handle(h, { t: 'setScenario', scenarioId: 'training_encounter_2' });
+  const view = g.last('lobby');
+  check('the host changes it: everyone sees the new fight', view?.scenarioId === 'training_encounter_2', view?.scenarioId);
+  check('...and everyone un-readies', view?.players?.every(p => !p.ready), JSON.stringify(view?.players?.map(p => p.ready)));
+}
+
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);
