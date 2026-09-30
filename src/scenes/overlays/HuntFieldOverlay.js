@@ -209,8 +209,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.selected = this.hunt.view().pos;
     this._refresh();
-    // A fight relaunches this scene: what it finished is said on the way back.
-    const reported = this._reportNews();
+    // A fight relaunches this scene: what it finished is said on the way back,
+    // and whether the kill has drawn something (HuntWorld drawToKill).
+    const scent = [...(this.hunt.view()?.log || [])].reverse().find(l => l.kind === 'blood_scent' && l.time === this.hunt.clock?.()?.time);
+    const reported = [scent ? 'Something has caught the scent of blood. Harvest quickly, or move on.' : '', this._reportNews()].filter(Boolean).join(' ');
     if (reported) this._say(reported);
   }
 
@@ -779,7 +781,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
       }
     } else {
-    if (move) acts.push([`Move here (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
+    if (move) acts.push([`Move here${occ?.temper === 'timid' ? ' (it will scatter)' : ''} (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
+    // A timid beast is walked past unless hunted on purpose (owner 2026-09-29).
+    if (move && occ?.temper === 'timid') acts.push(['Hunt it', () => this._move(id, { hunt: true }), 'danger']);
     if (occ && !occ.exact && v.fog[id] === 'visible') acts.push([`Scout (${SCOUT_TIME} time)`, () => this._act('scout', () => this.hunt.scout(occ.id))]);
     if (own) {
       for (const m of v.moves) {
@@ -839,6 +843,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         : this.v.boon?.vigil && onBlight ? 'Unmarked, but on blight: the vigil forgives this kill.' : 'Unmarked.');
     } else if (o.mark) lines.push(o.mark === 'marked' ? 'Marked by a prophet.' : 'Corrupted.');
     if (o.exact) lines.push(`Exactly: ${o.roster.map(m => m.grade || m.type).join(', ')}${o.composition ? ` (${o.composition})` : ''}.`);
+    // Its temper (HuntWorld temperOf), once known.
+    if (o.temper === 'predator') lines.push('A predator: it hunts what it notices, and blood draws it.');
+    else if (o.temper === 'territorial') lines.push('Territorial: it fights on its ground, and does not chase far.');
+    else if (o.temper === 'timid') lines.push('Timid: it scatters as you pass, unless you hunt it.');
     return lines;
   }
 
@@ -934,7 +942,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'wait': return `${day(e.time)} Waited${e.until === 'dark' ? ' for dark' : e.until === 'dawn' ? ' for dawn' : ''}${e.found ? '; something found you' : ''}.`;
       case 'camp': return `${day(e.time)} Camped${e.night ? ' at night' : ''}${e.dishes?.length ? `, cooked ${e.dishes.join(', ')}` : ''}${e.found ? '; a pack found the camp' : ''}.`;
       case 'cleanse': return `${day(e.time)} Cleansed the blight${e.source ? ' and destroyed its source' : ''}.`;
-      case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : ''}.`;
+      case 'encounter': return `${day(e.time)} ${e.ambush ? 'Ambushed' : 'Contact'}${e.cause === 'pack' ? ': a pack came for you' : e.cause === 'scent' ? ': drawn to the kill' : ''}.`;
       case 'win': return `${day(e.time)} Won the fight${e.huntPoints ? `: +${e.huntPoints} Hunt Points` : ''}${e.loot ? `, ${e.loot} item${e.loot > 1 ? 's' : ''} to the pack` : ''}.`;
       case 'flee': return `${day(e.time)} Fled${e.reason === 'reload' ? ' (reloaded mid-fight)' : ''}.`;
       case 'harvest': return `${day(e.time)} Harvested ${e.specimens + e.materials} part${e.specimens + e.materials === 1 ? '' : 's'}${Object.keys(e.meat || {}).length ? ' and meat' : ''}.`;
@@ -946,6 +954,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'event_quiet': return `${day(e.time)} Something is here, but ${e.quiet || (EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs')}.`;
       case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
       case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
+      case 'blood_scent': return `${day(e.time)} ${e.family ? `A ${familyName(this.v?.zoneId, e.family)}` : 'Something'} has caught the scent of blood.`;
+      case 'scatter': return `${day(e.time)} ${e.family ? `The ${familyName(this.v?.zoneId, e.family)}` : 'A beast'} scattered as you passed.`;
       case 'quest_done': return `${day(e.time)} ${e.label}: done. Report to Elder Varek.`;
       case 'rescued': return `${day(e.time)} Spoken for: you woke near a way out.`;
       case 'scent': return `${day(e.time)} ${e.family ? `The ${familyName(this.v?.zoneId, e.family)} pack` : 'Something'} caught your scent and is coming for you.`;
@@ -961,7 +971,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const e = v.encounter;
     const occ = v.occupants.find(o => o.id === e.occId);
     const lines = [];
-    lines.push(e.ambush ? (e.cause === 'camp' ? 'Your camp was found. Ambush!' : 'Ambush! You never saw them.') : (e.cause === 'pack' ? 'A pack has come for you.' : 'You close in.'));
+    lines.push(e.ambush ? (e.cause === 'camp' ? 'Your camp was found. Ambush!' : 'Ambush! You never saw them.') : (e.cause === 'pack' ? 'A pack has come for you.' : e.cause === 'scent' ? 'Drawn by the blood, something has come to the kill.' : 'You close in.'));
     lines.push(`You knew: ${e.knew}.`);
     if (occ && occ.band !== 'sensed') lines.push(...this._occupantLines(occ));
     else lines.push(e.kind === 'cultist' ? 'Cultists.' : 'Beasts.');
@@ -1215,7 +1225,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const meatOn = !this.harvestNoMeat && Object.keys(sp.meat).length > 0;
     const time = take.reduce((a, p) => a + p.time, 0) + (meatOn ? sp.meatTime : 0);
     const width = 420;
-    const height = 70 + groups.length * 30 + 30 + 30 + 46 + (groups.length ? 0 : 20);
+    const scentH = sp.scentIn != null ? 22 : 0;
+    const height = 70 + groups.length * 30 + 30 + 30 + 46 + (groups.length ? 0 : 20) + scentH;
     const p = this._sidePanel(null, width, Math.min(height, PANEL_BOTTOM - MAP.y - 12));
     this._panelText(p, p.px + 10, p.py + 8, `Spoils: ${sp.bodies} ${fam?.name || 'beast'}${sp.bodies > 1 ? 's' : ''}`, 16, '#f2e6c8');
     this._panelText(p, p.px + 10, p.py + 30, 'Take what you want. It costs time; what you leave is gone.', 12, '#a8b0bc');
@@ -1237,6 +1248,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
     this._panelText(p, p.px + 10, ty + 4, `Time: ${fmt(time)}. ${take.length} part${take.length === 1 ? '' : 's'}${meatOn ? ' and the meat' : ''}.`, 13, '#d8d8d8');
     ty += 30;
+    // Blood scent (HuntWorld drawToKill): what is coming, against this harvest's time.
+    if (sp.scentIn != null) {
+      const late = time >= sp.scentIn;
+      this._panelText(p, p.px + 10, ty - 4, `Something is coming for the kill: about ${fmt(sp.scentIn)} time away.${late ? ' It will arrive first.' : ''}`, 13, late ? '#e07060' : '#e0c070');
+      ty += scentH;
+    }
     this._panelButton(p, p.px + 80, ty + 12, this.harvestCommons ? 'Hide commons' : `Show commons (${commons})`, () => { this.harvestCommons = !this.harvestCommons; this._refresh(); });
     this._panelButton(p, p.px + 230, ty + 12, 'Harvest', () => this._act('harvest', () => this.hunt.harvest({ take: take.map(x => x.id), meat: meatOn })), 'confirm');
     this._panelButton(p, p.px + 345, ty + 12, 'Leave it', () => this._act('leave', () => this.hunt.harvest({ take: [], meat: false })));
@@ -1247,8 +1264,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * engine refuses a plain move there, at no cost, and says what the warning
    * shows; confirming enters it (hunt.enterLair) and the fight starts.
    */
-  _move(id) {
-    const res = this.hunt.move(id);
+  _move(id, opts = {}) {
+    const res = this.hunt.move(id, opts);
     if (res?.lair) return this._confirmLair(res.lair);
     return this._act('move', () => res);
   }
@@ -1342,6 +1359,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points${res.reward?.xpPool > 0 ? `, ${res.reward.xpPool} XP for the party` : ''}.`);
     if (kind === 'exit' && res.pack?.spoiled?.length) out.push('The fresh food you carried spoiled on the way home.');
     if (kind === 'move' && res.quiet) out.push(`Something is here, but ${res.quiet}.`);
+    if (kind === 'move' && res.scattered) out.push('It scatters as you pass.');
     if (kind === 'leave') out.push('You walk on. It will still be there.');
     return out.join(' ');
   }

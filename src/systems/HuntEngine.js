@@ -126,7 +126,7 @@ import {
   FORAGE_YIELD, FISH_YIELD, FISH_ITEM, CAMP_TIME, CAMP_SUPPLY, SATED_TIME, campRecoveryPercent,
   recovered, cookDish,
 } from './HuntRules.js';
-import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME } from './HuntWorld.js';
+import { initWorld, worldTick, alert, loseTrail, makeEncounter, trailView, CLEANSE_TIME, temperOf, isSpecialBeast, drawToKill } from './HuntWorld.js';
 import { rollLoadout, loadoutSeed, loadoutView, fightScenario } from './HuntBeasts.js';
 import { huntItemLevel } from './HuntScaling.js';
 import { regionFlag, questTitleForStep, questStepDone } from './HuntQuests.js';
@@ -422,7 +422,7 @@ function makeMapHunt(s, rng, worldRng, world) {
      * Walking onto a hostile occupant starts an encounter at once; `knew` is
      * what the party had detected of it before stepping in.
      */
-    move(to) {
+    move(to, { hunt = false } = {}) {
       const no = frozen(); if (no) return no;
       if (!mapNeighbors(s.map, s.pos).includes(to)) return { ok: false, reason: `'${to}' is not next to the party` };
       const tile = s.map.tiles[to];
@@ -441,25 +441,42 @@ function makeMapHunt(s, rng, worldRng, world) {
         return { ok: false, lair: { tile: to, boss: occ.boss, name: def?.lair?.name || def?.name, text: def?.lair?.text || '' },
           reason: `that is ${def?.lair?.name || 'a boss lair'}: enter it from its warning` };
       }
-      const knew = occ ? this._bandOf(occ) : null;
+      // A timid beast (HuntWorld temperOf) scatters to a free tile beside it
+      // as the party steps in, unless the party came to hunt it (`hunt`) or
+      // it is cornered (owner 2026-09-29).
+      let scattered = null;
+      if (occ && !hunt && temperOf(s, occ) === 'timid' && !isSpecialBeast(occ)) {
+        const sec = parseTileId(to).section;
+        const free = mapNeighbors(s.map, to).filter(n => n !== s.pos && parseTileId(n).section === sec
+          && isPassable(s.map.tiles[n]) && !s.map.occupants.some(o => o.tile === n)).sort();
+        if (free.length) {
+          const from = parseTileId(s.pos);
+          free.sort((a, b) => distance(parseTileId(b), from) - distance(parseTileId(a), from));
+          scattered = { id: occ.id, from: to, to: free[0] };
+          occ.tile = free[0];
+        }
+      }
+      const fight = occ && !scattered ? occ : null;
+      const knew = fight ? this._bandOf(fight) : null;
       s.supplies = Math.max(0, s.supplies - cost.supply);
       s.from = s.pos;
       s.pos = to;
-      if (occ) {
-        this._ensureLoadout(occ);
-        s.encounter = makeEncounter(occ, {
+      if (fight) {
+        this._ensureLoadout(fight);
+        s.encounter = makeEncounter(fight, {
           cause: 'party', knew, ambush: knew === 'nothing', partyInitiative: st.partyInitiative, at: s.time, tile: to,
         });
       }
+      if (scattered) this._log({ kind: 'scatter', occupant: scattered.id, family: occ.family || null, to: scattered.to, time: s.time });
       this._arrive();
       const spent = this._spendTime(cost.time);
       this._noteSupplies();
       const starved = this.hunger() === 'starving' ? this._starve() : [];
       this._reveal();
-      const contact = occ ? { id: occ.id, kind: occ.kind, knew } : null;
+      const contact = fight ? { id: fight.id, kind: fight.kind, knew } : null;
       // An event site opens when the party arrives, unless a fight came first.
       const event = s.encounter ? null : this._openEventAt(s.pos);
-      return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, encounter: this.encounter(), starved,
+      return { ok: true, to, supply: cost.supply, time: cost.time, flips: spent.flips, contact, scattered, encounter: this.encounter(), starved,
         event: event?.quiet ? null : event, quiet: event?.quiet || null };
     },
 
@@ -937,12 +954,18 @@ function makeMapHunt(s, rng, worldRng, world) {
         bodies: occ.roster.map(m => m.grade),
         at: s.time,
       } : null;
+      // A fresh kill draws the nearest predator in the section (HuntWorld
+      // drawToKill; owner 2026-09-29): at most one, none while anything hunts.
+      const scent = occ.kind === 'beast' && s.spoils ? drawToKill(s, s.pos, s.time, worldRng) : null;
+      const drawn = scent?.occ || null;
+      if (scent) s.spoils.scentAt = scent.eta;
+      if (drawn) this._log({ kind: 'blood_scent', occupant: drawn.id, family: this._bandOf(drawn) === 'identified' ? drawn.family : null, time: s.time });
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
       const favor = this._earnFavor(Boons.killFavor(occ), 'kill');
       const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
-      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, event: this._openEventHere(), ...(chest ? { chest: chest.id, chestItem: chest, historic: bl_historic } : {}) };
+      return { ok: true, kill, huntPoints, loot: found.length, spoils: !!s.spoils, favor, unmarked, drawn: drawn ? drawn.id : null, event: this._openEventHere(), ...(chest ? { chest: chest.id, chestItem: chest, historic: bl_historic } : {}) };
     },
 
     /**
@@ -1005,14 +1028,26 @@ function makeMapHunt(s, rng, worldRng, world) {
       s.knockouts = (s.knockouts || 0) + (Number(knockedOut) || 0);
       const time = back ? moveCost(s.map.tiles[back], this.stats()).time : SCOUT_TIME;
       if (back) { s.from = s.pos; s.pos = back; }
-      if (occ && occ.kind === 'beast') alert(occ, s.time + time);
+      // What a fled beast does (owner 2026-09-29): a predator, an apex, a
+      // quarry or a quest beast hunts the party; a territorial one chases only
+      // near where it stood; a timid one lets it go. Under a vigil, an unmarked
+      // beast is let go too (the prophet's watch).
+      let chases = false;
+      if (occ && occ.kind === 'beast') {
+        const temper = temperOf(s, occ);
+        const spared = !!s.vigil && occ.mark === 'unmarked' && !isSpecialBeast(occ);
+        if (!spared) {
+          if (isSpecialBeast(occ) || temper === 'predator') { alert(occ, s.time + time); chases = true; }
+          else if (temper === 'territorial') { alert(occ, s.time + time, { leash: occ.tile }); chases = true; }
+        }
+      }
       const spent = this._spendTime(time);
       const starved = this.hunger() === 'starving' ? this._starve() : [];
       this._reveal();
       this._log({ kind: 'flee', occupant: e.occId, reason, to: back, time: s.time });
       return {
         ok: true, to: back, time, flips: spent.flips, enemyFreeRound: reason !== 'reload',
-        alerted: occ?.kind === 'beast' ? occ.id : null, starved, encounter: this.encounter(),
+        alerted: chases ? occ.id : null, starved, encounter: this.encounter(),
       };
     },
 
@@ -1119,6 +1154,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       // Only a scout shows the loadout (ENCOUNTERS: "a scout action shows actual
       // gear"); Keen Tracker's exact roster does not.
       if (v.exact && s.scouted.includes(occId) && occ.loadout) v.loadout = loadoutView(occ);
+      // Its temper, once the party knows what it is (HuntWorld temperOf): the
+      // panel offers to walk past a timid beast, or to hunt it.
+      if (seen.band === 'identified' && occ.kind === 'beast') v.temper = isSpecialBeast(occ) ? 'special' : temperOf(s, occ);
       return { ...v, tile: seen.tile, at: seen.at, stale: s.fog[seen.tile] !== 'visible' };
     },
 
@@ -1287,6 +1325,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         bodies: sp.bodies.length,
         meat,
         meatTime: sp.bodies.length * MEAT_TIME_PER_BODY * factor,
+        // Blood scent: how long until what it drew reaches the kill (about).
+        scentIn: sp.scentAt != null ? Math.max(0, sp.scentAt - s.time) : null,
       };
     },
 

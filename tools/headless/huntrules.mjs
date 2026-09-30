@@ -976,7 +976,7 @@ function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null
   const startCount = s0.map.occupants.length;
   const problems = [], trace = [], encounters = [];
   let lastWorld = 0, seen = new Set(Object.keys(s0.fog));
-  const tally = { steps: 0, encounters: 0, ambush: 0, byCause: { party: 0, pack: 0, camp: 0 }, flees: 0, wins: 0, caughtAgain: 0, cleansed: 0, trailsSeen: 0 };
+  const tally = { steps: 0, encounters: 0, ambush: 0, byCause: { party: 0, pack: 0, camp: 0, scent: 0 }, flees: 0, wins: 0, caughtAgain: 0, cleansed: 0, trailsSeen: 0 };
   let fledFrom = null;
   for (let i = 0; i < 20000 && h.getState().time < days * 12; i++) {
     if (onStep) h = onStep(h, i, world) || h;
@@ -991,6 +991,8 @@ function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null
       kind = 'move';
       const to = chooseMove(h, pick, stood); stood.add(to);
       res = h.move(to);
+      // A timid beast stepped past scatters one hex (D2): its new place is its home.
+      if (res?.scattered) { home[res.scattered.id].tile = res.scattered.to; tally.scatters = (tally.scatters || 0) + 1; }
     }
     const s = h.getState();
     tally.steps++;
@@ -1017,7 +1019,11 @@ function longHunt({ zoneId, size, seed, days = 100, planMods = {}, onStep = null
         const sf = h.getState();
         const pack = sf.map.occupants.find(o => o.id === e.occId);
         if (!f.ok || !f.enemyFreeRound) problems.push(`step ${i}: flee refused or no free round`);
-        if (pack?.kind === 'beast' && !(pack.alerted)) problems.push(`step ${i}: the pack fled from was not alerted`);
+        // D2: a predator or special beast hunts after a flee, a territorial one on its leash; a timid one lets you go.
+        const chases = pack?.kind === 'beast' && (W.isSpecialBeast(pack) || W.temperOf(sf, pack) !== 'timid') && !(sf.vigil && !W.isSpecialBeast(pack) && pack.mark === 'unmarked');
+        if (chases && !pack.alerted) problems.push(`step ${i}: the pack fled from was not alerted`);
+        if (pack?.kind === 'beast' && !chases && pack.state === 'hunting') problems.push(`step ${i}: a timid beast hunts after a flee`);
+        if (pack?.leash && W.temperOf(sf, pack) !== 'territorial') problems.push(`step ${i}: only a territorial beast is leashed`);
         if (sf.supplies !== s.supplies) problems.push(`step ${i}: fleeing cost supplies`);
         if (e.cause === 'party' && f.to && f.to !== fromTile) problems.push(`step ${i}: fled to ${f.to}, came from ${fromTile}`);
         for (let k = 0; k < 5 && h.encounter(); k++) h.winEncounter();
@@ -1273,6 +1279,140 @@ console.log('=== flee, pursuit and losing the trail ===');
     reloadOk = s.flees === 1 && s.pos === d.from && s.map.occupants.find(o => o.id === e.occId)?.alerted && s.log.some(l => l.kind === 'flee' && l.reason === 'reload');
   }
   check('a hunt reloaded mid-fight comes back fled: retreated, the pack alerted, logged as a reload', reloadOk);
+}
+
+console.log('=== tempers and blood scent (playtest notes D2, 2026-09-29) ===');
+{
+  // A real hunt with one beast of `family` beside the party and nothing else in
+  // its section; `far` more hexes out, a roaming crocodile (a predator).
+  const staged = ({ family, seed = 9700, vigil = null, mark = 'marked', predatorAt = null }) => {
+    const world = recordingWorld(makeParty());
+    const d = createMapHunt(ZONES[0], { plan: { objective: 'scout', size: 'medium' }, supplies: 200, seed }, world).serialize();
+    const sec = secOf(d.pos), here = parseTileId(d.pos);
+    const open = (n) => isPassable(d.map.tiles[n]) && secOf(n) === sec && n !== d.pos;
+    const beasts = d.map.occupants.filter(o => o.kind === 'beast');
+    const [a, b] = beasts;
+    d.map.occupants = d.map.occupants.filter(o => secOf(o.tile) !== sec && o !== a && o !== b);
+    const next = mapNeighbors(d.map, d.pos).filter(open).sort()[0];
+    Object.assign(a, { tile: next, family, mark, state: 'rooted', home: 'rooted', nextStepAt: null });
+    for (const k of ['apex', 'quarry', 'quest', 'alerted', 'leash', 'goal']) delete a[k];
+    d.map.occupants.push(a);
+    if (predatorAt != null) {
+      const ring = Object.keys(d.map.tiles).filter(n => open(n) && n !== next && distance(parseTileId(n), here) === predatorAt).sort();
+      Object.assign(b, { tile: ring[0], family: 'crocodile', mark: 'marked', state: 'roaming', home: 'roaming', nextStepAt: d.time + 1000 });
+      for (const k of ['apex', 'quarry', 'quest', 'alerted', 'leash', 'goal']) delete b[k];
+      d.map.occupants.push(b);
+    }
+    d.vigil = vigil;
+    return { h: restoreMapHunt(d, world), beast: a.id, pred: b.id, next };
+  };
+  const occ = (h, id) => h.getState().map.occupants.find(o => o.id === id);
+
+  const s0 = staged({ family: 'bog_frog' }).h.getState();
+  const tempers = Object.fromEntries(['crocodile', 'marsh_viper', 'shore_gull', 'swamp_crab', 'snapping_turtle', 'bog_frog', 'nutria', 'marsh_bat', 'scarlet_ibis']
+    .map(f => [f, W.temperOf({ ...s0, zoneId: f === 'shore_gull' ? ZONES[1] : s0.zoneId }, { kind: 'beast', family: f })]));
+  check('tempers: crocodile, viper, gull hunt; crab and turtle hold ground; frog, nutria, bat, ibis are timid; an apex, quarry or quest beast is special',
+    ['crocodile', 'marsh_viper', 'shore_gull'].every(f => tempers[f] === 'predator') && ['swamp_crab', 'snapping_turtle'].every(f => tempers[f] === 'territorial')
+    && ['bog_frog', 'nutria', 'marsh_bat', 'scarlet_ibis'].every(f => tempers[f] === 'timid')
+    && W.isSpecialBeast({ apex: true }) && W.isSpecialBeast({ quarry: true }) && W.isSpecialBeast({ quest: 'x' }) && !W.isSpecialBeast({}),
+    JSON.stringify(tempers));
+
+  // Timid: walked past, it scatters (away from the party); hunted, it fights.
+  {
+    const { h, beast, next } = staged({ family: 'bog_frog' });
+    const from = h.getState().pos;
+    const r = h.move(next);
+    const o = occ(h, beast);
+    check('timid: stepping onto it is no fight; it scatters one hex, away from where the party came from, and it is logged',
+      r.ok && !h.encounter() && r.scattered?.id === beast && o.tile === r.scattered.to && o.tile !== next
+      && distance(parseTileId(o.tile), parseTileId(next)) === 1 && distance(parseTileId(o.tile), parseTileId(from)) >= 1
+      && h.getState().log.some(l => l.kind === 'scatter' && l.occupant === beast));
+    const t = staged({ family: 'bog_frog' });
+    const r2 = t.h.move(t.next, { hunt: true });
+    check('timid: "Hunt it" (move with hunt) starts the fight', r2.ok && !r2.scattered && t.h.encounter()?.occId === t.beast);
+    const f = t.h.flee();
+    check('timid: fled from, it lets the party go', f.ok && !f.alerted && occ(t.h, t.beast).state !== 'hunting');
+  }
+
+  // Territorial: fights on its ground, chases only within LEASH_RANGE of it.
+  {
+    // A start with room to run (the entry can be a dead end).
+    const roomy = (t) => { const s = t.h.getState(); return mapNeighbors(s.map, s.pos).filter(n => n !== t.next && isPassable(s.map.tiles[n])).length >= 2; };
+    let t = null;
+    for (let k = 0; k < 30 && !(t && roomy(t)); k++) t = staged({ family: 'swamp_crab', seed: 9800 + k });
+    const { h, beast, next } = t;
+    h.move(next);
+    const f = h.flee();
+    const o = occ(h, beast);
+    check(`territorial: fled from, it hunts on a leash to where it stood (${W.LEASH_RANGE} hexes)`,
+      f.ok && f.alerted === beast && (o.state === 'hunting' || h.encounter()) && (h.encounter() || o.leash === next));
+    const home = parseTileId(next);
+    let gaveUp = false;
+    for (let k = 0; k < 12 && !gaveUp; k++) {
+      if (h.encounter()) break;
+      const s = h.getState();
+      const opts = mapNeighbors(s.map, s.pos).filter(n => isPassable(s.map.tiles[n]) && !s.map.occupants.some(x => x.tile === n)).sort();
+      if (!opts.length) break;
+      const far = (id) => (secOf(id) === home.section ? distance(parseTileId(id), home) : 99);
+      h.move(opts.reduce((best, n) => (far(n) > far(best) ? n : best), opts[0]));
+      const s2 = h.getState();
+      const x = occ(h, beast);
+      if (x.state !== 'hunting') gaveUp = !x.leash && (secOf(s2.pos) !== home.section || distance(parseTileId(s2.pos), home) > W.LEASH_RANGE);
+    }
+    check('territorial: once the party is past the leash it gives up and forgets it', gaveUp || !!h.encounter());
+  }
+
+  // Predator: fled from, it hunts. Under a vigil an unmarked beast is spared; a marked one is not.
+  {
+    const p = staged({ family: 'crocodile' });
+    p.h.move(p.next);
+    check('predator: fled from, it hunts without a leash', p.h.flee().alerted === p.beast && !occ(p.h, p.beast).leash);
+    const v = staged({ family: 'crocodile', vigil: 'rivals', mark: 'unmarked' });
+    v.h.move(v.next);
+    check('vigil: an unmarked beast fled from is let go', !v.h.flee().alerted && occ(v.h, v.beast).state !== 'hunting');
+  }
+
+  // Blood scent, on hand-built state.
+  {
+    const base = staged({ family: 'bog_frog', predatorAt: 2 }).h.getState();
+    const pred = () => base.map.occupants.find(o => o.family === 'crocodile' && o.state === 'roaming');
+    const copy = () => JSON.parse(JSON.stringify(base));
+    const s1 = copy(), got = W.drawToKill(s1, s1.pos, s1.time, () => 0);
+    const p1 = s1.map.occupants.find(o => o.id === pred().id);
+    check(`scent: a roaming predator ${2} hexes from the kill is drawn: scenting, goal the kill, moving after ${W.SCENT_DELAY}, an eta`,
+      got?.occ?.id === p1.id && p1.state === 'scenting' && p1.goal === s1.pos
+      && Math.abs(p1.nextStepAt - (s1.time + W.SCENT_DELAY + W.HUNT_STEP)) < EPS && Math.abs(got.eta - (s1.time + W.SCENT_DELAY + 2 * W.HUNT_STEP)) < EPS);
+    const s2 = copy();
+    check(`scent: only ${W.SCENT_CHANCE}% of the time`, W.drawToKill(s2, s2.pos, s2.time, () => 0.99) === null && s2.map.occupants.every(o => o.state !== 'scenting'));
+    const s3 = copy();
+    s3.map.occupants.find(o => o.family === 'bog_frog').state = 'hunting';
+    check('scent: nothing is drawn while anything hunts the party', W.drawToKill(s3, s3.pos, s3.time, () => 0) === null);
+    const s4 = copy();
+    s4.map.occupants.find(o => o.id === pred().id).tile = Object.keys(s4.map.tiles)
+      .filter(n => secOf(n) === secOf(s4.pos) && isPassable(s4.map.tiles[n]) && distance(parseTileId(n), parseTileId(s4.pos)) === W.SCENT_RANGE + 1).sort()[0];
+    check(`scent: nothing past ${W.SCENT_RANGE} hexes`, W.drawToKill(s4, s4.pos, s4.time, () => 0) === null);
+  }
+
+  // A real win: the drawn predator walks to the kill, and a party still there fights it.
+  {
+    let drawnSeen = 0, came = 0, spoilsEta = 0;
+    for (let k = 0; k < 40; k++) {
+      const t = staged({ family: 'swamp_crab', predatorAt: 2, seed: 9700 + k });
+      t.h.move(t.next);
+      if (!t.h.encounter()) continue;
+      const w = t.h.winEncounter();
+      if (!w.drawn) continue;
+      drawnSeen++;
+      const sp = t.h.view().spoils;
+      if (sp?.scentIn > 0 && t.h.getState().log.some(l => l.kind === 'blood_scent')) spoilsEta++;
+      // Harvest everything, slowly: it arrives.
+      t.h.harvest({ take: sp.parts.map(p => p.id), meat: true });
+      for (let i = 0; i < 10 && !t.h.encounter(); i++) t.h.wait();
+      if (t.h.encounter()?.cause === 'scent' && t.h.encounter().occId === w.drawn) came++;
+    }
+    check('scent, in play: a win beside a predator sometimes draws it; the spoils say how long it is; a party that lingers is found by it',
+      drawnSeen > 0 && spoilsEta === drawnSeen && came > 0, `drawn ${drawnSeen}/40, eta shown ${spoilsEta}, came ${came}`);
+  }
 }
 
 console.log('=== blight, cleansing and corruption ===');

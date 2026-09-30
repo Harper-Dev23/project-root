@@ -300,7 +300,7 @@
    "0:7,2",
    0,
    95.2054,
-   "o5:sensed",
+   0,
    36
   ],
   [
@@ -321,7 +321,7 @@
    "0:8,2",
    0,
    103.5243,
-   0,
+   "o12:sensed",
    36
   ],
   [
@@ -335,7 +335,7 @@
    "0:8,3",
    0,
    109.0703,
-   "o12:sensed",
+   0,
    36
   ],
   [
@@ -391,7 +391,7 @@
    "0:7,3",
    0,
    125.7081,
-   "o4:sensed",
+   0,
    36
   ],
   [
@@ -547,7 +547,7 @@
    "0:5,1",
    37.3995,
    25.8811,
-   "o6:identified",
+   0,
    33
   ],
   [
@@ -645,7 +645,7 @@
    "0:3,5",
    11.8511,
    49.9135,
-   0,
+   "o3:sensed",
    59
   ],
   [
@@ -906,224 +906,224 @@
    "0:4,7",
    56.0695,
    5.5459,
-   "o1:sensed",
+   0,
    10
   ],
   [
    "0:4,6",
-   54.4042,
+   54.1042,
    7.3946,
-   "o7:nothing",
+   "o12:nothing",
    16
   ],
   [
    "0:3,6",
-   53.5716,
+   53.1216,
    8.3189,
-   0,
+   "o7:identified",
    23
   ],
   [
    "0:3,5",
-   52.7389,
+   52.2889,
    9.2432,
    0,
    24
   ],
   [
    "0:2,6",
-   51.9063,
+   51.4563,
    10.1676,
    0,
    28
   ],
   [
    "0:1,7",
-   51.0737,
+   50.6237,
    11.0919,
    0,
    30
   ],
   [
    "0:0,8",
-   50.2411,
+   49.7911,
    12.0162,
    0,
    30
   ],
   [
    "0:0,9",
-   49.4084,
+   48.9584,
    12.9405,
    0,
    30
   ],
   [
    "0:1,8",
-   48.5758,
+   48.1258,
    13.8649,
    0,
    30
   ],
   [
    "0:2,8",
-   47.7432,
+   47.2932,
    14.7892,
    0,
    30
   ],
   [
    "0:2,7",
-   46.9105,
+   46.4605,
    15.7135,
    0,
    30
   ],
   [
    "0:3,7",
-   45.2453,
+   44.7953,
    17.5622,
    "o13:nothing",
    30
   ],
   [
    "0:3,8",
-   43.58,
+   43.13,
    20.3351,
    0,
    30
   ],
   [
    "0:4,7",
-   41.9147,
+   41.4647,
    23.1081,
-   "o10:sensed",
+   0,
    30
   ],
   [
    "0:5,6",
-   40.2495,
+   39.7995,
    25.8811,
-   0,
+   "o26:nothing",
    33
   ],
   [
    "0:6,5",
-   37.7516,
+   37.3016,
    28.6541,
-   "o27:sensed",
+   0,
    36
   ],
   [
    "0:5,5",
-   36.0863,
+   35.6363,
    30.5027,
    0,
    37
   ],
   [
    "0:6,4",
-   33.5884,
+   33.1384,
    33.2757,
    0,
    39
   ],
   [
    "0:7,3",
-   31.0905,
+   30.6405,
    36.0486,
    0,
    39
   ],
   [
    "0:8,2",
-   28.5926,
+   28.1426,
    38.8216,
    0,
    39
   ],
   [
    "0:7,3",
-   26.0947,
+   25.6447,
    41.5946,
    0,
    39
   ],
   [
    "0:6,3",
-   23.5968,
+   23.1468,
    44.3676,
    0,
    40
   ],
   [
    "0:5,3",
-   21.9316,
+   21.4816,
    46.2162,
    0,
    41
   ],
   [
    "0:4,4",
-   19.4337,
+   18.9837,
    48.9892,
    "o4:nothing",
    41
   ],
   [
    "0:4,3",
-   17.7684,
+   17.3184,
    50.8378,
    0,
    43
   ],
   [
    "0:5,2",
-   14.4379,
+   13.9879,
    54.5351,
    0,
    43
   ],
   [
    "0:6,2",
-   11.94,
+   11.49,
    57.3081,
    0,
    43
   ],
   [
    "0:5,2",
-   8.6095,
+   8.1595,
    61.0054,
-   0,
+   "o27:sensed",
    43
   ],
   [
    "0:4,3",
-   6.9442,
+   6.4942,
    62.8541,
-   "o11:identified",
+   0,
    43
   ],
   [
    "0:3,4",
-   5.2789,
+   4.8289,
    64.7027,
    0,
    43
   ],
   [
    "0:3,3",
-   2.7811,
+   2.3311,
    67.4757,
    0,
    43
   ],
   [
    "0:2,3",
-   0.2832,
-   70.2486,
    0,
+   70.2486,
+   "o11:sensed",
    44
   ],
   [
@@ -1186,143 +1186,143 @@
    "1:3,6",
    0,
    89.6595,
-   "o2:sensed",
+   0,
    68
   ],
   [
    "1:3,5",
    0,
    90.5838,
-   "o14:identified",
-   72
+   0,
+   68
   ],
   [
    "1:4,5",
    0,
    91.5081,
    0,
-   79
+   71
   ],
   [
    "1:3,6",
    0,
    92.4324,
    0,
-   79
+   71
   ],
   [
    "1:3,7",
    0,
    93.3568,
    0,
-   80
+   73
   ],
   [
    "1:2,7",
    0,
    94.2811,
    0,
-   80
+   73
   ],
   [
    "1:3,7",
    0,
    95.2054,
    0,
-   80
+   73
   ],
   [
    "1:3,8",
    0,
    97.9784,
    0,
-   80
+   73
   ],
   [
    "1:4,8",
    0,
    99.827,
    0,
-   82
+   75
   ],
   [
    "1:5,8",
    0,
    101.6757,
-   0,
-   83
+   "o14:nothing",
+   77
   ],
   [
    "1:6,7",
    0,
    102.6,
    0,
-   85
+   79
   ],
   [
    "1:7,6",
    0,
    103.5243,
    0,
-   86
+   82
   ],
   [
    "1:7,5",
    0,
    104.4486,
    0,
-   86
+   84
   ],
   [
    "1:6,5",
    0,
    105.373,
    0,
-   86
+   84
   ],
   [
    "1:7,4",
    0,
    108.1459,
    0,
-   87
+   85
   ],
   [
    "1:8,4",
    0,
    110.9189,
    0,
-   87
+   85
   ],
   [
    "1:9,4",
    0,
    113.6919,
    "o6:sensed",
-   87
+   85
   ],
   [
    "1:9,3",
    0,
    116.4649,
    0,
-   87
+   85
   ],
   [
    "1:8,4",
    0,
    119.2378,
    0,
-   87
+   85
   ]
  ],
  "walkHashes": {
-  "reeds_of_gethsemane/small": "217f3e9b5a9ab5ec",
-  "reeds_of_gethsemane/medium": "4f3993c76ad150b6",
-  "reeds_of_gethsemane/large": "82ec7a4034f39fdc",
-  "bay_of_solace/small": "598d20042a7940e7",
-  "bay_of_solace/medium": "0de81706e5f94d72",
-  "bay_of_solace/large": "84b49c30b23248e6"
+  "reeds_of_gethsemane/small": "4fb00e9591381d21",
+  "reeds_of_gethsemane/medium": "4095df4e4f1e7ebe",
+  "reeds_of_gethsemane/large": "16f9ffe7a828a5b3",
+  "bay_of_solace/small": "b933d35e36a54ebe",
+  "bay_of_solace/medium": "c6308362dc98e2a3",
+  "bay_of_solace/large": "80a8c66396fd53d7"
  },
  "walkStats": {
   "reeds_of_gethsemane/small": {
@@ -1331,11 +1331,11 @@
    "daysAtEnd": 6.4,
    "mapRevealed": 0.9859,
    "timePerMove": 2.3398,
-   "supplyPerMove": 2.0717,
+   "supplyPerMove": 2.1515,
    "contactsBy": {
-    "identified": 20,
-    "sensed": 68,
-    "nothing": 56
+    "identified": 17,
+    "sensed": 50,
+    "nothing": 31
    }
   },
   "reeds_of_gethsemane/medium": {
@@ -1344,24 +1344,24 @@
    "daysAtEnd": 6.08,
    "mapRevealed": 0.9082,
    "timePerMove": 2.2017,
-   "supplyPerMove": 1.948,
+   "supplyPerMove": 1.9841,
    "contactsBy": {
-    "identified": 26,
-    "sensed": 80,
-    "nothing": 42
+    "identified": 14,
+    "sensed": 62,
+    "nothing": 31
    }
   },
   "reeds_of_gethsemane/large": {
    "hunts": 25,
    "movesEach": 60,
    "daysAtEnd": 6.16,
-   "mapRevealed": 0.8022,
+   "mapRevealed": 0.7956,
    "timePerMove": 2.2769,
-   "supplyPerMove": 1.957,
+   "supplyPerMove": 2.0571,
    "contactsBy": {
-    "identified": 34,
-    "sensed": 105,
-    "nothing": 54
+    "identified": 17,
+    "sensed": 62,
+    "nothing": 48
    }
   },
   "bay_of_solace/small": {
@@ -1369,10 +1369,10 @@
    "movesEach": 60,
    "daysAtEnd": 3.72,
    "mapRevealed": 0.9881,
-   "timePerMove": 1.2457,
+   "timePerMove": 1.2461,
    "supplyPerMove": 1.3123,
    "contactsBy": {
-    "identified": 87,
+    "identified": 85,
     "sensed": 34,
     "nothing": 0
    }
@@ -1382,32 +1382,32 @@
    "movesEach": 60,
    "daysAtEnd": 3.72,
    "mapRevealed": 0.922,
-   "timePerMove": 1.2683,
+   "timePerMove": 1.2692,
    "supplyPerMove": 1.3086,
    "contactsBy": {
     "identified": 78,
-    "sensed": 61,
+    "sensed": 59,
     "nothing": 0
    }
   },
   "bay_of_solace/large": {
    "hunts": 25,
    "movesEach": 60,
-   "daysAtEnd": 3.64,
+   "daysAtEnd": 3.68,
    "mapRevealed": 0.7055,
-   "timePerMove": 1.2305,
+   "timePerMove": 1.2307,
    "supplyPerMove": 1.2455,
    "contactsBy": {
-    "identified": 84,
-    "sensed": 65,
+    "identified": 86,
+    "sensed": 58,
     "nothing": 0
    }
   }
  },
  "firstSightBands": {
-  "identified": 1334,
-  "sensed": 812,
-  "nothing": 218
+  "identified": 1311,
+  "sensed": 818,
+  "nothing": 226
  },
  "testPartyStats": {
   "perception": 60,
@@ -1423,6 +1423,7 @@
    "family": "marsh_viper",
    "mark": "unmarked",
    "topGrade": "yearling",
+   "temper": "predator",
    "tile": "0:2,5",
    "at": 0,
    "stale": false
@@ -1456,6 +1457,7 @@
     }
    ],
    "composition": "Pack",
+   "temper": "predator",
    "tile": "0:2,5",
    "at": 0,
    "stale": false
@@ -1824,7 +1826,15 @@
    "move",
    1,
    5.0184,
-   52.4432,
+   50.5946,
+   "fed",
+   "shore_kelpx4,marsh_cressx4,sweetberryx4"
+  ],
+  [
+   "fish",
+   0,
+   5.0184,
+   50.5946,
    "fed",
    "shore_kelpx4,marsh_cressx4,sweetberryx4"
   ],
@@ -1832,7 +1842,7 @@
    "forage",
    1,
    5.0184,
-   53.4432,
+   51.5946,
    "fed",
    "shore_kelpx4,marsh_cressx4,sweetberryx8"
   ],
@@ -1840,7 +1850,7 @@
    "move",
    1,
    3.5132,
-   57.1405,
+   53.4432,
    "fed",
    "shore_kelpx4,marsh_cressx4,sweetberryx8"
   ],
@@ -1848,7 +1858,7 @@
    "move",
    1,
    2.0079,
-   58.9892,
+   55.2919,
    "fed",
    "shore_kelpx4,marsh_cressx4,sweetberryx8"
   ],
@@ -1856,7 +1866,7 @@
    "move",
    1,
    0.5026,
-   60.8378,
+   57.1405,
    "fed",
    "shore_kelpx4,marsh_cressx4,sweetberryx8"
   ],
@@ -1864,8 +1874,24 @@
    "forage",
    1,
    0.5026,
-   61.8378,
+   58.1405,
    "fed",
+   "shore_kelpx4,marsh_cressx4,sweetberryx12"
+  ],
+  [
+   "move",
+   1,
+   0,
+   59.9892,
+   "hungry",
+   "shore_kelpx4,marsh_cressx4,sweetberryx12"
+  ],
+  [
+   "move",
+   1,
+   0,
+   61.8378,
+   "hungry",
    "shore_kelpx4,marsh_cressx4,sweetberryx12"
   ],
   [
@@ -1877,18 +1903,10 @@
    "shore_kelpx4,marsh_cressx4,sweetberryx12"
   ],
   [
-   "move",
-   1,
-   0,
-   65.5351,
-   "hungry",
-   "shore_kelpx4,marsh_cressx4,sweetberryx12"
-  ],
-  [
    "fish",
    0,
    0,
-   65.5351,
+   63.6865,
    "hungry",
    "shore_kelpx4,marsh_cressx4,sweetberryx12"
   ],
@@ -1896,487 +1914,471 @@
    "move",
    1,
    0,
-   69.2324,
-   "hungry",
+   66.4595,
+   "starving",
    "shore_kelpx4,marsh_cressx4,sweetberryx12"
-  ],
-  [
-   "forage",
-   1,
-   0,
-   70.2324,
-   "starving",
-   "shore_kelpx4,marsh_cressx11,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   73.0054,
-   "starving",
-   "shore_kelpx4,marsh_cressx11,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   75.7784,
-   "starving",
-   "shore_kelpx4,marsh_cressx11,sweetberryx12"
-  ],
-  [
-   "forage",
-   1,
-   0,
-   76.7784,
-   "starving",
-   "shore_kelpx4,marsh_cressx18,sweetberryx12"
-  ],
-  [
-   "camp",
-   1,
-   0,
-   82.7784,
-   "starving",
-   "shore_kelpx4,marsh_cressx18,sweetberryx12"
-  ],
-  [
-   "forage",
-   0,
-   0,
-   82.7784,
-   "starving",
-   "shore_kelpx4,marsh_cressx18,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   85.5514,
-   "starving",
-   "shore_kelpx4,marsh_cressx18,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   89.2486,
-   "starving",
-   "shore_kelpx4,marsh_cressx18,sweetberryx12"
-  ],
-  [
-   "forage",
-   1,
-   0,
-   90.2486,
-   "starving",
-   "shore_kelpx4,marsh_cressx25,sweetberryx12"
   ],
   [
    "eat",
    1,
    1,
-   90.2486,
+   66.4595,
    "fed",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "fish",
-   0,
-   1,
-   90.2486,
-   "fed",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "forage",
-   0,
-   1,
-   90.2486,
-   "fed",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   92.0973,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   95.7946,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   97.6432,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   99.4919,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
-  ],
-  [
-   "move",
-   1,
-   0,
-   102.2649,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12"
+   "shore_kelpx4,marsh_cressx3,sweetberryx12"
   ],
   [
    "forage",
    1,
-   0,
-   103.2649,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "fish",
-   0,
-   0,
-   103.2649,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
+   1,
+   67.4595,
+   "fed",
+   "shore_kelpx4,marsh_cressx3,sweetberryx12,bitterrootx4"
   ],
   [
    "move",
    1,
    0,
-   106.0378,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   108.8108,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   111.5838,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   114.3568,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   118.0541,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   120.827,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
-  ],
-  [
-   "move",
-   1,
-   0,
-   124.5243,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx4"
+   70.2324,
+   "hungry",
+   "shore_kelpx4,marsh_cressx3,sweetberryx12,bitterrootx4"
   ],
   [
    "eat",
    1,
    2,
-   124.5243,
+   70.2324,
    "fed",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
+   "shore_kelpx4,marsh_cressx3,sweetberryx12,bitterrootx3"
+  ],
+  [
+   "eat",
+   1,
+   4,
+   70.2324,
+   "fed",
+   "shore_kelpx4,marsh_cressx3,sweetberryx12,bitterrootx2"
   ],
   [
    "move",
    1,
-   0,
-   127.2973,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   129.1459,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   131.9189,
-   "hungry",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   133.7676,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   135.6162,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   138.3892,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   141.1622,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   143.0108,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx12,bitterrootx3"
+   1.7421,
+   73.0054,
+   "fed",
+   "shore_kelpx4,marsh_cressx3,sweetberryx12,bitterrootx2"
   ],
   [
    "forage",
    1,
+   1.7421,
+   74.0054,
+   "fed",
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2"
+  ],
+  [
+   "camp",
+   1,
    0,
-   144.0108,
+   80.0054,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2"
+  ],
+  [
+   "forage",
+   0,
+   0,
+   80.0054,
+   "starving",
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2"
   ],
   [
    "move",
    1,
    0,
-   147.7081,
+   83.7027,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2"
+  ],
+  [
+   "fish",
+   1,
+   0,
+   84.7027,
+   "starving",
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2,raw_fishx2"
   ],
   [
    "move",
    1,
    0,
-   149.5568,
+   86.5514,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   153.2541,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   156.027,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
-  ],
-  [
-   "move",
-   1,
-   0,
-   158.8,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2,raw_fishx2"
   ],
   [
    "fish",
    0,
    0,
-   158.8,
+   86.5514,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx10,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "forage",
+   1,
+   0,
+   87.5514,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
   ],
   [
    "move",
    1,
    0,
-   160.6486,
+   89.4,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   91.2486,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "fish",
+   0,
+   0,
+   91.2486,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   93.0973,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   95.8703,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "move",
+   1,
+   0,
+   97.7189,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
   ],
   [
    "forage",
    0,
    0,
-   160.6486,
+   97.7189,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "fish",
+   0,
+   0,
+   97.7189,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
   ],
   [
    "move",
    1,
    0,
-   163.4216,
+   101.4162,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx2,raw_fishx2"
+  ],
+  [
+   "camp",
+   1,
+   3,
+   107.4162,
+   "sated",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0.7421,
+   110.1892,
+   "sated",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
+  ],
+  [
+   "fish",
+   0,
+   0.7421,
+   110.1892,
+   "sated",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
+  ],
+  [
+   "forage",
+   0,
+   0.7421,
+   110.1892,
+   "sated",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
   ],
   [
    "move",
    1,
    0,
-   167.1189,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   113.8865,
+   "hungry",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
   ],
   [
    "move",
    1,
    0,
-   170.8162,
-   "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   116.6595,
+   "hungry",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
   ],
   [
    "move",
    1,
    0,
-   174.5135,
+   120.3568,
    "starving",
-   "shore_kelpx4,marsh_cressx24,sweetberryx16,bitterrootx3"
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,bitterrootx1,raw_fishx1"
+  ],
+  [
+   "eat",
+   1,
+   2,
+   120.3568,
+   "fed",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   123.1297,
+   "hungry",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   124.9784,
+   "hungry",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   127.7514,
+   "hungry",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   129.6,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   131.4486,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   134.2216,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   136.9946,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   138.8432,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "forage",
+   0,
+   0,
+   138.8432,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   142.5405,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   144.3892,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   148.0865,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   150.8595,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "move",
+   1,
+   0,
+   153.6324,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
+  ],
+  [
+   "fish",
+   0,
+   0,
+   153.6324,
+   "starving",
+   "shore_kelpx4,marsh_cressx17,sweetberryx12,raw_fishx1"
   ]
  ],
  "mixedHashes": {
-  "reeds_of_gethsemane/small": "a52f9b8f29d5a9a1",
-  "reeds_of_gethsemane/medium": "d24b2bee6e05e1f8",
-  "reeds_of_gethsemane/large": "bdb9923899542b56",
-  "bay_of_solace/small": "e0b69b93cf7443a5",
-  "bay_of_solace/medium": "7c495f60b279c3bb",
-  "bay_of_solace/large": "3543ccb289198209"
+  "reeds_of_gethsemane/small": "1101d41672be6311",
+  "reeds_of_gethsemane/medium": "d477f6a07250c9f5",
+  "reeds_of_gethsemane/large": "007e598635db2847",
+  "bay_of_solace/small": "f047dee289d32c9c",
+  "bay_of_solace/medium": "a20a731fe827ace0",
+  "bay_of_solace/large": "0011497c1d196b9c"
  },
  "mixedTallies": {
   "reeds_of_gethsemane/small": {
-   "move": 678,
-   "forage": 151,
-   "fish": 6,
-   "eat": 79,
-   "camp": 56,
-   "refused": 230,
+   "move": 682,
+   "forage": 143,
+   "fish": 5,
+   "eat": 86,
+   "camp": 51,
+   "refused": 233,
    "dishes": {
     "plain": 0,
-    "hearty": 8,
+    "hearty": 6,
     "fine": 0
    },
-   "gathered": 157
+   "gathered": 148
   },
   "reeds_of_gethsemane/medium": {
-   "move": 669,
-   "forage": 145,
-   "fish": 11,
-   "eat": 96,
+   "move": 663,
+   "forage": 161,
+   "fish": 6,
+   "eat": 88,
    "camp": 62,
-   "refused": 217,
+   "refused": 220,
    "dishes": {
     "plain": 0,
-    "hearty": 14,
+    "hearty": 9,
     "fine": 0
    },
-   "gathered": 156
+   "gathered": 167
   },
   "reeds_of_gethsemane/large": {
-   "move": 661,
-   "forage": 165,
+   "move": 652,
+   "forage": 162,
    "fish": 15,
-   "eat": 84,
-   "camp": 56,
-   "refused": 219,
+   "eat": 95,
+   "camp": 63,
+   "refused": 213,
    "dishes": {
     "plain": 0,
-    "hearty": 15,
+    "hearty": 17,
     "fine": 0
    },
-   "gathered": 180
+   "gathered": 177
   },
   "bay_of_solace/small": {
-   "move": 658,
-   "forage": 133,
-   "fish": 19,
-   "eat": 68,
-   "camp": 71,
-   "refused": 251,
+   "move": 672,
+   "forage": 129,
+   "fish": 24,
+   "eat": 62,
+   "camp": 70,
+   "refused": 243,
    "dishes": {
     "plain": 0,
     "hearty": 27,
     "fine": 0
    },
-   "gathered": 152
+   "gathered": 153
   },
   "bay_of_solace/medium": {
-   "move": 665,
-   "forage": 160,
-   "fish": 15,
-   "eat": 64,
-   "camp": 59,
-   "refused": 237,
+   "move": 676,
+   "forage": 158,
+   "fish": 19,
+   "eat": 67,
+   "camp": 52,
+   "refused": 228,
    "dishes": {
     "plain": 0,
-    "hearty": 15,
+    "hearty": 13,
     "fine": 0
    },
-   "gathered": 175
+   "gathered": 177
   },
   "bay_of_solace/large": {
-   "move": 653,
-   "forage": 151,
-   "fish": 8,
-   "eat": 76,
-   "camp": 71,
-   "refused": 241,
+   "move": 651,
+   "forage": 147,
+   "fish": 14,
+   "eat": 80,
+   "camp": 72,
+   "refused": 236,
    "dishes": {
     "plain": 0,
-    "hearty": 16,
+    "hearty": 11,
     "fine": 0
    },
-   "gathered": 159
+   "gathered": 161
   }
  },
  "world7c": {
@@ -2456,561 +2458,570 @@
    "0:5,6",
    24.1676,
    0,
-   "o1@0:4,4:r o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o8@0:4,5:h o9@0:6,6:r"
+   "o1@0:5,5:h o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o8@0:4,4:r o9@0:8,5:r"
   ],
   [
    "camp",
    1,
    "0:5,6",
-   28,
-   "o8:camp:enemy",
-   "o1@0:4,3:r o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:6,6:r"
+   26,
+   "o1:camp:enemy",
+   "o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o8@0:4,4:s o9@0:8,5:r"
   ],
   [
    "camp",
    1,
    "0:5,6",
-   34,
+   32,
    0,
-   "o1@0:4,2:r o2@0:7,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
+   "o2@0:7,0:r o5@0:2,4:r* o6@0:7,3:r o8@0:4,5:s o9@0:9,3:r"
   ],
   [
    "camp",
    1,
    "0:5,6",
-   40,
-   0,
-   "o1@0:5,3:r o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
+   36,
+   "o8:scent:party",
+   "o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
   ],
   [
    "move",
    1,
-   "0:6,6",
-   41.8486,
-   0,
-   "o1@0:5,3:r o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
-  ],
-  [
-   "move",
-   1,
-   "0:6,5",
-   42.773,
-   0,
-   "o1@0:5,3:r o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
-  ],
-  [
-   "move",
-   1,
-   "0:7,4",
-   45.5459,
-   0,
-   "o1@0:5,4:h o2@0:7,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+   "0:4,6",
+   36.9243,
+   "o7:party:party",
+   "o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
   ],
   [
    "camp",
    1,
-   "0:6,5",
+   "0:4,6",
+   42.9243,
+   0,
+   "o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:4,6",
    48.9243,
-   "o1:camp:enemy",
-   "o1@0:7,4:h o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:6,5",
-   50.9243,
-   "o1:camp:enemy",
-   "o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+   0,
+   "o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
   ],
   [
    "move",
    1,
-   "0:6,4",
+   "0:5,5",
+   50.773,
+   0,
+   "o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:5,5",
    52.773,
    0,
-   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
+   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
-   "cleanse",
-   1,
-   "0:6,4",
-   54.773,
-   0,
-   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
-  ],
-  [
-   "move",
+   "camp",
    1,
    "0:5,5",
-   56.6216,
+   58.773,
    0,
-   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+   "o2@0:7,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
-   "cleanse",
+   "camp",
    1,
    "0:5,5",
-   58.6216,
+   64.773,
    0,
-   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+   "o2@0:7,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
   ],
   [
    "move",
    1,
    "0:4,5",
-   60.4703,
-   "o18:party:party",
-   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+   66.6216,
+   0,
+   "o2@0:7,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:4,5",
+   68.6216,
+   0,
+   "o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:7,5:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:4,5",
+   74.6216,
+   0,
+   "o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
   ],
   [
    "move",
    1,
    "0:3,6",
-   62.3189,
+   76.4703,
    0,
-   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
+   "o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
-   "move",
+   "cleanse",
    1,
    "0:3,6",
-   66.0162,
-   "o7:party:party",
-   "o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "move",
-   1,
-   "0:3,5",
-   67.8649,
+   78.4703,
    0,
-   "o2@0:6,2:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,5",
-   72,
-   "o2:camp:enemy",
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:3,5",
-   74,
-   0,
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,5",
-   80,
-   0,
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:3,5",
-   82,
-   0,
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "move",
-   1,
-   "0:3,4",
-   83.8486,
-   0,
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:3,4",
-   85.8486,
-   0,
-   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
-  ],
-  [
-   "move",
-   1,
-   "0:2,4",
-   87.6973,
-   "o5:party:enemy",
-   "o6@0:7,3:r o9@0:9,3:r"
-  ],
-  [
-   "move",
-   1,
-   "0:2,5",
-   89.5459,
-   0,
-   "o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "cleanse",
-   1,
-   "0:2,5",
-   91.5459,
-   0,
-   "o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "move",
-   1,
-   "0:2,6",
-   93.3946,
-   0,
-   "o6@0:7,3:r o9@0:10,3:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:2,6",
-   99.3946,
-   0,
-   "o6@0:7,3:r o9@0:9,4:r"
-  ],
-  [
-   "move",
-   1,
-   "0:1,7",
-   101.2432,
-   0,
-   "o6@0:7,3:r o9@0:8,5:r"
-  ],
-  [
-   "move",
-   1,
-   "0:1,7",
-   104.9405,
-   "o3:party:party",
-   "o6@0:7,3:r o9@0:7,6:r"
-  ],
-  [
-   "move",
-   1,
-   "0:2,7",
-   106.7892,
-   0,
-   "o6@0:7,3:r o9@0:7,6:r"
-  ],
-  [
-   "move",
-   1,
-   "0:1,8",
-   108.6378,
-   0,
-   "o6@0:7,3:r o9@0:6,6:r"
-  ],
-  [
-   "move",
-   1,
-   "0:2,8",
-   110.4865,
-   0,
-   "o6@0:7,3:r o9@0:6,6:r"
+   "o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
    "move",
    1,
    "0:3,7",
-   112.3351,
+   80.3189,
+   "o18:party:party",
+   "o2@0:8,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,8",
+   82.1676,
    0,
-   "o6@0:7,3:r o9@0:5,6:r"
+   "o2@0:8,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
   ],
   [
    "move",
    1,
    "0:2,7",
-   114.1838,
+   84.0162,
    0,
-   "o6@0:7,3:r o9@0:5,6:r"
+   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:7,5:r"
   ],
   [
-   "move",
-   1,
-   "0:3,6",
-   116.0324,
-   0,
-   "o6@0:7,3:r o9@0:6,6:r"
-  ],
-  [
-   "move",
+   "camp",
    1,
    "0:2,7",
-   117.8811,
+   90.0162,
    0,
-   "o6@0:7,3:r o9@0:6,6:r"
+   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:8,5:r"
   ],
   [
    "cleanse",
    1,
    "0:2,7",
-   119.8811,
+   92.0162,
    0,
-   "o6@0:7,3:r o9@0:6,6:r"
+   "o2@0:7,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
    "move",
    1,
-   "0:1,8",
-   121.7297,
+   "0:2,6",
+   93.8649,
    0,
-   "o6@0:7,3:r o9@0:7,5:r"
+   "o2@0:7,0:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:2,6",
+   99.8649,
+   0,
+   "o2@0:7,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:3,5",
+   101.7135,
+   0,
+   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
    "cleanse",
    1,
-   "0:1,8",
-   123.7297,
+   "0:3,5",
+   103.7135,
    0,
-   "o6@0:7,3:r o9@0:7,5:r"
+   "o2@0:6,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
    "move",
    1,
-   "0:1,8",
-   128.3514,
-   "o3:party:party",
-   "o6@0:7,3:r o9@0:7,6:r"
+   "0:4,4",
+   105.5622,
+   0,
+   "o2@0:5,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
   ],
   [
    "move",
    1,
-   "0:2,7",
-   130.2,
+   "0:3,4",
+   107.4108,
    0,
-   "o6@0:7,3:r o9@0:7,6:r"
+   "o2@0:5,1:r o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:3,3",
+   109.2595,
+   0,
+   "o2@0:4,1:h o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,3",
+   111.1081,
+   0,
+   "o2@0:4,2:h o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,3",
+   112.9568,
+   0,
+   "o2@0:3,3:h o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
   ],
   [
    "cleanse",
    1,
-   "0:2,7",
-   132.2,
+   "0:1,3",
+   114.9568,
    0,
-   "o6@0:7,3:r o9@0:8,5:r"
+   "o2@0:2,3:h o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
   ],
   [
    "move",
    1,
-   "0:3,6",
-   134.0486,
-   0,
-   "o6@0:7,3:r o9@0:8,5:r"
+   "0:1,3",
+   119.5784,
+   "o2:party:party",
+   "o2@0:2,3:h o5@0:2,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
-   "move",
+   "camp",
    1,
-   "0:3,6",
-   137.7459,
-   "o7:party:party",
-   "o6@0:7,3:r o9@0:7,5:r"
+   "0:2,3",
+   123.427,
+   "o2:camp:enemy",
+   "o2@0:1,3:h o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
    "cleanse",
    1,
-   "0:3,6",
+   "0:1,3",
+   127.2757,
+   "o2:pack:party",
+   "o2@0:2,3:h o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,3",
+   130.0486,
+   "o2:party:party",
+   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:2,3",
+   136.0486,
+   0,
+   "o5@0:2,4:r* o6@0:7,3:r o9@0:9,4:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,4",
+   137.8973,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:9,4:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,5",
    139.7459,
    0,
-   "o6@0:7,3:r o9@0:7,5:r"
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:9,4:r"
   ],
   [
    "move",
    1,
-   "0:3,5",
+   "0:2,6",
    141.5946,
    0,
-   "o6@0:7,3:r o9@0:6,6:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,5",
-   147.5946,
-   0,
-   "o6@0:7,3:r o9@0:5,6:r"
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
    "cleanse",
    1,
-   "0:3,5",
-   149.5946,
+   "0:2,6",
+   143.5946,
    0,
-   "o6@0:7,3:r o9@0:4,7:r"
-  ],
-  [
-   "forage",
-   1,
-   "0:3,5",
-   150.5946,
-   0,
-   "o6@0:7,3:r o9@0:4,7:r"
-  ],
-  [
-   "camp",
-   1,
-   "0:3,5",
-   156.5946,
-   0,
-   "o6@0:7,3:r o9@0:2,7:r"
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
    "move",
    1,
-   "0:4,4",
-   158.4432,
+   "0:1,7",
+   145.4432,
    0,
-   "o6@0:7,3:r o9@0:2,7:r"
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,8",
+   147.2919,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "move",
+   1,
+   "0:0,8",
+   149.1405,
+   "o3:party:party",
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:9,3:r"
+  ],
+  [
+   "cleanse",
+   1,
+   "0:0,8",
+   151.1405,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:10,3:r"
   ],
   [
    "camp",
    1,
-   "0:4,4",
-   164.4432,
+   "0:0,8",
+   157.1405,
    0,
-   "o6@0:7,3:r o9@0:1,7:r"
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:8,5:r"
+  ],
+  [
+   "move",
+   1,
+   "0:0,7",
+   158.9892,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:8,5:r"
+  ],
+  [
+   "move",
+   1,
+   "0:0,8",
+   161.7622,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:7,5:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:0,8",
+   167.7622,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:6,5:r"
+  ],
+  [
+   "camp",
+   1,
+   "0:0,8",
+   173.7622,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:4,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,8",
+   175.6108,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:4,7:r"
+  ],
+  [
+   "move",
+   1,
+   "0:2,7",
+   177.4595,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:4,8:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,7",
+   179.3081,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:4,8:r"
+  ],
+  [
+   "move",
+   1,
+   "0:1,8",
+   181.1568,
+   0,
+   "o5@0:3,4:r* o6@0:7,3:r o9@0:4,9:r"
   ]
  ],
  "worldHashes": {
-  "reeds_of_gethsemane/small": "da950e24c86a54f4",
-  "reeds_of_gethsemane/medium": "6f5054b2cd7a5fb7",
-  "reeds_of_gethsemane/large": "d9c5d64f26aacddf",
-  "bay_of_solace/small": "3ae36d83f7c82fab",
-  "bay_of_solace/medium": "899bfc898cea06ae",
-  "bay_of_solace/large": "0888aa88a9341b9f"
+  "reeds_of_gethsemane/small": "c7a00fc44a6af4b0",
+  "reeds_of_gethsemane/medium": "380c1959a3ce9f08",
+  "reeds_of_gethsemane/large": "19521d8e36484f3e",
+  "bay_of_solace/small": "326d5113475c8c88",
+  "bay_of_solace/medium": "be5d1411d0322199",
+  "bay_of_solace/large": "4fe508587b5f7823"
  },
  "worldTallies": {
   "reeds_of_gethsemane/small": {
-   "steps": 2065,
-   "encounters": 87,
-   "ambush": 42,
+   "steps": 2064,
+   "encounters": 58,
+   "ambush": 29,
    "byCause": {
-    "party": 67,
-    "pack": 11,
-    "camp": 9
+    "party": 45,
+    "pack": 6,
+    "camp": 7,
+    "scent": 0
    },
-   "flees": 47,
-   "wins": 40,
-   "caughtAgain": 9,
-   "cleansed": 163,
-   "trailsSeen": 1450,
+   "flees": 32,
+   "wins": 26,
+   "caughtAgain": 4,
+   "cleansed": 146,
+   "trailsSeen": 4467,
+   "scatters": 87,
    "days": 306,
    "blightTiles": 37,
-   "corrupted": 0,
+   "corrupted": 5,
    "stillHunting": 0
   },
   "reeds_of_gethsemane/medium": {
-   "steps": 2205,
-   "encounters": 106,
-   "ambush": 47,
+   "steps": 2266,
+   "encounters": 73,
+   "ambush": 26,
    "byCause": {
-    "party": 72,
-    "pack": 11,
-    "camp": 23
+    "party": 47,
+    "pack": 10,
+    "camp": 14,
+    "scent": 2
    },
-   "flees": 54,
-   "wins": 52,
+   "flees": 36,
+   "wins": 37,
    "caughtAgain": 8,
-   "cleansed": 169,
-   "trailsSeen": 2007,
+   "cleansed": 223,
+   "trailsSeen": 3509,
+   "scatters": 58,
    "days": 306,
-   "blightTiles": 58,
-   "corrupted": 0,
+   "blightTiles": 113,
+   "corrupted": 5,
    "stillHunting": 0
   },
   "reeds_of_gethsemane/large": {
-   "steps": 2114,
-   "encounters": 150,
-   "ambush": 79,
+   "steps": 2174,
+   "encounters": 116,
+   "ambush": 57,
    "byCause": {
-    "party": 104,
-    "pack": 22,
-    "camp": 24
+    "party": 85,
+    "pack": 16,
+    "camp": 14,
+    "scent": 1
    },
-   "flees": 79,
-   "wins": 71,
-   "caughtAgain": 16,
-   "cleansed": 143,
-   "trailsSeen": 2502,
+   "flees": 57,
+   "wins": 59,
+   "caughtAgain": 11,
+   "cleansed": 190,
+   "trailsSeen": 3447,
+   "scatters": 75,
    "days": 306,
-   "blightTiles": 115,
-   "corrupted": 1,
-   "stillHunting": 1
+   "blightTiles": 184,
+   "corrupted": 7,
+   "stillHunting": 0
   },
   "bay_of_solace/small": {
-   "steps": 2521,
-   "encounters": 74,
-   "ambush": 32,
+   "steps": 2517,
+   "encounters": 70,
+   "ambush": 29,
    "byCause": {
     "party": 44,
-    "pack": 8,
-    "camp": 22
+    "pack": 7,
+    "camp": 19,
+    "scent": 0
    },
-   "flees": 42,
+   "flees": 38,
    "wins": 32,
-   "caughtAgain": 5,
+   "caughtAgain": 4,
    "cleansed": 188,
-   "trailsSeen": 1928,
+   "trailsSeen": 1715,
    "days": 306,
    "blightTiles": 30,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/medium": {
-   "steps": 2556,
-   "encounters": 97,
-   "ambush": 35,
+   "steps": 2494,
+   "encounters": 104,
+   "ambush": 31,
    "byCause": {
-    "party": 58,
-    "pack": 16,
-    "camp": 23
+    "party": 71,
+    "pack": 11,
+    "camp": 22,
+    "scent": 0
    },
-   "flees": 46,
-   "wins": 51,
-   "caughtAgain": 11,
-   "cleansed": 202,
-   "trailsSeen": 2047,
+   "flees": 56,
+   "wins": 48,
+   "caughtAgain": 7,
+   "cleansed": 117,
+   "trailsSeen": 2376,
    "days": 306,
    "blightTiles": 0,
    "corrupted": 0,
    "stillHunting": 0
   },
   "bay_of_solace/large": {
-   "steps": 2590,
-   "encounters": 117,
-   "ambush": 51,
+   "steps": 2512,
+   "encounters": 134,
+   "ambush": 63,
    "byCause": {
-    "party": 71,
-    "pack": 5,
-    "camp": 41
+    "party": 77,
+    "pack": 8,
+    "camp": 47,
+    "scent": 2
    },
-   "flees": 59,
-   "wins": 58,
+   "flees": 64,
+   "wins": 70,
    "caughtAgain": 5,
-   "cleansed": 174,
-   "trailsSeen": 3420,
+   "cleansed": 165,
+   "trailsSeen": 3153,
    "days": 306,
    "blightTiles": 155,
-   "corrupted": 6,
+   "corrupted": 0,
    "stillHunting": 0
   }
  },
  "pursuit": {
   "normal": {
-   "caught": 68,
-   "lost": 29,
-   "cornered": 11,
-   "caughtAtOnce": 8
+   "caught": 32,
+   "lost": 64,
+   "cornered": 8,
+   "caughtAtOnce": 9
   },
   "fast": {
-   "caught": 38,
-   "lost": 58,
-   "cornered": 10,
-   "caughtAtOnce": 12
+   "lost": 76,
+   "cornered": 7,
+   "caught": 23,
+   "caughtAtOnce": 10
   }
  },
  "blightExample": {
@@ -3140,7 +3151,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 130,
-   "avgDay": 1.1667
+   "avgDay": 2
   },
   "retrieve reeds_of_gethsemane/small": {
    "runs": 6,
@@ -3170,7 +3181,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 227,
-   "avgDay": 2
+   "avgDay": 6.1667
   },
   "retrieve reeds_of_gethsemane/medium": {
    "runs": 6,
@@ -3200,7 +3211,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 2.5
+   "avgDay": 7.8333
   },
   "retrieve reeds_of_gethsemane/large": {
    "runs": 6,
@@ -3212,7 +3223,7 @@
    "runs": 6,
    "done": 6,
    "huntPoints": 325,
-   "avgDay": 2
+   "avgDay": 2.1667
   },
   "scout bay_of_solace/small": {
    "runs": 6,

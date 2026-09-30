@@ -127,20 +127,90 @@ export function initWorld(map, { restlessPercent = 0, rng }) {
   return { time: 0, day: 0 };
 }
 
-/** A pack you fled from, or woke: it hunts the party, starting after `from`. */
-export function alert(occ, from) {
+// ── Temperament (owner 2026-09-29, playtest notes D2) ─────────────────────────
+// Each native family has a temper (data/zones.js natives[f].temper):
+//   predator     hunts the party when it notices it, hunts it after a flee,
+//                and is drawn to a fresh kill (drawToKill, below)
+//   territorial  fights when the party steps onto it; fled from, it chases
+//                only while the party is within LEASH_RANGE of where it stood
+//   timid        never hunts; the party steps past it (it scatters) unless
+//                the party chooses to hunt it (HuntEngine.move's `hunt`)
+// An apex, a plan's quarry and a quest beast keep the old rules: never
+// avoidable, and they hunt the party after a flee (isSpecialBeast).
+
+/** How far a territorial beast chases from where it stood. */
+export const LEASH_RANGE = 2;
+/** How far a predator smells a fresh kill (hex steps, in its own section). */
+export const SCENT_RANGE = 3;
+/** The chance (percent) a predator in range is drawn at all. */
+export const SCENT_CHANCE = 50;
+/**
+ * How long it lingers before it moves: the head start a quick harvest
+ * (specimens and meat) fits in (huntsim, owner 2026-09-30).
+ */
+export const SCENT_DELAY = 4;
+
+/** 'predator' | 'territorial' | 'timid' for a beast; 'hostile' for anything else. */
+export function temperOf(s, occ) {
+  if (occ?.kind !== 'beast') return 'hostile';
+  const fam = getZone(s.zoneId)?.natives?.[occ.family];
+  return fam?.temper || (fam?.predator ? 'predator' : 'territorial');
+}
+
+/** An apex, a plan's quarry or a quest beast: never avoidable, always hunts after a flee. */
+export function isSpecialBeast(occ) {
+  return !!(occ?.apex || occ?.quarry || occ?.quest);
+}
+
+/**
+ * A pack you fled from, or woke: it hunts the party, starting after `from`.
+ * `leash`: the tile a territorial beast stood on; it gives up the moment the
+ * party is more than LEASH_RANGE from there.
+ */
+export function alert(occ, from, { leash = null } = {}) {
   occ.state = 'hunting';
   occ.closest = Infinity;
   occ.closerAt = from;
   occ.nextStepAt = from + HUNT_STEP;
   occ.alerted = true;
+  if (leash) occ.leash = leash; else delete occ.leash;
 }
 
 export function loseTrail(occ, now) {
   occ.state = occ.home === 'rooted' ? 'rooted' : 'roaming';
   delete occ.closest;
   delete occ.closerAt;
+  delete occ.leash;
+  delete occ.goal;
   occ.nextStepAt = occ.state === 'roaming' ? now + ROAM_STEP : null;
+}
+
+/**
+ * A fresh kill at `tile` (a won beast fight): the nearest Roaming predator in
+ * that section within SCENT_RANGE may be drawn to the bodies (SCENT_CHANCE,
+ * from the world stream `rng`), moving after SCENT_DELAY. One at most, and
+ * none while anything hunts the party or is already drawn (one chase at a
+ * time). It walks to the KILL, not the party: arriving while the party is
+ * still there is an encounter; arriving after it left, it roams on.
+ * Returns { occ, eta }: the drawn occupant and when it should reach the
+ * kill (by hex distance; a longer route is slower), or null.
+ */
+export function drawToKill(s, tile, now, rng) {
+  if (s.map.occupants.some(o => o.state === 'hunting' || o.state === 'scenting')) return null;
+  const at = parseTileId(tile);
+  let best = null, bestD = Infinity;
+  for (const o of s.map.occupants) {
+    if (o.kind !== 'beast' || o.state !== 'roaming' || temperOf(s, o) !== 'predator') continue;
+    const p = parseTileId(o.tile);
+    if (p.section !== at.section) continue;
+    const d = distance(p, at);
+    if (d <= SCENT_RANGE && (d < bestD || (d === bestD && occNum(o) < occNum(best)))) { best = o; bestD = d; }
+  }
+  if (!best || rng() * 100 >= SCENT_CHANCE) return null;
+  best.state = 'scenting';
+  best.goal = tile;
+  best.nextStepAt = now + SCENT_DELAY + HUNT_STEP;
+  return { occ: best, eta: now + SCENT_DELAY + bestD * HUNT_STEP };
 }
 
 function occupantAt(s, id, except) {
@@ -148,12 +218,12 @@ function occupantAt(s, id, except) {
 }
 
 /**
- * Shortest route for a Hunting pack toward the party: passable tiles, through
+ * Shortest route for a Hunting pack toward the party (or a scenting one
+ * toward its kill, `goal`): passable tiles, through
  * passages, never through another occupant. Returns the next tile and the
  * distance, or null if the party cannot be reached.
  */
-function stepToward(s, occ) {
-  const goal = s.pos;
+function stepToward(s, occ, goal = s.pos) {
   const dist = new Map([[goal, 0]]);
   const queue = [goal];
   for (let i = 0; i < queue.length; i++) {
@@ -235,12 +305,12 @@ function fadeTrails(s) {
  */
 export function predatorNotices(s, occ) {
   if (occ.noticed || occ.kind !== 'beast') return false;
-  if (!getZone(s.zoneId)?.natives?.[occ.family]?.predator) return false;
+  if (temperOf(s, occ) !== 'predator') return false;
   // One chase at a time: while any pack hunts the party, no predator takes
   // up another (WORLD_SIM: the map must not become a chase). Measured before
   // this rule: half of all wipes were a second hunter arriving straight
   // after a fight, the party under 60% HP and no chance to camp.
-  if (s.map.occupants.some(o => o.state === 'hunting')) return false;
+  if (s.map.occupants.some(o => o.state === 'hunting' || o.state === 'scenting')) return false;
   const a = parseTileId(occ.tile), b = parseTileId(s.pos);
   if (a.section !== b.section || distance(a, b) > PREDATOR_NOTICE_RANGE) return false;
   const conc = GROUNDS[s.map.tiles[s.pos]?.ground]?.concealment || 0;
@@ -264,8 +334,37 @@ function stepPack(s, occ, now, ctx) {
     if (predatorNotices(s, occ)) { alert(occ, now); occ.noticed = true; }
     return;
   }
+  if (occ.state === 'scenting') {
+    // Drawn to a kill (drawToKill): walk there at hunting pace. The party
+    // still on it is an encounter; the party gone, it roams on.
+    occ.nextStepAt = now + HUNT_STEP;
+    const route = stepToward(s, occ, occ.goal);
+    if (!route || occ.tile === occ.goal) { loseTrail(occ, now); return; }
+    if (route.next === s.pos) {
+      const knew = ctx.bandOf(occ);
+      ctx.ensureLoadout?.(occ);
+      leaveTrail(s, occ, from, s.pos, now);
+      occ.tile = s.pos;
+      delete occ.goal;
+      s.encounter = makeEncounter(occ, {
+        cause: 'scent', knew, ambush: knew === 'nothing',
+        partyInitiative: ctx.stats().partyInitiative, at: now, tile: s.pos,
+      });
+      return;
+    }
+    leaveTrail(s, occ, from, route.next, now);
+    occ.tile = route.next;
+    if (occ.tile === occ.goal) loseTrail(occ, now);
+    return;
+  }
   if (occ.state !== 'hunting') { occ.nextStepAt = null; return; }
   occ.nextStepAt = now + HUNT_STEP;
+  // A territorial beast on a leash gives up once the party is more than
+  // LEASH_RANGE from where it stood.
+  if (occ.leash) {
+    const home = parseTileId(occ.leash), there = parseTileId(s.pos);
+    if (home.section !== there.section || distance(home, there) > LEASH_RANGE) { loseTrail(occ, now); return; }
+  }
   const route = stepToward(s, occ);
   if (route && route.dist < occ.closest) { occ.closest = route.dist; occ.closerAt = now; }
   if (now - occ.closerAt >= trailLostTime(ctx.stats().speed) - EPS) { loseTrail(occ, now); return; }

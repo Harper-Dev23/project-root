@@ -51,20 +51,23 @@ export const ZONES = {
     // filled from here (HUNT_PLANS, roles). Which grounds each favours is on
     // the ground (GROUNDS[..].families). Names are placeholders until the
     // beast families land (chunk 9).
+    // `temper` (owner 2026-09-29, HuntWorld temperOf): 'predator' hunts the
+    // party and is drawn to fresh kills, 'territorial' fights on its tile and
+    // chases only near home, 'timid' never hunts and can be walked past.
     // `predator: true`: a Roaming pack of it that notices the party hunts it
     // (WORLD_SIM "a few predator families"; HuntWorld.stepPack, chunk 13c).
     // The flagship roster (chunk 14a, owner 2026-09-25; data/beastParts.js).
     natives: {
-      crocodile:       { name: 'Crocodile', predator: true },
-      marsh_viper:     { name: 'Marsh Viper', predator: true },
-      bog_frog:        { name: 'Bog Frog' },
-      swamp_crab:      { name: 'Swamp Crab' },
-      nutria:          { name: 'Nutria' },
-      marsh_bat:       { name: 'Marsh Bat' },
+      crocodile:       { name: 'Crocodile', predator: true, temper: 'predator' },
+      marsh_viper:     { name: 'Marsh Viper', predator: true, temper: 'predator' },
+      bog_frog:        { name: 'Bog Frog', temper: 'timid' },
+      swamp_crab:      { name: 'Swamp Crab', temper: 'territorial' },
+      nutria:          { name: 'Nutria', temper: 'timid' },
+      marsh_bat:       { name: 'Marsh Bat', temper: 'timid' },
       // Solitary: alone or a mother with young, never a pack (and never a
       // Cull quarry). HuntMapGen familyAllows.
-      snapping_turtle: { name: 'Snapping Turtle', compositions: ['lone', 'matriarch'] },
-      scarlet_ibis:    { name: 'Scarlet Ibis' },
+      snapping_turtle: { name: 'Snapping Turtle', compositions: ['lone', 'matriarch'], temper: 'territorial' },
+      scarlet_ibis:    { name: 'Scarlet Ibis', temper: 'timid' },
     },
     // The apex, drawn per hunt from this pool by weight (HuntMapGen apexPool;
     // owner 2026-09-27: not the same beast every time). Each is a Great beast
@@ -120,8 +123,8 @@ export const ZONES = {
     palette: { shingle: 35, grass: 20, heath: 15, water: 15, dunes: 10, marsh: 5 },
     relief: { flat: 90, hills: 10, highland: 0 },
     natives: {
-      tide_crab:  { name: 'Tide Crab' },
-      shore_gull: { name: 'Shore Gull', predator: true },
+      tide_crab:  { name: 'Tide Crab', temper: 'territorial' },
+      shore_gull: { name: 'Shore Gull', predator: true, temper: 'predator' },
     },
     apex: { family: 'tide_crab' },
     cultistShare: 0.2,

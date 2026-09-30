@@ -366,6 +366,7 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
   const rec = {
     zoneId, size, objective, level, partySize, policy, seed: huntSeed,
     fights: [], moves: 0, camps: 0, forages: 0, eats: 0, harvests: 0, harvestTime: 0,
+    beastWins: 0, scentDrawn: 0, scentMidHarvest: 0,
     events: 0, supplyStart: h.view().supplies, supplyMin: h.view().supplies, zeroMoves: 0,
     hungryMoves: 0, actions: 0, perception: h.stats().perception,
   };
@@ -378,13 +379,20 @@ function playHunt({ zoneId, size, objective, level, partySize, policy, huntSeed,
     rec.actions = a;
     if (h.getState().finished) break;
     if (h.encounter()) {
-      fight(h, party, slots, (huntSeed * 7919 + rec.fights.length) >>> 0, rec);
+      const out = fight(h, party, slots, (huntSeed * 7919 + rec.fights.length) >>> 0, rec);
       if (h.getState().finished) break;
+      // Blood scent (HuntWorld drawToKill): did the kill draw a predator, and
+      // did it reach the party while it harvested?
+      const newLog = h.getState().log || [];
+      const drew = out === 'won' && newLog.some(l => l.kind === 'blood_scent' && l.time === h.clock().time);
+      if (out === 'won' && h.view().spoils) rec.beastWins++;
+      if (drew) rec.scentDrawn++;
       const sp = h.view().spoils;
       if (sp) {
-        const take = sp.parts.filter(p => p.specimen).map(p => p.id);
+        const take = sp.parts.filter(p => p.specimen || process.env.HARVEST_ALL).map(p => p.id);
         const r = h.harvest({ take, meat: true });
         if (r.ok) { rec.harvests++; rec.harvestTime += r.time; }
+        if (h.encounter()?.cause === 'scent') rec.scentMidHarvest++;
       }
       continue;
     }
@@ -536,6 +544,11 @@ function summarise(recs) {
     ranOutPct: r1(100 * mean(recs.map(r => (r.zeroMoves > 0 ? 1 : 0)))),
     camps: r1(mean(recs.map(r => r.camps))),
     harvestTime: r1(mean(recs.map(r => r.harvestTime))),
+    // Of won beast fights: how many drew a predator to the kill, and how many
+    // of those reached the party mid-harvest; scent fights of all fights.
+    scentDrawnPct: r1(100 * recs.reduce((t, r) => t + r.scentDrawn, 0) / Math.max(1, recs.reduce((t, r) => t + r.beastWins, 0))),
+    scentHarvestPct: r1(100 * recs.reduce((t, r) => t + r.scentMidHarvest, 0) / Math.max(1, recs.reduce((t, r) => t + r.beastWins, 0))),
+    scentFightPct: r1(100 * mean(fights.map(f => (f.cause === 'scent' ? 1 : 0)))),
     knockouts: r1(mean(recs.map(r => r.knockouts))),
     events: r1(mean(recs.map(r => r.events))),
     xpPerHunter: r1(mean(recs.map(r => r.xpPerHunter))),
@@ -654,7 +667,7 @@ function rollup(by) {
 const COLS = [
   ['n', 'n'], ['done%', 'donePct'], ['wipe%', 'wipePct'], ['stuck', 'stuck'], ['perc', 'perception'], ['moves', 'moves'], ['acts', 'actions'], ['days', 'days'],
   ['fights', 'fights'], ['rd/fight', 'roundsPerFight'], ['rounds', 'rounds'], ['ambush%', 'ambushPct'], ['caught%', 'caughtPct'], ['fightWin%', 'fightWinPct'], ['enemy1st%', 'enemyFirstPct'],
-  ['supUsed', 'suppliesUsed'], ['ranOut%', 'ranOutPct'], ['camps', 'camps'], ['harvT', 'harvestTime'], ['KOs', 'knockouts'], ['events', 'events'],
+  ['supUsed', 'suppliesUsed'], ['ranOut%', 'ranOutPct'], ['camps', 'camps'], ['harvT', 'harvestTime'], ['scent%', 'scentDrawnPct'], ['scentHv%', 'scentHarvestPct'], ['scentF%', 'scentFightPct'], ['KOs', 'knockouts'], ['events', 'events'],
   ['XP/hunter', 'xpPerHunter'], ['HuntPts', 'huntPoints'], ['fightHP', 'fightHuntPoints'], ['exitHP', 'exitHuntPoints'], ['omens', 'omens'],
 ];
 function table(title, rows) {
