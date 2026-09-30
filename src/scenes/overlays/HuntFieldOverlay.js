@@ -1352,7 +1352,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points${res.reward?.xpPool > 0 ? `, ${res.reward.xpPool} XP for the party` : ''}.`);
     if (kind === 'exit' && res.pack?.spoiled?.length) out.push('The fresh food you carried spoiled on the way home.');
     if (kind === 'move' && res.quiet) out.push(`Something is here, but ${res.quiet}.`);
-    if (kind === 'move' && res.scattered) out.push('It scatters as you pass.');
+    // Often a beast hidden from you on a tile that looked empty: say what it was.
+    if (kind === 'move' && res.scattered) out.push(`${res.scattered.family ? `A ${familyName(this.v?.zoneId, res.scattered.family)}` : 'Something'} scatters as you pass (timid: it runs rather than fights).`);
     if (kind === 'leave') out.push('You walk on. It will still be there.');
     return out.join(' ');
   }

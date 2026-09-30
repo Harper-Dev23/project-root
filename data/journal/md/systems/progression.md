@@ -103,6 +103,6 @@ Anything short of level 5 can be closed by repeating a tier — they pay every t
 
 ## Currencies
 
-**Hunt Tickets** are earned on the *first* clear of a fight and spent at the bone pile. **Reckoning Marks** are earned from Reckoning tiers on *every* clear, and buy from the bone pile’s Marked buttons. A Ticket always buys a tier-1 base; a Mark always buys a tier-2 one — see [[Item Level & Base Types]].
+**Hunt Tickets** are earned on the *first* clear of a fight and spent at the bone pile. **Reckoning Tickets** are earned from Reckoning tiers on *every* clear, and buy from the bone pile’s Marked buttons. A Ticket always buys a tier-1 base; a Mark always buys a tier-2 one — see [[Item Level & Base Types]].
 
 <!-- GEN:END -->

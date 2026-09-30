@@ -163,8 +163,8 @@ check('found a beast encounter and a cultist encounter on real map hunts', !!bea
     check(`${label}: each enemy wears a COPY of its member's kept loadout`, copies && matches);
     check(`${label}: grade HP scale on beasts, none on cultists`,
       en.every(e => e.hpMult === (e.grade ? BP.GRADE_HP_SCALE[e.grade] : 1)));
-    check(`${label}: ${label === 'cultist' ? 'the armour drops' : 'no part drops (they are harvested, 9d)'}`,
-      en.every(e => Object.keys(e.gear).every(sl => !!e.gearDroppable[sl] === (label === 'cultist'))));
+    check(`${label}: ${label === 'cultist' ? 'the armour drops, the weapon never does' : 'no part drops (they are harvested, 9d)'}`,
+      en.every(e => Object.keys(e.gear).every(sl => !!e.gearDroppable[sl] === (label === 'cultist' && sl !== 'weaponMain'))));
     check(`${label}: the XP pool is FIGHT_XP_POOL with no xpPercent`, spec.xpPool === FIGHT_XP_POOL);
   }
 }
@@ -262,7 +262,7 @@ function winIt(m, planLabel) {
     && huntFightXP({ xpPool: 16 }, [...one(REF), { maxHP: 999, isAdd: true }]) === 16);
 
   const c = winIt(cultMeet);
-  const armour = c.spec.scenario.enemies.flatMap(e => Object.values(e.gear));
+  const armour = c.spec.scenario.enemies.flatMap(e => Object.entries(e.gear).filter(([sl]) => e.gearDroppable[sl]).map(([, g]) => g));
   const packIds = c.s1.pack.found.map(i => i.id + '/' + i.rarity);
   check('cultist: every piece of its armour went into the PACK', armour.every(a => packIds.includes(a.id + '/' + a.rarity)) && armour.length === c.s1.pack.found.length - c.s0.pack.found.length,
     `${armour.length} pieces`);

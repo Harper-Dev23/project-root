@@ -121,6 +121,7 @@ export function applyTakeHome(entries, ctx, target) {
       case 'omens': w.omens?.(...a); break;
       // Sin Tickets a parley or a cult quest paid: every save books them, like Hunt Points.
       case 'sinTickets': w.sinTickets?.(...a); break;
+      case 'divinityTickets': w.divinityTickets?.(...a); break;
       // The host's boss plan (14b-4); on anyone else's save it finds nothing.
       case 'spendBossPlan': w.spendBossPlan?.(...a); break;
       case 'fell': {

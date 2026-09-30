@@ -203,6 +203,16 @@ export const VERBS = {
       return n > 0 ? `+${n} Sin Ticket${n === 1 ? '' : 's'}.` : null;
     },
   },
+  divinityTickets: {
+    // The prophets' currency (owner 2026-09-30): a prophet's shrine or quest pays it.
+    reader: 'world.divinityTickets -> ProgressionManager.divinityTickets (a co-op ledger verb)',
+    validate: numErr,
+    apply: (v, api) => {
+      const n = Math.max(0, Math.round(evalNumber(v, api.roles)));
+      if (n > 0) api.world.divinityTickets?.(n);
+      return n > 0 ? `+${n} Divinity Ticket${n === 1 ? '' : 's'}.` : null;
+    },
+  },
   omens: {
     reader: "world.omens: the region's Omen meter (chunk 14b-3; Omens.js)",
     validate: numErr,
@@ -360,6 +370,7 @@ export function previewEffects(list, roles = {}) {
     const { verb, value } = verbOf(e);
     if (!verb) continue;
     if (verb === 'sinTickets') out.push(`${n(value)} Sin Ticket${n(value) === 1 ? '' : 's'}`);
+    else if (verb === 'divinityTickets') out.push(`${n(value)} Divinity Ticket${n(value) === 1 ? '' : 's'}`);
     else if (verb === 'huntPoints') out.push(`${n(value)} Hunt Points`);
     else if (verb === 'xp') out.push(`${n(value)} XP`);
     else if (verb === 'omens') out.push(`${n(value)} omens`);

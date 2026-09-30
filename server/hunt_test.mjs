@@ -235,7 +235,8 @@ console.log('=== a cultist fight: its gear crosses the wire into the pack ===');
   for (const u of C.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
   playFight(C.hub, C.lobby, C.connOf);
   const over = C.host.last('over');
-  const armour = spec.scenario.enemies.flatMap(e => Object.values(e.gear || {}));
+  // Their droppable gear: the armour (a cultist's weapon never drops, HuntBeasts).
+  const armour = spec.scenario.enemies.flatMap(e => Object.entries(e.gear || {}).filter(([sl]) => e.gearDroppable?.[sl]).map(([, g]) => g));
   check("won, and the rewards list the cultists' armour", over?.huntOutcome?.result === 'won' && over.rewards.loot.length === armour.length && armour.length > 0,
     `${over?.rewards?.loot?.length} of ${armour.length}`);
   const before = ch.h.getState().pack.found.length;

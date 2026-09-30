@@ -9,6 +9,7 @@
   "item",
   "historic",
   "sinTickets",
+  "divinityTickets",
   "omens",
   "boon",
   "standing",
@@ -64,7 +65,8 @@
    "option:0",
    "The grief in the air eases, if only for a moment.",
    "+3 Hunt Points.",
-   "+5 XP for the party."
+   "+5 XP for the party.",
+   "+1 Divinity Ticket."
   ],
   "reeds_sunken_shrine {\"option\":1}": [
    "option:1",
@@ -372,7 +374,8 @@
    "accept",
    "-1 supplies.",
    "Jeremiah takes note of you.",
-   "Jeremiah notices (+3 favor)."
+   "Jeremiah notices (+3 favor).",
+   "+1 Divinity Ticket."
   ],
   "shrine_of_house {\"accept\":false}": [
    "refuse",
@@ -383,7 +386,8 @@
    "-1 supplies.",
    "Jeremiah knows your tribe, and is glad of you.",
    "Jeremiah notices (+5 favor).",
-   "Jeremiah looks on you more kindly (+1 standing)."
+   "Jeremiah looks on you more kindly (+1 standing).",
+   "+1 Divinity Ticket."
   ],
   "shrine_of_house_followed {\"accept\":false}": [
    "refuse",

@@ -197,7 +197,7 @@ function randomRarityForPlanStock() {
 /** Hunt Tickets per Bone Pile gamble (was 1; 3 from the owner's 2026-09-29 call). Marked gambles cost 1 Mark, unchanged. */
 const TICKET_GAMBLE_COST = 3;
 
-// Reckoning Marks buy a better roll than a Hunt Ticket does, on both axes:
+// Reckoning Tickets buy a better roll than a Hunt Ticket does, on both axes:
 // this rarity table (which decides affix COUNT) and a higher item level plus
 // a tier-2 base cap at the call site (which decide affix TIER and base type).
 function randomRarityForMarkedGamble() {
@@ -1172,7 +1172,7 @@ export default class TownScene extends Phaser.Scene {
 
   /** Returns a formatted currency string for vendor panel headers. */
   _currencyLine() {
-    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Marks: ${ProgressionManager.reckoningMarks}  |  Sin Tickets: ${ProgressionManager.sinTickets}`;
+    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Tickets: ${ProgressionManager.reckoningMarks}  |  Sin Tickets: ${ProgressionManager.sinTickets}${ProgressionManager.divinityTickets > 0 ? `  |  Divinity Tickets: ${ProgressionManager.divinityTickets}` : ''}`;
   }
 
   /** Updates any live vendor currency text objects. */
@@ -1958,7 +1958,7 @@ export default class TownScene extends Phaser.Scene {
       };
 
       // The two button sets map ONE-TO-ONE onto the two base tiers: a Hunt
-      // Ticket always buys a tier-1 base, a Reckoning Mark always buys a
+      // Ticket always buys a tier-1 base, a Reckoning Ticket always buys a
       // tier-2 one. Deliberately NOT the weighted item-level draw the rest of
       // the game uses — that system stays exactly as it is for drops, party
       // finds and (later) hunting. This is a shop, and a shop should say what
@@ -1993,7 +1993,7 @@ export default class TownScene extends Phaser.Scene {
         emptyMessage: 'No armor IDs found in Items.js.'
       });
 
-      // === Reckoning Marks ===================================================
+      // === Reckoning Tickets ===================================================
       // Earned only from Reckoning tiers (MARK_REWARDS in ProgressionManager),
       // and the only way to reliably buy a tier-2 base. Item level 3 matches
       // what the Reckoning encounters themselves drop; the tier-2 cap is
@@ -2019,7 +2019,7 @@ export default class TownScene extends Phaser.Scene {
         y: 285,
         cost: 1,
         currency: 'reckoningMarks',
-        currencyName: 'Reckoning Mark',
+        currencyName: 'Reckoning Ticket',
         color: '#c8a0ff',
         itemLevel: MARK_ITEM_LEVEL,
         minBaseTier: MARK_MIN_BASE_TIER,
@@ -2039,7 +2039,7 @@ export default class TownScene extends Phaser.Scene {
         y: 315,
         cost: 1,
         currency: 'reckoningMarks',
-        currencyName: 'Reckoning Mark',
+        currencyName: 'Reckoning Ticket',
         color: '#c8a0ff',
         itemLevel: MARK_ITEM_LEVEL,
         minBaseTier: MARK_MIN_BASE_TIER,
@@ -2139,7 +2139,7 @@ export default class TownScene extends Phaser.Scene {
         // which case the row shows that currency and is charged against it.
         // Gold rows still do not deduct anything -- that is pre-existing
         // behaviour and deliberately left alone here.
-        const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Mark', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket', sinTickets: 'Sin Ticket' };
+        const CURRENCY_LABEL = { reckoningMarks: 'Reckoning Ticket', huntTickets: 'Hunt Ticket', tribeTickets: 'Tribe Ticket', sinTickets: 'Sin Ticket' };
         const cur = entry.currency;
         // A row may shorten its currency name (plan rows carry rarity AND item
         // level, and overflowed the panel with the full name).

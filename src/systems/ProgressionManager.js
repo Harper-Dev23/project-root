@@ -92,7 +92,7 @@ const SCENARIO_ORDER = [
 
 // Hunt Tickets awarded on FIRST completion of each scenario.
 /**
- * Reckoning Marks — earned ONLY from Reckoning tiers, spent only at the bone
+ * Reckoning Tickets — earned ONLY from Reckoning tiers, spent only at the bone
  * pile's Marked buttons.
  *
  * Unlike Hunt Tickets these are **repeatable**: they are awarded on every
@@ -136,7 +136,7 @@ const MARK_REWARDS = {
 };
 
 // Hunt Tickets come from the BASE encounters only. Reckoning tiers
-// deliberately pay nothing here — they pay Reckoning Marks instead (see
+// deliberately pay nothing here — they pay Reckoning Tickets instead (see
 // MARK_REWARDS), which is what makes the two currencies mean different
 // things: Tickets are the one-off reward for progressing, Marks are the
 // repeatable reward for grinding.
@@ -217,6 +217,9 @@ const ProgressionManager = {
   tribeTickets: 0,
   // The cults' black-market currency (chunk 14c+, owner 2026-09-27).
   sinTickets: 0,
+  // The prophets' currency (owner 2026-09-30, notes D3): prophet shrines pay
+  // it now, prophet quests later. Nothing spends it yet (parked).
+  divinityTickets: 0,
   huntPoints:   0,          // player-wide score from the Hunt loop — tracked via the Waystone
   tribeVendorStock: {},     // itemId → remaining stock (default 3 each)
   // The camp plan vendor's stock: { day, slots: [{ rarity, itemLevel, cost, sold }] }.
@@ -643,6 +646,7 @@ const ProgressionManager = {
       reckoningMarks:      this.reckoningMarks,
       tribeTickets:        this.tribeTickets,
       sinTickets:          this.sinTickets,
+      divinityTickets:     this.divinityTickets,
       huntPoints:          this.huntPoints,
       questFlags:          [...this.questFlags],
       tribe:               this.tribe,
@@ -670,6 +674,7 @@ const ProgressionManager = {
     this.reckoningMarks      = typeof data.reckoningMarks === 'number'  ? data.reckoningMarks           : 0;
     this.tribeTickets        = typeof data.tribeTickets === 'number'    ? data.tribeTickets             : 0;
     this.sinTickets          = typeof data.sinTickets === 'number'      ? data.sinTickets               : 0;
+    this.divinityTickets     = typeof data.divinityTickets === 'number' ? data.divinityTickets          : 0;
     this.huntPoints          = typeof data.huntPoints   === 'number'    ? data.huntPoints               : 0;
     this.questFlags          = Array.isArray(data.questFlags)           ? [...data.questFlags]          : [];
     this.tribe               = data.tribe || null;
@@ -709,6 +714,7 @@ const ProgressionManager = {
     this.reckoningMarks      = 0;
     this.tribeTickets        = 0;
     this.sinTickets          = 0;
+    this.divinityTickets     = 0;
     this.huntPoints          = 0;
     this.questFlags          = [];
     this.tribe               = null;

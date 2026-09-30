@@ -71,9 +71,9 @@ Toughness is the primary lever; the kit itself only grows at the marked tiers.
 
 ## Rewards
 
-XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+XP is awarded every time the fight is cleared, not only the first. Reckoning Tickets are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
 
-| Fight | XP | Reckoning Marks | Gear rolls as |
+| Fight | XP | Reckoning Tickets | Gear rolls as |
 |---|---|---|---|
 | Base encounter | 30 | - | item level 1, base tier 1 |
 | Reckoning I | 25 | 2 | item level 3, up to base tier 2 |

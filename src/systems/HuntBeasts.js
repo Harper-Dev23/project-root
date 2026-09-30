@@ -83,6 +83,14 @@ export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed, historicInWi
       const rarity = rollHuntDropRarity(itemRarity, rng);
       const inst = id ? createItemInstance(id, { rarity, itemLevel, rng }) : null;
       if (inst) out[CULTIST_GEAR_SLOT] = inst;
+      // Its weapon (owner 2026-09-30): a cultist fought unarmed, a 1-2 die
+      // under every skill. A tier-1 base of its type's huntWeapon, common,
+      // drawn after the armour so the armour rolls are what they were. Never
+      // dropped (fightScenario): the band's loot stays its armour.
+      const wt = ENEMY_TYPES[memberType(occ, i)]?.huntWeapon;
+      const wid = wt ? pickBaseId(weaponBases(wt), itemLevel, { maxBaseTier: 1, rng }) : null;
+      const weapon = wid ? createItemInstance(wid, { rarity: 'common', itemLevel, rng, rollAffixes: false }) : null;
+      if (weapon) out.weaponMain = weapon;
       return out;
     }
     const fam = HUNT_BEASTS[m.type] || HUNT_BEASTS[occ.family];
@@ -271,7 +279,7 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
       hpMult: gradeHpScale(m.grade) * (boost?.hpMult || 1),
       ...(Number.isFinite(boost?.damagePct) ? { damageMultiplierPct: boost.damagePct } : {}),
       gear,
-      gearDroppable: occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, true])) : {},
+      gearDroppable: occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, sl !== 'weaponMain'])) : {},
     };
   });
   const lead = occ.kind === 'cultist' ? 'Cultists' : (HUNT_BEASTS[occ.family]?.name || 'Beasts');

@@ -1664,7 +1664,7 @@ export const Items = {
     onUse: 'respec_stats',
     description: 'Drink to unmake every choice since your first breath. Refunds all level-up stat points and returns your attributes to what they were at creation. (Testing item.)',
   },
-  // ---- Proficiency tokens (Ember Cart, 2 Reckoning Marks each) ----------
+  // ---- Proficiency tokens (Ember Cart, 2 Reckoning Tickets each) ----------
   // PERMANENT +1 Proficiency in one stat. Deliberately additive to the
   // half-of-permanent-stat figure rather than a stat bonus, so Proficiency
   // can drift away from the attributes that first drove it -- a Hunter who

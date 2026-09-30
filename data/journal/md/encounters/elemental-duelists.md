@@ -91,9 +91,9 @@ This ladder scales the same roster rather than replacing it. Health is a multipl
 
 ## Rewards
 
-XP is awarded every time the fight is cleared, not only the first. Reckoning Marks are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
+XP is awarded every time the fight is cleared, not only the first. Reckoning Tickets are the same — they are the currency the pit pays out for repeating its harder work, and they are spent at the bone pile.
 
-| Fight | XP | Reckoning Marks | Gear rolls as |
+| Fight | XP | Reckoning Tickets | Gear rolls as |
 |---|---|---|---|
 | Base encounter | 55 | - | item level 2, base tier 1 |
 | Reckoning I | 65 | 6 | item level 3, up to base tier 2 |

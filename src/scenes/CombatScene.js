@@ -5774,7 +5774,7 @@ export default class CombatScene extends Phaser.Scene {
       this._log(`Collected ${out.loot.length} item${out.loot.length > 1 ? 's' : ''} from defeated enemies.`);
     }
 
-    // Quest flags, hunt tickets and Reckoning Marks all come from this one
+    // Quest flags, hunt tickets and Reckoning Tickets all come from this one
     // call, per save. It is why "each player gets their own marks" needed no
     // new machinery.
     try {
@@ -14253,9 +14253,9 @@ export default class CombatScene extends Phaser.Scene {
     if (progressReward?.firstCompletion && progressReward.huntTicketsEarned > 0) {
       line(`+${progressReward.huntTicketsEarned} Hunt Tickets  (Total: ${progressReward.huntTicketsTotal})`, '#ffe066');
     }
-    // Reckoning Marks are NOT gated on firstCompletion: re-running a tier pays.
+    // Reckoning Tickets are NOT gated on firstCompletion: re-running a tier pays.
     if (progressReward?.marksEarned > 0) {
-      line(`+${progressReward.marksEarned} Reckoning Mark${progressReward.marksEarned > 1 ? 's' : ''}  (Total: ${progressReward.marksTotal})`, '#c8a0ff');
+      line(`+${progressReward.marksEarned} Reckoning Ticket${progressReward.marksEarned > 1 ? 's' : ''}  (Total: ${progressReward.marksTotal})`, '#c8a0ff');
     }
 
     // ── Loot ── hover for the tooltip (Alt: affix detail), Inspect on Historic items.

@@ -61,9 +61,9 @@ Weapons run **Crude → Hardened → Ancestral**, armour runs **Simple → Fitte
 | Encounter VI | 3 | tier 1 only |
 | Any Reckoning tier | 3 | up to tier 2 |
 | Bone pile — Hunt Ticket | your party's level | tier 1 only |
-| Bone pile — Reckoning Mark | your party's level (min 3) | always tier 2 |
+| Bone pile — Reckoning Ticket | your party's level (min 3) | always tier 2 |
 
-The two bone-pile buttons are deliberately fixed: a Hunt Ticket always buys a tier-1 base and a Reckoning Mark always buys a tier-2 one. A shop should say what it sells.
+The two bone-pile buttons are deliberately fixed: a Hunt Ticket always buys a tier-1 base and a Reckoning Ticket always buys a tier-2 one. A shop should say what it sells.
 
 ## Bone
 

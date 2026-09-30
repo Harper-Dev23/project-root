@@ -564,6 +564,7 @@ export const ENEMY_TYPES = {
   },
   hunt_cult_zealot: {
     name: 'Cult Zealot',
+    huntWeapon: 'sword_1h',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_fighter',   // was soldier_portrait, never loaded (14a)
     maxHP: 60,
     maxMP: 20,
@@ -576,6 +577,7 @@ export const ENEMY_TYPES = {
   },
   hunt_cult_adept: {
     name: 'Cult Adept',
+    huntWeapon: 'dagger',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_rogue',   // was rogue_portrait, never loaded (14a)
     maxHP: 48,
     maxMP: 24,
@@ -593,6 +595,7 @@ export const ENEMY_TYPES = {
     // The Drowned Choir (Yar'galeth): "confessors gone wrong", forcing a
     // confession out of you, true or not. Curses, then deepens it.
     name: 'Choir Confessor',
+    huntWeapon: 'wand',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_warlock',
     maxHP: 50,
     maxMP: 26,
@@ -608,6 +611,7 @@ export const ENEMY_TYPES = {
     // The Drowned Choir's singers: a dirge that dazes, and drowned words
     // that rot.
     name: 'Choir Cantor',
+    huntWeapon: 'staff',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_wizard',
     maxHP: 46,
     maxMP: 26,
@@ -623,6 +627,7 @@ export const ENEMY_TYPES = {
     // The Temple of the Gill (Dagon): baptism as drowning. Hamstrings so you
     // cannot get out of the water, then the poisoned blade.
     name: 'Gill Baptist',
+    huntWeapon: 'dagger',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_rogue',
     maxHP: 58,
     maxMP: 20,
@@ -637,6 +642,7 @@ export const ENEMY_TYPES = {
     // Keeps the congregation standing (heals the most hurt ally below 60%),
     // otherwise casts rot from the altar.
     name: 'Gill Priest',
+    huntWeapon: 'staff',   // carried in a hunt fight (HuntBeasts.rollLoadout)
     skin: 'dummy_portrait_equipped_healer',
     maxHP: 48,
     maxMP: 30,

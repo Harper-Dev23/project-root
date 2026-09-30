@@ -454,7 +454,7 @@ function makeMapHunt(s, rng, worldRng, world) {
         if (free.length) {
           const from = parseTileId(s.pos);
           free.sort((a, b) => distance(parseTileId(b), from) - distance(parseTileId(a), from));
-          scattered = { id: occ.id, from: to, to: free[0] };
+          scattered = { id: occ.id, family: occ.family || null, from: to, to: free[0] };
           occ.tile = free[0];
         }
       }

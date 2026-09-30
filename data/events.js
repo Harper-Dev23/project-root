@@ -61,7 +61,7 @@ export const EVENT_TEMPLATES = {
     text: 'A half-sunken shrine to {prophet} pokes above the waterline.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, needs: ['prophet'] },
     options: [
-      { label: 'Pray quietly at the shrine', effects: [{ text: 'The grief in the air eases, if only for a moment.' }, { huntPoints: '{danger}*3' }, { xp: '{danger}*5' }] },
+      { label: 'Pray quietly at the shrine', effects: [{ text: 'The grief in the air eases, if only for a moment.' }, { huntPoints: '{danger}*3' }, { xp: '{danger}*5' }, { divinityTickets: 1 }] },
       { label: 'Search it for anything useful', effects: [{ text: 'You find nothing but old wax and waterlogged cloth.' }, { huntPoints: '{danger}' }] },
       { label: 'Leave it undisturbed', effects: [{ text: 'Some things are better left to the dead.' }] },
     ],
@@ -371,7 +371,7 @@ export const EVENT_TEMPLATES = {
     appears: { houses: 'any', followed: false, needs: ['prophet'] },
     offer: 'Kneel and make an offering',
     price: [{ time: 1 }, { supplies: '-{danger}' }],
-    reward: [{ text: '{prophet} takes note of you.' }, { boon: '{danger}*3' }],
+    reward: [{ text: '{prophet} takes note of you.' }, { boon: '{danger}*3' }, { divinityTickets: 1 }],
     refuse: [{ text: 'You pass by. Something saw you do it.' }],
   },
   shrine_of_house_followed: {
@@ -381,7 +381,7 @@ export const EVENT_TEMPLATES = {
     appears: { houses: 'any', followed: true, needs: ['prophet'] },
     offer: 'Kneel and make an offering',
     price: [{ time: 1 }, { supplies: '-{danger}' }],
-    reward: [{ text: '{prophet} knows your tribe, and is glad of you.' }, { boon: '{danger}*5' }, { standing: 1 }],
+    reward: [{ text: '{prophet} knows your tribe, and is glad of you.' }, { boon: '{danger}*5' }, { standing: 1 }, { divinityTickets: 1 }],
     refuse: [{ text: 'You pass by. Something saw you do it.' }],
   },
   prophet_vigil: {

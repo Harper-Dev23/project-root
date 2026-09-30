@@ -350,8 +350,9 @@ const occOf = (family, grades, id = 'o7') => ({ id, kind: 'beast', family, roste
   check('a common part rolls no affixes', a.flat().flatMap(Object.values).filter(p => p.rarity === 'common').every(p => !p.prefixes.length && !p.suffixes.length));
   const cult = { id: 'o3', kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }, { type: 'cultist', grade: null }] };
   const cl = HB.rollLoadout(cult, { itemLevel: 1, itemRarity: 0, seed: 5 });
-  check(`a cultist wears one ${BP.CULTIST_GEAR_SLOT} piece, uncommon or better, and members alternate types`,
-    cl.every(g => same(Object.keys(g), [BP.CULTIST_GEAR_SLOT]) && Items[g[BP.CULTIST_GEAR_SLOT].id].type === 'armor' && g[BP.CULTIST_GEAR_SLOT].rarity !== 'common')
+  check(`a cultist wears one ${BP.CULTIST_GEAR_SLOT} piece, uncommon or better, and carries its type's weapon; members alternate types`,
+    cl.every((g, i) => same(Object.keys(g).sort(), [BP.CULTIST_GEAR_SLOT, 'weaponMain'].sort()) && Items[g[BP.CULTIST_GEAR_SLOT].id].type === 'armor' && g[BP.CULTIST_GEAR_SLOT].rarity !== 'common'
+      && Items[g.weaponMain.id].weaponType === ENEMY_TYPES[HB.memberType(cult, i)].huntWeapon && g.weaponMain.rarity === 'common')
     && same([0, 1, 2].map(i => HB.memberType(cult, i)), ['hunt_cult_zealot', 'hunt_cult_adept', 'hunt_cult_zealot']));
 
   // Statistics per grade (2000 single-member loadouts each, IR 0 and 50).

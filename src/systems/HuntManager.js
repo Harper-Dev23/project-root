@@ -218,6 +218,10 @@ export const GAME_WORLD = {
   sinTickets(n) {
     ProgressionManager.sinTickets = (ProgressionManager.sinTickets || 0) + (Number(n) || 0);
   },
+  // The prophets' currency (owner 2026-09-30).
+  divinityTickets(n) {
+    ProgressionManager.divinityTickets = (ProgressionManager.divinityTickets || 0) + (Number(n) || 0);
+  },
   // The region's Omen meter (chunk 14b-3; src/systems/Omens.js).
   omens(zoneId, amount) {
     addOmens(ProgressionManager, zoneId, amount);

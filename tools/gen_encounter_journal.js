@@ -241,7 +241,7 @@ function tierName(sc) {
 /** XP, Marks and what the loot rolls as — all read from the data. */
 function rewardsBlock(doc) {
   const ids = [doc.id, ...(doc.extraTiers || [])];
-  const rows = ['| Fight | XP | Reckoning Marks | Gear rolls as |', '|---|---|---|---|'];
+  const rows = ['| Fight | XP | Reckoning Tickets | Gear rolls as |', '|---|---|---|---|'];
   ids.forEach(id => {
     const sc = COMBAT_SCENARIOS[id];
     if (!sc) return;
@@ -255,7 +255,7 @@ function rewardsBlock(doc) {
   });
   return ['## Rewards' + NL,
     'XP is awarded every time the fight is cleared, not only the first. '
-    + 'Reckoning Marks are the same — they are the currency the pit pays out for '
+    + 'Reckoning Tickets are the same — they are the currency the pit pays out for '
     + 'repeating its harder work, and they are spent at the bone pile.' + NL,
     rows.join(NL) + NL].join(NL);
 }

@@ -21,7 +21,7 @@ Camp Nehemiah has two separate rows of trade, each with its own currency.
 - Ironbinder's Stand — crude starting weapons
 - Watershade Armory — simple armor
 - Draughtwell — tonics
-- Ember Cart — fuel, and Proficiency tokens for Reckoning Marks
+- Ember Cart — fuel, and Proficiency tokens for Reckoning Tickets
 - Whispering Cloth — Identify and Sever items for use in combat
 - Greenhollow Satchel — Hunt Plans for Hunt Tickets
 - Bonepile — a weapon gamble for Hunt Tickets, unlocked after the second training scenario
