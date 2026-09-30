@@ -170,6 +170,10 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       }, t);
       r.applied = ledger.length;
       r.closed = true;
+      // This player's own pack (OwnPack.js): home on an exit (a guest leaving
+      // early is one, rule 7), lost on a wipe unless the region is Sheltered.
+      const st = ch.hunt.getState();
+      sum.ownPack = t.settleOwnPack?.({ ending: st.finished === 'wipe' ? 'wipe' : 'exit', deathRule: st.deathRule }) || null;
       t.forget?.();
       t.save?.();
       ch.tookHome = sum;

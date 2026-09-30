@@ -32,7 +32,8 @@ import { settlePack } from './HuntManager.js';
 import { exitReward } from './HuntObjectives.js';
 import { restoreMapHunt } from './HuntEngine.js';
 import { getZone } from '../../data/zones.js';
-import { stackQty } from './ItemStacks.js';
+import { stackQty, addToList } from './ItemStacks.js';
+import { settleOwnPack } from './OwnPack.js';
 
 /** The ledger entries a clean exit from this snapshot would have written
  *  (rule 7): what the pack brings home, and the exit's reward. */
@@ -176,6 +177,8 @@ export function takeHomeFromRecord(rec, target) {
   }, target);
   r.applied = led.length;
   r.closed = true;
+  // A clean exit (rule 7): this player's own pack comes home.
+  sum.ownPack = target.settleOwnPack?.({ ending: 'exit', deathRule: 'sheltered' }) || null;
   target.forget?.();
   target.save?.();
   return sum;
@@ -205,5 +208,11 @@ export async function gameTarget() {
     remember: (rec) => { (GameState.flags ||= {}).coopActive = rec; GameState.save('autosave'); },
     forget: () => { if (GameState.flags) delete GameState.flags.coopActive; },
     save: () => GameState.save('autosave'),
+    // This player's own pack comes home (or is lost) by the solo rules (OwnPack.js).
+    settleOwnPack: ({ ending, deathRule }) => {
+      const out = settleOwnPack(GameState.flags || {}, { ending, deathRule, settlePack });
+      for (const it of out.home) addToList((GameState.inventory ||= []), it);
+      return out;
+    },
   };
 }

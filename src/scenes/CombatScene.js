@@ -5642,9 +5642,11 @@ export default class CombatScene extends Phaser.Scene {
       this._pendingItemUse = null;
       // A stack was spent one unit, not removed: give that unit back.
       if (inst) {
-        const bag = (GameState.inventory = GameState.inventory || []);
+        // Back into the bag it came from: the active one (a co-op hunt's own
+        // pack, OwnPack.js), else the camp bag.
+        const bag = InventorySystem.isHuntingBag() ? InventorySystem.bagItems() : (GameState.inventory = GameState.inventory || []);
         if (bag.includes(inst)) inst.qty = stackQty(inst) + 1;
-        else bag.push(inst);
+        else InventorySystem.putInBag(inst);
         this._log(`${Items[inst.id]?.name || 'The item'} was not used and is still yours.`);
       }
     }));

@@ -38,6 +38,8 @@ const { makeStack, stackQty } = await import('../src/systems/ItemStacks.js');
 const { xpShare } = await import('../data/xpTable.js');
 const { Items } = await import('../data/items.js');
 const GameState = (await import('../src/systems/GameState.js')).default;
+const { startOwnPack, settleOwnPack } = await import('../src/systems/OwnPack.js');
+const { settlePack } = await import('../src/systems/HuntManager.js');
 const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
 const CombatScene = CombatSceneMod.default || Object.values(CombatSceneMod).find(v => typeof v === 'function');
@@ -99,14 +101,19 @@ function saveFor(from, ownTribe) {
     ownTribe: () => ownTribe,
   };
   const rec = {};
+  // This player's own pack (OwnPack.js): a draught and a fish they brought.
+  const flags = {};
+  startOwnPack(flags, { code: 'test', items: [makeStack('healing_draught', 2), makeStack('raw_fish', 1)] });
+  got.ownHome = null;
   return {
-    chars, got, world,
+    chars, got, world, flags,
     hunter: (ref) => chars.find(c => (c.instanceId || c.id) === ref) || null,
     awardXPTo: (cs, n) => GameState.awardXPTo(cs, n),
     moveToSlain: (c, fell) => { got.slain.push({ name: c.name, fell }); },
     day: () => 1, record: () => rec, save() {},
     active: null,
     remember(r) { this.active = JSON.parse(JSON.stringify(r)); }, forget() { this.active = null; },
+    settleOwnPack: (o) => { const out = settleOwnPack(flags, { ...o, settlePack }); got.ownHome = out; return out; },
   };
 }
 
@@ -360,6 +367,10 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   check('rule 4: every Bond records the hunt\'s favor', same(hg.favor, gg.favor) && hg.favor.length === led.filter(e => e.verb === 'favor').length, `${hg.favor.length} entries`);
   const again = R.guest.takeHome();
   check('taken home ONCE: a second take-home pays nothing', again === null && gg.huntPoints === hpAll);
+  const homeIds = (g) => (g.ownHome?.home || []).map(i => `${i.id}x${stackQty(i)}`).sort().join(',');
+  check('own packs: on an exit each player\'s own pack comes home (the fish spoils), and the pack is gone',
+    homeIds(hg) === 'healing_draughtx2' && homeIds(gg) === 'healing_draughtx2' && gg.ownHome.spoiled.some(i => i.id === 'raw_fish')
+    && !R.hostSave.flags.coopPack && !R.guestSave.flags.coopPack, `host ${homeIds(hg)} / guest ${homeIds(gg)}`);
 }
 
 console.log('=== two fights in one hunt ===');
@@ -434,6 +445,8 @@ console.log('=== 12d: a Watched wipe: each save loses only its own ===');
     && [...X.hostSave.got.slain, ...X.guestSave.got.slain].every(s => s.fell.rule === 'watched' && s.fell.zoneId === 'reeds_of_gethsemane'),
     `host ${hs.join(',')} / guest ${gs.join(',')}`);
   check('...and a Watched wipe brings nothing home', X.guestSave.got.found.length === 0 && X.guestSave.got.brought.length === 0);
+  check('...own packs included: lost, both saves', X.guestSave.got.ownHome?.home.length === 0 && X.guestSave.got.ownHome?.lost.length === 2
+    && X.hostSave.got.ownHome?.home.length === 0 && !X.guestSave.flags.coopPack);
 }
 
 console.log('=== 12d: a guest who leaves early takes a clean exit, once ===');

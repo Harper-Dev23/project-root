@@ -175,6 +175,32 @@ console.log('=== stacks never make or lose a unit (random operations) ===');
 }
 
 // =============================================================================
+console.log('=== a co-op hunt: this player\'s own pack is the bag (OwnPack.js) ===');
+{
+  const OP = await import('../../src/systems/OwnPack.js');
+  const savedFlags = GameState.flags, savedInv = GameState.inventory;
+  GameState.flags = {};
+  GameState.inventory = [S.makeStack('rations', 5)];
+  const draught = S.makeStack('healing_draught', 3);
+  OP.startOwnPack(GameState.flags, { code: 'ABCD', items: [draught] });
+  check('a pack not marked live (a reload, back in town) leaves the camp bag as the bag',
+    !InventorySystem.isHuntingBag() && InventorySystem.bagItems().some(i => i.id === 'rations'));
+  OP.markOwnPackLive('WXYZ');
+  check('...nor does a live co-op hunt with another code', !InventorySystem.isHuntingBag());
+  OP.markOwnPackLive('ABCD');
+  const bag = InventorySystem.bagItems();
+  check('live: the own pack is the bag, the camp bag out of reach', InventorySystem.isHuntingBag() && bag.length === 1 && bag[0].id === 'healing_draught');
+  InventorySystem.spendOneFromBag(bag[0]);
+  check('a combat item is spent from the own pack, one at a time', S.stackQty(GameState.flags.coopPack.items[0]) === 2 && S.countInList(GameState.inventory, 'healing_draught') === 0);
+  InventorySystem.putInBag(S.makeStack('healing_draught', 1));
+  check('...and a refund merges back into it', GameState.flags.coopPack.items.length === 1 && S.stackQty(GameState.flags.coopPack.items[0]) === 3);
+  const { settlePack } = await import('../../src/systems/HuntManager.js');
+  const out = OP.settleOwnPack(GameState.flags, { ending: 'exit', deathRule: 'watched', settlePack });
+  check('settled on an exit: all of it home, the pack gone, the camp bag the bag again',
+    out.home.length === 1 && S.stackQty(out.home[0]) === 3 && !GameState.flags.coopPack && !InventorySystem.isHuntingBag());
+  GameState.flags = savedFlags; GameState.inventory = savedInv;
+}
+
 console.log('=== the camp bag and the stash merge on arrival ===');
 {
   freshGame();

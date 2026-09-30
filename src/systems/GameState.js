@@ -2,6 +2,7 @@ import { SKILLS } from '../../data/skills.js'; // adjust path if needed
 import { getXPNeededForLevel, LEVEL_CAP, TRAINING_LEVEL_CAP, xpShare } from '../../data/xpTable.js';
 import { createItemInstance, isItemInstance } from './ItemFactory.js';
 import { addToList } from './ItemStacks.js';
+import { ownPackHandle } from './OwnPack.js';
 import { legacyItemId } from '../../data/beastParts.js';
 import { Items } from '../../data/items.js';
 import { rebuildCharacterStats, applyLevelUp } from './CharacterBuilder.js'; // ← make sure this exists
@@ -753,9 +754,12 @@ const GameState = {
     hooks.restore(this._rawHunt);
   },
 
-  /** The live map hunt whose pack is the party's bag, or null in camp (InventorySystem's active bag). */
+  /**
+   * The live map hunt whose pack is the party's bag, or on a co-op hunt this
+   * player's own pack (OwnPack.js), or null in camp (InventorySystem's active bag).
+   */
   packHunt() {
-    return this._huntHooks?.packHunt?.() || null;
+    return this._huntHooks?.packHunt?.() || ownPackHandle(this.flags) || null;
   },
 
   /* --------------------- Save / Load ---------------------- */

@@ -1,5 +1,6 @@
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { gameTarget } from '../systems/CoopRewards.js';
 import { createScrollbar } from '../ui/Scrollbar.js';
 import { LEADER_QUEST_REP_GAIN } from '../systems/TribeRelations.js';
 import InventorySystem from '../systems/InventorySystem.js';
@@ -970,6 +971,11 @@ export default class TownScene extends Phaser.Scene {
     const open = HUNT_SCREENS.filter(up);
     // Stopped outright: they may be showing a hunt that is no longer loaded.
     open.forEach(key => this.scene.stop(key));
+    // An own co-op pack with no co-op hunt left to rejoin (OwnPack.js): it
+    // comes home, as a clean exit, rather than sitting in the save forever.
+    if (GameState.flags?.coopPack && !GameState.flags?.coopActive) {
+      gameTarget().then(t => { t.settleOwnPack({ ending: 'exit', deathRule: 'sheltered' }); GameState.save('autosave'); });
+    }
     if (HuntManager.isActive()) {
       this._enterHuntGate();
     } else if (GameState.flags?.coopActive) {

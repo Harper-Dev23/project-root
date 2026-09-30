@@ -150,8 +150,9 @@ try {
   check('...and so is the guest', await onMap(G));
   const bag1 = await bag();
   check("the guest's pledged 10 Rations left the guest's bag at Start", (await guestRations()) === 20, `${await guestRations()}`);
+  const packR = await H.evaluate(`return window.__T.s().coop.hunt.getState().pack.brought.map(i => i.id + ':' + (i.qty || 1)).join(',');`);
   check("...and are in the hunt's pack with the host's 20",
-    (await H.evaluate(`return window.__T.s().coop.hunt.getState().pack.brought.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`)) === 30);
+    packR.split(',').filter(s => s.startsWith('rations:')).reduce((t, s) => t + Number(s.split(':')[1]), 0) === 30, packR);
   check('the host\'s plan and packed Rations were spent at the start', !bag1.plan && bag1.rations === bag0.rations - 20, `${JSON.stringify(bag0)} -> ${JSON.stringify(bag1)}`);
   await sleep(600);
   check('the guest\'s map says co-op, the host\'s says host',

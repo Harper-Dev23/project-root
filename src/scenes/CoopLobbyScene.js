@@ -29,7 +29,9 @@ import { createCoopHunt } from '../systems/CoopHunt.js';
 import { GAME_WORLD } from '../systems/HuntManager.js';
 import { takeDeparture } from './overlays/HuntHubOverlay.js';
 import { gameTarget, takeHomeFromRecord } from '../systems/CoopRewards.js';
-import { countInList, takeFromList } from '../systems/ItemStacks.js';
+import { countInList, takeFromList, addToList } from '../systems/ItemStacks.js';
+import { ownPack, startOwnPack, markOwnPackLive } from '../systems/OwnPack.js';
+import { packable } from './overlays/PackingOverlay.js';
 import { rationPackCap } from '../systems/HuntRules.js';
 
 /** Rations are pledged in steps, as on the Hunt screen. */
@@ -78,6 +80,9 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // Rations this player brings to a hunt (COOP_EXPLORATION rule 2): the
     // host's were chosen on the Hunt screen; a guest picks them here.
     this.rations = this.huntDeparture?.rationsToPack || 0;
+    // What else this player brings, their own (OwnPack.js): the host chose on
+    // the Hunt screen (huntDeparture.packIds), a guest here (PackingOverlay).
+    this.packIds = [];
     // Rejoining a co-op hunt this save was in (chunk 12d): its record,
     // GameState.flags.coopActive, offered by the town after a reload.
     this.resumeCoop = data.resumeCoop || null;
@@ -117,6 +122,32 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.rations = Math.max(0, Math.min(this._rationsCap(), this.rations + delta));
     if (this.client?.playerId) this.client.setRations(this.rations);
     this._refresh();
+  }
+
+  /** Choose what else this player brings (PackingOverlay); the choice comes back here. */
+  _openPacking() {
+    if (this.huntDeparture) return this._say('You packed on the Hunt screen.');
+    // The text fields are HTML over the canvas: hidden while the overlay is up.
+    const fields = [this.serverInput, this.nameInput, this.codeInput].filter(Boolean);
+    fields.forEach(f => f.setVisible(false));
+    this.scene.pause();
+    this.scene.launch('PackingOverlay', {
+      packIds: this.packIds,
+      onDone: (ids) => { this.packIds = ids; fields.forEach(f => f.setVisible(true)); this.scene.resume(); this._refresh(); },
+    });
+    this.scene.bringToTop('PackingOverlay');
+  }
+
+  /**
+   * Start this player's own pack for the hunt (OwnPack.js): `items` are
+   * already out of the camp bag. A pack left from a hunt this save never
+   * took home (a crash) goes back to the bag first, so nothing is lost.
+   */
+  _startOwnPack(items) {
+    const flags = (GameState.flags ||= {});
+    const stale = ownPack(flags);
+    if (stale) for (const it of stale.items || []) addToList((GameState.inventory ||= []), it);
+    startOwnPack(flags, { code: this.client?.code || null, items });
   }
 
   /** Is this lobby (the one we are in, or the one we would host) a hunt? */
@@ -427,30 +458,35 @@ export default class CoopLobbyScene extends Phaser.Scene {
   }
 
   _buildFooter(width, height) {
-    this.footerCaption = this.add.text(width / 2, 528, 'FIGHT',
+    // Rows below the two panels (they end near y 500): the Rations row, then
+    // the fight or hunt, the status line and the buttons.
+    this.footerCaption = this.add.text(width / 2, 548, 'FIGHT',
       { ...FONTS.muted, fontSize: '12px', color: '#7d838d' }).setOrigin(0.5);
-    this.scenarioText = this.add.text(width / 2, 552,
+    this.scenarioText = this.add.text(width / 2, 570,
       '', { ...FONTS.body, fontSize: '20px', color: MENU_THEME.titleColor }).setOrigin(0.5);
-    this.prevScenario = createButton(this, width / 2 - 180, 548, '<',
+    this.prevScenario = createButton(this, width / 2 - 180, 566, '<',
       () => this._cycleScenario(-1));
-    this.nextScenario = createButton(this, width / 2 + 180, 548, '>',
+    this.nextScenario = createButton(this, width / 2 + 180, 566, '>',
       () => this._cycleScenario(1));
 
     // A hunt lobby: the Rations this player brings (rule 2).
-    this.rationsText = this.add.text(width / 2, 494, '', { ...FONTS.body, fontSize: '15px', color: '#c8ccd4' }).setOrigin(0.5);
-    this.rationsLess = createButton(this, width / 2 - 230, 494, '−', () => this._adjustRations(-RATION_STEP));
-    this.rationsMore = createButton(this, width / 2 + 230, 494, '+', () => this._adjustRations(RATION_STEP));
+    this.rationsText = this.add.text(width / 2, 520, '', { ...FONTS.body, fontSize: '15px', color: '#c8ccd4' }).setOrigin(0.5);
+    const stepper = { minWidth: 46, padX: 14 };
+    this.rationsLess = createButton(this, width / 2 - 230, 520, '−', () => this._adjustRations(-RATION_STEP), stepper);
+    this.rationsMore = createButton(this, width / 2 + 230, 520, '+', () => this._adjustRations(RATION_STEP), stepper);
+    // A guest's own pack (OwnPack.js), chosen as on the Hunt screen.
+    this.packBtn = createButton(this, width / 2 + 330, 520, 'Pack…', () => this._openPacking());
 
-    this.status = this.add.text(width / 2, 588, '', { ...FONTS.body, color: '#d08c8c' })
+    this.status = this.add.text(width / 2, 604, '', { ...FONTS.body, color: '#d08c8c' })
       .setOrigin(0.5);
 
     // Labelled statically on purpose. createButton returns a Container with no
     // setText, and it auto-sizes its background from the label at creation, so
     // a toggling label would either be a silent no-op or overflow its box. The
     // player list already shows who is ready with a tick.
-    this.readyBtn = createButton(this, width / 2 - 150, 634, 'Toggle Ready', () => this._toggleReady());
-    this.startBtn = createButton(this, width / 2, 634, 'Start Hunt', () => this._start());
-    createButton(this, width / 2 + 180, 634, 'Back to Town', () => this._leave());
+    this.readyBtn = createButton(this, width / 2 - 150, 646, 'Toggle Ready', () => this._toggleReady());
+    this.startBtn = createButton(this, width / 2, 646, 'Start Hunt', () => this._start());
+    createButton(this, width / 2 + 180, 646, 'Back to Town', () => this._leave());
   }
 
   // ---- helpers ------------------------------------------------------------
@@ -677,6 +713,15 @@ export default class CoopLobbyScene extends Phaser.Scene {
     if (!this.client.isHost && !resumed) {
       const pledged = this.client.contributions?.[this.client.playerId] || 0;
       if (pledged > 0) takeFromList(GameState.inventory, 'rations', pledged);
+      // What else the guest packed leaves the camp bag into their own pack.
+      const own = [];
+      for (const id of this.packIds) {
+        const inst = (GameState.inventory || []).find(it => it?.instanceId === id);
+        if (!inst) continue;
+        GameState.removeFromInventory(id);
+        own.push(inst);
+      }
+      this._startOwnPack(own);
       GameState.save('autosave');
     }
     // A host coming back carries on from this save's record (chunk 12d).
@@ -685,11 +730,19 @@ export default class CoopLobbyScene extends Phaser.Scene {
     const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD, target, resume });
     if (coop.isHost && this.huntDeparture && !resume) {
       const { plan, supplies, bring } = takeDeparture(this.huntDeparture);
-      coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring });
+      // The Rations go into the shared pack; what else the host packed is the
+      // host's own (OwnPack.js), as every guest's is.
+      this._startOwnPack(bring.filter(it => it.id !== 'rations'));
+      coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring: bring.filter(it => it.id === 'rations') });
       // One write for the plan and the Rations spent (the co-op hunt itself
       // is not in the save: 12d).
       GameState.save('autosave');
     }
+    // This player's own pack is the bag while the hunt runs (OwnPack.js).
+    // A save from before own packs (or a lost one) gets an empty pack.
+    if (!ownPack(GameState.flags)) this._startOwnPack([]);
+    GameState.flags.coopPack.code = this.client.code;
+    markOwnPackLive(this.client.code);
     openCoopHunt(this, coop);
   }
 
@@ -730,6 +783,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.rationsText.setText(hunt ? `Rations you bring: ${mineR}  (in your bag: ${countInList(GameState.inventory || [], 'rations')})${this.huntDeparture ? '  · packed on the Hunt screen' : ''}` : '');
     this.rationsLess.setVisible(hunt && !this.huntDeparture);
     this.rationsMore.setVisible(hunt && !this.huntDeparture);
+    this.packBtn?.setVisible(hunt && !this.huntDeparture);
+    if (hunt && !this.huntDeparture) {
+      this.packIds = this.packIds.filter(id => packable().some(it => it.instanceId === id));
+      if (this.packIds.length) this.rationsText.setText(`${this.rationsText.text}  · ${this.packIds.length} other item${this.packIds.length === 1 ? '' : 's'} packed`);
+    }
     this.prevScenario.setVisible(canPick);
     this.nextScenario.setVisible(canPick);
 
