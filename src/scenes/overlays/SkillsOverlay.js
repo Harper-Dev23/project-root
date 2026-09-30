@@ -155,10 +155,10 @@ export default class SkillsOverlay extends Phaser.Scene {
     const cx = x + w / 2;
     this.header.add(this.add.text(x + 16, y, 'Filter:', { fontSize: '14px', color: '#cccccc' }));
 
-    this.weaponLeft = this.add.text(cx - 120, y, '◀', { fontSize: '16px', color: '#ffffff' })
+    this.weaponLeft = this.add.text(cx - 150, y, '◀', { fontSize: '16px', color: '#ffffff' })
       .setInteractive({ useHandCursor: true });
-    this.weaponLabel = this.add.text(cx - 100, y, `Weapon: ${this.filter.weapon}`, { fontSize: '14px', color: '#ffffff' });
-    this.weaponRight = this.add.text(cx + 120, y, '▶', { fontSize: '16px', color: '#ffffff' })
+    this.weaponLabel = this.add.text(cx - 130, y, `Weapon: ${this.filter.weapon}`, { fontSize: '14px', color: '#ffffff' });
+    this.weaponRight = this.add.text(cx + 150, y, '▶', { fontSize: '16px', color: '#ffffff' })
       .setInteractive({ useHandCursor: true });
 
     this.weaponLeft.on('pointerdown', () => {
@@ -209,18 +209,27 @@ export default class SkillsOverlay extends Phaser.Scene {
     // the whole point -- Proficiency is not one number, so "can I use this"
     // can only be answered against the specific stat a skill asks for.
     // Arrows and label use the SAME x offsets as the weapon cycler directly
-    // above (cx-120 / cx-100 / cx+120) so the two controls read as one column.
-    // The Proficiency readout then starts past the right arrow at cx+140; the
+    // above (cx-150 / cx-130 / cx+150) so the two controls read as one column.
+    // The Proficiency readout then starts past the right arrow at cx+170; the
     // search box is on row 1, so this half of row 2 is free.
     const charY = y + 26;
-    this._charLeft = this.add.text(cx - 120, charY + 4, '◀', { fontSize: '16px', color: '#ffffff' })
+    this._charLeft = this.add.text(cx - 150, charY + 4, '◀', { fontSize: '16px', color: '#ffffff' })
       .setInteractive({ useHandCursor: true });
-    this._charLabel = this.add.text(cx - 100, charY + 6, '', { fontSize: '14px', color: '#ffffff' });
-    this._charRight = this.add.text(cx + 120, charY + 4, '▶', { fontSize: '16px', color: '#ffffff' })
+    this._charLabel = this.add.text(cx - 130, charY + 6, '', { fontSize: '14px', color: '#ffffff' })
+      .setInteractive({ useHandCursor: false });
+    // The whole name and both hands, on hover (the label shows the main hand only).
+    this._charLabel.on('pointerover', (pt) => {
+      const c = this._selectedChar();
+      if (!c) return;
+      const [main, off] = this._weaponTypes(c);
+      this._showTooltipAt(pt.x, pt.y, { title: c.name, lines: [`Main hand: ${main || 'unarmed'}`, ...(off ? [`Off hand: ${off}`] : [])] });
+    });
+    this._charLabel.on('pointerout', () => this._hideTooltip());
+    this._charRight = this.add.text(cx + 150, charY + 4, '▶', { fontSize: '16px', color: '#ffffff' })
       .setInteractive({ useHandCursor: true });
     // Per-stat Proficiency for the selected Hunter, tinted with the game's own
     // stat colours so a glance tells you which requirement you actually meet.
-    this._charProf = this.add.text(cx + 140, charY + 7, '', { fontSize: '12px', color: '#9a9186' });
+    this._charProf = this.add.text(cx + 170, charY + 7, '', { fontSize: '12px', color: '#9a9186' });
 
     const cycleChar = (dir) => {
       const n = (GameState.party || []).length;
@@ -636,20 +645,24 @@ export default class SkillsOverlay extends Phaser.Scene {
       ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'].map(k => `${k} ${m[k] ?? 0}`).join('   '));
   }
 
-  /**
-   * The Hunter's equipped weapon types, in the same vocabulary as the Weapon
-   * filter and the skill cards ("sword_1h", "dagger"), so what is shown here is
-   * exactly what the filter can be set to. Dual wielding reads "dagger + dagger";
-   * nothing equipped reads "unarmed".
-   */
-  _weaponSummary(char) {
+  /** The Hunter's [main, off] weapon types, in the filter's and the cards' vocabulary ("sword_1h"). */
+  _weaponTypes(char) {
     const typeOf = (entry) => {
       if (!entry) return null;
       const id = typeof entry === 'string' ? entry : entry.id;
       return Items[id]?.weaponType || Items[id]?.subtype || null;
     };
-    const types = [typeOf(char?.equipment?.weaponMain), typeOf(char?.equipment?.weaponOff)].filter(Boolean);
-    return types.length ? types.join(' + ') : 'unarmed';
+    return [typeOf(char?.equipment?.weaponMain), typeOf(char?.equipment?.weaponOff)];
+  }
+
+  /**
+   * The Hunter's weapon, beside the name: the main hand only, so the label
+   * fits (owner 2026-09-30); both hands are on hover. What is shown is exactly
+   * what the Weapon filter can be set to. Nothing equipped reads "unarmed".
+   */
+  _weaponSummary(char) {
+    const [main, off] = this._weaponTypes(char);
+    return main || off || 'unarmed';
   }
 
   /**

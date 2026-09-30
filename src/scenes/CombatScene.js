@@ -528,7 +528,8 @@ export default class CombatScene extends Phaser.Scene {
     this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
     // In a co-op hunt only the host calls the retreat (chunk 12 decision 3).
     // Under the turn order, away from End Turn and the action lights.
-    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(width - 110, 318);
+    // Centred under the turn order panel (x 1125-1260, down to y 320), as wide as it.
+    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(1260 - 135 / 2, 346);
     this._highlightCurrentTurn();
     this._createCombatLog();
     for (const line of huntStartLines) this._log(line);
@@ -3618,7 +3619,7 @@ export default class CombatScene extends Phaser.Scene {
   /**
    * The Flee button (owner's notes, 2026-09-29): under the turn order, clear
    * of End Turn and the action lights it used to cover; two clicks, the first
-   * asking "Flee? Click again", which lapses after a few seconds; and none in
+   * asking "Confirm?" (it fits the turn order's width), which lapses after a few seconds; and none in
    * a boss fight, which cannot be fled.
    */
   _createFleeButton(x, y) {
@@ -3626,14 +3627,14 @@ export default class CombatScene extends Phaser.Scene {
     const arm = () => {
       if (this._fleeArmed) { this._fleeArmed = false; this._fleeArmTimer?.remove(false); this._startFlee(); return; }
       this._fleeArmed = true;
-      this.fleeButton?.text?.setText?.('Flee? Click again');
+      this.fleeButton?.text?.setText?.('Confirm?');
       this._fleeArmTimer?.remove(false);
       this._fleeArmTimer = this.time.delayedCall(3500, () => {
         this._fleeArmed = false;
         this.fleeButton?.text?.setText?.('Flee');
       });
     };
-    this.fleeButton = new UIButton(this, x, y, 'Flee', arm, 180);
+    this.fleeButton = new UIButton(this, x, y, 'Flee', arm, 135);
     this.fleeButton.setDepth(UI_DEPTH.overlay + 1);
     this.add.existing(this.fleeButton);
   }

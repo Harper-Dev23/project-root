@@ -88,6 +88,22 @@ export function splitStack(inst, n) {
 }
 
 /**
+ * Fold every other stack in `list` that can stack with `inst` back into it
+ * (the undo of a split, owner 2026-09-30). Returns how many entries were
+ * folded in (0: nothing to merge). Mutates `list`.
+ */
+export function mergeStacks(list, inst) {
+  if (!Array.isArray(list) || !isStackable(inst) || !list.includes(inst)) return 0;
+  const others = list.filter(it => it !== inst && canStack(it, inst));
+  for (const o of others) {
+    inst.qty = stackQty(inst) + stackQty(o);
+    if (o._isNew) inst._isNew = true;
+    list.splice(list.indexOf(o), 1);
+  }
+  return others.length;
+}
+
+/**
  * Take `n` units of base `id` out of `list`, from as many stacks as it takes.
  * Returns one stack holding exactly `n`, or null — and leaves the list
  * untouched — when the list holds fewer than `n`. Emptied entries are removed.

@@ -13,7 +13,7 @@ import { CLASS_COLORS, RARITY_COLORS } from '../../ui/styles.js';
 import { buildItemTooltipLines, installAffixDetailKeys } from '../../ui/itemTooltip.js';
 import { setupSceneCursor } from '../../ui/cursor.js';
 import { historicMechanicLines } from '../../../data/historicEffects.js';
-import { isStackable, stackQty, splitStack } from '../../systems/ItemStacks.js';
+import { isStackable, stackQty, splitStack, canStack, mergeStacks } from '../../systems/ItemStacks.js';
 
 
 export default class InventoryOverlay extends Phaser.Scene {
@@ -701,6 +701,28 @@ export default class InventoryOverlay extends Phaser.Scene {
             this.scene.restart();
           });
           btn(450, '[×]', '#aaaaaa', () => { this._splitRow = null; this.scene.restart(); });
+        }
+      }
+      // [Merge] (owner 2026-09-30): a stack with a split-off sibling in the same
+      // list folds them back into this row. Beside [Split], or in its place.
+      {
+        const list = GameState.inventory || [];
+        const splitShown = isStackable(item) && stackQty(item) > 1;
+        if (isStackable(item) && !InventorySystem.isHuntingBag() && !(this._splitRow?.item === item)
+          && list.includes(item) && list.some(it => it !== item && canStack(it, item))) {
+          const x = splitShown ? 332 : 270;
+          const t = this.add.text(x, y, '[Merge]', { fontSize: '13px', color: '#b8e8c8' })
+            .setInteractive({ useHandCursor: true })
+            .on('pointerover', () => t.setStyle({ color: '#ffffff' }))
+            .on('pointerout', () => t.setStyle({ color: '#b8e8c8' }))
+            .on('pointerdown', (p) => {
+              if (!this._isPointerWithinArea(p, gArea)) return;
+              SoundManager.play('dullClick');
+              mergeStacks(list, item);
+              GameState.save('autosave');
+              this.scene.restart();
+            });
+          listContainer.add(t);
         }
       }
 

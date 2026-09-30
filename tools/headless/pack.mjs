@@ -119,6 +119,16 @@ console.log('=== stack split and take ===');
   check('split 30 into 12 + 18', b.qty === 12 && a.qty === 18 && b.instanceId !== a.instanceId);
   check('split refuses 0, the whole stack, more than the stack, and non-integers',
     [0, 18, 19, 2.5, -1].every(n => S.splitStack(a, n) === null) && a.qty === 18);
+  {
+    const other = S.makeStack('raw_fish', 3);
+    const bag = [a, other, b, S.splitStack(a, 4)];
+    const folded = S.mergeStacks(bag, b);
+    check('merge folds every split-off stack back into the one clicked, and nothing else',
+      folded === 2 && bag.length === 2 && bag.includes(b) && b.qty === 30 && bag.includes(other) && other.qty === 3,
+      `folded ${folded}, left ${bag.map(x => `${x.id} ${x.qty}`).join(', ')}`);
+    check('merge with nothing to merge does nothing', S.mergeStacks(bag, other) === 0 && bag.length === 2);
+    a.qty = 18;
+  }
 
   // Two stacks kept apart on purpose (pushed, not merged), to take across both.
   const list = [S.makeStack('rations', 7), S.makeStack('rations', 5), createItemInstance('healing_potion')];
