@@ -783,7 +783,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     } else {
     if (move) acts.push([`Move here${occ?.temper === 'timid' ? ' (it will scatter)' : ''} (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
     // A timid beast is walked past unless hunted on purpose (owner 2026-09-29).
-    if (move && occ?.temper === 'timid') acts.push(['Hunt it', () => this._move(id, { hunt: true }), 'danger']);
+    // Offered on anything that might be one: a known timid beast, and a beast
+    // or a sensed shape whose temper you don't know yet (owner 2026-09-30).
+    const mightRun = occ && (occ.temper === 'timid' || occ.band === 'sensed' || (occ.kind === 'beast' && !occ.temper));
+    if (move && mightRun) acts.push([occ.temper === 'timid' ? 'Hunt it' : 'Hunt it (if it tries to run)', () => this._move(id, { hunt: true }), 'danger']);
     if (occ && !occ.exact && v.fog[id] === 'visible') acts.push([`Scout (${SCOUT_TIME} time)`, () => this._act('scout', () => this.hunt.scout(occ.id))]);
     if (own) {
       for (const m of v.moves) {

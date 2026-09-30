@@ -16,7 +16,8 @@ export function createButton(scene, cx, cy, label, callback, style = 'primary', 
 
   // Auto-size from text dimensions
   const probe = scene.add.text(0, -9999, label, { fontSize, fontFamily });
-  const bw = Math.max(probe.width  + cfg.padX * 2, 80);
+  // `minWidth` (style object): a small button such as a − / + stepper.
+  const bw = Math.max(probe.width  + cfg.padX * 2, cfg.minWidth ?? 80);
   const bh = Math.max(probe.height + cfg.padY * 2, 32);
   probe.destroy();
 
@@ -143,8 +144,15 @@ export default class UIButton extends Phaser.GameObjects.Container {
 
   /** Skinned: draw the face in a state and colour the text to match. */
   _paint(state) {
-    const color = drawButtonFace(this.face, this._w, this._h, { state, variant: this._variant });
+    const color = drawButtonFace(this.face, this._w, this._h, { state, variant: this._variant, accent: this._accent ?? null });
     if (color && this.text?.active) this.text.setStyle({ color });
+  }
+
+  /** An accent colour (0xRRGGBB), e.g. a class's on character creation. */
+  setAccent(color) {
+    this._accent = color;
+    this._applyState();
+    return this;
   }
 
   /** 'primary' | 'danger' | 'confirm': the skinned face's colour family. */
@@ -161,9 +169,10 @@ export default class UIButton extends Phaser.GameObjects.Container {
       this.background.setStrokeStyle(1.5, 0xb8922a);  // amber-gold = active selection
       this.text.setStyle({ color: '#f0c060' });
     } else {
+      const accent = this._accent ?? null;
       this.background.setFillStyle(0x1c1c1c);
-      this.background.setStrokeStyle(1.5, 0x6a7080);
-      this.text.setStyle({ color: '#b8bccf' });
+      this.background.setStrokeStyle(1.5, accent ?? 0x6a7080);
+      this.text.setStyle({ color: accent != null ? '#' + accent.toString(16).padStart(6, '0') : '#b8bccf' });
     }
   }
 

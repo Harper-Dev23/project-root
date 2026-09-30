@@ -4,7 +4,7 @@ import { SoundManager } from '../systems/SoundManager.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
 import UIButton, { createButton } from '../ui/Button.js';
 import { createPanel } from '../ui/GamePanel.js';
-import { FONTS } from '../ui/styles.js';
+import { FONTS, CLASS_COLORS } from '../ui/styles.js';
 import {
   buildCharacter,
   RACE_BONUSES,
@@ -171,6 +171,8 @@ export default class CharacterCreationScene extends Phaser.Scene {
         this.updateButtonHighlights();
         this.updateClassSkillText();
       }, 140, 32);
+      // Each class's own colour (CLASS_COLORS, as its name shows elsewhere).
+      if (CLASS_COLORS[cls]) btn.setAccent(parseInt(CLASS_COLORS[cls].slice(1), 16));
       this.add.existing(btn);
       this.classButtons.push({ cls, btn });
     });

@@ -81,12 +81,15 @@ const BRONZE = {
  * 'confirm' (anything else reads as primary). Returns the text colour to use.
  * Classic is drawn by the buttons' own old code, not here (returns null).
  */
-export function drawButtonFace(g, w, h, { state = 'rest', variant = 'primary', skin = buttonSkin() } = {}) {
+export function drawButtonFace(g, w, h, { state = 'rest', variant = 'primary', skin = buttonSkin(), accent = null } = {}) {
   g.clear();
   if (skin === 'classic') return null;
   const c = Math.max(2, Math.min(6, Math.floor(h / 5)));
   if (skin === 'bone') {
-    const [top, bot, border, text] = (BONE[variant] || BONE.primary)[state] || BONE.primary.rest;
+    let [top, bot, border, text] = (BONE[variant] || BONE.primary)[state] || BONE.primary.rest;
+    // An accent colour (a class's, on character creation) stains the bone;
+    // the text stays dark so every colour reads.
+    if (accent != null) { top = lerpColor(top, accent, 0.4); bot = lerpColor(bot, accent, 0.5); }
     g.fillStyle(0x000000, 0.5); poly(g, shift(chamfer(w, h, c), 2, 3), true);
     g.fillStyle(bot, 1); poly(g, chamfer(w, h, c), true);
     g.fillStyle(top, 1); poly(g, shift(chamfer(w - 4, h - 6, Math.max(1, c - 1)), 0, -1), true);
@@ -95,7 +98,12 @@ export function drawButtonFace(g, w, h, { state = 'rest', variant = 'primary', s
     return text;
   }
   // bronze
-  const [top, bot, border, text] = (BRONZE[variant] || BRONZE.primary)[state] || BRONZE.primary.rest;
+  let [top, bot, border, text] = (BRONZE[variant] || BRONZE.primary)[state] || BRONZE.primary.rest;
+  // An accent colour: the frame and the text take it (gold still marks the selected one).
+  if (accent != null && state !== 'selected') {
+    border = state === 'hover' ? lerpColor(accent, 0xffffff, 0.35) : accent;
+    text = '#' + (state === 'hover' ? lerpColor(accent, 0xffffff, 0.45) : accent).toString(16).padStart(6, '0');
+  }
   const c2 = Math.max(2, Math.min(7, Math.floor(h / 5)));
   g.fillStyle(0x000000, 0.55); poly(g, shift(chamfer(w, h, c2), 2, 3), true);
   bands(g, w, h, top, bot, 2);

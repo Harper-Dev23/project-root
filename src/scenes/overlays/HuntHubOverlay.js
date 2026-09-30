@@ -233,8 +233,10 @@ export default class HuntHubOverlay extends Phaser.Scene {
     );
 
     // Right-aligned: the supplies line is longer than it was under tickets.
-    this._button(x + width - 350, suppliesY + 32, '−', () => this._adjustPacked(-PACK_STEP));
-    this._button(x + width - 280, suppliesY + 32, '+', () => this._adjustPacked(PACK_STEP));
+    // Small steppers (owner 2026-09-30: at the 80px minimum they overlapped).
+    const stepper = { minWidth: 46, padX: 14 };
+    this._button(x + width - 340, suppliesY + 32, '−', () => this._adjustPacked(-PACK_STEP), stepper);
+    this._button(x + width - 280, suppliesY + 32, '+', () => this._adjustPacked(PACK_STEP), stepper);
     const buy = this._button(x + width - 130, suppliesY + 32, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
     if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
 
@@ -253,13 +255,16 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
     // Never empty: with nothing chosen, the hunt goes on the free basic plan.
     const plan = this._plan();
+    // Wrapped short of the plan's details at left + 420: a long affixed name
+    // ran underneath them.
     this._text(left, planY + 30, getItemComputedData(plan).name, {
-      fontSize: '14px', color: RARITY_COLORS[plan.rarity] || RARITY_COLORS.common,
+      fontSize: '13px', color: RARITY_COLORS[plan.rarity] || RARITY_COLORS.common, wordWrap: { width: 405 },
     });
     this._text(left + 420, planY + 4, describePlanHeader(plan).join('\n'), {
       fontSize: '11px', color: '#aaaaaa', wordWrap: { width: width - 500 },
     });
-    this._button(left + 280, planY + 18, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
+    // On the title's row, clear of the (wrapped) plan name below it.
+    this._button(left + 280, planY + 8, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
 
     // ── Active Modifiers (region + Hunt Plan — weather stays unknown until you depart) ──
     const modY = planY + 64;
