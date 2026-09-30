@@ -225,6 +225,8 @@ export function createMapHunt(zoneId, { plan, supplies = 100, bring = [], seed =
     ...(stirring ? { stirring } : {}),
     // What the save's active quest steps need in this region (chunk 14b-2).
     questSites: world.questSites?.(zoneId) || [],
+    // Fewer beasts for a small party (HuntMapGen.partyHeadScale, D1).
+    partySize: (world.party?.() || []).filter(c => c && c.status !== 'dead').length || 4,
   });
   const { pack, extraSupplies } = packAtDeparture(bring, planMods);
   const start = supplies + extraSupplies;
@@ -958,7 +960,6 @@ function makeMapHunt(s, rng, worldRng, world) {
       // drawToKill; owner 2026-09-29): at most one, none while anything hunts.
       const scent = occ.kind === 'beast' && s.spoils ? drawToKill(s, s.pos, s.time, worldRng) : null;
       const drawn = scent?.occ || null;
-      if (scent) s.spoils.scentAt = scent.eta;
       if (drawn) this._log({ kind: 'blood_scent', occupant: drawn.id, family: this._bandOf(drawn) === 'identified' ? drawn.family : null, time: s.time });
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
       const favor = this._earnFavor(Boons.killFavor(occ), 'kill');
@@ -1325,8 +1326,6 @@ function makeMapHunt(s, rng, worldRng, world) {
         bodies: sp.bodies.length,
         meat,
         meatTime: sp.bodies.length * MEAT_TIME_PER_BODY * factor,
-        // Blood scent: how long until what it drew reaches the kill (about).
-        scentIn: sp.scentAt != null ? Math.max(0, sp.scentAt - s.time) : null,
       };
     },
 

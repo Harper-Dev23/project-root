@@ -141,12 +141,13 @@ export function initWorld(map, { restlessPercent = 0, rng }) {
 /** How far a territorial beast chases from where it stood. */
 export const LEASH_RANGE = 2;
 /** How far a predator smells a fresh kill (hex steps, in its own section). */
-export const SCENT_RANGE = 3;
+export const SCENT_RANGE = 4;
 /** The chance (percent) a predator in range is drawn at all. */
 export const SCENT_CHANCE = 50;
 /**
  * How long it lingers before it moves: the head start a quick harvest
- * (specimens and meat) fits in (huntsim, owner 2026-09-30).
+ * (specimens and meat) fits in (huntsim, owner 2026-09-30). The party is
+ * told something caught the scent, never how long it has.
  */
 export const SCENT_DELAY = 4;
 
@@ -352,6 +353,8 @@ function stepPack(s, occ, now, ctx) {
       });
       return;
     }
+    // Something else has come to the kill first: it gives up.
+    if (route.next === occ.goal && occupantAt(s, occ.goal, occ)) { loseTrail(occ, now); return; }
     leaveTrail(s, occ, from, route.next, now);
     occ.tile = route.next;
     if (occ.tile === occ.goal) loseTrail(occ, now);

@@ -332,12 +332,12 @@ export const NEED_HANDLERS = {
       // solitary snapping turtles would need a dozen lone occupants).
       const natives = Object.keys(ctx.zone.natives).filter(f => familyAllows(ctx.zone, f, 'pack'));
       obj.family = natives[Math.floor(ctx.rng() * natives.length)];
-      obj.count = obj.params.count;
+      obj.count = ctx.heads(obj.params.count);
       while (familyCount(ctx.map, obj.family, ctx.reach) < obj.count) {
         const need = obj.count - familyCount(ctx.map, obj.family, ctx.reach);
         const tile = ctx.pickTile({ noBlight: true, hostile: true, weight: 'encounter', family: obj.family });
         if (!tile) return ctx.fail(`no tile for ${obj.family}`);
-        const size = Math.max(ctx.packSize.pack[0], Math.min(ctx.packSize.pack[1], need));
+        const size = Math.max(ctx.heads(ctx.packSize.pack[0]), Math.min(ctx.heads(ctx.packSize.pack[1]), need));
         const grade = ctx.rollGrade();
         ctx.addBeast(tile, { family: obj.family, composition: 'pack',
           roster: Array.from({ length: size }, () => ({ type: obj.family, grade })), quarry: true });
@@ -551,7 +551,20 @@ export function apexPool(zone) {
   return Array.isArray(zone?.apex) ? zone.apex : zone?.apex ? [zone.apex] : [];
 }
 
-export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null, stirring = null }) {
+/**
+ * Fewer beasts for a small party (owner 2026-09-30, playtest notes D1): a
+ * party of 3 meets packs about 3/4 the size, a party of 2 (or 1) about half.
+ * Only the head-count of ordinary packs, their followers and cult bands; a
+ * pack's leader, a lone beast, an apex, a quest beast and a boss are never
+ * scaled, and no enemy's own stats change. A Cull's count follows, so it
+ * takes the same number of fights. 4 or more: as designed.
+ */
+export const PARTY_HEADS = { 1: 0.5, 2: 0.5, 3: 0.75 };
+export function partyHeadScale(partySize) {
+  return PARTY_HEADS[Math.max(1, partySize | 0)] ?? 1;
+}
+
+export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives = [], mods = {}, followed = false, questSites = [], boss = null, stirring = null, partySize = 4 }) {
   const zone = getZone(zoneId);
   if (!zone) throw new Error(`unknown zone '${zoneId}'`);
   if (!zone.palette || !zone.relief || !zone.natives || !zone.apex) throw new Error(`zone '${zoneId}' has no generator data`);
@@ -568,7 +581,7 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
 
   const problems = [];
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites, boss, stirring });
+    const map = tryGenerate({ zone, objective, size, seed: seed >>> 0, attempt, bonusObjectives, mods, followed, questSites, boss, stirring, partySize });
     if (map.failed) { problems.push(map.failed); continue; }
     const v = validateHuntMap(map);
     if (v.ok) return map;
@@ -577,7 +590,11 @@ export function generateHuntMap({ zoneId, objective, size, seed, bonusObjectives
   throw new Error(`no valid map for ${zoneId}/${objective}/${size} seed ${seed}: ${problems.slice(-3).join(' | ')}`);
 }
 
-function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [], boss = null, stirring = null }) {
+function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mods, followed = false, questSites = [], boss = null, stirring = null, partySize = 4 }) {
+  // The party's head-count scale (partyHeadScale); drawn numbers are drawn as
+  // before, then scaled, so a party of 4 gets exactly the map it always did.
+  const headScale = partyHeadScale(partySize);
+  const heads = (k) => (headScale === 1 ? k : Math.max(1, Math.round(k * headScale)));
   const rng = makeRng(attemptSeed(seed, attempt, zone.id));
   const sizeDef = MAP_SIZES[size];
   const map = {
@@ -710,7 +727,7 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     ? pickWeighted(makeRng((attemptSeed(seed, attempt, zone.id) ^ 0xa9e71) >>> 0), pool.map(a => [a, a.weight ?? 1]))
     : pool[0];
   const ctx = {
-    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0, packSize, apex,
+    rng, map, zone, reach, entryDist, eventDefs, fail, forageFloor: 0, packSize, apex, heads,
     stepDist: (a, b) => {
       const A = parseTileId(a), B = parseTileId(b);
       return A.section === B.section ? distance(A, B) : (entryDist.get(a) ?? 0) + (entryDist.get(b) ?? 0);
@@ -768,7 +785,7 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
       const occ = {
         id: `o${nextOcc++}`, kind: 'cultist', tile,
         variant: flavor.length ? flavor[Math.floor(rng() * flavor.length)].id : null,
-        roster: Array.from({ length: randInt(rng, CULTIST_BAND.min, CULTIST_BAND.max) }, () => ({ type: 'cultist', grade: null })),
+        roster: Array.from({ length: heads(randInt(rng, CULTIST_BAND.min, CULTIST_BAND.max)) }, () => ({ type: 'cultist', grade: null })),
         state: 'rooted',
         concealment: ambush ? OCCUPANT_CONCEALMENT.cultAmbusher : OCCUPANT_CONCEALMENT.cultist,
       };
@@ -856,7 +873,7 @@ function tryGenerate({ zone, objective, size, seed, attempt, bonusObjectives, mo
     // A family may keep to some shapes only (natives[f].compositions, 14a).
     const famComps = comps.filter(([c]) => familyAllows(zone, fam, c));
     const comp = pickWeighted(rng, famComps.length ? famComps : comps);
-    ctx.addBeast(tile, { family: fam, composition: comp, roster: buildRoster(rng, comp, fam, ctx.rollGrade, gradeWeights, packSize) });
+    ctx.addBeast(tile, { family: fam, composition: comp, roster: buildRoster(rng, comp, fam, ctx.rollGrade, gradeWeights, packSize, heads) });
   }
 
   // ── 3f. event sites, about one per 8 tiles ─────────────────────────────────
@@ -1012,7 +1029,7 @@ export function shiftGrades(weights, pct) {
 }
 
 /** A filler occupant's roster from its named composition (ENCOUNTERS). */
-function buildRoster(rng, comp, family, rollGrade, weights, size) {
+function buildRoster(rng, comp, family, rollGrade, weights, size, heads = (k) => k) {
   const m = (grade) => ({ type: family, grade });
   switch (comp) {
     case 'lone': {
@@ -1020,17 +1037,19 @@ function buildRoster(rng, comp, family, rollGrade, weights, size) {
       return [m(GRADE_RANK[a] >= GRADE_RANK[b] ? a : b)];      // usually higher grade
     }
     case 'matriarch':
-      return [m('prime'), ...Array.from({ length: randInt(rng, 2, 3) }, () => m('yearling'))];
+      return [m('prime'), ...Array.from({ length: heads(randInt(rng, 2, 3)) }, () => m('yearling'))];
     case 'alpha': {
       const lead = pickWeighted(rng, [['prime', weights.prime], ['great', weights.great]]);
-      return [m(lead), ...Array.from({ length: randInt(rng, ...size.alphaFollowers) }, () => m('grown'))];
+      return [m(lead), ...Array.from({ length: heads(randInt(rng, ...size.alphaFollowers)) }, () => m('grown'))];
     }
     case 'scourge':
-      return Array.from({ length: randInt(rng, 6, 8) }, () => m('great'));
+      return Array.from({ length: heads(randInt(rng, 6, 8)) }, () => m('great'));
     case 'pack':
     default: {
       const g = rollGrade();
-      return Array.from({ length: randInt(rng, ...size.pack) }, () => m(g));
+      // Still a pack: never scaled below two.
+      const n = randInt(rng, ...size.pack);
+      return Array.from({ length: Math.max(Math.min(2, n), heads(n)) }, () => m(g));
     }
   }
 }

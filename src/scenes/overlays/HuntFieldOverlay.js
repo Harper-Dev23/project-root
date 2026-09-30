@@ -1225,8 +1225,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const meatOn = !this.harvestNoMeat && Object.keys(sp.meat).length > 0;
     const time = take.reduce((a, p) => a + p.time, 0) + (meatOn ? sp.meatTime : 0);
     const width = 420;
-    const scentH = sp.scentIn != null ? 22 : 0;
-    const height = 70 + groups.length * 30 + 30 + 30 + 46 + (groups.length ? 0 : 20) + scentH;
+    const height = 70 + groups.length * 30 + 30 + 30 + 46 + (groups.length ? 0 : 20);
     const p = this._sidePanel(null, width, Math.min(height, PANEL_BOTTOM - MAP.y - 12));
     this._panelText(p, p.px + 10, p.py + 8, `Spoils: ${sp.bodies} ${fam?.name || 'beast'}${sp.bodies > 1 ? 's' : ''}`, 16, '#f2e6c8');
     this._panelText(p, p.px + 10, p.py + 30, 'Take what you want. It costs time; what you leave is gone.', 12, '#a8b0bc');
@@ -1248,12 +1247,6 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
     this._panelText(p, p.px + 10, ty + 4, `Time: ${fmt(time)}. ${take.length} part${take.length === 1 ? '' : 's'}${meatOn ? ' and the meat' : ''}.`, 13, '#d8d8d8');
     ty += 30;
-    // Blood scent (HuntWorld drawToKill): what is coming, against this harvest's time.
-    if (sp.scentIn != null) {
-      const late = time >= sp.scentIn;
-      this._panelText(p, p.px + 10, ty - 4, `Something is coming for the kill: about ${fmt(sp.scentIn)} time away.${late ? ' It will arrive first.' : ''}`, 13, late ? '#e07060' : '#e0c070');
-      ty += scentH;
-    }
     this._panelButton(p, p.px + 80, ty + 12, this.harvestCommons ? 'Hide commons' : `Show commons (${commons})`, () => { this.harvestCommons = !this.harvestCommons; this._refresh(); });
     this._panelButton(p, p.px + 230, ty + 12, 'Harvest', () => this._act('harvest', () => this.hunt.harvest({ take: take.map(x => x.id), meat: meatOn })), 'confirm');
     this._panelButton(p, p.px + 345, ty + 12, 'Leave it', () => this._act('leave', () => this.hunt.harvest({ take: [], meat: false })));

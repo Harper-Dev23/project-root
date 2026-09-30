@@ -1395,7 +1395,7 @@ console.log('=== tempers and blood scent (playtest notes D2, 2026-09-29) ===');
 
   // A real win: the drawn predator walks to the kill, and a party still there fights it.
   {
-    let drawnSeen = 0, came = 0, spoilsEta = 0;
+    let drawnSeen = 0, came = 0, told = 0;
     for (let k = 0; k < 40; k++) {
       const t = staged({ family: 'swamp_crab', predatorAt: 2, seed: 9700 + k });
       t.h.move(t.next);
@@ -1404,15 +1404,50 @@ console.log('=== tempers and blood scent (playtest notes D2, 2026-09-29) ===');
       if (!w.drawn) continue;
       drawnSeen++;
       const sp = t.h.view().spoils;
-      if (sp?.scentIn > 0 && t.h.getState().log.some(l => l.kind === 'blood_scent')) spoilsEta++;
+      if (t.h.getState().log.some(l => l.kind === 'blood_scent') && !('scentIn' in sp) && !('scentAt' in t.h.getState().spoils)) told++;
       // Harvest everything, slowly: it arrives.
       t.h.harvest({ take: sp.parts.map(p => p.id), meat: true });
       for (let i = 0; i < 10 && !t.h.encounter(); i++) t.h.wait();
       if (t.h.encounter()?.cause === 'scent' && t.h.encounter().occId === w.drawn) came++;
     }
-    check('scent, in play: a win beside a predator sometimes draws it; the spoils say how long it is; a party that lingers is found by it',
-      drawnSeen > 0 && spoilsEta === drawnSeen && came > 0, `drawn ${drawnSeen}/40, eta shown ${spoilsEta}, came ${came}`);
+    check('scent, in play: a win beside a predator sometimes draws it; the log says so but never how long; a party that lingers is found by it',
+      drawnSeen > 0 && told === drawnSeen && came > 0, `drawn ${drawnSeen}/40, told ${told}, came ${came}`);
   }
+}
+
+console.log('=== fewer beasts for a small party (playtest notes D1, 2026-09-30) ===');
+{
+  const MG = await import('../../src/systems/HuntMapGen.js');
+  const beasts = (m) => m.occupants.filter(o => o.kind === 'beast' || o.kind === 'cultist');
+  let sameLayout = true, neverMore = true, special = true, leaders = true, packsOk = true, oneIsTwo = true, cullOk = true;
+  let heads4 = 0, heads3 = 0, heads2 = 0;
+  for (let k = 0; k < 24; k++) {
+    const objective = ['scout', 'cull', 'apex'][k % 3], size = ['small', 'medium'][k % 2];
+    const gen = (partySize) => MG.generateHuntMap({ zoneId: ZONES[0], objective, size, seed: 9900 + k, partySize });
+    const [m4, m3, m2, m1] = [4, 3, 2, 1].map(gen);
+    // A Cull places as many quarry packs as its (smaller) count needs, so only its ground is the same.
+    const cull = objective === 'cull';
+    sameLayout &&= JSON.stringify(m4.tiles) === JSON.stringify(m2.tiles) && (cull || same(beasts(m4).map(o => o.tile), beasts(m2).map(o => o.tile)));
+    oneIsTwo &&= JSON.stringify(m1.occupants) === JSON.stringify(m2.occupants);
+    for (const [m, add] of [[m4, (n) => { heads4 += n; }], [m3, (n) => { heads3 += n; }], [m2, (n) => { heads2 += n; }]]) add(beasts(m).reduce((t, o) => t + o.roster.length, 0));
+    if (!cull) beasts(m4).forEach((o, i) => {
+      const a = o.roster, b = beasts(m2)[i].roster;
+      if (b.length > a.length) neverMore = false;
+      if (W.isSpecialBeast(o) && !o.quarry || (o.quarry && o.roster[0].grade === 'great')) { if (!same(a, b)) special = false; }
+      if (o.composition === 'lone' && a.length !== b.length) special = false;
+      if (['alpha', 'matriarch'].includes(o.composition) && a[0].grade !== b[0].grade) leaders = false;
+      if (o.composition === 'pack' && a.length >= 2 && b.length < 2) packsOk = false;
+    });
+    if (objective === 'cull') {
+      const c4 = m4.objectives.primary, c2 = m2.objectives.primary;
+      cullOk &&= c2.count === Math.max(1, Math.round(c4.count / 2));
+    }
+  }
+  check('party of 4: the scale is 1 (the map it always was); 3: 3/4; 2 and 1: 1/2', MG.partyHeadScale(4) === 1 && MG.partyHeadScale(6) === 1 && MG.partyHeadScale(3) === 0.75 && MG.partyHeadScale(2) === 0.5 && MG.partyHeadScale(1) === 0.5);
+  check('a small party: the same map and the same places, only fewer heads; solo meets what a pair meets', sameLayout && neverMore && oneIsTwo);
+  check(`fewer beasts in all: 4 -> ${heads4}, 3 -> ${heads3}, 2 -> ${heads2}`, heads3 < heads4 && heads2 < heads3 && heads2 >= heads4 * 0.45);
+  check('an apex and a lone beast are untouched; a leader keeps its grade; a pack is never cut below two', special && leaders && packsOk);
+  check('a Cull asks a pair for half the kills', cullOk);
 }
 
 console.log('=== blight, cleansing and corruption ===');
