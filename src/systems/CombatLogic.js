@@ -791,7 +791,12 @@ export function calculateDamage(attacker, target, ability = null) {
     }
 
     if (scaled > 0) {
-      elemental += scaled;
+      // A necrotic flat (Withering, Blighted, Corrupting...) is stored beside
+      // the elemental ones but is necrotic damage: Necrotic Resist, necrotic%
+      // and the Unshriven read it. It used to land in the elemental bucket
+      // (found checking the owner's notes, 2026-09-29).
+      if (element === 'necrotic') necrotic += scaled;
+      else elemental += scaled;
       try { _pushBreakdown({ label: `${element} flat`, flat: scaled }); } catch { }
     }
   }

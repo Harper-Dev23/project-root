@@ -298,8 +298,12 @@ check('...Fight starts CombatScene', await waitFor(combatReady));
 const partyTurn = await waitFor("(() => { const c = window.__T.g().scene.getScene('CombatScene'); const a = c._currentChar?.(); return a && !a.isEnemy && c.fleeButton?.visible; })()", 30000);
 check('on a hunter\'s turn the fight offers Flee', partyTurn);
 await shot('05e-flee-button');
+// Two clicks (owner's notes, 2026-09-29): the first asks, the second flees.
 await clickText('^Flee$', 'CombatScene');
-check('Flee (clicked): the enemy gets its free round, then the fight ends as fled', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Fled')", 30000));
+check('the first Flee click asks to be sure', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Flee? Click again')", 5000));
+await shot('05e2-flee-confirm');
+await clickText('^Flee\\? Click again$', 'CombatScene');
+check('Flee (clicked twice): the enemy gets its free round, then the fight ends as fled', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Fled')", 30000));
 await shot('05f-fled');
 await clickText('^Back to the Hunt$', 'CombatScene');
 check('Back to the Hunt (clicked) returns to the map', await waitFor("window.__T.g().scene.isActive('HuntFieldOverlay') && !window.__T.g().scene.isActive('CombatScene')"));

@@ -1,4 +1,6 @@
 import { StatusEffects } from '../systems/StatusEffects.js';
+import { unshrivenPct } from '../systems/CombatLogic.js';
+import { UNSHRIVEN } from '../../data/historicEffects.js';
 
 const STATUS_ICON_LIBRARY = {
   // The runic zone had NO entry, so it fell through to the id-prettifier and
@@ -55,6 +57,10 @@ const STATUS_ICON_LIBRARY = {
   tainted: { glyph: 'TN', name: 'Tainted', fg: '#ffd6f2', bg: '#30192b', border: '#b25d9c', description: 'Afflicted by foul magic.' },
   regen: { glyph: 'RG', name: 'Regeneration', fg: '#9fe6a0', bg: '#16311f', border: '#2a7b3c', description: 'Restoring health over time.' },
   curse_cinders: { glyph: 'CC', name: 'Curse of Cinders', fg: '#ffd4a3', bg: '#362017', border: '#b36c36', description: 'Acting gains Fire buildup instead of losing it, scaling with Curse intensity.' },
+  // Curse of the Unshriven (The Unconfessed): a gear effect, shown as a status
+  // so its wearer can see it (owner's notes, 2026-09-29). combineStatusEffects
+  // adds it; the description is written there, with the live numbers.
+  unshriven: { glyph: 'US', name: 'Curse of the Unshriven', fg: '#e3c8ff', bg: '#24142e', border: '#8a4fb8' },
   lodged: { glyph: 'LD', name: 'Lodged', fg: '#ffd2a3', bg: '#2f1f14', border: '#a06c36', description: 'A projectile remains embedded.' },
 };
 
@@ -119,6 +125,18 @@ export const combineStatusEffects = (unit) => {
         out.push(se);
       }
     }
+  }
+  // Curse of the Unshriven: shown on whoever wears it, live while they are
+  // Cursed (unshrivenPct), dormant otherwise.
+  const base = unit?.gearEffects?.historic?.unshrivenPct || 0;
+  if (base > 0) {
+    const pct = Math.round(unshrivenPct(unit));
+    out.push({
+      id: 'unshriven', permanent: true,
+      description: pct > 0
+        ? `Cursed: +${pct}% necrotic damage dealt AND taken (grows with the curse meter, up to ${UNSHRIVEN.cap}%).`
+        : `Dormant. While Cursed: +${base}% necrotic damage dealt AND taken, growing with the curse meter, up to ${UNSHRIVEN.cap}%.`,
+    });
   }
   if (unit?.statuses && typeof unit.statuses === 'object') {
     Object.keys(unit.statuses).forEach((key) => {

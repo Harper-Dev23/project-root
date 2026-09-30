@@ -527,7 +527,8 @@ export default class CombatScene extends Phaser.Scene {
     this._createActionLights(layout.actionLights.x, layout.actionLights.y);
     this._createEndTurnButton(layout.endTurn.x, layout.endTurn.y);
     // In a co-op hunt only the host calls the retreat (chunk 12 decision 3).
-    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(layout.endTurn.x, layout.endTurn.y - 60);
+    // Under the turn order, away from End Turn and the action lights.
+    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(width - 110, 318);
     this._highlightCurrentTurn();
     this._createCombatLog();
     for (const line of huntStartLines) this._log(line);
@@ -3614,8 +3615,25 @@ export default class CombatScene extends Phaser.Scene {
   // button, a free round or a food buff.
 
   /** The Flee button, above End Turn; shown and hidden with it. */
+  /**
+   * The Flee button (owner's notes, 2026-09-29): under the turn order, clear
+   * of End Turn and the action lights it used to cover; two clicks, the first
+   * asking "Flee? Click again", which lapses after a few seconds; and none in
+   * a boss fight, which cannot be fled.
+   */
   _createFleeButton(x, y) {
-    this.fleeButton = new UIButton(this, x, y, 'Flee', () => this._startFlee());
+    if (this.huntFight?.kind === 'boss') return;
+    const arm = () => {
+      if (this._fleeArmed) { this._fleeArmed = false; this._fleeArmTimer?.remove(false); this._startFlee(); return; }
+      this._fleeArmed = true;
+      this.fleeButton?.text?.setText?.('Flee? Click again');
+      this._fleeArmTimer?.remove(false);
+      this._fleeArmTimer = this.time.delayedCall(3500, () => {
+        this._fleeArmed = false;
+        this.fleeButton?.text?.setText?.('Flee');
+      });
+    };
+    this.fleeButton = new UIButton(this, x, y, 'Flee', arm, 180);
     this.fleeButton.setDepth(UI_DEPTH.overlay + 1);
     this.add.existing(this.fleeButton);
   }
@@ -3633,6 +3651,7 @@ export default class CombatScene extends Phaser.Scene {
    */
   _startFlee() {
     if (!this.huntFight || this.combatEnded || this._fleeing) return;
+    if (this.huntFight.kind === 'boss') { this._log('There is no fleeing a boss.'); return; }
     // Co-op: the server plays the free round; the host asks for it.
     if (this.isCoop) { this.coopClient?.flee(); return; }
     const actor = this._currentChar?.();
@@ -5381,6 +5400,13 @@ export default class CombatScene extends Phaser.Scene {
       }
     }
 
+    // Another skill clicked while one was armed: the first one's button goes
+    // back to normal (owner's notes, 2026-09-29: it stayed highlighted, though
+    // it would not be cast).
+    if (this.targetingAbilityBtn && this.targetingAbilityBtn !== sourceBtn) {
+      if (this.targetingAbility) this._exitTargetingMode(); else this._resetArmedAbilityButton();
+    }
+
     // --- Targeted skills ---
     if (ability.requiresTarget) {
       // Position-targeting for movement/reposition skills
@@ -6582,6 +6608,19 @@ export default class CombatScene extends Phaser.Scene {
     out = out.filter(sl => sl.char && sl.char.status !== 'incapacitated');
     out = out.filter(sl => !this._abilityTargetGateReason(user, sl.char, ability));
     return out;
+  }
+
+  /** Un-highlight the ability button that was armed (the amber-gold selected state), if any. */
+  _resetArmedAbilityButton() {
+    const btn = this.targetingAbilityBtn;
+    if (!btn) return;
+    this.targetingAbilityBtn = null;
+    btn._isSelected = false;
+    if (btn.background?.active) {
+      btn.background.setFillStyle(0x1c1c1c);
+      btn.background.setStrokeStyle(1.5, 0x6a7080);
+    }
+    if (btn.text?.active) btn.text.setStyle({ color: '#b8bccf' });
   }
 
   _enterTargetingMode(ability, sourceBtn = null) {
@@ -13083,16 +13122,7 @@ export default class CombatScene extends Phaser.Scene {
     this._clearSlotListeners?.();   // removes all slot/icon listeners, keeps interactive active
 
     // Reset the ability button that was highlighted (amber-gold selection state)
-    if (this.targetingAbilityBtn) {
-      const btn = this.targetingAbilityBtn;
-      this.targetingAbilityBtn = null;
-      btn._isSelected = false;
-      if (btn.background?.active) {
-        btn.background.setFillStyle(0x1c1c1c);
-        btn.background.setStrokeStyle(1.5, 0x6a7080);
-      }
-      if (btn.text?.active) btn.text.setStyle({ color: '#b8bccf' });
-    }
+    this._resetArmedAbilityButton();
 
     // NOTE: used to hard-reset every slot's border here via _resetSlotStroke
     // (a plain red/white default with no concept of "whose turn is it") —
@@ -13130,7 +13160,9 @@ export default class CombatScene extends Phaser.Scene {
 
     let color = '#ffffff'; // Default: damage
     if (isHeal) color = '#00ff66';
-    if (isCrit) color = '#ffff00'; // Crit: yellow
+    // Crit: yellow on damage; a critical HEAL stays green, brighter (owner's
+    // notes, 2026-09-29: a yellow heal read as damage).
+    if (isCrit) color = isHeal ? '#b8ff6a' : '#ffff00';
 
     const sign = isHeal ? '+' : '-';
 

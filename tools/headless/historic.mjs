@@ -327,5 +327,18 @@ console.log('=== Sunken Nave: Rooted ===');
   check('without Sunken Nave nobody takes root', rootedStacks(p0) === 0);
 }
 
+console.log('=== Curse of the Unshriven shows as a status (owner\'s notes, 2026-09-29) ===');
+{
+  const { combineStatusEffects, getStatusEffectDisplay } = await import('../../src/ui/statusEffectIcons.js');
+  const wearer = { name: 'W', statusEffects: [], gearEffects: { historic: { unshrivenPct: 15 } }, weakness: { tiers: { curse: 0 }, meters: { curse: 0 } } };
+  const dormant = combineStatusEffects(wearer).find(e => e.id === 'unshriven');
+  check('its wearer shows it, dormant while not Cursed', !!dormant && /Dormant/.test(dormant.description), dormant?.description);
+  wearer.weakness = { tiers: { curse: 1 }, meters: { curse: 60 } };
+  const live = combineStatusEffects(wearer).find(e => e.id === 'unshriven');
+  check('...live while Cursed, with the percentage it adds', !!live && /^Cursed: \+\d+% necrotic damage dealt AND taken/.test(live.description), live?.description);
+  check('...named and described on its icon', getStatusEffectDisplay(live).name === 'Curse of the Unshriven' && getStatusEffectDisplay(live).description === live.description);
+  check('nobody else shows it', !combineStatusEffects({ statusEffects: [] }).some(e => e.id === 'unshriven'));
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

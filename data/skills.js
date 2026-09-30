@@ -3663,10 +3663,12 @@ const NPC_ONLY_SKILLS = {
         ...roll, physical, elemental, necrotic, amount,
         isMagic: true, element: 'cold',
         buildup: { cold: 200 }, consumeWeakness: ['cold'],
-        statusEffects: [{ id: 'frozen', turns: 1, blocksAction: true, vfx: { kind: 'debuff_shock' } }],
+        // Frost-Numbed, not Frozen (owner's notes, 2026-09-29): it takes the
+        // target's bonus action next turn, not the whole turn.
+        statusEffects: [{ id: 'frost_numbed', turns: 1, vfx: { kind: 'debuff_shock' } }],
       };
     },
-    description: "Enraged only. Deals 180% weapon damage as Cold, applies massive Cold buildup, and Freezes the target (skip next action)."
+    description: "Enraged only. Deals 180% weapon damage as Cold, applies massive Cold buildup, and Frost-Numbs the target (no bonus action on its next turn)."
   },
 
   // Encounter 6 - Berserker Boss

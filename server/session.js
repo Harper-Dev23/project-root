@@ -448,6 +448,7 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
      */
     flee() {
       if (!hunt) return { ok: false, reason: 'there is no fleeing a pit fight' };
+      if (huntFight?.kind === 'boss') return { ok: false, reason: 'there is no fleeing a boss' };
       if (host.combatEnded) return { ok: false, reason: 'the fight is over' };
       const actor = host._currentChar?.();
       if (!actor || actor.ownerId == null) return { ok: false, reason: "flee on one of the party's turns" };
