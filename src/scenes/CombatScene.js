@@ -4912,6 +4912,10 @@ export default class CombatScene extends Phaser.Scene {
         const sk = SKILLS?.[id];
         if (sk) this.reactions?.arm?.(user, sk);
       }
+      // In co-op the server's fight is where reactions fire: it has to be
+      // told (owner's notes, 2026-09-29: reactions never fired in co-op).
+      // This screen keeps its own copy for the menu's marks and lights.
+      if (this.isCoop) this.coopClient?.prepareReactions?.(this._unitRef(user), chosen);
       this._log(chosen.length
         ? `${user.name} prepares ${chosen.length} reaction${chosen.length > 1 ? 's' : ''}.`
         : `${user.name} stands down — no reactions prepared.`);
@@ -5981,6 +5985,16 @@ export default class CombatScene extends Phaser.Scene {
       // would have to guess at identity for effects that carry no id of their
       // own, and the server's list is authoritative by definition.
       unit.statusEffects = (u.effects || []).map(e => ({ ...e }));
+
+      // Enrage on an ally's fall (Ember and Rime): the server runs it, and its
+      // burst is replayed as a recorded VFX, but the lasting portrait pulse and
+      // the camera shake were scene-only, so a co-op client never showed them
+      // (owner's notes, 2026-09-29). The enrage status arriving is the cue.
+      const enr = ENEMY_TYPES[unit.type]?.enrageOnAllyDeath;
+      if (enr?.vfx && !unit._enrageTint && unit.statusEffects.some(se => se?.id === enr.statusId)) {
+        if (Number.isFinite(enr.vfx.tint)) unit._enrageTint = enr.vfx.tint;
+        if (enr.vfx.shake !== false) this.cameras?.main?.shake?.(320, 0.006);
+      }
 
       unit.cooldowns = { ...(u.cooldowns || {}) };
       applied++;

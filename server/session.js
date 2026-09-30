@@ -29,6 +29,7 @@ import { GameplaySettings } from '../src/systems/GameplaySettings.js';
 import { isItemInstance } from '../src/systems/ItemFactory.js';
 import { COMBAT_SCENARIOS } from '../data/combatScenarios.js';
 import { huntFightXP } from '../src/systems/HuntObjectives.js';
+import { SKILLS, getReactionSkillsFor } from '../data/skills.js';
 
 /** The shared party cap. Already the game's own limit in five places. */
 export const PARTY_LIMIT = 6;
@@ -536,6 +537,32 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
         events: host.__takeEvents(),
         state: session.state(),
       };
+    },
+
+    /**
+     * A player's hunter prepares reactions (protocol 'prepareReactions'),
+     * replacing any it had. Only its owner may, only reactions it can use
+     * (getReactionSkillsFor), and no more than its capacity. Any time in the
+     * fight, not only on its turn: that is when reactions are prepared for.
+     */
+    prepareReactions(playerId, { actor, skills = [] } = {}) {
+      if (host.combatEnded) return { ok: false, reason: 'the fight is over' };
+      const unit = host._findUnitByRef?.(actor);
+      if (!unit || host.enemies?.includes(unit)) return { ok: false, reason: 'no such hunter' };
+      if (unit.ownerId !== playerId) return { ok: false, reason: `${unit.name} is not yours` };
+      if (unit.status === 'incapacitated' || unit.status === 'dead') return { ok: false, reason: `${unit.name} is down` };
+      const usable = new Set(getReactionSkillsFor(unit).map(s => s.id));
+      const bad = skills.find(id => !usable.has(id));
+      if (bad) return { ok: false, reason: `${unit.name} cannot prepare ${SKILLS[bad]?.name || bad}` };
+      const cap = host.reactions?.capacity?.(unit) ?? (unit.reactionCapacity ?? 2);
+      const from = host.combatEntries.length;
+      host.reactions?.disarm?.(unit);
+      for (const id of skills.slice(0, cap)) host.reactions?.arm?.(unit, SKILLS[id]);
+      host._log?.(skills.length
+        ? `${unit.name} prepares ${Math.min(skills.length, cap)} reaction${Math.min(skills.length, cap) > 1 ? 's' : ''}.`
+        : `${unit.name} stands down — no reactions prepared.`);
+      version++;
+      return { ok: true, log: session.logSince(from), privateLog: [], events: host.__takeEvents(), state: session.state() };
     },
 
     /**

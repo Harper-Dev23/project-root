@@ -480,6 +480,19 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       pushResult(lobby, result, conn);
     },
 
+    /**
+     * { t:'prepareReactions', actor, skills } - a player's hunter prepares
+     * reactions (replacing any before), on the fight reactions fire in. Allowed
+     * off-turn: reactions are prepared for the other side's turns.
+     */
+    prepareReactions(conn, msg, lobby, player) {
+      if (!lobby.session) return fail(conn, lobby.hunt ? 'there is no fight on' : 'the hunt has not started');
+      const skills = Array.isArray(msg.skills) ? msg.skills.filter(s => typeof s === 'string').slice(0, 8) : [];
+      const result = lobby.session.prepareReactions(player.id, { actor: msg.actor, skills });
+      if (!result.ok) return fail(conn, result.reason);
+      pushResult(lobby, result, conn);
+    },
+
     /** { t:'endTurn' } */
     endTurn(conn, msg, lobby, player) {
       if (!lobby.session) return fail(conn, lobby.hunt ? 'there is no fight on' : 'the hunt has not started');

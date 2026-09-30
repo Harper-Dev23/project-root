@@ -188,6 +188,16 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return client.send({ t: 'act', actor, skill, target, targetSlot });
     },
 
+    /**
+     * The reactions a hunter has prepared, replacing any before (the
+     * Reactions menu's "Prepare Selected"). The server's fight is the one
+     * reactions fire in, so it has to be told: a prepared set that stayed on
+     * this screen never fired in co-op (owner's notes, 2026-09-29).
+     */
+    prepareReactions(actor, skills) {
+      return client.send({ t: 'prepareReactions', actor, skills: Array.isArray(skills) ? skills : [] });
+    },
+
     // ---- a co-op map hunt (server/README.md, "Hunt lobbies") ---------------
     // The host's client runs the hunt; these only carry it (CoopHunt.js).
     setRations(qty) { return client.send({ t: 'setRations', qty }); },

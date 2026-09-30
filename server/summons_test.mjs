@@ -135,5 +135,30 @@ console.log('=== a co-op client builds the server\'s adds, and never its own ===
     && addUnits.every(u => client.enemies.some(e => e.isAdd && e.uid === u.ref)), JSON.stringify(report.unknown));
 }
 
+console.log('=== the enrage shows on a co-op client (owner\'s notes, 2026-09-29) ===');
+{
+  const client = createCombatHost(CombatScene);
+  client.isCoop = true;
+  client.coopClient = { roster: session.party.map(c => ({ ...toWireCharacter(c), ownerId: c.ownerId })), playerId: 'alice', gearSeed: session.gearSeed, on: () => () => {}, requestSync: () => {} };
+  client.coopParty = []; client._coopUnsubs = []; client.scenarioId = SCENARIO; client.gearSeed = session.gearSeed;
+  client._placeCoopParty();
+  client._placeEnemies(SCENARIO);
+  client.turnOrder = [...client.coopParty, ...client.enemies];
+  let shakes = 0;
+  client.cameras = { main: { shake: () => { shakes++; } } };
+  client._applyNetState(session.state());
+  const cRime = client.enemies.find(e => e.name === 'Rime');
+  check('before Ember falls: no enrage on the client', !cRime._enrageTint && shakes === 0);
+  // Ember falls on the server: Rime enrages there.
+  ember.currentHP = 0;
+  server._onUnitKnockedOut(ember);
+  server.__drain();
+  check('the server enraged Rime', (rime.statusEffects || []).some(se => se?.id === 'duelist_fury'));
+  client._applyNetState(session.state());
+  check("the client's Rime takes the enrage pulse, and the camera shakes once", !!cRime._enrageTint && shakes === 1, `tint ${cRime._enrageTint}, shakes ${shakes}`);
+  client._applyNetState(session.state());
+  check('...once: a later broadcast does not shake it again', shakes === 1);
+}
+
 console.log(failures ? `\n${failures} FAILED` : '\nALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);
