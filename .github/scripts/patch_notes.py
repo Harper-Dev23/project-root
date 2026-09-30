@@ -101,9 +101,34 @@ def previous_deployed_sha(repo, env, token, current):
 SKIP_PREFIX = re.compile(r'^\s*(chore|internal|ci|test)\s*:', re.I)
 SKIP_TAG = re.compile(r'\[no[- ]?notes\]', re.I)
 
+# A hand-written release (owner 2026-09-30): a commit carrying `[release]` in
+# its message is the WHOLE announcement for its deploy. When one is in the
+# range, only release commits are read (their bulleted body lines, grouped by
+# prefix as usual), and the embed takes the release's subject as its title.
+# Lets a long branch ship as one written post instead of a pile of
+# engineering subjects. Put the tag in the body so the subject stays clean.
+RELEASE_TAG = re.compile(r'\[release\]', re.I)
+
+
+def release_messages(raw):
+    """The release commits' messages in `raw` (git log %B, NUL-separated),
+    or [] when the range has none."""
+    return [m for m in raw.split(chr(0)) if m.strip() and RELEASE_TAG.search(m)]
+
+
+def release_title(msgs):
+    """The newest release's subject, without a `prefix:`, for the embed title."""
+    if not msgs:
+        return ''
+    first = next((l.strip() for l in msgs[0].strip().splitlines() if l.strip()), '')
+    m = re.match(r'^\s*[a-zA-Z]+\s*:\s*(.+)$', first)
+    return RELEASE_TAG.sub('', m.group(1) if m else first).strip()
+
 
 def is_silent(msg):
     """True if this whole commit should be left out of the notes."""
+    if RELEASE_TAG.search(msg):
+        return False
     if SKIP_TAG.search(msg):
         return True
     first = next((l for l in msg.strip().splitlines() if l.strip()), '')
@@ -219,7 +244,10 @@ def main():
         print('no previous deployment found - using the latest commit only')
 
     n_commits = len([m for m in out.split(chr(0)) if m.strip()]) or 1
-    subjects = extract(out)
+    releases = release_messages(out)
+    if releases:
+        print('release commits in the range: %d - posting their notes only' % len(releases))
+    subjects = extract(chr(0).join(releases) if releases else out)
     if not subjects:
         # Deployed, but nothing here is for players. Staying quiet is the whole
         # point of the skip markers -- posting "new build" with no notes is
@@ -266,7 +294,7 @@ def main():
     payload = {
         'username': "Behel'ith",
         'embeds': [{
-            'title': 'New build is live',
+            'title': release_title(releases) or 'New build is live',
             'description': '%d %s - [`%s`](https://github.com/%s/commit/%s) - [compare](%s)'
                            % (n_commits, plural, sha[:7], repo, sha, compare),
             'url': url,
