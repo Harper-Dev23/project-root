@@ -3635,6 +3635,7 @@ export default class CombatScene extends Phaser.Scene {
       });
     };
     this.fleeButton = new UIButton(this, x, y, 'Flee', arm, 135);
+    this.fleeButton.setVariant?.('danger');
     this.fleeButton.setDepth(UI_DEPTH.overlay + 1);
     this.add.existing(this.fleeButton);
   }
@@ -3913,9 +3914,15 @@ export default class CombatScene extends Phaser.Scene {
       this._actionMenuBackBtn.background.setStrokeStyle(1.5, hover ? 0xff4444 : 0xaa2222);
       this._actionMenuBackBtn.text.setStyle({ color: hover ? '#ffdddd' : '#ff9999', fontSize: '11px' });
     };
-    paintBack(false);
-    this._actionMenuBackBtn.on('pointerover', () => paintBack(true));
-    this._actionMenuBackBtn.on('pointerout', () => paintBack(false));
+    // A skinned button (buttonSkins.js) says it with its danger face instead.
+    if (this._actionMenuBackBtn._skinned) {
+      this._actionMenuBackBtn.setVariant('danger');
+      this._actionMenuBackBtn.text.setStyle({ fontSize: '11px' });
+    } else {
+      paintBack(false);
+      this._actionMenuBackBtn.on('pointerover', () => paintBack(true));
+      this._actionMenuBackBtn.on('pointerout', () => paintBack(false));
+    }
     this._actionMenuBackBtn.setVisible(false);
     this.actionMenu.add(this._actionMenuBackBtn);
 
@@ -6637,6 +6644,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!btn) return;
     this.targetingAbilityBtn = null;
     btn._isSelected = false;
+    if (btn._skinned) { if (btn.face?.active) btn._applyState(); return; }
     if (btn.background?.active) {
       btn.background.setFillStyle(0x1c1c1c);
       btn.background.setStrokeStyle(1.5, 0x6a7080);

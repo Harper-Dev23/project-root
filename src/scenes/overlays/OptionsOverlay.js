@@ -1,3 +1,4 @@
+import { BUTTON_SKINS, BUTTON_SKIN_NAMES, buttonSkin, setButtonSkin } from '../../ui/buttonSkins.js';
 import { wakeTown } from '../../ui/townInput.js';
 import { createOverlayFrame } from '../../ui/OverlayFrame.js';
 import { HOTKEYS } from '../../systems/HotkeyManager.js';
@@ -142,6 +143,18 @@ export default class OptionsOverlay extends Phaser.Scene {
     } else if (name === 'Graphics') {
       let cy = contentY;
       addText(left, cy, 'Graphics', sectionStyle); cy += 32;
+      // Button style (buttonSkins.js), the owner's art pass: try each in game.
+      const skinLabel = addText(left + 20, cy, '', itemStyle);
+      const paintSkin = () => skinLabel.setText(`Button style:  ◀  ${BUTTON_SKIN_NAMES[buttonSkin()]}  ▶`);
+      paintSkin();
+      skinLabel.setInteractive({ useHandCursor: true }).on('pointerdown', (p) => {
+        const i = BUTTON_SKINS.indexOf(buttonSkin());
+        const dir = p.x < skinLabel.x + skinLabel.width / 2 ? -1 : 1;
+        setButtonSkin(BUTTON_SKINS[(i + dir + BUTTON_SKINS.length) % BUTTON_SKINS.length]);
+        paintSkin();
+      });
+      cy += 22;
+      addText(left + 40, cy, 'Screens pick it up when they are next opened.', noteStyle); cy += 32;
       addText(left + 20, cy, '• Display Mode: Fullscreen / Windowed', itemStyle); cy += 26;
       addText(left + 20, cy, '• VSync: On / Off', itemStyle); cy += 26;
       addText(left + 20, cy, '• Brightness [placeholder slider]', itemStyle);
