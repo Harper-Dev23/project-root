@@ -401,10 +401,13 @@ export default class InventoryOverlay extends Phaser.Scene {
       { key: 'weapon', label: 'Weapons' },
       { key: 'armor', label: 'Armor' },
       { key: 'item', label: 'Items' },
+      // Beast parts get their own tab (owner's notes, 2026-09-29): they wear
+      // character slots, so the slot filters used to catch them.
+      { key: 'parts', label: 'Parts' },
       { key: 'all', label: 'All' }
     ];
     globalCats.forEach((cat, i) => {
-      const x = 640 + (i - 1.5) * 100;
+      const x = 640 + (i - 2) * 90;
       this.add.text(x, gToggleY, cat.label, {
         fontSize: '16px',
         color: (this.currentGlobalCategory === cat.key) ? '#ffff88' : '#cccccc'
@@ -946,6 +949,12 @@ export default class InventoryOverlay extends Phaser.Scene {
 
     this.input.on('wheel', this._onWheel, this);
 
+    // The list redraws after nearly every click (equip, discard, split) and
+    // comes back at the remembered offset. Rows scrolled out of view above it
+    // were still clickable until the next scroll, sitting invisibly over the
+    // tabs (owner's notes, 2026-09-29). Sync them now too, not only on scroll.
+    _syncInteractivity(listContainer, listStartY, listStartY + gVisibleHeight);
+
     // cleanup when scene shuts down (prevents stacking on restart)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       if (this._onWheel) this.input.off('wheel', this._onWheel, this);
@@ -1240,12 +1249,16 @@ export default class InventoryOverlay extends Phaser.Scene {
   }
 
   _filterByCategory(items, category) {
+    const isPart = (it) => !!Items[it.id]?.part;
+    if (category === 'parts') return items.filter(isPart);
+    // Parts are never weapons, armour or items here, whatever slot they wear.
+    const gear = items.filter(it => !isPart(it));
     if (category === 'weapon') {
-      return items.filter(it => Items[it.id]?.type === 'weapon');
+      return gear.filter(it => Items[it.id]?.type === 'weapon');
     } else if (category === 'armor') {
-      return items.filter(it => ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(Items[it.id]?.slot));
+      return gear.filter(it => ['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(Items[it.id]?.slot));
     } else if (category === 'item') {
-      return items.filter(it => Items[it.id]?.type !== 'weapon' &&
+      return gear.filter(it => Items[it.id]?.type !== 'weapon' &&
         !['chest', 'boots', 'gloves', 'head', 'legs', 'ring', 'amulet'].includes(Items[it.id]?.slot));
     }
     return items;

@@ -94,20 +94,38 @@ export function createScrollbar(scene, opts = {}) {
     thumb.fillRoundedRect(x, y + pos * usable, TRACK_W, thumbH, TRACK_W / 2);
   }
 
+  // Where on the thumb the pointer took hold. Grabbing the thumb keeps that
+  // point under the cursor while dragging; clicking the bare track jumps the
+  // thumb's centre there (owner's notes, 2026-09-29: every grab snapped the
+  // thumb to its centre, or to the top, and dragging felt stuck).
+  let grab = null;
+  const thumbTop = () => {
+    const max = Math.max(0, getMax() || 0);
+    const usable = Math.max(1, height - thumbH);
+    return y + (max > 0 ? Math.min(1, Math.max(0, (getScroll() || 0) / max)) : 0) * usable;
+  };
   const toScroll = (pointerY) => {
     const max = Math.max(0, getMax() || 0);
     if (max <= 0) return;
     const usable = Math.max(1, height - thumbH);
-    // Centre the thumb under the cursor so a click jumps where you aimed.
-    const local = Phaser.Math.Clamp(pointerY - y - thumbH / 2, 0, usable);
+    const local = Phaser.Math.Clamp(pointerY - y - (grab ?? thumbH / 2), 0, usable);
     setScroll((local / usable) * max);
     refresh();
   };
 
   zone.on('pointerover', () => { hovered = true; refresh(); });
   zone.on('pointerout', () => { hovered = false; refresh(); });
-  zone.on('drag', (_p, _dx, dragY) => toScroll(dragY));
-  zone.on('pointerdown', (p) => toScroll(p.worldY));
+  // The POINTER's y, not the drag event's dragY: that is where the dragged
+  // object would move to, and this zone never moves, so it read as the top of
+  // the track and threw the thumb there.
+  zone.on('drag', (p) => toScroll(p.worldY));
+  zone.on('pointerdown', (p) => {
+    const top = thumbTop();
+    const onThumb = p.worldY >= top && p.worldY <= top + thumbH;
+    grab = onThumb ? p.worldY - top : thumbH / 2;
+    if (!onThumb) toScroll(p.worldY);
+  });
+  zone.on('dragend', () => { grab = null; });
   // An interrupted drag (mouse released off-canvas, or the list rebuilding
   // underneath) can otherwise leave the zone dead for the rest of the scene.
   zone.on('dragend', () => {

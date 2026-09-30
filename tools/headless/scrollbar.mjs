@@ -73,5 +73,24 @@ check('refreshing it after the scene shut down does not throw',
   thrown === null, thrown ? thrown.message : 'no error');
 
 console.log('');
+console.log('=== grabbing and dragging (owner\'s notes, 2026-09-29: it snapped) ===');
+{
+  // A 100px track, half the content visible: a 50px thumb over a max of 100.
+  const { scene: s2, made: m2 } = fakeScene();
+  let v = 0;
+  createScrollbar(s2, { x: 0, y: 0, height: 100, getScroll: () => v, getMax: () => 100, setScroll: (n) => { v = n; }, viewRatio: () => 0.5 });
+  const z = m2.zones[0].handlers;
+  z.pointerdown({ worldY: 40 });
+  check('grabbing the thumb does not move it', v === 0, `scroll ${v}`);
+  z.drag({ worldY: 60 }, 0, 0);
+  check('dragging follows the pointer from where it took hold (20px of 50 = 40%)', v === 40, `scroll ${v}`);
+  z.drag({ worldY: 9999 }, 0, 0);
+  check('...and stops at the end', v === 100, `scroll ${v}`);
+  z.dragend();
+  z.pointerdown({ worldY: 10 });
+  check('clicking the bare track above the thumb jumps there (its centre to the click, clamped)', v === 0, `scroll ${v}`);
+}
+
+console.log('');
 console.log(failures ? `${failures} CHECK(S) FAILED` : 'ALL CHECKS PASSED');
 process.exit(failures ? 1 : 0);

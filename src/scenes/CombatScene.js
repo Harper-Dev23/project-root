@@ -3942,16 +3942,35 @@ export default class CombatScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setInteractive({ useHandCursor: true, draggable: true });
     this._actionMenuScrollThumbZone = thumbZone;
-    thumbZone.on('drag', (_pointer, _dragX, dragY) => {
+    // Follows the POINTER (in the menu's own space), from where it took hold
+    // of the thumb; a click on the bare track jumps the thumb's centre there.
+    // It read the drag event's dragY, where a dragged object would move to,
+    // and this zone never moves: every grab threw the thumb to the top
+    // (owner's notes, 2026-09-29). Same fix as src/ui/Scrollbar.js.
+    let grab = null;
+    const localY = (pointer) => pointer.worldY - (this.actionMenu?.y || 0);
+    const thumbTop = () => {
+      const th = this._actionMenuScrollThumbHeight || 16;
+      const max = this.actionMenuScrollMax || 0;
+      return trackY + (max > 0 ? (this.actionMenuScrollY || 0) / max : 0) * Math.max(1, trackH - th);
+    };
+    const scrollTo = (py) => {
+      const th = this._actionMenuScrollThumbHeight || 16;
+      const usableH = Math.max(1, trackH - th);
+      const at = Phaser.Math.Clamp(py - trackY - (grab ?? th / 2), 0, usableH);
+      this._setActionMenuScroll((at / usableH) * (this.actionMenuScrollMax || 0));
+    };
+    thumbZone.on('pointerdown', (pointer) => {
       try {
-        const th = this._actionMenuScrollThumbHeight || 16;
-        const usableH = Math.max(1, trackH - th);
-        const localY = Phaser.Math.Clamp(dragY - trackY, 0, usableH);
-        const ratio = localY / usableH;
-        this._setActionMenuScroll(ratio * (this.actionMenuScrollMax || 0));
-      } catch (err) {
-        console.error('[actionMenu scrollbar] drag handler threw', err);
-      }
+        const py = localY(pointer), top = thumbTop(), th = this._actionMenuScrollThumbHeight || 16;
+        const onThumb = py >= top && py <= top + th;
+        grab = onThumb ? py - top : th / 2;
+        if (!onThumb) scrollTo(py);
+      } catch (err) { console.error('[actionMenu scrollbar] pointerdown threw', err); }
+    });
+    thumbZone.on('drag', (pointer) => {
+      try { scrollTo(localY(pointer)); }
+      catch (err) { console.error('[actionMenu scrollbar] drag handler threw', err); }
     });
     // Safety net for an interrupted drag (e.g. releasing the mouse off the
     // game canvas mid-drag, or the action menu rebuilding underneath the
@@ -3962,6 +3981,7 @@ export default class CombatScene extends Phaser.Scene {
     // same way in _finalizeActionMenuLayout) can never get stuck dead for
     // the rest of the fight.
     thumbZone.on('dragend', () => {
+      grab = null;
       if (!thumbZone.input?.enabled) thumbZone.setInteractive({ useHandCursor: true, draggable: true });
     });
     this.actionMenu.add(thumbZone);

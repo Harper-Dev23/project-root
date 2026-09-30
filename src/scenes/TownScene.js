@@ -13,7 +13,7 @@ import { DevFlags } from '../systems/DevFlags.js';
 import { describeModifiers } from '../systems/HuntModifiers.js';
 import { currentPlanStock, markPlanSold } from '../systems/HuntPlans.js';
 import { setupSceneCursor } from '../ui/cursor.js';
-import { buildItemTooltipLines } from '../ui/itemTooltip.js';
+import { buildItemTooltipLines, installAffixDetailKeys } from '../ui/itemTooltip.js';
 import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription, pendingReports } from '../data/quests.js';
@@ -555,6 +555,9 @@ export default class TownScene extends Phaser.Scene {
       }
 
       const data = tooltipData || this._buildItemTooltipData(itemRef);
+      // An item's tooltip is built fresh, so Alt (affix detail) can re-show
+      // it while hovered (installAffixDetailKeys in create()).
+      this._hoveredItemTip = itemRef && !tooltipData ? { itemRef, x: pointer.worldX, y: pointer.worldY } : null;
       if (data && this.tooltip) {
         this.tooltip.show(pointer.worldX, pointer.worldY, data);
       }
@@ -562,12 +565,14 @@ export default class TownScene extends Phaser.Scene {
 
     displayObj.on('pointermove', (pointer) => {
       this.tooltip?.reposition(pointer.worldX, pointer.worldY);
+      if (this._hoveredItemTip) { this._hoveredItemTip.x = pointer.worldX; this._hoveredItemTip.y = pointer.worldY; }
     });
 
     displayObj.on('pointerout', () => {
       if (displayObj.setColor && baseColor) {
         displayObj.setColor(baseColor);
       }
+      this._hoveredItemTip = null;
       this.tooltip?.hide();
     });
   }
@@ -644,6 +649,13 @@ export default class TownScene extends Phaser.Scene {
     const mapHalf = (this._mapDisplayWidth || 922) / 2;
     this.tooltip.setBounds(640 - mapHalf, Math.min(640 + mapHalf, 1280 - RIGHT_SIDEBAR_W));
     this._initQuestMarkerInput();
+    // Alt: affix detail on a hovered item's tooltip, as in the inventory (owner's
+    // notes, 2026-09-29: the Bone Pile had none). _attachTooltip notes what is hovered.
+    installAffixDetailKeys(this, () => {
+      const h = this._hoveredItemTip;
+      const data = h && this._buildItemTooltipData(h.itemRef);
+      if (data) this.tooltip?.show(h.x, h.y, data);
+    });
 
     // Debug click coords
     this.input.on('pointerdown', pointer => {
@@ -1170,6 +1182,17 @@ export default class TownScene extends Phaser.Scene {
     if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
   }
 
+  /**
+   * After spending at a vendor or the Bone Pile: the vendor's own currency
+   * line, the sidebar's ticket counts, and the save, at once (owner's notes,
+   * 2026-09-29: the totals only changed after leaving the vendor).
+   */
+  _afterSpend() {
+    this._updateVendorCurrencyDisplay();
+    this.scene.get('UIScene')?.refreshUI?.();
+    GameState.save('autosave');
+  }
+
   _buildInteriorLayout({ titleText, flavorText, bgColor = 0x1e1a18, bgImage = null, titleColor = '#ffddaa', flavorColor = '#dddddd', exitText = '[ Exit ]', onExit, useHeaderBanner = true }) {
     const PANEL_W = 915, PANEL_H = 685;
     const blocker = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0)
@@ -1598,7 +1621,6 @@ export default class TownScene extends Phaser.Scene {
       const panelRight = 1050;
       const panelTop = 220;   // aligns with first item row
       const panelBottom = 595;   // bottom border of panel
-      const lineHeight = 36;    // keep your existing snap size
 
       // Only scroll if pointer is inside the inventory panel
       if (pointer.x >= panelLeft && pointer.x <= panelRight &&
@@ -1607,21 +1629,21 @@ export default class TownScene extends Phaser.Scene {
         // Apply scroll
         this.vendorInventoryContainer.y -= deltaY * 0.5;
 
-        // Visible area height
-        const visibleHeight = panelBottom - panelTop;
+        // Visible area: the MASK's, as the scrollbar reads it. It was the whole
+        // panel (220-595), which on the Bone Pile, whose log starts under its
+        // buttons, understated how far the log could scroll, so the newest
+        // rolls could not be reached (owner's notes, 2026-09-29).
+        const visibleHeight = Math.max(0, (this._inventoryMaskBottom ?? panelBottom) - (this._inventoryMaskTop ?? panelTop));
 
         // 👉 Total height now includes optional top padding (Bonepile uses 80)
         const topPadding = this.vendorInventoryContainer.topPadding || 0;
         const contentH = this.vendorInventoryContainer.listHeight || 0;
         const totalHeight = topPadding + contentH;
 
-        // Compute max scroll distance (how far up we can go)
-        let maxScroll = Math.max(0, totalHeight - visibleHeight);
-
-        // Keep your existing "snap to line" feel
-        if (lineHeight > 0) {
-          maxScroll = Math.ceil(maxScroll / lineHeight) * lineHeight;
-        }
+        // How far up the list can go: exactly to its last row. (Rounding this
+        // up to a 36px row, as it did, scrolled past the end, and the Bone
+        // Pile's rows are not 36px anyway.)
+        const maxScroll = Math.max(0, totalHeight - visibleHeight);
 
         // Refresh the thumb and re-run the off-screen click-blocking after the
         // clamp below settles the final y.
@@ -1813,7 +1835,8 @@ export default class TownScene extends Phaser.Scene {
       }) => {
         const currencyWord = cost === 1 ? currencyName : `${currencyName}s`;
         const btn = this.add.text(620, y, `[ Gamble ${label} — ${cost} ${currencyWord} ]`, {
-          fontSize: '20px',
+          // 17px: the Marked rows ran past the panel's right edge at 20.
+          fontSize: '17px',
           color
         })
           .setDepth(13)
@@ -1836,8 +1859,7 @@ export default class TownScene extends Phaser.Scene {
             }
 
             ProgressionManager[currency] -= cost;
-            GameState.save('autosave');
-            this._updateVendorCurrencyDisplay();
+            this._afterSpend();
 
             // A renown origin is now an OVERLAY on the base that was going to
             // drop anyway, not a swap to a separate pool of 13 hand-written
@@ -1896,9 +1918,9 @@ export default class TownScene extends Phaser.Scene {
               .setDepth(13)
               .setInteractive({ useHandCursor: true });
 
-            const tooltipData = this._buildItemTooltipData(inst);
+            // The item, not a pre-built tooltip: Alt shows its affix detail.
             this._attachTooltip(line, {
-              tooltipData,
+              itemRef: inst,
               baseColor: displayColor,
               hoverColor: '#ffffff'
             });
@@ -2032,7 +2054,7 @@ export default class TownScene extends Phaser.Scene {
 
       // The keeper buys beast parts (batch 4b chunk 6): its own overlay,
       // PartsBuyerOverlay, over the camp bag. Cleared with the gamble buttons.
-      const sellBtn = this.add.text(620, 345, '[ Sell beast parts ]', { fontSize: '20px', color: '#e0c890' })
+      const sellBtn = this.add.text(620, 345, '[ Sell beast parts ]', { fontSize: '17px', color: '#e0c890' })
         .setDepth(13)
         .setInteractive({ useHandCursor: true })
         .on('pointerover', function () { this.setColor('#ffffff'); })
@@ -2149,6 +2171,7 @@ export default class TownScene extends Phaser.Scene {
                 return;
               }
               ProgressionManager[cur] = held - entry.cost;
+              this._afterSpend();
             }
 
             const instOpts = {};
