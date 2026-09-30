@@ -239,6 +239,10 @@ console.log('=== a cultist fight: its gear crosses the wire into the pack ===');
   const armour = spec.scenario.enemies.flatMap(e => Object.entries(e.gear || {}).filter(([sl]) => e.gearDroppable?.[sl]).map(([, g]) => g));
   check("won, and the rewards list the cultists' armour", over?.huntOutcome?.result === 'won' && over.rewards.loot.length === armour.length && armour.length > 0,
     `${over?.rewards?.loot?.length} of ${armour.length}`);
+  const rep = over?.report;
+  check('the end of the fight carries the battle report: a row per hunter, damage dealt, the kills',
+    !!rep && rep.rows?.length >= 1 && rep.total?.damage > 0 && rep.total?.kills >= 1,
+    rep ? `${rep.rows.length} rows, ${rep.total.damage} damage, ${rep.total.kills} kills` : 'no report');
   const before = ch.h.getState().pack.found.length;
   ch.h.winEncounter({ loot: over.rewards.loot, knockedOut: over.huntOutcome.knockedOut });
   const found = ch.h.getState().pack.found;

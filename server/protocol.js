@@ -135,6 +135,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         // entirely local, and there is only one implementation of what a clear
         // is worth.
         rewards: won ? lobby.session.rewards() : null,
+        report: lobby.session.report?.() || null,
         survivors: units.filter(u => u.side === 'ally' && u.hp > 0).map(u => u.ref),
         players: lobby.players.map(p => p.id),
       });
@@ -185,6 +186,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       outcome: outcome?.result === 'won' ? 'victory' : outcome?.result === 'fled' ? 'fled' : 'defeat',
       huntOutcome: outcome,
       rewards: outcome?.result === 'won' ? session.rewards() : null,
+      report: session.report?.() || null,
       vitals: session.vitals(),
       fightVersion: lobby.hunt.version,
       players: lobby.players.map(p => p.id),

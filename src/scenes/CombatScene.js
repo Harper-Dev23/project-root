@@ -32,6 +32,7 @@ import { DevFlags } from '../systems/DevFlags.js';
 import { rebuildCharacterStats, resetCombatMods, calculateDerivedStats } from '../systems/CharacterBuilder.js';
 import { huntFightXP } from '../systems/HuntObjectives.js';
 import { createCombatStats } from '../systems/CombatStats.js';
+import { xpShare } from '../../data/xpTable.js';
 import { isItemInstance, createItemInstance, getItemComputedData, applyRenownOrigin, pickBaseId, upgradeWeaponBase, mergeHistoricEffects } from '../systems/ItemFactory.js';
 import { stackQty } from '../systems/ItemStacks.js';
 import { makeRng, isSeed } from '../systems/seededRng.js';
@@ -5653,12 +5654,18 @@ export default class CombatScene extends Phaser.Scene {
 
     off.push(client.on('over', (msg) => {
       this.combatEnded = true;
+      this._coopReport = msg.report || null;
       if (msg.hunt) {
         // A co-op MAP-HUNT fight (chunk 12c). Nothing is paid here: the
         // host's hunt takes the outcome (CoopHunt) and every save-side effect
         // rides in its ledger (12d). Every screen leads back to the map.
         const back = { showRetry: false, showExit: true, exitLabel: 'Back to the Hunt', onExit: () => this.huntFight?.reopen?.(this) };
-        if (msg.outcome === 'victory') this._showVictoryScreen('Victory!', [], null, msg.rewards?.loot || [], []);
+        // The fight's XP pool is paid when the hunt is taken home (CoopRewards
+        // rule 1): say what each hunter's share will be.
+        const pool = msg.rewards?.xpPool || 0;
+        const n = (this._party?.() || []).filter(Boolean).length || 1;
+        const xpLines = pool > 0 ? [`${xpShare(pool, n)} XP each (the fight's ${pool}, shared by ${n}), paid when the hunt ends.`] : [];
+        if (msg.outcome === 'victory') this._showVictoryScreen('Victory!', xpLines, null, msg.rewards?.loot || [], []);
         else if (msg.outcome === 'fled') this._showDefeatScreen('Fled', 'You broke away. They will be hunting you.', back);
         else this._showDefeatScreen('Defeat', 'The party fell. The hunt is over.', back);
         return;
@@ -13497,7 +13504,9 @@ export default class CombatScene extends Phaser.Scene {
    * Solo only for now: a co-op board is the server's (null there).
    */
   _statsFor(actor) {
-    if (this.isCoop || this.isAuthoritativeHost) return null;
+    // A co-op client's board is the server's: the SERVER's board (the
+    // authoritative host) tracks it and sends the report with the fight's end.
+    if (this.isCoop) return null;
     if (!this._combatStats) {
       const party = this._party().filter(Boolean);
       this._combatStats = createCombatStats(party, {
@@ -14269,7 +14278,9 @@ export default class CombatScene extends Phaser.Scene {
     }
 
     // ── Loot ── hover for the tooltip (Alt: affix detail), Inspect on Historic items.
-    const lw = box(margin + colW + gap, topY, colW, topH, this.huntFight ? 'Loot (into your hunt pack)' : 'Loot');
+    // Co-op: the finds go into the shared pack, and every save takes a copy home (CoopRewards rule 1).
+    const lootHead = this.isCoop && this.huntFight ? 'Loot (shared: everyone takes a copy home)' : this.huntFight ? 'Loot (into your hunt pack)' : 'Loot';
+    const lw = box(margin + colW + gap, topY, colW, topH, lootHead);
     let ly = lw.y + 40;
     if (!loot.length) this.add.text(lw.x + 16, ly, 'Nothing dropped.', { fontSize: '15px', color: '#888888', fontFamily: FONT }).setDepth(D);
     loot.forEach(inst => {
@@ -14337,6 +14348,8 @@ export default class CombatScene extends Phaser.Scene {
    * before). Null in co-op, where the fight is the server's.
    */
   _finishBattleReport() {
+    // A co-op client shows the report the server sent with the fight's end.
+    if (this.isCoop) return this._coopReport || null;
     if (this._battleReport !== undefined && this._battleReportFor === this._combatStats) return this._battleReport;
     const stats = this._combatStats;
     this._battleReportFor = stats;

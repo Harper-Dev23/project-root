@@ -431,6 +431,15 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     },
 
     /**
+     * The battle report (CombatStats, as solo's victory screen shows it):
+     * damage, biggest hit, healing, taken and kills per hunter, sent with the
+     * fight's end so every co-op screen can show it. Null if nothing was tracked.
+     */
+    report() {
+      try { return host._finishBattleReport?.() || null; } catch { return null; }
+    },
+
+    /**
      * Every hunter's state at this moment, { ref: { hp, mp, status } }: what
      * the map carries on with after the fight. The mirror of `vitals` in.
      */
