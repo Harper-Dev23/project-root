@@ -29,7 +29,8 @@ installPhaserStub(0, { deterministic: false });
 
 const { createHub } = await import('./protocol.js');
 const { createCoopClient } = await import('../src/systems/CoopClient.js');
-const { createCoopHunt, LEDGER_VERBS } = await import('../src/systems/CoopHunt.js');
+const { createCoopHunt, hostWorld, LEDGER_VERBS } = await import('../src/systems/CoopHunt.js');
+const { restoreMapHunt } = await import('../src/systems/HuntEngine.js');
 const { toWireCharacter } = await import('../src/systems/CoopWire.js');
 const { makeParty } = await import('../tools/headless/fixtures.js');
 const { makeRng } = await import('../src/systems/seededRng.js');
@@ -245,6 +246,59 @@ console.log('=== moves ===');
   await until(() => S.guestC.lastError, 'the stale refusal');
   check('a stale move is refused back to the guest', /moved on/.test(S.guestC.lastError));
   check('only the host acts: a guest\'s other actions are refused locally', /only the host/.test(S.guest.act().reason) && /only the host/.test(S.guest.fight().reason));
+}
+
+console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran forever) ===');
+{
+  // A bog frog (timid) on two tiles beside the party, put into the host's
+  // hunt as coopboss_test does (serialize, edit, restore) and published.
+  // The last move may have walked into something: clear it first.
+  for (let i = 0; i < 5; i++) {
+    const v = S.host.view();
+    if (v.encounter) S.host.act(h => h.flee());
+    else if (v.event) S.host.act(h => h.leaveEvent());
+    else if (v.spoils) S.host.act(h => h.harvest({ take: [], meat: false }));
+    else break;
+  }
+  const d = S.host.hunt.serialize();
+  const grade = d.map.occupants.find(o => o.kind === 'beast')?.roster[0]?.grade ?? 'common';
+  const frog = (id, tile) => ({ id, kind: 'beast', family: 'bog_frog', tile, roster: [{ type: 'bog_frog', grade }],
+    composition: 'solitary', state: 'rooted', concealment: 0, mark: 'marked' });
+  // Only tiles where a plain move makes the frog scatter (it has somewhere to
+  // run), tried on a scratch copy: a cornered frog fights anyway, and would
+  // pass without the fix.
+  const scatters = (tile, other) => {
+    const t = JSON.parse(JSON.stringify(d));
+    t.map.occupants.push(frog('o9000', tile), frog('o8999', other));
+    return !!restoreMapHunt(t, hostWorld(S.host.party, null, []), { view: true }).move(tile)?.scattered;
+  };
+  const open = S.host.view().moves.map(m => m.tile).filter(t => !d.map.occupants.some(o => o.tile === t));
+  let free = [];
+  for (const a of open) for (const b of open) if (!free.length && a !== b && scatters(a, b) && scatters(b, a)) free = [a, b];
+  check('two tiles beside the party where a frog would scatter', free.length === 2, `${open.length} open`);
+  d.map.occupants.push(frog('o9001', free[0]), frog('o9002', free[1]));
+  S.host.hunt = restoreMapHunt(d, S.host.hostWorld, { view: true });   // as the host's resume: no reload steps
+  S.host.act(() => ({ ok: true }));
+  await until(() => S.guest.version === S.host.version, 'the frogs published');
+  const before = S.host.version;
+  S.guestC.lastError = null;
+  S.guest.move(free[0], { hunt: true });
+  await until(() => S.host.version > before || S.guestC.lastError, 'the guest\'s hunt move');
+  check('a guest\'s "Hunt it" reaches the host: the frog stands and fights', S.host.view().encounter?.occId === 'o9001', S.guestC.lastError || JSON.stringify(S.host.view().encounter));
+  // The host side, through the field facade the map scene uses.
+  S.host.act(h => h.flee());
+  const back = S.host.view().pos;
+  const step = S.host.view().moves.find(m => m.tile === free[1]);
+  if (step) {
+    S.host.field().move(free[1], { hunt: true });
+    check('the host\'s "Hunt it" through the field facade: the frog fights', S.host.view().encounter?.occId === 'o9002', JSON.stringify(S.host.view().encounter));
+    S.host.act(h => h.flee());
+  } else check('the second frog is still beside the party after the flee', false, back);
+  const d2 = S.host.hunt.serialize();
+  d2.map.occupants = d2.map.occupants.filter(o => o.id !== 'o9001' && o.id !== 'o9002');
+  S.host.hunt = restoreMapHunt(d2, S.host.hostWorld, { view: true });
+  S.host.act(() => ({ ok: true }));
+  await until(() => S.guest.version === S.host.version, 'caught up');
 }
 
 console.log('=== nothing touched a save ===');

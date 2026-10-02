@@ -204,7 +204,7 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     // The host's client runs the hunt; these only carry it (CoopHunt.js).
     setRations(qty) { return client.send({ t: 'setRations', qty }); },
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
-    move(tile, version) { return client.send({ t: 'move', tile, version }); },
+    move(tile, version, { hunt = false } = {}) { return client.send({ t: 'move', tile, version, ...(hunt ? { hunt: true } : {}) }); },
     huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },
     // Named send*, not huntFight: that is the live fight's spec (below), and a
     // method of the same name overwrote it (12d found it: every guest "saw" a fight).

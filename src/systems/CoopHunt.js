@@ -205,7 +205,7 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       fieldFacade = new Proxy({}, {
         get(_, prop) {
           if (prop === 'view') return () => ch.view();
-          if (prop === 'move') return (tile) => ch.move(tile);
+          if (prop === 'move') return (tile, opts) => ch.move(tile, opts);
           if (prop === 'then' || typeof prop === 'symbol') return undefined;   // not a promise
           return (...args) => ch.act(h => (typeof h[prop] === 'function'
             ? h[prop](...args) : { ok: false, reason: `the hunt cannot ${String(prop)}` }));
@@ -304,7 +304,10 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       if (res?.ok) publish();
       return res;
     };
-    ch.move = (tile) => ch.act(h => h.move(tile));
+    // `hunt`: the party came to hunt a timid beast, so it does not scatter
+    // (HuntEngine.move). Dropping it let a timid quarry run forever (co-op
+    // playtest: a Cull's bog frog).
+    ch.move = (tile, { hunt = false } = {}) => ch.act(h => h.move(tile, { hunt: !!hunt }));
 
     /** Fight the pending encounter: beginFight (the food buff is used up, so
      *  that state is published first), then the server runs it. */
@@ -325,7 +328,7 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     // decides. Every refusal goes back to the one who asked.
     unsubs.push(client.on('moveIntent', (m) => {
       if (m.version !== ch.version) return client.huntRefuse(m.from, 'the hunt has moved on; try again');
-      const res = ch.move(m.tile);
+      const res = ch.move(m.tile, { hunt: !!m.hunt });
       if (!res?.ok) client.huntRefuse(m.from, res?.reason || 'the hunt refused that move');
       else emit('moved', { by: m.from, name: m.name, res });
     }));
@@ -400,9 +403,9 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     if (client.huntFight) ch.fighting = client.huntFight;
 
     // A guest's move is a request; the host's next snapshot is the answer.
-    ch.move = (tile) => {
+    ch.move = (tile, { hunt = false } = {}) => {
       if (ch.fighting) return { ok: false, reason: 'the hunt waits while the fight is on' };
-      client.move(tile, ch.version);
+      client.move(tile, ch.version, { hunt });
       return { ok: true, pending: true };
     };
     ch.act = () => ({ ok: false, reason: 'only the host can do that' });

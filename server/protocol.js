@@ -529,8 +529,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     },
 
     /**
-     * { t:'move', tile, version } - anyone asks to move the party token. The
-     * host resolves it (AUTHORITY_MODEL: anyone may move, the host decides).
+     * { t:'move', tile, version, hunt? } - anyone asks to move the party token
+     * (`hunt`: to hunt a timid beast rather than walk past it). The host
+     * resolves it (AUTHORITY_MODEL: anyone may move, the host decides).
      * Refused here, to the asker only, if a fight is live or the move was
      * aimed at an older state than the latest.
      */
@@ -542,7 +543,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       if (msg.tile == null || typeof msg.tile === 'object') return fail(conn, 'a move needs a tile');
       const host = hostOf(lobby);
       if (!host?.conn) return fail(conn, 'the host is away');
-      send(host.conn, { t: 'moveIntent', from: player.id, name: player.name, tile: msg.tile, version: h.version });
+      send(host.conn, { t: 'moveIntent', from: player.id, name: player.name, tile: msg.tile, hunt: msg.hunt === true, version: h.version });
     },
 
     /** { t:'huntRefuse', to, reason } - host only: tell one player why their
