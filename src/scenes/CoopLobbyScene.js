@@ -743,6 +743,23 @@ export default class CoopLobbyScene extends Phaser.Scene {
     if (!ownPack(GameState.flags)) this._startOwnPack([]);
     GameState.flags.coopPack.code = this.client.code;
     markOwnPackLive(this.client.code);
+    // The hunt runs on its own copies of the hunters (CoopHunt's party), but
+    // the left party panel draws the saved ones (co-op playtest: the HP bars
+    // never moved). Copy this player's hunters' HP and MP across as the hunt
+    // changes. Status is left to the take-home, which decides who fell.
+    const mirrorVitals = () => {
+      for (const c of coop.party) {
+        if (c.ownerId !== this.client.playerId) continue;
+        const ref = c.instanceId || c.id;
+        const mine = (GameState.party || []).find(p => (p.instanceId || p.id) === ref);
+        if (!mine) continue;
+        if (Number.isFinite(c.currentHP)) mine.currentHP = c.currentHP;
+        if (Number.isFinite(c.currentMP)) mine.currentMP = c.currentMP;
+      }
+    };
+    coop.on('changed', mirrorVitals);
+    coop.on('fightOver', mirrorVitals);
+    mirrorVitals();
     openCoopHunt(this, coop);
   }
 
