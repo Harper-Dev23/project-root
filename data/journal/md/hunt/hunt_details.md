@@ -29,7 +29,7 @@ You see the tiles near you. Anything further off may be **sensed** -- something 
 
 ## What lives there
 
-Every pack stands on a tile. Walking onto one starts the fight, and whoever has the better Initiative acts first -- unless you walked in blind, in which case they ambush you. Some packs wander; **predators** notice a party that comes close and hunt it. You can **Flee** a fight, at the cost of a free round for the enemy, but a pack you fled from will follow.
+Every pack stands on a tile. Walking onto one starts the fight, and whoever has the better Initiative acts first -- unless you walked in blind, in which case they ambush you. Some packs wander; **predators** notice a party that comes close and hunt it, while **timid** beasts scatter unless you hunt them. You can **Flee** a fight, at the cost of a free round for the enemy, but a predator you fled from will follow. Tempers, prophet marks, vigils, blight and waiting are in [[Hunting the Wild]].
 
 **Events** sit on their own tiles: a choice, a stat check, a riddle. Some only stir at night. A quest you are on may put its own event on the map, marked in violet from the start.
 
