@@ -14279,7 +14279,7 @@ export default class CombatScene extends Phaser.Scene {
 
     // ── Loot ── hover for the tooltip (Alt: affix detail), Inspect on Historic items.
     // Co-op: the finds go into the shared pack, and every save takes a copy home (CoopRewards rule 1).
-    const lootHead = this.isCoop && this.huntFight ? 'Loot (shared: everyone takes a copy home)' : this.huntFight ? 'Loot (into your hunt pack)' : 'Loot';
+    const lootHead = this.isCoop && this.huntFight ? 'Loot (shared: a copy goes into everyone\'s pack)' : this.huntFight ? 'Loot (into your hunt pack)' : 'Loot';
     const lw = box(margin + colW + gap, topY, colW, topH, lootHead);
     let ly = lw.y + 40;
     if (!loot.length) this.add.text(lw.x + 16, ly, 'Nothing dropped.', { fontSize: '15px', color: '#888888', fontFamily: FONT }).setDepth(D);

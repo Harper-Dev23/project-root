@@ -167,6 +167,7 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       const sum = applyTakeHome(entries, {
         me: client.playerId, hostId: client.hostId, contributions: ch.contributions,
         partySize: party.length, zoneId: ch.hunt.view().zoneId, myRefs, vitals: vitals(),
+        copied: t.copiedFinds?.() || {},
       }, t);
       r.applied = ledger.length;
       r.closed = true;
@@ -250,12 +251,24 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     });
   }
 
+  /**
+   * Every find the shared pack holds, copied into this player's own pack as
+   * it shows up (owner 2026-10-02; OwnPack.syncFinds), so it can be equipped
+   * or used mid-hunt. Before remember(), so the save that keeps the record
+   * keeps the copies too. Never once this save has taken its share home.
+   */
+  function syncFinds() {
+    if (ch.tookHome || !ch.hunt || !target?.syncFinds) return;
+    target.syncFinds(ch.hunt.getState().pack?.found || []);
+  }
+
   // ── Host ────────────────────────────────────────────────────────────────────
   let endSent = false;
   function publish() {
     ch.version++;
     const env = ch.snapshot();
     client.huntSnapshot(ch.version, env);
+    syncFinds();
     remember(env);
     emit('changed', ch.view());
     const fin = ch.hunt.view().finished;
@@ -389,6 +402,7 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     lastEnv = env;
     ch.id = env.id || ch.id;
     ch.hunt = restoreMapHunt(env.hunt, guestWorld(party), { view: true });
+    syncFinds();
     remember(env);
     ledger.splice(0, ledger.length, ...(env.ledger || []));
     emit('changed', ch.view());

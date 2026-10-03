@@ -7,7 +7,9 @@
 // and every player holds the whole ledger. Each client applies it to its OWN
 // save here, by one rule set:
 //
-//   rule 1  loot and finds: the whole list, COPIED to every save;
+//   rule 1  loot and finds: the whole list, COPIED to every save (each find
+//           into each player's own pack as it shows up, OwnPack.syncFinds;
+//           whatever a save never copied is banked here at the end);
 //           completion reward and bonus objectives: in full, to every save;
 //           XP: the pool split over the WHOLE party, each save paying only its
 //           own hunters their share; Hunt Points: to each save's own tribe
@@ -33,7 +35,7 @@ import { exitReward } from './HuntObjectives.js';
 import { restoreMapHunt } from './HuntEngine.js';
 import { getZone } from '../../data/zones.js';
 import { stackQty, addToList } from './ItemStacks.js';
-import { settleOwnPack } from './OwnPack.js';
+import { settleOwnPack, syncFinds, copiedFinds, uncopied } from './OwnPack.js';
 
 /** The ledger entries a clean exit from this snapshot would have written
  *  (rule 7): what the pack brings home, and the exit's reward. */
@@ -106,7 +108,13 @@ export function applyTakeHome(entries, ctx, target) {
       }
       case 'bankItems': {
         const [items = [], opts = {}] = a;
-        if (opts.found) { w.bankItems(items.map(i => JSON.parse(JSON.stringify(i))), { found: true }); sum.items += items.length; }
+        // Finds already copied into this player's own pack mid-hunt come home
+        // with it (OwnPack.syncFinds); only what was never copied is banked.
+        if (opts.found) {
+          const left = uncopied(items, ctx.copied || {});
+          if (left.length) w.bankItems(left.map(i => JSON.parse(JSON.stringify(i))), { found: true });
+          sum.items += left.length;
+        }
         else {
           const got = broughtShare(items, { contributions, me, hostId });
           if (got.length) w.bankItems(got, { found: false });
@@ -173,7 +181,7 @@ export function takeHomeFromRecord(rec, target) {
   const entries = [...led.slice(r.applied), ...cleanExitEntries(rec.env)];
   const sum = applyTakeHome(entries, {
     me: rec.playerId, hostId: rec.hostId, contributions: rec.contributions, partySize: rec.partySize,
-    zoneId: rec.zoneId, myRefs: rec.myRefs || [], vitals: rec.env.vitals,
+    zoneId: rec.zoneId, myRefs: rec.myRefs || [], vitals: rec.env.vitals, copied: target.copiedFinds?.() || {},
   }, target);
   r.applied = led.length;
   r.closed = true;
@@ -208,6 +216,9 @@ export async function gameTarget() {
     remember: (rec) => { (GameState.flags ||= {}).coopActive = rec; GameState.save('autosave'); },
     forget: () => { if (GameState.flags) delete GameState.flags.coopActive; },
     save: () => GameState.save('autosave'),
+    // Every find, copied into this player's own pack as it shows up (OwnPack.js).
+    syncFinds: (found) => syncFinds(GameState.flags || {}, found),
+    copiedFinds: () => copiedFinds(GameState.flags),
     // This player's own pack comes home (or is lost) by the solo rules (OwnPack.js).
     settleOwnPack: ({ ending, deathRule }) => {
       const out = settleOwnPack(GameState.flags || {}, { ending, deathRule, settlePack });

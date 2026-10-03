@@ -39,7 +39,7 @@ const { makeStack, stackQty } = await import('../src/systems/ItemStacks.js');
 const { xpShare } = await import('../data/xpTable.js');
 const { Items } = await import('../data/items.js');
 const GameState = (await import('../src/systems/GameState.js')).default;
-const { startOwnPack, settleOwnPack } = await import('../src/systems/OwnPack.js');
+const { startOwnPack, settleOwnPack, syncFinds, copiedFinds } = await import('../src/systems/OwnPack.js');
 const { settlePack } = await import('../src/systems/HuntManager.js');
 const ProgressionManager = (await import('../src/systems/ProgressionManager.js')).default;
 const CombatSceneMod = await import('../src/scenes/CombatScene.js');
@@ -115,6 +115,8 @@ function saveFor(from, ownTribe) {
     active: null,
     remember(r) { this.active = JSON.parse(JSON.stringify(r)); }, forget() { this.active = null; },
     settleOwnPack: (o) => { const out = settleOwnPack(flags, { ...o, settlePack }); got.ownHome = out; return out; },
+    syncFinds: (found) => syncFinds(flags, found),
+    copiedFinds: () => copiedFinds(flags),
   };
 }
 
@@ -404,7 +406,13 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   const hpAll = ledgerSum(led, 'awardHuntPoints');
   check('rule 1: every save gets the hunt\'s Hunt Points in full (fights and completion)', hg.huntPoints === hpAll && gg.huntPoints === hpAll && hpAll > 0, `${hpAll} each`);
   const found = led.filter(e => e.verb === 'bankItems' && e.args[1]?.found).flatMap(e => e.args[0]);
-  check('rule 1: the finds are COPIED to every save', same(ids(hg.found), ids(found)) && same(ids(gg.found), ids(found)), `${found.length} items`);
+  // Finds go into each player's own pack as they show up (owner 2026-10-02),
+  // and come home with it; the end banks only what was never copied. Counted
+  // in units per base, since copies of a growing stack land as their own stacks.
+  const units = (list) => { const u = {}; for (const i of list) u[i.id] = (u[i.id] || 0) + stackQty(i); return JSON.stringify(Object.keys(u).sort().map(k => [k, u[k]])); };
+  const homeFinds = (g) => [...g.found, ...(g.ownHome?.home || []).filter(i => i.id !== 'healing_draught')];
+  check('rule 1: the finds are COPIED to every save, every unit once', units(homeFinds(hg)) === units(found) && units(homeFinds(gg)) === units(found), `${found.length} items`);
+  check('...copied into each own pack during the hunt, so the end banks nothing twice', hg.found.length === 0 && gg.found.length === 0, `${hg.found.length} / ${gg.found.length} banked at the end`);
   // Expected by the real awardXPTo on fresh copies: each pool's share, split
   // over all six, paid in order to that player's own three.
   const pools = led.filter(e => e.verb === 'awardXP').map(e => e.args[0]);
@@ -421,8 +429,8 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   check('rule 4: every Bond records the hunt\'s favor', same(hg.favor, gg.favor) && hg.favor.length === led.filter(e => e.verb === 'favor').length, `${hg.favor.length} entries`);
   const again = R.guest.takeHome();
   check('taken home ONCE: a second take-home pays nothing', again === null && gg.huntPoints === hpAll);
-  const homeIds = (g) => (g.ownHome?.home || []).map(i => `${i.id}x${stackQty(i)}`).sort().join(',');
-  check('own packs: on an exit each player\'s own pack comes home (the fish spoils), and the pack is gone',
+  const homeIds = (g) => (g.ownHome?.home || []).filter(i => !found.some(f => f.id === i.id)).map(i => `${i.id}x${stackQty(i)}`).sort().join(',');
+  check('own packs: on an exit each player\'s own pack comes home with what they brought (the fish spoils), and the pack is gone',
     homeIds(hg) === 'healing_draughtx2' && homeIds(gg) === 'healing_draughtx2' && gg.ownHome.spoiled.some(i => i.id === 'raw_fish')
     && !R.hostSave.flags.coopPack && !R.guestSave.flags.coopPack, `host ${homeIds(hg)} / guest ${homeIds(gg)}`);
 }
@@ -451,6 +459,28 @@ console.log('=== two fights in one hunt ===');
     const sp2 = T.host.view().spoils;
     if (sp2) T.host.act(h => h.harvest({ take: [], meat: false }));
   } else check('a second encounter was found', false);
+}
+
+console.log('=== finds into each own pack, as they show up (owner 2026-10-02) ===');
+{
+  const { uncopied } = await import('../src/systems/OwnPack.js');
+  const flags = {};
+  startOwnPack(flags, { code: 'x', items: [] });
+  const mat = makeStack(Object.keys(Items).find(id => Items[id]?.part && Items[id]?.stackable && !Items[id]?.food), 1);   // a harvested material
+  const fish = makeStack('raw_fish', 2);
+  const gear = { ...makeStack('healing_draught', 1), qty: 1 };
+  const shared = [mat, fish, gear];
+  const n1 = syncFinds(flags, shared);
+  const n2 = syncFinds(flags, shared);
+  const qtyIn = (id) => flags.coopPack.items.filter(i => i.id === id).reduce((t, i) => t + stackQty(i), 0);
+  check('each find is copied once; a snapshot seen again copies nothing; fresh food is left in the shared pack',
+    n1 === 2 && n2 === 0 && qtyIn(mat.id) === 1 && qtyIn(gear.id) === 1 && qtyIn('raw_fish') === 0, `${n1}, ${n2}`);
+  mat.qty = 4;
+  syncFinds(flags, shared);
+  check('a shared stack that grew copies only the new units', qtyIn(mat.id) === 4, `${qtyIn(mat.id)}`);
+  const extra = makeStack('healing_draught', 3);
+  const left = uncopied([mat, gear, extra], copiedFinds(flags));
+  check('the take-home banks only what was never copied', left.length === 1 && left[0] === extra, JSON.stringify(left.map(i => i.id)));
 }
 
 console.log('=== 12d: the Rations split, with a remainder ===');
