@@ -197,6 +197,8 @@ function randomRarityForPlanStock() {
 
 /** Hunt Tickets per Bone Pile gamble (was 1; 3 from the owner's 2026-09-29 call). Marked gambles cost 1 Mark, unchanged. */
 const TICKET_GAMBLE_COST = 3;
+// The vendor currency strip sits centred over the 510-wide vendor panel.
+const VENDOR_CURRENCY_MAX_W = 500;
 
 // Reckoning Tickets buy a better roll than a Hunt Ticket does, on both axes:
 // this rarity table (which decides affix COUNT) and a higher item level plus
@@ -1178,14 +1180,24 @@ export default class TownScene extends Phaser.Scene {
 
   /** Returns a formatted currency string for vendor panel headers. */
   _currencyLine() {
-    return `Hunt Tickets: ${ProgressionManager.huntTickets}  |  Tribe Tickets: ${ProgressionManager.tribeTickets}  |  Reckoning Tickets: ${ProgressionManager.reckoningMarks}  |  Sin Tickets: ${ProgressionManager.sinTickets}${ProgressionManager.divinityTickets > 0 ? `  |  Divinity Tickets: ${ProgressionManager.divinityTickets}` : ''}`;
+    // "Tickets" once, not per currency (co-op playtest: with Divinity Tickets
+    // the strip ran past the vendor panel).
+    return `Tickets  -  Hunt: ${ProgressionManager.huntTickets}  |  Tribe: ${ProgressionManager.tribeTickets}  |  Reckoning: ${ProgressionManager.reckoningMarks}  |  Sin: ${ProgressionManager.sinTickets}${ProgressionManager.divinityTickets > 0 ? `  |  Divinity: ${ProgressionManager.divinityTickets}` : ''}`;
+  }
+
+  /** Set a vendor currency strip's text, shrunk to sit over the vendor panel. */
+  _setCurrencyText(t, line = this._currencyLine()) {
+    if (!t) return t;
+    t.setScale(1).setText(line);
+    if (t.width > VENDOR_CURRENCY_MAX_W) t.setScale(VENDOR_CURRENCY_MAX_W / t.width);
+    return t;
   }
 
   /** Updates any live vendor currency text objects. */
   _updateVendorCurrencyDisplay() {
     const line = this._currencyLine();
-    if (this.vendorCurrencyDisplay)      this.vendorCurrencyDisplay.setText(line);
-    if (this.tribeVendorCurrencyDisplay) this.tribeVendorCurrencyDisplay.setText(line);
+    this._setCurrencyText(this.vendorCurrencyDisplay, line);
+    this._setCurrencyText(this.tribeVendorCurrencyDisplay, line);
   }
 
   /**
@@ -1586,10 +1598,10 @@ export default class TownScene extends Phaser.Scene {
       color: '#ffddaa'
     }).setOrigin(0.5);
     // Currency strip — updates whenever a purchase or gamble happens.
-    this.vendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
+    this.vendorCurrencyDisplay = this._setCurrencyText(this.add.text(800, 143, '', {
       fontSize: '12px',
       color: '#3a2818'
-    }).setOrigin(0.5).setDepth(13);
+    }).setOrigin(0.5).setDepth(13));
     // 470 ran the "You received: <long affixed name>" line straight into the
     // panel border at x~1053 (starts at 610, so 610+470 = 1080). Matched to the
     // same right margin the bonepile drop log uses.
@@ -3759,10 +3771,10 @@ export default class TownScene extends Phaser.Scene {
     }).setOrigin(0.5);
     // Currency strip — updated on every purchase so the player always sees
     // their current ticket count without leaving the market.
-    this.tribeVendorCurrencyDisplay = this.add.text(800, 143, this._currencyLine(), {
+    this.tribeVendorCurrencyDisplay = this._setCurrencyText(this.add.text(800, 143, '', {
       fontSize: '12px',
       color: '#3a2818'
-    }).setOrigin(0.5).setDepth(13);
+    }).setOrigin(0.5).setDepth(13));
     this.vendorBody = this.add.text(610, 210, '', {
       fontSize: '16px',
       color: '#dddddd',
