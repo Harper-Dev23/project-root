@@ -350,10 +350,34 @@ const occOf = (family, grades, id = 'o7') => ({ id, kind: 'beast', family, roste
   check('a common part rolls no affixes', a.flat().flatMap(Object.values).filter(p => p.rarity === 'common').every(p => !p.prefixes.length && !p.suffixes.length));
   const cult = { id: 'o3', kind: 'cultist', roster: [{ type: 'cultist', grade: null }, { type: 'cultist', grade: null }, { type: 'cultist', grade: null }] };
   const cl = HB.rollLoadout(cult, { itemLevel: 1, itemRarity: 0, seed: 5 });
-  check(`a cultist wears one ${BP.CULTIST_GEAR_SLOT} piece, uncommon or better, and carries its type's weapon; members alternate types`,
-    cl.every((g, i) => same(Object.keys(g).sort(), [BP.CULTIST_GEAR_SLOT, 'weaponMain'].sort()) && Items[g[BP.CULTIST_GEAR_SLOT].id].type === 'armor' && g[BP.CULTIST_GEAR_SLOT].rarity !== 'common'
+  const KIT = ['boots', 'chest', 'gloves', 'head', 'legs', 'weaponMain'];
+  check(`a cultist wears a full kit: a ${BP.CULTIST_GEAR_SLOT} piece uncommon or better, plain armour elsewhere, and its type's weapon; members alternate types`,
+    cl.every((g, i) => same(Object.keys(g).sort(), KIT) && KIT.filter(s => s !== 'weaponMain').every(s => Items[g[s].id].type === 'armor' && Items[g[s].id].slot === s)
+      && g[BP.CULTIST_GEAR_SLOT].rarity !== 'common'
       && Items[g.weaponMain.id].weaponType === ENEMY_TYPES[HB.memberType(cult, i)].huntWeapon && g.weaponMain.rarity === 'common')
     && same([0, 1, 2].map(i => HB.memberType(cult, i)), ['hunt_cult_zealot', 'hunt_cult_adept', 'hunt_cult_zealot']));
+  // Only 1-2 pieces drop (co-op playtest, 2026-10-02): the chest always, one
+  // more half the time, rolled as the chest is; the worn-only rest are common.
+  {
+    let one = 0, two = 0, bad = 0;
+    for (let k = 0; k < 400; k++) {
+      const occ1 = { id: `o${k + 1}`, kind: 'cultist', roster: [{ type: 'cultist', grade: null }] };
+      occ1.loadout = HB.rollLoadout(occ1, { itemLevel: 2, itemRarity: 0, seed: 900 + k });
+      const e = HB.fightScenario(occ1).enemies[0];
+      const drop = Object.keys(e.gear).filter(s => e.gearDroppable[s]);
+      if (drop.length === 1) one++; else if (drop.length === 2) two++; else bad++;
+      if (!drop.includes(BP.CULTIST_GEAR_SLOT) || drop.includes('weaponMain')) bad++;
+      if (Object.keys(e.gear).some(s => !e.gearDroppable[s] && e.gear[s].rarity !== 'common')) bad++;
+      if (Object.values(e.gear).some(g => 'huntDrop' in g)) bad++;
+    }
+    check('a cultist drops its chest and sometimes one more piece, never its weapon; what stays is common; the fight\'s gear carries no huntDrop mark',
+      bad === 0 && one > 120 && two > 120, `${one} one, ${two} two, ${bad} bad`);
+    const legacy = { id: 'o9', kind: 'cultist', roster: [{ type: 'cultist', grade: null }],
+      loadout: [{ chest: cl[0].chest, weaponMain: cl[0].weaponMain }].map(g => JSON.parse(JSON.stringify(g, (k, x) => (k === 'huntDrop' ? undefined : x)))) };
+    const le = HB.fightScenario(legacy).enemies[0];
+    check('a loadout rolled before full kits (no huntDrop marks) still drops its armour, not its weapon',
+      le.gearDroppable.chest === true && le.gearDroppable.weaponMain === false);
+  }
 
   // Statistics per grade (2000 single-member loadouts each, IR 0 and 50).
   const stats = {};

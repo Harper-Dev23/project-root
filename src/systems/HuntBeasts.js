@@ -8,9 +8,11 @@
 // ── The loadout ─────────────────────────────────────────────────────────────
 // A beast wears its PARTS (data/beastParts.js): one item per slot its family's
 // anatomy has, each rolled from the member's grade and the party's Item Rarity
-// (PartyStats.rollPartRarity) at the region's item level. A cultist wears one
-// piece of armour (CULTIST_GEAR_SLOT), rolled like the Advance loop's cultist
-// drop (rollHuntDropRarity). Either way it is rolled ONCE per occupant, the
+// (PartyStats.rollPartRarity) at the region's item level. A cultist wears a
+// full kit: its chest (CULTIST_GEAR_SLOT), rolled like the Advance loop's
+// cultist drop (rollHuntDropRarity), its type's weapon, and plain armour in
+// the other body slots; the chest and sometimes one more piece drop (huntDrop).
+// Either way it is rolled ONCE per occupant, the
 // first time it is needed (decision 4): when the party scouts it, or when the
 // fight starts. HuntEngine keeps it on the occupant, so what was scouted is what
 // is fought, and a reload does not re-roll it.
@@ -62,6 +64,18 @@ export function memberType(occ, index) {
   return fam.type;
 }
 
+/** The armour a cultist wears besides its chest (CULTIST_GEAR_SLOT). */
+const CULTIST_KIT_SLOTS = ['head', 'legs', 'gloves', 'boots'];
+
+/**
+ * Whether a cultist's piece drops if it falls. A loadout rolled before full
+ * kits (a saved hunt) has no huntDrop marks: its armour drops, its weapon not.
+ */
+function cultistDrops(gear, slot) {
+  const marked = Object.values(gear).some(g => g && 'huntDrop' in g);
+  return marked ? !!gear[slot]?.huntDrop : slot !== 'weaponMain';
+}
+
 /** Armour bases a cultist can wear in a slot (as CombatScene's random drop). */
 function armorBases(slot) {
   return Object.entries(Items).filter(([, it]) => it?.type === 'armor' && it?.slot === slot && !it?.historic).map(([id]) => id);
@@ -91,6 +105,24 @@ export function rollLoadout(occ, { itemLevel, itemRarity = 0, seed, historicInWi
       const wid = wt ? pickBaseId(weaponBases(wt), itemLevel, { maxBaseTier: 1, rng }) : null;
       const weapon = wid ? createItemInstance(wid, { rarity: 'common', itemLevel, rng, rollAffixes: false }) : null;
       if (weapon) out.weaponMain = weapon;
+      // The rest of its kit (co-op playtest, 2026-10-02: "full equipment with
+      // only 1-2 pieces droppable"), drawn after the chest and weapon so those
+      // roll what they did. The chest always drops; half the time one more
+      // piece does, rolled as the chest is. What only it wears is common with
+      // no affixes: armour, not a second set of loot's power.
+      if (inst) inst.huntDrop = true;
+      const extraDrop = rng() < 0.5 ? CULTIST_KIT_SLOTS[Math.floor(rng() * CULTIST_KIT_SLOTS.length)] : null;
+      for (const slot of CULTIST_KIT_SLOTS) {
+        const sid = pickBaseId(armorBases(slot), itemLevel, { maxBaseTier: 1, rng });
+        if (!sid) continue;
+        const drops = slot === extraDrop;
+        const piece = drops
+          ? createItemInstance(sid, { rarity: rollHuntDropRarity(itemRarity, rng), itemLevel, rng })
+          : createItemInstance(sid, { rarity: 'common', itemLevel, rng, rollAffixes: false });
+        if (!piece) continue;
+        piece.huntDrop = drops;
+        out[slot] = piece;
+      }
       return out;
     }
     const fam = HUNT_BEASTS[m.type] || HUNT_BEASTS[occ.family];
@@ -248,8 +280,8 @@ export function gradeHpScale(grade) {
  * Members stand by grade, the strongest at the front centre (the leader of an
  * Alpha and pack, the mother of a Matriarch and young); ties keep roster order.
  * Each gets a COPY of its loadout, so what combat does to an item never
- * reaches the hunt's saved occupant. A cultist's armour drops if it falls (the
- * Advance loop's cultist drop); a beast's parts never drop, they are
+ * reaches the hunt's saved occupant. A cultist's marked pieces drop if it falls
+ * (the Advance loop's cultist drop); a beast's parts never drop, they are
  * harvested (9d).
  */
 /** A beast's name label colour in a fight, by its mark: the map's ring
@@ -265,6 +297,8 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
     const m = occ.roster[i];
     const type = memberType(occ, i);
     const gear = JSON.parse(JSON.stringify(occ.loadout[i] || {}));
+    const drops = occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, cultistDrops(gear, sl)])) : {};
+    for (const g of Object.values(gear)) if (g) delete g.huntDrop;   // the hunt's mark, not the item's
     const base = ENEMY_TYPES[type]?.name || type;
     // The lead of a boosted beast (an apex, zones `boost`) is stronger.
     const boost = k === 0 && occ.boost ? occ.boost : null;
@@ -279,7 +313,7 @@ export function fightScenario(occ, { itemLevel = 1, zoneName = null } = {}) {
       hpMult: gradeHpScale(m.grade) * (boost?.hpMult || 1),
       ...(Number.isFinite(boost?.damagePct) ? { damageMultiplierPct: boost.damagePct } : {}),
       gear,
-      gearDroppable: occ.kind === 'cultist' ? Object.fromEntries(Object.keys(gear).map(sl => [sl, sl !== 'weaponMain'])) : {},
+      gearDroppable: drops,
     };
   });
   const lead = occ.kind === 'cultist' ? 'Cultists' : (HUNT_BEASTS[occ.family]?.name || 'Beasts');

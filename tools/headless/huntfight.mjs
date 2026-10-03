@@ -48,7 +48,8 @@ const check = (label, ok, detail = '') => {
   if (!ok) failures++;
 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const noIds = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'instanceId' || k === '_droppable' ? undefined : x)));
+// huntDrop: the loadout's mark of what a cultist drops, left off the fight's copy.
+const noIds = (v) => JSON.parse(JSON.stringify(v, (k, x) => (k === 'instanceId' || k === '_droppable' || k === 'huntDrop' ? undefined : x)));
 
 const store = new Map();
 globalThis.localStorage = {
@@ -163,8 +164,15 @@ check('found a beast encounter and a cultist encounter on real map hunts', !!bea
     check(`${label}: each enemy wears a COPY of its member's kept loadout`, copies && matches);
     check(`${label}: grade HP scale on beasts, none on cultists`,
       en.every(e => e.hpMult === (e.grade ? BP.GRADE_HP_SCALE[e.grade] : 1)));
-    check(`${label}: ${label === 'cultist' ? 'the armour drops, the weapon never does' : 'no part drops (they are harvested, 9d)'}`,
-      en.every(e => Object.keys(e.gear).every(sl => !!e.gearDroppable[sl] === (label === 'cultist' && sl !== 'weaponMain'))));
+    // A cultist (co-op playtest, 2026-10-02): a full kit, of which the chest
+    // and at most one more piece drop; never the weapon.
+    const dropsOk = label === 'cultist'
+      ? en.every(e => {
+        const d = Object.keys(e.gear).filter(sl => e.gearDroppable[sl]);
+        return e.gearDroppable.chest === true && !e.gearDroppable.weaponMain && d.length >= 1 && d.length <= 2;
+      })
+      : en.every(e => Object.keys(e.gear).every(sl => !e.gearDroppable[sl]));
+    check(`${label}: ${label === 'cultist' ? 'the chest and at most one more piece drop, the weapon never does' : 'no part drops (they are harvested, 9d)'}`, dropsOk);
     check(`${label}: the XP pool is FIGHT_XP_POOL with no xpPercent`, spec.xpPool === FIGHT_XP_POOL);
   }
 }
