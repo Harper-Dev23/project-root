@@ -273,6 +273,38 @@ console.log('=== the vigil and unmarked kills (11d) ===');
   const rm = marked.h.winEncounter({});
   check('...a marked kill under a vigil still earns favor, and no god notices', rm.favor > 0 && marked.w.favorLog.every(([, n]) => n > 0) && marked.w.godLog.length === 0 && rm.unmarked === null);
 
+  // The vigil's rewards (owner 2026-10-03, co-op playtest).
+  const noVigil = watch(meet(o => o.kind === 'beast' && o.mark === 'marked', { from: 600 }));
+  const r0 = noVigil.h.winEncounter({});
+  check(`under a vigil a marked kill pays ${SD.VIGIL_MARKED_FAVOR_PERCENT}% more favor`,
+    r0.favor > 0 && Math.abs(rm.favor - r0.favor * (1 + SD.VIGIL_MARKED_FAVOR_PERCENT / 100)) < 1e-9, `${r0.favor} -> ${rm.favor}`);
+  /** Walk the hunt to its entry and leave, recording what the world is paid. */
+  const leave = (m) => {
+    const d = m.h.serialize(); d.pos = d.map.entry; d.spoils = null;
+    const paid = [];
+    m.w.devotion = (h, n) => paid.push(['devotion', h, n]);
+    m.w.divinityTickets = (n) => paid.push(['divinity', n]);
+    const r = restoreMapHunt(d, m.w).exit();
+    return { r, paid };
+  };
+  const keptExit = leave(marked);
+  const vh = HOUSE_OF_ZONE[marked.zoneId];
+  check(`a vigil kept to a clean exit: +${SD.VIGIL_KEPT_DEVOTION} devotion with its house and ${SD.VIGIL_KEPT_DIVINITY} Divinity Ticket, and the exit says so`,
+    keptExit.r.ok && same(keptExit.paid, [['devotion', vh, SD.VIGIL_KEPT_DEVOTION], ['divinity', SD.VIGIL_KEPT_DIVINITY]])
+    && keptExit.r.reward.vigilKept?.house === vh, JSON.stringify(keptExit.paid));
+  const brokenExit = leave(kept);
+  check('...broken by an unmarked kill off blight: nothing', brokenExit.r.ok && brokenExit.paid.length === 0 && !brokenExit.r.reward.vigilKept
+    && kept.h.view().boon.vigilBroken === true);
+  const noneExit = leave(noVigil);
+  check('...and no vigil, no reward', noneExit.r.ok && noneExit.paid.length === 0);
+  // The save's side: devotion alone, toward the shrine, not the Bond.
+  PM.reset(); PM.setTribe('styx');
+  const st0 = PM.getStanding();
+  const bond0 = st0.bond.jeremiah || 0;
+  GAME_WORLD.devotion('jeremiah', SD.VIGIL_KEPT_DEVOTION);
+  check('GAME_WORLD.devotion raises your tribe\'s devotion with the house, not the Bond',
+    PM.getStanding().devotion.styx.jeremiah === SD.VIGIL_KEPT_DEVOTION && (PM.getStanding().bond.jeremiah || 0) === bond0);
+
   // Blight-mercy, on a hunt whose tile is blighted (through the save's path).
   const party = makeParty();
   const w = world(party); watch({ w });

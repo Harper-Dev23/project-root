@@ -164,6 +164,17 @@ export function isSpecialBeast(occ) {
 }
 
 /**
+ * Calmed by the prophet's vigil (owner 2026-10-03, co-op playtest): while a
+ * vigil is kept, an UNMARKED beast does not come for the party. It does not
+ * notice it, is not drawn to a fresh kill, and gives up a chase it was on.
+ * Stepping onto it still starts a fight (it is still wild). An apex, a
+ * quarry and a quest beast are never calmed.
+ */
+export function calmedByVigil(s, occ) {
+  return !!s?.vigil && occ?.kind === 'beast' && occ.mark === 'unmarked' && !isSpecialBeast(occ);
+}
+
+/**
  * A pack you fled from, or woke: it hunts the party, starting after `from`.
  * `leash`: the tile a territorial beast stood on; it gives up the moment the
  * party is more than LEASH_RANGE from there.
@@ -202,6 +213,7 @@ export function drawToKill(s, tile, now, rng) {
   let best = null, bestD = Infinity;
   for (const o of s.map.occupants) {
     if (o.kind !== 'beast' || o.state !== 'roaming' || temperOf(s, o) !== 'predator') continue;
+    if (calmedByVigil(s, o)) continue;
     const p = parseTileId(o.tile);
     if (p.section !== at.section) continue;
     const d = distance(p, at);
@@ -307,6 +319,7 @@ function fadeTrails(s) {
 export function predatorNotices(s, occ) {
   if (occ.noticed || occ.kind !== 'beast') return false;
   if (temperOf(s, occ) !== 'predator') return false;
+  if (calmedByVigil(s, occ)) return false;
   // One chase at a time: while any pack hunts the party, no predator takes
   // up another (WORLD_SIM: the map must not become a chase). Measured before
   // this rule: half of all wipes were a second hunter arriving straight
@@ -335,6 +348,8 @@ function stepPack(s, occ, now, ctx) {
     if (predatorNotices(s, occ)) { alert(occ, now); occ.noticed = true; }
     return;
   }
+  // A chase begun before the vigil, the vigil ends (calmedByVigil).
+  if ((occ.state === 'scenting' || occ.state === 'hunting') && calmedByVigil(s, occ)) { loseTrail(occ, now); return; }
   if (occ.state === 'scenting') {
     // Drawn to a kill (drawToKill): walk there at hunting pace. The party
     // still on it is an encounter; the party gone, it roams on.

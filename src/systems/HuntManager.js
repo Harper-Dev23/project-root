@@ -176,6 +176,10 @@ export const GAME_WORLD = {
   favor(house, amount) {
     Standing.earnFavor(ProgressionManager.getStanding(), ProgressionManager.tribe, house, amount);
   },
+  // Your tribe's devotion alone (a vigil kept; owner 2026-10-03).
+  devotion(house, amount) {
+    Standing.addDevotion(ProgressionManager.getStanding(), ProgressionManager.tribe, house, amount);
+  },
   followedHouse() {
     return Standing.followedHouse(ProgressionManager.getStanding(), ProgressionManager.tribe);
   },

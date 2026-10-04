@@ -280,12 +280,17 @@ console.log('=== the engine sets region flags ===');
   // The Vowback Crocodile (owner 2026-09-27): a quest beast on the map while
   // its step is active, marked as a quest site; its kill sets vowback_slain.
   {
-    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS), 'mb_weeping_heard', 'mb_signs_found']));
-    const hv = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 91 }, wv);
-    const dv = hv.serialize();
-    const vb = dv.map.occupants.find(o => o.quest === 'wr_apex');
-    const marked = hv.view().objectiveSites.find(o => o.step === 'wr_apex');
-    const nx = vb && mapNeighbors(dv.map, vb.tile).find(id => isPassable(dv.map.tiles[id]) && !dv.map.occupants.some(o => o.tile === id));
+    // A map where the Vowback has a free tile beside it to step from (which
+    // seed gives one moves with whatever else its hunt places).
+    let wv, hv, dv, vb, marked, nx;
+    for (let seed = 91; seed < 131 && !nx; seed++) {
+      wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS), 'mb_weeping_heard', 'mb_signs_found']));
+      hv = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed }, wv);
+      dv = hv.serialize();
+      vb = dv.map.occupants.find(o => o.quest === 'wr_apex');
+      marked = hv.view().objectiveSites.find(o => o.step === 'wr_apex');
+      nx = vb && mapNeighbors(dv.map, vb.tile).find(id => isPassable(dv.map.tiles[id]) && !dv.map.occupants.some(o => o.tile === id));
+    }
     for (const o of dv.map.occupants) o.noticed = true;
     if (nx) { dv.pos = nx; dv.fog[nx] = 'visible'; }
     const hv2 = restoreMapHunt(dv, wv);

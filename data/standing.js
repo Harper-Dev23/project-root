@@ -75,6 +75,15 @@ export const RITE_TICKETS_PER_LEVEL = 5;
 // the vigil's house (blight-mercy waives it). Placeholder until chunk 13.
 // Reader: HuntEngine._unmarkedKill.
 export const VIGIL_KILL_COST = 3;
+// The vigil's rewards (owner 2026-10-03, co-op playtest): sticking to the
+// marked beasts is clearly worth it. Under a vigil a MARKED kill pays this
+// much more favor (HuntEngine.winEncounter), and a clean exit with the vigil
+// kept (no unmarked kill off blight) pays the vigil's house this much of your
+// tribe's devotion, the claiming table that leads to its shrine, and
+// VIGIL_KEPT_DIVINITY Divinity Tickets (HuntEngine.exit). Placeholders.
+export const VIGIL_MARKED_FAVOR_PERCENT = 50;
+export const VIGIL_KEPT_DEVOTION = 10;
+export const VIGIL_KEPT_DIVINITY = 1;
 // Every unmarked kill (blight too) draws the region's false god's attention:
 // hidden standing + this much. Reader: HuntEngine._unmarkedKill.
 export const UNMARKED_KILL_FALSE_GOD = 1;

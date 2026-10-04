@@ -37,12 +37,15 @@ The beasts your plan sends you after are always marked.
 
 ## Vigils
 
-Some events ask you to keep a **vigil** for the region's prophet, for the rest of the hunt. Under a vigil:
+Some events ask you to keep a **vigil** for the region's prophet, for the rest of the hunt. The prophet's watch falls on the beasts as well as on you. Under a vigil:
 
-- killing an **unmarked** beast costs **3** standing with that prophet's house, unless it dies on blight: the prophet forgives a kill on blighted ground;
-- an unmarked beast you flee from is let go instead of following you.
+- **the unmarked are calmed**: an unmarked beast does not notice you, is not drawn to a fresh kill, and gives up a chase it was already on. One you flee from lets you go. Walking onto one still starts a fight. An apex, your plan's quarry and a quest beast are never calmed;
+- **marked kills pay 50% more favor**;
+- killing an **unmarked** beast costs **3** standing with that prophet's house and **breaks the vigil**, unless it dies on blight: the prophet forgives a kill on blighted ground.
 
-The fight's opening line tells you a pack's mark, and what killing it would cost under the vigil.
+**Keep the vigil** to a clean exit, with no unmarked beast killed off blight, and the house rewards you: **+10 devotion** for your tribe with that house (devotion is what lets your tribe hold a house and raise its shrine) and a **Divinity Ticket**.
+
+The fight's opening line tells you a pack's mark, and what killing it would cost under the vigil. The hunt's prophet line, top left, says whether the vigil still holds.
 
 ## Blight
 

@@ -150,6 +150,16 @@ export function earnFavor(st, playerTribe, house, amount) {
 }
 
 /**
+ * The player's tribe's devotion with a house alone moves (a vigil kept,
+ * owner 2026-10-03): the claiming table, not the Bond. Never below 0.
+ */
+export function addDevotion(st, playerTribe, house, amount) {
+  if (!HOUSES.includes(house) || !playerTribe || !st.devotion?.[playerTribe] || !Number.isFinite(amount)) return false;
+  st.devotion[playerTribe][house] = Math.max(0, devotionOf(st, playerTribe, house) + amount);
+  return true;
+}
+
+/**
  * A rival tribe's devotion with a house moves (an event's `standing` verb with
  * target "rival", chunk 11a: sabotage, EVENTS). Never below 0. A rival that
  * drops below the claim threshold keeps its hold; only the player's lead takes

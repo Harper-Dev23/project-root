@@ -51,11 +51,12 @@ const cultLineOpen = (pm, god, startedFlag) =>
   (pastTheVowback(pm) && isReported(pm, 'wr_apex'))
   || pm.hasQuestFlag(`cult_slain:${god}`) || pm.hasQuestFlag(startedFlag);
 
-/** The Unconfessed Dead is open: the Vowback slain, or a save already on it.
- *  (The Reeds' apex no longer opens it: since the split, owner 2026-10-03,
- *  that kill comes early, in The Hunter's Trade.) */
+/** The Unconfessed Dead is open once the Mourner's signs are found (owner
+ *  2026-10-03: the Vowback was too late), or the Vowback slain (a save that
+ *  got there first), or a save already on it. The Reeds' apex no longer
+ *  opens it: since the split that kill comes early, in The Hunter's Trade. */
 const ghostPartyOpen = (pm) =>
-  pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('gp_soul_found');
+  pm.hasQuestFlag('mb_signs_found') || pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('gp_soul_found');
 
 const anyLodgeFlag = (pm) =>
   pm.hasQuestFlag('lodge_styx') || pm.hasQuestFlag('lodge_zafaar') ||

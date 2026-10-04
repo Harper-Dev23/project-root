@@ -1391,6 +1391,35 @@ console.log('=== tempers and blood scent (playtest notes D2, 2026-09-29) ===');
     s4.map.occupants.find(o => o.id === pred().id).tile = Object.keys(s4.map.tiles)
       .filter(n => secOf(n) === secOf(s4.pos) && isPassable(s4.map.tiles[n]) && distance(parseTileId(n), parseTileId(s4.pos)) === W.SCENT_RANGE + 1).sort()[0];
     check(`scent: nothing past ${W.SCENT_RANGE} hexes`, W.drawToKill(s4, s4.pos, s4.time, () => 0) === null);
+
+    // The vigil calms the unmarked (owner 2026-10-03): they do not notice the
+    // party, are not drawn to a kill, and drop a chase they were on. A marked
+    // beast, an apex, a quarry or a quest beast is never calmed.
+    const v1 = copy(); v1.vigil = 'jeremiah';
+    const vp = v1.map.occupants.find(o => o.id === pred().id); vp.mark = 'unmarked';
+    check('vigil: an unmarked predator is not drawn to a kill', W.drawToKill(v1, v1.pos, v1.time, () => 0) === null && vp.state === 'roaming');
+    vp.noticed = false; vp.tile = mapNeighbors(v1.map, v1.pos).find(n => isPassable(v1.map.tiles[n]) && !v1.map.occupants.some(o => o.tile === n)) || vp.tile;
+    const noticedWithout = W.predatorNotices({ ...v1, vigil: null }, vp);
+    check('vigil: an unmarked predator does not notice the party (and without the vigil it would)', !W.predatorNotices(v1, vp) && noticedWithout);
+    const v2 = copy(); v2.vigil = 'jeremiah';
+    check('vigil: a marked predator is not calmed (still drawn)', W.drawToKill(v2, v2.pos, v2.time, () => 0)?.occ?.id === pred().id);
+    check('vigil: calmedByVigil only for an unmarked, ordinary beast, and only under a vigil',
+      W.calmedByVigil({ vigil: 'j' }, { kind: 'beast', mark: 'unmarked' }) && !W.calmedByVigil({ vigil: null }, { kind: 'beast', mark: 'unmarked' })
+      && !W.calmedByVigil({ vigil: 'j' }, { kind: 'beast', mark: 'marked' }) && !W.calmedByVigil({ vigil: 'j' }, { kind: 'beast', mark: 'unmarked', apex: true })
+      && !W.calmedByVigil({ vigil: 'j' }, { kind: 'cultist', mark: 'unmarked' }));
+  }
+
+  // A chase begun before the vigil ends when it starts: the next world step
+  // drops the trail.
+  {
+    const p = staged({ family: 'crocodile', mark: 'unmarked' });
+    p.h.move(p.next);
+    p.h.flee();
+    const was = occ(p.h, p.beast)?.state;
+    p.h._setVigil('jeremiah');
+    for (let i = 0; i < 4 && !p.h.encounter(); i++) p.h.wait();
+    check('vigil: an unmarked beast already hunting the party gives up once the vigil is kept',
+      was === 'hunting' && !p.h.encounter() && occ(p.h, p.beast)?.state !== 'hunting', `${was} -> ${occ(p.h, p.beast)?.state}`);
   }
 
   // A real win: the drawn predator walks to the kill, and a party still there fights it.

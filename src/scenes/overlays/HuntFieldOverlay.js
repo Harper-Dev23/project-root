@@ -558,9 +558,15 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
     // The prophet boon (chunk 10b): level and favor; hover for what it gives.
     const b = v.boon;
-    // A prophet's vigil (11d): unmarked kills off blight cost standing.
-    const vigilLine = b?.vigil ? `${houseName(b.vigil)}'s vigil: each unmarked kill off blight costs ${b.vigilCost} standing.` : null;
-    const vig = b?.vigil ? ' · vigil' : '';
+    // A prophet's vigil (11d; owner 2026-10-03): the unmarked are calmed,
+    // marked kills pay more, and keeping it to the exit pays devotion.
+    const vigilLine = b?.vigil ? [
+      `${houseName(b.vigil)}'s vigil: unmarked beasts are calmed and leave you be. Marked kills pay +${b.vigilMarkedPercent}% favor.`,
+      b.vigilBroken
+        ? `Broken: an unmarked beast died off blight (${b.vigilCost} standing each). No reward for keeping it this hunt.`
+        : `Each unmarked kill off blight costs ${b.vigilCost} standing and breaks it. Keep it to the exit: +${b.vigilKeptDevotion} devotion with ${houseName(b.vigil)} and ${b.vigilKeptDivinity} Divinity Ticket.`,
+    ].join(' ') : null;
+    const vig = b?.vigil ? (b.vigilBroken ? ' · vigil broken' : ' · vigil') : '';
     if (b?.pact) {
       // A false god's pact replaces the prophet's boon for this hunt (11c).
       const pt = txt(x + 12, y + 41, `✦ ${b.pact.name}'s pact ${b.pact.level} · ${b.pact.curse.name}${vig}`, 11, '#c89ae8');
@@ -971,6 +977,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'boon': return `${day(e.time)} ✦ ${houseName(e.house)}'s boon, level ${e.level}${e.name ? `: ${e.name}` : ''}.`;
       case 'exit': return `${day(e.time)} Left the hunt: ${e.huntPoints} Hunt Points.`;
       case 'wipe': return `${day(e.time)} The party fell.`;
+      // The prophet's vigil (owner 2026-10-03).
+      case 'vigil': return `${day(e.time)} ✦ ${houseName(e.house)} keeps a vigil: the unmarked are calmed.`;
+      case 'unmarked_kill': return e.cost ? `${day(e.time)} An unmarked kill: -${e.cost} standing, and the vigil is broken.` : null;
+      case 'vigil_kept': return `${day(e.time)} ✦ The vigil was kept: +${e.devotion} devotion with ${houseName(e.house)}, and a Divinity Ticket.`;
       default: return null;
     }
   }
@@ -1359,6 +1369,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (res.starved?.length) out.push(`Starving: ${res.starved.map(s => s.name).join(', ')} lost HP.`);
     if (kind === 'scout' && res.view?.exact) out.push('Scouted: you know exactly what is there.');
     if (kind === 'exit') out.push(`Hunt over. ${res.reward?.huntPoints || 0} Hunt Points${res.reward?.xpPool > 0 ? `, ${res.reward.xpPool} XP for the party` : ''}.`);
+    if (kind === 'exit' && res.reward?.vigilKept) out.push(`The vigil was kept: +${res.reward.vigilKept.devotion} devotion with ${houseName(res.reward.vigilKept.house)}, and a Divinity Ticket.`);
     if (kind === 'exit' && res.pack?.spoiled?.length) out.push('The fresh food you carried spoiled on the way home.');
     if (kind === 'move' && res.quiet) out.push(`Something is here, but ${res.quiet}.`);
     // Often a beast hidden from you on a tile that looked empty: say what it was.

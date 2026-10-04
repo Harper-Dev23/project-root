@@ -116,7 +116,9 @@ import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } f
 import { objectiveProgress, exitReward, completionRewardPercent } from './HuntObjectives.js';
 import { isItemInstance, createItemInstance } from './ItemFactory.js';
 import { houseOf } from './Standing.js';
-import { VIGIL_KILL_COST, UNMARKED_KILL_FALSE_GOD } from '../../data/standing.js';
+import {
+  VIGIL_KILL_COST, UNMARKED_KILL_FALSE_GOD, VIGIL_MARKED_FAVOR_PERCENT, VIGIL_KEPT_DEVOTION, VIGIL_KEPT_DIVINITY,
+} from '../../data/standing.js';
 import * as Boons from './Boons.js';
 import { FALSE_GODS, PACT_START, PACT_MAX, PACT_PRICE } from '../../data/falseGods.js';
 import {
@@ -489,12 +491,12 @@ function makeMapHunt(s, rng, worldRng, world) {
     _markLine(occ) {
       if (occ?.kind !== 'beast' || !occ.mark) return null;
       const onBlight = s.map.tiles[occ.tile]?.ground === 'blight';
-      if (occ.mark === 'marked') return 'These beasts are Marked by a prophet (gold).';
+      if (occ.mark === 'marked') return s.vigil ? `These beasts are Marked by a prophet (gold). Under the vigil they pay ${VIGIL_MARKED_FAVOR_PERCENT}% more favor.` : 'These beasts are Marked by a prophet (gold).';
       if (occ.mark === 'corrupted') return 'These beasts are Corrupted (purple).';
       if (!s.vigil) return 'These beasts are Unmarked (silver).';
       const house = s.vigil.charAt(0).toUpperCase() + s.vigil.slice(1);
       return onBlight ? `These beasts are Unmarked (silver), but on blight: ${house}'s vigil forgives the kill.`
-        : `These beasts are Unmarked (silver). Under ${house}'s vigil, killing them costs ${VIGIL_KILL_COST} standing.`;
+        : `These beasts are Unmarked (silver). Under ${house}'s vigil, killing them costs ${VIGIL_KILL_COST} standing and breaks the vigil.`;
     },
 
     /**
@@ -962,7 +964,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       const drawn = scent?.occ || null;
       if (drawn) this._log({ kind: 'blood_scent', occupant: drawn.id, family: this._bandOf(drawn) === 'identified' ? drawn.family : null, time: s.time });
       if (huntPoints > 0) world.awardHuntPoints(huntPoints);
-      const favor = this._earnFavor(Boons.killFavor(occ), 'kill');
+      // Under a vigil a marked kill is worth more (owner 2026-10-03).
+      const vigilBonus = s.vigil && occ.kind === 'beast' && occ.mark === 'marked' ? 1 + VIGIL_MARKED_FAVOR_PERCENT / 100 : 1;
+      const favor = this._earnFavor(Boons.killFavor(occ) * vigilBonus, 'kill');
       const unmarked = this._unmarkedKill(occ);
       this._reveal();
       this._log({ kind: 'win', occupant: occ.id, huntPoints, loot: found.length, time: s.time });
@@ -984,6 +988,8 @@ function makeMapHunt(s, rng, worldRng, world) {
       const mercy = s.map.tiles[occ.tile]?.ground === 'blight';
       const cost = s.vigil && !mercy ? VIGIL_KILL_COST : 0;
       if (cost) world.favor?.(s.vigil, -cost);
+      // It breaks the vigil: no reward for keeping it at the exit.
+      if (cost) s.vigilBroken = true;
       this._log({ kind: 'unmarked_kill', occupant: occ.id, vigil: s.vigil || null, mercy, cost, time: s.time });
       return { god, vigil: s.vigil || null, mercy, cost };
     },
@@ -1125,9 +1131,17 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (reward.huntPoints > 0) world.awardHuntPoints(reward.huntPoints);
       // Completion XP (chunk 13c): the world splits it over the party.
       if (reward.xpPool > 0) world.awardXP?.(reward.xpPool);
-      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, xpPool: reward.xpPool, omens: reward.omens };
+      // A vigil kept to the end (owner 2026-10-03): no unmarked beast killed
+      // off blight. The house's devotion, toward its shrine, and a Divinity Ticket.
+      const vigilKept = s.vigil && !s.vigilBroken ? { house: s.vigil, devotion: VIGIL_KEPT_DEVOTION, divinityTickets: VIGIL_KEPT_DIVINITY } : null;
+      if (vigilKept) {
+        world.devotion?.(vigilKept.house, vigilKept.devotion);
+        world.divinityTickets?.(vigilKept.divinityTickets);
+        this._log({ kind: 'vigil_kept', house: vigilKept.house, devotion: vigilKept.devotion, time: s.time });
+      }
+      s.reward = { completion: reward.completion, bonuses: reward.bonuses, huntPoints: reward.huntPoints, primaryDone: reward.primaryDone, xpPool: reward.xpPool, omens: reward.omens, vigilKept };
       this._log({ kind: 'exit', tile: s.pos, huntPoints: reward.huntPoints, xpPool: reward.xpPool, primaryDone: reward.primaryDone, time: s.time });
-      return { ok: true, reward, pack };
+      return { ok: true, reward: { ...reward, vigilKept }, pack };
     },
 
     /**
@@ -1890,6 +1904,9 @@ function makeMapHunt(s, rng, worldRng, world) {
         names: Boons.boonEffects(b.house, b.level).names,
         pact,
         vigil: s.vigil || null, vigilCost: VIGIL_KILL_COST,
+        // What keeping it pays (owner 2026-10-03), and whether it still can.
+        vigilBroken: !!s.vigilBroken, vigilMarkedPercent: VIGIL_MARKED_FAVOR_PERCENT,
+        vigilKeptDevotion: VIGIL_KEPT_DEVOTION, vigilKeptDivinity: VIGIL_KEPT_DIVINITY,
       };
     },
 

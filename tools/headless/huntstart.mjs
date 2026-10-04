@@ -136,7 +136,7 @@ PM.clearQuestFlag('elder_bonepile');
 check('a hunt after Trial 2 does not raise it', PM.offerBonepileAfterHunt() === false);
 
 console.log('');
-console.log('=== The Unconfessed Dead opens on the Vowback ===');
+console.log('=== The Unconfessed Dead opens on the Mourner\'s signs ===');
 {
   const { getQuestState } = await import('../../src/data/quests.js');
   const ud = QUEST_LINES.find(q => q.id === 'unconfessed_dead');
@@ -144,9 +144,16 @@ console.log('=== The Unconfessed Dead opens on the Vowback ===');
   PM.tribe = 'styx';
   PM.setQuestFlag(REEDS_DONE);
   check('scout hunts alone: not open', getQuestState(ud, PM) === 'locked', getQuestState(ud, PM));
-  PM.setQuestFlag('vowback_slain');
-  check('the Vowback slain, no apex kill: open, the Drowned Camp to find',
+  PM.setQuestFlag('mb_weeping_heard');
+  check('the Lament Pools alone: not open', getQuestState(ud, PM) === 'locked', getQuestState(ud, PM));
+  // Owner 2026-10-03: the Vowback was too late; the signs open it.
+  PM.setQuestFlag('mb_signs_found');
+  check('the signs found: open, the Drowned Camp to find',
     getQuestState(ud, PM) !== 'locked' && getStepState(step('ud_camp'), PM) === 'active');
+  PM.reset();
+  PM.tribe = 'styx';
+  PM.setQuestFlag('vowback_slain');
+  check('a save with the Vowback slain is open too', getStepState(step('ud_camp'), PM) === 'active');
   PM.reset();
   PM.tribe = 'styx';
   PM.setQuestFlag('apex_slain:reeds_of_gethsemane');
