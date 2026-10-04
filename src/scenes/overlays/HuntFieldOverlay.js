@@ -775,10 +775,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // leaving the co-op hunt takes the place of the actions.
     const acts = [];
     // A timid beast is walked past unless hunted on purpose (owner 2026-09-29).
-    // Offered on anything that might be one: a known timid beast, and a beast
-    // or a sensed shape whose temper you don't know yet (owner 2026-09-30).
-    // A guest moves too, so a guest is offered it as well.
-    const mightRun = occ && (occ.temper === 'timid' || occ.band === 'sensed' || (occ.kind === 'beast' && !occ.temper));
+    // Offered only on a beast you have made out (owner 2026-10-03: not on a
+    // shape you only sensed, which could be a beast, cultists or an event):
+    // a known timid one, or one whose temper you don't know yet. Something you
+    // cannot make out, you cannot chase. A guest moves too, so a guest is
+    // offered it as well.
+    const mightRun = occ?.kind === 'beast' && (occ.temper === 'timid' || !occ.temper);
     const moveActs = () => {
       if (move) acts.push([`Move here${occ?.temper === 'timid' ? ' (it will scatter)' : ''} (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
       if (move && mightRun) acts.push([occ.temper === 'timid' ? 'Hunt it' : 'Hunt it (if it tries to run)', () => this._move(id, { hunt: true }), 'danger']);
