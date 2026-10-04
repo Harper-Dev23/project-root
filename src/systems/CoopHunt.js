@@ -144,6 +144,16 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
 
     view() { return ch.hunt ? ch.hunt.view() : null; },
 
+    /** A quest flag as this hunt last set it (its ledger), or undefined if it
+     *  never touched it: what the save will hold once the hunt is home. */
+    ledgerFlag(flag) {
+      for (let i = ledger.length - 1; i >= 0; i--) {
+        const e = ledger[i];
+        if (e.verb === 'questFlag' && e.args[0] === flag) return !!e.args[1];
+      }
+      return undefined;
+    },
+
     /** The snapshot the server stores and relays. */
     snapshot() {
       return { v: COOP_SNAPSHOT_VERSION, id: ch.id, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals() };
@@ -183,7 +193,10 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     },
 
     /** Stop listening (the lobby or the game is leaving the hunt). */
-    dispose() { for (const off of unsubs.splice(0)) { try { off(); } catch { } } },
+    dispose() {
+      for (const off of unsubs.splice(0)) { try { off(); } catch { } }
+      emit('closed', null);
+    },
 
     /** Leave the co-op hunt: take this save's share home (a guest leaving
      *  early takes a clean exit, rule 7), stop listening, close the socket. */

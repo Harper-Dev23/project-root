@@ -17,6 +17,7 @@
 // few choices and renders what comes back.
 
 import GameState from '../systems/GameState.js';
+import ProgressionManager from '../systems/ProgressionManager.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { COLORS, FONTS, MENU_THEME } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
@@ -760,6 +761,20 @@ export default class CoopLobbyScene extends Phaser.Scene {
     coop.on('changed', mirrorVitals);
     coop.on('fightOver', mirrorVitals);
     mirrorVitals();
+    // Quest flags the hunt sets reach this save only at the take-home, so the
+    // Quest Log and the Elder read the hunt's ledger meanwhile (co-op
+    // playtest: steps a step behind). The town stayed awake through the hunt,
+    // so its 'wake' refresh never ran when the flags landed (the Elder only
+    // paid out after a trip to the Combat Pit): refresh it here instead.
+    ProgressionManager.setLiveQuestFlags((flag) => coop.ledgerFlag(flag));
+    const game = this.game;
+    const home = () => {
+      ProgressionManager.setLiveQuestFlags(null);
+      game.scene.getScene('TownScene')?._refreshQuestFlags?.();
+      game.scene.getScene('UIScene')?.refreshUI?.();
+    };
+    coop.on('tookHome', home);
+    coop.on('closed', home);
     openCoopHunt(this, coop);
   }
 

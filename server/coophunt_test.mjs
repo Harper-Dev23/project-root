@@ -323,6 +323,27 @@ console.log('=== the host\'s world ===');
   check('...and one cleared in this hunt reads as cleared', w.hasQuestFlag('in_the_save') === false);
 }
 
+console.log('=== quest flags the hunt set, read before the take-home (co-op playtest: a step behind) ===');
+{
+  const { getStepState, QUEST_LINES } = await import('../src/data/quests.js');
+  const step = QUEST_LINES.flatMap(q => q.steps || []).find(s => s.id === 'wr_hunt');
+  const flag = 'hunted:reeds_of_gethsemane';
+  const had = ProgressionManager.questFlags.slice();
+  ProgressionManager.questFlags = ProgressionManager.questFlags.filter(f => f !== flag);
+  check('the hunt has not set it yet: undefined, and the save says no', S.host.ledgerFlag(flag) === undefined && !ProgressionManager.hasQuestFlag(flag));
+  S.host.hostWorld.questFlag(flag, true);
+  ProgressionManager.setLiveQuestFlags((f) => S.host.ledgerFlag(f));
+  check('set in the hunt\'s ledger, the save reads it while the hunt is live; the save itself is untouched',
+    S.host.ledgerFlag(flag) === true && ProgressionManager.hasQuestFlag(flag) && !ProgressionManager.questFlags.includes(flag));
+  check('...so the Quest Log shows the step done, waiting for the Elder', getStepState(step, ProgressionManager) === 'report', getStepState(step, ProgressionManager));
+  ProgressionManager.setLiveQuestFlags(null);
+  check('cleared, the save reads only itself again', !ProgressionManager.hasQuestFlag(flag));
+  ProgressionManager.questFlags = had;
+  S.host.act(() => ({ ok: true }));       // publish the flag, as a real one would be
+  await until(() => S.guest.version === S.host.version, 'caught up');
+  check('a guest reads the same flag from its copy of the ledger', S.guest.ledgerFlag(flag) === true);
+}
+
 console.log('=== a guest back in a new tab ===');
 {
   S.guestC.disconnect();          // the old tab is closed

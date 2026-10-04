@@ -303,7 +303,21 @@ const ProgressionManager = {
   // ----- Quest flags -------------------------------------------------------
 
   hasQuestFlag(id) {
+    const live = this._liveQuestFlag?.(id);
+    if (live !== undefined) return !!live;
     return this.questFlags.includes(id);
+  },
+
+  /**
+   * A live co-op hunt's quest flags (co-op playtest, 2026-10-02: quests a
+   * step behind). They reach this save only when the hunt is taken home
+   * (CoopHunt's ledger), so until then hasQuestFlag asks the hunt first:
+   * `fn(id)` -> true / false, or undefined for "the hunt never touched it".
+   * Read-only and never saved; null clears it.
+   */
+  _liveQuestFlag: null,
+  setLiveQuestFlags(fn) {
+    this._liveQuestFlag = typeof fn === 'function' ? fn : null;
   },
 
   setQuestFlag(id) {
