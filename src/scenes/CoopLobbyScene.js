@@ -768,7 +768,20 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // paid out after a trip to the Combat Pit): refresh it here instead.
     ProgressionManager.setLiveQuestFlags((flag) => coop.ledgerFlag(flag));
     const game = this.game;
+    // Gear equipped on the map reaches the server's fights (co-op playtest:
+    // the next fight still wore the lobby's gear). Checked twice a second; it
+    // sends only when this player's hunters' equipment changed.
+    const client = this.client;
+    const myHunters = () => {
+      const refs = new Set(coop.party.filter(c => c.ownerId === client.playerId).map(c => c.instanceId || c.id));
+      return (GameState.party || []).filter(c => refs.has(c.instanceId || c.id));
+    };
+    const gearTimer = setInterval(() => {
+      try { coop.syncGear(myHunters(), toWireCharacter); } catch (err) { console.error('[coop gear]', err); }
+    }, 500);
+    coop.syncGear(myHunters(), toWireCharacter);
     const home = () => {
+      clearInterval(gearTimer);
       ProgressionManager.setLiveQuestFlags(null);
       game.scene.getScene('TownScene')?._refreshQuestFlags?.();
       game.scene.getScene('UIScene')?.refreshUI?.();

@@ -211,6 +211,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     sendHuntFight(version, spec, vitals) { return client.send({ t: 'huntFight', version, spec, vitals }); },
     flee() { return client.send({ t: 'flee' }); },
     huntEnd(reason, report) { return client.send({ t: 'huntEnd', reason, report }); },
+    // This player's own hunters as they are now (wire form): gear equipped on the map.
+    huntGear(hunters) { return client.send({ t: 'huntGear', hunters }); },
   };
 
   function emit(event, payload) {
@@ -317,6 +319,12 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
       case 'moveIntent':
         emit('moveIntent', msg);
+        break;
+
+      case 'huntRoster':
+        // Someone's gear changed on the map (huntGear): the party as it is now.
+        client.roster = msg.roster || [];
+        emit('huntRoster', client.roster);
         break;
 
       case 'huntEnded':

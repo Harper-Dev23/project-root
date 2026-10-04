@@ -78,8 +78,9 @@ fight in progress. `hunt_test.mjs` drives all of it through messages.
 |---|---|---|
 | `start` | host | starts the HUNT, not a fight: everyone gets `huntStarted` with the roster |
 | `huntSnapshot {version, snapshot}` | host | stored as-is, relayed to guests as `huntState`; version must go up; 512 KB cap |
-| `move {tile, version}` | anyone | reaches the host as `moveIntent`; refused if stale or a fight is live |
+| `move {tile, version, hunt?}` | anyone | reaches the host as `moveIntent` (`hunt`: hunt a timid beast instead of walking past it); refused if stale or a fight is live |
 | `huntRefuse {to, reason}` | host | tells one player why their move was not taken |
+| `huntGear {hunters}` | anyone | re-sends that player's OWN hunters (gear equipped on the map); placements kept; from the next fight; everyone gets `huntRoster` |
 | `huntFight {version, spec, vitals}` | host | `spec` is `HuntEngine.beginFight()` + `zoneId`; `vitals` the map's HP/MP. Runs a fight; `started` carries `huntFight` |
 | `flee` | host | the party breaks away, on one of the party's turns |
 | `huntEnd {reason, report}` | host | guests get `huntEnded`; the lobby goes |

@@ -344,6 +344,39 @@ console.log('=== quest flags the hunt set, read before the take-home (co-op play
   check('a guest reads the same flag from its copy of the ledger', S.guest.ledgerFlag(flag) === true);
 }
 
+console.log('=== gear equipped on the map reaches the next fight (co-op playtest) ===');
+{
+  // The guest's own hunters, as its save holds them; it swaps one hunter's
+  // weapon for a fresh one on the map.
+  const mine = S.guest.party.filter(c => c.ownerId === S.guestC.playerId).map(c => fromWireCharacter(toWireCharacter(c)));
+  const who = mine.find(c => c.equipment?.weaponMain) || mine[0];
+  const ref = who.instanceId || who.id;
+  const sentFirst = S.guest.syncGear(mine, toWireCharacter);
+  const sentAgain = S.guest.syncGear(mine, toWireCharacter);
+  await until(() => true, 'tick');
+  const swap = Object.entries(Items).find(([id, it]) => it?.type === 'weapon' && it.weaponType === Items[who.equipment?.weaponMain?.id || '']?.weaponType && id !== who.equipment?.weaponMain?.id)?.[0]
+    || Object.keys(Items).find(id => Items[id]?.type === 'weapon');
+  const { createItemInstance } = await import('../src/systems/ItemFactory.js');
+  who.equipment = { ...(who.equipment || {}), weaponMain: createItemInstance(swap, { rarity: 'rare', itemLevel: 3 }) };
+  const newInst = who.equipment.weaponMain.instanceId;
+  let rosters = 0; S.host.on('roster', () => rosters++);
+  const slotBefore = S.lobby.players.find(p => p.id === S.guestC.playerId).hunters.find(h => (h.instanceId || h.id) === ref)?.slotId;
+  const sent = S.guest.syncGear(mine, toWireCharacter);
+  await until(() => rosters > 0, 'the new roster at the host');
+  check('sent once at the start, not again unchanged, and again when the gear changed', sentFirst && !sentAgain && sent);
+  check('the server keeps the new gear for the next fight, and the hunter keeps its place',
+    S.lobby.players.find(p => p.id === S.guestC.playerId).hunters.find(h => (h.instanceId || h.id) === ref)?.equipment?.weaponMain?.instanceId === newInst
+    && slotBefore === S.lobby.players.find(p => p.id === S.guestC.playerId).hunters.find(h => (h.instanceId || h.id) === ref)?.slotId);
+  const onHost = S.host.party.find(c => (c.instanceId || c.id) === ref);
+  check('the host\'s copy of the hunter wears it, and keeps the HP the hunt left it',
+    onHost?.equipment?.weaponMain?.instanceId === newInst && onHost.currentHP <= onHost.maxHP);
+  S.guestC.lastError = null;
+  S.hostC.send({ t: 'huntGear', hunters: [toWireCharacter(who)] });
+  await until(() => S.hostC.lastError, 'the refusal');
+  check('nobody can re-send someone else\'s hunter', /are yours/.test(S.hostC.lastError || ''), S.hostC.lastError);
+  S.hostC.lastError = null;
+}
+
 console.log('=== a guest back in a new tab ===');
 {
   S.guestC.disconnect();          // the old tab is closed

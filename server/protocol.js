@@ -355,6 +355,32 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     },
 
     /**
+     * { t:'huntGear', hunters } - during a hunt, a player re-sends THEIR OWN
+     * hunters as they are now: gear equipped on the map (co-op playtest
+     * 2026-10-02: fights kept the lobby's gear). Only hunters already in their
+     * list are taken, and each keeps its placement. It counts from the next
+     * fight (a fight on now has its own copies). Everyone gets the new roster,
+     * so every copy of the party, the host's hunt's included, wears it too.
+     */
+    huntGear(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      const refOf = (x) => x?.instanceId || x?.id;
+      const incoming = new Map((Array.isArray(msg.hunters) ? msg.hunters : [])
+        .filter(x => x && typeof x === 'object').map(x => [refOf(x), x]));
+      let changed = 0;
+      player.hunters = player.hunters.map(old => {
+        const nu = incoming.get(refOf(old));
+        if (!nu) return old;
+        const { slotId, ownerId, ...rest } = nu;
+        changed++;
+        return old.slotId != null ? { ...rest, slotId: old.slotId } : rest;
+      });
+      if (!changed) return fail(conn, 'none of those hunters are yours');
+      broadcast(lobby, { t: 'huntRoster', roster: rosterOf(lobby) });
+    },
+
+    /**
      * { t:'claimSlot', ref, slotId }  -- place ONE OF YOUR OWN hunters.
      *
      * Fail-closed in the same way the action gate is: a hunter that is not in

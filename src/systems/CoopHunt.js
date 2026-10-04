@@ -246,6 +246,45 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
   }));
   unsubs.push(client.on('error', (reason) => emit('refused', reason)));
 
+  // Gear changed on the map (co-op playtest 2026-10-02: fights kept the
+  // lobby's gear). The server takes a player's re-sent hunters (huntGear) and
+  // sends everyone the party as it is now; each copy of a hunter is rebuilt
+  // in place (the hunt holds these objects), keeping where the hunt left its
+  // HP, MP and status.
+  unsubs.push(client.on('huntRoster', (roster) => {
+    for (const wire of roster || []) {
+      const c = byRef.get(refOf(wire));
+      if (!c) continue;
+      const { currentHP, currentMP, status } = c;
+      const next = fromWireCharacter(wire);
+      next.ownerId = wire.ownerId ?? c.ownerId ?? null;
+      for (const k of Object.keys(c)) if (!(k in next)) delete c[k];
+      Object.assign(c, next);
+      if (Number.isFinite(currentHP)) c.currentHP = Number.isFinite(c.maxHP) ? Math.min(currentHP, c.maxHP) : currentHP;
+      if (Number.isFinite(currentMP)) c.currentMP = Number.isFinite(c.maxMP) ? Math.min(currentMP, c.maxMP) : currentMP;
+      if (status) c.status = status;
+    }
+    emit('roster', party);
+  }));
+
+  /**
+   * Send this player's hunters to the server if their gear changed since the
+   * last send (`mine`: the save's own characters; `toWire`: CoopWire's
+   * toWireCharacter). Cheap to call often: it compares equipment only.
+   * Returns true when it sent.
+   */
+  let gearSent = null;
+  ch.syncGear = (mine, toWire) => {
+    if (!mine?.length || ch.tookHome) return false;
+    // The first call always sends: a player back after a reload may have
+    // changed gear the server never heard about.
+    const sig = JSON.stringify(mine.map(c => [c.instanceId || c.id, c.equipment || {}]));
+    if (sig === gearSent) return false;
+    gearSent = sig;
+    client.huntGear(mine.map(toWire));
+    return true;
+  };
+
   /**
    * This save's record of the hunt it is in (chunk 12d), kept with every
    * snapshot: enough to rejoin after a reload (the seat's client id, the
