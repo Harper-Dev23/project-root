@@ -15,13 +15,10 @@ import { HUNT_BEASTS, partBaseId } from '../../data/beastParts.js';
 import { createItemInstance, getItemComputedData, pickBaseId } from './ItemFactory.js';
 import { rollPartRarity } from './PartyStats.js';
 
-/** The weapon types the gamble draws from: the six current ones. */
-const GAMBLE_WEAPON_TYPES = ['sword_1h', 'dagger', 'staff', 'mace_2h', 'bow', 'axe_2h'];
 const RANK = ['common', 'uncommon', 'rare', 'epic'];
 const atLeast = (r, floor) => (RANK.indexOf(r) < RANK.indexOf(floor) ? floor : r);
 
 const plainBase = (it) => !it?.locked && !it?.unique && !it?.natural && !it?.historic && !it?.renownOrigin && !it?.part;
-const weaponPool = () => Object.entries(Items).filter(([, it]) => it?.type === 'weapon' && plainBase(it) && GAMBLE_WEAPON_TYPES.includes(it.weaponType)).map(([id]) => id);
 const armorPool = () => Object.entries(Items).filter(([, it]) => it?.type === 'armor' && plainBase(it) && it.slot !== 'ring' && it.slot !== 'amulet').map(([id]) => id);
 
 function weighted(rng, table) {
@@ -37,7 +34,7 @@ export function marketView(cultId, pm) {
   if (!m) return null;
   const stall = (id, def) => ({
     id, name: def.name, kind: def.kind,
-    ...(def.kind === 'gamble' ? { cost: def.cost, text: `A random ${m.gamble?.armorShare >= 50 ? 'piece of armour or a weapon (mostly armour)' : 'weapon or piece of armour (mostly weapons)'}, uncommon to epic. One in a hundred armour pieces comes up Corrupted.` } : {}),
+    ...(def.kind === 'gamble' ? { cost: def.cost, text: 'A random piece of armour, uncommon to epic. One in a hundred comes up Corrupted.' } : {}),
     ...(def.kind === 'goods' ? { goods: def.goods.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, cost: g.cost, text: Items[g.id]?.description || '' })) } : {}),
     ...(def.kind === 'part' ? { cost: def.cost, text: `A smuggled beast part, ${def.rarityFloor} or better.` } : {}),
   });
@@ -64,10 +61,10 @@ export function buy(cultId, stallId, { pm, bag, rng = Math.random, itemLevel = 1
   let item = null;
   if (def.kind === 'goods') item = createItemInstance(good.id, { itemLevel, rng });
   if (def.kind === 'gamble') {
-    const armour = rng() * 100 < (m.gamble?.armorShare ?? 50);
-    const id = pickBaseId(armour ? armorPool() : weaponPool(), itemLevel, { maxBaseTier: 2, rng });
+    // Armour only, at every market (owner 2026-10-03, co-op playtest).
+    const id = pickBaseId(armorPool(), itemLevel, { maxBaseTier: 2, rng });
     const rarity = weighted(rng, def.rarity);
-    const corrupted = armour && rng() < (def.corruptedChance || 0);
+    const corrupted = rng() < (def.corruptedChance || 0);
     item = id ? createItemInstance(id, { rarity, itemLevel, rng, ...(corrupted ? { renownOrigin: 'corrupted' } : {}) }) : null;
   }
   if (def.kind === 'part') {

@@ -187,13 +187,12 @@ console.log('=== the black markets ===');
     return out;
   };
   const c = roll('yargaleth', 6000, 11), d = roll('dagon', 6000, 12);
-  check(`the Choir's gamble leans to armour (${c.armour}/6000), the Temple's to weapons (${d.weapon}/6000)`, c.armour > 4300 && c.armour < 4700 && d.weapon > 4300 && d.weapon < 4700);
+  // Armour only at both (owner 2026-10-03, co-op playtest).
+  check(`both cults' gambles give armour only (${c.armour} + ${d.armour} of 12000)`, c.weapon === 0 && d.weapon === 0 && c.armour === 6000 && d.armour === 6000);
   const r = c.rarity;
   check(`uncommon 30 / rare 45 / epic 25 (${r.uncommon} / ${r.rare} / ${r.epic} of 6000)`, r.uncommon > 1650 && r.uncommon < 1950 && r.rare > 2550 && r.rare < 2850 && r.epic > 1350 && r.epic < 1650);
   const armourN = c.armour + d.armour, corrN = c.corrupted + d.corrupted;
   check(`about 1 armour piece in 100 comes up Corrupted (${corrN} of ${armourN})`, corrN / armourN > 0.005 && corrN / armourN < 0.016);
-  const w3 = roll('dagon', 3000, 13);
-  check(`weapons never do (${c.weapon + d.weapon + w3.weapon} weapons rolled, none Corrupted)`, c.corruptWeapon + d.corruptWeapon + w3.corruptWeapon === 0 && w3.weapon > 0);
   const pb = [], pp = { sinTickets: 300 };
   const prng = makeRng(14);
   for (let i = 0; i < 100; i++) M.buy('dagon', 'parts', { pm: pp, bag: pb, rng: prng, zoneId: REEDS, itemLevel: 3 });

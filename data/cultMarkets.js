@@ -22,8 +22,8 @@ export const SHARED_STALLS = {
     name: 'The Cult Gamble',
     kind: 'gamble',
     cost: 1,
-    // Better odds than the bone pile (60 / 30 / 10) at the same one ticket;
-    // Sin Tickets are harder to come by.
+    // Armour only, at every market (owner 2026-10-03). Better odds than the
+    // bone pile at one ticket; Sin Tickets are harder to come by.
     rarity: { uncommon: 30, rare: 45, epic: 25 },
     // One armour piece in a hundred comes up Corrupted (ItemFactory
     // RENOWN_ORIGINS.corrupted), as one bone-pile weapon in a hundred is Bone.
@@ -51,8 +51,7 @@ export const CULT_PARLEY = {
 };
 
 export const CULT_MARKETS = {
-  // The Drowned Choir (Yar'galeth): knowledge and vestments. Its gamble leans
-  // to armour.
+  // The Drowned Choir (Yar'galeth): knowledge and vestments.
   yargaleth: {
     name: 'The Tithe-Boat',
     cult: 'The Drowned Choir',
@@ -60,12 +59,10 @@ export const CULT_MARKETS = {
     eventId: 'tithe_boat',
     unlockFlag: 'choir_market_open',
     pct: 40,
-    gamble: { armorShare: 75 },
     stalls: ['gamble', 'tinctures'],
     own: null,
   },
-  // The Temple of the Gill (Dagon): goods and bodies. Its gamble leans to
-  // weapons, and it smuggles rare beast parts.
+  // The Temple of the Gill (Dagon): goods and bodies. It smuggles rare beast parts.
   dagon: {
     name: 'The Gill Market',
     cult: 'The Temple of the Gill',
@@ -73,7 +70,6 @@ export const CULT_MARKETS = {
     eventId: 'gill_market',
     unlockFlag: 'gill_market_open',
     pct: 40,
-    gamble: { armorShare: 25 },
     stalls: ['gamble', 'tinctures'],
     own: {
       id: 'parts',
