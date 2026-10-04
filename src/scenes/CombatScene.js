@@ -5598,7 +5598,8 @@ export default class CombatScene extends Phaser.Scene {
       // genuinely gone. Clearing it here stops a LATER unrelated refusal from
       // handing back an item that was already used.
       this._pendingItemUse = null;
-      const report = this._applyNetState(state);
+      // The hit units' new HP waits for their hits to play (_replayCoopEvents).
+      const report = this._applyNetState(state, { defer: this._takeCoopDefer() });
       if (!report.ok) {
         // Rather than draw a board we know is incomplete, ask for the whole
         // thing again. A silent partial apply is how two players end up
@@ -5618,21 +5619,7 @@ export default class CombatScene extends Phaser.Scene {
       this._logLocal({ segments: [{ text: `${msg.from}: ${msg.text}`, color: '#9fd8ff' }] });
     }));
 
-    off.push(client.on('log', (lines) => {
-      // Entries arrive STRUCTURED, so the detailed damage breakdown survives
-      // the trip and can still be hovered. Rehydrating turns the unit and
-      // skill references back into the real objects the tooltip code expects.
-      for (const line of lines) {
-        // Separators go in directly, exactly as _advanceTurn does in single
-        // player. They carry no text, so the text path has nothing to render.
-        if (line?.separator) {
-          this.combatEntries.push({ separator: true });
-          continue;
-        }
-        this._log(this._fromWireArg(line));
-      }
-      this._scheduleLogRender?.();
-    }));
+    off.push(client.on('log', (lines) => this._takeCoopLog(lines)));
 
     off.push(client.on('error', (reason) => {
       this._log(`⚠ ${reason}`);
@@ -5711,10 +5698,36 @@ export default class CombatScene extends Phaser.Scene {
     });
 
     // The opening board arrived before this scene existed, so apply it now.
+    // An enemy side that went first already took its turns on the server:
+    // its log and VFX came with the board (client.opening), and play first,
+    // the hit hunters' HP landing with each hit (co-op playtest 2026-10-03).
     if (client.state) {
-      this._applyNetState(client.state);
+      const opening = client.opening;
+      client.opening = null;           // once: a scene rebuilt later must not replay it
+      if (opening?.log?.length) this._takeCoopLog(opening.log);
+      if (opening?.events?.length) this._replayCoopEvents(opening.events);
+      this._applyNetState(client.state, { defer: this._takeCoopDefer() });
       this._afterCoopState();
     }
+  }
+
+  /**
+   * Log lines from the server. Entries arrive STRUCTURED, so the detailed
+   * damage breakdown survives the trip and can still be hovered; rehydrating
+   * turns the unit and skill references back into the real objects the
+   * tooltip code expects.
+   */
+  _takeCoopLog(lines) {
+    for (const line of lines || []) {
+      // Separators go in directly, exactly as _advanceTurn does in single
+      // player. They carry no text, so the text path has nothing to render.
+      if (line?.separator) {
+        this.combatEntries.push({ separator: true });
+        continue;
+      }
+      this._log(this._fromWireArg(line));
+    }
+    this._scheduleLogRender?.();
   }
 
   /**
@@ -5818,9 +5831,14 @@ export default class CombatScene extends Phaser.Scene {
    * own rhythm. Offsets are relative to the first event in the batch, since
    * the server's virtual clock counts from the start of the fight.
    *
-   * Deliberately visual-only. The authoritative board is applied immediately
-   * and separately, so a slow animation can never delay or alter the truth —
-   * at worst a damage number floats a moment after the bar it belongs to.
+   * The board is applied as it arrives, EXCEPT the units this batch hits:
+   * their new HP, status and knock-out wait for their own floating numbers
+   * (co-op playtest 2026-10-03: the bars dropped before the blows, and a
+   * hunter left the board before the hit that downed them). Each number steps
+   * its target's bar by that amount; the target's last number lands its whole
+   * new state. Anything still held lands when the replay's time is up
+   * (_flushDeferredNet), so a lost animation can delay the truth on screen
+   * but never change it.
    */
   _replayCoopEvents(events) {
     if (!Array.isArray(events) || !events.length) return;
@@ -5832,19 +5850,33 @@ export default class CombatScene extends Phaser.Scene {
     // player never stretches, and the fight would drift out of its own rhythm.
     const base = events[0].at || 0;
 
+    // Who this batch hits, and which number is each one's last: the board
+    // that follows holds their state back until then (_takeCoopDefer).
+    const refOf = (a) => (a && typeof a === 'object' && a.__unit !== undefined ? a.__unit : null);
+    const lastHit = new Map();
+    events.forEach((ev, i) => {
+      const ref = ev.fn === '_showFloatingNumber' ? refOf(ev.args?.[1]) : null;
+      if (ref != null) lastHit.set(ref, i);
+    });
+    this._coopDefer = new Set(lastHit.keys());
+
     let last = 0;
-    for (const ev of events) {
+    events.forEach((ev, i) => {
       const delay = Math.max(0, ((ev.at || 0) - base));
       last = Math.max(last, delay);
       const run = () => {
+        const ref = ev.fn === '_showFloatingNumber' ? refOf(ev.args?.[1]) : null;
+        if (ref != null) this._revealNetStep(ref, ev.args?.[0], !!ev.args?.[2], lastHit.get(ref) === i);
         if (this.combatEnded && ev.fn !== '_showFloatingNumber') return;
         const args = (ev.args || []).map(a => this._fromWireArg(a));
         try { this[ev.fn]?.(...args); }
         catch (err) { console.warn('[coop] could not replay ' + ev.fn, err); }
       };
-      if (delay <= 0) run();
-      else this.time.delayedCall(delay, run);
-    }
+      // Always on the clock, even at 0: the board that came with these events
+      // is applied right after this returns, and a hit must find its target's
+      // held state already there.
+      this.time.delayedCall(delay, run);
+    });
 
     // Hold this player's controls until the replay finishes.
     //
@@ -5873,8 +5905,56 @@ export default class CombatScene extends Phaser.Scene {
     clearTimeout(this._coopUnlockTimer);
     this._coopUnlockTimer = setTimeout(() => {
       this._coopReplaying = false;
+      this._flushDeferredNet();
       this._afterCoopState();
     }, Math.max(0, this._coopReplayDeadline - Date.now()));
+  }
+
+  /** The units the last replayed batch hits, for the board that follows it; once. */
+  _takeCoopDefer() {
+    const d = this._coopDefer;
+    this._coopDefer = null;
+    return d && d.size ? d : null;
+  }
+
+  /**
+   * A replayed floating number on a unit whose new state is held back
+   * (_replayCoopEvents): step its bar by the number, toward where the board
+   * says it ends; on its last number, land the whole held state.
+   */
+  _revealNetStep(ref, amount, isHeal, isLast) {
+    const u = this._deferredNet?.get(ref);
+    if (!u) return;
+    const unit = this._netUnits?.get(ref) || this._findUnitByRef(ref);
+    if (!unit) { this._deferredNet.delete(ref); return; }
+    if (isLast) {
+      this._deferredNet.delete(ref);
+      this._applyNetUnit(unit, u);
+      this._refreshNetUnitFx(unit);
+      this._refreshStatusEffectIcons?.(unit);
+    } else if (Number.isFinite(Number(amount)) && Number.isFinite(unit.currentHP)) {
+      const n = Number(amount);
+      unit.currentHP = isHeal
+        ? Math.min(Number.isFinite(unit.maxHP) ? unit.maxHP : Infinity, unit.currentHP + n)
+        : Math.max(u.hp, unit.currentHP - n);
+    }
+    this._updateHealthBars?.();
+    this._updateHPMPBars?.();
+  }
+
+  /** Land every held unit state at once (the replay is over, or a new board came). */
+  _flushDeferredNet() {
+    if (!this._deferredNet?.size) return;
+    for (const [ref, u] of this._deferredNet) {
+      const unit = this._netUnits?.get(ref) || this._findUnitByRef(ref);
+      if (!unit) continue;
+      this._applyNetUnit(unit, u);
+      this._refreshNetUnitFx(unit);
+      this._refreshStatusEffectIcons?.(unit);
+    }
+    this._deferredNet.clear();
+    this._updateHealthBars?.();
+    this._updateHPMPBars?.();
   }
 
   /** Turn a recorded argument back into something this scene can use. */
@@ -5994,9 +6074,11 @@ export default class CombatScene extends Phaser.Scene {
    * Returns a report of what it could not apply, so a caller can decide to
    * request a full resync instead of quietly rendering a wrong board.
    */
-  _applyNetState(state) {
+  _applyNetState(state, { defer = null } = {}) {
     const unknown = [];
     if (!state || !Array.isArray(state.units)) return { applied: 0, unknown, ok: false };
+    // Anything a previous board held back lands first: this board is newer.
+    this._flushDeferredNet();
 
     // A directory of everyone who has ever been on this board, refreshed
     // before each apply and never pruned.
@@ -6031,7 +6113,24 @@ export default class CombatScene extends Phaser.Scene {
     for (const u of state.units) {
       const unit = this._netUnits.get(u.ref) || this._findUnitByRef(u.ref);
       if (!unit) { unknown.push(u.ref); continue; }
+      // Hit by the batch now replaying: its state waits for its hits
+      // (_replayCoopEvents, _revealNetStep).
+      if (defer?.has(u.ref)) {
+        (this._deferredNet ||= new Map()).set(u.ref, u);
+        applied++;
+        continue;
+      }
+      this._applyNetUnit(unit, u);
+      applied++;
+    }
 
+    this._applyNetBoard(state);
+    return { applied, unknown, ok: unknown.length === 0 };
+  }
+
+  /** One unit's state from a co-op board (see _applyNetState). */
+  _applyNetUnit(unit, u) {
+    {
       // A unit that has just gone down needs its portrait moved off the board.
       //
       // Single player does this inside _onUnitKnockedOut, which a co-op client
@@ -6114,9 +6213,11 @@ export default class CombatScene extends Phaser.Scene {
       }
 
       unit.cooldowns = { ...(u.cooldowns || {}) };
-      applied++;
     }
+  }
 
+  /** The board-wide half of a co-op board (see _applyNetState). */
+  _applyNetBoard(state) {
     // Where everyone STANDS is authoritative too, and used not to be applied
     // at all. See _applyNetSlots for what that cost.
     this._applyNetSlots(state);
@@ -6150,24 +6251,9 @@ export default class CombatScene extends Phaser.Scene {
     // deterministic would mean seeding it, and nothing about the fight depends
     // on where a decorative shaft happens to sit.)
     for (const unit of this._netUnits.values()) {
-      // The fallen are skipped, not redrawn. A corpse keeps its `lodged`
-      // effects, so redrawing it pins the arrows to the empty slot it left --
-      // and the KO branch above has already cleared them, so this loop would
-      // simply put them back.
-      if (unit.status === 'incapacitated') continue;
-
-      const fx = unit.statusEffects || [];
-      // The runic ring is keyed on its MODS as well as its timer: turning Rune
-      // Channel on changes how the ring is drawn without changing how long it
-      // lasts, so a timer-only signature would never notice.
-      const zone = fx.find(e => e.id === 'runic_zone');
-      const sig = fx.filter(e => e.id === 'lodged').map(e => e.tint ?? '-').join(',')
-        + '|' + (zone?.turns ?? 0)
-        + '|' + JSON.stringify(zone?.mods ?? null);
-      if (unit.__netFxSig === sig) continue;
-      unit.__netFxSig = sig;
-      this._refreshLodgeSprites?.(unit);
-      this._refreshRunicZoneSprite?.(unit);
+      // A unit whose state is held back keeps its visuals until it lands.
+      if (this._deferredNet?.has(this._unitRef(unit))) continue;
+      this._refreshNetUnitFx(unit);
     }
 
     if (Number.isFinite(state.round)) this.combatRound = state.round;
@@ -6194,8 +6280,30 @@ export default class CombatScene extends Phaser.Scene {
     // arrived — the right people acted, but the strip named the wrong ones.
     this._refreshTurnOrderUI?.();
     this._highlightCurrentTurn?.();
+  }
 
-    return { applied, unknown, ok: unknown.length === 0 };
+  /** Redraw one unit's status-driven visuals if they changed (see _applyNetBoard). */
+  _refreshNetUnitFx(unit) {
+    {
+      // The fallen are skipped, not redrawn. A corpse keeps its `lodged`
+      // effects, so redrawing it pins the arrows to the empty slot it left --
+      // and the KO branch above has already cleared them, so this loop would
+      // simply put them back.
+      if (unit.status === 'incapacitated') return;
+
+      const fx = unit.statusEffects || [];
+      // The runic ring is keyed on its MODS as well as its timer: turning Rune
+      // Channel on changes how the ring is drawn without changing how long it
+      // lasts, so a timer-only signature would never notice.
+      const zone = fx.find(e => e.id === 'runic_zone');
+      const sig = fx.filter(e => e.id === 'lodged').map(e => e.tint ?? '-').join(',')
+        + '|' + (zone?.turns ?? 0)
+        + '|' + JSON.stringify(zone?.mods ?? null);
+      if (unit.__netFxSig === sig) return;
+      unit.__netFxSig = sig;
+      this._refreshLodgeSprites?.(unit);
+      this._refreshRunicZoneSprite?.(unit);
+    }
   }
 
   /**

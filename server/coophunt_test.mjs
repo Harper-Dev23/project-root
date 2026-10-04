@@ -287,8 +287,26 @@ console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran f
   S.guest.move(free[0], { hunt: true });
   await until(() => S.host.version > before || S.guestC.lastError, 'the guest\'s hunt move');
   check('a guest\'s "Hunt it" reaches the host: the frog stands and fights', S.host.view().encounter?.occId === 'o9001', S.guestC.lastError || JSON.stringify(S.host.view().encounter));
+  // Walked in blind, so the frog goes first. What it did before anyone could
+  // act comes WITH the fight's start (co-op playtest 2026-10-03: it rode
+  // along with the first player's action, a turn late).
+  if (S.host.view().encounter?.first === 'enemy') {
+    S.guestC.opening = undefined;
+    const r = S.host.fight();
+    await until(() => S.guestC.opening !== undefined && S.guest.fighting, 'the fight to start');
+    const op = S.guestC.opening;
+    check('an enemy-first fight starts with the enemies\' opening: their log and their VFX',
+      r.ok && op?.events?.length > 0 && op.events.some(e => e.fn === '_playAttackVFX' || e.fn === '_showFloatingNumber') && op.log?.length > 0,
+      `${op?.events?.length} events, ${op?.log?.length} log lines`);
+    let over = false; S.host.on('fightOver', () => { over = true; });
+    await until(() => S.lobby.session?.current()?.ownerId != null || !S.lobby.session, 'a hunter\'s turn');
+    if (S.lobby.session) S.host.flee();
+    await until(() => over, 'the flee');
+  } else {
+    check('the blind frog went first (an ambush)', false, JSON.stringify(S.host.view().encounter));
+    S.host.act(h => h.flee());
+  }
   // The host side, through the field facade the map scene uses.
-  S.host.act(h => h.flee());
   const back = S.host.view().pos;
   const step = S.host.view().moves.find(m => m.tile === free[1]);
   if (step) {

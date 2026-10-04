@@ -249,6 +249,10 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
         // the server sends one seed and everyone rolls the same equipment.
         // Without it each player saw the same enemy wearing different gear.
         client.gearSeed = Number.isFinite(msg.gearSeed) ? msg.gearSeed : null;
+        // What the enemies did before anyone could act (an enemy side that
+        // goes first): its log and VFX, for the board to play before the
+        // first turn. Absent on a rejoin, which joins the fight as it stands.
+        client.opening = msg.opening || null;
         client.status = CoopStatus.FIGHTING;
         emit('started', { state: msg.state, roster: client.roster, gearSeed: client.gearSeed });
         emit('status', client.status);

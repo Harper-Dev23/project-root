@@ -620,5 +620,13 @@ export function createSession({ CombatScene, players = [], scenarioId = 'trainin
     },
   };
 
+  // What the fight's opening did before anyone could act: an enemy side that
+  // goes first (an ambush, or better initiative) has already taken its turns
+  // inside startCombat. Its log and VFX go out with the opening board, so
+  // every client plays them before the first player acts (co-op playtest
+  // 2026-10-03: they used to ride along with the first player's action, so
+  // the HP was gone at the start and the enemies animated a turn late).
+  session.opening = { log: session.logSince(0), events: host.__takeEvents() };
+
   return session;
 }

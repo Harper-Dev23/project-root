@@ -491,7 +491,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       broadcast(lobby, { t: 'started', state: lobby.session.state(), roster,
         // The fight's enemy-gear seed. Clients roll their board from this so
         // everyone's enemies carry identical equipment and derived stats.
-        gearSeed: lobby.session.gearSeed });
+        gearSeed: lobby.session.gearSeed,
+        // What the enemies did before anyone could act (session.opening).
+        opening: lobby.session.opening });
     },
 
     /** { t:'act', actor, skill, target } */
@@ -608,7 +610,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       }
       h.lastOver = null;
       broadcast(lobby, { t: 'started', state: lobby.session.state(), roster: rosterOf(lobby),
-        gearSeed: lobby.session.gearSeed, huntFight: lobby.session.huntFight });
+        gearSeed: lobby.session.gearSeed, huntFight: lobby.session.huntFight, opening: lobby.session.opening });
       // A fight can end before anyone acts: an ambush that wipes the party in
       // the enemy's opening turns.
       if (lobby.session.isOver) huntFightOver(lobby);

@@ -227,9 +227,16 @@ try {
       JSON.stringify(scene.turnOrder.map(u => u.currentHP)) === before);
 
     await until(() => client.state.version > v, 'the server to answer');
-    await sleep(50);
-    check('and then the server\'s board landed',
-      JSON.stringify(scene.turnOrder.map(u => u.currentHP)) !== before);
+    // The hit unit's new HP waits for its hit to play (co-op playtest
+    // 2026-10-03: bars dropped before the blow); everything else is in.
+    const foeUnit = scene._netUnits?.get(foe.ref) || scene._findUnitByRef(foe.ref);
+    const after = client.state.units.find(u => u.ref === foe.ref)?.hp;
+    check('the struck foe\'s new HP is held back while its hit plays',
+      after < foe.hp && foeUnit?.currentHP === foe.hp && scene._deferredNet?.has(foe.ref),
+      `server ${after}, shown ${foeUnit?.currentHP}`);
+    await sleep(Math.max(0, (scene._coopReplayDeadline || 0) - Date.now()) + 80);
+    check('and then the server\'s board landed, all of it, by the end of the replay',
+      JSON.stringify(scene.turnOrder.map(u => u.currentHP)) !== before && foeUnit?.currentHP === after && !scene._deferredNet?.size);
   }
 
   // The block above spent that hunter's major action, so hand the turn over
