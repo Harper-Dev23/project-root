@@ -315,10 +315,37 @@ console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
   PM.tribe = 'styx';
   ['hunted:reeds_of_gethsemane', 'mb_weeping_heard', 'mb_signs_found', 'vowback_slain'].forEach(f => PM.setQuestFlag(f));
   PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_pools', 'wr_signs'];
-  check("the Vowback not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_apex'));
+  check("the Vowback not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.id === 'mourning_beast'));
   claimQuestRewards(PM);
-  check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_apex')
+  check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.id === 'mourning_beast')
     && getStepState(step('wr_offer'), PM) === 'active');
+}
+
+console.log('');
+console.log('=== a save mid-line under the old order: the Vowback reported, on the Lament Pools (the owner\'s run) ===');
+{
+  const { getQuestState, pendingReports } = await import('../../src/data/quests.js');
+  const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
+  const { offersReady } = await import('../../src/systems/Omens.js');
+  const REEDS = 'reeds_of_gethsemane';
+  const trade = QUEST_LINES.find(q => q.id === 'hunters_trade');
+  PM.reset();
+  PM.tribe = 'styx';
+  ['hunted:' + REEDS, 'hunted_cull:' + REEDS, 'hunted_apex:' + REEDS, 'apex_slain:' + REEDS, 'vowback_slain'].forEach(f => PM.setQuestFlag(f));
+  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_apex'];
+  const tickets = PM.huntTickets;
+  check('The Hunter\'s Trade reads completed', getQuestState(trade, PM) === 'completed');
+  check('the Vowback is done, not owed again, and not paid again', getStepState(step('wr_apex'), PM) === 'completed'
+    && !pendingReports(PM).some(h => h.step.id === 'wr_apex') && claimQuestRewards(PM).length === 0 && PM.huntTickets === tickets);
+  check('...and no Vowback quest site on the next hunt', !questSitesFor(REEDS, PM).some(q => q.step === 'wr_apex'));
+  check('the Lament Pools are the step, with their site', getStepState(step('wr_pools'), PM) === 'active' && questSitesFor(REEDS, PM).some(q => q.step === 'wr_pools'));
+  check('the tribe\'s offer waits: not active, not ready', getStepState(step('wr_offer'), PM) !== 'active' && !offersReady(PM, REEDS).some(b => b.id === 'mourning_beast'));
+  PM.setQuestFlag('mb_weeping_heard');
+  check('the Pools heard: reported, the signs are next', claimQuestRewards(PM).map(p => p.stepId).join() === 'wr_pools' && getStepState(step('wr_signs'), PM) === 'active');
+  PM.setQuestFlag('mb_signs_found');
+  check('the signs found but not reported: the offer still waits', !offersReady(PM, REEDS).some(b => b.id === 'mourning_beast'));
+  check('...reported: the offer is ready and the questline\'s last step', claimQuestRewards(PM).map(p => p.stepId).join() === 'wr_signs'
+    && offersReady(PM, REEDS).some(b => b.id === 'mourning_beast') && getStepState(step('wr_offer'), PM) === 'active');
 }
 
 console.log('');

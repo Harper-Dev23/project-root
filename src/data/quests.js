@@ -426,7 +426,9 @@ export const QUEST_LINES = [
         id:          'wr_offer',
         label:       'The Tribe\'s Offer',
         description: "Visit your tribe's lodge and open Tribe HQ. Your tribe knows what the signs mean, and has something for you.",
-        isActive:   (pm) => pastTheVowback(pm),
+        // The signs too: a save that killed the Vowback under the old order
+        // (before the Pools) still walks them first.
+        isActive:   (pm) => pastTheVowback(pm) && pm.hasQuestFlag('mb_signs_found'),
         isComplete: (pm) => pm.hasQuestFlag('mb_offer_taken'),
       },
     ],
@@ -820,6 +822,10 @@ function isReported(pm, stepId) {
  * | 'active' | 'upcoming'.
  */
 export function getStepState(step, pm) {
+  // A step already reported is done, wherever its line now puts it (the
+  // split, owner 2026-10-03: a save that reported the Vowback before the
+  // Pools existed ahead of it).
+  if (step.reward && typeof pm?.isStepDone === 'function' && pm.isStepDone(step.id)) return 'completed';
   const prev = PREV_REPORT.get(step.id);
   if (prev && !isReported(pm, prev)) return 'upcoming';
   if (step.isComplete(pm)) return step.reward && !isReported(pm, step.id) ? 'report' : 'completed';

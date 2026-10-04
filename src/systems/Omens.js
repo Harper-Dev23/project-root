@@ -63,9 +63,12 @@ export function claimBossPlan(pm, bag, bossId) {
  *  (`offerAfterStep`, batch 4b chunk 1). A save with no report record counts
  *  as reported, as in quests.js. */
 function offerOpen(pm, boss) {
-  if (!pm?.hasQuestFlag?.(boss.offerAfter)) return false;
-  if (!boss.offerAfterStep || typeof pm.isStepDone !== 'function') return true;
-  return pm.isStepDone(boss.offerAfterStep);
+  // `offerAfter` / `offerAfterStep` may each name several: all must hold.
+  const flags = [].concat(boss.offerAfter || []);
+  if (!flags.every(f => pm?.hasQuestFlag?.(f))) return false;
+  const steps = [].concat(boss.offerAfterStep || []);
+  if (!steps.length || typeof pm.isStepDone !== 'function') return true;
+  return steps.every(id => pm.isStepDone(id));
 }
 
 /** Bosses whose first, free offer is waiting: the step before it done, not yet taken. */

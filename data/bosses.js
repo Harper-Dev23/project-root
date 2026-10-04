@@ -117,10 +117,12 @@ export const BOSSES = {
     zone: 'reeds_of_gethsemane',
     plan: 'mourners_offering',
     unlockFlag: 'mb_offer_taken',
-    // After the Vowback (owner 2026-10-03: it now comes between the signs
-    // and the offer).
-    offerAfter: 'vowback_slain',
-    offerAfterStep: 'wr_apex',
+    // After the signs AND the Vowback, both reported (owner 2026-10-03: the
+    // Vowback now comes between the signs and the offer). Both, so a save that
+    // killed the Vowback under the old order still walks the Pools and the
+    // signs before its offer.
+    offerAfter: ['mb_signs_found', 'vowback_slain'],
+    offerAfterStep: ['wr_signs', 'wr_apex'],
     historic: 'burden_of_dreams',
     loot: {
       family: 'mourning_beast',
