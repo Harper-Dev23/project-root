@@ -64,14 +64,17 @@ export function describePlanHeader(inst) {
 
 /**
  * The map sizes the vendor sells (owner 2026-09-29, batch 4b chunk 2): Small
- * from the start, Medium once the Vowback is reported to the Elder (quests.js
- * wr_apex), Large after the first boss (the engine's boss_slain:<id>). A
+ * from the start, Medium once The Hunter's Trade's apex is reported to the
+ * Elder (quests.js wr_apexpool; the Vowback, wr_apex, for a save that reported
+ * it first), Large after the first boss (the engine's boss_slain:<id>). A
  * stand-in save with no report record (a harness's) sells every size.
  */
 export function planSizesOpen(pm) {
   if (typeof pm?.isStepDone !== 'function') return ['small', 'medium', 'large'];
   const sizes = ['small'];
-  if (pm.isStepDone('wr_apex')) sizes.push('medium');
+  // Medium once The Hunter's Trade is done (its apex reported; owner
+  // 2026-10-03 split the line), or for a save that reported the Vowback first.
+  if (pm.isStepDone('wr_apexpool') || pm.isStepDone('wr_apex')) sizes.push('medium');
   if ((pm.questFlags || []).some(f => f.startsWith('boss_slain:'))) sizes.push('large');
   return sizes;
 }

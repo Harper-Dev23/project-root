@@ -117,8 +117,10 @@ export const BOSSES = {
     zone: 'reeds_of_gethsemane',
     plan: 'mourners_offering',
     unlockFlag: 'mb_offer_taken',
-    offerAfter: 'mb_signs_found',
-    offerAfterStep: 'wr_signs',
+    // After the Vowback (owner 2026-10-03: it now comes between the signs
+    // and the offer).
+    offerAfter: 'vowback_slain',
+    offerAfterStep: 'wr_apex',
     historic: 'burden_of_dreams',
     loot: {
       family: 'mourning_beast',

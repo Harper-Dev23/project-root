@@ -388,9 +388,10 @@ console.log('=== 14b-5: the Ghost Party ===');
   // The questline and the offer.
   const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
   const { offersReady, takeFirstOffer } = await import('../../src/systems/Omens.js');
-  const flags = new Set(['apex_slain:' + REEDS]);
+  const flags = new Set(['vowback_slain']);   // the Vowback opens it (owner 2026-10-03: no longer the Reeds' apex)
   const pm = { tribe: 'styx', completedScenarios: [], hasQuestFlag: (x) => flags.has(x) };
-  const sites = () => questSitesFor(REEDS, pm).map(q => q.eventId).filter(e => e && e !== 'reeds_lament_pools');
+  // This line's own sites (the Vowback also opens the cult lines, whose sites are theirs).
+  const sites = () => questSitesFor(REEDS, pm).filter(q => /^ud_/.test(q.step)).map(q => q.eventId);
   const walk = [sites()]; flags.add('gp_soul_found'); walk.push(sites()); flags.add('gp_names_known'); walk.push(sites());
   check('The Unconfessed Dead: the Drowned Camp, then the graves, then the offer', JSON.stringify(walk) === JSON.stringify([['reeds_drowned_camp'], ['reeds_unmarked_graves'], []])
     && offersReady(pm, REEDS).some(b => b.id === 'ghost_party'), JSON.stringify(walk));

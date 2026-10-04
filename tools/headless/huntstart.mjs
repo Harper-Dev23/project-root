@@ -96,8 +96,9 @@ console.log('=== when the cults are introduced (batch 4b chunk 3) ===');
   PM.setQuestFlag('cult_slain:yargaleth');
   check('a Drowned Choir band fought: the Choir line alone opens', getStepState(step('hb_singing'), PM) === 'active'
     && getQuestState(temple, PM) === 'locked');
-  PM.setQuestFlag('vowback_slain');
-  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool'];
+  // The Vowback now follows the Pools and the Signs (owner 2026-10-03).
+  ['mb_weeping_heard', 'mb_signs_found', 'vowback_slain'].forEach(f => PM.setQuestFlag(f));
+  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_pools', 'wr_signs'];
   check('the Vowback slain but not reported: the Temple still waits', getQuestState(temple, PM) === 'locked');
   claimQuestRewards(PM);
   check('the Vowback reported: both lines, side by side', getStepState(step('ob_offerings'), PM) === 'active'
@@ -149,7 +150,11 @@ console.log('=== The Unconfessed Dead opens on the Vowback ===');
   PM.reset();
   PM.tribe = 'styx';
   PM.setQuestFlag('apex_slain:reeds_of_gethsemane');
-  check('a save opened by the apex (before batch 4) stays open', getStepState(step('ud_camp'), PM) === 'active');
+  // Since the split (owner 2026-10-03) the Reeds' apex comes early, in The
+  // Hunter's Trade, so it no longer opens the line; a save already on it stays.
+  check('the Reeds\' apex alone does not open it', getQuestState(ud, PM) === 'locked', getQuestState(ud, PM));
+  PM.setQuestFlag('gp_soul_found');
+  check('a save already on it stays open', getQuestState(ud, PM) !== 'locked');
 }
 
 console.log('');
@@ -244,11 +249,10 @@ const saved = JSON.parse(JSON.stringify(PM.serialize()));
 PM.reset();
 PM.deserialize(saved);
 check('a save round trip does not pay it again', claimQuestRewards(PM).length === 0 && PM.huntTickets === before);
-PM.setQuestFlag('vowback_slain');
-PM.setQuestFlag('choir_heard');
+['hunted_cull:reeds_of_gethsemane', 'hunted_apex:reeds_of_gethsemane', 'mb_weeping_heard', 'choir_heard'].forEach(f => PM.setQuestFlag(f));
 paid = claimQuestRewards(PM);
-// A Vowback kill carries the Cull and Apex steps with it (a save past them, chunk 2).
-const chain = ['wr_cull', 'wr_apexpool', 'wr_apex', 'hb_singing'];
+// Both lines move in one visit: The Hunter's Trade, then the Reeds' own line.
+const chain = ['wr_cull', 'wr_apexpool', 'wr_pools', 'hb_singing'];
 check('steps finished on one hunt: all paid, in quest order',
   paid.map(p => p.stepId).join() === chain.join()
     && PM.huntTickets === before + chain.reduce((n, id) => n + step(id).reward.huntTickets, 0),
@@ -258,7 +262,7 @@ check('the Combat Pit still pays its own tickets', PM.onScenarioComplete('traini
 console.log('');
 console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
 {
-  const { pendingReports } = await import('../../src/data/quests.js');
+  const { pendingReports, getQuestState } = await import('../../src/data/quests.js');
   const { questSitesFor } = await import('../../src/systems/HuntQuests.js');
   const { offersReady } = await import('../../src/systems/Omens.js');
   const REEDS = 'reeds_of_gethsemane';
@@ -288,22 +292,25 @@ console.log('=== reporting to Elder Varek (batch 4b chunk 1) ===');
   check('an apex killed on another plan does not count: it takes an Apex plan', getStepState(step('wr_apexpool'), PM) === 'active');
   PM.setQuestFlag('hunted_apex:reeds_of_gethsemane');
   claimQuestRewards(PM);
-  check('an Apex hunt reported: the Vowback is the step, and the next hunt marks it', getStepState(step('wr_apex'), PM) === 'active'
-    && questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
+  check("an Apex hunt reported: The Hunter's Trade is done, and the Reeds' own line is on the Lament Pools",
+    getQuestState(QUEST_LINES.find(q => q.id === 'hunters_trade'), PM) === 'completed'
+    && getStepState(step('wr_pools'), PM) === 'active' && questSitesFor(REEDS, PM).some(s => s.step === 'wr_pools')
+    && !questSitesFor(REEDS, PM).some(s => s.step === 'wr_apex'));
   // Several done before a visit (a save from before reports): all in one visit, in order.
   PM.reset();
   PM.tribe = 'styx';
-  ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard'].forEach(f => PM.setQuestFlag(f));
+  ['hunted:reeds_of_gethsemane', 'hunted_cull:reeds_of_gethsemane', 'hunted_apex:reeds_of_gethsemane',
+    'mb_weeping_heard', 'mb_signs_found', 'vowback_slain'].forEach(f => PM.setQuestFlag(f));
   const all = claimQuestRewards(PM).map(p => p.stepId).join();
-  check('steps done before the visit are reported together, in order', all === 'wr_hunt,wr_cull,wr_apexpool,wr_apex,wr_pools', all);
-  // The lodge's first offer waits on the report too.
+  check('steps done before the visit are reported together, in order', all === 'wr_hunt,wr_cull,wr_apexpool,wr_pools,wr_signs,wr_apex', all);
+  // The lodge's first offer waits on the Vowback's report (owner 2026-10-03).
   PM.reset();
   PM.tribe = 'styx';
-  ['hunted:reeds_of_gethsemane', 'vowback_slain', 'mb_weeping_heard', 'mb_signs_found'].forEach(f => PM.setQuestFlag(f));
-  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_apex', 'wr_pools'];
-  check("Signs of the Mourner not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs'));
+  ['hunted:reeds_of_gethsemane', 'mb_weeping_heard', 'mb_signs_found', 'vowback_slain'].forEach(f => PM.setQuestFlag(f));
+  PM.completedQuestSteps = ['wr_hunt', 'wr_cull', 'wr_apexpool', 'wr_pools', 'wr_signs'];
+  check("the Vowback not reported: the tribe's offer waits", !offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_apex'));
   claimQuestRewards(PM);
-  check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_signs')
+  check('...reported: it is ready', offersReady(PM, REEDS).some(b => b.offerAfterStep === 'wr_apex')
     && getStepState(step('wr_offer'), PM) === 'active');
 }
 

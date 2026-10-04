@@ -18,7 +18,7 @@
  *   'placeholder'→ future content stub (shown with "Coming Soon" note)
  */
 
-import { VOWBACK_CROCODILE } from '../../data/zones.js';
+import { VOWBACK_CROCODILE, ZONES } from '../../data/zones.js';
 
 // ── Shorthand helpers used inside step functions ──────────────────────────────
 
@@ -33,8 +33,12 @@ const historicTalkPending = (pm) => !historicExplained(pm)
   && (pm.hasQuestFlag('historic_elder_visit') || pm.hasQuestFlag('bloodthirster_elder_visit'));
 const firstHistoricFlag = (pm) => (pm.questFlags || []).find(f => f.startsWith('historic_first:')) || null;
 
-/** The Vowback is dead (or, a save from before it was a quest beast, the Lament Pools were reached). */
-const pastTheVowback = (pm) => pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('mb_weeping_heard');
+/** The Vowback is dead. (Since the split, owner 2026-10-03, the Lament Pools
+ *  come BEFORE it, so reaching them no longer counts.) */
+const pastTheVowback = (pm) => pm.hasQuestFlag('vowback_slain');
+/** A hunt-plan flag (`hunted`, `hunted_cull`, `apex_slain`, ...) in ANY
+ *  region: The Hunter's Trade is done wherever the party hunts. */
+const anyRegion = (pm, prefix) => Object.keys(ZONES).some(z => pm.hasQuestFlag(`${prefix}:${z}`));
 
 /**
  * A cult's questline opens (owner 2026-09-29, batch 4b chunk 3): when the
@@ -47,10 +51,11 @@ const cultLineOpen = (pm, god, startedFlag) =>
   (pastTheVowback(pm) && isReported(pm, 'wr_apex'))
   || pm.hasQuestFlag(`cult_slain:${god}`) || pm.hasQuestFlag(startedFlag);
 
-/** The Unconfessed Dead is open: the Vowback slain, or (a save that opened
- *  it before batch 4) the Reeds' apex. */
+/** The Unconfessed Dead is open: the Vowback slain, or a save already on it.
+ *  (The Reeds' apex no longer opens it: since the split, owner 2026-10-03,
+ *  that kill comes early, in The Hunter's Trade.) */
 const ghostPartyOpen = (pm) =>
-  pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane');
+  pm.hasQuestFlag('vowback_slain') || pm.hasQuestFlag('gp_soul_found');
 
 const anyLodgeFlag = (pm) =>
   pm.hasQuestFlag('lodge_styx') || pm.hasQuestFlag('lodge_zafaar') ||
@@ -330,10 +335,13 @@ export const QUEST_LINES = [
   // (owner 2026-09-29).
 
   {
-    id:          'weeping_in_the_reeds',
-    category:    'region',
-    title:       'The Weeping in the Reeds',
-    description: 'The Reeds of Gethsemane grieve. Something in them grieves loudest of all.',
+    // Split from The Weeping in the Reeds (owner 2026-10-03, co-op playtest):
+    // the plan types, learned in order, in ANY region (four starting regions
+    // to come). Its step ids are the old ones, so a save's reports carry over.
+    id:          'hunters_trade',
+    category:    'main',
+    title:       "The Hunter's Trade",
+    description: 'Every region is learned the same way: hunt it, thin its herds, and kill what rules it.',
     isAvailable: (pm) => pm.tribe !== null,
     steps: [
       {
@@ -341,65 +349,75 @@ export const QUEST_LINES = [
         // A marker over the Hunt Gate while this is the step to do (TownScene
         // DERIVED_MARKERS: no save flag, the step's own state decides).
         flags:       ['hunt_gate'],
-        label:       'Hunt the Reeds',
+        label:       'Hunt a Region',
         reward:      { huntTickets: 4, item: { base: 'plan_cull_small', rarity: 'common' },
-                       text: 'You came back from the Reeds with the work done. The camp pays for that. Now thin the herds: take this plan.' },
-        description: 'Leave by the Hunt Gate with a hunt plan for the Reeds of Gethsemane, and see its main objective done.',
+                       text: 'You came back with the work done. The camp pays for that. Now thin the herds: take this plan.' },
+        description: 'Leave by the Hunt Gate with a hunt plan for any region, and see its main objective done.',
         isActive:   (pm) => pm.tribe !== null,
-        isComplete: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
+        isComplete: (pm) => anyRegion(pm, 'hunted') || anyRegion(pm, 'apex_slain'),
       },
-      // The Reeds' opening (owner 2026-09-29, batch 4b chunk 2): the Elder hands
-      // out a Cull plan, then an Apex plan, so the first named fight comes
-      // after two plan types and guaranteed fights. A save past the Vowback
-      // counts both as done (they pay on its next visit to the tower).
       {
         id:          'wr_cull',
-        label:       'Thin the Reeds',
+        label:       'Thin the Herds',
+        // Elder Varek hands out another if it is lost (QuestRewards.replacementPlan).
+        planFrom:    'wr_hunt',
         reward:      { huntTickets: 4, item: { base: 'plan_apex_small', rarity: 'uncommon' },
-                       text: 'The herds are thinner, and the reeds quieter for it. Something larger rules them. Find it.' },
-        description: 'Take a Cull plan into the Reeds of Gethsemane and see its main objective done. Elder Varek gave you one; the Greenhollow Satchel sells them too.',
-        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
-        isComplete: (pm) => pm.hasQuestFlag('hunted_cull:reeds_of_gethsemane') || pastTheVowback(pm),
+                       text: 'The herds are thinner, and quieter for it. Something larger rules them. Find it.' },
+        description: 'Take a Cull plan into any region and see its main objective done. Elder Varek gave you one, and will give you another if you lose it; the Greenhollow Satchel sells them too.',
+        isActive:   (pm) => anyRegion(pm, 'hunted'),
+        isComplete: (pm) => anyRegion(pm, 'hunted_cull'),
       },
       {
         id:          'wr_apexpool',
-        label:       "The Reeds' Apex",
-        reward:      { huntTickets: 6, text: 'So that is what rules the reeds. The mourners speak of something older still.' },
-        description: 'Take an Apex plan into the Reeds of Gethsemane and kill the beast that rules them. Elder Varek gave you one.',
-        isActive:   (pm) => pm.hasQuestFlag('hunted_cull:reeds_of_gethsemane'),
-        isComplete: (pm) => pm.hasQuestFlag('hunted_apex:reeds_of_gethsemane') || pastTheVowback(pm),
+        label:       'Kill the Apex',
+        planFrom:    'wr_cull',
+        reward:      { huntTickets: 6, text: 'So that is what rules there. Every region has its own; now you know how to find them.' },
+        description: 'Take an Apex plan into any region and kill the beast that rules it. Elder Varek gave you one, and will give you another if you lose it.',
+        isActive:   (pm) => anyRegion(pm, 'hunted_cull'),
+        isComplete: (pm) => anyRegion(pm, 'hunted_apex'),
       },
-      {
-        id:          'wr_apex',
-        label:       'The Vowback Crocodile',
-        // Reporting it opens both cult lines (cultLineOpen, chunk 3): his line says why.
-        reward:      { huntTickets: 8, text: 'The Vowback is dead? Then the mourners can walk the reeds again. They tell me of other things now: singing under the water at night, and offerings sunk in the still pools. Look into both.' },
-        description: 'The mourners speak of an old crocodile grown over with prayer stones. Your next Reeds hunt will mark where it lies with its brood. Kill it.',
-        // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
-        // A save that reached the Lament Pools before this counts as done.
-        huntSite:    { zone: 'reeds_of_gethsemane', beast: { ...VOWBACK_CROCODILE, flag: 'vowback_slain' }, far: true },
-        // After The Reeds' Apex (chunk 2). An apex kill made before that step
-        // existed still counts; the report of the step before it gates it anyway.
-        isActive:   (pm) => pm.hasQuestFlag('hunted_apex:reeds_of_gethsemane') || pm.hasQuestFlag('apex_slain:reeds_of_gethsemane'),
-        isComplete: (pm) => pastTheVowback(pm),
-      },
+    ],
+  },
+
+  {
+    // The Reeds' own line (owner 2026-10-03): opens after one hunt there, and
+    // leads to its first boss. The Vowback now comes after the signs, before
+    // the tribe's offer (for now; it may become a bounty).
+    id:          'weeping_in_the_reeds',
+    category:    'region',
+    title:       'The Weeping in the Reeds',
+    description: 'The Reeds of Gethsemane grieve. Something in them grieves loudest of all.',
+    isAvailable: (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
+    steps: [
       {
         id:          'wr_pools',
         label:       'The Lament Pools',
         reward:      { huntTickets: 4, text: 'You heard the weeping and held your ground. Few do.' },
         description: 'Something weeps in the Reeds at night. Your next Reeds hunt will mark the Lament Pools on its map. Be there after dark.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_lament_pools', far: true },
-        isActive:   (pm) => pm.hasQuestFlag('vowback_slain'),
+        isActive:   (pm) => pm.hasQuestFlag('hunted:reeds_of_gethsemane'),
         isComplete: (pm) => pm.hasQuestFlag('mb_weeping_heard'),
       },
       {
         id:          'wr_signs',
         label:       'Signs of the Mourner',
-        reward:      { huntTickets: 4, text: 'You tracked the mourner to ground. Tell your tribe what you saw.' },
+        reward:      { huntTickets: 4, text: 'You tracked the mourner to ground. The mourners say an old crocodile keeps watch near there.' },
         description: 'Follow the weeping to where it goes to ground. Your next Reeds hunt will mark the trail.',
         huntSite:    { zone: 'reeds_of_gethsemane', eventId: 'reeds_mourner_signs', far: true },
         isActive:   (pm) => pm.hasQuestFlag('mb_weeping_heard'),
         isComplete: (pm) => pm.hasQuestFlag('mb_signs_found'),
+      },
+      {
+        id:          'wr_apex',
+        label:       'The Vowback Crocodile',
+        // Reporting it opens both cult lines (cultLineOpen, chunk 3): his line says why.
+        reward:      { huntTickets: 8, text: 'The Vowback is dead? Then the mourners can walk the reeds again. They tell me of other things now: singing under the water at night, and offerings sunk in the still pools. Look into both. And go to your tribe: they know what the signs mean.' },
+        description: 'The mourners speak of an old crocodile grown over with prayer stones, keeping watch where the mourner goes to ground. Your next Reeds hunt will mark where it lies with its brood. Kill it.',
+        // A quest BEAST (owner 2026-09-27: it was the Reeds' apex every hunt).
+        huntSite:    { zone: 'reeds_of_gethsemane', beast: { ...VOWBACK_CROCODILE, flag: 'vowback_slain' }, far: true },
+        isActive:   (pm) => pm.hasQuestFlag('mb_signs_found'),
+        // A save that took the tribe's offer under the old order is past it.
+        isComplete: (pm) => pastTheVowback(pm) || pm.hasQuestFlag('mb_offer_taken'),
       },
       {
         // Completed by taking the tribe's first Mourner's Offering at the
@@ -407,7 +425,7 @@ export const QUEST_LINES = [
         id:          'wr_offer',
         label:       'The Tribe\'s Offer',
         description: "Visit your tribe's lodge and open Tribe HQ. Your tribe knows what the signs mean, and has something for you.",
-        isActive:   (pm) => pm.hasQuestFlag('mb_signs_found'),
+        isActive:   (pm) => pastTheVowback(pm),
         isComplete: (pm) => pm.hasQuestFlag('mb_offer_taken'),
       },
     ],

@@ -130,9 +130,11 @@ console.log("=== the tribe's first offer ends the questline ===");
   const quest = QUEST_LINES.find(q => q.id === 'weeping_in_the_reeds');
   const pm = fakePM(['hunted:' + REEDS, 'apex_slain:' + REEDS, 'mb_weeping_heard']);
   const bag = [];
-  check('not before the signs are found', O.offersReady(pm, REEDS).length === 0 && !O.takeFirstOffer(pm, bag, 'mourning_beast', pm.setQuestFlag).ok);
   pm.setQuestFlag('mb_signs_found');
-  check('after them, the offer waits in the Reeds only', O.offersReady(pm, REEDS).length === 1 && O.offersReady(pm, 'bay_of_solace').length === 0);
+  // The Vowback now comes between the signs and the offer (owner 2026-10-03).
+  check('not before the Vowback is slain', O.offersReady(pm, REEDS).length === 0 && !O.takeFirstOffer(pm, bag, 'mourning_beast', pm.setQuestFlag).ok);
+  pm.setQuestFlag('vowback_slain');
+  check('after it, the offer waits in the Reeds only', O.offersReady(pm, REEDS).length === 1 && O.offersReady(pm, 'bay_of_solace').length === 0);
   check('...the questline is on its last step', getQuestState(quest, pm) === 'active');
   const t = O.takeFirstOffer(pm, bag, 'mourning_beast', pm.setQuestFlag);
   check('taking it: a free plan, the boss unlocked, the questline complete', t.ok && bag.length === 1 && bag[0].id === MB.plan

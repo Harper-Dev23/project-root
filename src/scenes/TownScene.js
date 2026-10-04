@@ -18,7 +18,7 @@ import { buildItemTooltipLines, installAffixDetailKeys } from '../ui/itemTooltip
 import { createTextBanner } from '../ui/DialogBox.js';
 import { createRectMask } from '../ui/masks.js';
 import { getStepForFlag, resolveStepDescription, pendingReports } from '../data/quests.js';
-import { claimQuestRewards, questRewardMessage } from '../systems/QuestRewards.js';
+import { claimQuestRewards, questRewardMessage, replacementPlans, giveReplacementPlans, replacementMessage } from '../systems/QuestRewards.js';
 import { HuntManager } from '../systems/HuntManager.js';
 import { launchMapHunt } from './overlays/HuntFieldOverlay.js';
 
@@ -1041,7 +1041,8 @@ export default class TownScene extends Phaser.Scene {
     const hasElderFlag = ProgressionManager.hasQuestFlag('orientation_elder') ||
                          ProgressionManager.hasQuestFlag('elder_bonepile') ||
                          ProgressionManager.hasQuestFlag('elder_leveling') ||
-                         pendingReports(ProgressionManager).length > 0;
+                         pendingReports(ProgressionManager).length > 0 ||
+                         replacementPlans(ProgressionManager, (b) => this._ownsPlanLike(b)).length > 0;
     if (!currentTribe || hasElderFlag) {
       if (this.eldersTowerGroups?.[1]) {
         this.eldersTowerGroups[1].destroy(true);
@@ -1179,6 +1180,17 @@ export default class TownScene extends Phaser.Scene {
   // ===========================================================
 
   /** Returns a formatted currency string for vendor panel headers. */
+  /**
+   * Does the party hold a hunt plan with the same objective as `base`, anywhere
+   * (camp bag, stashes, hunters, a hunt's pack, a co-op own pack)? A bought
+   * plan counts as well as the Elder's. For replacementPlans.
+   */
+  _ownsPlanLike(base) {
+    const want = Items[base]?.objective;
+    const held = [...GameState._allHeldItems(), ...(GameState.flags?.coopPack?.items || [])];
+    return held.some(i => Items[i?.id]?.type === 'huntPlan' && !Items[i.id].basic && Items[i.id].objective === want);
+  }
+
   _currencyLine() {
     // "Tickets" once, not per currency (co-op playtest: with Divinity Tickets
     // the strip ran past the vendor panel).
@@ -2760,7 +2772,12 @@ export default class TownScene extends Phaser.Scene {
     if (!this.eldersTowerGroups) this.eldersTowerGroups = {};
 
     // A report is read once: the floor it was shown on is rebuilt next visit.
-    if (this.eldersTowerGroups[floor]?._reportShown) {
+    // And the Elder's floor is rebuilt whenever word from the field or a lost
+    // plan waits, however the party came home (co-op playtest: a stale floor
+    // only paid out after the town happened to wake).
+    const elderDue = floor === 1 && (pendingReports(ProgressionManager).length > 0
+      || replacementPlans(ProgressionManager, (b) => this._ownsPlanLike(b)).length > 0);
+    if (this.eldersTowerGroups[floor]?._reportShown || (elderDue && this.eldersTowerGroups[floor])) {
       this.eldersTowerGroups[floor].destroy(true);
       this.eldersTowerGroups[floor] = null;
     }
@@ -2846,6 +2863,24 @@ export default class TownScene extends Phaser.Scene {
             fontSize: '14px', color: '#ddccaa',
           });
           layout.add(reportBox);
+          layout._reportShown = true;
+        } else if (replacementPlans(ProgressionManager, (b) => this._ownsPlanLike(b)).length) {
+          // A plan he handed out is gone (a failed hunt uses it up; owner
+          // 2026-10-03): he gives another while its step is still the one to do.
+          const partyLevel = Math.max(1, ...(GameState.party || []).map(c => c?.level || 1));
+          const given = giveReplacementPlans(ProgressionManager, {
+            owns: (b) => this._ownsPlanLike(b),
+            addItem: (inst) => InventorySystem.addGlobalItem(inst),
+            itemLevel: partyLevel,
+          });
+          GameState.save('autosave');
+          const { container: planBox } = createTextBanner(this, {
+            x: 640, y: 250, width: 760,
+            title: 'Another plan',
+            body: replacementMessage(given),
+            fontSize: '14px', color: '#ddccaa',
+          });
+          layout.add(planBox);
           layout._reportShown = true;
         } else if (hasLevelingFlag) {
           // Scenario 3 cleared — explain stats, progression, growth.

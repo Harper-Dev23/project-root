@@ -97,52 +97,77 @@ console.log('=== the generator places quest sites ===');
 }
 
 // =============================================================================
-console.log('=== The Weeping in the Reeds, step by step ===');
+console.log('=== The Hunter\'s Trade, then The Weeping in the Reeds, step by step ===');
 {
+  // Split (owner 2026-10-03, co-op playtest): the plan types in order, in any
+  // region; and the Reeds' own line, open after one Reeds hunt, leading to its
+  // first boss: Pools, Signs, the Vowback, the tribe's offer.
+  const trade = QUEST_LINES.find(q => q.id === 'hunters_trade');
   const quest = QUEST_LINES.find(q => q.id === 'weeping_in_the_reeds');
+  check('two lines: The Hunter\'s Trade (Main) and The Weeping in the Reeds (Regions)',
+    trade?.category === 'main' && same(trade.steps.map(s => s.id), ['wr_hunt', 'wr_cull', 'wr_apexpool'])
+    && quest?.category === 'region' && same(quest.steps.map(s => s.id), ['wr_pools', 'wr_signs', 'wr_apex', 'wr_offer']));
   const pm = fakePM();
-  const active = () => quest.steps.filter(s => getStepState(s, pm) === 'active').map(s => s.id);
-  // This questline's own sites (The Unconfessed Dead runs alongside it from the apex on).
+  const active = (q) => q.steps.filter(s => getStepState(s, pm) === 'active').map(s => s.id);
   const WR = new Set(quest.steps.map(s => s.id));
   const sites = () => questSitesFor(REEDS, pm).filter(s => WR.has(s.step)).map(s => s.eventId || `beast:${s.beast?.family}`);
   const trail = [];
-  trail.push([active(), sites()]);
-  pm.add(regionFlag('hunted', REEDS)); trail.push([active(), sites()]);
-  // A Cull hunt, then an Apex hunt (batch 4b chunk 2), before the Vowback.
-  pm.add(regionFlag('hunted_cull', REEDS)); trail.push([active(), sites()]);
-  pm.add(regionFlag('hunted_apex', REEDS)); trail.push([active(), sites()]);
-  // The Vowback Crocodile is a quest beast (owner 2026-09-27), not the apex.
-  pm.add('vowback_slain'); trail.push([active(), sites()]);
-  pm.add('mb_weeping_heard'); trail.push([active(), sites()]);
-  pm.add('mb_signs_found'); trail.push([active(), sites()]);
-  pm.add('mb_offer_taken'); trail.push([active(), sites()]);
+  const note = () => trail.push([active(trade), active(quest), sites()]);
+  note();
+  pm.add(regionFlag('hunted', REEDS)); note();
+  pm.add(regionFlag('hunted_cull', REEDS)); note();
+  pm.add(regionFlag('hunted_apex', REEDS)); note();
+  pm.add('mb_weeping_heard'); note();
+  pm.add('mb_signs_found'); note();
+  pm.add('vowback_slain'); note();
+  pm.add('mb_offer_taken'); note();
   const want = [
-    [['wr_hunt'], []],
-    [['wr_cull'], []],
-    [['wr_apexpool'], []],
-    [['wr_apex'], ['beast:vowback_crocodile']],
-    [['wr_pools'], ['reeds_lament_pools']],
-    [['wr_signs'], ['reeds_mourner_signs']],
-    [['wr_offer'], []],
-    [[], []],
+    [['wr_hunt'], [], []],
+    [['wr_cull'], ['wr_pools'], ['reeds_lament_pools']],
+    [['wr_apexpool'], ['wr_pools'], ['reeds_lament_pools']],
+    [[], ['wr_pools'], ['reeds_lament_pools']],
+    [[], ['wr_signs'], ['reeds_mourner_signs']],
+    [[], ['wr_apex'], ['beast:vowback_crocodile']],
+    [[], ['wr_offer'], []],
+    [[], [], []],
   ];
-  check('one active step at a time, and a site only while its step is active', same(trail, want), JSON.stringify(trail));
-  check('...and the questline ends completed', getQuestState(quest, pm) === 'completed');
+  check('each line one step at a time, the Reeds line open after one Reeds hunt, a site only while its step is active', same(trail, want), JSON.stringify(trail));
+  check('...and both lines end completed', getQuestState(trade, pm) === 'completed' && getQuestState(quest, pm) === 'completed');
   check('no tribe yet: nothing is active and no site is placed', questSitesFor(REEDS, fakePM([], null)).length === 0
-    && quest.steps.every(s => getStepState(s, fakePM([], null)) !== 'active'));
+    && [...trade.steps, ...quest.steps].every(s => getStepState(s, fakePM([], null)) !== 'active'));
+  check('The Weeping in the Reeds is not open before a Reeds hunt', !quest.isAvailable(fakePM()) && quest.isAvailable(fakePM([regionFlag('hunted', REEDS)])));
+  // The Hunter's Trade is done in any region: a Bay hunt counts.
+  const bay = fakePM([regionFlag('hunted', 'bay_of_solace'), regionFlag('hunted_cull', 'bay_of_solace')]);
+  check('The Hunter\'s Trade counts a hunt in any region (a Bay Cull completes it)', getStepState(trade.steps[1], bay) === 'completed'
+    && trade.steps.filter(s => getStepState(s, bay) === 'active').map(s => s.id).join() === 'wr_apexpool'
+    && !quest.isAvailable(bay));
+  // A plan the Elder gave and the party lost (owner 2026-10-03): he gives
+  // another while its step is the one to do, and only then.
+  {
+    const { replacementPlans, giveReplacementPlans } = await import('../../src/systems/QuestRewards.js');
+    const onCull = fakePM([regionFlag('hunted', REEDS)]);
+    const none = () => false, has = () => true;
+    const due = replacementPlans(onCull, none);
+    check('on "Thin the Herds" with no Cull plan anywhere, the Elder owes one', due.length === 1 && due[0].base === 'plan_cull_small', JSON.stringify(due));
+    check('...not while the party still holds one, nor before the step', replacementPlans(onCull, has).length === 0 && replacementPlans(fakePM(), none).length === 0);
+    const got = [];
+    const given = giveReplacementPlans(onCull, { owns: none, addItem: (i) => got.push(i), itemLevel: 3 });
+    check('...and he hands it over at the party\'s level', given.length === 1 && got[0]?.id === 'plan_cull_small' && got[0].itemLevel === 3);
+    const onApex = fakePM([regionFlag('hunted', REEDS), regionFlag('hunted_cull', REEDS)]);
+    check('on "Kill the Apex", it is an Apex plan', replacementPlans(onApex, none).map(r => r.base).join() === 'plan_apex_small');
+    check('once the line is done, nothing is owed', replacementPlans(fakePM([regionFlag('hunted', REEDS), regionFlag('hunted_cull', REEDS), regionFlag('hunted_apex', REEDS)]), none).length === 0);
+  }
   const early = fakePM([regionFlag('apex_slain', REEDS)]);
-  check('killing an apex first completes "Hunt the Reeds" too (no dead step); the Vowback Crocodile is next, as its own quest site', getStepState(quest.steps[0], early) === 'completed'
-    && quest.steps.filter(s => getStepState(s, early) === 'active').map(s => s.id).join() === 'wr_apex'
-    && questSitesFor(REEDS, early).some(q => q.step === 'wr_apex' && q.beast?.family === 'vowback_crocodile' && q.beast.flag === 'vowback_slain'));
-  // A save from before (the Lament Pools reached through an apex kill) keeps its place.
-  const older = fakePM([regionFlag('hunted', REEDS), regionFlag('apex_slain', REEDS), 'mb_weeping_heard']);
-  check('an older save past the Lament Pools does not go back to the Vowback', getStepState(quest.steps[1], older) === 'completed'
-    && quest.steps.filter(s => getStepState(s, older) === 'active').map(s => s.id).join() === 'wr_signs');
+  check('killing an apex first completes "Hunt a Region" too (no dead step)', getStepState(trade.steps[0], early) === 'completed');
+  // A save that took the tribe's offer under the old order (the Vowback before
+  // the Pools) is not sent back for it.
+  const older = fakePM([regionFlag('hunted', REEDS), 'mb_weeping_heard', 'mb_signs_found', 'mb_offer_taken']);
+  check('a save that took the offer under the old order is done with the Vowback', getStepState(quest.steps[2], older) === 'completed' && getQuestState(quest, older) === 'completed');
   // After its kill, the Vowback is a rare sight (zones rareBeasts): 10% of Reeds hunts, never marked as a quest.
   const rare = questSitesFor(REEDS, fakePM([regionFlag('hunted', REEDS), 'vowback_slain'])).find(q => q.step === 'rare:vowback');
   check('once slain, the Vowback turns up on 10% of Reeds hunts as a rare beast', !!rare && rare.pct === 10 && rare.beast.family === 'vowback_crocodile' && !rare.beast.flag
     && !questSitesFor(REEDS, fakePM([regionFlag('hunted', REEDS)])).some(q => q.step === 'rare:vowback'));
-  check('a site is placed in its own region only', questSitesFor('bay_of_solace', fakePM([regionFlag('apex_slain', REEDS)])).length === 0);
+  check('a site is placed in its own region only', questSitesFor('bay_of_solace', fakePM([regionFlag('hunted', REEDS)])).length === 0);
 }
 
 // =============================================================================
@@ -255,7 +280,7 @@ console.log('=== the engine sets region flags ===');
   // The Vowback Crocodile (owner 2026-09-27): a quest beast on the map while
   // its step is active, marked as a quest site; its kill sets vowback_slain.
   {
-    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS), regionFlag('hunted_cull', REEDS), regionFlag('hunted_apex', REEDS)]));
+    const wv = recordingWorld(makeParty(), fakePM([regionFlag('hunted', REEDS), 'mb_weeping_heard', 'mb_signs_found']));
     const hv = createMapHunt(REEDS, { plan: { objective: 'scout', size: 'medium' }, supplies: 300, seed: 91 }, wv);
     const dv = hv.serialize();
     const vb = dv.map.occupants.find(o => o.quest === 'wr_apex');

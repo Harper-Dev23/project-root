@@ -48,6 +48,45 @@ export function claimQuestRewards(pm, { addItem = null, itemLevel = 1 } = {}) {
   return paid;
 }
 
+/**
+ * A plan the Elder handed out and the party no longer has (owner 2026-10-03,
+ * co-op playtest: a failed Cull plan was gone, and another was hard to find).
+ * A step with `planFrom: <stepId>` needs the plan that step's report gave;
+ * while it is the active step and `owns(base)` finds none anywhere, the Elder
+ * gives another. Returns [{ step, quest, base, rarity }].
+ */
+export function replacementPlans(pm, owns) {
+  const byId = new Map(QUEST_LINES.flatMap(q => (q.steps || []).map(s => [s.id, s])));
+  const out = [];
+  for (const quest of QUEST_LINES) {
+    for (const step of quest.steps || []) {
+      const plan = byId.get(step.planFrom)?.reward?.item;
+      if (!plan || !Items[plan.base] || getStepState(step, pm) !== 'active') continue;
+      if (owns(plan.base)) continue;
+      out.push({ step: step.label, quest: quest.title, base: plan.base, rarity: plan.rarity });
+    }
+  }
+  return out;
+}
+
+/** Hand over every replacement plan due (replacementPlans), as a report hands one over. */
+export function giveReplacementPlans(pm, { owns, addItem, itemLevel = 1 }) {
+  const given = [];
+  for (const r of replacementPlans(pm, owns)) {
+    const item = createItemInstance(r.base, { rarity: r.rarity, itemLevel: Math.max(1, itemLevel | 0) });
+    if (!item) continue;
+    addItem(item);
+    given.push({ ...r, item });
+  }
+  return given;
+}
+
+/** What Elder Varek says as he hands them over. */
+export function replacementMessage(given) {
+  const lines = given.map(g => `${g.step}: a ${cap(g.item.rarity)} ${Items[g.item.id]?.name || g.item.id}`);
+  return `"Lost it? It happens out there. Take another, and bring it back used this time."\n\n${lines.join('\n')}`;
+}
+
 const cap = (w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : '');
 
 /** What Elder Varek says for what claimQuestRewards paid: one line per step. */

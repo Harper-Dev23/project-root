@@ -41,9 +41,9 @@ You never go out without a plan. The **Basic Hunt Plan** is free, never runs out
 
 The **Greenhollow Satchel** on Vendor Row sells three plans a day, for Hunt Tickets, **one ticket per item level**. It stocks plans up to your party's highest level, with at least one at that level. The stock changes once a day, and days pass while you hunt. Each plan on the table sells once.
 
-Small maps are on sale from the start. **Medium** maps open once you have reported the Vowback Crocodile to Elder Varek, and **large** maps once you have killed your first boss.
+Small maps are on sale from the start. **Medium** maps open once you finish *The Hunter's Trade* (your first Apex hunt, reported to Elder Varek), and **large** maps once you have killed your first boss.
 
-Some quest steps hand you a plan as a reward. It works like a bought one, and is used up when you depart.
+*The Hunter's Trade* hands you a Cull plan and then an Apex plan as rewards. They work like bought ones, and are used up when you depart. If you lose one before its step is done, Elder Varek gives you another on your next visit to the Elders' Tower.
 
 ## Boss plans
 
