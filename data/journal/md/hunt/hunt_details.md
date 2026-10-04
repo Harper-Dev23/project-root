@@ -39,7 +39,7 @@ Every pack stands on a tile. Walking onto one starts the fight, and whoever has 
 
 ## Rewards
 
-A beast fight pays **8 Hunt Points** before modifiers and every fight shares an XP pool among the party. A **clean exit** with the primary objective done pays the completion reward -- **20 / 35 / 50 Hunt Points** by map size, and an XP pool of **240 / 440 / 640** -- plus each bonus objective you finished. What you found rides in the **pack** until you leave: on the starting coasts a wipe costs nothing in it.
+A beast fight pays **8 Hunt Points** before modifiers and every fight shares an XP pool among the party. A **clean exit** with the primary objective done pays the completion reward -- **20 / 35 / 50 Hunt Points** by map size, and an XP pool of **240 / 440 / 640** -- plus each bonus objective you finished. What you found rides in the **pack** until you leave: on the starting coasts a wipe costs nothing in it. What a wipe costs elsewhere is in [[When the Party Falls]]; cult bands, parley and the black markets in [[Cults and Markets]]; and hunting with friends in [[Hunting Together]].
 
 Everything you do in a region also fills its **Omen meter**; see [[Bosses and Historic Items]].
 
