@@ -118,11 +118,16 @@ check('Continue (clicked) closes the result', !(await texts()).includes('Continu
 // ---- 2. A check, with the dice ------------------------------------------------
 at = await place('reeds_sinking_mud');
 t = await texts();
-check('a check shows the stat, who rolls and the DC, and a Roll button', t.some(x => /^Dexterity check, DC \d+: .+ rolls d20 [+-]\d+\.$/.test(x)) && t.includes('Roll'), t.find(x => x.includes('check')));
+// Chunk 15b: the event screen shows who rolls and the odds, not a DC.
+const odds = t.find(x => /^Dexterity: .+, \d+% to succeed$/.test(x));
+const want = await evaluate(`const { checkChance } = await import('/src/systems/EventEffects.js'); const c = window.__T.s().hunt.view().event.check; return { pct: checkChance(c.modifier, c.dc), who: c.who };`);
+check('a check shows the stat, who rolls and the odds, and a Roll button',
+  !!odds && odds === `Dexterity: ${want.who}, ${want.pct}% to succeed` && t.includes('Roll'), odds);
+check('...and the hunter who rolls is shown by name', t.includes(want.who), want.who);
 await shot('03-check');
 await clickText('^Roll$', FIELD);
-check('Roll (clicked): the dice token lands, then the roll against the DC shows',
-  await waitFor(`window.__T.textsOf('${FIELD}').some(t => /^Rolled \\d+ [+-] \\d+ = \\d+ against DC \\d+: (success|failure)\\.$/.test(t.text))`));
+check('Roll (clicked): the dice token lands, then who rolled what against what was needed shows',
+  await waitFor(`window.__T.textsOf('${FIELD}').some(t => /^.+ rolled \\d+ [+-] \\d+ = \\d+, needing \\d+: (success|failure)\\.$/.test(t.text))`));
 await shot('04-check-result');
 check('...and the site is spent', await spent(at.tile));
 await clickText('^Continue$', FIELD);

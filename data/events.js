@@ -13,6 +13,10 @@
 // ── A template ───────────────────────────────────────────────────────────────
 //   name      a short title for the event panel
 //   shape     'choice' | 'check' | 'puzzle' | 'offer' | 'trade'
+//   art       its vignette's kind (data/vignettes.js): shrine water cult
+//             trader remains sign ruin night. Required.
+//   vignette  optional: its own picture's key, shown once it is drawn (until
+//             then, the kind's). Quest sites and bosses have one.
 //   text      what the party finds (roles in braces, see EventEffects.js)
 //   appears   where and when it may appear (below)
 //   ...and by shape:
@@ -49,6 +53,7 @@ export const EVENT_TEMPLATES = {
   reeds_sinking_mud: {
     name: 'Sinking Mud',
     shape: 'check',
+    art: 'water',
     text: 'The ground gives way to sucking mud underfoot.',
     appears: { zones: ['reeds_of_gethsemane'] },
     check: { stat: 'DEX', dc: '{danger}+11' },
@@ -58,6 +63,7 @@ export const EVENT_TEMPLATES = {
   reeds_sunken_shrine: {
     name: 'The Sunken Shrine',
     shape: 'choice',
+    art: 'shrine',
     text: 'A half-sunken shrine to {prophet} pokes above the waterline.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, needs: ['prophet'] },
     options: [
@@ -69,6 +75,7 @@ export const EVENT_TEMPLATES = {
   reeds_distant_weeping: {
     name: 'Distant Weeping',
     shape: 'puzzle',
+    art: 'night',
     text: 'A faint, distant weeping carries over the water.',
     appears: { zones: ['reeds_of_gethsemane'] },
     prompt: 'A voice rises from the mist: "I am taken without being touched, and given without being held. What am I?"',
@@ -80,6 +87,7 @@ export const EVENT_TEMPLATES = {
   reeds_stranger_at_camp: {
     name: 'A Silent Figure',
     shape: 'choice',
+    art: 'night',
     text: 'A silent figure sits at the edge of the reeds in the dark, unmoving.',
     appears: { zones: ['reeds_of_gethsemane'], night: true },
     options: [
@@ -95,6 +103,8 @@ export const EVENT_TEMPLATES = {
   reeds_lament_pools: {
     name: 'The Lament Pools',
     shape: 'choice',
+    art: 'water',
+    vignette: 'lament_pools',
     text: 'Black pools lie still among the reeds. From them comes weeping: many voices, none of them near, all of them drowned.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
@@ -105,6 +115,8 @@ export const EVENT_TEMPLATES = {
   reeds_mourner_signs: {
     name: 'Signs of the Mourner',
     shape: 'check',
+    art: 'sign',
+    vignette: 'mourner_signs',
     text: 'The reeds here are flattened in a wide swathe, and the mud holds prints bigger than any crocodile\'s. Scraps of burial cloth hang from the stems.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     check: { stat: 'perception', dc: '{danger}+12' },
@@ -116,6 +128,8 @@ export const EVENT_TEMPLATES = {
   reeds_drowned_camp: {
     name: 'The Drowned Camp',
     shape: 'choice',
+    art: 'remains',
+    vignette: 'drowned_camp',
     text: 'Black tents half-sunk in the water, and a cold fire that gives no heat. A soul stands at its edge, tied to the camp by a cord of reed and hair. It is waiting to be asked something.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
@@ -126,6 +140,8 @@ export const EVENT_TEMPLATES = {
   reeds_unmarked_graves: {
     name: 'Unmarked Graves',
     shape: 'check',
+    art: 'remains',
+    vignette: 'unmarked_graves',
     text: 'Six mounds in a row on the only dry ground for a mile, with no stones. Someone buried a hunting party here and did not know what to write.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     check: { stat: 'WIS', dc: '{danger}+12' },
@@ -137,6 +153,8 @@ export const EVENT_TEMPLATES = {
   reeds_cathedral_roots: {
     name: 'The Cathedral Roots',
     shape: 'check',
+    art: 'ruin',
+    vignette: 'cathedral_roots',
     text: 'The tide has drawn back further than it should. Where the water was, the roof of a drowned cathedral breaks the mud, its roots and arches black with weed. A way down lies open, for now.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     check: { stat: 'perception', dc: '{danger}+13' },
@@ -156,6 +174,7 @@ export const EVENT_TEMPLATES = {
   choir_parley: {
     name: 'The Drowned Choir',
     shape: 'trade',
+    art: 'cult',
     text: 'The Choir lower their hands. A cantor steps forward: the river owes them fish, and they will pay for what the river will not give.',
     appears: { setPiece: true },
     give: [{ id: 'raw_fish', qty: 3 }],
@@ -165,6 +184,7 @@ export const EVENT_TEMPLATES = {
   gill_parley: {
     name: 'The Temple of the Gill',
     shape: 'trade',
+    art: 'cult',
     text: 'The gill-priests do not raise their weapons. They want meat for the river, and they pay in tickets.',
     appears: { setPiece: true },
     give: [{ id: 'lean_game', qty: 2 }],
@@ -177,6 +197,7 @@ export const EVENT_TEMPLATES = {
   choir_singing: {
     name: 'Singing Under the Water',
     shape: 'choice',
+    art: 'cult',
     text: 'A hymn rises from under the reeds, many voices, none of them breathing. The water shivers with it.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
@@ -187,6 +208,7 @@ export const EVENT_TEMPLATES = {
   choir_cantor: {
     name: "The Cantor's Price",
     shape: 'trade',
+    art: 'cult',
     text: 'A Choir cantor waits on a stone, holding a page of a hymnal. It will trade the page for fish. Or you could take it from a Choir band.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     give: [{ id: 'raw_fish', qty: 2 }],
@@ -196,6 +218,7 @@ export const EVENT_TEMPLATES = {
   choir_unfinished_hymn: {
     name: 'The Unfinished Hymn',
     shape: 'puzzle',
+    art: 'cult',
     text: 'The page, read aloud where the Choir first sang, calls the water to listen. The verse breaks off. It wants its last word.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     prompt: '"What drowns and is not drowned, and answers what was never asked?"',
@@ -207,6 +230,7 @@ export const EVENT_TEMPLATES = {
   choir_tithe_offer: {
     name: 'The Tithe-Boat',
     shape: 'offer',
+    art: 'cult',
     text: 'A flat barge hung with dark lanterns. The Choir offer you a place in the hymn, and a place at their market.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     offer: 'Sing with them',
@@ -220,6 +244,7 @@ export const EVENT_TEMPLATES = {
   gill_offerings: {
     name: 'Drowned Offerings',
     shape: 'check',
+    art: 'cult',
     text: 'Bundles sunk in a still pool at a reed shrine: bread, teeth, a child\'s shoe, each tied to a stone. Someone left these for the river.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     check: { stat: 'WIS', dc: '{danger}+11' },
@@ -229,6 +254,7 @@ export const EVENT_TEMPLATES = {
   gill_baptism: {
     name: 'Baptism in the Gill',
     shape: 'offer',
+    art: 'cult',
     text: 'A gill-priest waits waist-deep in the water and offers to baptise the party in Dagon\'s river. The water does not look like it wants to let anyone go.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     offer: 'Be baptised',
@@ -239,6 +265,7 @@ export const EVENT_TEMPLATES = {
   gill_smugglers: {
     name: "The Smugglers' Channel",
     shape: 'trade',
+    art: 'cult',
     text: 'Temple smugglers pole a flat boat through a channel you had not seen. They want meat for the river, and will take you to the Deep Priest for it.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     give: [{ id: 'lean_game', qty: 2 }],
@@ -248,6 +275,7 @@ export const EVENT_TEMPLATES = {
   gill_deep_priest: {
     name: 'The Deep Priest',
     shape: 'offer',
+    art: 'cult',
     text: 'In a church of woven reed stands the Temple\'s eldest priest, gills open at his throat. He asks you to kneel to the river.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
     offer: 'Kneel',
@@ -263,6 +291,7 @@ export const EVENT_TEMPLATES = {
   tithe_boat: {
     name: 'The Tithe-Boat',
     shape: 'market',
+    art: 'trader',
     market: 'yargaleth',
     text: 'A flat barge moored among the reeds, hung with lanterns that light nothing. The Drowned Choir sell here, and take only Sin Tickets.',
     appears: { zones: ['reeds_of_gethsemane', 'bay_of_solace'], setPiece: true },
@@ -270,6 +299,7 @@ export const EVENT_TEMPLATES = {
   gill_market: {
     name: 'The Gill Market',
     shape: 'market',
+    art: 'trader',
     market: 'dagon',
     text: 'Crates stacked under a reed awning, dripping. The Temple of the Gill trades in what the river brings up, for Sin Tickets.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true },
@@ -283,6 +313,7 @@ export const EVENT_TEMPLATES = {
   dagon_whisper: {
     name: 'A Voice in the Water',
     shape: 'offer',
+    art: 'water',
     text: 'Something in the water knows your name. It offers a gift and says it asks nothing. The water has gone very still.',
     appears: { god: 'dagon', night: true, pact: false, needs: ['falsegod'] },
     offer: 'Accept the gift',
@@ -293,6 +324,7 @@ export const EVENT_TEMPLATES = {
   dagon_hunger: {
     name: 'The River Asks Again',
     shape: 'offer',
+    art: 'water',
     text: 'Bloated fish drift belly-up at your feet. The voice returns, hungrier: the river asks for your breath.',
     appears: { god: 'dagon', pact: true, maxPerMap: 2, needs: ['falsegod'] },
     offer: 'Give it',
@@ -303,6 +335,7 @@ export const EVENT_TEMPLATES = {
   yargaleth_bubbles: {
     name: 'Bubbles in Still Water',
     shape: 'offer',
+    art: 'water',
     text: 'Bubbles rise where the water should be still. A voice beneath them answers a question you never asked.',
     appears: { god: 'yargaleth', pact: false, needs: ['falsegod'] },
     offer: 'Listen',
@@ -313,6 +346,7 @@ export const EVENT_TEMPLATES = {
   yargaleth_undertow: {
     name: 'The Throat That Never Closes',
     shape: 'offer',
+    art: 'water',
     text: 'Salt forms runes on your skin. The voice offers the rest of the answer, if you will only keep listening.',
     appears: { god: 'yargaleth', pact: true, maxPerMap: 2, needs: ['falsegod'] },
     offer: 'Keep listening',
@@ -325,6 +359,7 @@ export const EVENT_TEMPLATES = {
   bay_rising_tide: {
     name: 'The Rising Tide',
     shape: 'check',
+    art: 'water',
     text: 'The tide rises faster than expected, cutting off the way ahead.',
     appears: { zones: ['bay_of_solace'] },
     check: { stat: 'CON', dc: '{danger}+10' },
@@ -334,6 +369,7 @@ export const EVENT_TEMPLATES = {
   bay_wrecked_hull: {
     name: 'A Wrecked Hull',
     shape: 'choice',
+    art: 'remains',
     text: 'The ribs of a wrecked hull jut from the sand.',
     appears: { zones: ['bay_of_solace'] },
     options: [
@@ -344,6 +380,7 @@ export const EVENT_TEMPLATES = {
   bay_driftwood_idol: {
     name: 'The Driftwood Idol',
     shape: 'puzzle',
+    art: 'shrine',
     text: 'Someone has stacked driftwood into a crude idol, turned toward the sea.',
     appears: { zones: ['bay_of_solace'], setPiece: true },
     prompt: 'Carved into the driftwood: "I have a bed but never sleep, a mouth but never speak. What am I?"',
@@ -355,6 +392,7 @@ export const EVENT_TEMPLATES = {
   bay_lantern_glow: {
     name: 'A Lantern on the Water',
     shape: 'choice',
+    art: 'night',
     text: 'A faint lantern glow bobs far out on the water, going nowhere.',
     appears: { zones: ['bay_of_solace'], night: true },
     options: [
@@ -367,6 +405,7 @@ export const EVENT_TEMPLATES = {
   shrine_of_house: {
     name: 'A Wayside Shrine',
     shape: 'offer',
+    art: 'shrine',
     text: 'A shrine to {prophet}, half-swallowed by the land. Offerings lie untouched. The air listens.',
     appears: { houses: 'any', followed: false, needs: ['prophet'] },
     offer: 'Kneel and make an offering',
@@ -377,6 +416,7 @@ export const EVENT_TEMPLATES = {
   shrine_of_house_followed: {
     name: 'A Shrine of Your House',
     shape: 'offer',
+    art: 'shrine',
     text: 'A shrine to {prophet}, half-swallowed by the land. Your tribe has left offerings here before you.',
     appears: { houses: 'any', followed: true, needs: ['prophet'] },
     offer: 'Kneel and make an offering',
@@ -387,6 +427,7 @@ export const EVENT_TEMPLATES = {
   prophet_vigil: {
     name: 'The Vigil',
     shape: 'choice',
+    art: 'shrine',
     text: "Birds of {prophet}'s watch circle overhead and do not leave. A vigil is kept on these lands: every beast that dies unmarked will be counted.",
     appears: { houses: 'any', needs: ['prophet'] },
     options: [
@@ -399,6 +440,7 @@ export const EVENT_TEMPLATES = {
   wounded_in_the_blight: {
     name: 'Wounded in the Blight',
     shape: 'choice',
+    art: 'remains',
     text: 'A beast lies in the black ground, unmarked, breathing badly. The blight is already in its eyes.',
     appears: { grounds: ['blight'], nearby: 'unmarked' },
     options: [
@@ -410,6 +452,7 @@ export const EVENT_TEMPLATES = {
   riddle_stones: {
     name: 'The Riddle Stones',
     shape: 'puzzle',
+    art: 'ruin',
     text: 'Ten stones stand in a circle. One is carved with a question.',
     appears: {},
     prompt: '"Which prophet returns from the lake, and never the same?"',
@@ -421,6 +464,7 @@ export const EVENT_TEMPLATES = {
   rival_camp: {
     name: 'Another Camp',
     shape: 'choice',
+    art: 'trader',
     text: 'Hunters of {rival} have made camp here. They watch you come, hands near their weapons, but they do not draw.',
     appears: { needs: ['rival'] },
     options: [
@@ -432,6 +476,7 @@ export const EVENT_TEMPLATES = {
   hermit: {
     name: 'The Hermit',
     shape: 'trade',
+    art: 'trader',
     text: 'A hermit sits outside a lean-to of reeds and hide. "Food for news," they say. "Nothing else is worth having out here."',
     appears: {},
     give: [{ id: 'rations', qty: 1 }],
@@ -441,6 +486,7 @@ export const EVENT_TEMPLATES = {
   hunting_blind: {
     name: 'An Old Hunting Blind',
     shape: 'choice',
+    art: 'sign',
     text: 'An old hunting blind, woven from branches and long abandoned.',
     appears: {},
     options: [
@@ -451,6 +497,7 @@ export const EVENT_TEMPLATES = {
   crossing_tracks: {
     name: 'Crossing Tracks',
     shape: 'check',
+    art: 'sign',
     text: 'Tracks cross tracks here, too many to read at a glance.',
     appears: {},
     check: { stat: 'perception', dc: '{danger}+10' },
@@ -460,6 +507,7 @@ export const EVENT_TEMPLATES = {
   bitter_roots: {
     name: 'Bitter Roots',
     shape: 'check',
+    art: 'sign',
     text: 'A tangle of roots, some of them good to eat. Some of them are not.',
     appears: {},
     check: { stat: 'foraging', dc: '{danger}+9' },
@@ -469,6 +517,7 @@ export const EVENT_TEMPLATES = {
   fresh_carcass: {
     name: 'A Fresh Carcass',
     shape: 'choice',
+    art: 'remains',
     text: 'A fresh carcass, not yet cold. Whatever killed it is not far.',
     appears: { hunger: ['hungry', 'starving'] },
     options: [
@@ -481,6 +530,7 @@ export const EVENT_TEMPLATES = {
   reeds_lore_test: {
     name: 'The Shell Cairn',
     shape: 'puzzle',
+    art: 'ruin',
     text: 'A cairn of cracked tortoise shell stands among the reeds. Someone has scratched a question into the largest piece.',
     appears: { zones: ['reeds_of_gethsemane'] },
     prompt: '"When the Silent Tortoise is destroyed, into how many shards does his shell break?"',
@@ -492,6 +542,7 @@ export const EVENT_TEMPLATES = {
   gilled_pilgrims: {
     name: 'The Gilled Pilgrims',
     shape: 'trade',
+    art: 'cult',
     text: 'Pilgrims with gill-slits cut into their necks kneel at the water. They ask for a fish to give back to the river.',
     appears: { zones: ['reeds_of_gethsemane'], needs: ['falsegod'] },
     give: [{ id: 'raw_fish', qty: 1 }],
@@ -501,6 +552,7 @@ export const EVENT_TEMPLATES = {
   eel_catcher_request: {
     name: 'The Eel-Catcher',
     shape: 'trade',
+    art: 'trader',
     text: 'An old fisher mends a net at the water\'s edge. "Three fish and I\'ll tell you where the big one sleeps."',
     appears: { zones: ['reeds_of_gethsemane'], notQuestFlag: 'eel_catcher_owed' },
     give: [{ id: 'raw_fish', qty: 3 }],
@@ -510,6 +562,7 @@ export const EVENT_TEMPLATES = {
   eel_catcher_return: {
     name: 'The Eel-Catcher Again',
     shape: 'choice',
+    art: 'trader',
     text: 'The old fisher waves you over. "I said I would owe you. I keep my word."',
     appears: { zones: ['reeds_of_gethsemane'], questFlag: 'eel_catcher_owed' },
     options: [
@@ -521,6 +574,7 @@ export const EVENT_TEMPLATES = {
   bay_lore_test: {
     name: 'The Mirrored Sigils',
     shape: 'puzzle',
+    art: 'ruin',
     text: 'Sigils are cut into a tidal rock, each one a mirror of the last.',
     appears: { zones: ['bay_of_solace'] },
     prompt: '"After how many nights of silence does the Patterned Visionary reform in Lake Genesis?"',

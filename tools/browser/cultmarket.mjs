@@ -54,7 +54,7 @@ await evaluate(`window.__hunt = await window.bmDevMapHunt({ zoneId: 'reeds_of_ge
   s.hunt._openEventAt(site.tile); s._refresh(); await new Promise(r => setTimeout(r, 300)); return true;`);
 await shot('01b-cantor-trade');
 check('a quest trade names its quest line and what it pays', !!(await B.findText('^Quest: The Hymn Beneath the Water$', 'HuntFieldOverlay'))
-  && !!(await B.findText('^They give: advances a quest, 1 Sin Ticket\\.$', 'HuntFieldOverlay')));
+  && !!(await B.findText('^They give: advances a quest, 1 Sin Ticket$', 'HuntFieldOverlay')));
 
 // ---- 2. The Draughtwell sells the draughts (its stock, as the vendor row reads it) ----
 const dw = await evaluate(`const town = window.__T.g().scene.getScene('TownScene');

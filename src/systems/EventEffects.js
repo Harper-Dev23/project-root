@@ -100,6 +100,16 @@ export function ratingModifier(rating = 50) {
   return Math.floor(rating / 10) - 5;
 }
 
+/**
+ * The chance a check succeeds, as a whole percent (chunk 15b: the event
+ * screen shows odds, not a DC and a modifier). A check succeeds when
+ * d20 + modifier >= DC, with no automatic success or failure on a 20 or 1.
+ */
+export function checkChance(modifier, dc) {
+  const faces = Math.max(0, Math.min(D20, D20 + 1 - (dc - modifier)));
+  return Math.round(faces / D20 * 100);
+}
+
 /** A d20 roll, or the die face the player's dice token settled on. */
 export function rollD20(rng, roll = null) {
   if (Number.isInteger(roll) && roll >= 1 && roll <= D20) return roll;

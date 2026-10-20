@@ -203,6 +203,42 @@ console.log('=== the validator, over every template ===');
 }
 
 // =============================================================================
+// Chunk 15b: every real template names its vignette's kind; a unique vignette
+// is a plain key; every picture listed as drawn is on disk; and an event shows
+// its unique picture once drawn, else its kind's, else the placeholder.
+console.log('=== vignettes (chunk 15b) ===');
+{
+  const V = await import('../../data/vignettes.js');
+  const real = Object.entries(EVENT_TEMPLATES).filter(([id]) => !id.startsWith('test_'));
+  const noKind = real.filter(([, t]) => !V.VIGNETTE_KINDS[t.art]).map(([id, t]) => `${id}: '${t.art}'`);
+  check(`every template names a known vignette kind (${real.length} templates, ${Object.keys(V.VIGNETTE_KINDS).length} kinds)`, noKind.length === 0, noKind.join(' | '));
+  const badUnique = real.filter(([, t]) => t.vignette !== undefined && !/^[a-z0-9_]+$/.test(t.vignette)).map(([id]) => id);
+  check('every unique vignette is a plain key', badUnique.length === 0, badUnique.join(', '));
+  const used = new Set(real.map(([, t]) => t.art));
+  const unused = Object.keys(V.VIGNETTE_KINDS).filter(k => !used.has(k));
+  check('every kind is used by some event', unused.length === 0, unused.join(', '));
+  const missingFiles = V.VIGNETTE_ART.filter(k => !fs.existsSync(new URL(`../../${V.vignettePath(k)}`, import.meta.url)));
+  check(`every picture listed as drawn is on disk (${V.VIGNETTE_ART.length} listed)`, missingFiles.length === 0, missingFiles.join(', '));
+  const tpl = { art: 'water', vignette: 'lament_pools' };
+  const none = V.vignetteFor(tpl, 'reeds_of_gethsemane', []);
+  const kindOnly = V.vignetteFor(tpl, 'reeds_of_gethsemane', ['water']);
+  const both = V.vignetteFor(tpl, 'reeds_of_gethsemane', ['water', 'lament_pools']);
+  check('an event shows its own picture once drawn, else its kind\'s, else the placeholder',
+    none.art === null && kindOnly.art === 'vignette_water' && both.art === 'vignette_lament_pools' && none.kind === 'water');
+  check('the tint is the region\'s, with a default elsewhere',
+    none.tint === V.REGION_TINT.reeds_of_gethsemane && V.vignetteFor(tpl, 'nowhere', []).tint === V.DEFAULT_TINT);
+  // The odds the screen shows match the engine's rule, d20 + modifier >= DC,
+  // counted face by face.
+  const wrong = [];
+  for (let mod = -5; mod <= 10; mod++) for (let dc = 0; dc <= 32; dc++) {
+    let wins = 0;
+    for (let d = 1; d <= 20; d++) if (d + mod >= dc) wins++;
+    if (E.checkChance(mod, dc) !== wins * 5) wrong.push(`${mod}/${dc}: ${E.checkChance(mod, dc)} vs ${wins * 5}`);
+  }
+  check('the odds shown match d20 + modifier >= DC on every face (528 cases)', wrong.length === 0, wrong.slice(0, 4).join(' | '));
+}
+
+// =============================================================================
 console.log('=== the maps place only what may appear ===');
 {
   // A ground-limited template the maps may draw, so the per-tile ground rule

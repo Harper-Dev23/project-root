@@ -1590,7 +1590,8 @@ function makeMapHunt(s, rng, worldRng, world) {
         const living = world.party().filter(c => c && c.status !== 'dead' && c.status !== 'incapacitated');
         let who = null, value = 10;
         for (const c of living) { const v = c.totalStats?.[stat] ?? c.stats?.[stat] ?? 10; if (!who || v > value) { who = c; value = v; } }
-        return { stat, value, modifier: statModifier(value), who: who?.name || null };
+        // whoRef: which hunter, so the event screen can show them (chunk 15b).
+        return { stat, value, modifier: statModifier(value), who: who?.name || null, whoRef: who ? (who.instanceId || who.id || null) : null };
       }
       const value = this.stats()[stat] ?? 50;
       return { stat, value, modifier: ratingModifier(value), who: 'the party' };
@@ -1650,6 +1651,9 @@ function makeMapHunt(s, rng, worldRng, world) {
       // A quest's site says whose (owner, 2026-09-27: clear, not half-added).
       const site = ev.site.occId ? s.map.occupants.find(o => o.id === ev.site.occId) : null;
       if (site?.quest) out.quest = questTitleForStep(site.quest);
+      // The stirring god, named only on its own temptations (chunk 15b: the
+      // event screen's strip). It stays hidden everywhere else (chunk 14c).
+      if (tpl.appears?.god || (tpl.appears?.needs || []).includes('falsegod')) out.stirs = FALSE_GODS[ev.godId]?.name || null;
       if (tpl.shape === 'offer') {
         const need = this._supplyCost(tpl.price, r);
         out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need,

@@ -76,6 +76,8 @@ import { drawFaceToken } from '../../ui/FaceToken.js';
 import { facesOf, soloFace } from '../../systems/PlayerFaces.js';
 import { levelDef as boonLevelDef } from '../../systems/Boons.js';
 import { EVENT_TEMPLATES } from '../../../data/events.js';
+import { VIGNETTE_KINDS, vignetteFor } from '../../../data/vignettes.js';
+import { checkChance } from '../../systems/EventEffects.js';
 import { pendingReports, QUEST_LINES, getQuestState } from '../../data/quests.js';
 
 // The boon level each hunt has already announced (chunk 10b), kept per hunt
@@ -114,6 +116,14 @@ let announcedReports = null;
  *  panel's buttons under the bar). */
 const PANEL_BOTTOM = 564;
 const LOG_SHOWN = 14;
+/** The event screen (chunk 15b; owner, 2026-10-04): 880 × 470 inside the map
+ *  area between the HUD strip and the dialogue bar, its vignette shown at
+ *  300 × 400 (drawn at 600 × 800, data/vignettes.js). */
+const EVENT_SCREEN = { x: FIELD_WINDOW.x + 21, y: MAP.y + 8, w: 880, h: 470 };
+const VIGNETTE = { w: 300, h: 400 };
+/** A colour scaled toward black (f < 1); and as CSS. */
+const shade = (c, f) => (Math.round(((c >> 16) & 255) * f) << 16) | (Math.round(((c >> 8) & 255) * f) << 8) | Math.round((c & 255) * f);
+const hex = (c) => `#${c.toString(16).padStart(6, '0')}`;
 
 const OBJECTIVE_NAME = (id) => PRIMARY_OBJECTIVES[id]?.name || BONUS_OBJECTIVES[id]?.name || id;
 /** A marked site's hover line: the plan's objective, or a quest's (14b-2). */
@@ -1064,79 +1074,221 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     } else this._panelButton(p, p.px + width / 2, ty + 12, 'Fight', () => this._fight(), 'danger');
   }
 
+  // ── The event screen (chunk 15b) ─────────────────────────────────────────────
+  //
+  // A large panel over the dimmed map, inside the field window: below the HUD
+  // strip and above the dialogue bar. Left: the event's vignette (its region's
+  // tint over the picture, or a placeholder until one is drawn) and a strip
+  // with the time of day and, on its own temptations, the stirring god.
+  // Right: the title, the text, the hunter the event is about, and the
+  // choices, each a row that says what it costs, gives or risks.
+
+  /** The frame: dim the map, draw the panel and the vignette. Returns a panel
+   *  object the _panel* helpers accept, plus the right column's geometry. */
+  _eventFrame(templateId, { title, titleColor = '#e8c66a', tag = null } = {}) {
+    const v = this.v;
+    const cont = this.add.container(0, 0).setDepth(20);
+    this.layer.add(cont);
+    const g = this.add.graphics();
+    cont.add(g);
+    g.fillStyle(0x07080a, 0.62).fillRect(MAP.x, MAP.y, MAP.w, MAP.h);
+    // The whole map is behind the panel: nothing below takes a click.
+    cont.add(this.add.zone(MAP.x, MAP.y, MAP.w, MAP.h).setOrigin(0).setInteractive());
+    const { x, y, w, h } = EVENT_SCREEN;
+    g.fillStyle(0x15171c, 0.98).fillRoundedRect(x, y, w, h, 8);
+    g.lineStyle(1, 0x5a6070, 1).strokeRoundedRect(x, y, w, h, 8);
+    this._panelRect = { x, y, w, h };
+
+    // The vignette.
+    const tpl = EVENT_TEMPLATES[templateId] || {};
+    const vg = vignetteFor(tpl, v.zoneId);
+    const vx = x + 16, vy = y + 16, vw = VIGNETTE.w, vh = VIGNETTE.h;
+    g.fillStyle(shade(vg.tint, 0.22), 1).fillRect(vx, vy, vw, vh);
+    if (vg.art && this.textures.exists(vg.art)) {
+      const img = this.add.image(vx + vw / 2, vy + vh / 2, vg.art).setDisplaySize(vw, vh).setTint(vg.tint);
+      cont.add(img);
+    } else {
+      // A placeholder until the picture is drawn (data/vignettes.js).
+      const kind = VIGNETTE_KINDS[vg.kind];
+      g.lineStyle(1, shade(vg.tint, 0.55), 1).strokeRect(vx + 10, vy + 10, vw - 20, vh - 20);
+      cont.add(this.add.text(vx + vw / 2, vy + vh / 2 - 30, kind.mark, { fontFamily: FONT, fontSize: '72px', color: hex(shade(vg.tint, 0.9)) }).setOrigin(0.5));
+      cont.add(this.add.text(vx + vw / 2, vy + vh / 2 + 34, kind.name, { fontFamily: FONT, fontSize: '16px', color: hex(shade(vg.tint, 0.8)) }).setOrigin(0.5));
+    }
+    g.lineStyle(1, 0x3a3f4a, 1).strokeRect(vx, vy, vw, vh);
+
+    // The strip under it: when, and (on its own temptations) which god stirs.
+    const sy = vy + vh + 8;
+    const when = `Day ${v.clock.day} · ${v.clock.isNight ? 'Night' : 'Day'}`;
+    cont.add(this.add.text(vx, sy, when, { fontFamily: FONT, fontSize: '13px', color: v.clock.isNight ? '#a9b8ff' : '#ffe9a8' }));
+    const stirs = v.event?.templateId === templateId ? v.event?.stirs : null;
+    if (stirs) cont.add(this.add.text(vx + vw, sy, `${stirs} stirs`, { fontFamily: FONT, fontSize: '13px', color: '#c89ae8' }).setOrigin(1, 0));
+
+    // The right column, and its title.
+    const rx = vx + vw + 22, rw = x + w - 18 - rx;
+    const p = { cont, px: rx - 10, py: y, width: rw + 20, height: h, rx, rw };
+    let ty = y + 14;
+    if (tag) { cont.add(this.add.text(rx, ty, tag, { fontFamily: FONT, fontSize: '12px', color: '#b9a3e8' })); ty += 18; }
+    const t = this.add.text(rx, ty, title, { fontFamily: FONT, fontSize: '21px', color: titleColor, wordWrap: { width: rw } });
+    cont.add(t);
+    p.ty = ty + t.height + 8;
+    p.vignette = { x: vx, y: vy, w: vw, h: vh };
+    return p;
+  }
+
+  /** Text down the right column; returns the y below it. */
+  _eventText(p, ty, s, { size = 13, color = '#d8d8d8', gap = 6, family = FONT } = {}) {
+    const t = this.add.text(p.rx, ty, s, { fontFamily: family, fontSize: `${size}px`, color, wordWrap: { width: p.rw }, lineSpacing: 2 });
+    p.cont.add(t);
+    return ty + t.height + gap;
+  }
+
   /**
-   * The event the party stands on (chunk 11b; EVENTS: five shapes). Every
-   * shape can be walked away from, which costs nothing and leaves the site.
-   *   choice  one button per option
-   *   check   the stat, who rolls and the DC; Roll rolls the hunt's die, then
-   *           the dice token lands on that face and the outcome shows
-   *   puzzle  the prompt and one button per answer
-   *   offer   what accepting costs, Accept (only if it can be paid), Refuse
-   *   trade   what is asked and what the pack holds, Trade (only if carried),
-   *           Refuse
+   * One choice: a row across the right column with its label and, under it,
+   * what it costs, gives or risks. A row that cannot be taken is drawn dim
+   * and its click says why (cb does). Returns the y below it.
+   */
+  _choiceRow(p, ty, label, detail, cb, { enabled = true, danger = false } = {}) {
+    const pad = 9;
+    const lt = this.add.text(p.rx + 12, ty + pad, label, { fontFamily: FONT, fontSize: '15px', color: enabled ? (danger ? '#e8a090' : '#f2e6c8') : '#8a8f98', wordWrap: { width: p.rw - 24 } });
+    let h = pad + lt.height;
+    let dt = null;
+    if (detail) {
+      dt = this.add.text(p.rx + 12, ty + h + 2, detail, { fontFamily: FONT, fontSize: '12px', color: enabled ? '#a8b0bc' : '#d88a7a', wordWrap: { width: p.rw - 24 } });
+      h += 2 + dt.height;
+    }
+    h += pad;
+    const g = this.add.graphics();
+    const paint = (hover) => {
+      g.clear();
+      g.fillStyle(hover ? 0x2a303a : 0x1e2229, 1).fillRoundedRect(p.rx, ty, p.rw, h, 5);
+      g.lineStyle(1, hover ? 0xc8a24a : 0x454b57, 1).strokeRoundedRect(p.rx, ty, p.rw, h, 5);
+    };
+    paint(false);
+    const hit = this.add.zone(p.rx, ty, p.rw, h).setOrigin(0).setInteractive({ useHandCursor: true });
+    hit.on('pointerover', () => paint(true));
+    hit.on('pointerout', () => paint(false));
+    hit.on('pointerdown', () => { SoundManager.play('select'); cb(); });
+    p.cont.add([g, lt, ...(dt ? [dt] : []), hit]);
+    return ty + h + 6;
+  }
+
+  /**
+   * The hunter this event is about: on a check, the one who rolls; otherwise
+   * the lead's face, who came upon it. A round portrait in their player's
+   * colour, with a line saying why it is them. Returns the y below it.
+   */
+  _eventHunter(p, ty, ev) {
+    const party = this.coop ? (this.coop.party || []) : (GameState.party || []);
+    const faces = this._faces();
+    const lead = faces.find(f => f.isLead) || faces[0];
+    const byRef = (ref) => party.find(c => (c.instanceId || c.id) === ref) || null;
+    let char = null, why;
+    if (ev.shape === 'check' && ev.check.whoRef) {
+      char = byRef(ev.check.whoRef);
+      why = `rolls ${STAT_NAME[ev.check.stat] || ev.check.stat} for the party`;
+    } else if (ev.shape === 'check') {
+      char = byRef(lead?.ref);
+      why = `leads; the party's ${STAT_NAME[ev.check.stat] || ev.check.stat} decides it`;
+    } else {
+      char = byRef(lead?.ref);
+      why = 'came upon it first';
+    }
+    if (!char) return ty;
+    const owner = faces.find(f => f.playerId != null && f.playerId === char.ownerId);
+    const face = { skin: char.skin, colour: (owner || lead)?.colour };
+    p.cont.add(drawFaceToken(this, p.rx + 20, ty + 20, face, { diameter: 34 }));
+    p.cont.add(this.add.text(p.rx + 46, ty + 4, char.name, { fontFamily: FONT, fontSize: '15px', color: '#f2e6c8' }));
+    const whose = this.coop && owner ? `${owner.name}'s hunter, ` : '';
+    p.cont.add(this.add.text(p.rx + 46, ty + 23, `${whose}${why}`, { fontFamily: FONT, fontSize: '12px', color: '#a8b0bc' }));
+    return ty + 48;
+  }
+
+  /**
+   * The event the party stands on (chunk 11b; EVENTS: the shapes), on the
+   * event screen (chunk 15b). Every shape can be walked away from, which
+   * costs nothing and leaves the site.
+   *   choice  one row per option
+   *   check   who rolls and the odds; Roll rolls the hunt's die, then the
+   *           dice token lands on that face (over the vignette) and the
+   *           outcome shows
+   *   puzzle  the prompt and one row per answer
+   *   offer   what accepting costs and gives (dim if it cannot be paid), Refuse
+   *   trade   what is asked and what the pack holds, Trade (dim if not
+   *           carried), Refuse
+   *   market  the cult's stalls, bought from this player's own save
    */
   _drawEvent() {
     const ev = this.v.event;
-    const width = 380;
-    const lines = [ev.text];
-    if (ev.quest) lines.unshift(`Quest: ${ev.quest}`);
-    let buttons = [];
+    const p = this._eventFrame(ev.templateId, { title: ev.name, tag: ev.quest ? `Quest: ${ev.quest}` : null });
+    let ty = this._eventText(p, p.ty, ev.text, { size: 15, color: '#e6e1d6', gap: 12 });
+    ty = this._eventHunter(p, ty, ev);
     const act = (pick) => () => this._resolveEvent(pick);
-    if (ev.shape === 'choice') buttons = ev.options.map(o => [o.label, act({ option: o.index }), 'primary']);
+    const guest = this.coop && !this.coop.isHost;
+    const rows = [];   // [label, detail, cb, { enabled, danger }]
+
+    if (ev.shape === 'choice') for (const o of ev.options) rows.push([o.label, null, act({ option: o.index })]);
     if (ev.shape === 'check') {
       const c = ev.check;
-      const mod = c.modifier >= 0 ? `+${c.modifier}` : `${c.modifier}`;
-      lines.push(`${STAT_NAME[c.stat] || c.stat} check, DC ${c.dc}: ${c.who === 'the party' ? 'the party' : c.who} rolls d20 ${mod}.`);
-      buttons = [['Roll', () => this._rollCheck(), 'primary']];
+      const chance = checkChance(c.modifier, c.dc);
+      const who = c.who === 'the party' ? 'The party' : c.who;
+      rows.push(['Roll', `${STAT_NAME[c.stat] || c.stat}: ${who}, ${chance}% to succeed`, () => this._rollCheck()]);
     }
     if (ev.shape === 'puzzle') {
-      lines.push(ev.prompt);
-      buttons = ev.answers.map((a, k) => [a, act({ answer: k }), 'primary']);
+      ty = this._eventText(p, ty, ev.prompt, { size: 14, color: '#e8d9b0', gap: 10 });
+      ev.answers.forEach((a, k) => rows.push([a, null, act({ answer: k })]));
     }
     if (ev.shape === 'offer') {
-      if (ev.offer.supplyCost > 0) lines.push(`It costs ${fmt(ev.offer.supplyCost)} supplies${ev.offer.canAccept ? '' : ' (you have too few)'}.`);
-      const pc = ev.offer.pact;
+      const o = ev.offer;
+      const pc = o.pact;
       if (pc) {
-        lines.push(`A pact with ${pc.god}, level ${pc.level}: ${pc.gift || ''}`);
-        lines.push(`The price: ${pc.bondCost} standing with ${pc.house || 'the house'}, and a curse for the rest of the hunt (${pc.curse})${pc.endsProphet ? ' The prophet will turn away.' : ''}`);
+        ty = this._eventText(p, ty, `A pact with ${pc.god}, level ${pc.level}: ${pc.gift || ''}`, { color: '#c89ae8' });
+        ty = this._eventText(p, ty, `The price: ${pc.bondCost} standing with ${pc.house || 'the house'}, and a curse for the rest of the hunt (${pc.curse})${pc.endsProphet ? ' The prophet will turn away.' : ''}`, { gap: 10 });
       }
-      if (!pc && ev.offer.gives?.length) lines.push(`${ev.offer.label}: ${ev.offer.gives.join(', ')}.`);
-      if (!pc && ev.offer.refuseGives?.length) lines.push(`Refuse: ${ev.offer.refuseGives.join(', ')}.`);
-      buttons = [[ev.offer.label, ev.offer.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), ev.offer.canAccept ? 'primary' : 'danger'],
-        ['Refuse', act({ accept: false }), 'primary']];
-    }
-    // A cult's black market (owner, 2026-09-27): its stalls, bought from the
-    // player's own save (Sin Tickets out, goods into the camp bag).
-    if (ev.shape === 'market') {
-      const mv = marketView(ev.market, ProgressionManager);
-      lines.push(`${mv.cultName}. You carry ${mv.sinTickets} Sin Ticket${mv.sinTickets === 1 ? '' : 's'}.`);
-      for (const st of mv.stalls) {
-        if (st.kind === 'goods') for (const g of st.goods) buttons.push([`${g.name} (${g.cost})`, () => this._buy(ev.market, st.id, g.id), 'primary']);
-        else { lines.push(`${st.name}: ${st.text}`); buttons.push([`${st.kind === 'gamble' ? 'Gamble' : st.name} (${st.cost})`, () => this._buy(ev.market, st.id), 'primary']); }
-      }
+      // The preview names the price first (previewEffects), so the cost is
+      // only spelled out on its own when there is no preview (a pact).
+      const short = o.canAccept ? '' : ' (you have too few)';
+      const detail = !pc && o.gives?.length ? `${o.gives.join(', ')}${short}`
+        : o.supplyCost > 0 ? `It costs ${fmt(o.supplyCost)} supplies${short}.` : null;
+      rows.push([o.label, detail,
+        o.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), { enabled: o.canAccept }]);
+      rows.push(['Refuse', !pc && o.refuseGives?.length ? o.refuseGives.join(', ') : null, act({ accept: false })]);
     }
     if (ev.shape === 'trade') {
       // A supply item (Rations) short in the pack comes out of supplies (2026-09-27).
-      lines.push(`They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (${g.fromSupplies ? `${g.fromSupplies} from your supplies` : `you carry ${g.have}`})`).join(', ')}.`);
-      if (ev.trade.pays?.length) lines.push(`They give: ${ev.trade.pays.join(', ')}.`);
-      buttons = [['Trade', ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), ev.trade.canAccept ? 'primary' : 'danger'],
-        ['Refuse', act({ accept: false }), 'primary']];
+      ty = this._eventText(p, ty, `They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (${g.fromSupplies ? `${g.fromSupplies} from your supplies` : `you carry ${g.have}`})`).join(', ')}.`, { gap: 10 });
+      rows.push(['Trade', ev.trade.pays?.length ? `They give: ${ev.trade.pays.join(', ')}` : null,
+        ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), { enabled: ev.trade.canAccept }]);
+      rows.push(['Refuse', null, act({ accept: false })]);
     }
-    buttons.push(['Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary']);
-    // A co-op guest reads the event; the host chooses (chunk 12 decision 3).
-    if (this.coop && !this.coop.isHost) {
-      lines.push('The host decides.');
-      buttons = [['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']];
+    // A cult's black market (owner, 2026-09-27): its stalls, bought from the
+    // player's own save (Sin Tickets out, goods into the camp bag). Markets
+    // stay personal in co-op (chunk 15): a guest buys too.
+    if (ev.shape === 'market') {
+      const mv = marketView(ev.market, ProgressionManager);
+      ty = this._eventText(p, ty, `${mv.cultName}. You carry ${mv.sinTickets} Sin Ticket${mv.sinTickets === 1 ? '' : 's'}.`, { gap: 8 });
+      for (const st of mv.stalls) {
+        if (st.kind === 'goods') for (const g of st.goods) rows.push([`${g.name} (${g.cost})`, null, () => this._buy(ev.market, st.id, g.id)]);
+        else rows.push([`${st.kind === 'gamble' ? 'Gamble' : st.name} (${st.cost})`, st.text, () => this._buy(ev.market, st.id)]);
+      }
     }
-    const diceRoom = ev.shape === 'check' ? 120 : 0;
-    const height = 50 + this._linesHeight(lines, width) + diceRoom + buttons.length * 38 + 16;
-    const p = this._sidePanel(ev.tile, width, height);
-    this._panelText(p, p.px + 10, p.py + 8, ev.name, 17, '#e8c66a');
-    let ty = this._panelLines(p, p.py + 36, lines) + 8;
-    if (diceRoom) { this._diceSpot = { x: p.px + width / 2, y: ty + diceRoom / 2, w: width - 40, h: diceRoom - 10 }; ty += diceRoom; }
-    for (const [label, cb, style] of buttons) {
-      this._panelButton(p, p.px + width / 2, ty + 16, label, cb, style);
-      ty += 38;
+
+    ty += 4;
+    for (const [label, detail, cb, opts] of rows) {
+      const take = guest && ev.shape !== 'market' ? () => this._say('The host decides.') : cb;
+      ty = this._choiceRow(p, ty, label, detail, take, opts);
+    }
+    if (ev.shape === 'check') {
+      const vg = p.vignette;
+      this._diceSpot = { x: vg.x + vg.w / 2, y: vg.y + vg.h / 2, w: vg.w - 20, h: 130 };
+    }
+
+    // The foot: Walk away (the host or solo), or a guest's wait and Leave.
+    const { x, y, w, h } = EVENT_SCREEN;
+    if (guest) {
+      p.cont.add(this.add.text(p.rx, y + h - 34, 'The host decides.', { fontFamily: FONT, fontSize: '13px', color: '#a8b0bc' }));
+      this._panelButton(p, x + w - 110, y + h - 26, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+    } else {
+      this._panelButton(p, x + w - 80, y + h - 26, 'Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary');
     }
   }
 
@@ -1190,25 +1342,26 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const lines = [...res.lines];
     if (res.roll) {
       const r = res.roll;
-      lines.unshift(`Rolled ${r.die} ${r.modifier >= 0 ? '+' : '-'} ${Math.abs(r.modifier)} = ${r.total} against DC ${r.dc}: ${res.branch === 'success' ? 'success' : 'failure'}.`);
+      const who = r.who && r.who !== 'the party' ? r.who : 'The party';
+      lines.unshift(`${who} rolled ${r.die} ${r.modifier >= 0 ? '+' : '-'} ${Math.abs(r.modifier)} = ${r.total}, needing ${r.dc}: ${res.branch === 'success' ? 'success' : 'failure'}.`);
     }
     if (!lines.length) lines.push(res.branch === 'refuse' ? 'You leave it be.' : 'Nothing more comes of it.');
-    this._eventResult = { name: ev.name, lines, success: res.branch !== 'failure' };
+    this._eventResult = { name: ev.name, templateId: ev.templateId, quest: ev.quest || null, lines, success: res.branch !== 'failure' };
     if (res.encounter) SoundManager.play('handsClick');
     else if (res.branch === 'failure') SoundManager.play('handsClick');
     else SoundManager.play('reward');
     this._refresh();
   }
 
-  /** What an event came to. Continue clears it; a fight it started is next. */
+  /** What an event came to, on the event screen with its vignette (chunk
+   *  15b). Continue clears it; a fight it started is next. */
   _drawEventResult() {
     const r = this._eventResult;
-    const width = 380;
-    const height = 50 + this._linesHeight(r.lines, width) + 54;
-    const p = this._sidePanel(this.v.pos, width, height);
-    this._panelText(p, p.px + 10, p.py + 8, r.name, 17, r.success ? '#e8c66a' : '#d88a7a');
-    const ty = this._panelLines(p, p.py + 36, r.lines) + 8;
-    this._panelButton(p, p.px + width / 2, ty + 16, 'Continue', () => { this._eventResult = null; this._refresh(); });
+    const p = this._eventFrame(r.templateId, { title: r.name, titleColor: r.success ? '#e8c66a' : '#d88a7a', tag: r.quest ? `Quest: ${r.quest}` : null });
+    let ty = p.ty;
+    for (const l of r.lines) ty = this._eventText(p, ty, l, { size: 14, color: '#e6e1d6', gap: 6 });
+    const { x, y, w, h } = EVENT_SCREEN;
+    this._panelButton(p, x + w - 80, y + h - 26, 'Continue', () => { this._eventResult = null; this._refresh(); });
   }
 
   /**

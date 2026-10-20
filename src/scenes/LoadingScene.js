@@ -1,4 +1,5 @@
 import { AUDIO_MANIFEST, MUSIC_MANIFEST } from '../systems/SoundManager.js';
+import { VIGNETTE_ART, vignettePath, vignetteTextureKey } from '../../data/vignettes.js';
 
 export default class LoadingScene extends Phaser.Scene {
   constructor() {
@@ -116,6 +117,9 @@ export default class LoadingScene extends Phaser.Scene {
         this.load.image(key, path);
       }
     }
+    // Event vignettes (chunk 15b): only the pictures listed as drawn
+    // (data/vignettes.js says how to add one).
+    for (const key of VIGNETTE_ART) this.load.image(vignetteTextureKey(key), vignettePath(key));
     // Weakness portrait overlays — grayscale, tinted at runtime per family
     // (see CombatScene._updateWeaknessOverlays). Painted against the 128x128
     // portrait template, rendered down to the portrait's live 64x64.
