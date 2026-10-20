@@ -10,7 +10,7 @@ status: "approved"
 teaser: false
 requires: []
 sort: 28
-version: 2
+version: 3
 updatedAt: 2026-10-20
 ---
 # Hunting Together
@@ -31,6 +31,18 @@ The lobby shows what each player brings for the party. Your camp bag stays in ca
 **Anyone can move the party.** The host does everything else: forage, fish, camp, wait, choose at events, start and flee fights, and lead the party into a boss's lair.
 
 Fights are shared. Each player commands their own hunters on their own turns, and gear you equip on the map is what your hunter wears in the next fight.
+
+## Events: everyone votes
+
+When the party meets an event, every player votes by clicking a choice, and your hunter's face appears on it so everyone can see who picked what. Walking away is a choice like any other. Nothing happens until everyone has voted, and there is no timer. The most votes win, and a tie goes to the lead's pick. If one player has gone quiet, the lead can **Call it** once everyone else has voted.
+
+Some choices are not voted:
+
+- **A roll belongs to the hunter who makes it.** On a check, the hunter rolling is named, and their player makes the call; anyone else's pick shows faintly, as a suggestion.
+- **A false god's pact needs everyone.** One player saying no is enough to refuse it.
+- **Black markets are your own.** Everyone buys from their own camp bag; only leaving is voted.
+
+Everyone sees what came of it, the dice included.
 
 ## What you find
 

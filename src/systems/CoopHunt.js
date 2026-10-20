@@ -36,6 +36,7 @@ import { applyTakeHome, cleanExitEntries, OWN_TRIBE } from './CoopRewards.js';
 import { makeStack } from './ItemStacks.js';
 import { Items } from '../../data/items.js';
 import { pledgeOf, kindOf, PARTY } from './PackPlan.js';
+import { eventKey, choicesFor, ruleFor, tally, runChoice } from './EventVotes.js';
 
 export const COOP_SNAPSHOT_VERSION = 1;
 
@@ -136,6 +137,13 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     tookHome: null,       // this save's summary, once it has taken its share
     fighting: null,       // the spec of the fight in progress, as the server sent it
     ended: null,          // the huntEnded message, once the hunt is over
+    // Event votes (chunk 15d; EventVotes.js): the open event's key and each
+    // player's vote, and the last event outcome, for every screen (the host
+    // keeps them, and they ride in every snapshot).
+    votes: { key: null, votes: {} },
+    lastResult: null,
+    /** Who leads (chunk 15d: the host; 15e lets it pass). Ties and calling it. */
+    get leadId() { return client.hostId; },
 
     on(event, fn) {
       if (!listeners.has(event)) listeners.set(event, new Set());
@@ -157,7 +165,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
 
     /** The snapshot the server stores and relays. */
     snapshot() {
-      return { v: COOP_SNAPSHOT_VERSION, id: ch.id, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals() };
+      return { v: COOP_SNAPSHOT_VERSION, id: ch.id, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals(),
+        votes: plain(ch.votes), lastResult: plain(ch.lastResult) };
     },
 
     /**
@@ -230,6 +239,67 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     },
   };
   let fieldFacade = null;
+
+  /** Every player's id on the hunt, in seat order: who votes. */
+  const playerIds = () => (client.lobby?.players || []).map(p => p.id);
+
+  /**
+   * Where the vote on the open event stands, for the screen (chunk 15d): the
+   * rule, who voted for what, who is still to vote, and whether the lead may
+   * call it. The same on every client: the votes come in the snapshot.
+   */
+  ch.voteView = () => {
+    const ev = ch.view()?.event;
+    if (!ev) return null;
+    const key = eventKey(ev);
+    const votes = ch.votes?.key === key ? { ...ch.votes.votes } : {};
+    const { rule, ownerId } = ruleFor(ev, party);
+    const players = playerIds();
+    const t = tally({ rule, ownerId, votes, players, leadId: ch.leadId, choices: choicesFor(ev) });
+    return { key, rule, ownerId, votes, players, leadId: ch.leadId, waitingOn: t.waitingOn, canCall: t.canCall, mine: votes[client.playerId] || null };
+  };
+
+  /**
+   * This player's vote on the open event (`call`: the lead calls it). The
+   * host counts it at once; a guest's goes to the host (voteIntent), and the
+   * next snapshot shows it.
+   */
+  ch.vote = (choice, { call = false } = {}) => {
+    const ev = ch.view()?.event;
+    if (!ev) return { ok: false, reason: 'there is nothing to vote on' };
+    if (ch.fighting) return { ok: false, reason: 'the hunt waits while the fight is on' };
+    if (ch.isHost) return castVote(client.playerId, eventKey(ev), choice, call);
+    client.vote(eventKey(ev), choice || '', call);
+    return { ok: true, pending: true };
+  };
+
+  /**
+   * The host counts a vote, and when the vote is decided, its hunt makes the
+   * choice (EventVotes.runChoice) and every screen is told the outcome
+   * (`lastResult`: its lines, the roll for the dice, whether it went on).
+   */
+  function castVote(from, key, choice, call) {
+    if (!ch.isHost || !ch.hunt) return { ok: false, reason: 'only the host counts votes' };
+    const ev = ch.hunt.view().event;
+    if (!ev || eventKey(ev) !== key) return { ok: false, reason: 'that event has moved on' };
+    if (ch.votes.key !== key) ch.votes = { key, votes: {} };
+    const choices = choicesFor(ev);
+    if (choice && choices.includes(choice)) ch.votes.votes[from] = choice;
+    const { rule, ownerId } = ruleFor(ev, party);
+    const t = tally({ rule, ownerId, votes: ch.votes.votes, players: playerIds(), leadId: ch.leadId, choices, call: !!call && from === ch.leadId });
+    if (!t.decided) { publish(); return { ok: true, pending: true }; }
+    const res = runChoice(ch.hunt, t.decided);
+    if (!res?.ok) { publish(); return res || { ok: false }; }
+    ch.votes = { key: null, votes: {} };
+    ch.lastResult = {
+      id: `${key}:${ch.version + 1}`, key, choice: t.decided, name: ev.name, templateId: ev.templateId, quest: ev.quest || null,
+      lines: res.lines || [], branch: res.branch || (t.decided === 'leave' ? 'left' : t.decided === 'escape' ? 'escape' : null),
+      roll: res.roll || null, next: res.next || null, encounter: !!res.encounter,
+    };
+    publish();
+    emit('eventDecided', ch.lastResult);
+    return res;
+  }
 
   // ── Both sides ──────────────────────────────────────────────────────────────
   unsubs.push(client.on('started', () => {
@@ -405,6 +475,12 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       else emit('moved', { by: m.from, name: m.name, res });
     }));
 
+    // A guest's vote (chunk 15d): counted, or refused back to them.
+    unsubs.push(client.on('voteIntent', (m) => {
+      const res = castVote(m.from, m.key, m.choice, m.call);
+      if (res && res.ok === false) client.huntRefuse(m.from, res.reason || 'the host could not take that vote');
+    }));
+
     // How the fight ended, applied to the real hunt exactly where CombatScene
     // applies it in single player: winEncounter / flee / wipe. The fight's XP
     // pool goes into the ledger (single player pays it from CombatScene; here
@@ -464,6 +540,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     syncFinds();
     remember(env);
     ledger.splice(0, ledger.length, ...(env.ledger || []));
+    ch.votes = env.votes || { key: null, votes: {} };
+    ch.lastResult = env.lastResult || null;
     emit('changed', ch.view());
   }
 

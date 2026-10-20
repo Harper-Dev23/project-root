@@ -77,6 +77,9 @@ const bootWith = (P, from, extra = '') => P.bootToTown(`
   const { makeParty } = await import('/tools/headless/fixtures.js');
   const GS = (await import('/src/systems/GameState.js')).default;
   const party = makeParty().slice(${from}, ${from + 3}); GS.characters = party; GS.party = party;
+  // A clean slate: no pack remembered from an earlier run in this browser
+  // profile (chunk 15f remembers the last hunt's).
+  if (GS.flags) delete GS.flags.lastHunt;
   ${extra}`);
 
 try {
@@ -204,6 +207,43 @@ try {
     check('the guest\'s clicks moved the party: the host\'s hunt took it, both maps agree', hp === target.tile && gp === target.tile, `${hp} / ${gp}`);
     await G.shot('04-guest-moved');
   }
+
+  // ── 4b. An event, voted on (chunk 15d) ──────────────────────────────────────
+  // Sinking Mud placed beside the party on the host's hunt; the guest votes
+  // Press on, the host Go around: a tie, so the lead's (the host's) wins.
+  const placed = await H.evaluate(`
+    const { restoreMapHunt } = await import('/src/systems/HuntEngine.js');
+    const { mapNeighbors } = await import('/src/systems/HuntMapGen.js'); const { isPassable } = await import('/data/grounds.js');
+    const coop = window.__T.s().coop;
+    const d = coop.hunt.serialize();
+    // A free neighbour if there is one; else one is cleared for the event.
+    const near = [...mapNeighbors(d.map, d.pos)].filter(id => d.map.tiles[id] && isPassable(d.map.tiles[id]) && !d.map.tiles[id].exit);
+    const tile = near.find(id => !d.map.occupants.some(o => o.tile === id)) || near[0];
+    d.map.occupants = d.map.occupants.filter(o => o.tile !== tile);
+    d.map.occupants.push({ id: 'ovote', kind: 'event', tile, eventId: 'reeds_sinking_mud', concealment: 0 });
+    for (const o of d.map.occupants) { o.noticed = true; if (o.kind === 'beast') { o.state = 'rooted'; o.home = 'rooted'; o.nextStepAt = null; } }
+    d.event = null; d.encounter = null;   // a real event the walk stepped on is left
+    coop.hunt = restoreMapHunt(d, coop.hostWorld, { view: true });
+    const res = coop.move(tile);
+    await new Promise(r => setTimeout(r, 600));
+    return { tile, ok: res?.ok, reason: res?.reason || null, event: coop.view()?.event?.templateId || null, enc: !!coop.view()?.encounter };`);
+  check('an event opens on both screens', placed.event === 'reeds_sinking_mud'
+    && await waitFor(G, `window.__T.textsOf('${MAP}').some(t => t.text === 'Press on')`, 5000)
+    && !!(await H.findText('^Press on$', MAP)), JSON.stringify(placed));
+  await G.clickText('^Press on$', MAP);
+  check("the guest's vote shows on the host's screen, with who is still to vote",
+    await waitFor(H, `window.__T.textsOf('${MAP}').some(t => /^Votes: 1 of 2, waiting for you\\./.test(t.text))`, 5000));
+  await H.shot('03b-vote-host');
+  await G.shot('03b-vote-guest');
+  await H.clickText('^Go around$', MAP);
+  const out = 'You take the long way round, testing every step.';
+  check('both voted, a tie: the lead\'s choice is made, and both see the outcome',
+    await waitFor(H, `window.__T.textsOf('${MAP}').some(t => t.text === '${out}')`, 5000)
+    && await waitFor(G, `window.__T.textsOf('${MAP}').some(t => t.text === '${out}')`, 5000));
+  await G.shot('03c-outcome-guest');
+  await H.clickText('^Continue$', MAP);
+  await G.clickText('^Continue$', MAP);
+  await sleep(300);
 
   // ── 5. To a fight; the host's Fight click takes both players there ──────────
   const walked = await H.evaluate(`

@@ -534,6 +534,75 @@ console.log('=== 15f-2: party items from both players, one shared pack ===');
   check('...and the fish spoiled on the way home, as fresh food does', unitsIn(hg.brought, 'raw_fish') + unitsIn(gg.brought, 'raw_fish') === 0);
 }
 
+console.log('=== 15d: event votes, two players ===');
+{
+  const V = await setup('VOTE');
+  V.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'scout', size: 'medium', mods: {}, bonusObjectives: [] }, supplies: 200, bring: [], seed: 77 });
+  await until(() => V.guest.version === V.host.version, 'the guest caught up');
+  const { isPassable: passable } = await import('../data/grounds.js');
+  const { mapNeighbors: around } = await import('../src/systems/HuntMapGen.js');
+  /** Put an event beside the party (a quiet world), and step onto it. */
+  const place = async (templateId) => {
+    const d = V.host.hunt.serialize();
+    const tile = [...around(d.map, d.pos)].find(id => d.map.tiles[id] && passable(d.map.tiles[id]) && !d.map.tiles[id].exit && !d.map.occupants.some(o => o.tile === id));
+    d.map.occupants.push({ id: 'ovote_' + Math.floor(Math.random() * 1e9), kind: 'event', tile, eventId: templateId, concealment: 0 });
+    for (const o of d.map.occupants) { o.noticed = true; if (o.kind === 'beast') { o.state = 'rooted'; o.home = 'rooted'; o.nextStepAt = null; } }
+    d.event = null; d.encounter = null;
+    V.host.hunt = restoreMapHunt(d, V.host.hostWorld, { view: true });
+    const r = V.host.move(tile);
+    await until(() => V.guest.version === V.host.version, 'the event reached the guest');
+    return r;
+  };
+  const synced = () => until(() => V.guest.version === V.host.version, 'in step');
+
+  let r = await place('reeds_sinking_mud');
+  check('an event opens for both players', r.ok && V.host.view().event?.templateId === 'reeds_sinking_mud' && V.guest.view().event?.templateId === 'reeds_sinking_mud', r.reason || '');
+  V.guest.vote('option:1');
+  await until(() => V.guest.voteView()?.votes.p2 === 'option:1', "the guest's vote on every screen");
+  const vv = V.host.voteView();
+  check("the guest's vote is counted, and shows on both screens", vv.votes.p2 === 'option:1' && V.guest.voteView().votes.p2 === 'option:1');
+  check('...nothing happens until everyone has voted (no time limit)', !!V.host.view().event && vv.waitingOn.join() === 'p1', vv.waitingOn.join());
+  V.host.vote('option:0');
+  await synced();
+  check('everyone in, a tie (1 to 1): the lead\'s vote wins (Go around)', !V.host.view().event && V.host.lastResult?.choice === 'option:0', JSON.stringify(V.host.lastResult));
+  check('...and the guest sees the outcome: its name and lines', V.guest.lastResult?.choice === 'option:0' && V.guest.lastResult.lines.includes('You take the long way round, testing every step.'),
+    JSON.stringify(V.guest.lastResult?.lines));
+
+  r = await place('reeds_sinking_mud');
+  V.guest.vote('option:1'); await until(() => V.host.voteView()?.votes.p2 === 'option:1', 'the vote');
+  V.host.vote('option:1'); await synced();
+  const beat = V.guest.view().event;
+  check('both say Press on: the event goes on, on every screen', beat?.beat?.id === 'stuck' && V.guest.lastResult?.next === 'stuck');
+  const rule = V.host.voteView();
+  const owner = rule.ownerId, other = owner === 'p1' ? 'p2' : 'p1';
+  const side = (pid) => (pid === 'p1' ? V.host : V.guest);
+  check('a check is the rolling hunter\'s player\'s call', rule.rule === 'personal' && (owner === 'p1' || owner === 'p2'), `${rule.rule} ${owner}`);
+  side(other).vote('roll');
+  await until(() => V.host.voteView()?.votes[other] === 'roll', 'the suggestion');
+  check("...anyone else's pick is a suggestion: the mud waits", !!V.host.view().event?.beat);
+  side(owner).vote('roll');
+  await synced();
+  check('...theirs rolls it, and every screen gets the roll for the dice', !V.host.view().event && V.guest.lastResult?.choice === 'roll' && Number.isInteger(V.guest.lastResult?.roll?.die),
+    JSON.stringify(V.guest.lastResult?.roll));
+
+  r = await place('reeds_sinking_mud');
+  V.host.vote('option:0');
+  await synced();
+  check('with all but one voted, the lead may call it', V.host.voteView()?.canCall === true && !!V.host.view().event);
+  V.host.vote(null, { call: true });
+  await synced();
+  check('...and calling it decides on the votes cast', !V.host.view().event && V.host.lastResult?.choice === 'option:0');
+  r = await place('reeds_sinking_mud');
+  V.guest.vote('option:0', { call: true });
+  await until(() => V.host.voteView()?.votes.p2 === 'option:0', 'the guest vote');
+  await synced();
+  check('only the lead can call it: a guest\'s call is just their vote', !!V.host.view().event && V.host.voteView().votes.p2 === 'option:0');
+  V.host.vote('leave');
+  await synced();
+  check('walking away is a vote too: a tie, to the lead (who walked away)', !V.host.view().event && V.host.lastResult?.choice === 'leave');
+  V.hostC.disconnect(); V.guestC.disconnect();
+}
+
 console.log('=== two fights in one hunt ===');
 {
   const T = await departToEncounter('TWO', 'beast', 100);

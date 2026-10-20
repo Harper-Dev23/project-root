@@ -154,6 +154,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
   init(data) {
     this.coop = data?.coop || null;
+    // The last event outcome already seen (chunk 15d): one from before this
+    // screen opened (a fight in between) is not shown again.
+    this._seenResultId = this.coop?.lastResult?.id || null;
     this.hunt = this.coop ? this.coop.field() : (data?.hunt || null);
     this._coopUnsubs = [];
     this.onDone = typeof data?.onDone === 'function' ? data.onDone : null;
@@ -322,6 +325,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._panelRect = null;
     if (!this.hunt.view()) { this._drawWaiting(); return; }
     this.v = this.hunt.view();
+    // Co-op (chunk 15d): an event outcome the host's hunt just made, shown
+    // on every screen, the dice first.
+    if (this.coop) this._takeCoopResult();
     const v = this.v;
     if (this.selected && !v.layout.includes(this.selected)) this.selected = v.pos;
     if (this.layer) this.layer.destroy(true);
@@ -1150,7 +1156,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * what it costs, gives or risks. A row that cannot be taken is drawn dim
    * and its click says why (cb does). Returns the y below it.
    */
-  _choiceRow(p, ty, label, detail, cb, { enabled = true, danger = false } = {}) {
+  _choiceRow(p, ty, label, detail, cb, { enabled = true, danger = false, picked = false } = {}) {
     const pad = 9;
     const lt = this.add.text(p.rx + 12, ty + pad, label, { fontFamily: FONT, fontSize: '15px', color: enabled ? (danger ? '#e8a090' : '#f2e6c8') : '#8a8f98', wordWrap: { width: p.rw - 24 } });
     let h = pad + lt.height;
@@ -1161,10 +1167,11 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     }
     h += pad;
     const g = this.add.graphics();
+    // A row you voted for (co-op, chunk 15d) keeps its gold edge.
     const paint = (hover) => {
       g.clear();
-      g.fillStyle(hover ? 0x2a303a : 0x1e2229, 1).fillRoundedRect(p.rx, ty, p.rw, h, 5);
-      g.lineStyle(1, hover ? 0xc8a24a : 0x454b57, 1).strokeRoundedRect(p.rx, ty, p.rw, h, 5);
+      g.fillStyle(hover || picked ? 0x2a303a : 0x1e2229, 1).fillRoundedRect(p.rx, ty, p.rw, h, 5);
+      g.lineStyle(picked ? 2 : 1, hover || picked ? 0xc8a24a : 0x454b57, 1).strokeRoundedRect(p.rx, ty, p.rw, h, 5);
     };
     paint(false);
     const hit = this.add.zone(p.rx, ty, p.rw, h).setOrigin(0).setInteractive({ useHandCursor: true });
@@ -1233,18 +1240,21 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     ty = this._eventHunter(p, ty, ev);
     const act = (pick) => () => this._resolveEvent(pick);
     const guest = this.coop && !this.coop.isHost;
-    const rows = [];   // [label, detail, cb, { enabled, danger }]
+    // Co-op (chunk 15d): every party choice is a vote (EventVotes.js); a
+    // row carries its choice id, and the faces of who voted for it.
+    const vote = this.coop?.voteView?.() || null;
+    const rows = [];   // [label, detail, cb, { enabled, danger }, choice id]
 
-    if (ev.shape === 'choice') for (const o of ev.options) rows.push([o.label, null, act({ option: o.index })]);
+    if (ev.shape === 'choice') for (const o of ev.options) rows.push([o.label, null, act({ option: o.index }), {}, `option:${o.index}`]);
     if (ev.shape === 'check') {
       const c = ev.check;
       const chance = checkChance(c.modifier, c.dc);
       const who = c.who === 'the party' ? 'The party' : c.who;
-      rows.push(['Roll', `${STAT_NAME[c.stat] || c.stat}: ${who}, ${chance}% to succeed`, () => this._rollCheck()]);
+      rows.push(['Roll', `${STAT_NAME[c.stat] || c.stat}: ${who}, ${chance}% to succeed`, () => this._rollCheck(), {}, 'roll']);
     }
     if (ev.shape === 'puzzle') {
       ty = this._eventText(p, ty, ev.prompt, { size: 14, color: '#e8d9b0', gap: 10 });
-      ev.answers.forEach((a, k) => rows.push([a, null, act({ answer: k })]));
+      ev.answers.forEach((a, k) => rows.push([a, null, act({ answer: k }), {}, `answer:${k}`]));
     }
     if (ev.shape === 'offer') {
       const o = ev.offer;
@@ -1259,15 +1269,15 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       const detail = !pc && o.gives?.length ? `${o.gives.join(', ')}${short}`
         : o.supplyCost > 0 ? `It costs ${fmt(o.supplyCost)} supplies${short}.` : null;
       rows.push([o.label, detail,
-        o.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), { enabled: o.canAccept }]);
-      rows.push(['Refuse', !pc && o.refuseGives?.length ? o.refuseGives.join(', ') : null, act({ accept: false })]);
+        o.canAccept ? act({ accept: true }) : () => this._say('You cannot pay the price.'), { enabled: o.canAccept }, o.canAccept ? 'accept' : null]);
+      rows.push(['Refuse', !pc && o.refuseGives?.length ? o.refuseGives.join(', ') : null, act({ accept: false }), {}, 'refuse']);
     }
     if (ev.shape === 'trade') {
       // A supply item (Rations) short in the pack comes out of supplies (2026-09-27).
       ty = this._eventText(p, ty, `They ask for ${ev.trade.give.map(g => `${g.qty} × ${g.name} (${g.fromSupplies ? `${g.fromSupplies} from your supplies` : `you carry ${g.have}`})`).join(', ')}.`, { gap: 10 });
       rows.push(['Trade', ev.trade.pays?.length ? `They give: ${ev.trade.pays.join(', ')}` : null,
-        ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), { enabled: ev.trade.canAccept }]);
-      rows.push(['Refuse', null, act({ accept: false })]);
+        ev.trade.canAccept ? act({ accept: true }) : () => this._say('You do not carry what they ask.'), { enabled: ev.trade.canAccept }, ev.trade.canAccept ? 'accept' : null]);
+      rows.push(['Refuse', null, act({ accept: false }), {}, 'refuse']);
     }
     // A cult's black market (owner, 2026-09-27): its stalls, bought from the
     // player's own save (Sin Tickets out, goods into the camp bag). Markets
@@ -1285,29 +1295,71 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (ev.beat) {
       const n = ev.beat.ropes || 0;
       rows.push(['Use an Escape Rope', n ? `Get clear of it. You carry ${n}.` : 'You carry none: the only way out is through.',
-        n ? () => this._escapeEvent() : () => this._say('You carry no Escape Rope.'), { enabled: n > 0 }]);
+        n ? () => this._escapeEvent() : () => this._say('You carry no Escape Rope.'), { enabled: n > 0 }, n > 0 ? 'escape' : null]);
     }
+    // In co-op, walking away is voted like any other choice: a row.
+    if (vote && !ev.beat) rows.push(['Walk away', 'Leave it be; it costs nothing.', null, {}, 'leave']);
 
     ty += 4;
-    for (const [label, detail, cb, opts] of rows) {
-      const take = guest && ev.shape !== 'market' ? () => this._say('The host decides.') : cb;
-      ty = this._choiceRow(p, ty, label, detail, take, opts);
+    for (const [label, detail, cb, opts = {}, choice] of rows) {
+      const rowTop = ty;
+      const take = vote && choice ? () => this._vote(choice) : cb;
+      ty = this._choiceRow(p, ty, label, detail, take, { ...opts, picked: !!vote && vote.mine === choice });
+      if (vote && choice) this._drawVoters(p, rowTop, ty - 6, choice, vote);
     }
     if (ev.shape === 'check') {
       const vg = p.vignette;
       this._diceSpot = { x: vg.x + vg.w / 2, y: vg.y + vg.h / 2, w: vg.w - 20, h: 130 };
     }
 
-    // The foot: Walk away (the host or solo), or a guest's wait and Leave.
+    // The foot. Co-op: where the vote stands, Call it for the lead, and a
+    // guest's way out of the hunt. Solo: Walk away, or committed.
     const { x, y, w, h } = EVENT_SCREEN;
-    if (guest) {
-      p.cont.add(this.add.text(p.rx, y + h - 34, 'The host decides.', { fontFamily: FONT, fontSize: '13px', color: '#a8b0bc' }));
-      this._panelButton(p, x + w - 110, y + h - 26, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+    if (vote) {
+      p.cont.add(this.add.text(p.rx, y + h - 64, this._voteLine(vote, ev), { fontFamily: FONT, fontSize: '12px', color: '#a8b0bc', wordWrap: { width: p.rw } }));
+      if (vote.canCall && vote.leadId === this.coop.client?.playerId) this._panelButton(p, x + w - 70, y + h - 26, 'Call it', () => this._vote(null, { call: true }), 'confirm');
+      if (guest) this._panelButton(p, p.rx + 100, y + h - 26, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
     } else if (ev.beat) {
       p.cont.add(this.add.text(p.rx, y + h - 34, 'You are committed: there is no walking away now.', { fontFamily: FONT, fontSize: '13px', color: '#a8b0bc' }));
     } else {
       this._panelButton(p, x + w - 80, y + h - 26, 'Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary');
     }
+  }
+
+  /** A vote on the open event (chunk 15d). The host's next snapshot shows it. */
+  _vote(choice, opts = {}) {
+    const res = this.coop?.vote?.(choice, opts);
+    if (res && res.ok === false) this._say(res.reason ? `Cannot: ${res.reason}.` : 'Cannot vote now.');
+    else SoundManager.play('select');
+    this._refresh();
+  }
+
+  /** Small faces of who voted for a choice, at its row's right (chunk 15d).
+   *  A pick that only suggests (someone else's call) is drawn faint. */
+  _drawVoters(p, top, bottom, choice, vote) {
+    const faces = this._faces();
+    const voters = Object.entries(vote.votes).filter(([, c]) => c === choice).map(([pid]) => pid);
+    voters.forEach((pid, i) => {
+      const f = faces.find(x => x.playerId === pid);
+      if (!f) return;
+      const objs = drawFaceToken(this, p.rx + p.rw - 18 - i * 26, (top + bottom) / 2, f, { diameter: 18, ring: 2 });
+      if (vote.rule === 'personal' && pid !== vote.ownerId) objs.forEach(o => o.setAlpha?.(0.45));
+      p.cont.add(objs);
+    });
+  }
+
+  /** One line on where the vote stands (chunk 15d). */
+  _voteLine(vote, ev) {
+    const faces = this._faces();
+    const nameOf = (pid) => (pid === this.coop.client?.playerId ? 'you' : faces.find(f => f.playerId === pid)?.name || pid);
+    if (vote.rule === 'personal') {
+      const mine = vote.ownerId === this.coop.client?.playerId;
+      return `${ev.check?.who || 'Their hunter'} rolls, so this is ${mine ? 'your call' : `${nameOf(vote.ownerId)}'s call`}.${mine ? '' : ' Your pick shows as a suggestion.'}`;
+    }
+    const n = Object.keys(vote.votes).filter(pid => vote.players.includes(pid)).length;
+    const waiting = vote.waitingOn.map(nameOf);
+    const head = vote.rule === 'unanimous' ? 'A pact needs everyone\'s yes. ' : '';
+    return `${head}Votes: ${n} of ${vote.players.length}${waiting.length ? `, waiting for ${waiting.join(', ')}` : ''}. A tie goes to the lead.`;
   }
 
   /** Out of a committed event with an Escape Rope (chunk 15c). */
@@ -1386,11 +1438,48 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._refresh();
   }
 
+  /**
+   * Co-op (chunk 15d): the host's hunt made an event choice (the vote
+   * decided it) and published the outcome. Every screen shows it, the host's
+   * too: the dice for a roll, landing on the face the hunt rolled, then the
+   * result. A Walk away shows nothing; a beat that went on shows the next
+   * beat (its text is led by what happened).
+   */
+  _takeCoopResult() {
+    const r = this.coop.lastResult;
+    if (!r || r.id === this._seenResultId) return;
+    this._seenResultId = r.id;
+    if (r.choice === 'leave') return;
+    const lines = [...(r.lines || [])];
+    if (r.roll) {
+      const who = r.roll.who && r.roll.who !== 'the party' ? r.roll.who : 'The party';
+      lines.unshift(`${who} rolled ${r.roll.die} ${r.roll.modifier >= 0 ? '+' : '-'} ${Math.abs(r.roll.modifier)} = ${r.roll.total}, needing ${r.roll.dc}: ${r.branch === 'success' ? 'success' : 'failure'}.`);
+    }
+    if (!lines.length) lines.push(r.branch === 'refuse' ? 'You leave it be.' : 'Nothing more comes of it.');
+    const done = { name: r.name, templateId: r.templateId, quest: r.quest, lines, success: r.branch !== 'failure' };
+    const sound = () => SoundManager.play(r.encounter || r.branch === 'failure' ? 'handsClick' : r.next ? 'select' : 'reward');
+    if (!r.roll) { if (!r.next) this._eventResult = done; sound(); return; }
+    // The dice land over the vignette; the outcome shows when they settle.
+    if (!r.next) this._eventResult = { ...done, pendingRoll: r.roll.who && r.roll.who !== 'the party' ? r.roll.who : 'The party' };
+    const vx = EVENT_SCREEN.x + 16 + VIGNETTE.w / 2, vy = EVENT_SCREEN.y + 16 + VIGNETTE.h / 2;
+    const token = new DiceToken(this, { x: vx, y: vy, width: VIGNETTE.w - 20, height: 130, depth: 30, value: r.roll.die,
+      onSettled: () => this.time.delayedCall(350, () => {
+        token.destroy();
+        if (!r.next && this._eventResult?.pendingRoll) this._eventResult = done;
+        sound();
+        this._refresh();
+      }) });
+    SoundManager.play('select');
+    token.roll();
+  }
+
   /** What an event came to, on the event screen with its vignette (chunk
    *  15b). Continue clears it; a fight it started is next. */
   _drawEventResult() {
     const r = this._eventResult;
     const p = this._eventFrame(r.templateId, { title: r.name, titleColor: r.success ? '#e8c66a' : '#d88a7a', tag: r.quest ? `Quest: ${r.quest}` : null });
+    // Co-op (chunk 15d): the dice are still rolling over the vignette.
+    if (r.pendingRoll) { this._eventText(p, p.ty, `${r.pendingRoll} rolls…`, { size: 14, color: '#a8b0bc' }); return; }
     let ty = p.ty;
     for (const l of r.lines) ty = this._eventText(p, ty, l, { size: 14, color: '#e6e1d6', gap: 6 });
     const { x, y, w, h } = EVENT_SCREEN;

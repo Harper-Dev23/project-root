@@ -633,6 +633,24 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       send(host.conn, { t: 'moveIntent', from: player.id, name: player.name, tile: msg.tile, hunt: msg.hunt === true, version: h.version });
     },
 
+    /**
+     * { t:'vote', key, choice, call? } - a player's vote on the open event
+     * (chunk 15d): carried to the host, whose hunt keeps the tally and
+     * resolves what it decides. `key` names the event and beat voted on, so a
+     * vote on one the hunt has moved past is ignored there. `call`: the lead
+     * calls it. The server reads none of it.
+     */
+    vote(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      if (lobby.session) return fail(conn, 'the hunt waits while the fight is on');
+      const key = String(msg.key ?? '').slice(0, 200), choice = String(msg.choice ?? '').slice(0, 40);
+      if (!key || !/^[a-z]+(:\d+)?$/.test(choice)) return fail(conn, 'that is not a vote');
+      const host = hostOf(lobby);
+      if (!host?.conn) return fail(conn, 'the host is away');
+      send(host.conn, { t: 'voteIntent', from: player.id, name: player.name, key, choice, call: msg.call === true });
+    },
+
     /** { t:'huntRefuse', to, reason } - host only: tell one player why their
      *  move was not taken (the host's hunt said no). */
     huntRefuse(conn, msg, lobby, player) {

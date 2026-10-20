@@ -207,6 +207,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     setRations(qty) { return client.send({ t: 'setRations', qty }); },
     /** What this player brings to the shared pack (chunk 15f-2): Rations and party items. */
     setPack(rations, items = {}) { return client.send({ t: 'setPack', rations, items }); },
+    /** A vote on the open event (chunk 15d): `call` is the lead calling it. */
+    vote(key, choice, call = false) { return client.send({ t: 'vote', key, choice, ...(call ? { call: true } : {}) }); },
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
     move(tile, version, { hunt = false } = {}) { return client.send({ t: 'move', tile, version, ...(hunt ? { hunt: true } : {}) }); },
     huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },
@@ -327,6 +329,11 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
 
       case 'moveIntent':
         emit('moveIntent', msg);
+        break;
+
+      // A player's vote on the open event, for the host's tally (chunk 15d).
+      case 'voteIntent':
+        emit('voteIntent', msg);
         break;
 
       case 'huntRoster':
