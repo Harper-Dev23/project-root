@@ -624,6 +624,43 @@ console.log('=== flee inside the fight: the free round ===');
     s1.finished === 'wipe' && !s1.log.slice(logFrom).some(l => l.kind === 'flee' && l.reason === 'fled'), `finished ${s1.finished}`);
 }
 
+// Chunk 15c: a Smoke Pot is a flee with no free round, and never against a boss.
+console.log('=== a Smoke Pot ===');
+{
+  const m = meet({ kind: 'beast', from: 1500 });
+  const { host } = hostBegun(m);
+  for (const u of m.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  seed(41);
+  startCombat(host);
+  const actor = toPartyTurn(host);
+  const inv0 = GameState.inventory;
+  GameState.inventory = [makeStack('smoke_pot', 2)];
+  const s0 = m.h.getState();
+  const started = [];
+  const origStart = host._startTurnStatusEffects;
+  host._startTurnStatusEffects = function (c) { started.push(c); return origStart.call(this, c); };
+  const ability = { id: 'smoke_pot', name: 'Smoke Pot', itemUse: Items.smoke_pot.combatUse, requiresTarget: false };
+  host._useCombatItem(actor, actor, ability);
+  const s1 = m.h.getState();
+  check('a Smoke Pot ends the fight as a flee at once', host.combatEnded && !s1.encounter && s1.flees === s0.flees + 1
+    && s1.log.some(l => l.kind === 'flee' && l.reason === 'fled'), `flees ${s0.flees} -> ${s1.flees}`);
+  check('...with no free round: no enemy took a turn', !started.some(c => c.isEnemy), `${started.length} turns`);
+  check('...and one pot is used up', GameState.inventory[0]?.qty === 1, `2 -> ${GameState.inventory[0]?.qty}`);
+  GameState.inventory = inv0;
+}
+{
+  const m = meet({ kind: 'beast', from: 1600 });
+  const { host } = hostBegun(m);
+  startCombat(host);
+  const actor = toPartyTurn(host);
+  host.huntFight.kind = 'boss';
+  const inv0 = GameState.inventory;
+  GameState.inventory = [makeStack('smoke_pot', 1)];
+  host._useCombatItem(actor, actor, { id: 'smoke_pot', name: 'Smoke Pot', itemUse: Items.smoke_pot.combatUse, requiresTarget: false });
+  check('against a boss it fizzles: the fight goes on and the pot is kept', !host.combatEnded && GameState.inventory[0]?.qty === 1);
+  GameState.inventory = inv0;
+}
+
 console.log('=== Unbroken: knock-outs in won fights ===');
 {
   const m = meet({ kind: 'beast', from: 1800, bonus: ['unbroken'] });

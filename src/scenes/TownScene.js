@@ -2327,7 +2327,10 @@ export default class TownScene extends Phaser.Scene {
           { id: "tonic_of_reflection", cost: 0 },
           // Potions (owner, 2026-09-27): the plain draughts, for Hunt Tickets.
           { id: "healing_draught", cost: 1, currency: "huntTickets" },
-          { id: "mana_draught", cost: 1, currency: "huntTickets" }
+          { id: "mana_draught", cost: 1, currency: "huntTickets" },
+          // Ways out (owner, 2026-10-20; chunk 15c): for events and for fights.
+          { id: "escape_rope", cost: 2, currency: "huntTickets" },
+          { id: "smoke_pot", cost: 2, currency: "huntTickets" }
         ]
       },
 

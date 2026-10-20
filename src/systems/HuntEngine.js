@@ -109,7 +109,10 @@ import { makeRng, rngFromState, randomSeed, isSeed } from './seededRng.js';
 import { parseTileId, distance } from './HexGrid.js';
 import { EVENT_TEMPLATES } from '../../data/events.js';
 import { applyEffects, previewEffects, fillText, dynamicBlock, evalNumber, rollD20, statModifier, ratingModifier,
-  CORE_STATS } from './EventEffects.js';
+  CORE_STATS, nextBeat } from './EventEffects.js';
+
+/** The item that gets a committed party out of an event (chunk 15c). */
+export const ESCAPE_ROPE = 'escape_rope';
 import { generateHuntMap, mapNeighbors, occupantConcealment, HUNT_MAP_VERSION } from './HuntMapGen.js';
 import { partyStats } from './PartyStats.js';
 import { GAME_WORLD, packAtDeparture, zoneDeathRule, DEATH_RULES, settlePack } from './HuntManager.js';
@@ -1641,36 +1644,68 @@ function makeMapHunt(s, rng, worldRng, world) {
       if (!ev) return null;
       const tpl = EVENT_TEMPLATES[ev.templateId];
       const r = ev.roles;
-      const out = { templateId: ev.templateId, name: fillText(tpl.name, r), shape: tpl.shape, text: fillText(tpl.text, r), tile: ev.site.tile };
-      if (tpl.shape === 'choice') out.options = tpl.options.map((o, i) => ({ index: i, label: fillText(o.label, r) }));
-      if (tpl.shape === 'check') out.check = { ...this._checkStat(tpl.check.stat), dc: Math.round(evalNumber(tpl.check.dc, r)) };
-      if (tpl.shape === 'puzzle') { out.prompt = fillText(tpl.prompt, r); out.answers = tpl.answers.map(a => fillText(a, r)); }
+      // The beat the party is on (chunk 15c): the template itself until an
+      // outcome goes on to one of its `beats`. Name, roles and where it
+      // appears are always the template's; the rest is the beat's.
+      const node = this._eventNode(ev);
+      const out = { templateId: ev.templateId, name: fillText(tpl.name, r), shape: node.shape, text: fillText(node.text, r), tile: ev.site.tile };
+      if (ev.beat) {
+        // Committed: Walk away is gone; an Escape Rope is the way out.
+        out.beat = { id: ev.beat, n: ev.beatNo || 2, lead: ev.lead || [], ropes: this._packCount(ESCAPE_ROPE) };
+      }
+      if (node.shape === 'choice') out.options = node.options.map((o, i) => ({ index: i, label: fillText(o.label, r) }));
+      if (node.shape === 'check') out.check = { ...this._checkStat(node.check.stat), dc: Math.round(evalNumber(node.check.dc, r)) };
+      if (node.shape === 'puzzle') { out.prompt = fillText(node.prompt, r); out.answers = node.answers.map(a => fillText(a, r)); }
       // A black market (owner, 2026-09-27): the screen reads its stalls from
       // Market.marketView against the player's own save.
-      if (tpl.shape === 'market') out.market = tpl.market;
+      if (node.shape === 'market') out.market = node.market;
       // A quest's site says whose (owner, 2026-09-27: clear, not half-added).
       const site = ev.site.occId ? s.map.occupants.find(o => o.id === ev.site.occId) : null;
       if (site?.quest) out.quest = questTitleForStep(site.quest);
       // The stirring god, named only on its own temptations (chunk 15b: the
       // event screen's strip). It stays hidden everywhere else (chunk 14c).
       if (tpl.appears?.god || (tpl.appears?.needs || []).includes('falsegod')) out.stirs = FALSE_GODS[ev.godId]?.name || null;
-      if (tpl.shape === 'offer') {
-        const need = this._supplyCost(tpl.price, r);
-        out.offer = { label: fillText(tpl.offer, r), supplyCost: need, canAccept: s.supplies >= need,
+      if (node.shape === 'offer') {
+        const need = this._supplyCost(node.price, r);
+        out.offer = { label: fillText(node.offer, r), supplyCost: need, canAccept: s.supplies >= need,
           // What each answer gives, named before the choice (previewEffects).
-          gives: previewEffects([...(tpl.price || []), ...(tpl.reward || [])], r), refuseGives: previewEffects(tpl.refuse, r) };
-        if ((tpl.reward || []).some(e => e.falseGod?.pact)) {
+          gives: previewEffects([...(node.price || []), ...(node.reward || [])], r), refuseGives: previewEffects(node.refuse, r) };
+        if ((node.reward || []).some(e => e.falseGod?.pact)) {
           const god = FALSE_GODS[huntGod(s)];
           const next = s.boon?.pact ? Math.min(PACT_MAX, s.boon.pact.level + 1) : PACT_START;
           out.offer.pact = { god: god?.name, level: next, bondCost: PACT_PRICE.bondPerLevel * next, house: r.house,
             gift: god?.levels[next]?.text || null, curse: god?.curse.text, endsProphet: !s.boon?.pact };
         }
       }
-      if (tpl.shape === 'trade') {
-        const give = tpl.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._giveHave(g.id), ...this._supplyNote(g) }));
-        out.trade = { give, canAccept: give.every(g => g.have >= g.qty), pays: previewEffects(tpl.receive, r) };
+      if (node.shape === 'trade') {
+        const give = node.give.map(g => ({ id: g.id, name: Items[g.id]?.name || g.id, qty: g.qty, have: this._giveHave(g.id), ...this._supplyNote(g) }));
+        out.trade = { give, canAccept: give.every(g => g.have >= g.qty), pays: previewEffects(node.receive, r) };
       }
       return out;
+    },
+
+    /** The open event's current beat: the template, or one of its `beats`. */
+    _eventNode(ev) {
+      const tpl = EVENT_TEMPLATES[ev.templateId];
+      return (ev.beat && tpl.beats?.[ev.beat]) || tpl;
+    },
+
+    /** An event is over (any way but walking away): its site is spent. */
+    _spendEventSite(ev) {
+      if (ev.site.occId) {
+        const i = s.map.occupants.findIndex(o => o.id === ev.site.occId);
+        if (i >= 0) s.map.occupants.splice(i, 1);
+      } else if (ev.site.feature === 'shrine') {
+        const f = s.map.features.find(x => x.kind === 'shrine' && x.tile === ev.site.tile);
+        if (f) f.resolved = true;
+        // The region's shrine, resolved (any branch): Commune is done, and the
+        // prophet notices (chunk 11b; the favor was paid on arrival before).
+        if (!s.communed) {
+          s.communed = true;
+          this._log({ kind: 'communed', tile: ev.site.tile, time: s.time });
+          this._earnFavor(Boons.SHRINE_FAVOR, 'shrine');
+        }
+      }
     },
 
     /** What the outcome verbs are handed (EventEffects.VERBS). */
@@ -1764,58 +1799,60 @@ function makeMapHunt(s, rng, worldRng, world) {
       const ev = s.event;
       if (!ev) return { ok: false, reason: 'no event is open' };
       const tpl = EVENT_TEMPLATES[ev.templateId];
-      if (tpl.shape === 'market') return { ok: false, reason: 'a market is browsed, not resolved: walk away when you are done' };
+      // The beat the party is on (chunk 15c): its shape and outcomes.
+      const node = this._eventNode(ev);
+      if (node.shape === 'market') return { ok: false, reason: 'a market is browsed, not resolved: walk away when you are done' };
       const r = ev.roles;
       let effects, branch, roll = null;
-      if (tpl.shape === 'choice') {
-        const o = tpl.options[pick.option];
+      if (node.shape === 'choice') {
+        const o = node.options[pick.option];
         if (!o) return { ok: false, reason: 'no such option' };
         effects = o.effects; branch = `option:${pick.option}`;
-      } else if (tpl.shape === 'check') {
-        const c = this._checkStat(tpl.check.stat);
+      } else if (node.shape === 'check') {
+        const c = this._checkStat(node.check.stat);
         roll = rollD20(rng, pick.roll);
-        const dc = Math.round(evalNumber(tpl.check.dc, r));
+        const dc = Math.round(evalNumber(node.check.dc, r));
         const ok = roll + c.modifier >= dc;
-        effects = ok ? tpl.success : tpl.failure; branch = ok ? 'success' : 'failure';
+        effects = ok ? node.success : node.failure; branch = ok ? 'success' : 'failure';
         roll = { die: roll, modifier: c.modifier, total: roll + c.modifier, dc, who: c.who };
-      } else if (tpl.shape === 'puzzle') {
-        if (!Number.isInteger(pick.answer) || !tpl.answers[pick.answer]) return { ok: false, reason: 'no such answer' };
-        const ok = pick.answer === tpl.correct;
-        effects = ok ? tpl.success : tpl.failure; branch = ok ? 'success' : 'failure';
-      } else if (tpl.shape === 'offer') {
+      } else if (node.shape === 'puzzle') {
+        if (!Number.isInteger(pick.answer) || !node.answers[pick.answer]) return { ok: false, reason: 'no such answer' };
+        const ok = pick.answer === node.correct;
+        effects = ok ? node.success : node.failure; branch = ok ? 'success' : 'failure';
+      } else if (node.shape === 'offer') {
         if (pick.accept) {
-          if (s.supplies < this._supplyCost(tpl.price, r)) return { ok: false, reason: 'you cannot pay the price' };
-          effects = [...(tpl.price || []), ...(tpl.reward || [])]; branch = 'accept';
-        } else { effects = tpl.refuse || []; branch = 'refuse'; }
-      } else if (tpl.shape === 'trade') {
+          if (s.supplies < this._supplyCost(node.price, r)) return { ok: false, reason: 'you cannot pay the price' };
+          effects = [...(node.price || []), ...(node.reward || [])]; branch = 'accept';
+        } else { effects = node.refuse || []; branch = 'refuse'; }
+      } else if (node.shape === 'trade') {
         if (pick.accept) {
-          if (!tpl.give.every(g => this._giveHave(g.id) >= g.qty)) return { ok: false, reason: 'you do not carry what they ask' };
-          for (const g of tpl.give) this._payGive(g);
-          effects = tpl.receive || []; branch = 'accept';
-        } else { effects = tpl.refuse || []; branch = 'refuse'; }
+          if (!node.give.every(g => this._giveHave(g.id) >= g.qty)) return { ok: false, reason: 'you do not carry what they ask' };
+          for (const g of node.give) this._payGive(g);
+          effects = node.receive || []; branch = 'accept';
+        } else { effects = node.refuse || []; branch = 'refuse'; }
       } else {
-        return { ok: false, reason: `unknown shape '${tpl.shape}'` };
+        return { ok: false, reason: `unknown shape '${node.shape}'` };
+      }
+      // The event goes on (chunk 15c): the outcome's effects apply, and the
+      // event stays open on the next beat, its site unspent. What just
+      // happened leads the next beat's text (`lead`), the roll first, so a
+      // reload shows it too. The validator keeps fights out of such outcomes.
+      const next = nextBeat(effects);
+      if (next && tpl.beats?.[next]) {
+        const lines = applyEffects(effects, this._eventApi(ev));
+        const rollLine = roll ? `${roll.who && roll.who !== 'the party' ? roll.who : 'The party'} rolled ${roll.die} ${roll.modifier >= 0 ? '+' : '-'} ${Math.abs(roll.modifier)} = ${roll.total}, needing ${roll.dc}: ${branch}.` : null;
+        s.event = { ...ev, beat: next, beatNo: (ev.beatNo || 1) + 1, lead: [rollLine, ...lines].filter(Boolean) };
+        this._reveal();
+        this._log({ kind: 'event_beat', event: ev.templateId, beat: next, branch, time: s.time });
+        return { ok: true, branch, lines, roll, next, encounter: this.encounter() };
       }
       // The site is spent before its effects run, so a fight it starts or a
       // world tick it causes sees the map as it now is.
       s.event = null;
-      if (ev.site.occId) {
-        const i = s.map.occupants.findIndex(o => o.id === ev.site.occId);
-        if (i >= 0) s.map.occupants.splice(i, 1);
-      } else if (ev.site.feature === 'shrine') {
-        const f = s.map.features.find(x => x.kind === 'shrine' && x.tile === ev.site.tile);
-        if (f) f.resolved = true;
-        // The region's shrine, resolved (any branch): Commune is done, and the
-        // prophet notices (chunk 11b; the favor was paid on arrival before).
-        if (!s.communed) {
-          s.communed = true;
-          this._log({ kind: 'communed', tile: ev.site.tile, time: s.time });
-          this._earnFavor(Boons.SHRINE_FAVOR, 'shrine');
-        }
-      }
+      this._spendEventSite(ev);
       const lines = applyEffects(effects, this._eventApi(ev));
       this._reveal();
-      this._log({ kind: 'event', event: ev.templateId, branch, time: s.time });
+      this._log({ kind: 'event', event: ev.templateId, branch, ...(ev.beat ? { beat: ev.beat } : {}), time: s.time });
       // Counted apart from the log, which is capped (Omens, 14b-3).
       s.eventsResolved = (s.eventsResolved || 0) + 1;
       return { ok: true, branch, lines, roll, encounter: this.encounter() };
@@ -1867,10 +1904,31 @@ function makeMapHunt(s, rng, worldRng, world) {
     /** Walk away from the open event (decision 3): nothing is lost, the site stays. */
     leaveEvent() {
       if (!s.event) return { ok: false, reason: 'no event is open' };
+      // Committed to a later beat (chunk 15c): no walking away.
+      if (s.event.beat) return { ok: false, reason: 'you are in too deep to walk away; only an Escape Rope gets you out' };
       const id = s.event.templateId;
       s.event = null;
       this._log({ kind: 'event_left', event: id, time: s.time });
       return { ok: true };
+    },
+
+    /**
+     * Out of an event the party is committed to (chunk 15c; owner,
+     * 2026-10-20): one Escape Rope from the pack, and the party is clear.
+     * The site is spent (you went in), nothing else of the event happens, and
+     * it does not count as seen through (omens). Before committing, walking
+     * away is free, so the rope is not needed (or spent) then.
+     */
+    escapeEvent() {
+      if (s.finished) return { ok: false, reason: 'the hunt is over' };
+      const ev = s.event;
+      if (!ev) return { ok: false, reason: 'no event is open' };
+      if (!ev.beat) return { ok: false, reason: 'you can still walk away for free' };
+      if (!this._takeFood(ESCAPE_ROPE, 1)) return { ok: false, reason: 'you carry no Escape Rope' };
+      s.event = null;
+      this._spendEventSite(ev);
+      this._log({ kind: 'event_escaped', event: ev.templateId, beat: ev.beat, time: s.time });
+      return { ok: true, lines: ['You throw the Escape Rope and haul yourselves clear.'], encounter: this.encounter() };
     },
 
     /**

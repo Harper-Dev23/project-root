@@ -1529,6 +1529,19 @@ export const Items = {
     combatUse: { kind: 'restore', target: 'self', mpPct: 30 },
     description: 'Combat only, bonus action; the hunter who uses it drinks it. Restores 30% of their max MP.',
   },
+  // ── Ways out (owner, 2026-10-20; chunk 15c; vault HUNT_ITEMS) ──
+  // Each takes a risk off the table, at a price, when you choose to spend it.
+  // Sold at the Draughtwell for Hunt Tickets; packed for the hunt, at risk
+  // like anything packed. Starting prices, to tune.
+  escape_rope: {
+    id: 'escape_rope', name: 'Escape Rope', type: 'consumable', stackable: true, rarity: 'common',
+    description: 'Hunt only. Gets the party out of an event it is committed to (once you have gone on, you cannot simply walk away). Used up.',
+  },
+  smoke_pot: {
+    id: 'smoke_pot', name: 'Smoke Pot', type: 'consumable', stackable: true, rarity: 'common',
+    combatUse: { kind: 'smoke', target: 'self' },
+    description: 'Hunt fights only, bonus action. The party slips away in the smoke: a flee with no free round for the enemy. Not against a boss. Used up.',
+  },
   tincture_red_breath: {
     id: 'tincture_red_breath', name: 'Tincture of Red Breath', type: 'consumable', stackable: true, rarity: 'uncommon',
     combatUse: { kind: 'restore', target: 'self', hpPct: 50, costMpPct: 15 },

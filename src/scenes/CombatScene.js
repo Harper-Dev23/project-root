@@ -5315,6 +5315,24 @@ export default class CombatScene extends Phaser.Scene {
       return;
     }
 
+    // A Smoke Pot (owner, 2026-10-20; chunk 15c): the party slips away with no
+    // free round for the enemy (Flee gives them one). Hunt fights only, never
+    // a boss; fizzles, at no cost, anywhere else. In co-op the acting client
+    // spends its own pot and the server, which rules on the board, ends the
+    // fight as a flee; any player may throw one on their own hunter's turn.
+    if (cfg.kind === 'smoke') {
+      if (!this.huntFight || this.huntFight.kind === 'boss') {
+        this._log(`${itemName} fizzles — ${this.huntFight ? 'there is no slipping away from a boss' : 'there is nowhere to slip away to here'}.`);
+        return;
+      }
+      if (this.combatEnded || this._fleeing) return;
+      this._spendBonusActionAndItem(user, inst);
+      this._log(`💨 ${user.name} throws a Smoke Pot. The party slips away in the smoke.`);
+      if (this.isCoop && !this.isAuthoritativeHost) return;
+      this._onCombatFled();
+      return;
+    }
+
     // A potion (owner, 2026-09-27): restores HP and/or MP on the hunter who
     // drinks it, and a cult tincture takes some of the other. Fizzles, at no
     // cost, on a hunter who is down or has nothing to restore.
@@ -7941,7 +7959,8 @@ export default class CombatScene extends Phaser.Scene {
       this._updateHealthBars?.();
       this._updateHPMPBars?.();
       this._updateActionLights?.();
-      if (!this._currentChar?.()?.isEnemy) this._buildActionMenuRoot?.();
+      // A Smoke Pot can end the fight right here (chunk 15c): no menu then.
+      if (!this.combatEnded && !this._currentChar?.()?.isEnemy) this._buildActionMenuRoot?.();
       return;
     }
 

@@ -21,7 +21,8 @@
   "fight",
   "blight",
   "falseGod",
-  "time"
+  "time",
+  "beat"
  ],
  "drawn": {
   "yargaleth_bubbles": 325,
@@ -51,14 +52,20 @@
   "bay_rising_tide": 321
  },
  "lines": {
-  "reeds_sinking_mud {\"roll\":20}": [
+  "reeds_sinking_mud {\"option\":0}": [
+   "option:0",
+   "You take the long way round, testing every step."
+  ],
+  "reeds_sinking_mud {\"option\":1} > {\"roll\":20}": [
    "success",
-   "You catch yourself on a reed clump and pull free.",
+   "Three steps in, the ground gives way.",
+   "You catch a reed clump and haul yourselves out onto a dry hummock no one could see from the bank.",
    "+2 Hunt Points."
   ],
-  "reeds_sinking_mud {\"roll\":1}": [
+  "reeds_sinking_mud {\"option\":1} > {\"roll\":1}": [
    "failure",
-   "You sink to the waist before hauling free, soaked and shaken.",
+   "Three steps in, the ground gives way.",
+   "You sink to the waist before you claw free, soaked, shaken and a long time about it.",
    "Halvard lost 4 HP."
   ],
   "reeds_sunken_shrine {\"option\":0}": [
@@ -105,10 +112,29 @@
    "option:1",
    "By dawn they are simply gone, as if they were never there."
   ],
-  "reeds_lament_pools {\"option\":0}": [
-   "option:0",
-   "The weeping takes words, then names: the names of the drowned. Something vast turns over beneath the water, and is gone.",
+  "reeds_lament_pools {\"option\":0} > {\"option\":0} > {\"roll\":20}": [
+   "success",
+   "The weeping takes words, then names: the names of the drowned.",
    "Your quest log is updated.",
+   "You kneel, and put your arm into water colder than any night.",
+   "You hold still until the grip loosens, and draw out a mourner's token, worn smooth by tears. The pools will remember you.",
+   "The region's omens stir (+10).",
+   "+10 XP for the party."
+  ],
+  "reeds_lament_pools {\"option\":0} > {\"option\":0} > {\"roll\":1}": [
+   "failure",
+   "The weeping takes words, then names: the names of the drowned.",
+   "Your quest log is updated.",
+   "You kneel, and put your arm into water colder than any night.",
+   "You pull, and it pulls back, and lets go only when it has taken its fill of your warmth.",
+   "Halvard lost 5 HP.",
+   "+4 XP for the party."
+  ],
+  "reeds_lament_pools {\"option\":0} > {\"option\":1}": [
+   "option:1",
+   "The weeping takes words, then names: the names of the drowned.",
+   "Your quest log is updated.",
+   "You back away. Behind you the pool breathes out, and the weeping starts again.",
    "+8 XP for the party."
   ],
   "reeds_lament_pools {\"option\":1}": [
@@ -128,10 +154,29 @@
    "The trail doubles back on itself, but the cloth all points one way: toward the Lament Pools. That is enough to go on.",
    "Your quest log is updated."
   ],
-  "reeds_drowned_camp {\"option\":0}": [
-   "option:0",
+  "reeds_drowned_camp {\"option\":0} > {\"option\":0} > {\"roll\":20}": [
+   "success",
    "It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.",
    "Your quest log is updated.",
+   "Six bedrolls, sodden and empty. Six names cut into the tent pole, five of them scratched out. The soul waits behind you.",
+   "The words come. The cold fire gutters, and for a moment the soul is only a hunter, tired, and grateful. Then it is a soul again, and the camp is waiting.",
+   "+6 Hunt Points.",
+   "+10 XP for the party."
+  ],
+  "reeds_drowned_camp {\"option\":0} > {\"option\":0} > {\"roll\":1}": [
+   "failure",
+   "It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.",
+   "Your quest log is updated.",
+   "Six bedrolls, sodden and empty. Six names cut into the tent pole, five of them scratched out. The soul waits behind you.",
+   "The words come out wrong. The cold fire flares, and its no-heat goes through you like a winter.",
+   "Halvard lost 4 HP.",
+   "+4 XP for the party."
+  ],
+  "reeds_drowned_camp {\"option\":0} > {\"option\":1}": [
+   "option:1",
+   "It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.",
+   "Your quest log is updated.",
+   "You leave it standing at the edge of the cold fire. It does not follow. It does not need to.",
    "+8 XP for the party."
   ],
   "reeds_drowned_camp {\"option\":1}": [
@@ -181,10 +226,19 @@
    "refuse",
    "They watch you go, and say nothing."
   ],
-  "choir_singing {\"option\":0}": [
+  "choir_singing {\"option\":0} > {\"option\":0}": [
    "option:0",
    "The words are almost yours. You understand that the Drowned Choir know you now, and would talk.",
-   "Your quest log is updated."
+   "Your quest log is updated.",
+   "The word comes from somewhere in you that you did not know was drowned. Under the water, the Choir answer with joy, and leave something on the bank for you.",
+   "+1 Sin Ticket."
+  ],
+  "choir_singing {\"option\":0} > {\"option\":1}": [
+   "option:1",
+   "The words are almost yours. You understand that the Drowned Choir know you now, and would talk.",
+   "Your quest log is updated.",
+   "The voices wait, and wait, and go on without you. Somewhere, a prophet notices.",
+   "Jeremiah looks on you more kindly (+1 standing)."
   ],
   "choir_singing {\"option\":1}": [
    "option:1",

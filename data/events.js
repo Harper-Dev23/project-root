@@ -50,15 +50,29 @@
 
 export const EVENT_TEMPLATES = {
   // ── The Reeds of Gethsemane ────────────────────────────────────────────────
+  // Chunk 15c (owner, 2026-10-20): the first events told in beats. Once the
+  // party goes on to a beat it is committed: Walk away is gone, and only an
+  // Escape Rope gets it out. A quest flag is always set on the way in, so a
+  // rope or a bad roll never blocks a questline.
   reeds_sinking_mud: {
     name: 'Sinking Mud',
-    shape: 'check',
+    shape: 'choice',
     art: 'water',
-    text: 'The ground gives way to sucking mud underfoot.',
+    text: 'The reeds ahead stand in still, black water. The ground between them looks firm. It is not, quite.',
     appears: { zones: ['reeds_of_gethsemane'] },
-    check: { stat: 'DEX', dc: '{danger}+11' },
-    success: [{ text: 'You catch yourself on a reed clump and pull free.' }, { huntPoints: '{danger}*2' }],
-    failure: [{ text: 'You sink to the waist before hauling free, soaked and shaken.' }, { hp: '-{danger}*4' }],
+    options: [
+      { label: 'Go around', effects: [{ text: 'You take the long way round, testing every step.' }, { time: 1 }] },
+      { label: 'Press on', effects: [{ text: 'Three steps in, the ground gives way.' }, { beat: 'stuck' }] },
+    ],
+    beats: {
+      stuck: {
+        shape: 'check',
+        text: 'The mud takes you to the knees, then the thighs. Every pull sinks you deeper, and the reeds are just out of reach.',
+        check: { stat: 'DEX', dc: '{danger}+11' },
+        success: [{ text: 'You catch a reed clump and haul yourselves out onto a dry hummock no one could see from the bank.' }, { huntPoints: '{danger}*2' }, { reveal: { radius: 2 } }],
+        failure: [{ text: 'You sink to the waist before you claw free, soaked, shaken and a long time about it.' }, { hp: '-{danger}*4' }, { time: 1 }],
+      },
+    },
   },
   reeds_sunken_shrine: {
     name: 'The Sunken Shrine',
@@ -108,9 +122,26 @@ export const EVENT_TEMPLATES = {
     text: 'Black pools lie still among the reeds. From them comes weeping: many voices, none of them near, all of them drowned.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
-      { label: 'Listen', effects: [{ text: 'The weeping takes words, then names: the names of the drowned. Something vast turns over beneath the water, and is gone.' }, { questFlag: 'mb_weeping_heard' }, { xp: '{danger}*8' }] },
+      { label: 'Listen', effects: [{ text: 'The weeping takes words, then names: the names of the drowned.' }, { questFlag: 'mb_weeping_heard' }, { beat: 'beneath' }] },
       { label: 'Kneel at the edge and grieve with it', effects: [{ text: 'You grieve for no one you knew. The pools grow quiet, as if they heard. Far off, something answers with a howl.' }, { questFlag: 'mb_weeping_heard' }, { huntPoints: '{danger}*4' }] },
     ],
+    beats: {
+      beneath: {
+        shape: 'choice',
+        text: 'Something vast turns over beneath the water, and the weeping stops. In the silence the nearest pool draws back from its edge, as if breathing in.',
+        options: [
+          { label: 'Reach into the pool', effects: [{ text: 'You kneel, and put your arm into water colder than any night.' }, { beat: 'reach' }] },
+          { label: 'Back away while it is quiet', effects: [{ text: 'You back away. Behind you the pool breathes out, and the weeping starts again.' }, { xp: '{danger}*8' }] },
+        ],
+      },
+      reach: {
+        shape: 'check',
+        text: 'Cold to the elbow, then the shoulder. Your fingers close on something that is not a stone, and something else closes on your wrist.',
+        check: { stat: 'WIS', dc: '{danger}+12' },
+        success: [{ text: 'You hold still until the grip loosens, and draw out a mourner\'s token, worn smooth by tears. The pools will remember you.' }, { omens: 10 }, { xp: '{danger}*10' }],
+        failure: [{ text: 'You pull, and it pulls back, and lets go only when it has taken its fill of your warmth.' }, { hp: '-{danger}*5' }, { xp: '{danger}*4' }],
+      },
+    },
   },
   reeds_mourner_signs: {
     name: 'Signs of the Mourner',
@@ -133,9 +164,26 @@ export const EVENT_TEMPLATES = {
     text: 'Black tents half-sunk in the water, and a cold fire that gives no heat. A soul stands at its edge, tied to the camp by a cord of reed and hair. It is waiting to be asked something.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
-      { label: 'Ask it who it was', effects: [{ text: 'It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.' }, { questFlag: 'gp_soul_found' }, { xp: '{danger}*8' }] },
+      { label: 'Ask it who it was', effects: [{ text: 'It cannot remember its name. It remembers six hunters, a flood, and a confession none of them made. It gives you the knot at the end of its cord.' }, { questFlag: 'gp_soul_found' }, { beat: 'tents' }] },
       { label: 'Cut the cord', effects: [{ text: 'The soul does not leave. It only looks at you, and at the tents, and you understand it will be here tomorrow night as well. You keep the cut knot.' }, { questFlag: 'gp_soul_found' }, { huntPoints: '{danger}*4' }] },
     ],
+    beats: {
+      tents: {
+        shape: 'choice',
+        text: 'It turns toward the tents. The cord pulls taut. It wants you to look inside.',
+        options: [
+          { label: 'Look inside', effects: [{ text: 'Six bedrolls, sodden and empty. Six names cut into the tent pole, five of them scratched out. The soul waits behind you.' }, { beat: 'confession' }] },
+          { label: 'Leave it waiting', effects: [{ text: 'You leave it standing at the edge of the cold fire. It does not follow. It does not need to.' }, { xp: '{danger}*8' }] },
+        ],
+      },
+      confession: {
+        shape: 'check',
+        text: 'You could say the confession they never made: say it for them, aloud, to whatever drowned them.',
+        check: { stat: 'CHA', dc: '{danger}+12' },
+        success: [{ text: 'The words come. The cold fire gutters, and for a moment the soul is only a hunter, tired, and grateful. Then it is a soul again, and the camp is waiting.' }, { huntPoints: '{danger}*6' }, { xp: '{danger}*10' }],
+        failure: [{ text: 'The words come out wrong. The cold fire flares, and its no-heat goes through you like a winter.' }, { hp: '-{danger}*4' }, { xp: '{danger}*4' }],
+      },
+    },
   },
   reeds_unmarked_graves: {
     name: 'Unmarked Graves',
@@ -201,10 +249,21 @@ export const EVENT_TEMPLATES = {
     text: 'A hymn rises from under the reeds, many voices, none of them breathing. The water shivers with it.',
     appears: { zones: ['reeds_of_gethsemane'], setPiece: true, night: true },
     options: [
-      { label: 'Listen', effects: [{ text: 'The words are almost yours. You understand that the Drowned Choir know you now, and would talk.' }, { questFlag: 'choir_heard' }, { falseGod: { god: 'yargaleth', amount: 1 } }] },
+      { label: 'Listen', effects: [{ text: 'The words are almost yours. You understand that the Drowned Choir know you now, and would talk.' }, { questFlag: 'choir_heard' }, { falseGod: { god: 'yargaleth', amount: 1 } }, { beat: 'verse' }] },
       { label: 'Drown it out', effects: [{ text: 'You sing over it, badly, until it stops. Somewhere under the water, someone laughs. The Choir know you now.' }, { questFlag: 'choir_heard' }] },
     ],
+    beats: {
+      verse: {
+        shape: 'choice',
+        text: 'The hymn comes to a verse with a gap in it: a breath where a word should be. Under the water, the voices wait for you.',
+        options: [
+          { label: 'Sing the missing word', effects: [{ text: 'The word comes from somewhere in you that you did not know was drowned. Under the water, the Choir answer with joy, and leave something on the bank for you.' }, { falseGod: { god: 'yargaleth', amount: 2 } }, { sinTickets: 1 }] },
+          { label: 'Stay silent', effects: [{ text: 'The voices wait, and wait, and go on without you. Somewhere, a prophet notices.' }, { standing: 1 }] },
+        ],
+      },
+    },
   },
+
   choir_cantor: {
     name: "The Cantor's Price",
     shape: 'trade',

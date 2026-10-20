@@ -348,7 +348,26 @@ export const VERBS = {
       return null;
     },
   },
+  // Chunk 15c: the event goes on. The outcome's other effects apply, then the
+  // event stays open on the named beat (a key of the template's `beats`)
+  // instead of ending. The party is committed from then on: Walk away is
+  // gone, and only an Escape Rope gets it out (HuntEngine.escapeEvent). The
+  // validator checks the beat exists, comes last, and starts no fight.
+  beat: {
+    reader: 'HuntEngine.resolveEvent: the event stays open on that beat',
+    validate: (v) => (typeof v === 'string' && /^[a-z0-9_]+$/.test(v) ? null : 'beat must name one of the template\'s beats'),
+    apply: () => null,
+  },
 };
+
+/** The beat an outcome goes on to, or null when it ends the event (chunk 15c). */
+export function nextBeat(list) {
+  const e = (list || []).find(x => x && Object.keys(x).length === 1 && 'beat' in x);
+  return e ? e.beat : null;
+}
+
+/** Most beats one event may hold, its opening included (owner, 2026-10-04: 2-3). */
+export const MAX_BEATS = 3;
 
 /** The journal unlock flag a `lore` effect sets for an entry. */
 export function loreFlag(entryId) {

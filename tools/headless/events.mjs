@@ -81,7 +81,12 @@ for (const rel of JSON.parse(fs.readFileSync(path.join(REPO, 'data/journal/md/in
 }
 
 /** Every problem with one template, as strings. Empty when it is sound. */
-function validateTemplate(id, t) {
+function validateTemplate(id, t, beatsOf = null, out = null) {
+  // Chunk 15c: a beat is checked as a node of its template, against the
+  // template's beats (`beatsOf`); the template itself passes its own.
+  const isBeat = !!beatsOf;
+  const beats = beatsOf || t.beats || {};
+  const goesTo = [];
   const bad = [];
   const say = (m) => bad.push(`${id}: ${m}`);
   if (!E.SHAPES.includes(t.shape)) say(`unknown shape '${t.shape}'`);
@@ -148,7 +153,45 @@ function validateTemplate(id, t) {
       }
       for (const v of Object.values(typeof value === 'object' && value ? value : { v: value })) if (typeof v === 'string' && verb !== 'text') exprs.push(v);
     }
+    // An outcome that goes on (chunk 15c): to one of this template's beats,
+    // as its last effect, and never starting a fight on the way.
+    const verbs = list.map(eff => E.verbOf(eff).verb);
+    const at = verbs.indexOf('beat');
+    if (at >= 0) {
+      const to = list[at].beat;
+      if (!beats[to]) say(`${label}: goes on to beat '${to}', which this event does not have`);
+      if (at !== list.length - 1 || verbs.lastIndexOf('beat') !== at) say(`${label}: the beat must be its outcome's one last effect`);
+      if (verbs.includes('fight')) say(`${label}: an outcome that goes on cannot start a fight`);
+      goesTo.push(to);
+    }
   }
+  if (!isBeat && t.beats !== undefined) {
+    if (typeof t.beats !== 'object' || Array.isArray(t.beats) || !Object.keys(t.beats).length) say('beats must be an object holding at least one beat');
+    if (t.shape === 'market') say('a market cannot have beats');
+    const edges = new Map([['', goesTo]]);
+    for (const [bid, b] of Object.entries(t.beats || {})) {
+      if (!/^[a-z0-9_]+$/.test(bid)) say(`beat '${bid}' is not a plain key`);
+      if (b.shape === 'market') say(`beat '${bid}': a market cannot be a beat`);
+      for (const k of ['name', 'appears', 'beats', 'art', 'vignette']) if (b[k] !== undefined) say(`beat '${bid}': '${k}' belongs to the event, not a beat`);
+      const sub = { goesTo: [] };
+      bad.push(...validateTemplate(`${id}.${bid}`, { ...b, name: t.name, appears: a }, t.beats, sub));
+      edges.set(bid, sub.goesTo);
+    }
+    // Every beat reachable from the opening, no way round in a loop, and
+    // no path longer than MAX_BEATS (the opening counts as one).
+    const seen = new Set();
+    const walk = (node, depth, path) => {
+      if (depth > E.MAX_BEATS) { say(`a path runs ${depth} beats (${[...path, node].filter(Boolean).join(' > ')}); at most ${E.MAX_BEATS}`); return; }
+      for (const to of edges.get(node) || []) {
+        if (path.includes(to)) { say(`beat '${to}' leads back round to itself`); continue; }
+        seen.add(to);
+        walk(to, depth + 1, [...path, node]);
+      }
+    };
+    walk('', 1, []);
+    for (const bid of Object.keys(t.beats || {})) if (!seen.has(bid)) say(`beat '${bid}' is never reached`);
+  }
+  if (out) out.goesTo = goesTo;
   // Roles: known, and every nullable one declared in appears.needs.
   const used = [...texts, ...exprs, t.check?.dc].flatMap(x => E.rolesIn(x));
   for (const r of new Set(used)) {
@@ -197,6 +240,18 @@ console.log('=== the validator, over every template ===');
     'a puzzle answer out of range': { name: 'T', shape: 'puzzle', text: 'T', prompt: 'P', answers: ['a', 'b'], correct: 5, success: [], failure: [] },
     'a trade of an unstackable item': { name: 'T', shape: 'trade', text: 'T', give: [{ id: 'bloodthirster', qty: 1 }], receive: [] },
     'a check on no stat': { name: 'T', shape: 'check', text: 'T', check: { stat: 'LUCK', dc: 10 }, success: [], failure: [] },
+    // Beats (chunk 15c).
+    'a beat that does not exist': { ...base, options: [{ label: 'L', effects: [{ beat: 'nowhere' }] }] },
+    'a beat that is not last': { ...base, options: [{ label: 'L', effects: [{ beat: 'b' }, { xp: 1 }] }], beats: { b: { ...base, name: undefined } } },
+    'a beat that starts a fight': { ...base, options: [{ label: 'L', effects: [{ fight: true }, { beat: 'b' }] }], beats: { b: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [] }] } } },
+    'a beat never reached': { ...base, beats: { b: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [] }] } } },
+    'beats in a loop': { ...base, options: [{ label: 'L', effects: [{ beat: 'b' }] }], beats: { b: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [{ beat: 'b' }] }] } } },
+    'four beats in a row': { ...base, options: [{ label: 'L', effects: [{ beat: 'b' }] }], beats: {
+      b: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [{ beat: 'c' }] }] },
+      c: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [{ beat: 'd' }] }] },
+      d: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [] }] } } },
+    'a beat with its own name': { ...base, options: [{ label: 'L', effects: [{ beat: 'b' }] }], beats: { b: { name: 'X', shape: 'choice', text: 'T', options: [{ label: 'L', effects: [] }] } } },
+    'a bad beat inside': { ...base, options: [{ label: 'L', effects: [{ beat: 'b' }] }], beats: { b: { shape: 'choice', text: 'T', options: [{ label: 'L', effects: [{ gold: 1 }] }] } } },
   };
   const missed = Object.entries(broken).filter(([, t]) => validateTemplate('x', t).length === 0).map(([k]) => k);
   check(`the validator catches each kind of mistake (${Object.keys(broken).length} kinds)`, missed.length === 0, missed.length ? `missed: ${missed.join(', ')}` : '');
@@ -428,11 +483,28 @@ console.log('=== every branch of every real template resolves ===');
     if (id.startsWith('test_')) continue;
     if (t.shape === 'market') continue;   // browsed, never resolved (cultmarket.mjs)
     const zoneId = t.appears?.zones?.[0] || 'reeds_of_gethsemane';
-    const picks = t.shape === 'choice' ? t.options.map((_, i) => ({ option: i }))
-      : t.shape === 'check' ? [{ roll: 20 }, { roll: 1 }]
-      : t.shape === 'puzzle' ? t.answers.map((_, i) => ({ answer: i }))
+    // Every path through the event (chunk 15c): each pick of the opening,
+    // and where an outcome goes on to a beat, each pick of that beat too.
+    const picksFor = (n) => n.shape === 'choice' ? n.options.map((_, i) => ({ option: i }))
+      : n.shape === 'check' ? [{ roll: 20 }, { roll: 1 }]
+      : n.shape === 'puzzle' ? n.answers.map((_, i) => ({ answer: i }))
       : [{ accept: true }, { accept: false }];
-    for (const pick of picks) {
+    const outcomeOf = (n, p) => n.shape === 'choice' ? n.options[p.option].effects
+      : n.shape === 'check' ? (p.roll === 20 ? n.success : n.failure)
+      : n.shape === 'puzzle' ? (p.answer === n.correct ? n.success : n.failure)
+      : n.shape === 'offer' ? (p.accept ? [...(n.price || []), ...(n.reward || [])] : (n.refuse || []))
+      : (p.accept ? n.receive : (n.refuse || []));
+    const paths = [];
+    const expand = (prefix, n) => {
+      for (const p of picksFor(n)) {
+        const to = E.nextBeat(outcomeOf(n, p));
+        if (to && t.beats?.[to]) expand([...prefix, p], t.beats[to]);
+        else paths.push([...prefix, p]);
+      }
+    };
+    expand([], t);
+    for (const path of paths) {
+      const pick = path[0];
       try {
         // A template for inside a pact (11c) is met with one already begun.
         // ...and each 11d moment is set up the same way: a beast of the mark
@@ -453,18 +525,74 @@ console.log('=== every branch of every real template resolves ===');
         if (a.questFlag) w.flags.add(a.questFlag);
         const opened = h.move(tile);
         if (!opened.event) { problems.push(`${id}: did not open (${opened.quiet || opened.reason})`); continue; }
-        const r = h.resolveEvent(pick);
-        if (!r.ok) { problems.push(`${id} ${JSON.stringify(pick)}: ${r.reason}`); continue; }
+        const key = `${id} ${path.map(p => JSON.stringify(p)).join(' > ')}`;
+        let r = null;
+        const said = [];
+        for (const [k, p] of path.entries()) {
+          r = h.resolveEvent(p);
+          if (!r.ok) break;
+          said.push(...r.lines);
+          // Going on keeps the event open and its site unspent; the last pick ends it.
+          if (k < path.length - 1 && (!r.next || !h.view().event?.beat || !h.getState().map.occupants.some(o => o.id === 'otest'))) { problems.push(`${key}: did not go on to a beat`); r = null; break; }
+        }
+        if (!r) continue;
+        if (!r.ok) { problems.push(`${key}: ${r.reason}`); continue; }
         if (h.getState().map.occupants.some(o => o.id === 'otest') || h.view().event) problems.push(`${id}: the site was not spent`);
-        lines[`${id} ${JSON.stringify(pick)}`] = [r.branch, ...r.lines];
+        lines[key] = [r.branch, ...said];
       } catch (e) { problems.push(`${id} ${JSON.stringify(pick)}: THREW ${e.message}`); }
     }
   }
   check(`every branch of the ${Object.keys(EVENT_TEMPLATES).filter(k => !k.startsWith('test_')).length} real templates resolves, and spends its site`, problems.length === 0, problems.join(' | '));
   const puzzles = Object.entries(lines).filter(([k]) => k.startsWith('reeds_distant_weeping'));
   check('a puzzle: the right answer succeeds, every other fails', puzzles.filter(([, v]) => v[0] === 'success').length === 1 && puzzles.filter(([, v]) => v[0] === 'failure').length === 3);
-  check('a check: a 20 succeeds and a 1 fails (DC {danger}+11 in the Reeds)', lines['reeds_sinking_mud {"roll":20}']?.[0] === 'success' && lines['reeds_sinking_mud {"roll":1}']?.[0] === 'failure');
+  check('a check: a 20 succeeds and a 1 fails (DC {danger}+11 in the Reeds)', lines['reeds_sinking_mud {"option":1} > {"roll":20}']?.[0] === 'success' && lines['reeds_sinking_mud {"option":1} > {"roll":1}']?.[0] === 'failure');
   golden.lines = lines;
+}
+
+// =============================================================================
+// Chunk 15c: beats and the Escape Rope, on a real hunt (Sinking Mud: "Press
+// on" goes on to a check in the mud).
+console.log('=== beats and the Escape Rope (chunk 15c) ===');
+{
+  const ropes = (h) => countInList(h.getState().pack.found, 'escape_rope') + countInList(h.getState().pack.brought, 'escape_rope');
+  const { h, tile } = withSite('reeds_sinking_mud', { extra: (d) => d.pack.brought.push(makeStack('escape_rope', 2)) });
+  h.move(tile);
+  check('before committing, walking away is free and needs no rope', !h.escapeEvent().ok && !h.view().event?.beat);
+  const r = h.resolveEvent({ option: 1 });
+  const ev = h.view().event;
+  check('"Press on" goes on: the event stays open on its next beat, the site unspent',
+    r.ok && r.next === 'stuck' && ev?.beat?.id === 'stuck' && ev.shape === 'check' && h.getState().map.occupants.some(o => o.id === 'otest'));
+  check('...what just happened leads the beat', ev.beat.lead.includes('Three steps in, the ground gives way.'), ev.beat.lead.join(' / '));
+  check('...and it counts as the second beat, with the ropes carried', ev.beat.n === 2 && ev.beat.ropes === 2, JSON.stringify(ev.beat));
+  const walk = h.leaveEvent();
+  check('committed: walking away is refused, and says why', !walk.ok && /Escape Rope/.test(walk.reason) && !!h.view().event, walk.reason);
+  const again = restoreMapHunt(h.serialize(), recordingWorld(makeParty()));
+  check('a reload mid-event comes back on the same beat', again.view().event?.beat?.id === 'stuck' && again.view().event.beat.lead.length === 1);
+  const resolved = h.getState().eventsResolved || 0;
+  const out = h.escapeEvent();
+  check('an Escape Rope gets the party out: one used, the site spent, the hunt goes on',
+    out.ok && ropes(h) === 1 && !h.view().event && !h.getState().map.occupants.some(o => o.id === 'otest') && h.move(h.view().moves[0].tile).ok,
+    `${ropes(h)} ropes left`);
+  check('...it does not count as seen through (omens)', (h.getState().eventsResolved || 0) === resolved);
+  check('...and the log says so', h.getState().log.some(l => l.kind === 'event_escaped' && l.beat === 'stuck'));
+
+  const bare = withSite('reeds_sinking_mud');
+  bare.h.move(bare.tile);
+  bare.h.resolveEvent({ option: 1 });
+  const none = bare.h.escapeEvent();
+  check('with no rope, there is no way out but through', !none.ok && /no Escape Rope/.test(none.reason) && !!bare.h.view().event, none.reason);
+  const through = bare.h.resolveEvent({ roll: 20 });
+  check('...and seeing it through ends it, and the site is spent', through.ok && !through.next && through.branch === 'success'
+    && !bare.h.view().event && bare.h.getState().log.some(l => l.kind === 'event' && l.beat === 'stuck'));
+
+  // Three beats, two of them choices, the last a check.
+  const lp = withSite('reeds_lament_pools', { night: true });
+  lp.h.move(lp.tile);
+  lp.h.resolveEvent({ option: 0 });
+  lp.h.resolveEvent({ option: 0 });
+  const reach = lp.h.view().event;
+  check('three beats: the Lament Pools reach the third', reach?.beat?.id === 'reach' && reach.beat.n === 3 && reach.shape === 'check');
+  check('a quest flag set on the way in holds whatever comes after', lp.w.flags.has('mb_weeping_heard'));
 }
 
 // =============================================================================

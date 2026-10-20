@@ -1018,6 +1018,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       case 'event_quiet': return `${day(e.time)} Something is here, but ${e.quiet || (EVENT_TEMPLATES[e.event] ? 'not now' : 'nothing stirs')}.`;
       case 'event': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: ${e.branch === 'success' ? 'it went well' : e.branch === 'failure' ? 'it went badly' : e.branch === 'refuse' ? 'you refused' : 'resolved'}.`;
       case 'event_left': return `${day(e.time)} Walked away from ${EVENT_TEMPLATES[e.event]?.name || 'an event'}.`;
+      // Chunk 15c: an event told in beats.
+      case 'event_beat': return `${day(e.time)} ${EVENT_TEMPLATES[e.event]?.name || 'An event'}: you went on.`;
+      case 'event_escaped': return `${day(e.time)} Got clear of ${EVENT_TEMPLATES[e.event]?.name || 'an event'} with an Escape Rope.`;
       case 'blood_scent': return `${day(e.time)} ${e.family ? `A ${familyName(this.v?.zoneId, e.family)}` : 'Something'} has caught the scent of blood.`;
       case 'scatter': return `${day(e.time)} ${e.family ? `The ${familyName(this.v?.zoneId, e.family)}` : 'A beast'} scattered as you passed.`;
       case 'quest_done': return `${day(e.time)} ${e.label}: done. Report to Elder Varek.`;
@@ -1219,8 +1222,14 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    */
   _drawEvent() {
     const ev = this.v.event;
-    const p = this._eventFrame(ev.templateId, { title: ev.name, tag: ev.quest ? `Quest: ${ev.quest}` : null });
-    let ty = this._eventText(p, p.ty, ev.text, { size: 15, color: '#e6e1d6', gap: 12 });
+    // A later beat (chunk 15c) says which part it is, and what just happened
+    // leads its text.
+    const tag = [ev.quest ? `Quest: ${ev.quest}` : null, ev.beat ? `Part ${ev.beat.n}` : null].filter(Boolean).join(' · ') || null;
+    const p = this._eventFrame(ev.templateId, { title: ev.name, tag });
+    let ty = p.ty;
+    for (const l of ev.beat?.lead || []) ty = this._eventText(p, ty, l, { size: 13, color: '#a8b0bc', gap: 4 });
+    if (ev.beat?.lead?.length) ty += 6;
+    ty = this._eventText(p, ty, ev.text, { size: 15, color: '#e6e1d6', gap: 12 });
     ty = this._eventHunter(p, ty, ev);
     const act = (pick) => () => this._resolveEvent(pick);
     const guest = this.coop && !this.coop.isHost;
@@ -1272,6 +1281,13 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       }
     }
 
+    // Committed (chunk 15c): no Walk away; an Escape Rope is the way out.
+    if (ev.beat) {
+      const n = ev.beat.ropes || 0;
+      rows.push(['Use an Escape Rope', n ? `Get clear of it. You carry ${n}.` : 'You carry none: the only way out is through.',
+        n ? () => this._escapeEvent() : () => this._say('You carry no Escape Rope.'), { enabled: n > 0 }]);
+    }
+
     ty += 4;
     for (const [label, detail, cb, opts] of rows) {
       const take = guest && ev.shape !== 'market' ? () => this._say('The host decides.') : cb;
@@ -1287,9 +1303,18 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     if (guest) {
       p.cont.add(this.add.text(p.rx, y + h - 34, 'The host decides.', { fontFamily: FONT, fontSize: '13px', color: '#a8b0bc' }));
       this._panelButton(p, x + w - 110, y + h - 26, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+    } else if (ev.beat) {
+      p.cont.add(this.add.text(p.rx, y + h - 34, 'You are committed: there is no walking away now.', { fontFamily: FONT, fontSize: '13px', color: '#a8b0bc' }));
     } else {
       this._panelButton(p, x + w - 80, y + h - 26, 'Walk away', () => this._act('leave', () => this.hunt.leaveEvent()), 'primary');
     }
+  }
+
+  /** Out of a committed event with an Escape Rope (chunk 15c). */
+  _escapeEvent() {
+    const ev = this.v.event;
+    const res = this._act('event', () => this.hunt.escapeEvent());
+    if (res?.ok) this._showEventResult(ev, { ...res, branch: 'escape' });
   }
 
   /** Buy from a black market's stall, on this player's own save. */
@@ -1339,6 +1364,14 @@ export default class HuntFieldOverlay extends Phaser.Scene {
   }
 
   _showEventResult(ev, res) {
+    // The event went on to its next beat (chunk 15c): the screen redraws on
+    // it, with what just happened (and the roll) leading its text.
+    if (res.next) {
+      this._eventResult = null;
+      SoundManager.play(res.branch === 'failure' ? 'handsClick' : 'select');
+      this._refresh();
+      return;
+    }
     const lines = [...res.lines];
     if (res.roll) {
       const r = res.roll;

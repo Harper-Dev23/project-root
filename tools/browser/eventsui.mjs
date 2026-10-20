@@ -115,9 +115,17 @@ await clickText('^Continue$', FIELD);
 await sleep(300);
 check('Continue (clicked) closes the result', !(await texts()).includes('Continue'));
 
-// ---- 2. A check, with the dice ------------------------------------------------
-at = await place('reeds_sinking_mud');
+// ---- 2. Beats, then a check with the dice (chunk 15c: Sinking Mud) -------------
+at = await place('reeds_sinking_mud', { pack: { id: 'escape_rope', qty: 1 } });
 t = await texts();
+check('before going on: its two choices and Walk away', ['Go around', 'Press on', 'Walk away'].every(x => t.includes(x)));
+await clickText('^Press on$', FIELD);
+await sleep(400);
+t = await texts();
+check('"Press on" (clicked): the next beat, marked Part 2, led by what just happened',
+  t.includes('Part 2') && t.includes('Three steps in, the ground gives way.') && t.some(x => x.startsWith('The mud takes you to the knees')));
+check('...committed: no Walk away, and the Escape Rope offered with the count carried',
+  !t.includes('Walk away') && t.includes('Use an Escape Rope') && t.includes('Get clear of it. You carry 1.'));
 // Chunk 15b: the event screen shows who rolls and the odds, not a DC.
 const odds = t.find(x => /^Dexterity: .+, \d+% to succeed$/.test(x));
 const want = await evaluate(`const { checkChance } = await import('/src/systems/EventEffects.js'); const c = window.__T.s().hunt.view().event.check; return { pct: checkChance(c.modifier, c.dc), who: c.who };`);
@@ -130,6 +138,20 @@ check('Roll (clicked): the dice token lands, then who rolled what against what w
   await waitFor(`window.__T.textsOf('${FIELD}').some(t => /^.+ rolled \\d+ [+-] \\d+ = \\d+, needing \\d+: (success|failure)\\.$/.test(t.text))`));
 await shot('04-check-result');
 check('...and the site is spent', await spent(at.tile));
+await clickText('^Continue$', FIELD);
+await sleep(300);
+
+// ---- 2b. The Escape Rope (chunk 15c) --------------------------------------------
+at = await place('reeds_sinking_mud', { pack: { id: 'escape_rope', qty: 1 } });
+await clickText('^Press on$', FIELD);
+await sleep(400);
+await clickText('^Use an Escape Rope$', FIELD);
+await sleep(400);
+t = await texts();
+const ropesLeft = await evaluate(`const { countInList } = await import('/src/systems/ItemStacks.js'); const p = window.__T.s().hunt.getState().pack; return countInList(p.found, 'escape_rope') + countInList(p.brought, 'escape_rope');`);
+check('Use an Escape Rope (clicked): the party gets clear, the site is spent', t.includes('You throw the Escape Rope and haul yourselves clear.') && await spent(at.tile));
+check('...one rope used of the two carried (one from each placement)', ropesLeft === 1, `${ropesLeft} left`);
+await shot('04b-escaped');
 await clickText('^Continue$', FIELD);
 await sleep(300);
 

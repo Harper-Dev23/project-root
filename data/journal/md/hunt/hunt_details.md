@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 20
-version: 3
-updatedAt: 2026-09-26
+version: 4
+updatedAt: 2026-10-20
 ---
 # The Sacred Hunt
 
@@ -29,9 +29,11 @@ You see the tiles near you. Anything further off may be **sensed** -- something 
 
 ## What lives there
 
-Every pack stands on a tile. Walking onto one starts the fight, and whoever has the better Initiative acts first -- unless you walked in blind, in which case they ambush you. Some packs wander; **predators** notice a party that comes close and hunt it, while **timid** beasts scatter unless you hunt them. You can **Flee** a fight, at the cost of a free round for the enemy, but a predator you fled from will follow. Tempers, prophet marks, vigils, blight and waiting are in [[Hunting the Wild]].
+Every pack stands on a tile. Walking onto one starts the fight, and whoever has the better Initiative acts first -- unless you walked in blind, in which case they ambush you. Some packs wander; **predators** notice a party that comes close and hunt it, while **timid** beasts scatter unless you hunt them. You can **Flee** a fight, at the cost of a free round for the enemy, but a predator you fled from will follow. A **Smoke Pot** (the Draughtwell) gets the party away with no free round at all; it is a bonus action, any hunter can throw one, and it does nothing against a boss. Tempers, prophet marks, vigils, blight and waiting are in [[Hunting the Wild]].
 
-**Events** sit on their own tiles: a choice, a stat check, a riddle. Some only stir at night. A quest you are on may put its own event on the map, marked in violet from the start.
+**Events** sit on their own tiles: a choice, a stat check, a riddle. Some only stir at night. A quest you are on may put its own event on the map, marked in violet from the start. The event screen shows who it is about, and a check shows who rolls and the odds.
+
+Some events go on: a choice leads to a second part, and sometimes a third. You can always **walk away** from an event before you go on, for free. Once you have gone on, you are committed, and the only way out short of seeing it through is an **Escape Rope** (the Draughtwell), used up as you climb clear. A quest step is never lost by getting out early.
 
 ## Staying alive
 

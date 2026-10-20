@@ -226,6 +226,31 @@ console.log('=== fleeing ===');
   check('applied to the host\'s hunt as a flee (the encounter cleared)', r.ok !== false && !fh.h.getState().encounter, JSON.stringify(tile0));
 }
 
+console.log('=== a Smoke Pot (chunk 15c) ===');
+{
+  const M = huntLobby('SMOK');
+  const mh = hostHunt(M.host.last('huntStarted').roster, { from: 200 });
+  M.hub.handle(M.host, { t: 'huntSnapshot', version: 1, snapshot: mh.h.serialize() });
+  sendFight(M.hub, M.host, mh, 1);
+  const s = M.lobby.session;
+  for (const u of s.party) { u.maxHP = 9999; u.currentHP = 9999; }
+  // To one of the GUEST's hunters: any player may throw one, unlike Flee.
+  for (let i = 0; i < 40 && s.current()?.ownerId !== 'p2'; i++) {
+    const cur = s.current();
+    if (cur?.ownerId != null) M.hub.handle(M.connOf[cur.ownerId], { t: 'endTurn' }); else s.host.__drain();
+  }
+  const cur = s.current();
+  check('setup: a guest hunter is to act', cur?.ownerId === 'p2', JSON.stringify(cur));
+  const hp0 = s.party.map(u => u.currentHP).join(',');
+  const enemyTurns0 = s.host.combatEntries.length;
+  M.host.clear();
+  M.hub.handle(M.guest, { t: 'act', actor: cur.ref, skill: 'smoke_pot', target: cur.ref });
+  const over = M.host.last('over');
+  check('a guest\'s Smoke Pot ends the fight as fled', over?.huntOutcome?.result === 'fled' && !M.lobby.session, JSON.stringify(over?.huntOutcome) + ' ' + M.guest.errors().join('; '));
+  check('...with no free round: no one was hurt', s.party.map(u => u.currentHP).join(',') === hp0);
+  check('...and the log says so', (s.host.combatEntries || []).slice(enemyTurns0).some(e => JSON.stringify(e).includes('Smoke Pot')));
+}
+
 console.log('=== a cultist fight: its gear crosses the wire into the pack ===');
 {
   const C = huntLobby('CULT');
