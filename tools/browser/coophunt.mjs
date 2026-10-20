@@ -96,7 +96,10 @@ try {
     const hub = Gm.scene.getScene('${HUB}'); const GS = (await import('/src/systems/GameState.js')).default;
     hub.setZone('reeds_of_gethsemane'); hub.setHuntPlan(GS.inventory.find(i => i.instanceId === window.__plan.instanceId));
     return true;`);
+  // Chunk 15f: walk the departure flow to Pack (step 4), pack, then Review.
+  for (let i = 0; i < 3; i++) await H.clickText('^Next$', HUB);
   for (let i = 0; i < 2; i++) await H.clickText('^[+]$', HUB);
+  await H.clickText('^Next$', HUB);
   const bag = () => H.evaluate(`const GS = (await import('/src/systems/GameState.js')).default;
     return { rations: GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0), plan: GS.inventory.some(i => i.instanceId === window.__plan.instanceId) };`);
   const bag0 = await bag();

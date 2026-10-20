@@ -108,6 +108,7 @@ await B.bootToTown(`
   const { createItemInstance } = await import('/src/systems/ItemFactory.js');
   const party = makeParty(); GS.characters = party; GS.party = party;
   InventorySystem.addGlobalItem(makeStack('rations', 100));
+  InventorySystem.addGlobalItem(makeStack('escape_rope', 2));
   const { makeRng } = await import('/src/systems/seededRng.js');
   window.__plan = createItemInstance('plan_retrieve_small', { rarity: 'rare', itemLevel: 3, rng: makeRng(${PLAN_SEED}) });
   InventorySystem.addGlobalItem(window.__plan);
@@ -123,10 +124,18 @@ await evaluate(`
   hub.setZone('reeds_of_gethsemane');
   hub.setHuntPlan(GS.inventory.find(i => i.instanceId === window.__plan.instanceId));
   return true;`);
-for (let i = 0; i < 9; i++) await clickText('^[+]$', HUB);
-await shot('01-loadout');
-const packedLine = (await findText('Rations packed', HUB))?.text || '';
-check('the packing cap is 60: nine clicks of +10 with 100 in the bag pack 60', /\+ 60 Rations packed/.test(packedLine), packedLine);
+// Chunk 15f: the departure flow, one step at a time (Where, The plan, The
+// party, Pack, Review), walked with real clicks on Next.
+const hubTexts = () => evaluate(`return window.__T.textsOf('${HUB}').map(t => t.text);`);
+let ht = await hubTexts();
+check('step 1, Where: the region, its danger, and Next (no Depart yet)', ht.includes('The Reeds of Gethsemane')
+  && ht.some(t => t.startsWith('Danger 1: gear found here is item level 1')) && ht.includes('Next') && !ht.includes('Depart'));
+await shot('01a-where');
+await clickText('^Next$', HUB);
+ht = await hubTexts();
+check('step 2, The plan: the chosen plan and its modifiers', ht.some(t => t.startsWith('Active Modifiers')) && ht.includes('Choose Hunt Plan'));
+await clickText('^Next$', HUB);
+await shot('01b-party');
 const STATS = ['Perception', 'Endurance', 'Speed', 'Cooking', 'Fishing', 'Foraging', 'Item Rarity', 'Party Initiative'];
 const statTexts = (await evaluate(`return window.__T.textsOf('${HUB}').map(t => t.text);`)).filter(t => STATS.some(s => t.startsWith(s + ' ')));
 check('the Hunt screen shows all eight party stats', STATS.every(s => statTexts.some(t => t.startsWith(s + ' '))), statTexts.join(' | '));
@@ -137,6 +146,33 @@ const stats = await evaluate(`
   const st = partyStats(GS.party, huntMods(getZone('reeds_of_gethsemane').modifiers, {}, window.__plan.instanceMods.misc));
   return { perception: st.perception, by: st.providers.perception };`);
 check('...with the numbers partyStats gives (Perception)', statTexts.includes(`Perception ${Math.round(stats.perception * 10) / 10} (${stats.by})`), `${stats.perception} (${stats.by})`);
+// The Party sheet from step 3 hands back to the Hunt screen, the town kept asleep under it.
+await clickText('^Party sheet$', HUB);
+await sleep(500);
+const sheet = await evaluate(`const G = window.__T.g(); return { open: G.scene.isActive('PartyManagementScene'), hubPaused: G.scene.isPaused('HuntHubOverlay') };`);
+await evaluate(`window.__T.g().scene.getScene('PartyManagementScene')._closeAndReturn(); await new Promise(r => setTimeout(r, 300)); return 1;`);
+const sheetBack = await evaluate(`const G = window.__T.g(); return { sheet: G.scene.isActive('PartyManagementScene'), hub: G.scene.isActive('HuntHubOverlay') && !G.scene.isPaused('HuntHubOverlay'), town: !!G.scene.getScene('TownScene').input.enabled };`);
+check('the Party sheet opens over the Hunt screen, and closing it returns there (the town stays asleep)',
+  sheet.open && sheet.hubPaused && !sheetBack.sheet && sheetBack.hub && !sheetBack.town, JSON.stringify({ sheet, sheetBack }));
+await clickText('^Next$', HUB);
+for (let i = 0; i < 9; i++) await clickText('^[+]$', HUB);
+const packedLine = (await findText('Rations packed', HUB))?.text || '';
+check('step 4, Pack: the cap is 60: nine clicks of +10 with 100 in the bag pack 60', /and 60 Rations packed/.test(packedLine), packedLine);
+// The Escape Rope's own + (the one on its row), clicked three times with two in camp.
+const plusOnRow = async (name) => {
+  const all = await evaluate(`return window.__T.textsOf('${HUB}');`);
+  const row = all.find(t => t.text === name);
+  return all.find(t => t.text === '+' && row && Math.abs(t.y - row.y) < 8);
+};
+for (let i = 0; i < 3; i++) { const p = await plusOnRow('Escape Rope'); if (p) { await click(p.x, p.y); await sleep(150); } }
+const hubPack = await evaluate(`return window.__T.g().scene.getScene('${HUB}').pack;`);
+check('a row\'s + packs one at a time, never past what is in camp (2 Escape Ropes)', hubPack.items?.escape_rope === 2, JSON.stringify(hubPack));
+await shot('01-loadout');
+await clickText('^Next$', HUB);
+ht = await hubTexts();
+check('step 5, Review: the supplies, what is packed, and Depart only here', ht.includes('Depart') && ht.includes('Depart with friends')
+  && ht.some(t => t.startsWith('120 (camp issue 60 + 60 Rations)')) && ht.includes('2 × Escape Rope'), ht.filter(t => /camp issue|Escape/.test(t)).join(' | '));
+await shot('01c-review');
 
 // ---- 2. Depart ---------------------------------------------------------------
 const bagBefore = await bagRations();
@@ -157,8 +193,12 @@ if (dep.seed !== HUNT_SEED) throw new Error(`the hunt was not seeded: ${JSON.str
 check('Depart starts a hunt on the hex map and opens the map scene (the Hunt screen closes)', dep.mode === 'map' && dep.field && !dep.hub, JSON.stringify(dep));
 check('...with the plan\'s objective, size and item level (Retrieve, Small, 3)', dep.objective === 'retrieve' && dep.size === 'small' && dep.level === 3 && dep.layout === 37);
 check('...the plan used up, 60 Rations packed', !dep.planInBag && bagBefore - (await bagRations()) === 60 && dep.supplies >= 120, `supplies ${dep.supplies}`);
+const ropes = await evaluate(`const { HuntManager } = await import('/src/systems/HuntManager.js'); const { countInList } = await import('/src/systems/ItemStacks.js');
+  const GS = (await import('/src/systems/GameState.js')).default; const p = HuntManager.current().getState().pack;
+  return { pack: countInList(p.brought, 'escape_rope'), camp: countInList(GS.inventory, 'escape_rope') };`);
+check('...and the 2 Escape Ropes went from the camp bag into the hunt pack', ropes.pack === 2 && ropes.camp === 0, JSON.stringify(ropes));
 const s0 = await saved();
-check('...and saved at once: the autosave holds the map hunt', s0?.version === 8 && s0?.hunt?.mode === 'map', `v${s0?.version}`);
+check('...and saved at once: the autosave holds the map hunt', s0?.version === 9 && s0?.hunt?.mode === 'map', `v${s0?.version}`);
 await shot('02-departed');
 
 // ---- 3. Every action autosaves ------------------------------------------------
@@ -407,8 +447,16 @@ await clickText('^Return to camp$');
 await sleep(500);
 await evaluate(`window.__T.g().scene.getScene('TownScene')._enterHuntGate(); await new Promise(r => setTimeout(r, 900)); return 1;`);
 const planning = await evaluate(`const G = window.__T.g(); return { hub: G.scene.isActive('HuntHubOverlay'), field: G.scene.isActive('HuntFieldOverlay') };`);
-check('after leaving, the Hunt screen opens on planning again, not on a hunt', planning.hub && !planning.field && !!(await findText('Choose Location|No location chosen', HUB)));
+// Chunk 15f: it opens on step 1 with the last region remembered.
+check('after leaving, the Hunt screen opens on planning again (step 1, the last region remembered), not on a hunt',
+  planning.hub && !planning.field && !!(await findText('^Change Location$', HUB)) && !!(await findText('^The Reeds of Gethsemane$', HUB)));
 await shot('07-planning-again');
+// The pack is remembered too (chunk 15f): last time's counts, against what
+// the camp bag holds now (the ropes came home with the clean exit).
+const again = await evaluate(`const { countInList } = await import('/src/systems/ItemStacks.js'); const GS = (await import('/src/systems/GameState.js')).default;
+  return { ...window.__T.g().scene.getScene('${HUB}').pack, camp: countInList(GS.inventory, 'rations') };`);
+check('...and last hunt\'s pack is ready again: 60 Rations (or all in camp) and the 2 Escape Ropes',
+  again.rations === Math.min(60, again.camp) && again.items?.escape_rope === 2, JSON.stringify(again));
 await evaluate(`const G = window.__T.g(); G.scene.stop('HuntHubOverlay'); return 1;`);
 
 // ---- 7. An old save with an Advance hunt -------------------------------------------

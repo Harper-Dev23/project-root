@@ -33,7 +33,7 @@ import { createPanel } from '../../ui/GamePanel.js';
 import { SoundManager } from '../../systems/SoundManager.js';
 import { HuntManager, CAMP_ISSUE, zoneDeathRule } from '../../systems/HuntManager.js';
 import { InventorySystem } from '../../systems/InventorySystem.js';
-import { countInList, takeFromList, makeStack } from '../../systems/ItemStacks.js';
+import { countInList, makeStack, stackQty } from '../../systems/ItemStacks.js';
 import { Items } from '../../../data/items.js';
 import { describeModifiers, describeLoadout } from '../../systems/HuntModifiers.js';
 import { describePlanHeader, makeBasicPlan, isBasicPlan } from '../../systems/HuntPlans.js';
@@ -47,7 +47,10 @@ import { partyStats } from '../../systems/PartyStats.js';
 import { planMapInputs } from '../../systems/HuntMapGen.js';
 import { launchMapHunt } from './HuntFieldOverlay.js';
 import { bossesIn, omenMeter, offersReady } from '../../systems/Omens.js';
-import { packable } from './PackingOverlay.js';
+import { PACK_GROUPS, packRows, clampPlan, adjust, emptyPlan, reminders, describePlan, takePlan, rememberPlan } from '../../systems/PackPlan.js';
+import { questSitesFor, questTitleForStep } from '../../systems/HuntQuests.js';
+import { huntItemLevel } from '../../systems/HuntScaling.js';
+import { owedExplorationPicks } from '../../systems/PartyStats.js';
 
 // The camp's free issue (CAMP_ISSUE, 60) comes on top of what is packed. The
 // packing cap is rationPackCap (HuntRules.js): 60 since the hunt moved onto
@@ -55,6 +58,9 @@ import { packable } from './PackingOverlay.js';
 const RATIONS_PER_TICKET     = 10;
 const PACK_STEP              = 10;
 const LOG_LINES_SHOWN        = 10;
+const FONT = 'Georgia, Gelasio, serif';
+/** The departure flow's steps (chunk 15f), in order. */
+const FLOW_STEPS = ['Where', 'The plan', 'The party', 'Pack', 'Review'];
 
 // Shown before departure, never a surprise (DEATH_AND_REVIVAL).
 const DEATH_RULE_TEXT = {
@@ -72,20 +78,29 @@ const DEATH_RULE_TEXT = {
  * Depart and the co-op host's start (CoopLobbyScene), so they cannot drift.
  * The caller saves.
  */
-export function takeDeparture({ plan, rationsToPack = 0, packIds = [] }) {
-  const packed = Math.max(0, Math.min(rationsToPack, countInList(GameState.inventory, 'rations'), rationPackCap(GameState.party)));
-  const supplies = CAMP_ISSUE + packed * (Items.rations?.supply ?? 1);
-  const rations = packed > 0 ? takeFromList(GameState.inventory, 'rations', packed) : null;
-  // What else was packed (batch 4b chunk 7, PackingOverlay): whole entries out
-  // of the camp bag and into the pack, at risk from here. Never the plan.
-  const others = [];
+/** The older packing choice (whole camp-bag entries by instance id) as a
+ *  PackPlan: a stack counts its units, anything else is gear. */
+function legacyPlan(rations, packIds = []) {
+  const plan = { rations, items: {}, gear: [] };
   for (const id of packIds) {
     const inst = (GameState.inventory || []).find(it => it?.instanceId === id);
-    if (!inst || inst.instanceId === plan?.instanceId || inst.id === 'rations') continue;
-    GameState.removeFromInventory(id);
-    others.push(inst);
+    if (!inst) continue;
+    if (Items[inst.id]?.stackable) plan.items[inst.id] = (plan.items[inst.id] || 0) + stackQty(inst);
+    else plan.gear.push(id);
   }
-  const bring = [...(rations ? [rations] : []), ...others];
+  return plan;
+}
+
+export function takeDeparture({ plan, pack = null, rationsToPack = 0, packIds = [] }) {
+  // The Pack step's plan (chunk 15f, PackPlan.js): { rations, items, gear }.
+  // The older { rationsToPack, packIds } still reads as one (gear by instance).
+  const p = clampPlan(GameState.inventory || [], pack || legacyPlan(rationsToPack, packIds), rationPackCap(GameState.party));
+  p.gear = p.gear.filter(id => id !== plan?.instanceId);
+  const supplies = CAMP_ISSUE + p.rations * (Items.rations?.supply ?? 1);
+  const taken = takePlan(GameState.inventory, p);
+  // party: the shared side (Rations apart); own: fights and gear. Solo it is
+  // all one pack; a co-op start splits them (CoopLobbyScene).
+  const bring = [...(taken.rations ? [taken.rations] : []), ...taken.party, ...taken.own];
   const view = huntPlanView(plan);
   // A boss plan stays in the bag until its boss is fought (14b-4): the hunt
   // carries its id and uses it up then (HuntEngine.beginFight).
@@ -100,11 +115,13 @@ export default class HuntHubOverlay extends Phaser.Scene {
   }
 
   init() {
-    this.zoneId = null;
-    this.rationsToPack = 0;
+    // Last hunt's region and pack, remembered (chunk 15f): a returning
+    // player can click straight through.
+    const last = GameState.flags?.lastHunt || null;
+    this.zoneId = last?.zoneId && getZone(last.zoneId) ? last.zoneId : null;
     this.huntPlanInstance = null;
-    // Camp bag entries chosen to go with the party (PackingOverlay; batch 4b chunk 7).
-    this.packIds = [];
+    this.step = 1;
+    this.pack = clampPlan(GameState.inventory || [], last?.pack || emptyPlan(), rationPackCap(GameState.party || []));
   }
 
   create() {
@@ -162,10 +179,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
     }
     if (HuntManager.isActive()) {
       this._renderHunting();
-    } else if (this.zoneId) {
-      this._renderLoadout();
     } else {
-      this._renderPick();
+      this._renderFlow();
     }
   }
 
@@ -181,111 +196,260 @@ export default class HuntHubOverlay extends Phaser.Scene {
     return b;
   }
 
-  // ── Phase: no zone chosen ────────────────────────────────────────────────
+  // ── The departure flow (chunk 15f; owner, 2026-10-20) ─────────────────────
+  //
+  // Five steps clicked through in order, so nothing is missed and nothing is
+  // crammed onto one page: Where, The plan, The party, Pack, Review. Depart
+  // is only on the last. The step names along the top go back to any step
+  // already reached; Back and Next walk them. Last hunt's region and pack
+  // are remembered (GameState.flags.lastHunt), so a returning player can
+  // click Next four times and go.
 
-  _renderPick() {
-    const { x, y, width } = this._bounds;
-    const left = x + 40;
+  _renderFlow() {
+    const { x, y, width, bottom } = this._bounds;
+    if (!this.zoneId) this.step = 1;
+    // The step names, along the top.
+    const stepW = (width - 80) / FLOW_STEPS.length;
+    FLOW_STEPS.forEach((name, i) => {
+      const n = i + 1;
+      const reachable = n === 1 || !!this.zoneId;
+      const t = this._text(x + 40 + stepW * i + stepW / 2, y + 58, `${n}  ${name}`, {
+        fontSize: '15px', fontFamily: FONT,
+        color: n === this.step ? '#ffdd88' : reachable ? '#d8cfbf' : '#7a7468',
+        fontStyle: n === this.step ? 'bold' : 'normal',
+      }).setOrigin(0.5, 0);
+      if (reachable && n !== this.step) t.setInteractive({ useHandCursor: true }).on('pointerdown', () => this._go(n));
+    });
+    const line = this.add.graphics();
+    line.lineStyle(1, 0x8a7a5a, 0.6).lineBetween(x + 40, y + 84, x + width - 40, y + 84);
+    this._content.add(line);
 
-    this._text(left, y + 80, 'No location chosen.', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
-    this._text(left, y + 116, `Hunt Tickets: ${ProgressionManager.huntTickets}`, { fontSize: '15px', color: '#cccccc' });
-    this._text(left, y + 142, `Hunt Points (total): ${ProgressionManager.huntPoints}`, { fontSize: '15px', color: '#88ddff' });
+    const top = y + 98;
+    if (this.step === 1) this._renderWhere(top);
+    if (this.step === 2) this._renderPlanStep(top);
+    if (this.step === 3) this._renderPartyStep(top);
+    if (this.step === 4) this._renderPackStep(top);
+    if (this.step === 5) this._renderReview(top);
 
-    this._text(left, y + 190,
-      'Choose a location to begin planning your hunt. You will be able to set\nsupplies and any Hunt Plan before departing.',
-      { fontSize: '14px', color: '#999999', wordWrap: { width: width - 80 } }
-    );
-
-    this._button(x + width / 2, y + 280, 'Choose Location', () => this._openMap(), 'confirm');
+    // The foot: Back and Next; on the last step, the two ways to leave.
+    if (this.step > 1) this._button(x + 110, bottom - 40, 'Back', () => this._go(this.step - 1), 'primary');
+    if (this.step < FLOW_STEPS.length) {
+      const next = this._button(x + width - 110, bottom - 40, 'Next', () => this._go(this.step + 1), 'confirm');
+      if (!this.zoneId) next.disableInteractive().setAlpha(0.4);
+    } else {
+      this._button(x + width - 140, bottom - 40, 'Depart', () => this._depart(), 'confirm');
+      // Co-op (chunk 12c): the same departure, taken into a co-op lobby.
+      // Nothing is spent until the hunt actually starts there.
+      this._button(x + width - 340, bottom - 40, 'Depart with friends', () => this._departWithFriends(), 'primary');
+    }
   }
 
-  // ── Phase: zone chosen, configuring loadout ─────────────────────────────
+  _go(n) {
+    if (n > 1 && !this.zoneId) return;
+    SoundManager.play('select');
+    this.step = Math.max(1, Math.min(FLOW_STEPS.length, n));
+    this._render();
+  }
 
-  _renderLoadout() {
-    const zone = getZone(this.zoneId);
-    const { x, y, width, bottom } = this._bounds;
+  _heading(left, y, s) {
+    return this._text(left, y, s, { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
+  }
+
+  // ── 1. Where ────────────────────────────────────────────────────────────
+
+  _renderWhere(top) {
+    const { x, width } = this._bounds;
     const left = x + 40;
+    if (!this.zoneId) {
+      this._text(left, top, 'No region chosen.', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
+      this._text(left, top + 34, `Hunt Tickets: ${ProgressionManager.huntTickets}   ·   Hunt Points (total): ${ProgressionManager.huntPoints}`, { fontSize: '15px', color: '#cccccc' });
+      this._text(left, top + 70, 'Choose a region to hunt. Then you choose a Hunt Plan, look over the party, pack, and depart.',
+        { fontSize: '14px', color: '#999999', wordWrap: { width: width - 80 } });
+      this._button(x + width / 2, top + 150, 'Choose Location', () => this._openMap(), 'confirm');
+      return;
+    }
+    const zone = getZone(this.zoneId);
+    this._text(left, top, zone.name, { fontSize: '22px', color: '#ffdd88', fontFamily: FONT });
+    this._button(x + width - 140, top + 12, 'Change Location', () => this._openMap(), 'danger');
+    const flavor = this._text(left, top + 34, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
+    let ty = flavor.y + flavor.height + 14;
+    this._text(left, ty, `Danger ${zone.danger ?? 1}: gear found here is item level ${huntItemLevel(zone.danger)}.`, { fontSize: '14px', color: '#d0d0d0' });
+    ty += 24;
+    this._text(left, ty, `${DEATH_RULE_TEXT[zoneDeathRule(zone)]} Everything you pack is at risk on a hunt.`, { fontSize: '13px', color: '#c9a36a', wordWrap: { width: width - 80 } });
+    ty += 30;
+    const omensH = this._renderOmens(left, ty, x + width - 40, zone);
+    ty += omensH ? omensH + 8 : 0;
+    // The quests that will place something on this region's maps (14b-2).
+    const quests = [...new Set(questSitesFor(this.zoneId, ProgressionManager)
+      .filter(s => !String(s.step).includes(':')).map(s => questTitleForStep(s.step)).filter(Boolean))];
+    this._heading(left, ty + 6, 'Your quests here');
+    this._text(left, ty + 34, quests.length ? quests.map(q => `·  ${q}`).join('\n') : 'None. Your quest log may point somewhere else.',
+      { fontSize: '14px', color: quests.length ? '#c59bff' : '#999999', lineSpacing: 4 });
+  }
 
-    this._text(left, y + 64, zone.name, { fontSize: '20px', color: '#ffdd88', fontFamily: 'Georgia, Gelasio, serif' });
-    const flavor = this._text(left, y + 92, zone.flavor, { fontSize: '14px', color: '#cccccc', wordWrap: { width: width - 80 } });
-    this._button(x + width - 140, y + 64, 'Change Location', () => this._openMap(), 'danger');
-    // The region's Omen row (14b-3) gets its own line under the flavour; the
-    // rest moves down only for a region that has one.
-    const omensH = this._renderOmens(left, flavor.y + flavor.height + 8, x + width - 40, zone);
+  // ── 2. The plan ─────────────────────────────────────────────────────────
 
-    // ── Supplies: the camp's issue plus packed Rations ──────────────────
-    const suppliesY = omensH ? Math.max(y + 150, flavor.y + flavor.height + 8 + omensH + 8) : y + 150;
-    this._text(left, suppliesY, 'Supplies', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
-
-    const inBag = this._rationsInBag();
-    this.rationsToPack = Math.min(this.rationsToPack, inBag, rationPackCap(GameState.party));
-    this._suppliesText = this._text(left, suppliesY + 30,
-      `${this._departSupplies()} supplies (camp issue ${CAMP_ISSUE} + ${this.rationsToPack} Rations packed)`,
-      { fontSize: '15px', color: '#d0d0d0' }
-    );
-    this._ticketsText = this._text(left, suppliesY + 56,
-      `Rations in camp bag: ${inBag}   ·   Hunt Tickets: ${ProgressionManager.huntTickets}`,
-      { fontSize: '13px', color: '#999999' }
-    );
-    this._text(left, suppliesY + 78,
-      `Everything you pack is at risk. Rations you don't eat come home; fresh food spoils. ${DEATH_RULE_TEXT[zoneDeathRule(zone)]}`,
-      { fontSize: '12px', color: '#c9a36a', wordWrap: { width: width - 80 } }
-    );
-
-    // Right-aligned: the supplies line is longer than it was under tickets.
-    // Small steppers (owner 2026-09-30: at the 80px minimum they overlapped).
-    const stepper = { minWidth: 46, padX: 14 };
-    this._button(x + width - 340, suppliesY + 32, '−', () => this._adjustPacked(-PACK_STEP), stepper);
-    this._button(x + width - 280, suppliesY + 32, '+', () => this._adjustPacked(PACK_STEP), stepper);
-    const buy = this._button(x + width - 130, suppliesY + 32, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
-    if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
-
-    // ── What else goes with you (batch 4b chunk 7): the camp bag stays in camp.
-    this.packIds = this.packIds.filter(id => packable().some(it => it.instanceId === id));
-    const packedNames = packable().filter(it => this.packIds.includes(it.instanceId)).map(it => getItemComputedData(it)?.name || it.id);
-    this._text(left, suppliesY + 114,
-      packedNames.length ? `Also packed: ${packedNames.slice(0, 4).join(', ')}${packedNames.length > 4 ? ` and ${packedNames.length - 4} more` : ''}`
-        : 'Nothing else packed. Draughts, chants and spare gear you leave behind stay safe in camp, out of reach.',
-      { fontSize: '13px', color: packedNames.length ? '#d0d0d0' : '#999999', wordWrap: { width: width - 260 } });
-    this._button(x + width - 130, suppliesY + 118, 'Pack…', () => this._openPacking(), 'primary');
-
-    // ── Hunt Plan ────────────────────────────────────────────────────────
-    const planY = suppliesY + 156;
-    this._text(left, planY, 'Hunt Plan', { fontSize: '18px', color: '#ffffaa', fontStyle: 'bold' });
-
+  _renderPlanStep(top) {
+    const zone = getZone(this.zoneId);
+    const { x, width } = this._bounds;
+    const left = x + 40;
+    this._heading(left, top, 'Hunt Plan');
     // Never empty: with nothing chosen, the hunt goes on the free basic plan.
     const plan = this._plan();
-    // Wrapped short of the plan's details at left + 420: a long affixed name
-    // ran underneath them.
-    this._text(left, planY + 30, getItemComputedData(plan).name, {
-      fontSize: '13px', color: RARITY_COLORS[plan.rarity] || RARITY_COLORS.common, wordWrap: { width: 405 },
+    this._button(x + width - 150, top + 10, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
+    const name = this._text(left, top + 34, getItemComputedData(plan).name, {
+      fontSize: '16px', color: RARITY_COLORS[plan.rarity] || RARITY_COLORS.common, wordWrap: { width: width - 80 },
     });
-    this._text(left + 420, planY + 4, describePlanHeader(plan).join('\n'), {
-      fontSize: '11px', color: '#aaaaaa', wordWrap: { width: width - 500 },
+    const head = this._text(left, name.y + name.height + 8, describePlanHeader(plan).join('\n'), {
+      fontSize: '13px', color: '#cfcfcf', wordWrap: { width: width - 80 }, lineSpacing: 3,
     });
-    // On the title's row, clear of the (wrapped) plan name below it.
-    this._button(left + 280, planY + 8, 'Choose Hunt Plan', () => this._openHuntPlanPicker(), 'primary');
-
-    // ── Active Modifiers (region + Hunt Plan — weather stays unknown until you depart) ──
-    const modY = planY + 64;
-    const modPanel = createPanel(this, left, modY, width - 80, 90, 'slot');
+    // Active modifiers (region + plan; the weather stays unknown until you depart).
+    const modY = head.y + head.height + 16;
+    const modPanel = createPanel(this, left, modY, width - 80, 110, 'slot');
     this._content.add(modPanel);
     this._text(left + 16, modY + 10, 'Active Modifiers (region + Hunt Plan — weather unknown until you depart)', {
       fontSize: '13px', color: '#ffdd88', fontStyle: 'bold', wordWrap: { width: width - 112 },
     });
-
     const previewLines = describeLoadout(zone.modifiers, plan.instanceMods?.misc);
-    this._text(left + 16, modY + 34,
-      previewLines.length ? previewLines.join('   ·   ') : 'No active modifiers.',
-      { fontSize: '13px', color: '#cccccc', wordWrap: { width: width - 112 } }
-    );
+    this._text(left + 16, modY + 34, previewLines.length ? previewLines.join('   ·   ') : 'No active modifiers.',
+      { fontSize: '13px', color: '#cccccc', wordWrap: { width: width - 112 } });
+  }
 
-    this._renderPartyStats(left, modY + 102, width - 80, zone, plan);
+  // ── 3. The party ────────────────────────────────────────────────────────
 
-    this._button(x + width / 2 - 110, bottom - 50, 'Depart', () => this._depart(), 'confirm');
-    // Co-op (chunk 12c): the same departure, taken into a co-op lobby. Nothing
-    // is spent until the hunt actually starts there (CoopLobbyScene).
-    this._button(x + width / 2 + 110, bottom - 50, 'Depart with friends', () => this._departWithFriends(), 'primary');
+  _renderPartyStep(top) {
+    const zone = getZone(this.zoneId);
+    const { x, width } = this._bounds;
+    const left = x + 40;
+    const party = GameState.party || [];
+    this._heading(left, top, `The party (${party.length})`);
+    this._button(x + width - 140, top + 10, 'Party sheet', () => this._openPartySheet(), 'primary');
+    const colW = (width - 80) / 2;
+    party.forEach((c, i) => {
+      const cx = left + (i % 2) * colW, cy = top + 34 + Math.floor(i / 2) * 22;
+      this._text(cx, cy, `${c.name}  ·  level ${c.level || 1} ${c.baseClass || ''}`.trim(), { fontSize: '14px', color: '#e8e8e8' });
+    });
+    let ty = top + 34 + Math.ceil(party.length / 2) * 22 + 8;
+    // Exploration picks a hunter has earned but not chosen (PARTY_STATS).
+    const owed = party.filter(c => owedExplorationPicks(c).length).map(c => c.name);
+    if (owed.length) {
+      this._text(left, ty, `${owed.join(', ')} ${owed.length === 1 ? 'has' : 'have'} an exploration pick to choose: open the Party sheet.`,
+        { fontSize: '13px', color: '#c9a36a', wordWrap: { width: width - 80 } });
+      ty += 26;
+    }
+    this._renderPartyStats(left, ty + 8, width - 80, zone, this._plan());
+  }
+
+  _openPartySheet() {
+    SoundManager.play('select');
+    this.scene.pause();
+    this.scene.launch('PartyManagementScene', { onClose: () => { this.scene.resume(); this._render(); } });
+    this.scene.bringToTop('PartyManagementScene');
+  }
+
+  // ── 4. Pack ─────────────────────────────────────────────────────────────
+
+  _renderPackStep(top) {
+    const { x, width, bottom } = this._bounds;
+    const left = x + 40;
+    const bag = GameState.inventory || [];
+    const cap = rationPackCap(GameState.party);
+    this.pack = clampPlan(bag, this.pack, cap);
+
+    // Rations: the camp's free issue plus what is packed, in steps of 10.
+    this._heading(left, top, 'Supplies');
+    const inBag = countInList(bag, 'rations');
+    this._text(left, top + 28, `${this._departSupplies()} supplies: the camp's issue of ${CAMP_ISSUE} and ${this.pack.rations} Rations packed (${inBag} in camp, ${cap} at most)`,
+      { fontSize: '14px', color: '#d0d0d0', wordWrap: { width: width - 420 } });
+    const stepper = { minWidth: 46, padX: 14 };
+    this._button(x + width - 370, top + 34, '−', () => this._adjustRations(-PACK_STEP), stepper);
+    this._button(x + width - 310, top + 34, '+', () => this._adjustRations(PACK_STEP), stepper);
+    const buy = this._button(x + width - 150, top + 34, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
+    if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
+
+    // Everything else, by group, in two columns. A group with nothing in camp
+    // is left out, except the Ways out (the Draughtwell sells them).
+    const rows = packRows(bag, this.pack);
+    const colW = (width - 100) / 2;
+    const rowH = 25;
+    let col = 0, ty = top + 74;
+    const colTop = ty, colBottom = bottom - 130;
+    const place = (h) => { if (ty + h > colBottom && col === 0) { col = 1; ty = colTop; } return left + col * (colW + 20); };
+    for (const g of PACK_GROUPS) {
+      const mine = rows.filter(r => r.group === g.id);
+      if (!mine.length) continue;
+      let cx = place(rowH * 2);
+      this._text(cx, ty, g.name, { fontSize: '14px', color: '#ffdd88', fontStyle: 'bold' });
+      ty += 22;
+      for (const r of mine) {
+        cx = place(rowH);
+        this._packRow(cx, ty, colW, r);
+        ty += rowH;
+      }
+      ty += 6;
+    }
+    if (!rows.some(r => r.have > 0)) {
+      this._text(left, colTop + 110, 'Nothing else in camp to pack. The Draughtwell sells draughts, Escape Ropes and Smoke Pots.', { fontSize: '13px', color: '#999999' });
+    }
+
+    // Last time, and clearing.
+    const last = GameState.flags?.lastHunt?.pack;
+    if (last) this._button(left + 110, bottom - 96, 'Pack as last time', () => { this.pack = clampPlan(bag, last, cap); SoundManager.play('select'); this._render(); }, 'primary');
+    this._button(left + (last ? 300 : 80), bottom - 96, 'Unpack all', () => { this.pack = emptyPlan(); SoundManager.play('select'); this._render(); }, 'danger');
+    this._text(x + width - 40, bottom - 104, `Everything packed is at risk. ${DEATH_RULE_TEXT[zoneDeathRule(getZone(this.zoneId))]}`,
+      { fontSize: '12px', color: '#c9a36a', wordWrap: { width: 380 }, align: 'right' }).setOrigin(1, 0);
+  }
+
+  /** One row of the Pack step: its name, how many are in camp, − count +. */
+  _packRow(cx, cy, w, r) {
+    const dim = r.have === 0;
+    this._text(cx, cy, r.name, { fontSize: '13px', color: dim ? '#8a8478' : r.packed ? '#f2e6c8' : '#cfcfcf' });
+    this._text(cx + w - 150, cy, r.stack ? `in camp ${r.have}` : '', { fontSize: '11px', color: '#9a9a9a' });
+    // Padded, so the click target is bigger than the glyph.
+    const less = this._text(cx + w - 76, cy - 4, '−', { fontSize: '18px', color: r.packed ? '#ffdd88' : '#6a6458', padding: { x: 6, y: 1 } });
+    const n = this._text(cx + w - 44, cy, r.stack ? String(r.packed) : (r.packed ? 'yes' : 'no'), { fontSize: '13px', color: r.packed ? '#9fe09f' : '#9a9a9a' }).setOrigin(0.5, 0);
+    const more = this._text(cx + w - 26, cy - 4, '+', { fontSize: '18px', color: r.packed < r.have ? '#ffdd88' : '#6a6458', padding: { x: 6, y: 1 } });
+    for (const [t, d] of [[less, -1], [more, +1]]) {
+      t.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
+        this.pack = adjust(this.pack, r, d);
+        SoundManager.play('select');
+        this._render();
+      });
+    }
+    return n;
+  }
+
+  // ── 5. Review ───────────────────────────────────────────────────────────
+
+  _renderReview(top) {
+    const zone = getZone(this.zoneId);
+    const { x, width } = this._bounds;
+    const left = x + 40;
+    const bag = GameState.inventory || [];
+    this.pack = clampPlan(bag, this.pack, rationPackCap(GameState.party));
+    const plan = this._plan();
+    const row = (label, value, y, color = '#e8e8e8') => {
+      this._text(left, y, label, { fontSize: '14px', color: '#ffdd88' });
+      return this._text(left + 130, y, value, { fontSize: '14px', color, wordWrap: { width: width - 210 } });
+    };
+    let ty = top;
+    ty = row('Region', `${zone.name} (danger ${zone.danger ?? 1})`, ty).y + 26;
+    const p = row('Hunt Plan', getItemComputedData(plan).name, ty, RARITY_COLORS[plan.rarity] || RARITY_COLORS.common);
+    ty = p.y + p.height + 8;
+    ty = row('Party', (GameState.party || []).map(c => c.name).join(', '), ty).y + 26;
+    ty = row('Supplies', `${this._departSupplies()} (camp issue ${CAMP_ISSUE} + ${this.pack.rations} Rations)`, ty).y + 26;
+    const packed = describePlan(bag, { ...this.pack, rations: 0 });
+    const pk = row('Packed', packed.length ? packed.join(', ') : 'Nothing else.', ty, packed.length ? '#e8e8e8' : '#999999');
+    ty = pk.y + pk.height + 14;
+    this._text(left, ty, `At risk: everything packed. ${DEATH_RULE_TEXT[zoneDeathRule(zone)]}`, { fontSize: '13px', color: '#c9a36a', wordWrap: { width: width - 80 } });
+    ty += 30;
+    // Gentle reminders: warnings, never blocks.
+    const remind = reminders(bag, this.pack);
+    if (remind.length) {
+      this._text(left, ty, remind.map(l => `!  ${l}`).join('\n'), { fontSize: '13px', color: '#e8b070', lineSpacing: 4 });
+      const back = this._text(left, ty + remind.length * 20 + 6, 'Back to Pack', { fontSize: '13px', color: '#ffdd88', fontStyle: 'bold' });
+      back.setInteractive({ useHandCursor: true }).on('pointerdown', () => this._go(4));
+    }
   }
 
   /**
@@ -301,10 +465,11 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const huntDeparture = {
       zoneId: this.zoneId,
       plan,
-      rationsToPack: this.rationsToPack,
-      packIds: [...this.packIds],
+      pack: clampPlan(GameState.inventory || [], this.pack, rationPackCap(GameState.party)),
+      rationsToPack: this.pack.rations,
       label: `${zone?.name || this.zoneId}: ${getItemComputedData(plan).name}`,
     };
+    this._remember();
     this.scene.stop();
     window.sceneManager.loadScene('CoopLobbyScene', 'Opening the lobby…', { huntDeparture });
   }
@@ -351,12 +516,12 @@ export default class HuntHubOverlay extends Phaser.Scene {
 
   /** Supplies the hunt would start with: the free issue plus what is packed. */
   _departSupplies() {
-    return CAMP_ISSUE + this.rationsToPack * (Items.rations?.supply ?? 1);
+    return CAMP_ISSUE + (this.pack?.rations || 0) * (Items.rations?.supply ?? 1);
   }
 
-  _adjustPacked(delta) {
+  _adjustRations(delta) {
     const most = Math.min(rationPackCap(GameState.party), this._rationsInBag());
-    this.rationsToPack = Phaser.Math.Clamp(this.rationsToPack + delta, 0, most);
+    this.pack = { ...this.pack, rations: Phaser.Math.Clamp((this.pack.rations || 0) + delta, 0, most) };
     SoundManager.play('select');
     this._render();
   }
@@ -395,16 +560,21 @@ export default class HuntHubOverlay extends Phaser.Scene {
     SoundManager.play('select');
     // Every new hunt is a hunt on the hex map (chunk 8c). The Advance loop
     // only lives on in old saves.
-    const { plan, supplies, bring } = takeDeparture({ plan: this._plan(), rationsToPack: this.rationsToPack, packIds: this.packIds });
+    this._remember();
+    const { plan, supplies, bring } = takeDeparture({ plan: this._plan(), pack: this.pack });
     HuntManager.startMap(this.zoneId, { plan, supplies, bring });
-    this.rationsToPack = 0;
-    this.packIds = [];
+    this.pack = emptyPlan();
     this.huntPlanInstance = null;
 
     // One write for the rations, the plan and the new hunt, so a reload can
     // never refund either while keeping the hunt, or the other way round.
     GameState.save('autosave');
     this._handOverToMap();
+  }
+
+  /** Remember this region and pack for next time (chunk 15f). Counts only. */
+  _remember() {
+    (GameState.flags ||= {}).lastHunt = { zoneId: this.zoneId, pack: rememberPlan(this.pack) };
   }
 
   // ── Phase: actively hunting ──────────────────────────────────────────────
@@ -494,9 +664,8 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const pack = HuntManager.exit();
     GameState.restorePartyToFull();
     GameState.save('autosave');
-    this.zoneId = null;
-    this.rationsToPack = 0;
     this.huntPlanInstance = null;
+    this.step = 1;
     const uiScene = this.scene.get('UIScene');
     uiScene?.refreshUI();
     const found = pack?.home.found.length || 0;
@@ -514,17 +683,6 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this.scene.pause();
     this.scene.launch('HuntMapOverlay');
     this.scene.bringToTop('HuntMapOverlay');
-  }
-
-  /** Choose what else goes with the party (PackingOverlay); the choice comes back here. */
-  _openPacking() {
-    SoundManager.play('select');
-    this.scene.pause();
-    this.scene.launch('PackingOverlay', {
-      packIds: this.packIds,
-      onDone: (ids) => { this.packIds = ids; this.scene.resume(); this._render(); },
-    });
-    this.scene.bringToTop('PackingOverlay');
   }
 
   _openHuntPlanPicker() {

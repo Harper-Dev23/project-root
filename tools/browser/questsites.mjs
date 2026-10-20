@@ -110,6 +110,8 @@ await evaluate(`const g = window.__T.g(); g.scene.stop('LodgeRegionsOverlay');
   await new Promise(r => setTimeout(r, 500));
   g.scene.getScene('HuntHubOverlay').setZone('reeds_of_gethsemane');
   await new Promise(r => setTimeout(r, 300)); return true;`);
+// Chunk 15f: the plan is step 2 of the departure flow.
+await B.clickText('^Next$', 'HuntHubOverlay');
 await B.clickText('^Choose Hunt Plan', 'HuntHubOverlay');
 await sleep(500);
 await shot('05-picker-boss-plan');

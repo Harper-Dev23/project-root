@@ -136,10 +136,14 @@ export default class PartyManagementScene extends Phaser.Scene {
 
   /** Scenes are reused: every field this screen keeps is set here, not left
    *  from the last visit (ENGINE_HAZARDS #1). */
-  init() {
+  init(data) {
     this._selected = null;   // the hunter the sheet is showing
     this._sheet = null;
     this._pickModal = null;
+    // Opened from the Hunt screen's Party step (chunk 15f): closing hands
+    // back to it, which keeps the town asleep under it.
+    this._onClose = typeof data?.onClose === 'function' ? data.onClose : null;
+    this._handsBack = !!this._onClose;
   }
 
   create() {
@@ -971,6 +975,14 @@ export default class PartyManagementScene extends Phaser.Scene {
   /* ---------- Scene lifecycle ---------- */
 
   _closeAndReturn() {
+    if (this._onClose) {
+      const done = this._onClose;
+      this._onClose = null;
+      this.scene.get('UIScene')?.refreshUI?.();
+      this.scene.stop('PartyManagementScene');
+      done();
+      return;
+    }
     const town = this.scene.get('TownScene');
     wakeTown(this);
     // Refresh quest flags — TownScene stays running throughout (never sleeps),
@@ -983,6 +995,7 @@ export default class PartyManagementScene extends Phaser.Scene {
   }
 
   shutdown() {
+    if (this._handsBack) return;   // the Hunt screen keeps the town asleep
     const town = this.scene.get('TownScene');
     wakeTown(this);
     const ui = this.scene.get('UIScene');
