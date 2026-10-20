@@ -530,7 +530,9 @@ export default class CombatScene extends Phaser.Scene {
     // In a co-op hunt only the host calls the retreat (chunk 12 decision 3).
     // Under the turn order, away from End Turn and the action lights.
     // Centred under the turn order panel (x 1125-1260, down to y 320), as wide as it.
-    if (this.huntFight && (!this.isCoop || this.coopClient?.isHost)) this._createFleeButton(1260 - 135 / 2, 346);
+    // Co-op: the lead's call (chunk 15e; the host leads unless it passed).
+    const leads = this.coopHunt ? this.coopHunt.leadId === this.coopClient?.playerId : this.coopClient?.isHost;
+    if (this.huntFight && (!this.isCoop || leads)) this._createFleeButton(1260 - 135 / 2, 346);
     this._highlightCurrentTurn();
     this._createCombatLog();
     for (const line of huntStartLines) this._log(line);
@@ -3656,7 +3658,7 @@ export default class CombatScene extends Phaser.Scene {
     if (!this.huntFight || this.combatEnded || this._fleeing) return;
     if (this.huntFight.kind === 'boss') { this._log('There is no fleeing a boss.'); return; }
     // Co-op: the server plays the free round; the host asks for it.
-    if (this.isCoop) { this.coopClient?.flee(); return; }
+    if (this.isCoop) { if (this.coopHunt) this.coopHunt.flee(); else this.coopClient?.flee(); return; }
     const actor = this._currentChar?.();
     if (!actor || actor.isEnemy) return;
     const byInitiativeDesc = (a, b) => computeEffectiveInitiative(b) - computeEffectiveInitiative(a);

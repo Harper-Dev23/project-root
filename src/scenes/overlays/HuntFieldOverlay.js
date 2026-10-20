@@ -966,19 +966,15 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       if (!own) acts.push(['Ping this tile', () => this._ping(id)]);
       if (move || !own) lines.push(`${this._leadName()} leads: only the lead moves the party. Click their face (top) to ask for the lead.`);
     };
-    if (this.coop && !this.coop.isHost) {
+    // Co-op, not leading (chunk 15e; owner, 2026-10-20: the lead drives):
+    // ping and propose; the lead has every map action, as solo.
+    if (this.coop && !this._iLead()) {
       leadMoves();
       if (own) {
-        if (this._iLead()) {
-          for (const m of v.moves) {
-            if (v.layout.includes(m.tile)) continue;
-            acts.push([`Cross to section ${parseTileId(m.tile).section + 1} (${fmt(m.supply)} supplies, ${fmt(m.time)} time)`, () => this._move(m.tile)]);
-          }
-        }
-        lines.push('The host forages, fishes and waits. Camping and leaving the hunt are put to the vote.');
+        lines.push(`${this._leadName()} leads: moving, foraging, fishing, waiting and fights are theirs. Camping and leaving the hunt are put to the vote.`);
         acts.push([`Camp… (vote; ${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
         if (t?.exit) acts.push(['Leave the hunt (vote)', () => this._confirmExit(), 'danger']);
-        acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
+        if (!this.coop.isHost) acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
       }
     } else {
     if (this.coop) leadMoves(); else moveActs();
@@ -991,7 +987,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       acts.push([`Forage (${FORAGE_TIME} time)`, () => this._act('forage', () => this.hunt.forage())]);
       acts.push([`Fish (${FISH_TIME} time)`, () => this._act('fish', () => this.hunt.fish())]);
       acts.push(['Eat…', () => { this.panel = 'eat'; this._refresh(); }]);
-      acts.push([`Camp… (${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
+      acts.push([`Camp… (${this.coop ? 'vote; ' : ''}${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
       // Wait without moving (owner's playtest, 2026-09-27): a short wait, or to
       // the next dark or dawn. Packs can find you, as they find a camp.
       for (const [until, label] of [['short', 'Wait'], ['dark', 'Wait until dark'], ['dawn', 'Wait until dawn']]) {
@@ -999,7 +995,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
         if (c) acts.push([`${label} (${fmt(c.units)} time, ${fmt(c.supply)} supplies)`, () => this._act('wait', () => this.hunt.wait({ until }))]);
       }
       if (t?.ground === 'blight') acts.push([`Cleanse (${CLEANSE_TIME} time)`, () => this._act('cleanse', () => this.hunt.cleanse())]);
-      if (t?.exit) acts.push(['Leave the hunt', () => this._confirmExit(), 'danger']);
+      if (t?.exit) acts.push([this.coop ? 'Leave the hunt (vote)' : 'Leave the hunt', () => this._confirmExit(), 'danger']);
+      if (this.coop && !this.coop.isHost) acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
     }
     }
 
@@ -1188,7 +1185,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     const priceText = v.parley ? v.parley.price.map(g => `${g.qty} ${g.name}`).join(', ') : '';
     if (v.parley?.canPay) lines.push(`This cult knows you and will talk. Parley: pay ${priceText}; they give ${v.parley.gives.join(', ') || 'nothing'}, and leave.`);
     else if (v.parley) lines.push(`This cult knows you, but wants ${priceText}, which you do not carry. Fight, or flee from the fight.`);
-    const guest = this.coop && !this.coop.isHost;
+    // Co-op (chunk 15e): the lead starts the fight; anyone else waits for them.
+    const guest = this.coop && !this._iLead();
     const width = 360, height = 50 + this._linesHeight(lines, 360) + 60 + (guest ? 40 : 0);
     const p = this._sidePanel(e.tile && v.layout.includes(e.tile) ? e.tile : v.pos, width, height);
     this._panelText(p, p.px + 10, p.py + 8, e.ambush ? 'Ambush' : 'Encounter', 17, '#ff9a8a');
@@ -1200,8 +1198,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // the host starts it for everyone. A guest can still leave the hunt here,
     // as on every other panel a guest waits on (an event, the spoils).
     if (guest) {
-      this._panelText(p, p.px + 10, ty + 4, 'Waiting for the host to fight.', 14, '#e8c66a');
-      this._panelButton(p, p.px + width / 2, ty + 48, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
+      this._panelText(p, p.px + 10, ty + 4, `Waiting for ${this._leadName()} to fight.`, 14, '#e8c66a');
+      if (!this.coop.isHost) this._panelButton(p, p.px + width / 2, ty + 48, 'Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger');
     }
     else if (v.parley?.canPay) {
       // A cult that knows the party (owner, 2026-09-27): pay and talk, or fight.
@@ -1667,10 +1665,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    */
   _drawHarvest() {
     const sp = this.v.spoils;
-    if (this.coop && !this.coop.isHost) {
-      // The host chooses what to take; a guest sees what is there.
+    if (this.coop && !this._iLead()) {
+      // The lead chooses what to take (chunk 15e); anyone else sees what is there.
       const fam = HUNT_BEASTS[sp.family];
-      const lines = [`${sp.parts.length} part${sp.parts.length === 1 ? '' : 's'} to take, and the meat.`, 'The host decides what to harvest.'];
+      const lines = [`${sp.parts.length} part${sp.parts.length === 1 ? '' : 's'} to take, and the meat.`, `${this._leadName()} leads, and decides what to harvest.`];
       const width = 340, height = 50 + this._linesHeight(lines, width) + 50;
       const p = this._sidePanel(null, width, height);
       this._panelText(p, p.px + 10, p.py + 8, `Spoils: ${sp.bodies} ${fam?.name || 'beast'}${sp.bodies > 1 ? 's' : ''}`, 16, '#f2e6c8');
@@ -1799,6 +1797,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this._refresh();
       return res;
     }
+    // A leading guest's action (chunk 15e) is made by the host's hunt: the
+    // next snapshot shows what came of it.
+    if (res.pending) { SoundManager.play('select'); this._refresh(); return res; }
     if (kind === 'move' || kind === 'flee') this.selected = this.hunt.view().pos;
     // Save after every accepted action; a refusal changed nothing.
     if (this.hunt.view().finished) this.onFinished?.(this.hunt);

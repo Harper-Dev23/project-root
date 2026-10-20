@@ -45,6 +45,14 @@ export const BIG_MOVES = {
   exit: { ask: 'Leave the hunt?', run: (h) => h.exit(), done: 'The party leaves the hunt.' },
   hunt: { ask: 'Hunt it down?', run: (h, a) => h.move(a.tile, { hunt: true }), done: 'The party goes after it.' },
 };
+/**
+ * The lead's own map actions (owner, 2026-10-20: the lead drives). A guest
+ * who leads sends them to the host's hunt (`leadAct`); a host who does not
+ * lead is refused, like anyone else. Fight and Flee are the lead's too.
+ */
+export const LEAD_ACTIONS = ['forage', 'fish', 'wait', 'scout', 'cleanse', 'eat', 'harvest', 'parley'];
+/** Questions the map screen asks of the hunt, answered from this player's own copy. */
+const LOCAL_READS = ['foodInPack', 'waitCost'];
 /** How long a ping stays on the map (ms), unless the party moves first. */
 export const PING_MS = 20000;
 
@@ -250,6 +258,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
         get(_, prop) {
           if (prop === 'view') return () => ch.view();
           if (prop === 'move') return (tile, opts) => ch.move(tile, opts);
+          if (LOCAL_READS.includes(prop)) return (...args) => ch.hunt?.[prop]?.(...args);
+          if (LEAD_ACTIONS.includes(prop)) return (...args) => ch.leadAct(prop, args);
           if (prop === 'then' || typeof prop === 'symbol') return undefined;   // not a promise
           return (...args) => ch.act(h => (typeof h[prop] === 'function'
             ? h[prop](...args) : { ok: false, reason: `the hunt cannot ${String(prop)}` }));
@@ -259,6 +269,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     },
   };
   let fieldFacade = null;
+  // The host's fight start (set in the host's block below; chunk 15e: the lead's call).
+  let startFight = () => ({ ok: false, reason: 'only the host starts a fight' });
 
   /** Every player's id on the hunt, in seat order: who votes. */
   const playerIds = () => (client.lobby?.players || []).map(p => p.id);
@@ -294,6 +306,15 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
   };
 
   // ── The lead, big moves and pings (chunk 15e) ──────────────────────────────
+
+  /** One of the lead's actions (LEAD_ACTIONS): made on the host's hunt. */
+  ch.leadAct = (method, args = []) => {
+    if (!LEAD_ACTIONS.includes(method)) return { ok: false, reason: 'that is not something the lead does' };
+    if (client.playerId !== ch.leadId) return { ok: false, reason: 'only the lead does that; ask for the lead' };
+    if (ch.isHost) return hostIntent(client.playerId, 'leadAct', { method, args });
+    client.intent('leadAct', { method, args });
+    return { ok: true, pending: true };
+  };
 
   /** Ask for the lead (any player but the lead). */
   ch.askLead = () => {
@@ -366,6 +387,20 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       publish();
       emit('leadPassed', { from, to: data.to });
       return { ok: true };
+    }
+    if (kind === 'leadAct') {
+      if (from !== ch.leadId) return { ok: false, reason: 'only the lead does that; ask for the lead' };
+      if (!LEAD_ACTIONS.includes(data.method)) return { ok: false, reason: 'that is not something the lead does' };
+      const args = Array.isArray(data.args) ? plain(data.args) : [];
+      return ch.act(h => (typeof h[data.method] === 'function' ? h[data.method](...args) : { ok: false, reason: `the hunt cannot ${data.method}` }));
+    }
+    if (kind === 'fight') {
+      if (from !== ch.leadId) return { ok: false, reason: 'only the lead starts the fight' };
+      return startFight();
+    }
+    if (kind === 'flee') {
+      if (from !== ch.leadId) return { ok: false, reason: 'only the lead calls the retreat' };
+      return ch.fighting ? (client.flee(), { ok: true }) : { ok: false, reason: 'there is no fight to flee' };
     }
     if (kind === 'propose') {
       const move = BIG_MOVES[data.kind];
@@ -586,7 +621,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
 
     /** Fight the pending encounter: beginFight (the food buff is used up, so
      *  that state is published first), then the server runs it. */
-    ch.fight = () => {
+    ch.fight = () => hostIntent(client.playerId, 'fight', {});
+    startFight = () => {
       if (ch.fighting) return { ok: false, reason: 'a fight is already on' };
       const spec = ch.hunt?.beginFight();
       if (!spec?.ok) return spec || { ok: false, reason: 'the hunt has not begun' };
@@ -595,8 +631,20 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       return { ok: true, spec };
     };
 
-    /** Break away from the fight in progress (the host only, decision 3). */
-    ch.flee = () => (ch.fighting ? (client.flee(), { ok: true }) : { ok: false, reason: 'there is no fight to flee' });
+    /** Break away from the fight in progress (the lead's call; the server
+     *  takes it from the host, which sends it). */
+    ch.flee = () => hostIntent(client.playerId, 'flee', {});
+
+    // The lead drops (a lost connection, or left the hunt): it comes back to
+    // the host, so the party is never stuck (chunk 15e). The asks go with it.
+    unsubs.push(client.on('lobby', (lobby) => {
+      if (!ch.hunt || ch.leadId === client.playerId) return;
+      const lead = (lobby?.players || []).find(p => p.id === ch.leadId);
+      if (lead && !lead.away) return;
+      ch.lead = { id: client.playerId, asks: [] };
+      publish();
+      emit('leadPassed', { from: null, to: client.playerId, reason: 'away' });
+    }));
 
     // A guest asked to move. The server already refused anything stale
     // against ITS version; the host checks its own as well, then the hunt
@@ -704,8 +752,17 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
       return { ok: true, pending: true };
     };
     ch.act = () => ({ ok: false, reason: 'only the host can do that' });
-    ch.fight = () => ({ ok: false, reason: 'only the host starts the fight' });
-    ch.flee = () => ({ ok: false, reason: 'only the host can call the retreat' });
+    // The lead's fight and retreat (chunk 15e), made by the host's hunt.
+    ch.fight = () => {
+      if (client.playerId !== ch.leadId) return { ok: false, reason: 'only the lead starts the fight' };
+      client.intent('fight', {});
+      return { ok: true, pending: true };
+    };
+    ch.flee = () => {
+      if (client.playerId !== ch.leadId) return { ok: false, reason: 'only the lead calls the retreat' };
+      client.intent('flee', {});
+      return { ok: true, pending: true };
+    };
     unsubs.push(client.on('over', (msg) => {
       if (!msg?.hunt) return;
       ch.fighting = null;

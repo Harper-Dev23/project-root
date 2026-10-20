@@ -266,7 +266,9 @@ console.log('=== moves ===');
   S.guestC.move(S.guest.view().moves[0].tile, S.guest.version - 1);
   await until(() => S.guestC.lastError, 'the stale refusal');
   check('a stale move is refused back to the guest', /moved on/.test(S.guestC.lastError));
-  check('only the host acts: a guest\'s other actions are refused locally', /only the host/.test(S.guest.act().reason) && /only the host/.test(S.guest.fight().reason));
+  // Chunk 15e: the guest leads here, so fights are theirs and the host is refused.
+  check('a guest\'s engine calls are refused locally, and a host who does not lead cannot start a fight',
+    /only the host/.test(S.guest.act().reason) && /only the lead/.test(S.host.fight().reason || ''));
 }
 
 console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran forever) ===');
@@ -317,7 +319,7 @@ console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran f
   // along with the first player's action, a turn late).
   if (S.host.view().encounter?.first === 'enemy') {
     S.guestC.opening = undefined;
-    const r = S.host.fight();
+    const r = S.guest.fight();   // the guest leads: their call, made by the host's hunt
     await until(() => S.guestC.opening !== undefined && S.guest.fighting, 'the fight to start');
     const op = S.guestC.opening;
     check('an enemy-first fight starts with the enemies\' opening: their log and their VFX',
@@ -325,7 +327,7 @@ console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran f
       `${op?.events?.length} events, ${op?.log?.length} log lines`);
     let over = false; S.host.on('fightOver', () => { over = true; });
     await until(() => S.lobby.session?.current()?.ownerId != null || !S.lobby.session, 'a hunter\'s turn');
-    if (S.lobby.session) S.host.flee();
+    if (S.lobby.session) S.guest.flee();   // the lead's retreat, sent by the host
     await until(() => over, 'the flee');
   } else {
     check('the blind frog went first (an ambush)', false, JSON.stringify(S.host.view().encounter));
@@ -684,7 +686,25 @@ console.log('=== 15e: the lead, big moves and pings ===');
   L.guest.move(next.tile);
   await until(() => L.host.version > before && L.guest.version === L.host.version, 'the lead\'s move');
   check('...and when the party moves, the pings clear', L.guest.livePings().length === 0 && L.host.livePings().length === 0);
-  L.hostC.disconnect(); L.guestC.disconnect();
+
+  // The lead drives (owner, 2026-10-20): the small map actions are the lead's.
+  await synced();
+  const t1 = L.host.hunt.getState().time;
+  const hostTry = L.host.field().forage();
+  check('a host who does not lead cannot forage', hostTry.ok === false && /only the lead/.test(hostTry.reason || ''), hostTry.reason);
+  const v0 = L.host.version;
+  const gTry = L.guest.field().forage();
+  await until(() => L.host.version > v0 && L.guest.version === L.host.version, 'the guest lead\'s forage');
+  check('the leading guest forages: the host\'s hunt does it, and time passes', gTry.pending && L.host.hunt.getState().time > t1
+    && L.host.hunt.getState().log.some(l => l.kind === 'forage' || l.kind === 'foraged'), JSON.stringify(gTry));
+  const reads = L.guest.field().waitCost('short');
+  check('the screen\'s questions (the cost of a wait) are answered from the guest\'s own copy', !!reads && Number.isFinite(reads.units), JSON.stringify(reads));
+
+  // The lead drops: it comes back to the host, so the party is never stuck.
+  L.guestC.disconnect();
+  await until(() => L.host.leadId === 'p1', 'the lead back to the host');
+  check('when the leading guest drops, the lead comes back to the host', L.host.leadId === 'p1' && !/only the lead/.test(L.host.field().forage().reason || ''), JSON.stringify(L.host.field().waitCost('short')));
+  L.hostC.disconnect();
 }
 
 console.log('=== two fights in one hunt ===');

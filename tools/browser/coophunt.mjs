@@ -303,7 +303,7 @@ try {
   check('the host walked the party into an encounter', walked === 'beast' || walked === 'cultist', walked);
   await waitFor(G, `!!window.__T.s().coop.view()?.encounter`, 6000);
   await sleep(500);
-  check('the guest sees it, and is told to wait for the host', !!(await G.findText('^Waiting for the host to fight\\.$')));
+  check('the guest sees it, and is told to wait for the lead (the host here)', !!(await G.findText('^Waiting for Hana to fight\\.$')));
   await G.shot('05-encounter-guest');
   await H.clickText('^Fight$');
   const inFight = (P) => waitFor(P, `window.__T.g().scene.isActive('CombatScene') && window.__T.g().scene.getScene('CombatScene').isCoop && (window.__T.g().scene.getScene('CombatScene').enemies || []).length > 0`, 20000);

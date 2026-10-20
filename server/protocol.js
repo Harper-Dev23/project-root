@@ -82,6 +82,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       id: p.id,
       name: p.name,
       ready: p.ready,
+      // Disconnected (a dropped socket keeps the seat): a co-op hunt's lead
+      // goes back to the host (chunk 15e).
+      away: !p.conn,
       rations: p.rations || 0,
       // Chunk 15f-2: the party items this player brings to the shared pack.
       items: { ...(p.packItems || {}) },
@@ -664,7 +667,8 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       const h = lobby.hunt;
       if (!h || h.finished) return fail(conn, 'no hunt is under way');
       const kind = String(msg.kind ?? '');
-      if (!['askLead', 'passLead', 'propose'].includes(kind)) return fail(conn, 'that is not a request');
+      // leadAct, fight, flee: the lead's own actions, made on the host's hunt.
+      if (!['askLead', 'passLead', 'propose', 'leadAct', 'fight', 'flee'].includes(kind)) return fail(conn, 'that is not a request');
       const data = msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data) ? msg.data : {};
       if (JSON.stringify(data).length > 2000) return fail(conn, 'that request is too big');
       const host = hostOf(lobby);
