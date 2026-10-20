@@ -303,7 +303,7 @@ function describeWriteError(e) {
 // Once a version has been pushed, players hold saves at that version, and a
 // migration that already ran will never run again for them. So a later change
 // to the payload gets its OWN step (5, 6, ...) rather than an edit to an old one.
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 // key n = 'upgrade a save at version n-1 so it is valid at version n'
 const MIGRATIONS = {
@@ -374,6 +374,25 @@ const MIGRATIONS = {
       pr.standing = newStanding(h, day);
     }
     for (const c of data.slain || []) if (c && !c.fell) c.fell = { ...LEGACY_FELL };
+    return data;
+  },
+  // v9: the old Healing and Mana Potions are retired (owner, 2026-10-20): the
+  // Draughtwell's draughts do the same job. Every copy anywhere in the save
+  // (the bag, a stash, a character, a hunt's pack) becomes the matching
+  // draught, which stacks; a missing qty reads as 1 (v5).
+  9: (data) => {
+    const TO = { healing_potion: ['healing_draught', 'Healing Draught'], mana_potion: ['mana_draught', 'Mana Draught'] };
+    const visit = (v) => {
+      if (Array.isArray(v)) { v.forEach(visit); return; }
+      if (!v || typeof v !== 'object') return;
+      const to = TO[v.id];
+      if (to && typeof v.instanceId === 'string') {
+        v.id = to[0];
+        if ('displayName' in v) v.displayName = to[1];
+      }
+      for (const k of Object.keys(v)) visit(v[k]);
+    };
+    visit(data);
     return data;
   },
 };

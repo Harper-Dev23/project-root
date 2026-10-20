@@ -273,7 +273,7 @@ console.log('=== the real game world ===');
 // =============================================================================
 console.log('=== the save: a real v7 save migrates to v8 ===');
 {
-  check('SAVE_VERSION is 8', SAVE_VERSION === 8);
+  check('SAVE_VERSION is 9', SAVE_VERSION === 9);
   const raw = fs.readFileSync(new URL('../snapshots/save-v7-fixture.json', import.meta.url), 'utf8');
   const v7 = JSON.parse(raw);
   store.set('bmSave_v7a', raw);
@@ -300,7 +300,7 @@ console.log('=== the save: a real v7 save migrates to v8 ===');
   GameState.save('v8');
   const saved = JSON.parse(store.get('bmSave_v8'));
   GameState.load('v8');
-  check('standing survives a v8 save and load', saved.version === 8 && same(PM.standing, before) && S.followedHouse(PM.standing, PM.tribe) === 'ezekiel');
+  check('standing survives a v9 save and load', saved.version === 9 && same(PM.standing, before) && S.followedHouse(PM.standing, PM.tribe) === 'ezekiel');
   check('...and a v8 load migrates nothing again (rep not multiplied twice)', TR.TRIBE_IDS.every(t => PM.getTribeRep(t) === rep7[t] * TR.REP_SCALE));
   golden.migration = { rep: { ...PM.tribeRep }, standingSeason: stA.season, fell: GameState.slain.map(c => c.fell) };
 

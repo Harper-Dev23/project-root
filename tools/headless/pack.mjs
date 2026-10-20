@@ -96,8 +96,8 @@ console.log('=== stack merge ===');
   check('a different rarity is its own stack', list.length === 2 && unc.qty === 1);
 
   const pots = [];
-  S.addToList(pots, createItemInstance('healing_potion'));
-  S.addToList(pots, createItemInstance('healing_potion'));
+  S.addToList(pots, createItemInstance('tabula_rasa'));
+  S.addToList(pots, createItemInstance('tabula_rasa'));
   check('a non-stackable base never stacks', pots.length === 2 && pots.every(p => p.qty === undefined));
 
   const sword = createItemInstance('hardened_sword_1h', { rarity: 'rare' });
@@ -131,10 +131,10 @@ console.log('=== stack split and take ===');
   }
 
   // Two stacks kept apart on purpose (pushed, not merged), to take across both.
-  const list = [S.makeStack('rations', 7), S.makeStack('rations', 5), createItemInstance('healing_potion')];
+  const list = [S.makeStack('rations', 7), S.makeStack('rations', 5), createItemInstance('tabula_rasa')];
   const t = S.takeFromList(list, 'rations', 9);
-  check('take 9 from stacks of 7 + 5: one stack of 9, 3 left, the potion untouched',
-    t?.qty === 9 && units(list) === 3 && list.some(i => i.id === 'healing_potion'), `left ${list.map(i => `${i.id}x${S.stackQty(i)}`).join(', ')}`);
+  check('take 9 from stacks of 7 + 5: one stack of 9, 3 left, the other item untouched',
+    t?.qty === 9 && units(list) === 3 && list.some(i => i.id === 'tabula_rasa'), `left ${list.map(i => `${i.id}x${S.stackQty(i)}`).join(', ')}`);
 
   const before = JSON.stringify(list);
   check('take more than there is: null, and the list is untouched', S.takeFromList(list, 'rations', 4) === null && JSON.stringify(list) === before);
@@ -236,7 +236,7 @@ const measured = [];
     for (const ending of ['exit', 'wipe']) {
       ZONES[ZONE].deathRule = rule;
       const world = recordingWorld();
-      const potion = createItemInstance('healing_potion');
+      const potion = createItemInstance('tabula_rasa');
       const hunt = createHunt(ZONE, { supplies: CAMP_ISSUE + PACKED, seed: 9, bring: [S.makeStack('rations', PACKED), potion] }, world);
       for (let i = 0; i < STEPS; i++) { hunt.advance(); if (hunt.hasPendingEncounter()) { hunt.engagePending(); hunt.resolveCombatEncounter({ won: true, type: 'beast' }); } }
       hunt.addFound(createItemInstance('hardened_dagger', { rarity: 'rare' }));
@@ -258,7 +258,7 @@ const measured = [];
       };
       measured.push(row);
       const ok = keeps
-        ? same(homeB, [{ found: false, id: 'rations', qty: left }, { found: false, id: 'healing_potion', qty: 1 }])
+        ? same(homeB, [{ found: false, id: 'rations', qty: left }, { found: false, id: 'tabula_rasa', qty: 1 }])
           && same(homeF, [{ found: true, id: 'hardened_dagger', qty: 1 }, { found: true, id: 'rations', qty: 5 }])
           && out.lost.brought.length + out.lost.found.length === 0
         : world.banked.length === 0 && out.lost.brought.length === 2 && out.lost.found.length === 2;

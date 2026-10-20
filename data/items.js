@@ -7,24 +7,9 @@ import { buildPartBases } from './beastParts.js';
 
 export const Items = {
 
-  healing_potion: {
-    id: 'healing_potion',
-    name: 'Healing Potion',
-    type: 'consumable',
-    rarity: 'common',
-    effect: 'heal',
-    amount: 25,
-    description: 'Restores a small amount of health.'
-  },
-  mana_potion: {
-    id: 'mana_potion',
-    name: 'Mana Potion',
-    type: 'consumable',
-    rarity: 'common',
-    effect: 'mana',
-    amount: 15,
-    description: 'Restores a small amount of mana.'
-  },
+  // healing_potion and mana_potion were retired 2026-10-20 (owner): the
+  // Draughtwell's draughts do their job. Saves turn them into draughts
+  // (GameState MIGRATIONS 9).
 
   // === Hunt supplies ===
   // What a hunt runs on. Bought with Hunt Tickets on the Hunt screen, kept in

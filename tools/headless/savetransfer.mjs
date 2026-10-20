@@ -227,6 +227,25 @@ console.log('=== an import cannot replace an existing save ===');
     globalThis.localStorage.getItem('bmSave_precious') === original);
 }
 
+/* ---------------- 7b. the old potions become draughts (save v9) ---------------- */
+console.log('=== a v8 save\'s old potions become draughts ===');
+{
+  setStore(makeStore());
+  const pot = (id, extra = {}) => ({ id, instanceId: `itm_${Math.random().toString(36).slice(2, 9)}`, rarity: 'common', displayName: id, ...extra });
+  const old = { version: 8, characters: [{ id: 'a', name: 'Bran' }],
+    inventory: [pot('healing_potion'), pot('mana_potion'), pot('healing_potion')],
+    hunt: { mode: 'map', pack: { brought: [pot('mana_potion')], found: [] } } };
+  const r = GameState.importSave('old-potions', JSON.parse(JSON.stringify(old)));
+  check('a v8 save holding the old potions imports', r.ok !== false, r.reason || '');
+  const saved = JSON.parse(globalThis.localStorage.getItem('bmSave_old-potions') || 'null');
+  const all = JSON.stringify(saved);
+  check('...no old potion is left anywhere in it', !/healing_potion|mana_potion/.test(all));
+  const inv = (saved?.inventory || []).map(i => `${i.id}/${i.displayName}`);
+  check('...each became its draught, named as one', JSON.stringify(inv) === JSON.stringify(['healing_draught/Healing Draught', 'mana_draught/Mana Draught', 'healing_draught/Healing Draught']), inv.join(', '));
+  check('...a hunt pack\'s too', saved?.hunt?.pack?.brought?.[0]?.id === 'mana_draught');
+  check('...and the save is now v9', saved?.version === SAVE_VERSION && SAVE_VERSION === 9, saved?.version);
+}
+
 /* ---------------- 8. storage that refuses the write ---------------- */
 console.log('=== a full browser storage is reported, not hidden ===');
 {
