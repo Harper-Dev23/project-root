@@ -128,7 +128,9 @@ try {
     const { makeStack } = await import('/src/systems/ItemStacks.js');
     InventorySystem.addGlobalItem(makeStack('rations', 30));
     InventorySystem.addGlobalItem(makeStack('escape_rope', 1));
-    InventorySystem.addGlobalItem(makeStack('healing_draught', 2));`);
+    InventorySystem.addGlobalItem(makeStack('healing_draught', 2));
+    // A quest step of the guest's own in the Reeds (The Lament Pools): playtest item 1.
+    const PM = (await import('/src/systems/ProgressionManager.js')).default; PM.setQuestFlag('hunted:reeds_of_gethsemane');`);
   const guestRations = () => G.evaluate(`const GS = (await import('/src/systems/GameState.js')).default;
     return GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`);
   await G.evaluate(`window.sceneManager.loadScene('${LOBBY}', 'Opening the lobby…', { scenarioIds: ['training_encounter_1'], scenarioId: 'training_encounter_1' }); return true;`);
@@ -141,6 +143,10 @@ try {
   check('the guest joins by code', await waitFor(G, `!!window.__T.g().scene.getScene('${LOBBY}').client?.playerId`));
   await sleep(400);
   check('...and sees it is a hunt, and which', !!(await G.findText('^CO-OP HUNT$', LOBBY)) && !!(await G.findText('^(The )?Reeds of Gethsemane: ', LOBBY)));
+  // Co-op playtest item 1 (owner, 2026-10-20: the map stays the host's, and says so).
+  const note = (await G.findText('^A co-op map follows the host\'s quests', LOBBY))?.text || '';
+  check('the guest is told the map follows the host\'s quests, naming their own step here', note.includes('The Weeping in the Reeds'), note);
+  check('...and the host is not', !(await H.findText('^A co-op map follows', LOBBY)));
   await G.shot('02-lobby');
 
   // ── 3. Ready, Start: both on the map ────────────────────────────────────────

@@ -150,9 +150,9 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       return true;
     },
 
-    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit', label = '' }) {
+    createLobby({ name, scenarioId, hunters, quickCombat = false, isPublic = false, mode = 'pit', label = '', zoneId = null }) {
       client.clientId = coopClientId();
-      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode, label,
+      return client.send({ t: 'create', name, scenarioId, hunters, quickCombat, isPublic, mode, label, zoneId,
         clientId: client.clientId });
     },
     /** `clientId` is only passed to reclaim a seat this SAVE held in an

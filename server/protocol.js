@@ -71,6 +71,7 @@ export function createHub({ CombatScene, codeFactory = makeCode,
     code: lobby.code,
     mode: lobby.mode,
     label: lobby.label,
+    zoneId: lobby.zoneId ?? null,
     scenarioId: lobby.scenarioId,
     hostId: lobby.hostId,
     limit: PARTY_LIMIT,
@@ -231,6 +232,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         // What a hunt lobby is hunting, in words the host's game wrote
         // ("Reeds of Gethsemane: Scout, Small"), for the guests and the list.
         label: String(msg.label ?? '').slice(0, 120),
+        // Which region it hunts (chunk 15, playtest item 1): a guest's lobby
+        // says whose quests the map follows.
+        zoneId: typeof msg.zoneId === 'string' ? msg.zoneId.slice(0, 64) : null,
         hostId: playerId,
         players: [],
         session: null,

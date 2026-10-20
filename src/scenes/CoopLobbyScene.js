@@ -18,6 +18,7 @@
 
 import GameState from '../systems/GameState.js';
 import ProgressionManager from '../systems/ProgressionManager.js';
+import { questSitesFor, questTitleForStep } from '../systems/HuntQuests.js';
 import { COMBAT_SCENARIOS } from '../../data/combatScenarios.js';
 import { COLORS, FONTS, MENU_THEME } from '../ui/styles.js';
 import { createPanel } from '../ui/GamePanel.js';
@@ -110,6 +111,22 @@ export default class CoopLobbyScene extends Phaser.Scene {
     });
     this._unsubs.push(off);
     this.client.joinLobby({ code: rec.code, name: this._playerName('Hunter'), hunters: [], clientId: rec.clientId });
+  }
+
+  /**
+   * A guest's notice (co-op playtest item 1; owner, 2026-10-20: the map
+   * stays the host's): this player's own quest steps and black markets in
+   * the hunt's region, which a co-op map does not place unless the host has
+   * them too. Empty when there are none.
+   */
+  _guestQuestNote(zoneId) {
+    if (!zoneId) return '';
+    const mine = questSitesFor(zoneId, ProgressionManager).filter(s => !String(s.step).startsWith('rare:'));
+    if (!mine.length) return '';
+    const quests = [...new Set(mine.filter(s => !String(s.step).includes(':')).map(s => questTitleForStep(s.step)).filter(Boolean))];
+    const markets = mine.some(s => String(s.step).startsWith('market:'));
+    const what = [quests.length ? `your quest steps here (${quests.join(', ')})` : null, markets ? 'your black markets' : null].filter(Boolean).join(' and ');
+    return `A co-op map follows the host's quests: ${what} only appear if the host has them too.`;
   }
 
   /** Tell the server what this player brings to the shared pack (chunk 15f-2). */
@@ -473,8 +490,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
 
     // A hunt lobby: what this player brings (chunk 15f-2): for the party
     // (the shared pack) and their own. Packed on the Pack screen.
-    this.rationsText = this.add.text(width / 2 - 80, 520, '', { ...FONTS.body, fontSize: '14px', color: '#c8ccd4', align: 'center', wordWrap: { width: 760 } }).setOrigin(0.5);
-    this.packBtn = createButton(this, width / 2 + 400, 520, 'Pack…', () => this._openPacking());
+    this.rationsText = this.add.text(width / 2 - 80, 510, '', { ...FONTS.body, fontSize: '14px', color: '#c8ccd4', align: 'center', wordWrap: { width: 760 } }).setOrigin(0.5);
+    this.packBtn = createButton(this, width / 2 + 400, 510, 'Pack…', () => this._openPacking());
+    // A guest's own quest steps here (co-op playtest item 1; owner,
+    // 2026-10-20): the map follows the host's quests, and says so.
+    this.questNote = this.add.text(width / 2, 530, '', { ...FONTS.body, fontSize: '12px', color: '#e0b070', align: 'center', wordWrap: { width: 900 } }).setOrigin(0.5);
 
     this.status = this.add.text(width / 2, 604, '', { ...FONTS.body, color: '#d08c8c' })
       .setOrigin(0.5);
@@ -622,6 +642,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       scenarioId: this.scenarioId,
       mode: this.huntDeparture ? 'hunt' : 'pit',
       label: this.huntDeparture?.label || '',
+      zoneId: this.huntDeparture?.zoneId || null,
       hunters: this._hunters(),
       // The host's combat speed paces the recording for the whole hunt, so
       // everyone watches the same fight at the same rate.
@@ -851,6 +872,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
       this.rationsText.setText(`For the party: ${forParty.join(', ') || 'nothing'}   ·   Yours: ${yours.join(', ') || 'nothing'}${this.huntDeparture ? '   (packed on the Hunt screen)' : ''}`);
     }
     this.packBtn?.setVisible(hunt && !this.huntDeparture);
+    this.questNote?.setText(hunt && !this.client?.isHost ? this._guestQuestNote(lobby?.zoneId) : '');
     this.prevScenario.setVisible(canPick);
     this.nextScenario.setVisible(canPick);
 
