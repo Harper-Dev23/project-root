@@ -42,3 +42,6 @@ __pycache__/
 
 # Krita writes a .png~ backup beside any edited asset
 *.png~
+
+# Art kit shared with artists (guides + brief), kept out of git
+art-kit/
