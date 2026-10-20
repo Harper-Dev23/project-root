@@ -17,7 +17,9 @@ updatedAt: 2026-10-20
 
 ## Loadout
 
-The camp issues **60 supplies** free for every hunt. On top of that you can pack **Rations**, bought on the Hunt screen at **10 for one Hunt Ticket**. Packed Rations you don't eat come home when you leave. Fresh food does not: fish, meat and anything foraged spoil on the way home, so eat what you find.
+The Hunt screen walks you through five steps: **Where**, **The plan**, **The party**, **Pack** and **Review**, and you can only depart from the last. It remembers your last region and pack, so a familiar hunt is a few clicks of Next.
+
+The camp issues **60 supplies** free for every hunt. On top of that you can pack **Rations**, bought on the Pack step at **10 for one Hunt Ticket**. The Pack step also lists everything else in your camp bag that is useful on a hunt (ways out, draughts, chants, food, spare gear), and Review warns you if you left something behind. Packed Rations you don't eat come home when you leave. Fresh food does not: fish, meat and anything foraged spoil on the way home, so eat what you find.
 
 Every hunt goes out on a **Hunt Plan** -- the free Basic Hunt Plan if you choose nothing else. The plan sets the map's **size** (small, medium, large), its **primary objective**, and any **bonus objectives** and modifiers it rolled. A bought plan is used up when you depart; see [[Hunt Plans]].
 

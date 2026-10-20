@@ -205,6 +205,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     // ---- a co-op map hunt (server/README.md, "Hunt lobbies") ---------------
     // The host's client runs the hunt; these only carry it (CoopHunt.js).
     setRations(qty) { return client.send({ t: 'setRations', qty }); },
+    /** What this player brings to the shared pack (chunk 15f-2): Rations and party items. */
+    setPack(rations, items = {}) { return client.send({ t: 'setPack', rations, items }); },
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
     move(tile, version, { hunt = false } = {}) { return client.send({ t: 'move', tile, version, ...(hunt ? { hunt: true } : {}) }); },
     huntRefuse(to, reason) { return client.send({ t: 'huntRefuse', to, reason }); },

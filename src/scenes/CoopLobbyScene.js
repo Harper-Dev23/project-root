@@ -32,12 +32,12 @@ import { takeDeparture } from './overlays/HuntHubOverlay.js';
 import { gameTarget, takeHomeFromRecord } from '../systems/CoopRewards.js';
 import { countInList, takeFromList, addToList } from '../systems/ItemStacks.js';
 import { ownPack, startOwnPack, markOwnPackLive } from '../systems/OwnPack.js';
-import { packable } from './overlays/PackingOverlay.js';
+import { Items } from '../../data/items.js';
+import { emptyPlan, partyItemsOf, pledgeOf, takePlan, kindOf, PARTY, describePlan, clampPlan } from '../systems/PackPlan.js';
 import { rationPackCap } from '../systems/HuntRules.js';
 import { colourOf, defaultFace } from '../systems/PlayerFaces.js';
 
 /** Rations are pledged in steps, as on the Hunt screen. */
-const RATION_STEP = 10;
 
 const SERVER_KEY = 'coop_server_url';
 // The last lobby this browser was seated in, for reconnecting after a crash.
@@ -79,12 +79,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // A hunt lobby's host: { zoneId, plan, rationsToPack, label } from the
     // Hunt screen. Null for training, and for every guest.
     this.huntDeparture = data.huntDeparture || null;
-    // Rations this player brings to a hunt (COOP_EXPLORATION rule 2): the
-    // host's were chosen on the Hunt screen; a guest picks them here.
-    this.rations = this.huntDeparture?.rationsToPack || 0;
-    // What else this player brings, their own (OwnPack.js): the host chose on
-    // the Hunt screen (huntDeparture.packIds), a guest here (PackingOverlay).
-    this.packIds = [];
+    // What this player packs (chunk 15f-2, PackPlan): the host chose on the
+    // Hunt screen (huntDeparture.pack), a guest here (PackingOverlay). Its
+    // Rations and party items are pledged to the shared pack (setPack); the
+    // rest is this player's own (OwnPack.js).
+    this.pack = this.huntDeparture?.pack || emptyPlan();
     // Rejoining a co-op hunt this save was in (chunk 12d): its record,
     // GameState.flags.coopActive, offered by the town after a reload.
     this.resumeCoop = data.resumeCoop || null;
@@ -113,17 +112,9 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.client.joinLobby({ code: rec.code, name: this._playerName('Hunter'), hunters: [], clientId: rec.clientId });
   }
 
-  /** The most Rations this player can bring: what the bag holds, within the
-   *  Hunt screen's packing cap. */
-  _rationsCap() {
-    return Math.min(countInList(GameState.inventory || [], 'rations'), rationPackCap(GameState.party || []));
-  }
-
-  _adjustRations(delta) {
-    if (this.huntDeparture) return this._say('Your Rations were packed on the Hunt screen.');
-    this.rations = Math.max(0, Math.min(this._rationsCap(), this.rations + delta));
-    if (this.client?.playerId) this.client.setRations(this.rations);
-    this._refresh();
+  /** Tell the server what this player brings to the shared pack (chunk 15f-2). */
+  _pledge() {
+    if (this.client?.playerId && this.isHuntLobby) this.client.setPack(this.pack.rations || 0, partyItemsOf(this.pack));
   }
 
   /** Choose what else this player brings (PackingOverlay); the choice comes back here. */
@@ -134,8 +125,8 @@ export default class CoopLobbyScene extends Phaser.Scene {
     fields.forEach(f => f.setVisible(false));
     this.scene.pause();
     this.scene.launch('PackingOverlay', {
-      packIds: this.packIds,
-      onDone: (ids) => { this.packIds = ids; fields.forEach(f => f.setVisible(true)); this.scene.resume(); this._refresh(); },
+      pack: this.pack, coop: true,
+      onDone: (pack) => { this.pack = pack; this._pledge(); fields.forEach(f => f.setVisible(true)); this.scene.resume(); this._refresh(); },
     });
     this.scene.bringToTop('PackingOverlay');
   }
@@ -480,13 +471,10 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.nextScenario = createButton(this, width / 2 + 180, 566, '>',
       () => this._cycleScenario(1));
 
-    // A hunt lobby: the Rations this player brings (rule 2).
-    this.rationsText = this.add.text(width / 2, 520, '', { ...FONTS.body, fontSize: '15px', color: '#c8ccd4' }).setOrigin(0.5);
-    const stepper = { minWidth: 46, padX: 14 };
-    this.rationsLess = createButton(this, width / 2 - 230, 520, '−', () => this._adjustRations(-RATION_STEP), stepper);
-    this.rationsMore = createButton(this, width / 2 + 230, 520, '+', () => this._adjustRations(RATION_STEP), stepper);
-    // A guest's own pack (OwnPack.js), chosen as on the Hunt screen.
-    this.packBtn = createButton(this, width / 2 + 330, 520, 'Pack…', () => this._openPacking());
+    // A hunt lobby: what this player brings (chunk 15f-2): for the party
+    // (the shared pack) and their own. Packed on the Pack screen.
+    this.rationsText = this.add.text(width / 2 - 80, 520, '', { ...FONTS.body, fontSize: '14px', color: '#c8ccd4', align: 'center', wordWrap: { width: 760 } }).setOrigin(0.5);
+    this.packBtn = createButton(this, width / 2 + 400, 520, 'Pack…', () => this._openPacking());
 
     this.status = this.add.text(width / 2, 604, '', { ...FONTS.body, color: '#d08c8c' })
       .setOrigin(0.5);
@@ -596,7 +584,7 @@ export default class CoopLobbyScene extends Phaser.Scene {
         // code expecting to have to write it down.
         try { localStorage.setItem(LAST_CODE_KEY, this.client.code || ''); } catch { }
         // Tell the server what this player brings to a hunt.
-        if (!msg?.resumed && this.isHuntLobby && this.rations > 0) this.client.setRations(this.rations);
+        if (!msg?.resumed && this.isHuntLobby) this._pledge();
         this._say(msg?.resumed ? 'Rejoined your hunt.' : '');
         this._refresh();
       }),
@@ -742,17 +730,15 @@ export default class CoopLobbyScene extends Phaser.Scene {
     // A guest's pledged Rations leave their own bag now (decision 6), once:
     // not again on a rejoin. The host's leave with its departure below.
     if (!this.client.isHost && !resumed) {
-      const pledged = this.client.contributions?.[this.client.playerId] || 0;
-      if (pledged > 0) takeFromList(GameState.inventory, 'rations', pledged);
-      // What else the guest packed leaves the camp bag into their own pack.
-      const own = [];
-      for (const id of this.packIds) {
-        const inst = (GameState.inventory || []).find(it => it?.instanceId === id);
-        if (!inst) continue;
-        GameState.removeFromInventory(id);
-        own.push(inst);
-      }
-      this._startOwnPack(own);
+      // Exactly what the server says this player pledged (the host's hunt
+      // holds one stack for it), Rations and party items (chunk 15f-2).
+      const pledged = pledgeOf(this.client.contributions?.[this.client.playerId]);
+      if (pledged.rations > 0) takeFromList(GameState.inventory, 'rations', pledged.rations);
+      for (const [id, n] of Object.entries(pledged.items)) if (n > 0) takeFromList(GameState.inventory, id, n);
+      // The rest of the plan, fight items and gear, leaves the camp bag into
+      // this player's own pack.
+      const ownPlan = { rations: 0, items: Object.fromEntries(Object.entries(this.pack.items || {}).filter(([id]) => kindOf(id) !== PARTY)), gear: this.pack.gear || [] };
+      this._startOwnPack(takePlan(GameState.inventory, ownPlan).own);
       GameState.save('autosave');
     }
     // A host coming back carries on from this save's record (chunk 12d).
@@ -760,11 +746,12 @@ export default class CoopLobbyScene extends Phaser.Scene {
     const resume = resumed && this.client.isHost && rec?.code === this.client.code ? rec : null;
     const coop = createCoopHunt({ client: this.client, reads: GAME_WORLD, target, resume });
     if (coop.isHost && this.huntDeparture && !resume) {
-      const { plan, supplies, bring } = takeDeparture(this.huntDeparture);
-      // The Rations go into the shared pack; what else the host packed is the
-      // host's own (OwnPack.js), as every guest's is.
-      this._startOwnPack(bring.filter(it => it.id !== 'rations'));
-      coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring: bring.filter(it => it.id === 'rations') });
+      const { plan, supplies, shared, own } = takeDeparture(this.huntDeparture);
+      // The Rations and party items go into the shared pack (chunk 15f-2);
+      // fight items and gear are the host's own (OwnPack.js), as every
+      // guest's are.
+      this._startOwnPack(own);
+      coop.begin({ zoneId: this.huntDeparture.zoneId, plan, supplies, bring: shared });
       // One write for the plan and the Rations spent (the co-op hunt itself
       // is not in the save: 12d).
       GameState.save('autosave');
@@ -853,16 +840,17 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.footerCaption?.setText(hunt ? 'HUNT' : 'FIGHT');
     this.scenarioText.setText(hunt ? (lobby?.label || this.huntDeparture?.label || '') : (scenario?.name || this.scenarioId));
     const canPick = (!inLobby || this.client.isHost) && !hunt;
-    const mineR = this.rations;
+    // What this player brings (chunk 15f-2): for the party, and their own.
     this.rationsText.setVisible(hunt);
-    this.rationsText.setText(hunt ? `Rations you bring: ${mineR}  (in your bag: ${countInList(GameState.inventory || [], 'rations')})${this.huntDeparture ? '  · packed on the Hunt screen' : ''}` : '');
-    this.rationsLess.setVisible(hunt && !this.huntDeparture);
-    this.rationsMore.setVisible(hunt && !this.huntDeparture);
-    this.packBtn?.setVisible(hunt && !this.huntDeparture);
-    if (hunt && !this.huntDeparture) {
-      this.packIds = this.packIds.filter(id => packable().some(it => it.instanceId === id));
-      if (this.packIds.length) this.rationsText.setText(`${this.rationsText.text}  · ${this.packIds.length} other item${this.packIds.length === 1 ? '' : 's'} packed`);
+    if (hunt) {
+      const bag = GameState.inventory || [];
+      if (!this.huntDeparture) this.pack = clampPlan(bag, this.pack, rationPackCap(GameState.party || []));
+      const ownItems = Object.fromEntries(Object.entries(this.pack.items || {}).filter(([id]) => kindOf(id) !== PARTY));
+      const forParty = describePlan(bag, { rations: this.pack.rations, items: partyItemsOf(this.pack), gear: [] });
+      const yours = describePlan(bag, { rations: 0, items: ownItems, gear: this.pack.gear || [] });
+      this.rationsText.setText(`For the party: ${forParty.join(', ') || 'nothing'}   ·   Yours: ${yours.join(', ') || 'nothing'}${this.huntDeparture ? '   (packed on the Hunt screen)' : ''}`);
     }
+    this.packBtn?.setVisible(hunt && !this.huntDeparture);
     this.prevScenario.setVisible(canPick);
     this.nextScenario.setVisible(canPick);
 
@@ -951,7 +939,11 @@ export default class CoopLobbyScene extends Phaser.Scene {
       const you = p.id === this.client.playerId ? ' (you)' : '';
       const host = p.id === lobby.hostId ? ' ★' : '';
       const names = p.hunters.map(h => h.name).join(', ') || 'no hunters';
-      row.setText(`${p.ready ? '✓' : '·'} ${p.name}${you}${host} — ${names}`);
+      // What they bring to the shared pack (chunk 15f-2), so everyone can see it.
+      const brings = lobby.mode === 'hunt'
+        ? [p.rations ? `${p.rations} Rations` : null, ...Object.entries(p.items || {}).map(([id, n]) => `${n} ${Items[id]?.name || id}`)].filter(Boolean)
+        : [];
+      row.setText(`${p.ready ? '✓' : '·'} ${p.name}${you}${host} — ${names}${brings.length ? `  · brings ${brings.join(', ')}` : ''}`);
       row.setColor(p.ready ? '#9ad39a' : '#c8ccd4');
       dot.setFillStyle(colourOf(p.colour ?? i).int).setVisible(!showBrowse);
     });

@@ -36,6 +36,8 @@ import { restoreMapHunt } from './HuntEngine.js';
 import { getZone } from '../../data/zones.js';
 import { stackQty, addToList } from './ItemStacks.js';
 import { settleOwnPack, syncFinds, copiedFinds, uncopied } from './OwnPack.js';
+import { pledgeOf } from './PackPlan.js';
+import { Items } from '../../data/items.js';
 
 /** The ledger entries a clean exit from this snapshot would have written
  *  (rule 7): what the pack brings home, and the exit's reward. */
@@ -62,18 +64,31 @@ export function cleanExitEntries(env) {
  * that is not Rations (the host packed it).
  */
 export function broughtShare(items, { contributions = {}, me, hostId }) {
-  const total = Object.values(contributions).reduce((t, n) => t + (n || 0), 0);
-  const left = items.filter(i => i.id === 'rations').reduce((t, i) => t + stackQty(i), 0);
-  const others = items.filter(i => i.id !== 'rations');
-  const shareOf = (pid) => (total > 0 ? Math.floor(left * (contributions[pid] || 0) / total) : 0);
-  let mine = shareOf(me);
-  if (me === hostId) {
-    const theirs = Object.keys(contributions).filter(pid => pid !== hostId).reduce((t, pid) => t + shareOf(pid), 0);
-    mine = left - theirs;
+  // Chunk 15f-2: the same split for every party item a player brought (an
+  // Escape Rope, fish), kind by kind, by how many of THAT kind each brought.
+  // A pledge before 15f-2 is a number of Rations (pledgeOf).
+  const pledges = Object.fromEntries(Object.entries(contributions).map(([pid, c]) => [pid, pledgeOf(c)]));
+  const broughtOf = (pid, id) => (id === 'rations' ? pledges[pid].rations : (pledges[pid].items[id] || 0));
+  const out = [];
+  for (const id of [...new Set(items.map(i => i.id))]) {
+    const entries = items.filter(i => i.id === id);
+    const total = Object.keys(pledges).reduce((t, pid) => t + broughtOf(pid, id), 0);
+    // Nobody pledged it (gear the host packed before own packs, or a kind
+    // that does not stack): the host's, whole.
+    if (total === 0 || !Items[id]?.stackable) {
+      if (me === hostId) out.push(...entries.map(i => JSON.parse(JSON.stringify(i))));
+      continue;
+    }
+    const left = entries.reduce((t, i) => t + stackQty(i), 0);
+    const shareOf = (pid) => Math.floor(left * broughtOf(pid, id) / total);
+    let mine = pledges[me] ? shareOf(me) : 0;
+    if (me === hostId) {
+      // The host gets what the rounding leaves.
+      const theirs = Object.keys(pledges).filter(pid => pid !== hostId).reduce((t, pid) => t + shareOf(pid), 0);
+      mine = left - theirs;
+    }
+    if (mine > 0) out.push({ ...JSON.parse(JSON.stringify(entries[0])), qty: mine });
   }
-  const out = me === hostId ? others.map(i => JSON.parse(JSON.stringify(i))) : [];
-  const stack = items.find(i => i.id === 'rations');
-  if (mine > 0 && stack) out.push({ ...JSON.parse(JSON.stringify(stack)), qty: mine });
   return out;
 }
 

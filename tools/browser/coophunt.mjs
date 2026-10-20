@@ -123,7 +123,9 @@ try {
   await bootWith(G, 3, `
     const { InventorySystem } = await import('/src/systems/InventorySystem.js');
     const { makeStack } = await import('/src/systems/ItemStacks.js');
-    InventorySystem.addGlobalItem(makeStack('rations', 30));`);
+    InventorySystem.addGlobalItem(makeStack('rations', 30));
+    InventorySystem.addGlobalItem(makeStack('escape_rope', 1));
+    InventorySystem.addGlobalItem(makeStack('healing_draught', 2));`);
   const guestRations = () => G.evaluate(`const GS = (await import('/src/systems/GameState.js')).default;
     return GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0);`);
   await G.evaluate(`window.sceneManager.loadScene('${LOBBY}', 'Opening the lobby…', { scenarioIds: ['training_encounter_1'], scenarioId: 'training_encounter_1' }); return true;`);
@@ -139,11 +141,27 @@ try {
   await G.shot('02-lobby');
 
   // ── 3. Ready, Start: both on the map ────────────────────────────────────────
-  // 12d: the guest pledges 10 Rations (one click of +).
-  await G.clickText('^[+]$', LOBBY);
-  await sleep(400);
-  check('the guest pledges Rations in the lobby, and the host sees it',
-    !!(await G.findText('^Rations you bring: 10', LOBBY)) && await waitFor(H, `window.__T.g().scene.getScene('${LOBBY}').client.lobby.players.find(p => p.id !== 'p1')?.rations === 10`, 4000));
+  // 12d / 15f-2: the guest packs on the Pack screen: 10 Rations (one click
+  // of +), the Escape Rope (for the party) and a Healing Draught (theirs).
+  await G.clickText('^Pack…$', LOBBY);
+  await waitFor(G, `window.__T.g().scene.isActive('PackingOverlay')`);
+  await G.clickText('^[+]$', 'PackingOverlay');
+  const plusOn = async (name) => {
+    const all = await G.evaluate(`return window.__T.textsOf('PackingOverlay');`);
+    const row = all.find(t => t.text === name);
+    return all.find(t => t.text === '+' && row && Math.abs(t.y - row.y) < 8);
+  };
+  for (const name of ['Escape Rope', 'Healing Draught']) { const p = await plusOn(name); if (p) { await G.click(p.x, p.y); await sleep(150); } }
+  const tags = await G.evaluate(`return window.__T.textsOf('PackingOverlay').map(t => t.text);`);
+  check('the Pack screen says whose each item will be: for the party, or yours', tags.includes('for the party') && tags.includes('yours'));
+  await G.shot('02b-pack');
+  await G.clickText('^Done$', 'PackingOverlay');
+  await sleep(500);
+  const summary = (await G.findText('^For the party: ', LOBBY))?.text || '';
+  check('the lobby shows what the guest brings, split: for the party and theirs',
+    summary.startsWith('For the party: 10 × Rations, 1 × Escape Rope') && summary.includes('Yours: 1 × Healing Draught'), summary);
+  check('...and the host sees the pledge: 10 Rations and the rope',
+    await waitFor(H, `(() => { const p = window.__T.g().scene.getScene('${LOBBY}').client.lobby.players.find(p => p.id !== 'p1'); return p?.rations === 10 && p.items?.escape_rope === 1 && !p.items?.healing_draught; })()`, 4000));
   await G.clickText('^Toggle Ready$', LOBBY);
   await H.clickText('^Toggle Ready$', LOBBY);
   await sleep(400);
@@ -157,6 +175,12 @@ try {
   check("...and are in the hunt's pack with the host's 20",
     packR.split(',').filter(s => s.startsWith('rations:')).reduce((t, s) => t + Number(s.split(':')[1]), 0) === 30, packR);
   check('the host\'s plan and packed Rations were spent at the start', !bag1.plan && bag1.rations === bag0.rations - 20, `${JSON.stringify(bag0)} -> ${JSON.stringify(bag1)}`);
+  // 15f-2: the rope is in the SHARED pack (events draw on it), once; the
+  // draught is in the guest's own pack, not the shared one.
+  check('the guest\'s Escape Rope is in the shared pack, once', packR.split(',').includes('escape_rope:1') && !packR.includes('healing_draught'), packR);
+  const gOwn = await G.evaluate(`const GS = (await import('/src/systems/GameState.js')).default; const { countInList } = await import('/src/systems/ItemStacks.js');
+    return { own: countInList(GS.flags.coopPack?.items || [], 'healing_draught'), campRope: countInList(GS.inventory, 'escape_rope'), campDraught: countInList(GS.inventory, 'healing_draught') };`);
+  check('...the draught is in the guest\'s own pack, and both left the camp bag', gOwn.own === 1 && gOwn.campRope === 0 && gOwn.campDraught === 1, JSON.stringify(gOwn));
   await sleep(600);
   check('the guest\'s map says co-op, the host\'s says host',
     !!(await G.findText('co-op$')) && !!(await H.findText('co-op \\(host\\)$')));

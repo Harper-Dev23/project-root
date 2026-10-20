@@ -35,6 +35,7 @@ import { fromWireCharacter } from './CoopWire.js';
 import { applyTakeHome, cleanExitEntries, OWN_TRIBE } from './CoopRewards.js';
 import { makeStack } from './ItemStacks.js';
 import { Items } from '../../data/items.js';
+import { pledgeOf, kindOf, PARTY } from './PackPlan.js';
 
 export const COOP_SNAPSHOT_VERSION = 1;
 
@@ -340,14 +341,20 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     /** Depart: the host's plan and region, everyone's hunters. */
     ch.begin = ({ zoneId, plan, supplies, bring = [], seed } = {}) => {
       if (ch.hunt) throw new Error('this co-op hunt has already begun');
-      // The guests' pledged Rations go into the same pack (rule 2); each
-      // guest took them out of their own bag when the hunt started.
+      // The guests' pledges go into the same shared pack (rule 2; chunk
+      // 15f-2: their party items too, Escape Ropes and food); each guest took
+      // them out of their own bag when the hunt started. Stackable, so one
+      // stack per kind stands for them: nothing is copied.
       const packed = [...bring];
       let total = supplies;
-      for (const [pid, qty] of Object.entries(ch.contributions)) {
-        if (pid === client.playerId || !(qty > 0)) continue;
-        packed.push(makeStack('rations', qty));
-        total += qty * (Items.rations?.supply ?? 1);
+      for (const [pid, c] of Object.entries(ch.contributions)) {
+        if (pid === client.playerId) continue;
+        const { rations, items } = pledgeOf(c);
+        if (rations > 0) {
+          packed.push(makeStack('rations', rations));
+          total += rations * (Items.rations?.supply ?? 1);
+        }
+        for (const [id, n] of Object.entries(items)) if (n > 0 && Items[id]?.stackable && kindOf(id) === PARTY) packed.push(makeStack(id, n));
       }
       ch.id = 'coop-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
       const opts = { plan, supplies: total, bring: packed };

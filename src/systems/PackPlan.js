@@ -181,3 +181,18 @@ export function rememberPlan(plan) {
 
 /** Units in a list of entries, for messages. */
 export const unitsOf = (list) => (list || []).reduce((t, it) => t + stackQty(it), 0);
+
+/**
+ * One player's pledge to a co-op hunt's SHARED pack (chunk 15f-2), from the
+ * server's contributions: { rations, items: { itemId: units } }. Before 15f-2
+ * a pledge was a number of Rations; that still reads as one.
+ */
+export function pledgeOf(c) {
+  if (typeof c === 'number') return { rations: Math.max(0, c | 0), items: {} };
+  return { rations: Math.max(0, (c?.rations | 0) || 0), items: { ...(c?.items || {}) } };
+}
+
+/** The party items of a plan: what it pledges to the shared pack (Rations apart). */
+export function partyItemsOf(plan) {
+  return Object.fromEntries(Object.entries(plan?.items || {}).filter(([id, n]) => n > 0 && kindOf(id) === PARTY));
+}

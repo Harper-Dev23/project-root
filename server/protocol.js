@@ -82,6 +82,8 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       name: p.name,
       ready: p.ready,
       rations: p.rations || 0,
+      // Chunk 15f-2: the party items this player brings to the shared pack.
+      items: { ...(p.packItems || {}) },
       // Chunk 15a: the player colour (an index into PlayerFaces' colours, kept
       // for the whole lobby) and the hunter chosen as this player's face (null:
       // the client picks their highest-Perception hunter).
@@ -166,7 +168,9 @@ export function createHub({ CombatScene, codeFactory = makeCode,
 
   const hostOf = (lobby) => lobby.players.find(p => p.id === lobby.hostId) || null;
   /** What each player pledged to the hunt pack, { playerId: Rations }. */
-  const contributionsOf = (lobby) => Object.fromEntries(lobby.players.map(p => [p.id, p.rations || 0]));
+  /** What each player brings to the shared pack (rule 2; chunk 15f-2 adds the
+   *  party items to the Rations): { playerId: { rations, items } }. */
+  const contributionsOf = (lobby) => Object.fromEntries(lobby.players.map(p => [p.id, { rations: p.rations || 0, items: { ...(p.packItems || {}) } }]));
   /** Every player's hunters, each stamped with its owner: what a client needs
    *  to build the merged party (a pit fight's `started` sends the same). */
   const rosterOf = (lobby) => lobby.players.flatMap(p =>
@@ -458,6 +462,33 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       const qty = Math.floor(Number(msg.qty));
       if (!Number.isFinite(qty) || qty < 0 || qty > 999) return fail(conn, 'that is not a number of Rations');
       player.rations = qty;
+      broadcast(lobby, lobbyView(lobby));
+    },
+
+    /**
+     * { t:'setPack', rations, items } - a hunt lobby (chunk 15f-2; owner,
+     * 2026-10-20): what this player brings to the SHARED pack, Rations and
+     * party items ({ itemId: units }: Escape Ropes, food). They leave that
+     * player's camp bag when the hunt starts, once, and what is left comes
+     * home split by who brought it. Fight items stay in each player's own
+     * pack and never pass through here. The client only offers what it has.
+     */
+    setPack(conn, msg, lobby, player) {
+      if (started(lobby)) return fail(conn, 'the hunt has started');
+      if (lobby.mode !== 'hunt') return fail(conn, 'only a hunt takes a pack');
+      const qty = Math.floor(Number(msg.rations ?? 0));
+      if (!Number.isFinite(qty) || qty < 0 || qty > 999) return fail(conn, 'that is not a number of Rations');
+      const raw = msg.items && typeof msg.items === 'object' && !Array.isArray(msg.items) ? msg.items : {};
+      const entries = Object.entries(raw);
+      if (entries.length > 40) return fail(conn, 'too many kinds of item');
+      const items = {};
+      for (const [id, n] of entries) {
+        const k = Math.floor(Number(n));
+        if (!/^[a-z0-9_]{1,64}$/.test(id) || !Number.isFinite(k) || k < 0 || k > 999) return fail(conn, 'that is not a pack');
+        if (k > 0) items[id] = k;
+      }
+      player.rations = qty;
+      player.packItems = items;
       broadcast(lobby, lobbyView(lobby));
     },
 

@@ -120,7 +120,7 @@ function saveFor(from, ownTribe) {
   };
 }
 
-async function setup(code, { resumeGraceMs, rations = [0, 0] } = {}) {
+async function setup(code, { resumeGraceMs, rations = [0, 0], items = null } = {}) {
   const hub = createHub({ CombatScene, codeFactory: () => code, ...(resumeGraceMs ? { resumeGraceMs } : {}) });
   const WS = socketsFor(hub);
   const hostC = createCoopClient({ url: 'mem://', WebSocketImpl: WS });
@@ -134,10 +134,15 @@ async function setup(code, { resumeGraceMs, rations = [0, 0] } = {}) {
   guestC.send({ t: 'join', code, name: 'Gus', hunters: clone(3, 3), clientId: code + '-guest' });
   await until(() => guestC.playerId, 'the guest seated');
   guestC.clientId = code + '-guest';
-  if (rations[0]) hostC.setRations(rations[0]);
-  if (rations[1]) guestC.setRations(rations[1]);
+  // Chunk 15f-2: party items go with the Rations in one setPack.
+  if (items) { hostC.setPack(rations[0], items[0] || {}); guestC.setPack(rations[1], items[1] || {}); }
+  else {
+    if (rations[0]) hostC.setRations(rations[0]);
+    if (rations[1]) guestC.setRations(rations[1]);
+  }
   hostC.setReady(true); guestC.setReady(true);
-  await until(() => hostC.lobby?.players?.every(p => p.ready) && hostC.lobby.players.every((p, i) => (p.rations || 0) === rations[i]), 'both ready');
+  await until(() => hostC.lobby?.players?.every(p => p.ready) && hostC.lobby.players.every((p, i) => (p.rations || 0) === rations[i]
+    && JSON.stringify(p.items || {}) === JSON.stringify(items?.[i] || {})), 'both ready');
   hostC.startHunt();
   await until(() => hostC.status === 'hunting' && guestC.status === 'hunting', 'huntStarted');
   const hostSave = saveFor(0, 'zafaar'), guestSave = saveFor(3, 'elseth');
@@ -164,8 +169,10 @@ async function departToEncounter(code, kind, from, opts = {}) {
   for (let seed = from; seed < from + 60; seed++) {
     const S = await setup(code + seed, opts);
     const own = opts.rations?.[0] || 0;
+    // The host's own pledge goes in with its departure, as CoopLobbyScene does it.
+    const hostItems = Object.entries(opts.items?.[0] || {}).map(([id, n]) => makeStack(id, n));
     S.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'cull', size: 'medium', mods: {}, bonusObjectives: [] },
-      supplies: 60 + own * (Items.rations?.supply ?? 1), bring: own ? [makeStack('rations', own)] : [], seed });
+      supplies: 60 + own * (Items.rations?.supply ?? 1), bring: [...(own ? [makeStack('rations', own)] : []), ...hostItems], seed });
     if (await walkToEncounter(S, seed, kind)) return S;
     S.hostC.disconnect(); S.guestC.disconnect();
   }
@@ -462,7 +469,8 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   const st0 = R.host.hunt.getState();
   check('the pack holds both players\' pledged Rations (20 + 10)', qtyOf(st0.pack.brought) === 30, `${qtyOf(st0.pack.brought)}`);
   check('...and the hunt started with the camp issue plus all 30', st0.maxSupplies === 60 + 30 * K, `${st0.maxSupplies}`);
-  check('both sides know what each brought', same(R.host.contributions, { p1: 20, p2: 10 }) && same(R.guest.contributions, { p1: 20, p2: 10 }));
+  const want = { p1: { rations: 20, items: {} }, p2: { rations: 10, items: {} } };   // 15f-2: Rations and party items
+  check('both sides know what each brought', same(R.host.contributions, want) && same(R.guest.contributions, want), JSON.stringify(R.host.contributions));
   R.host.fight();
   await until(() => R.host.fighting && R.guest.fighting, 'the fight');
   for (const u of R.lobby.session.party) { u.maxHP = 9999; u.currentHP = 9999; }
@@ -505,6 +513,25 @@ console.log('=== 12d: Rations from both players, a win, and a clean exit ===');
   check('own packs: on an exit each player\'s own pack comes home with what they brought (the fish spoils), and the pack is gone',
     homeIds(hg) === 'healing_draughtx2' && homeIds(gg) === 'healing_draughtx2' && gg.ownHome.spoiled.some(i => i.id === 'raw_fish')
     && !R.hostSave.flags.coopPack && !R.guestSave.flags.coopPack, `host ${homeIds(hg)} / guest ${homeIds(gg)}`);
+}
+
+console.log('=== 15f-2: party items from both players, one shared pack ===');
+{
+  const I = await departToEncounter('ITM', 'beast', 100, { rations: [10, 0], items: [{ escape_rope: 1 }, { escape_rope: 2, raw_fish: 3 }] });
+  const unitsIn = (list, id) => list.filter(i => i.id === id).reduce((t, i) => t + stackQty(i), 0);
+  const st = I.host.hunt.getState();
+  check('the shared pack holds every party item once: 3 Escape Ropes (1 + 2) and the guest\'s 3 fish',
+    unitsIn(st.pack.brought, 'escape_rope') === 3 && unitsIn(st.pack.brought, 'raw_fish') === 3,
+    st.pack.brought.map(i => `${i.id}x${stackQty(i)}`).join(' '));
+  check('...and every save knows who brought what', same(I.guest.contributions, { p1: { rations: 10, items: { escape_rope: 1 } }, p2: { rations: 0, items: { escape_rope: 2, raw_fish: 3 } } }),
+    JSON.stringify(I.guest.contributions));
+  check('the host walked the party out through an exit', walkOut(I) && I.host.view().finished === 'exit');
+  await until(() => I.host.tookHome && I.guest.tookHome, 'both took home');
+  const hg = I.hostSave.got, gg = I.guestSave.got;
+  const hRopes = unitsIn(hg.brought, 'escape_rope'), gRopes = unitsIn(gg.brought, 'escape_rope');
+  check('the ropes left come home to whoever brought them: guest 2, host 1', gRopes === 2 && hRopes === 1, `host ${hRopes}, guest ${gRopes}`);
+  check('...nothing copied: 3 went out, 3 came back', hRopes + gRopes === 3);
+  check('...and the fish spoiled on the way home, as fresh food does', unitsIn(hg.brought, 'raw_fish') + unitsIn(gg.brought, 'raw_fish') === 0);
 }
 
 console.log('=== two fights in one hunt ===');

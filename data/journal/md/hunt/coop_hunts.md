@@ -10,8 +10,8 @@ status: "approved"
 teaser: false
 requires: []
 sort: 28
-version: 1
-updatedAt: 2026-10-03
+version: 2
+updatedAt: 2026-10-20
 ---
 # Hunting Together
 
@@ -19,8 +19,12 @@ A hunt can be shared. One player **hosts** from the Hunt Gate, choosing the regi
 
 ## Packing
 
-- **Rations**: every player can pledge Rations to the shared pack. What is left at the end is split back by what each of you brought.
-- **Your own pack**: everything else you bring (draughts, tinctures, spare gear) goes in your own pack, which only you use. Guests pack in the lobby; the host packs on the Hunt screen. Your camp bag stays in camp, as it does solo.
+Everyone packs on the same **Pack** screen: the host on the Hunt screen, guests from the lobby. Each item says where it goes, and you never have to choose:
+
+- **For the party**: Rations, Escape Ropes, and food (fish, game, forage). These go into the one **shared pack**, which the party eats from and events draw on, whoever brought them. What is left at the end goes back to whoever brought it, split by how many each of you packed. Nothing is ever doubled.
+- **Yours**: draughts, tinctures, chants, tonics, Smoke Pots and spare gear go in your own pack, for your own fights. Only you use them.
+
+The lobby shows what each player brings for the party. Your camp bag stays in camp, as it does solo.
 
 ## On the map
 

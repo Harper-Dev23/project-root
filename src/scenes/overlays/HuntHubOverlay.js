@@ -47,7 +47,8 @@ import { partyStats } from '../../systems/PartyStats.js';
 import { planMapInputs } from '../../systems/HuntMapGen.js';
 import { launchMapHunt } from './HuntFieldOverlay.js';
 import { bossesIn, omenMeter, offersReady } from '../../systems/Omens.js';
-import { PACK_GROUPS, packRows, clampPlan, adjust, emptyPlan, reminders, describePlan, takePlan, rememberPlan } from '../../systems/PackPlan.js';
+import { clampPlan, emptyPlan, reminders, describePlan, takePlan, rememberPlan, PARTY, kindOf } from '../../systems/PackPlan.js';
+import { drawPackRows } from '../../ui/PackRows.js';
 import { questSitesFor, questTitleForStep } from '../../systems/HuntQuests.js';
 import { huntItemLevel } from '../../systems/HuntScaling.js';
 import { owedExplorationPicks } from '../../systems/PartyStats.js';
@@ -100,13 +101,16 @@ export function takeDeparture({ plan, pack = null, rationsToPack = 0, packIds = 
   const taken = takePlan(GameState.inventory, p);
   // party: the shared side (Rations apart); own: fights and gear. Solo it is
   // all one pack; a co-op start splits them (CoopLobbyScene).
-  const bring = [...(taken.rations ? [taken.rations] : []), ...taken.party, ...taken.own];
+  const shared = [...(taken.rations ? [taken.rations] : []), ...taken.party];
+  const bring = [...shared, ...taken.own];
+  // What this departure pledged to a co-op hunt's shared pack (15f-2).
+  const pledge = { rations: p.rations, items: Object.fromEntries(Object.entries(p.items).filter(([id]) => kindOf(id) === PARTY)) };
   const view = huntPlanView(plan);
   // A boss plan stays in the bag until its boss is fought (14b-4): the hunt
   // carries its id and uses it up then (HuntEngine.beginFight).
-  if (view.boss) return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel, bossPlanId: plan.instanceId }, supplies, bring };
+  if (view.boss) return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel, bossPlanId: plan.instanceId }, supplies, bring, shared, own: taken.own, pledge };
   if (!isBasicPlan(plan)) GameState.removeFromInventory(plan.instanceId);
-  return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring };
+  return { plan: { ...planMapInputs(view), itemLevel: view.itemLevel }, supplies, bring, shared, own: taken.own, pledge };
 }
 
 export default class HuntHubOverlay extends Phaser.Scene {
@@ -367,28 +371,12 @@ export default class HuntHubOverlay extends Phaser.Scene {
     const buy = this._button(x + width - 150, top + 34, `Buy ${RATIONS_PER_TICKET} (1 Ticket)`, () => this._buyRations());
     if (ProgressionManager.huntTickets < 1) buy.disableInteractive().setAlpha(0.4);
 
-    // Everything else, by group, in two columns. A group with nothing in camp
-    // is left out, except the Ways out (the Draughtwell sells them).
-    const rows = packRows(bag, this.pack);
-    const colW = (width - 100) / 2;
-    const rowH = 25;
-    let col = 0, ty = top + 74;
-    const colTop = ty, colBottom = bottom - 130;
-    const place = (h) => { if (ty + h > colBottom && col === 0) { col = 1; ty = colTop; } return left + col * (colW + 20); };
-    for (const g of PACK_GROUPS) {
-      const mine = rows.filter(r => r.group === g.id);
-      if (!mine.length) continue;
-      let cx = place(rowH * 2);
-      this._text(cx, ty, g.name, { fontSize: '14px', color: '#ffdd88', fontStyle: 'bold' });
-      ty += 22;
-      for (const r of mine) {
-        cx = place(rowH);
-        this._packRow(cx, ty, colW, r);
-        ty += rowH;
-      }
-      ty += 6;
-    }
-    if (!rows.some(r => r.have > 0)) {
+    // Everything else, by group, in two columns (PackRows: the same rows as
+    // the co-op lobby's). The Ways out are listed even with none in camp.
+    const colTop = top + 74;
+    const { empty } = drawPackRows(this, { add: (o) => this._content.add(o), left, top: colTop, width: width - 80, bottom: bottom - 130,
+      bag, plan: this.pack, onChange: (p) => { this.pack = p; this._render(); } });
+    if (empty) {
       this._text(left, colTop + 110, 'Nothing else in camp to pack. The Draughtwell sells draughts, Escape Ropes and Smoke Pots.', { fontSize: '13px', color: '#999999' });
     }
 
@@ -398,25 +386,6 @@ export default class HuntHubOverlay extends Phaser.Scene {
     this._button(left + (last ? 300 : 80), bottom - 96, 'Unpack all', () => { this.pack = emptyPlan(); SoundManager.play('select'); this._render(); }, 'danger');
     this._text(x + width - 40, bottom - 104, `Everything packed is at risk. ${DEATH_RULE_TEXT[zoneDeathRule(getZone(this.zoneId))]}`,
       { fontSize: '12px', color: '#c9a36a', wordWrap: { width: 380 }, align: 'right' }).setOrigin(1, 0);
-  }
-
-  /** One row of the Pack step: its name, how many are in camp, − count +. */
-  _packRow(cx, cy, w, r) {
-    const dim = r.have === 0;
-    this._text(cx, cy, r.name, { fontSize: '13px', color: dim ? '#8a8478' : r.packed ? '#f2e6c8' : '#cfcfcf' });
-    this._text(cx + w - 150, cy, r.stack ? `in camp ${r.have}` : '', { fontSize: '11px', color: '#9a9a9a' });
-    // Padded, so the click target is bigger than the glyph.
-    const less = this._text(cx + w - 76, cy - 4, '−', { fontSize: '18px', color: r.packed ? '#ffdd88' : '#6a6458', padding: { x: 6, y: 1 } });
-    const n = this._text(cx + w - 44, cy, r.stack ? String(r.packed) : (r.packed ? 'yes' : 'no'), { fontSize: '13px', color: r.packed ? '#9fe09f' : '#9a9a9a' }).setOrigin(0.5, 0);
-    const more = this._text(cx + w - 26, cy - 4, '+', { fontSize: '18px', color: r.packed < r.have ? '#ffdd88' : '#6a6458', padding: { x: 6, y: 1 } });
-    for (const [t, d] of [[less, -1], [more, +1]]) {
-      t.setInteractive({ useHandCursor: true }).on('pointerdown', () => {
-        this.pack = adjust(this.pack, r, d);
-        SoundManager.play('select');
-        this._render();
-      });
-    }
-    return n;
   }
 
   // ── 5. Review ───────────────────────────────────────────────────────────
