@@ -1391,7 +1391,7 @@ export default class TownScene extends Phaser.Scene {
       collectBtn.on('pointerover', () => collectBtn.setBackgroundColor('#ffe866'));
       collectBtn.on('pointerout',  () => collectBtn.setBackgroundColor('#ffdd44'));
       collectBtn.on('pointerdown', () => {
-        SoundManager.play('reward');
+        SoundManager.play('questReward');
 
         const shard = createItemInstance('waystone_shard', { rarity: 'rare' });
         if (shard) {
@@ -2214,7 +2214,7 @@ export default class TownScene extends Phaser.Scene {
             }
 
             InventorySystem.addGlobalItem(instance);
-            SoundManager.play('dullClick');
+            SoundManager.play('vendorBuy');
             // A plan slot sells once: mark it and redraw, so the row goes away.
             if (Number.isInteger(entry.planSlot)) {
               markPlanSold(ProgressionManager, entry.planSlot);
@@ -2728,7 +2728,7 @@ export default class TownScene extends Phaser.Scene {
           ProgressionManager.setQuestFlag('waystone_attuned');
           ProgressionManager.setQuestFlag('samuel_waystone_return');
           GameState.save('autosave');
-          SoundManager.play('reward');
+          SoundManager.play('questReward');
           this.waystoneGroup.destroy(true);
           this.waystoneGroup = null;
           this._buildQuestFlags();
@@ -2858,7 +2858,7 @@ export default class TownScene extends Phaser.Scene {
           GameState.save('autosave');
           this._buildQuestFlags();
           this.scene.get('UIScene')?.refreshUI?.();
-          SoundManager.play('reward');
+          SoundManager.play('questReward');
           const { container: reportBox } = createTextBanner(this, {
             x: 640, y: 250, width: 760,
             title: 'Word from the field',
@@ -3356,7 +3356,7 @@ export default class TownScene extends Phaser.Scene {
       completeBtn.on('pointerout',  () => completeBtn.setBackgroundColor('#ffdd44'));
 
       completeBtn.on('pointerdown', () => {
-        SoundManager.play('reward');
+        SoundManager.play('questReward');
 
         // Grant rep
         ProgressionManager.clearQuestFlag(handinFlag);

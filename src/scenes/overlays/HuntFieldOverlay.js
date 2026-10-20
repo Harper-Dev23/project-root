@@ -1508,7 +1508,7 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     });
     if (!res.ok) { SoundManager.play('handsClick'); this._say(`Cannot: ${res.reason}.`); return; }
     GameState.save('autosave');
-    SoundManager.play('reward');
+    SoundManager.play('vendorBuy');
     this._say(`${res.name} goes to your camp bag (${res.spent} Sin Ticket${res.spent === 1 ? '' : 's'}).`);
     this._refresh();
   }

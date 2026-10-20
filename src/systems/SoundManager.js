@@ -38,6 +38,11 @@ export const AUDIO_MANIFEST = [
   { id: 'huh',        file: 'huh.wav',        volume: 0.4 },
   { id: 'handsClick',   file: 'handsClick.wav',   volume: 0.45 },
   { id: 'bonfireLoop',  file: 'bonfire_loop.mp3', volume: 0.3  },
+  // Their own names (co-op playtest item 12, owner 2026-10-03: "something
+  // subtle is fine while I make a new sound effect"). Placeholders on quiet
+  // existing files: drop the new sound in assets/audio and change `file`.
+  { id: 'vendorBuy',    file: 'select.wav',    volume: 0.3 },    // buying from a vendor
+  { id: 'questReward',  file: 'reward.wav',    volume: 0.25 },   // a quest hand-in paid
 ];
 
 // Music tracks — looping background songs, separate from one-shot SFX above.
