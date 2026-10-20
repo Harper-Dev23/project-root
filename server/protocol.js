@@ -651,6 +651,34 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       send(host.conn, { t: 'voteIntent', from: player.id, name: player.name, key, choice, call: msg.call === true });
     },
 
+    /**
+     * { t:'intent', kind, data } - a player's request for the host's hunt
+     * (chunk 15e): ask for the lead, pass it, or propose a big move for the
+     * party to vote on. Carried to the host as it is; the host's hunt decides.
+     */
+    intent(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      const kind = String(msg.kind ?? '');
+      if (!['askLead', 'passLead', 'propose'].includes(kind)) return fail(conn, 'that is not a request');
+      const data = msg.data && typeof msg.data === 'object' && !Array.isArray(msg.data) ? msg.data : {};
+      if (JSON.stringify(data).length > 2000) return fail(conn, 'that request is too big');
+      const host = hostOf(lobby);
+      if (!host?.conn) return fail(conn, 'the host is away');
+      send(host.conn, { t: 'coopIntent', from: player.id, name: player.name, kind, data });
+    },
+
+    /**
+     * { t:'ping', tile } - point at a tile (chunk 15e): everyone sees this
+     * player's face on it for a while. Nothing in the hunt changes.
+     */
+    ping(conn, msg, lobby, player) {
+      const h = lobby.hunt;
+      if (!h || h.finished) return fail(conn, 'no hunt is under way');
+      if (msg.tile == null || typeof msg.tile === 'object' || String(msg.tile).length > 40) return fail(conn, 'a ping needs a tile');
+      broadcast(lobby, { t: 'pinged', from: player.id, name: player.name, tile: String(msg.tile) });
+    },
+
     /** { t:'huntRefuse', to, reason } - host only: tell one player why their
      *  move was not taken (the host's hunt said no). */
     huntRefuse(conn, msg, lobby, player) {

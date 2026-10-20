@@ -208,6 +208,10 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     /** What this player brings to the shared pack (chunk 15f-2): Rations and party items. */
     setPack(rations, items = {}) { return client.send({ t: 'setPack', rations, items }); },
     /** A vote on the open event (chunk 15d): `call` is the lead calling it. */
+    /** A request for the host's hunt (chunk 15e): askLead, passLead { to }, propose { kind, args }. */
+    intent(kind, data = {}) { return client.send({ t: 'intent', kind, data }); },
+    /** Point at a tile for everyone (chunk 15e). */
+    ping(tile) { return client.send({ t: 'ping', tile }); },
     vote(key, choice, call = false) { return client.send({ t: 'vote', key, choice, ...(call ? { call: true } : {}) }); },
     huntSnapshot(version, snapshot) { return client.send({ t: 'huntSnapshot', version, snapshot }); },
     move(tile, version, { hunt = false } = {}) { return client.send({ t: 'move', tile, version, ...(hunt ? { hunt: true } : {}) }); },
@@ -334,6 +338,14 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
       // A player's vote on the open event, for the host's tally (chunk 15d).
       case 'voteIntent':
         emit('voteIntent', msg);
+        break;
+
+      // Chunk 15e: a request for the host (the lead, a big move), and a ping.
+      case 'coopIntent':
+        emit('coopIntent', msg);
+        break;
+      case 'pinged':
+        emit('pinged', msg);
         break;
 
       case 'huntRoster':

@@ -216,11 +216,18 @@ console.log('=== the Mourning Beast on a co-op hunt ===');
   S.guestC.lastError = null;
   S.guest.move(lair.tile);
   await until(() => S.guestC.lastError, 'the refusal');
-  check("a guest's move onto the lair is refused: the warning is the host's to accept", /lair/i.test(S.guestC.lastError) && !S.host.view().encounter, S.guestC.lastError);
+  // Chunk 15e: only the lead moves (the host leads here), and going into a
+  // lair is a big move the party votes on.
+  check("a guest's move onto the lair is refused (the host leads)", /only the lead|lair/i.test(S.guestC.lastError) && !S.host.view().encounter, S.guestC.lastError);
   check('...and a guest cannot go in', /only the host/.test(S.guest.act(h => h.enterLair(lair.tile)).reason || ''));
   const hm = S.host.move(lair.tile);
-  check("the host's plain move shows the warning", !hm.ok && !!hm.lair);
-  const inside = S.host.act(h => h.enterLair(lair.tile));
+  check("the lead's plain move shows the warning", !hm.ok && !!hm.lair);
+  S.host.propose('lair', { tile: lair.tile });
+  await until(() => S.guest.proposal?.kind === 'lair', 'the lair vote on the guest');
+  check('going in is put to the vote, the lead\'s yes in', S.guest.proposal.votes.p1 === 'yes' && !S.host.view().encounter);
+  S.guest.voteProposal('yes');
+  await until(() => !!S.host.view().encounter, 'the vote carried');
+  const inside = { ok: S.host.lastProposal?.decided === 'yes' && S.host.lastProposal.ok };
   await until(() => S.guest.version === S.host.version, 'the guest caught up');
   check('the host goes in: the boss fight, on both sides', inside.ok && S.host.view().encounter?.kind === 'boss' && S.guest.view().encounter?.kind === 'boss');
 

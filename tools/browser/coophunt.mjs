@@ -198,15 +198,46 @@ try {
     const m = v.moves.find(x => v.layout.includes(x.tile)); if (!m) return null;
     const c = s.center(m.tile); return { tile: m.tile, x: c.x, y: c.y };`);
   check('the guest has a tile to move to', !!target);
+  // Chunk 15e: the host leads. The guest's two clicks ping the tile instead
+  // (everyone sees the guest's face on it); then the guest asks for the lead
+  // (a click on the host's face) and the host passes it (a click on the
+  // guest's). The faces row: two faces centred over the map, host first.
+  const FACE = { host: { x: 620, y: 98 }, guest: { x: 660, y: 98 } };
   if (target) {
+    await G.click(target.x, target.y);
+    await G.click(target.x, target.y);
+    check('not leading, the guest\'s clicks ping the tile: the host sees it, and the party stays',
+      await waitFor(H, `window.__T.s().coop.livePings().some(p => p.from === 'p2' && p.tile === ${JSON.stringify(target.tile)})`, 4000)
+      && (await posOf(H)) !== target.tile);
+    await H.shot('04a-ping-host');
+    await G.click(FACE.host.x, FACE.host.y);
+    check('the guest asks for the lead (a click on the host\'s face): the host is told',
+      await waitFor(H, `(window.__T.s().coop.lead?.asks || []).includes('p2')`, 4000));
+    await H.shot('04b-ask-host');
+    await H.click(FACE.guest.x, FACE.guest.y);
+    check('the host passes it (a click on the guest\'s face): the guest leads, on both screens',
+      await waitFor(G, `window.__T.s().coop.leadId === 'p2'`, 4000) && await waitFor(H, `window.__T.s().coop.leadId === 'p2'`, 4000));
     await G.click(target.x, target.y);
     await G.click(target.x, target.y);
     await waitFor(H, `window.__T.s().coop.view().pos === ${JSON.stringify(target.tile)}`, 6000);
     await waitFor(G, `window.__T.s().coop.view().pos === ${JSON.stringify(target.tile)}`, 6000);
     const [hp, gp] = [await posOf(H), await posOf(G)];
-    check('the guest\'s clicks moved the party: the host\'s hunt took it, both maps agree', hp === target.tile && gp === target.tile, `${hp} / ${gp}`);
+    check('leading, the guest\'s clicks move the party: the host\'s hunt took it, both maps agree', hp === target.tile && gp === target.tile, `${hp} / ${gp}`);
     await G.shot('04-guest-moved');
+    // The lead back to the host (a click on the host's face) for the rest.
+    await G.click(FACE.host.x, FACE.host.y);
+    check('the guest passes the lead back with one click', await waitFor(H, `window.__T.s().coop.leadId === 'p1'`, 4000));
   }
+
+  // ── 4a. A big move put to the vote (chunk 15e): camping ────────────────────
+  const t0 = await H.evaluate(`const s = window.__T.s(); const r = s.coop.propose('camp', { meals: [] }); s._refresh(); return { ok: r.ok, time: s.coop.hunt.getState().time };`);
+  check('the host puts camping to the vote; the guest sees the question, with Yes and No',
+    t0.ok && await waitFor(G, `window.__T.textsOf('${MAP}').some(t => t.text === 'Make camp here?')`, 4000) && !!(await G.findText('^Yes$', MAP)));
+  await G.shot('04c-camp-vote-guest');
+  await G.clickText('^Yes$', MAP);
+  check('the guest\'s Yes carries it: the party camps, and both are told',
+    await waitFor(H, `window.__T.s().coop.hunt.getState().time > ${t0.time}`, 4000)
+    && await waitFor(G, `window.__T.textsOf('UIScene').some(t => t.text.includes('The party makes camp.'))`, 4000));
 
   // ── 4b. An event, voted on (chunk 15d) ──────────────────────────────────────
   // Sinking Mud placed beside the party on the host's hunt; the guest votes
@@ -348,7 +379,9 @@ try {
     return { closed: !!r?.closed, rations: GS.inventory.filter(i => i.id === 'rations').reduce((t, i) => t + (i.qty || 1), 0),
       savedClosed: !!Object.values(saved?.flags?.coopHunts || {})[0]?.closed };`);
   check("the guest's save took its share home once, and saved it", home.closed && home.savedClosed, JSON.stringify(home));
-  check("...Rations came back to the guest's bag (a share of what was left)", home.rations > 20 && home.rations <= 30, `${home.rations}`);
+  // The exact split is checked in server/coophunt_test.mjs (rule 2); here, a
+  // share of what was left: none if a long hunt (a camp, chunk 15e) ate it.
+  check("...Rations came back to the guest's bag (a share of what was left, never more than brought)", home.rations >= 20 && home.rations <= 30, `${home.rations}`);
 
   check('no uncaught errors on the host\'s page', H.errors.length === 0, H.errors.slice(0, 3).join(' | '));
   check('no uncaught errors on the guest\'s page', G.errors.length === 0, G.errors.slice(0, 3).join(' | '));

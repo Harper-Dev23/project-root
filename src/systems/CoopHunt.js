@@ -36,7 +36,17 @@ import { applyTakeHome, cleanExitEntries, OWN_TRIBE } from './CoopRewards.js';
 import { makeStack } from './ItemStacks.js';
 import { Items } from '../../data/items.js';
 import { pledgeOf, kindOf, PARTY } from './PackPlan.js';
-import { eventKey, choicesFor, ruleFor, tally, runChoice } from './EventVotes.js';
+import { eventKey, choicesFor, ruleFor, tally, runChoice, VOTE } from './EventVotes.js';
+
+/** The big moves the party votes on (chunk 15e; owner, 2026-10-20). */
+export const BIG_MOVES = {
+  camp: { ask: 'Make camp here?', run: (h, a) => h.camp({ meals: a.meals || [] }), done: 'The party makes camp.' },
+  lair: { ask: 'Go into the lair?', run: (h, a) => h.enterLair(a.tile), done: 'The party goes in.' },
+  exit: { ask: 'Leave the hunt?', run: (h) => h.exit(), done: 'The party leaves the hunt.' },
+  hunt: { ask: 'Hunt it down?', run: (h, a) => h.move(a.tile, { hunt: true }), done: 'The party goes after it.' },
+};
+/** How long a ping stays on the map (ms), unless the party moves first. */
+export const PING_MS = 20000;
 
 export const COOP_SNAPSHOT_VERSION = 1;
 
@@ -142,8 +152,17 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     // keeps them, and they ride in every snapshot).
     votes: { key: null, votes: {} },
     lastResult: null,
-    /** Who leads (chunk 15d: the host; 15e lets it pass). Ties and calling it. */
-    get leadId() { return client.hostId; },
+    // The lead (chunk 15e): who moves the party, breaks ties and calls votes.
+    // The host at first; it passes with a click. `asks`: who asked for it.
+    lead: { id: client.hostId, asks: [] },
+    /** Who leads. */
+    get leadId() { return ch.lead?.id ?? client.hostId; },
+    // A big move put to the vote (chunk 15e): { id, kind, args, by, votes },
+    // and how the last one went ({ id, kind, by, decided }).
+    proposal: null,
+    lastProposal: null,
+    // Pings (chunk 15e): { from, name, tile, at }, on this screen only.
+    pings: [],
 
     on(event, fn) {
       if (!listeners.has(event)) listeners.set(event, new Set());
@@ -166,7 +185,8 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     /** The snapshot the server stores and relays. */
     snapshot() {
       return { v: COOP_SNAPSHOT_VERSION, id: ch.id, hunt: ch.hunt.serialize(), ledger: plain(ledger), vitals: vitals(),
-        votes: plain(ch.votes), lastResult: plain(ch.lastResult) };
+        votes: plain(ch.votes), lastResult: plain(ch.lastResult),
+        lead: plain(ch.lead), proposal: plain(ch.proposal), lastProposal: plain(ch.lastProposal) };
     },
 
     /**
@@ -273,6 +293,94 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     return { ok: true, pending: true };
   };
 
+  // ── The lead, big moves and pings (chunk 15e) ──────────────────────────────
+
+  /** Ask for the lead (any player but the lead). */
+  ch.askLead = () => {
+    if (client.playerId === ch.leadId) return { ok: false, reason: 'you already lead' };
+    if (ch.isHost) return hostIntent(client.playerId, 'askLead', {});
+    client.intent('askLead', {});
+    return { ok: true, pending: true };
+  };
+  /** Pass the lead to another player (the lead only). */
+  ch.passLead = (to) => {
+    if (client.playerId !== ch.leadId) return { ok: false, reason: 'only the lead can pass the lead' };
+    if (ch.isHost) return hostIntent(client.playerId, 'passLead', { to });
+    client.intent('passLead', { to });
+    return { ok: true, pending: true };
+  };
+  /** Put a big move to the vote (BIG_MOVES). Proposing it is a yes. */
+  ch.propose = (kind, args = {}) => {
+    if (!BIG_MOVES[kind]) return { ok: false, reason: 'that is not something to vote on' };
+    if (ch.fighting) return { ok: false, reason: 'the hunt waits while the fight is on' };
+    if (ch.isHost) return hostIntent(client.playerId, 'propose', { kind, args });
+    client.intent('propose', { kind, args });
+    return { ok: true, pending: true };
+  };
+  /** A vote on the open proposal (`call`: the lead calls it). */
+  ch.voteProposal = (choice, { call = false } = {}) => {
+    const p = ch.proposal;
+    if (!p) return { ok: false, reason: 'there is nothing to vote on' };
+    if (ch.isHost) return castVote(client.playerId, `prop:${p.id}`, choice, call);
+    client.vote(`prop:${p.id}`, choice || '', call);
+    return { ok: true, pending: true };
+  };
+  /** Where the open proposal's vote stands, for the screen. */
+  ch.proposalView = () => {
+    const p = ch.proposal;
+    if (!p) return null;
+    const players = playerIds();
+    const t = tally({ rule: VOTE, votes: p.votes, players, leadId: ch.leadId, choices: ['yes', 'no'] });
+    return { ...p, ask: BIG_MOVES[p.kind]?.ask || p.kind, players, leadId: ch.leadId, waitingOn: t.waitingOn, canCall: t.canCall, mine: p.votes[client.playerId] || null };
+  };
+  /** Point at a tile for everyone. */
+  ch.ping = (tile) => { client.ping(tile); return { ok: true }; };
+  /** The pings still on the map: young enough, and since the party last moved. */
+  ch.livePings = (now = Date.now()) => {
+    const pos = ch.view()?.pos;
+    ch.pings = ch.pings.filter(p => now - p.at < PING_MS && p.pos === pos);
+    return ch.pings;
+  };
+  unsubs.push(client.on('pinged', (m) => {
+    const pos = ch.view()?.pos;
+    // One ping a player: a new one replaces their last.
+    ch.pings = [...ch.pings.filter(p => p.from !== m.from), { from: m.from, name: m.name, tile: m.tile, at: Date.now(), pos }];
+    emit('pinged', m);
+  }));
+
+  /** The host takes a request (its own, or a guest's coopIntent). */
+  function hostIntent(from, kind, data = {}) {
+    if (!ch.isHost || !ch.hunt) return { ok: false, reason: 'only the host can do that' };
+    const players = playerIds();
+    if (kind === 'askLead') {
+      if (from === ch.leadId) return { ok: false, reason: 'you already lead' };
+      if (!ch.lead.asks.includes(from)) ch.lead = { ...ch.lead, asks: [...ch.lead.asks, from] };
+      publish();
+      emit('leadAsked', { from });
+      return { ok: true };
+    }
+    if (kind === 'passLead') {
+      if (from !== ch.leadId) return { ok: false, reason: 'only the lead can pass the lead' };
+      if (!players.includes(data.to) || data.to === from) return { ok: false, reason: 'pass it to another player' };
+      ch.lead = { id: data.to, asks: [] };
+      publish();
+      emit('leadPassed', { from, to: data.to });
+      return { ok: true };
+    }
+    if (kind === 'propose') {
+      const move = BIG_MOVES[data.kind];
+      if (!move) return { ok: false, reason: 'that is not something to vote on' };
+      if (ch.proposal) return { ok: false, reason: 'the party is already voting on something' };
+      if (ch.hunt.view().event || ch.hunt.view().encounter) return { ok: false, reason: 'not now' };
+      // A move (Hunt it, a lair) is the lead's to propose.
+      if ((data.kind === 'hunt' || data.kind === 'lair') && from !== ch.leadId) return { ok: false, reason: 'only the lead moves the party' };
+      const args = plain(data.args || {});
+      ch.proposal = { id: `${data.kind}:${ch.version + 1}`, kind: data.kind, args, by: from, votes: {} };
+      return castVote(from, `prop:${ch.proposal.id}`, 'yes', false);
+    }
+    return { ok: false, reason: 'that is not a request' };
+  }
+
   /**
    * The host counts a vote, and when the vote is decided, its hunt makes the
    * choice (EventVotes.runChoice) and every screen is told the outcome
@@ -280,6 +388,7 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
    */
   function castVote(from, key, choice, call) {
     if (!ch.isHost || !ch.hunt) return { ok: false, reason: 'only the host counts votes' };
+    if (String(key).startsWith('prop:')) return castProposalVote(from, key.slice(5), choice, call);
     const ev = ch.hunt.view().event;
     if (!ev || eventKey(ev) !== key) return { ok: false, reason: 'that event has moved on' };
     if (ch.votes.key !== key) ch.votes = { key, votes: {} };
@@ -298,6 +407,25 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     };
     publish();
     emit('eventDecided', ch.lastResult);
+    return res;
+  }
+
+  /** A vote on the open big move (chunk 15e): yes or no, by the event rules. */
+  function castProposalVote(from, id, choice, call) {
+    const p = ch.proposal;
+    if (!p || p.id !== id) return { ok: false, reason: 'that vote has moved on' };
+    if (choice === 'yes' || choice === 'no') p.votes[from] = choice;
+    const t = tally({ rule: VOTE, votes: p.votes, players: playerIds(), leadId: ch.leadId, choices: ['yes', 'no'], call: !!call && from === ch.leadId });
+    if (!t.decided) { publish(); return { ok: true, pending: true }; }
+    ch.proposal = null;
+    let res = { ok: true };
+    if (t.decided === 'yes') {
+      res = BIG_MOVES[p.kind].run(ch.hunt, p.args) || { ok: false };
+      // A lair's warning or a refused move says why; the vote is spent either way.
+    }
+    ch.lastProposal = { id: p.id, kind: p.kind, by: p.by, decided: t.decided, ok: res?.ok !== false, reason: res?.ok === false ? (res.reason || null) : null };
+    publish();
+    emit('proposalDecided', ch.lastProposal);
     return res;
   }
 
@@ -449,7 +577,12 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     // `hunt`: the party came to hunt a timid beast, so it does not scatter
     // (HuntEngine.move). Dropping it let a timid quarry run forever (co-op
     // playtest: a Cull's bog frog).
-    ch.move = (tile, { hunt = false } = {}) => ch.act(h => h.move(tile, { hunt: !!hunt }));
+    ch.move = (tile, { hunt = false } = {}) => {
+      if (client.playerId !== ch.leadId) return { ok: false, reason: 'only the lead moves the party; ask for the lead' };
+      // "Hunt it" is a big move: the party votes (chunk 15e).
+      if (hunt) return hostIntent(client.playerId, 'propose', { kind: 'hunt', args: { tile } });
+      return ch.act(h => h.move(tile, { hunt: false }));
+    };
 
     /** Fight the pending encounter: beginFight (the food buff is used up, so
      *  that state is published first), then the server runs it. */
@@ -468,9 +601,17 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     // A guest asked to move. The server already refused anything stale
     // against ITS version; the host checks its own as well, then the hunt
     // decides. Every refusal goes back to the one who asked.
+    unsubs.push(client.on('coopIntent', (m) => {
+      const res = hostIntent(m.from, m.kind, m.data || {});
+      if (res && res.ok === false) client.huntRefuse(m.from, res.reason || 'the host could not do that');
+    }));
     unsubs.push(client.on('moveIntent', (m) => {
       if (m.version !== ch.version) return client.huntRefuse(m.from, 'the hunt has moved on; try again');
-      const res = ch.move(m.tile, { hunt: !!m.hunt });
+      // Only the lead moves the party (chunk 15e); "Hunt it" is a big move, voted.
+      if (m.from !== ch.leadId) return client.huntRefuse(m.from, 'only the lead moves the party; ask for the lead');
+      if (m.hunt) { const r = hostIntent(m.from, 'propose', { kind: 'hunt', args: { tile: m.tile } }); if (r?.ok === false) client.huntRefuse(m.from, r.reason); return; }
+      // The lead's move, made on the host's hunt (the host need not lead).
+      const res = ch.act(h => h.move(m.tile, { hunt: false }));
       if (!res?.ok) client.huntRefuse(m.from, res?.reason || 'the hunt refused that move');
       else emit('moved', { by: m.from, name: m.name, res });
     }));
@@ -542,6 +683,9 @@ export function createCoopHunt({ client, reads = null, target = null, resume = n
     ledger.splice(0, ledger.length, ...(env.ledger || []));
     ch.votes = env.votes || { key: null, votes: {} };
     ch.lastResult = env.lastResult || null;
+    ch.lead = env.lead || { id: client.hostId, asks: [] };
+    ch.proposal = env.proposal || null;
+    ch.lastProposal = env.lastProposal || null;
     emit('changed', ch.view());
   }
 

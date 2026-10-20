@@ -273,6 +273,8 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       c.on('ended', () => this._refresh()),
       c.on('refused', (reason) => this._say(`Cannot: ${reason}.`)),
       c.on('moved', (m) => this._say(`${m.name} moved the party.`)),
+      // A ping (chunk 15e) is not in the hunt's snapshot: redraw for it.
+      c.on('pinged', () => { if (this.hunt.view()) this._refresh(); }),
     );
   }
 
@@ -347,6 +349,26 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     else if (this.panel === 'camp') this._drawCamp();
     else if (this.selected) this._drawInspect(this.selected);
     if (this.panel === 'log') this._drawLog();
+    if (this.coop && !v.event && !this._eventResult && !v.finished) this._drawProposal();
+    if (this.coop) this._coopNews();
+  }
+
+  /** Say what changed in the party's say (chunk 15e): the lead, an ask, a vote's outcome. */
+  _coopNews() {
+    const c = this.coop, me = c.client?.playerId;
+    const name = (pid) => (pid === me ? 'You' : this._faces().find(f => f.playerId === pid)?.name || pid);
+    if (this._lastLead !== undefined && this._lastLead !== c.leadId) this._say(c.leadId === me ? 'You lead now: you move the party.' : `${name(c.leadId)} leads now.`);
+    this._lastLead = c.leadId;
+    const asks = (c.lead?.asks || []).filter(pid => pid !== me);
+    const askKey = asks.join(',');
+    if (c.leadId === me && askKey && askKey !== this._lastAsks) this._say(`${asks.map(name).join(', ')} ${asks.length === 1 ? 'asks' : 'ask'} for the lead: click their face to pass it.`);
+    this._lastAsks = askKey;
+    const lp = c.lastProposal;
+    if (lp && this._lastProposalId !== undefined && lp.id !== this._lastProposalId) {
+      const done = { camp: 'The party makes camp.', lair: 'The party goes in.', exit: 'The party leaves the hunt.', hunt: 'The party goes after it.' }[lp.kind];
+      this._say(lp.decided === 'yes' ? (lp.ok ? done : `The party said yes, but: ${lp.reason || 'it could not be done'}.`) : 'The party said no.');
+    }
+    this._lastProposalId = lp?.id ?? null;
   }
 
   /** Centre the current section's shape in the map area. */
@@ -556,19 +578,111 @@ export default class HuntFieldOverlay extends Phaser.Scene {
 
     // Co-op: everyone's face in a row at the top centre of the map (side
     // panels open at its left and right edges), the lead marked.
+    // Chunk 15e: clicking a face passes the lead (you lead) or asks for it
+    // (the lead's face); a player who asked is marked for the lead.
     if (this.coop && faces.length > 1) {
+      const me = this.coop.client?.playerId;
+      const iLead = this.coop.leadId === me;
+      const asks = this.coop.lead?.asks || [];
       faces.forEach((f, i) => {
         const fx = MAP.x + MAP.w / 2 + (i - (faces.length - 1) / 2) * 40, fy = MAP.y + 24;
         this.layer.add(drawFaceToken(this, fx, fy, f, { diameter: 26, lead: f.isLead }));
-        const hit = this.add.circle(fx, fy, 16, 0x000000, 0.001).setInteractive({ useHandCursor: false });
+        if (asks.includes(f.playerId)) {
+          const q = this.add.text(fx + 11, fy - 20, '?', { fontFamily: FONT, fontSize: '15px', color: '#ffdd88', fontStyle: 'bold', stroke: '#000000', strokeThickness: 3 });
+          this.layer.add(q);
+        }
+        const canPass = iLead && f.playerId !== me;
+        const canAsk = !iLead && f.isLead;
+        const hit = this.add.circle(fx, fy, 16, 0x000000, 0.001).setInteractive({ useHandCursor: canPass || canAsk });
         let tip = null;
         hit.on('pointerover', () => {
-          tip = this._box(fx - 14, fy + 22, 260, [`${f.name}${f.playerId === this.coop.client?.playerId ? ' (you)' : ''}${f.isLead ? ', leading' : ''}`,
-            f.hunterName ? `Face: ${f.hunterName}` : 'No hunter on this hunt'], 20);
+          const lines = [`${f.name}${f.playerId === me ? ' (you)' : ''}${f.isLead ? ', leading' : ''}`,
+            f.hunterName ? `Face: ${f.hunterName}` : 'No hunter on this hunt'];
+          if (canPass) lines.push(asks.includes(f.playerId) ? 'Asks for the lead. Click to pass it to them.' : 'Click to pass them the lead.');
+          if (canAsk) lines.push(asks.includes(me) ? 'You have asked for the lead.' : 'Click to ask for the lead.');
+          if (f.isLead) lines.push('The lead moves the party, breaks ties and calls votes.');
+          tip = this._box(fx - 14, fy + 22, 280, lines, 20);
         });
         hit.on('pointerout', () => { tip?.destroy(true); tip = null; });
+        if (canPass) hit.on('pointerdown', () => { tip?.destroy(true); this._coopDo(() => this.coop.passLead(f.playerId)); });
+        if (canAsk) hit.on('pointerdown', () => { tip?.destroy(true); this._coopDo(() => this.coop.askLead(), 'You ask for the lead.'); });
         this.layer.add(hit);
       });
+    }
+
+    // Pings (chunk 15e): each player's face on the tile they pointed at.
+    if (this.coop) {
+      const pings = this.coop.livePings?.() || [];
+      for (const pg of pings) {
+        if (!v.layout.includes(pg.tile)) continue;
+        const face = faces.find(x => x.playerId === pg.from);
+        const c = this.center(pg.tile);
+        this.layer.add(drawFaceToken(this, c.x, c.y - 14, face, { diameter: 20, ring: 2 }));
+      }
+      // A ping fades: redraw once the oldest is due to go.
+      if (pings.length && !this._pingTimer) {
+        const next = Math.max(200, Math.min(...pings.map(p => p.at)) + 20000 - Date.now() + 50);
+        this._pingTimer = this.time.delayedCall(next, () => { this._pingTimer = null; this._refresh(); });
+      }
+    }
+  }
+
+  /** A co-op request (chunk 15e); a refusal is said, a note shown on success. */
+  _coopDo(fn, note = null) {
+    const res = fn();
+    if (res && res.ok === false) { this._say(res.reason ? `Cannot: ${res.reason}.` : 'Cannot do that.'); return res; }
+    SoundManager.play('select');
+    if (note) this._say(note);
+    this._refresh();
+    return res;
+  }
+
+  /** Is this player the one who moves the party? (Always, solo.) */
+  _iLead() {
+    return !this.coop || this.coop.leadId === this.coop.client?.playerId;
+  }
+
+  /** The name of who leads, for the screen. */
+  _leadName() {
+    return this._faces().find(f => f.isLead)?.name || 'the lead';
+  }
+
+  /**
+   * A big move put to the vote (chunk 15e): what it is, who asked, Yes and
+   * No with the voters' faces, where the vote stands, and Call it for the
+   * lead. Top centre, under the faces row.
+   */
+  _drawProposal() {
+    const pv = this.coop?.proposalView?.();
+    if (!pv) return;
+    const faces = this._faces();
+    const me = this.coop.client?.playerId;
+    const by = pv.by === me ? 'you' : faces.find(f => f.playerId === pv.by)?.name || pv.by;
+    // Narrow enough to sit between the side panels (300 wide, at the edges).
+    const width = 300;
+    const px = MAP.x + (MAP.w - width) / 2, py = MAP.y + 48;
+    const cont = this.add.container(0, 0).setDepth(25);
+    this.layer.add(cont);
+    const g = this.add.graphics();
+    cont.add(g);
+    const height = 150;
+    g.fillStyle(0x15171c, 0.97).fillRoundedRect(px, py, width, height, 6);
+    g.lineStyle(1, 0xc8a24a, 1).strokeRoundedRect(px, py, width, height, 6);
+    cont.add(this.add.zone(px, py, width, height).setOrigin(0).setInteractive());
+    cont.add(this.add.text(px + 12, py + 10, pv.ask, { fontFamily: FONT, fontSize: '16px', color: '#ffdd88' }));
+    cont.add(this.add.text(px + 12, py + 32, `Asked by ${by}. A tie goes to the lead.`, { fontFamily: FONT, fontSize: '12px', color: '#a8b0bc' }));
+    const p = { cont, rx: px + 12, rw: width - 24 };
+    let ty = py + 54;
+    for (const [label, choice] of [['Yes', 'yes'], ['No', 'no']]) {
+      const top = ty;
+      ty = this._choiceRow(p, ty, label, null, () => this._coopDo(() => this.coop.voteProposal(choice)), { picked: pv.mine === choice });
+      this._drawVoters(p, top, ty - 6, choice, { votes: pv.votes, rule: 'vote' });
+    }
+    const waiting = pv.waitingOn.map(pid => (pid === me ? 'you' : faces.find(f => f.playerId === pid)?.name || pid));
+    cont.add(this.add.text(px + 12, py + height - 18, waiting.length ? `Waiting for ${waiting.join(', ')}.` : '', { fontFamily: FONT, fontSize: '11px', color: '#a8b0bc' }));
+    if (pv.canCall && pv.leadId === me) {
+      const b = createButton(this, px + width - 50, py + height - 16, 'Call it', () => this._coopDo(() => this.coop.voteProposal(null, { call: true })), 'confirm', { fontSize: '12px' });
+      cont.add(b);
     }
   }
 
@@ -846,18 +960,32 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       if (move) acts.push([`Move here${occ?.temper === 'timid' ? ' (it will scatter)' : ''} (${fmt(move.supply)} supplies, ${fmt(move.time)} time)`, () => this._move(id)]);
       if (move && mightRun) acts.push([occ.temper === 'timid' ? 'Hunt it' : 'Hunt it (if it tries to run)', () => this._move(id, { hunt: true }), 'danger']);
     };
+    // Chunk 15e: only the lead moves the party; anyone else pings the tile.
+    const leadMoves = () => {
+      if (this._iLead()) { moveActs(); return; }
+      if (!own) acts.push(['Ping this tile', () => this._ping(id)]);
+      if (move || !own) lines.push(`${this._leadName()} leads: only the lead moves the party. Click their face (top) to ask for the lead.`);
+    };
     if (this.coop && !this.coop.isHost) {
-      moveActs();
+      leadMoves();
       if (own) {
-        lines.push('The host forages, camps and chooses; you can move the party.');
+        if (this._iLead()) {
+          for (const m of v.moves) {
+            if (v.layout.includes(m.tile)) continue;
+            acts.push([`Cross to section ${parseTileId(m.tile).section + 1} (${fmt(m.supply)} supplies, ${fmt(m.time)} time)`, () => this._move(m.tile)]);
+          }
+        }
+        lines.push('The host forages, fishes and waits. Camping and leaving the hunt are put to the vote.');
+        acts.push([`Camp… (vote; ${CAMP_TIME} time, ${CAMP_SUPPLY} supplies)`, () => { this.panel = 'camp'; this.meals = []; this._refresh(); }]);
+        if (t?.exit) acts.push(['Leave the hunt (vote)', () => this._confirmExit(), 'danger']);
         acts.push(['Leave the co-op hunt', () => this._confirmLeaveCoop(), 'danger']);
       }
     } else {
-    moveActs();
+    if (this.coop) leadMoves(); else moveActs();
     if (occ && !occ.exact && v.fog[id] === 'visible') acts.push([`Scout (${SCOUT_TIME} time)`, () => this._act('scout', () => this.hunt.scout(occ.id))]);
     if (own) {
       for (const m of v.moves) {
-        if (v.layout.includes(m.tile)) continue;
+        if (v.layout.includes(m.tile) || !this._iLead()) continue;
         acts.push([`Cross to section ${parseTileId(m.tile).section + 1} (${fmt(m.supply)} supplies, ${fmt(m.time)} time)`, () => this._move(m.tile)]);
       }
       acts.push([`Forage (${FORAGE_TIME} time)`, () => this._act('forage', () => this.hunt.forage())]);
@@ -967,7 +1095,9 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     this._panelButton(p, p.px + 110, ty + 12, 'Make camp', () => {
       const meals = this.meals.map(m => (m.addition ? { main: m.main, addition: m.addition } : { main: m.main }));
       this.panel = null;
-      this._act('camp', () => this.hunt.camp({ meals }));
+      // Co-op (chunk 15e): making camp is put to the vote.
+      if (this.coop) this._coopDo(() => this.coop.propose('camp', { meals }), 'Camping is put to the vote.');
+      else this._act('camp', () => this.hunt.camp({ meals }));
     }, 'confirm');
     this._panelButton(p, p.px + 250, ty + 12, 'Back', () => { this.panel = null; this.meals = []; this._refresh(); });
     ty += 36;
@@ -1591,6 +1721,19 @@ export default class HuntFieldOverlay extends Phaser.Scene {
    * shows; confirming enters it (hunt.enterLair) and the fight starts.
    */
   _move(id, opts = {}) {
+    if (this.coop) {
+      // Chunk 15e: the lead moves; a lair is a vote (the lead proposes it).
+      if (!this._iLead()) return this._ping(id);
+      const site = this.v.objectiveSites?.find(s => s.objective === 'boss' && s.tile === id);
+      if (site && !this.v.encounter) {
+        const ui = this._uiScene();
+        const go = () => this._coopDo(() => this.coop.propose('lair', { tile: id }), 'Going in is put to the vote.');
+        const msg = `${site.name || 'The lair'}. Go in? The party votes.`;
+        if (ui?.showConfirmationDialogue) return ui.showConfirmationDialogue(msg, () => { ui.resetBottomBar(); go(); });
+        return go();
+      }
+      if (opts.hunt) return this._coopDo(() => this.coop.propose('hunt', { tile: id }), 'Hunting it is put to the vote.');
+    }
     const res = this.hunt.move(id, opts);
     if (res?.lair) return this._confirmLair(res.lair);
     return this._act('move', () => res);
@@ -1610,8 +1753,10 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       ? 'Leave the hunt? The pack comes home and the reward is paid.'
       : 'Leave now? The primary objective is not done: you keep what you found but forfeit the completion reward.';
     const ui = this._uiScene();
-    if (ui?.showConfirmationDialogue) ui.showConfirmationDialogue(msg, () => { ui.resetBottomBar(); this._act('exit', () => this.hunt.exit()); });
-    else this._act('exit', () => this.hunt.exit());
+    // Co-op (chunk 15e): leaving the hunt is put to the vote.
+    const leave = () => (this.coop ? this._coopDo(() => this.coop.propose('exit'), 'Leaving is put to the vote.') : this._act('exit', () => this.hunt.exit()));
+    if (ui?.showConfirmationDialogue) ui.showConfirmationDialogue(this.coop ? `${msg} The party votes.` : msg, () => { ui.resetBottomBar(); leave(); });
+    else leave();
   }
 
   _drawFinished() {
@@ -1728,9 +1873,16 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       this._move(id);
       return;
     }
+    // Co-op, not leading (chunk 15e): a second click on a tile pings it.
+    if (this.coop && !this._iLead() && id === this.selected && id !== this.v.pos) { this._ping(id); return; }
     SoundManager.play('select');
     this.selected = id;
     this._refresh();
+  }
+
+  /** Point at a tile for everyone (chunk 15e). */
+  _ping(id) {
+    return this._coopDo(() => this.coop.ping(id));
   }
 
   _close() {

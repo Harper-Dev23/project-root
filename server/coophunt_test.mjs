@@ -208,9 +208,18 @@ const S = await departToEncounter('ONE', 'beast', 100);
   check('the guest\'s view is the host\'s, field for field', same(S.guest.view(), S.host.view()), `version ${S.host.version}`);
   const e = S.guest.view().encounter;
   check('an encounter shows on the guest as it is (not resolved as a flee)', !!e && e.occId === S.host.view().encounter.occId);
+  // Chunk 15e: only the lead moves. Not leading, the guest is told so.
   S.guest.move(S.guest.view().moves[0]?.tile ?? S.guest.view().pos);
   await until(() => S.guestC.lastError, 'the refusal');
-  check('a guest\'s move into a pending encounter is refused by the hunt, to the guest', /fight|encounter|win it or flee/i.test(S.guestC.lastError || ''), S.guestC.lastError);
+  check('a guest who does not lead cannot move the party, and is told why', /only the lead moves/.test(S.guestC.lastError || ''), S.guestC.lastError);
+  S.guestC.lastError = null;
+  S.host.passLead('p2');
+  await until(() => S.guest.leadId === 'p2', 'the lead passed');
+  S.guest.move(S.guest.view().moves[0]?.tile ?? S.guest.view().pos);
+  await until(() => S.guestC.lastError, 'the refusal');
+  check('leading, a guest\'s move into a pending encounter is refused by the hunt, to the guest', /fight|encounter|win it or flee/i.test(S.guestC.lastError || ''), S.guestC.lastError);
+  S.guest.passLead('p1');
+  await until(() => S.host.leadId === 'p1' && S.guest.leadId === 'p1', 'the lead back');
 }
 
 console.log('=== a fight, and the host applies the win ===');
@@ -245,6 +254,9 @@ console.log('=== moves ===');
   if (v.spoils) { S.host.act(h => h.harvest({ take: [], meat: false })); v = S.host.view(); }
   if (v.event) { S.host.act(h => h.leaveEvent()); v = S.host.view(); }
   await until(() => S.guest.version === S.host.version, 'caught up');
+  // Chunk 15e: the guest leads for these moves (and the frog below).
+  S.host.passLead('p2');
+  await until(() => S.guest.leadId === 'p2', 'the lead passed');
   const tile = S.guest.view().moves[0].tile;
   const before = S.host.version;
   S.guest.move(tile);
@@ -292,8 +304,14 @@ console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran f
   const before = S.host.version;
   S.guestC.lastError = null;
   S.guest.move(free[0], { hunt: true });
-  await until(() => S.host.version > before || S.guestC.lastError, 'the guest\'s hunt move');
-  check('a guest\'s "Hunt it" reaches the host: the frog stands and fights', S.host.view().encounter?.occId === 'o9001', S.guestC.lastError || JSON.stringify(S.host.view().encounter));
+  // Chunk 15e: "Hunt it" is a big move, put to the vote by the lead (the
+  // guest's proposal is their yes); the host's yes carries it.
+  await until(() => S.host.proposal?.kind === 'hunt' || S.guestC.lastError, 'the guest\'s proposal');
+  check('a leading guest\'s "Hunt it" is put to the vote, their own vote yes', S.host.proposal?.kind === 'hunt' && S.host.proposal.votes.p2 === 'yes' && !S.host.view().encounter,
+    S.guestC.lastError || JSON.stringify(S.host.proposal));
+  S.host.voteProposal('yes');
+  await until(() => S.host.version > before && S.guest.version === S.host.version, 'the hunt move');
+  check('...and when the vote carries, the frog stands and fights', S.host.view().encounter?.occId === 'o9001' && S.guest.lastProposal?.decided === 'yes', S.guestC.lastError || JSON.stringify(S.host.view().encounter));
   // Walked in blind, so the frog goes first. What it did before anyone could
   // act comes WITH the fight's start (co-op playtest 2026-10-03: it rode
   // along with the first player's action, a turn late).
@@ -317,8 +335,14 @@ console.log('=== hunting a timid beast (co-op playtest: a Cull\'s bog frog ran f
   const back = S.host.view().pos;
   const step = S.host.view().moves.find(m => m.tile === free[1]);
   if (step) {
+    // The lead comes back to the host, whose "Hunt it" is a proposal too.
+    S.guest.passLead('p1');
+    await until(() => S.host.leadId === 'p1' && S.guest.version === S.host.version, 'the lead back');
     S.host.field().move(free[1], { hunt: true });
-    check('the host\'s "Hunt it" through the field facade: the frog fights', S.host.view().encounter?.occId === 'o9002', JSON.stringify(S.host.view().encounter));
+    await until(() => S.guest.proposal?.kind === 'hunt', 'the host\'s proposal on the guest');
+    S.guest.voteProposal('yes');
+    await until(() => !!S.host.view().encounter, 'the vote carried');
+    check('the host\'s "Hunt it" through the field facade, voted yes: the frog fights', S.host.view().encounter?.occId === 'o9002', JSON.stringify(S.host.view().encounter));
     S.host.act(h => h.flee());
   } else check('the second frog is still beside the party after the flee', false, back);
   const d2 = S.host.hunt.serialize();
@@ -601,6 +625,66 @@ console.log('=== 15d: event votes, two players ===');
   await synced();
   check('walking away is a vote too: a tie, to the lead (who walked away)', !V.host.view().event && V.host.lastResult?.choice === 'leave');
   V.hostC.disconnect(); V.guestC.disconnect();
+}
+
+console.log('=== 15e: the lead, big moves and pings ===');
+{
+  const L = await setup('LEAD');
+  L.host.begin({ zoneId: 'reeds_of_gethsemane', plan: { objective: 'scout', size: 'medium', mods: {}, bonusObjectives: [] }, supplies: 200, bring: [], seed: 78 });
+  // A quiet world: nothing hunts the party while these checks run.
+  const quiet = L.host.hunt.serialize();
+  for (const o of quiet.map.occupants) { o.noticed = true; if (o.kind === 'beast') { o.state = 'rooted'; o.home = 'rooted'; o.nextStepAt = null; } }
+  L.host.hunt = restoreMapHunt(quiet, L.host.hostWorld, { view: true });
+  L.host.act(() => ({ ok: true }));
+  const synced = () => until(() => L.guest.version === L.host.version, 'in step');
+  await synced();
+  check('the host leads at first, on both screens', L.host.leadId === 'p1' && L.guest.leadId === 'p1');
+
+  L.guest.askLead();
+  await until(() => L.guest.lead?.asks?.includes('p2'), 'the ask on every screen');
+  check('a guest asks for the lead: everyone sees who asked', L.host.lead.asks.includes('p2') && L.guest.lead.asks.includes('p2'));
+  check('only the lead can pass it', L.guest.passLead('p1').ok === false);
+  L.host.passLead('p2');
+  await until(() => L.guest.leadId === 'p2', 'the lead passed');
+  check('the lead passes with one call: the guest leads, the asks are cleared', L.host.leadId === 'p2' && L.guest.lead.asks.length === 0);
+  check('...and now the host cannot move the party', /only the lead/.test(L.host.move(L.host.view().moves[0].tile).reason || ''));
+
+  // Camp: anyone may propose; a tie goes to the lead.
+  const t0 = L.host.hunt.getState().time;
+  L.host.propose('camp', { meals: [] });
+  await until(() => L.guest.proposal?.kind === 'camp', 'the proposal on the guest');
+  const pv = L.guest.proposalView();
+  check('a big move is put to the vote: everyone sees it, the proposer\'s yes in', pv.ask === 'Make camp here?' && pv.votes.p1 === 'yes' && pv.waitingOn.join() === 'p2', JSON.stringify(pv));
+  check('...nothing happens until everyone has voted', L.host.hunt.getState().time === t0);
+  L.guest.voteProposal('yes');
+  await until(() => !L.host.proposal && L.guest.version === L.host.version, 'the vote');
+  check('everyone says yes: the party camps (time passes), and every screen is told', L.host.hunt.getState().time > t0 && L.guest.lastProposal?.decided === 'yes' && L.guest.lastProposal.kind === 'camp');
+
+  // Leave: the host says yes, the leading guest no: a tie, the lead's no.
+  L.host.propose('exit');
+  await until(() => L.guest.proposal?.kind === 'exit', 'the exit proposal');
+  L.guest.voteProposal('no');
+  await until(() => !L.host.proposal && L.guest.version === L.host.version, 'the vote');
+  check('a tie on leaving goes to the lead: no, and the hunt goes on', !L.host.view().finished && L.host.lastProposal?.decided === 'no');
+
+  // A lair (or Hunt it) is a move: only the lead proposes it.
+  const lair = L.host.propose('lair', { tile: L.host.view().pos });
+  check('only the lead proposes a move into a lair', lair.ok === false && /only the lead/.test(lair.reason));
+
+  // Pings: on every screen, one a player, gone when the party moves.
+  const near = L.guest.view().moves[0].tile;
+  L.host.ping(near);
+  await until(() => L.guest.pings.some(p => p.from === 'p1'), 'the ping');
+  check('a ping shows on every screen, with who pinged', L.guest.livePings().some(p => p.from === 'p1' && p.tile === near) && L.host.livePings().some(p => p.tile === near));
+  const next = L.guest.view().moves.find(m => m.tile !== near) || L.guest.view().moves[0];
+  L.host.ping(next.tile);
+  await until(() => L.guest.pings.filter(p => p.from === 'p1').length === 1 && L.guest.pings[0].tile === next.tile, 'the second ping');
+  check('...a new ping replaces your last', L.guest.livePings().filter(p => p.from === 'p1').length === 1);
+  const before = L.host.version;
+  L.guest.move(next.tile);
+  await until(() => L.host.version > before && L.guest.version === L.host.version, 'the lead\'s move');
+  check('...and when the party moves, the pings clear', L.guest.livePings().length === 0 && L.host.livePings().length === 0);
+  L.hostC.disconnect(); L.guestC.disconnect();
 }
 
 console.log('=== two fights in one hunt ===');

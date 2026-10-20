@@ -10,7 +10,7 @@ status: "approved"
 teaser: false
 requires: []
 sort: 28
-version: 3
+version: 4
 updatedAt: 2026-10-20
 ---
 # Hunting Together
@@ -28,7 +28,13 @@ The lobby shows what each player brings for the party. Your camp bag stays in ca
 
 ## On the map
 
-**Anyone can move the party.** The host does everything else: forage, fish, camp, wait, choose at events, start and flee fights, and lead the party into a boss's lair.
+**The lead moves the party.** The host leads at first, and the party token wears the lead's face. Click another player's face (at the top of the map) to pass them the lead; click the lead's face to ask for it, and a **?** shows the lead who is asking.
+
+If you are not leading, clicking a tile twice **pings** it: your face appears there for everyone for a little while, or until the party moves.
+
+**Big moves are voted**, like events: making camp, leaving the hunt, going into a boss's lair, and **Hunt it** on a timid beast. Whoever asks votes yes; the most votes win, and a tie goes to the lead. The lead proposes the moves themselves (a lair, Hunt it); anyone can propose camping or leaving.
+
+The host still forages, fishes, waits, scouts, and starts and flees fights.
 
 Fights are shared. Each player commands their own hunters on their own turns, and gear you equip on the map is what your hunter wears in the next fight.
 
