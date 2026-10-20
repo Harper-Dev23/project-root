@@ -72,6 +72,8 @@ import { CLEANSE_TIME } from '../../systems/HuntWorld.js';
 import { HuntManager } from '../../systems/HuntManager.js';
 import GameState from '../../systems/GameState.js';
 import DiceToken from '../../ui/DiceToken.js';
+import { drawFaceToken } from '../../ui/FaceToken.js';
+import { facesOf, soloFace } from '../../systems/PlayerFaces.js';
 import { levelDef as boonLevelDef } from '../../systems/Boons.js';
 import { EVENT_TEMPLATES } from '../../../data/events.js';
 import { pendingReports, QUEST_LINES, getQuestState } from '../../data/quests.js';
@@ -528,10 +530,44 @@ export default class HuntFieldOverlay extends Phaser.Scene {
       g.fillStyle(0xbfae72, 0.6).fillTriangle(x + 18, y - 8, x + 28, y, x + 18, y + 8);
     }
 
-    // The party.
+    // The party: the lead's face (chunk 15a). Moved down, and a little
+    // smaller, when something shares the tile.
     const me = this.center(v.pos);
-    g.fillStyle(0xf5f1e6, 1).fillCircle(me.x, me.y + (v.occupants.some(o => o.tile === v.pos) ? 18 : 0), 11);
-    g.lineStyle(3, 0x1a1a1a, 1).strokeCircle(me.x, me.y + (v.occupants.some(o => o.tile === v.pos) ? 18 : 0), 11);
+    const shared = v.occupants.some(o => o.tile === v.pos);
+    const faces = this._faces();
+    const lead = faces.find(f => f.isLead) || faces[0];
+    this.layer.add(drawFaceToken(this, me.x, me.y + (shared ? 16 : 0), lead, { diameter: shared ? 24 : 30 }));
+
+    // Co-op: everyone's face in a row at the top centre of the map (side
+    // panels open at its left and right edges), the lead marked.
+    if (this.coop && faces.length > 1) {
+      faces.forEach((f, i) => {
+        const fx = MAP.x + MAP.w / 2 + (i - (faces.length - 1) / 2) * 40, fy = MAP.y + 24;
+        this.layer.add(drawFaceToken(this, fx, fy, f, { diameter: 26, lead: f.isLead }));
+        const hit = this.add.circle(fx, fy, 16, 0x000000, 0.001).setInteractive({ useHandCursor: false });
+        let tip = null;
+        hit.on('pointerover', () => {
+          tip = this._box(fx - 14, fy + 22, 260, [`${f.name}${f.playerId === this.coop.client?.playerId ? ' (you)' : ''}${f.isLead ? ', leading' : ''}`,
+            f.hunterName ? `Face: ${f.hunterName}` : 'No hunter on this hunt'], 20);
+        });
+        hit.on('pointerout', () => { tip?.destroy(true); tip = null; });
+        this.layer.add(hit);
+      });
+    }
+  }
+
+  /**
+   * Every player's face (chunk 15a; PlayerFaces). Co-op: the lobby's players
+   * over the merged party, the host leading (15e makes the lead pass). Solo:
+   * the one player, always leading.
+   */
+  _faces() {
+    if (this.coop) {
+      const client = this.coop.client;
+      const faces = facesOf({ players: client?.lobby?.players || [], party: this.coop.party || [], leadId: client?.hostId });
+      if (faces.length) return faces;
+    }
+    return [soloFace(GameState.party || [])];
   }
 
   // ── HUD strip ──────────────────────────────────────────────────────────────
@@ -552,9 +588,12 @@ export default class HuntFieldOverlay extends Phaser.Scene {
     // Where and what.
     const zone = getZone(v.zoneId);
     const sizeName = MAP_SIZES[v.plan.size]?.name || v.plan.size;
-    txt(x + 12, y + 5, `${zone?.name || v.zoneId}${this.coop ? (this.coop.isHost ? ' · co-op (host)' : ' · co-op') : ''}`, 15, '#f2e6c8');
+    // "co-op" sits on the second line: on the first, the Reeds' long name ran
+    // into the supplies.
+    txt(x + 12, y + 5, `${zone?.name || v.zoneId}`, 15, '#f2e6c8');
     const sec = v.sections > 1 ? ` · Section ${v.section + 1} of ${v.sections}` : '';
-    txt(x + 12, y + 25, `${sizeName} · ${v.weather?.name || ''}${sec}`, 12, '#a8b0bc');
+    const coopTag = this.coop ? (this.coop.isHost ? ' · co-op (host)' : ' · co-op') : '';
+    txt(x + 12, y + 25, `${sizeName} · ${v.weather?.name || ''}${sec}${coopTag}`, 12, '#a8b0bc');
 
     // The prophet boon (chunk 10b): level and favor; hover for what it gives.
     const b = v.boon;

@@ -34,6 +34,7 @@ import { countInList, takeFromList, addToList } from '../systems/ItemStacks.js';
 import { ownPack, startOwnPack, markOwnPackLive } from '../systems/OwnPack.js';
 import { packable } from './overlays/PackingOverlay.js';
 import { rationPackCap } from '../systems/HuntRules.js';
+import { colourOf, defaultFace } from '../systems/PlayerFaces.js';
 
 /** Rations are pledged in steps, as on the Hunt screen. */
 const RATION_STEP = 10;
@@ -437,10 +438,19 @@ export default class CoopLobbyScene extends Phaser.Scene {
       { ...FONTS.body, fontSize: '15px', color: '#7d838d', lineSpacing: 6 });
 
     this.playerRows = [];
+    this.playerDots = [];
     for (let i = 0; i < 6; i++) {
       this.playerRows.push(this.add.text(646, 278 + i * 30, '',
         { ...FONTS.body, fontSize: '16px' }));
+      // The player's colour (chunk 15a): their votes, pings and token.
+      this.playerDots.push(this.add.circle(636, 288 + i * 30, 5, 0xffffff).setVisible(false));
     }
+
+    // Your face (chunk 15a): which of your hunters stands for you in votes,
+    // pings and the party token. Click to try the next one.
+    this.faceText = this.add.text(646, 466, '', { ...FONTS.body, fontSize: '14px' })
+      .setInteractive({ useHandCursor: true });
+    this.faceText.on('pointerdown', () => this._cycleFace());
 
     // The same panel shows open lobbies when browsing. One list at a time:
     // before you are seated it shows where you could go, after it shows who
@@ -671,6 +681,26 @@ export default class CoopLobbyScene extends Phaser.Scene {
     if (!this.client?.playerId) return this._say('Host or join a lobby first.');
     const me = this.client.lobby?.players?.find(p => p.id === this.client.playerId);
     this.client.setReady(!me?.ready);
+  }
+
+  /** Your hunters in this lobby (full characters, from your save) and your
+   *  face among them: the one you chose, else the highest Perception. */
+  _myFace() {
+    const me = this.client?.lobby?.players?.find(p => p.id === this.client.playerId);
+    if (!me) return null;
+    const refs = me.hunters.map(h => h.ref);
+    const mine = (GameState.party || []).filter(c => refs.includes(c.instanceId || c.id));
+    const chosen = me.face != null ? mine.find(c => (c.instanceId || c.id) === me.face) : null;
+    return { mine, hunter: chosen || defaultFace(mine), chosen: !!chosen, colour: me.colour ?? 0 };
+  }
+
+  /** Your face moves to your next hunter in the lobby (chunk 15a). */
+  _cycleFace() {
+    const f = this._myFace();
+    if (!f || !f.mine.length) return this._say('Bring a hunter first.');
+    const at = f.mine.indexOf(f.hunter);
+    const next = f.mine[(at + 1) % f.mine.length];
+    this.client.setFace(next.instanceId || next.id);
   }
 
   _start() {
@@ -916,13 +946,22 @@ export default class CoopLobbyScene extends Phaser.Scene {
     this.lobbyHint.setVisible(!inLobby && !showBrowse);
     this.playerRows.forEach((row, i) => {
       const p = players[i];
-      if (!p) { row.setText(''); return; }
+      const dot = this.playerDots[i];
+      if (!p) { row.setText(''); dot.setVisible(false); return; }
       const you = p.id === this.client.playerId ? ' (you)' : '';
       const host = p.id === lobby.hostId ? ' ★' : '';
       const names = p.hunters.map(h => h.name).join(', ') || 'no hunters';
       row.setText(`${p.ready ? '✓' : '·'} ${p.name}${you}${host} — ${names}`);
       row.setColor(p.ready ? '#9ad39a' : '#c8ccd4');
+      dot.setFillStyle(colourOf(p.colour ?? i).int).setVisible(!showBrowse);
     });
+
+    const myFace = inLobby && !showBrowse ? this._myFace() : null;
+    this.faceText.setVisible(!!myFace);
+    if (myFace) {
+      this.faceText.setText(`Your face: ${myFace.hunter?.name || 'none'}${myFace.chosen ? '' : ' (highest Perception)'}   · click to change`);
+      this.faceText.setColor(colourOf(myFace.colour).css);
+    }
 
     this.startBtn.setVisible(!inLobby || this.client.isHost);
   }

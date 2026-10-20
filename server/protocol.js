@@ -82,6 +82,11 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       name: p.name,
       ready: p.ready,
       rations: p.rations || 0,
+      // Chunk 15a: the player colour (an index into PlayerFaces' colours, kept
+      // for the whole lobby) and the hunter chosen as this player's face (null:
+      // the client picks their highest-Perception hunter).
+      colour: p.colour ?? 0,
+      face: p.face ?? null,
       hunters: p.hunters.map(h => ({
         ref: h.instanceId || h.id,
         name: h.name,
@@ -318,6 +323,10 @@ export function createHub({ CombatScene, codeFactory = makeCode,
         conn,
         hunters,
         ready: false,
+        // The lowest colour no one else holds, so a seat keeps its colour
+        // when someone else leaves.
+        colour: [0, 1, 2, 3, 4, 5].find(c => !lobby.players.some(p => p.colour === c)) ?? 0,
+        face: null,
         // The browser's own id, stored so this seat can be reclaimed after a
         // dropped socket. Never shown, never typed, and only meaningful within
         // this lobby -- it is not an account.
@@ -383,6 +392,20 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       });
       if (!changed) return fail(conn, 'none of those hunters are yours');
       broadcast(lobby, { t: 'huntRoster', roster: rosterOf(lobby) });
+    },
+
+    /**
+     * { t:'setFace', ref } - choose which of YOUR OWN hunters is your face
+     * (chunk 15a): your votes, your pings, and the party token while you lead.
+     * Any time, the hunt included. `ref: null` goes back to the default.
+     */
+    setFace(conn, msg, lobby, player) {
+      const refOf = (x) => x?.instanceId || x?.id;
+      if (msg.ref != null && !player.hunters.some(h => refOf(h) === msg.ref)) {
+        return fail(conn, 'that hunter is not yours');
+      }
+      player.face = msg.ref ?? null;
+      broadcast(lobby, lobbyView(lobby));
     },
 
     /**

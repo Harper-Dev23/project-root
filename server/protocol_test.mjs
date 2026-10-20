@@ -487,5 +487,45 @@ console.log('=== the host changes the fight after hosting (owner\'s notes, 2026-
   check('...and everyone un-readies', view?.players?.every(p => !p.ready), JSON.stringify(view?.players?.map(p => p.ready)));
 }
 
+console.log('');
+console.log('=== player faces and colours (chunk 15a) ===');
+{
+  const hub3 = createHub({ CombatScene, codeFactory: () => 'FACE' });
+  const a = conn('a'), b = conn('b'), c = conn('c');
+  hub3.handle(a, { t: 'create', name: 'A', mode: 'hunt', hunters: clone(2, 0) });
+  hub3.handle(b, { t: 'join', code: 'FACE', name: 'B', hunters: clone(2, 2) });
+  hub3.handle(c, { t: 'join', code: 'FACE', name: 'C', hunters: clone(2, 4) });
+  let view = a.last('lobby');
+  check('each seat gets its own colour, in seat order',
+    JSON.stringify(view.players.map(p => p.colour)) === '[0,1,2]', JSON.stringify(view.players.map(p => p.colour)));
+  check('no one has chosen a face yet', view.players.every(p => p.face === null));
+
+  const bRefs = view.players.find(p => p.id === 'p2').hunters.map(h => h.ref);
+  const aRefs = view.players.find(p => p.id === 'p1').hunters.map(h => h.ref);
+  hub3.handle(b, { t: 'setFace', ref: bRefs[1] });
+  view = c.last('lobby');
+  check('a player chooses one of their own hunters, and everyone sees it',
+    view.players.find(p => p.id === 'p2').face === bRefs[1]);
+  b.clear();
+  hub3.handle(b, { t: 'setFace', ref: aRefs[0] });
+  check('someone else\'s hunter is refused', /not yours/.test(b.errors()[0] || ''), b.errors()[0]);
+  check('...and the face did not change', a.last('lobby').players.find(p => p.id === 'p2').face === bRefs[1]);
+  hub3.handle(b, { t: 'setFace', ref: null });
+  check('null goes back to the default', a.last('lobby').players.find(p => p.id === 'p2').face === null);
+
+  // B leaves before the start; a newcomer takes the free colour, not a copy of C's.
+  hub3.disconnect(b);
+  const d = conn('d');
+  hub3.handle(d, { t: 'join', code: 'FACE', name: 'D', hunters: clone(2, 2) });
+  view = a.last('lobby');
+  const colours = view.players.map(p => p.colour);
+  check('a seat keeps its colour when another leaves; a newcomer takes the free one',
+    view.players.find(p => p.name === 'C').colour === 2 && view.players.find(p => p.name === 'D').colour === 1,
+    JSON.stringify(view.players.map(p => p.name + ':' + p.colour)));
+  check('no two players share a colour', new Set(colours).size === colours.length);
+  const ids = view.players.map(p => p.id);
+  check('no two players share an id after someone leaves', new Set(ids).size === ids.length, ids.join(' '));
+}
+
 console.log('\n' + (failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'));
 process.exit(failures === 0 ? 0 : 1);

@@ -170,6 +170,8 @@ export function createCoopClient({ url, WebSocketImpl } = {}) {
     setReady(ready = true) { return client.send({ t: 'ready', ready }); },
     /** Place one of YOUR hunters. `slotId: null` picks it back up. */
     claimSlot(ref, slotId) { return client.send({ t: 'claimSlot', ref, slotId }); },
+    /** Choose which of YOUR hunters is your face (chunk 15a). `null`: the default. */
+    setFace(ref) { return client.send({ t: 'setFace', ref }); },
     startHunt() { return client.send({ t: 'start' }); },
     endTurn() { return client.send({ t: 'endTurn' }); },
     requestSync() { return client.send({ t: 'sync' }); },
