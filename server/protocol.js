@@ -252,7 +252,12 @@ export function createHub({ CombatScene, codeFactory = makeCode,
       if (mine) return handlers._resume(conn, lobby, mine);
 
       if (started(lobby)) return fail(conn, 'that hunt has already started');
-      const playerId = 'p' + (lobby.players.length + 1);
+      // The lowest id no one holds. Counting the players gave a newcomer the
+      // id of someone still seated once an earlier player had left (p1, p3,
+      // then p3 again), so both owned each other's hunters.
+      let n = 1;
+      while (lobby.players.some(p => p.id === 'p' + n)) n++;
+      const playerId = 'p' + n;
       return handlers._seat(conn, lobby, playerId, msg);
     },
 
