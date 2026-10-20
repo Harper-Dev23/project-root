@@ -302,7 +302,7 @@ await shot('05e-flee-button');
 await clickText('^Flee$', 'CombatScene');
 check('the first Flee click asks to be sure', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Confirm?')", 5000));
 await shot('05e2-flee-confirm');
-await clickText('^Flee\\? Click again$', 'CombatScene');
+await clickText('^Confirm\\?$', 'CombatScene');   // 76b9d3a: the second click reads "Confirm?"
 check('Flee (clicked twice): the enemy gets its free round, then the fight ends as fled', await waitFor("window.__T.textsOf('CombatScene').some(t => t.text === 'Fled')", 30000));
 await shot('05f-fled');
 await clickText('^Back to the Hunt$', 'CombatScene');
